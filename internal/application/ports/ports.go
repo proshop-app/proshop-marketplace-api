@@ -12,6 +12,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
 // Clock — текущее время.
@@ -27,6 +28,7 @@ type UnitOfWork interface {
 
 // Tx — хранилища, привязанные к одной транзакции.
 type Tx interface {
+	Taxonomy() taxonomy.Repository
 	Participants() participant.Repository
 	Registry() participant.Registry
 	Products() catalog.ProductRepository

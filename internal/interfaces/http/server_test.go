@@ -23,9 +23,11 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -63,6 +65,10 @@ func newEnv(t *testing.T) *env {
 		platform: fake.NewPlatform(),
 		pickups:  fake.NewPickupIndex(),
 	}
+	e.store.SeedTaxonomy(taxonomy.Definition{
+		Version:    1,
+		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория"}},
+	})
 	registry := prometheus.NewRegistry()
 	identities := &fake.IDs{}
 	provider := &fake.PickupProvider{Info: delivery.CarrierInfo{Code: "cdek", Name: "СДЭК"}}
@@ -76,6 +82,7 @@ func newEnv(t *testing.T) *env {
 	)
 
 	handler := transport.NewHandler(transport.Deps{
+		Taxonomy:     apptaxonomy.NewService(e.store, e.clock),
 		Catalog:      appcatalog.NewQueries(e.store, e.index),
 		Participants: appparticipant.NewService(e.store, e.clock),
 		Auth: appbuyer.NewAuth(
@@ -142,11 +149,19 @@ func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID
 		Available: 2,
 		Price:     money.FromKopecks(price),
 		Card: catalog.Card{
+			Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
+			Publication: taxonomy.Publication{
+				Published:    true,
+				Version:      1,
+				CategoryID:   "c1",
+				CategoryName: "Категория",
+				CategoryPath: []string{"c1"},
+			},
 			Name:        "Товар " + string(product),
 			Description: "Описание",
 			Visible:     true,
 			Tags:        tags,
-			Categories:  []catalog.Category{{ID: "c1", Name: "Кухня"}},
+			Categories:  []catalog.Category{{ID: "c1", Name: "Категория"}},
 		},
 	}
 

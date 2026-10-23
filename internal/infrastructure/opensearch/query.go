@@ -11,13 +11,13 @@ func searchBody(query ports.OfferQuery) map[string]any {
 		filters = append(filters, term("tenantId", query.TenantID))
 	}
 	if query.CategoryID != "" {
-		filters = append(filters, term("categories.id", query.CategoryID))
+		filters = append(filters, term("categoryPath", query.CategoryID))
 	}
 	if query.Tag != "" {
 		filters = append(filters, term("tags", query.Tag))
 	}
-	if query.InStock {
-		filters = append(filters, term("inStock", true))
+	if query.InStockSet || query.InStock {
+		filters = append(filters, term("inStock", query.InStock))
 	}
 	if query.PriceMin != nil || query.PriceMax != nil {
 		bounds := map[string]any{}
@@ -31,6 +31,22 @@ func searchBody(query ports.OfferQuery) map[string]any {
 		filters = append(filters, map[string]any{"range": map[string]any{"price": bounds}})
 	}
 
+	for code, filter := range query.Attributes {
+		field := "attributes." + code
+		if len(filter.Values) > 0 {
+			filters = append(filters, map[string]any{"terms": map[string]any{field: filter.Values}})
+		}
+		if filter.Min != "" || filter.Max != "" {
+			bounds := map[string]any{}
+			if filter.Min != "" {
+				bounds["gte"] = filter.Min
+			}
+			if filter.Max != "" {
+				bounds["lte"] = filter.Max
+			}
+			filters = append(filters, map[string]any{"range": map[string]any{field: bounds}})
+		}
+	}
 	boolQuery := map[string]any{"filter": filters}
 	if query.Text != "" {
 		boolQuery["must"] = []any{map[string]any{
@@ -44,6 +60,7 @@ func searchBody(query ports.OfferQuery) map[string]any {
 	}
 
 	return map[string]any{
+		"aggs":             facetAggregations(query.FacetFields),
 		"query":            map[string]any{"bool": boolQuery},
 		"from":             query.Offset,
 		"size":             query.Limit,

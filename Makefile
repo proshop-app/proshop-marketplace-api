@@ -69,11 +69,17 @@ test-integration: infra-up
 lint:
 	$(GOLANGCI_LINT) run ./...
 
-## build: бинарники сервиса и миграций в bin/
+## build: бинарники сервиса, миграций и загрузчика таксономии в bin/
 build:
 	CGO_ENABLED=0 go build -trimpath -o bin/marketplace ./cmd/marketplace
 	CGO_ENABLED=0 go build -trimpath -o bin/migrate ./cmd/migrate
+	CGO_ENABLED=0 go build -trimpath -o bin/taxonomy ./cmd/taxonomy
 
 ## image: образ сервиса
 image:
 	docker build -t $(IMAGE) .
+
+.PHONY: taxonomy-load
+## taxonomy-load: загрузить версию схем площадки из YAML
+taxonomy-load:
+	go run ./cmd/taxonomy load "$(FILE)"

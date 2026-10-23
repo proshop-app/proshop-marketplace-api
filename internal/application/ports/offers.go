@@ -2,10 +2,12 @@ package ports
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -39,6 +41,9 @@ type OfferStates interface {
 
 // OfferDocument — предложение в индексе поиска. Суммы — в копейках.
 type OfferDocument struct {
+	CategoryID        string
+	CategoryPath      []string
+	Attributes        map[string]json.RawMessage
 	ID                string
 	TenantID          string
 	ProductID         string
@@ -81,22 +86,26 @@ const (
 
 // OfferQuery — поиск по выдаче каталога.
 type OfferQuery struct {
-	Text       string
-	TenantID   string
-	CategoryID string
-	Tag        string
-	PriceMin   *int64
-	PriceMax   *int64
-	InStock    bool
-	Sort       OfferSort
-	Offset     int
-	Limit      int
+	InStockSet  bool
+	Attributes  map[string]AttributeFilter
+	FacetFields []taxonomy.Attribute
+	Text        string
+	TenantID    string
+	CategoryID  string
+	Tag         string
+	PriceMin    *int64
+	PriceMax    *int64
+	InStock     bool
+	Sort        OfferSort
+	Offset      int
+	Limit       int
 }
 
 // OfferPage — страница выдачи.
 type OfferPage struct {
-	Total int
-	Items []OfferDocument
+	Facets []Facet
+	Total  int
+	Items  []OfferDocument
 }
 
 // OfferIndex — индекс предложений.

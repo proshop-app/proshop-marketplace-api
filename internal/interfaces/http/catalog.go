@@ -1,8 +1,10 @@
 package http
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
@@ -28,30 +30,33 @@ type tagJSON struct {
 
 // offerJSON — предложение в ответе. Суммы — целые копейки.
 type offerJSON struct {
-	ID                string         `json:"id"`
-	TenantID          string         `json:"tenantId"`
-	ProductID         string         `json:"productId"`
-	Seller            sellerJSON     `json:"seller"`
-	Name              string         `json:"name"`
-	Description       string         `json:"description,omitempty"`
-	Image             string         `json:"image,omitempty"`
-	URL               string         `json:"url,omitempty"`
-	SKU               string         `json:"sku,omitempty"`
-	Categories        []categoryJSON `json:"categories"`
-	Tags              []tagJSON      `json:"tags"`
-	Price             int64          `json:"price"`
-	BasePrice         int64          `json:"basePrice"`
-	Available         int            `json:"available"`
-	InStock           bool           `json:"inStock"`
-	CheckoutAvailable bool           `json:"checkoutAvailable"`
-	UpdatedAt         time.Time      `json:"updatedAt"`
+	CategoryID        string                     `json:"categoryId"`
+	Attributes        map[string]json.RawMessage `json:"attributes"`
+	ID                string                     `json:"id"`
+	TenantID          string                     `json:"tenantId"`
+	ProductID         string                     `json:"productId"`
+	Seller            sellerJSON                 `json:"seller"`
+	Name              string                     `json:"name"`
+	Description       string                     `json:"description,omitempty"`
+	Image             string                     `json:"image,omitempty"`
+	URL               string                     `json:"url,omitempty"`
+	SKU               string                     `json:"sku,omitempty"`
+	Categories        []categoryJSON             `json:"categories"`
+	Tags              []tagJSON                  `json:"tags"`
+	Price             int64                      `json:"price"`
+	BasePrice         int64                      `json:"basePrice"`
+	Available         int                        `json:"available"`
+	InStock           bool                       `json:"inStock"`
+	CheckoutAvailable bool                       `json:"checkoutAvailable"`
+	UpdatedAt         time.Time                  `json:"updatedAt"`
 }
 
 type offerPageJSON struct {
-	Items  []offerJSON `json:"items"`
-	Total  int         `json:"total"`
-	Limit  int         `json:"limit"`
-	Offset int         `json:"offset"`
+	Facets []ports.Facet `json:"facets"`
+	Items  []offerJSON   `json:"items"`
+	Total  int           `json:"total"`
+	Limit  int           `json:"limit"`
+	Offset int           `json:"offset"`
 }
 
 type catalogHandlers struct {
@@ -66,6 +71,8 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	}
 
 	out := offerJSON{
+		CategoryID:        doc.CategoryID,
+		Attributes:        doc.Attributes,
 		ID:                doc.ID,
 		TenantID:          doc.TenantID,
 		ProductID:         doc.ProductID,
@@ -82,6 +89,9 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 		InStock:           doc.InStock,
 		CheckoutAvailable: doc.CheckoutAvailable,
 		UpdatedAt:         doc.UpdatedAt.UTC(),
+	}
+	if out.Attributes == nil {
+		out.Attributes = map[string]json.RawMessage{}
 	}
 	if withDescription {
 		out.Description = doc.Description
@@ -115,6 +125,7 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body := offerPageJSON{
+		Facets: list.Facets,
 		Items:  make([]offerJSON, 0, len(list.Items)),
 		Total:  list.Total,
 		Limit:  limit,
@@ -156,6 +167,35 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 		Sort:       ports.OfferSort(values.Get("sort")),
 	}
 
+	query.Attributes = map[string]ports.AttributeFilter{}
+	for key, values := range values {
+		if !strings.HasPrefix(key, "attr.") {
+			continue
+		}
+		code := strings.TrimPrefix(key, "attr.")
+		var bound string
+		if strings.HasSuffix(code, ".min") {
+			code = strings.TrimSuffix(code, ".min")
+			bound = "min"
+		} else if strings.HasSuffix(code, ".max") {
+			code = strings.TrimSuffix(code, ".max")
+			bound = "max"
+		}
+		filter := query.Attributes[code]
+		if bound != "" {
+			if len(values) != 1 || values[0] == "" {
+				return query, appcatalog.ErrInvalidQuery
+			}
+			if bound == "min" {
+				filter.Min = values[0]
+			} else {
+				filter.Max = values[0]
+			}
+		} else {
+			filter.Values = values
+		}
+		query.Attributes[code] = filter
+	}
 	var err error
 
 	if query.Limit, err = intParam(values.Get("limit")); err != nil {
@@ -172,6 +212,7 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 	}
 
 	if raw := values.Get("inStock"); raw != "" {
+		query.InStockSet = true
 		if query.InStock, err = strconv.ParseBool(raw); err != nil {
 			return query, appcatalog.ErrInvalidQuery.WithMessage("inStock — true или false")
 		}

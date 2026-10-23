@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
@@ -27,7 +28,13 @@ func snapshot(revision int64, at time.Time) catalog.Snapshot {
 		ProductID: "p1",
 		Revision:  revision,
 		At:        at,
-		Card:      catalog.Card{Name: " Товар ", Visible: true, Tags: []string{"tag-1"}},
+		Card: catalog.Card{
+			Name:        " Товар ",
+			Visible:     true,
+			Tags:        []string{"tag-1"},
+			Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
+			Publication: taxonomy.Publication{Published: true, CategoryID: "c1"},
+		},
 		Price:     rub(10000),
 		Available: 5,
 	}

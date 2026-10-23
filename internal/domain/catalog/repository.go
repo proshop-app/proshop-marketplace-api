@@ -8,6 +8,7 @@ import (
 
 // ProductRepository — проекция товаров магазинов.
 type ProductRepository interface {
+	Page(ctx context.Context, tenant ids.TenantID, product ids.ProductID, limit int) ([]*Product, error)
 	// Get — запись; нет — ErrProductNotFound.
 	Get(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) (*Product, error)
 	// Save заводит или условно по исходной версии обновляет запись; не совпала — ErrConflict.

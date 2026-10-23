@@ -16,6 +16,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
 // querier — общее у транзакции и пула.
@@ -107,3 +108,5 @@ func (s *scope) Checkouts() checkout.Repository { return &Checkouts{q: s.q} }
 func (s *scope) PickupPoints() delivery.PickupPointRepository {
 	return &PickupPoints{q: s.q}
 }
+
+func (s *scope) Taxonomy() taxonomy.Repository { return &Taxonomy{q: s.q} }

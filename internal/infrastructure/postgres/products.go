@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -49,16 +50,18 @@ type Products struct {
 
 // cardJSON — карточка товара в колонке jsonb.
 type cardJSON struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Image       string         `json:"image,omitempty"`
-	URL         string         `json:"url,omitempty"`
-	SKU         string         `json:"sku,omitempty"`
-	Categories  []categoryJSON `json:"categories,omitempty"`
-	Tags        []string       `json:"tags,omitempty"`
-	VariantsID  string         `json:"variantsId,omitempty"`
-	Visible     bool           `json:"visible"`
-	OnlyVariant bool           `json:"onlyVariant,omitempty"`
+	Marketplace *taxonomy.Card       `json:"marketplace,omitempty"`
+	Publication taxonomy.Publication `json:"publication"`
+	Name        string               `json:"name"`
+	Description string               `json:"description,omitempty"`
+	Image       string               `json:"image,omitempty"`
+	URL         string               `json:"url,omitempty"`
+	SKU         string               `json:"sku,omitempty"`
+	Categories  []categoryJSON       `json:"categories,omitempty"`
+	Tags        []string             `json:"tags,omitempty"`
+	VariantsID  string               `json:"variantsId,omitempty"`
+	Visible     bool                 `json:"visible"`
+	OnlyVariant bool                 `json:"onlyVariant,omitempty"`
 }
 
 type categoryJSON struct {
@@ -190,6 +193,8 @@ func (r *productRow) product() (*catalog.Product, error) {
 
 func encodeCard(card catalog.Card) ([]byte, error) {
 	doc := cardJSON{
+		Marketplace: card.Marketplace,
+		Publication: card.Publication,
 		Name:        card.Name,
 		Description: card.Description,
 		Image:       card.Image,
@@ -219,6 +224,8 @@ func decodeCard(raw []byte) (catalog.Card, error) {
 	}
 
 	card := catalog.Card{
+		Marketplace: doc.Marketplace,
+		Publication: doc.Publication,
 		Name:        doc.Name,
 		Description: doc.Description,
 		Image:       doc.Image,

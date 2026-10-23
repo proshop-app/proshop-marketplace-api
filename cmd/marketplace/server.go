@@ -20,6 +20,7 @@ import (
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
+	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	infrakafka "github.com/proshop-app/proshop-marketplace/internal/infrastructure/kafka"
@@ -35,6 +36,7 @@ import (
 
 // services — сценарии приложения процесса.
 type services struct {
+	taxonomy     *apptaxonomy.Service
 	projector    *appcatalog.Projector
 	indexer      *appcatalog.Indexer
 	queries      *appcatalog.Queries
@@ -148,6 +150,7 @@ func (s *server) services(ctx context.Context) services {
 	})
 
 	return services{
+		taxonomy:     apptaxonomy.NewService(uow, now),
 		projector:    appcatalog.NewProjector(uow, now),
 		indexer:      indexer,
 		queries:      appcatalog.NewQueries(uow, s.store.index),
@@ -265,6 +268,7 @@ func (s *server) httpServer() *http.Server {
 	}
 
 	handler := transport.NewHandler(transport.Deps{
+		Taxonomy:      s.app.taxonomy,
 		Catalog:       s.app.queries,
 		Participants:  s.app.participants,
 		Auth:          s.app.auth,

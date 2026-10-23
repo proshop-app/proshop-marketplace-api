@@ -74,14 +74,35 @@ func (x *Index) Ping(ctx context.Context) error {
 	return err
 }
 
-// Exists — алиас рабочего индекса заведён.
+// Exists — алиас заведён и его схема совместима с текущей версией индексатора.
 func (x *Index) Exists(ctx context.Context) (bool, error) {
 	status, err := x.do(ctx, http.MethodHead, "/_alias/"+url.PathEscape(x.alias), nil, nil, http.StatusNotFound)
 	if err != nil {
 		return false, err
 	}
 
-	return status == http.StatusOK, nil
+	if status != http.StatusOK {
+		return false, nil
+	}
+	var mapping map[string]struct {
+		Mappings struct {
+			Meta struct {
+				Version int `json:"taxonomySchema"`
+			} `json:"_meta"`
+		} `json:"mappings"`
+	}
+	if _, err := x.do(ctx, http.MethodGet, "/"+url.PathEscape(x.alias)+"/_mapping", nil, &mapping); err != nil {
+		return false, err
+	}
+	if len(mapping) == 0 {
+		return false, nil
+	}
+	for _, index := range mapping {
+		if index.Mappings.Meta.Version != offerMappingVersion {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // NewGeneration заводит пустое поколение со схемой.
@@ -263,7 +284,8 @@ func (x *Index) Get(ctx context.Context, id string) (ports.OfferDocument, bool, 
 // Search — выдача.
 func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.OfferPage, error) {
 	var response struct {
-		Hits struct {
+		Aggregations map[string]json.RawMessage `json:"aggregations"`
+		Hits         struct {
 			Total struct {
 				Value int `json:"value"`
 			} `json:"total"`
@@ -279,9 +301,14 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 		return ports.OfferPage{}, err
 	}
 
+	facets, err := readFacets(response.Aggregations, query.FacetFields)
+	if err != nil {
+		return ports.OfferPage{}, err
+	}
 	page := ports.OfferPage{
-		Total: response.Hits.Total.Value,
-		Items: make([]ports.OfferDocument, 0, len(response.Hits.Hits)),
+		Facets: facets,
+		Total:  response.Hits.Total.Value,
+		Items:  make([]ports.OfferDocument, 0, len(response.Hits.Hits)),
 	}
 	for _, hit := range response.Hits.Hits {
 		page.Items = append(page.Items, fromDocument(hit.Source, hit.Version))

@@ -10,6 +10,7 @@ import (
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -26,6 +27,7 @@ type productProjection struct {
 }
 
 type productSnapshot struct {
+	Marketplace       *taxonomy.Card  `json:"marketplace"`
 	ID                string          `json:"id"`
 	Name              string          `json:"name"`
 	Description       string          `json:"description"`
@@ -168,6 +170,7 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 	}
 
 	card := catalog.Card{
+		Marketplace: product.Marketplace,
 		Name:        product.Name,
 		Description: product.Description,
 		URL:         product.URL,

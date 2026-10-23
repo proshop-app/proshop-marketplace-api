@@ -1,7 +1,9 @@
 package opensearch
 
-// indexBody — настройки и схема поколения индекса. Схема строгая: поле,
-// которого нет в схеме, — ошибка записи, а не тихое расширение индекса.
+const offerMappingVersion = 1
+
+// indexBody — строгая схема поколения. Только проверенные канонические
+// attributes допускают динамические поля; остальные неизвестные поля отклоняются.
 func indexBody(shards, replicas int) map[string]any {
 	keyword := map[string]any{"type": "keyword"}
 	stored := map[string]any{"type": "keyword", "index": false}
@@ -26,12 +28,32 @@ func indexBody(shards, replicas int) map[string]any {
 			},
 		},
 		"mappings": map[string]any{
+			"_meta":   map[string]any{"taxonomySchema": offerMappingVersion},
 			"dynamic": "strict",
+			"dynamic_templates": []any{
+				map[string]any{"attribute_number": map[string]any{
+					"path_match":         "attributes.*",
+					"match_mapping_type": "long",
+					"mapping":            map[string]any{"type": "double"},
+				}},
+				map[string]any{"attribute_decimal": map[string]any{
+					"path_match":         "attributes.*",
+					"match_mapping_type": "double",
+					"mapping":            map[string]any{"type": "double"},
+				}},
+				map[string]any{"attribute_keyword": map[string]any{
+					"path_match": "attributes.*",
+					"mapping":    map[string]any{"type": "keyword"},
+				}},
+			},
 			"properties": map[string]any{
-				"offerId":    keyword,
-				"tenantId":   keyword,
-				"productId":  keyword,
-				"sellerSlug": keyword,
+				"categoryId":   keyword,
+				"categoryPath": keyword,
+				"attributes":   map[string]any{"type": "object", "dynamic": true},
+				"offerId":      keyword,
+				"tenantId":     keyword,
+				"productId":    keyword,
+				"sellerSlug":   keyword,
 				"sellerName": map[string]any{
 					"type":     "text",
 					"analyzer": "offer_text",

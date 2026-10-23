@@ -63,6 +63,10 @@ func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error 
 	snapshot := event.Snapshot
 
 	return p.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		definition, err := tx.Taxonomy().Current(ctx)
+		if err != nil {
+			return err
+		}
 		fresh, err := tx.Inbox().MarkProcessed(ctx, event.EventID, now)
 		if err != nil || !fresh {
 			return err
@@ -81,6 +85,7 @@ func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error 
 			return err
 		}
 
+		product.Revalidate(definition, now)
 		if err := tx.Products().Save(ctx, product); err != nil {
 			return err
 		}

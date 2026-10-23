@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Proshop Marketplace API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     API федеративного маркетплейса для витрины (Nuxt 4) и панели оператора
     (Vue 3). Все суммы — целые копейки. Время — RFC 3339 в UTC. Ошибка —
@@ -16,6 +16,7 @@ servers:
     description: make dev
 tags:
   - name: service
+  - name: taxonomy
   - name: catalog
   - name: auth
   - name: cart
@@ -23,6 +24,105 @@ tags:
   - name: checkout
   - name: operator
 paths:
+  /api/v1/taxonomy/categories:
+    get:
+      tags: [taxonomy]
+      summary: Дерево категорий площадки и полные схемы
+      operationId: taxonomyCategories
+      parameters:
+        - { $ref: "#/components/parameters/TaxonomyCache" }
+      responses:
+        "200": { $ref: "#/components/responses/Taxonomy" }
+        "304": { description: Версия не изменилась }
+  /api/v1/taxonomy/categories/{id}/schema:
+    get:
+      tags: [taxonomy]
+      summary: Полная схема категории без наследования
+      operationId: taxonomySchema
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/TaxonomyCache" }
+      responses:
+        "200":
+          description: Категория; ETag и X-Taxonomy-Version как у дерева
+          headers:
+            ETag: { schema: { type: string } }
+            X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyCategory" }
+        "304": { description: Версия не изменилась }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/taxonomy/version:
+    get:
+      tags: [taxonomy]
+      summary: Текущая версия; 0 до первой загрузки
+      operationId: taxonomyVersion
+      parameters:
+        - { $ref: "#/components/parameters/TaxonomyCache" }
+      responses:
+        "200":
+          description: Версия таксономии; ETag и X-Taxonomy-Version
+          headers:
+            ETag: { schema: { type: string } }
+            X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyVersion" }
+        "304": { description: Версия не изменилась }
+  /api/v1/operator/taxonomy:
+    get:
+      tags: [operator]
+      summary: Прочитать текущую версию таксономии
+      operationId: operatorTaxonomy
+      security: [{ operatorToken: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/TaxonomyCache" }
+      responses:
+        "200": { $ref: "#/components/responses/Taxonomy" }
+        "304": { description: Версия не изменилась }
+        "401": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [operator]
+      summary: Атомарно загрузить версию и перепроверить карточки
+      operationId: loadTaxonomy
+      security: [{ operatorToken: [] }]
+      description: |
+        Один YAML-документ до 2 MiB, формат taxonomy/example.yaml. Идемпотентен
+        для той же версии с тем же содержимым. Новая версия строго больше текущей.
+        Коды глобальны; тип и единица неизменны; удалять код из всех схем нельзя.
+        Ошибочные карточки скрываются, индекс обновляется через outbox.
+      requestBody:
+        required: true
+        content:
+          application/yaml:
+            schema: { $ref: "#/components/schemas/TaxonomyDefinition" }
+      responses:
+        "200":
+          description: Версия загружена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyVersion" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/catalog/offers/{offerId}/publication:
+    get:
+      tags: [operator]
+      summary: Диагностика публикации из проекции, включая скрытые предложения
+      operationId: offerPublication
+      security: [{ operatorToken: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/OfferId" }
+      responses:
+        "200":
+          description: Состояние проверки последней проекции
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Publication" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /health:
     get:
       tags: [service]
@@ -54,12 +154,21 @@ paths:
     get:
       tags: [catalog]
       summary: Выдача предложений
-      description: Только предложения, открытые покупателю и показанные в выдаче.
+      description: |
+        Только опубликованные предложения. category — узел дерева площадки, включая потомков.
+        Канонические фильтры: attr.<код>=значение; повтор параметра означает OR,
+        разные коды — AND. Для number: attr.<код>.min и attr.<код>.max (включительно),
+        либо точное значение. Неизвестный код, неверный тип/словарь/диапазон — 400.
+        Пример: ?category=c1&attr.a1=v1&attr.a1=v2&attr.a2.min=1.5&attr.a2.max=10.
+        Фасеты считаются по всей отфильтрованной выдаче до пагинации. Атрибутные —
+        только при facet=true и покрытии >=20%; category, tenant, price, inStock — всегда.
+        Числа: min/max; остальные: до 256 наиболее частых значений с count.
+        Для пустой выдачи универсальные фасеты пусты, атрибутные отсутствуют.
       operationId: listOffers
       parameters:
         - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Строка поиска }
         - { name: tenant, in: query, schema: { type: string }, description: Магазин }
-        - { name: category, in: query, schema: { type: string }, description: Категория магазина }
+        - { name: category, in: query, schema: { type: string }, description: Категория площадки с потомками }
         - { name: tag, in: query, schema: { type: string } }
         - { name: priceMin, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
         - { name: priceMax, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
@@ -540,6 +649,11 @@ components:
       scheme: bearer
       description: Служебный токен оператора (OPERATOR_TOKEN) до входа через панель на неделе 3.
   parameters:
+    TaxonomyCache:
+      name: If-None-Match
+      in: header
+      schema: { type: string }
+      description: 'ETag вида "taxonomy-1"; поддерживаются слабые ETag, списки и *'
     OfferId:
       name: offerId
       in: path
@@ -557,6 +671,22 @@ components:
       required: true
       schema: { type: string, format: uuid }
   responses:
+    Taxonomy:
+      description: Текущий снимок таксономии; версия 0 и пустое дерево до первой загрузки
+      headers:
+        ETag: { schema: { type: string } }
+        X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
+        Cache-Control: { schema: { type: string }, description: public, max-age=0, must-revalidate }
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [version, categories]
+            properties:
+              version: { type: integer, format: int64, minimum: 0 }
+              categories:
+                type: array
+                items: { $ref: "#/components/schemas/TaxonomyCategory" }
     Error:
       description: Ошибка
       content:
@@ -578,6 +708,99 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Participant" }
   schemas:
+    TaxonomyVersion:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, format: int64, minimum: 0 }
+    TaxonomyDefinition:
+      type: object
+      additionalProperties: false
+      required: [version, categories]
+      properties:
+        version: { type: integer, format: int64, minimum: 1 }
+        categories:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/TaxonomyCategory" }
+    TaxonomyCategory:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        name: { type: string, minLength: 1, maxLength: 256 }
+        attributes:
+          type: [array, "null"]
+          items: { $ref: "#/components/schemas/TaxonomyAttribute" }
+        children:
+          type: [array, "null"]
+          items: { $ref: "#/components/schemas/TaxonomyCategory" }
+    TaxonomyAttribute:
+      type: object
+      additionalProperties: false
+      required: [code, name, type]
+      properties:
+        code: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        name: { type: string, minLength: 1, maxLength: 256 }
+        type: { type: string, enum: [enum, number, string, boolean] }
+        required: { type: boolean, default: false }
+        values: { type: array, items: { type: string }, description: Обязательный словарь только для enum }
+        unit: { type: string, description: Единица только для number }
+        facet: { type: boolean, default: false }
+    CanonicalAttributes:
+      type: object
+      additionalProperties:
+        type: [string, number, boolean]
+      description: Скалярные значения по кодам схемы; без массивов и null
+    MarketplaceCard:
+      type: object
+      required: [categoryId, attributes, published]
+      properties:
+        categoryId: { type: string }
+        attributes: { $ref: "#/components/schemas/CanonicalAttributes" }
+        published: { type: boolean }
+    Publication:
+      type: object
+      required: [version, categoryId, attributes, issues, published]
+      properties:
+        version: { type: integer, format: int64 }
+        categoryId: { type: string }
+        categoryName: { type: string }
+        categoryPath: { type: [array, "null"], items: { type: string } }
+        attributes: { $ref: "#/components/schemas/CanonicalAttributes" }
+        published: { type: boolean }
+        issues:
+          type: array
+          items:
+            type: object
+            required: [code]
+            properties:
+              attribute: { type: string }
+              code:
+                type: string
+                enum: [taxonomy.card_missing, taxonomy.category_unknown, taxonomy.attribute_unknown,
+                       taxonomy.type, taxonomy.required, taxonomy.enum_value, taxonomy.unpublished]
+    Facet:
+      type: object
+      required: [code, name, type, count, values]
+      properties:
+        code: { type: string, description: 'category, tenant, price, inStock или attr.<код>' }
+        name: { type: string }
+        type: { type: string, enum: [enum, number, string, boolean] }
+        unit: { type: string }
+        count: { type: integer, description: Число предложений с полем до пагинации }
+        min: { type: number }
+        max: { type: number }
+        values:
+          type: array
+          maxItems: 256
+          items:
+            type: object
+            required: [value, count]
+            properties:
+              value: { type: string }
+              count: { type: integer }
     Error:
       type: object
       required: [error]
@@ -617,8 +840,10 @@ components:
         label: { type: string }
     Offer:
       type: object
-      required: [id, tenantId, productId, seller, name, categories, tags, price, basePrice, available, inStock, checkoutAvailable, updatedAt]
+      required: [id, tenantId, productId, seller, name, categoryId, attributes, categories, tags, price, basePrice, available, inStock, checkoutAvailable, updatedAt]
       properties:
+        categoryId: { type: string, description: Категория площадки }
+        attributes: { $ref: "#/components/schemas/CanonicalAttributes" }
         id: { type: string, examples: ["t1~p1"] }
         tenantId: { type: string }
         productId: { type: string }
@@ -642,11 +867,14 @@ components:
         updatedAt: { type: string, format: date-time }
     OfferPage:
       type: object
-      required: [items, total, limit, offset]
+      required: [items, total, limit, offset, facets]
       properties:
         items:
           type: array
           items: { $ref: "#/components/schemas/Offer" }
+        facets:
+          type: array
+          items: { $ref: "#/components/schemas/Facet" }
         total: { type: integer }
         limit: { type: integer }
         offset: { type: integer }

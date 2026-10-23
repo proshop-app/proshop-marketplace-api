@@ -11,7 +11,7 @@ import (
 func TestSearchBodyFilters(t *testing.T) {
 	low, high := int64(100), int64(900)
 	body := searchBody(ports.OfferQuery{
-		Text:       "чайник",
+		Text:       "товар",
 		TenantID:   "t1",
 		CategoryID: "c1",
 		Tag:        "tag-1",
@@ -32,11 +32,11 @@ func TestSearchBodyFilters(t *testing.T) {
 	for _, fragment := range []string{
 		`{"term":{"listed":true}}`,
 		`{"term":{"tenantId":"t1"}}`,
-		`{"term":{"categories.id":"c1"}}`,
+		`{"term":{"categoryPath":"c1"}}`,
 		`{"term":{"tags":"tag-1"}}`,
 		`{"term":{"inStock":true}}`,
 		`{"range":{"price":{"gte":100,"lte":900}}}`,
-		`"query":"чайник"`,
+		`"query":"товар"`,
 		`"from":20`,
 		`"size":10`,
 		`[{"price":"asc"},{"offerId":"asc"}]`,
