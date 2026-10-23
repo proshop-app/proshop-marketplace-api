@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+bin
+tmp
+*.md
+docker-compose.yml
+.golangci.yml
+.air.toml
+Makefile
+.env

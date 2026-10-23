@@ -1,0 +1,72 @@
+# Линтер, юнит-тесты, интеграционные тесты на compose и сборка образа.
+# Образ не публикуется: реестр и выкат подключаются вместе с кластером.
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.23.2"
+
+jobs:
+  lint:
+    name: Линтер
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: make lint
+
+  test:
+    name: Юнит-тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: go vet ./...
+      - run: make test
+
+  integration:
+    name: Интеграционные тесты
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Ядро для OpenSearch
+        run: sudo sysctl -w vm.max_map_count=262144
+      - run: make test-integration
+      - name: Журналы сервисов
+        if: failure()
+        run: docker compose logs
+      - name: Уборка
+        if: always()
+        run: docker compose down -v
+
+  image:
+    name: Образ
+    needs: [lint, test, integration]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t proshop-marketplace:${{ github.sha }} .

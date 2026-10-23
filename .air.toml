@@ -1,0 +1,17 @@
+# Перезапуск сервиса при правках для make dev. Версия air закреплена в Makefile.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/marketplace ./cmd/marketplace"
+bin = "./tmp/marketplace"
+include_ext = ["go", "sql"]
+exclude_dir = ["tmp", "bin", ".git", ".github"]
+exclude_regex = ["_test\\.go$"]
+delay = 500
+send_interrupt = true
+kill_delay = "10s"
+stop_on_error = true
+
+[misc]
+clean_on_exit = true
