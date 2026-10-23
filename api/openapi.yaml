@@ -1,0 +1,825 @@
+openapi: 3.1.0
+info:
+  title: Proshop Marketplace API
+  version: 0.2.0
+  description: |
+    API федеративного маркетплейса для витрины (Nuxt 4) и панели оператора
+    (Vue 3). Все суммы — целые копейки. Время — RFC 3339 в UTC. Ошибка —
+    `{"error": {"code": "<ключ>", "message": "<текст>"}}`; код ответа
+    выбирается по классу ошибки: invalid → 400, unauthorized → 401,
+    not_found → 404, conflict → 409, too_many_requests → 429,
+    unavailable → 503, internal → 500. Ключ ошибки стабилен, текст — для
+    человека. Идентификатор запроса — заголовок `X-Request-Id` (входящий,
+    если по формату, иначе выданный сервером).
+servers:
+  - url: http://localhost:8080
+    description: make dev
+tags:
+  - name: service
+  - name: catalog
+  - name: auth
+  - name: cart
+  - name: delivery
+  - name: checkout
+  - name: operator
+paths:
+  /health:
+    get:
+      tags: [service]
+      summary: Состояние зависимостей
+      operationId: health
+      responses:
+        "200":
+          description: Все зависимости отвечают
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: Какая-то зависимость не отвечает
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+  /metrics:
+    get:
+      tags: [service]
+      summary: Метрики Prometheus
+      operationId: metrics
+      responses:
+        "200":
+          description: Текстовый формат Prometheus
+          content:
+            text/plain:
+              schema: { type: string }
+  /api/v1/catalog/offers:
+    get:
+      tags: [catalog]
+      summary: Выдача предложений
+      description: Только предложения, открытые покупателю и показанные в выдаче.
+      operationId: listOffers
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Строка поиска }
+        - { name: tenant, in: query, schema: { type: string }, description: Магазин }
+        - { name: category, in: query, schema: { type: string }, description: Категория магазина }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: priceMin, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
+        - { name: priceMax, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
+        - { name: inStock, in: query, schema: { type: boolean } }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [relevance, price_asc, price_desc, newest], default: relevance }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 }, description: "offset + limit ≤ 10000" }
+      responses:
+        "200":
+          description: Страница выдачи
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OfferPage" }
+        "400": { $ref: "#/components/responses/Error" }
+  /api/v1/catalog/offers/{offerId}:
+    get:
+      tags: [catalog]
+      summary: Карточка предложения
+      operationId: getOffer
+      parameters:
+        - $ref: "#/components/parameters/OfferId"
+      responses:
+        "200":
+          description: Карточка с описанием и подписями тегов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Offer" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/auth/call:
+    post:
+      tags: [auth]
+      summary: Начать вход по звонку
+      description: |
+        Покупатель получает номер, на который нужно позвонить со своего
+        телефона. Лимиты: по телефону и по адресу покупателя.
+      operationId: startLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [phone]
+              properties:
+                phone: { type: string, examples: ["+7 (925) 123-45-67"] }
+      responses:
+        "201":
+          description: Проверка заведена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Challenge" }
+        "400": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/auth/call/check:
+    post:
+      tags: [auth]
+      summary: Состояние проверки звонком
+      description: |
+        Клиент опрашивает раз в 2–3 секунды. Когда звонок подтверждён,
+        ответ ставит куку сессии `__Host-mp_session` (Secure, HttpOnly,
+        SameSite=Lax) и содержит покупателя; токен в тело не попадает.
+        Сессия выдаётся по проверке один раз: повтор — 409 buyer.challenge_used.
+      operationId: checkLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challengeId]
+              properties:
+                challengeId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Состояние; при входе — Set-Cookie и покупатель
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: "__Host-mp_session=…; Path=/; Secure; HttpOnly; SameSite=Lax"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Выйти
+      operationId: logout
+      responses:
+        "204":
+          description: Сессия завершена, кука стёрта
+  /api/v1/auth/webhooks/smsru:
+    post:
+      tags: [auth]
+      summary: Оповещение sms.ru о проверке звонком
+      description: |
+        Служебный адрес для шлюза. Форма с записями `data[N]` вида
+        «callcheck_status\n<check_id>\n<код>\n<время>». Состояние
+        перечитывается у шлюза, телу не верим. Ответ — «100».
+      operationId: smsruWebhook
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: { type: string }
+      responses:
+        "200":
+          description: Принято
+          content:
+            text/plain:
+              schema: { type: string, const: "100" }
+  /api/v1/me:
+    get:
+      tags: [auth]
+      summary: Покупатель сессии
+      operationId: me
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      responses:
+        "200":
+          description: Покупатель
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Buyer" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/cart:
+    get:
+      tags: [cart]
+      summary: Корзина покупателя
+      description: Нет корзины или она просрочена — пустая.
+      operationId: getCart
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/cart/lines:
+    post:
+      tags: [cart]
+      summary: Положить предложение
+      description: То же предложение складывает количества; остаток сверяется с каталогом.
+      operationId: addCartLine
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [offerId, quantity]
+              properties:
+                offerId: { type: string, examples: ["t1~p1"] }
+                quantity: { type: integer, minimum: 1, maximum: 999 }
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/cart/lines/{offerId}:
+    put:
+      tags: [cart]
+      summary: Задать количество
+      description: Ноль убирает строку.
+      operationId: setCartLineQuantity
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/OfferId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 0, maximum: 999 }
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [cart]
+      summary: Убрать строку
+      operationId: removeCartLine
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/OfferId"
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/cart/verify:
+    post:
+      tags: [cart]
+      summary: Перепроверить у магазинов
+      description: Цена и наличие спрашиваются у каждого магазина; строки получают пометку issue.
+      operationId: verifyCart
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+        "401": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/delivery/carriers:
+    get:
+      tags: [delivery]
+      summary: Подключённые перевозчики
+      description: Для переключателя карты; карта показывает пункты одного перевозчика.
+      operationId: listCarriers
+      responses:
+        "200":
+          description: Перевозчики
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Carrier" }
+  /api/v1/delivery/pickup-points:
+    get:
+      tags: [delivery]
+      summary: Пункты выдачи перевозчика
+      description: Ровно одно из двух — область карты или город.
+      operationId: listPickupPoints
+      parameters:
+        - { name: carrier, in: query, required: true, schema: { type: string, examples: [cdek, yandex] } }
+        - name: bbox
+          in: query
+          description: "minLon,minLat,maxLon,maxLat в градусах"
+          schema: { type: string, examples: ["37.5,55.6,37.8,55.9"] }
+        - { name: city, in: query, schema: { type: string }, description: Город словами перевозчика, без учёта регистра }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } }
+      responses:
+        "200":
+          description: Пункты
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/PickupPoint" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout:
+    post:
+      tags: [checkout]
+      summary: Собрать покупку из корзины
+      description: Повтор с тем же Idempotency-Key отдаёт ту же покупку.
+      operationId: createCheckout
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, pattern: "^[A-Za-z0-9_:.-]{8,128}$" }
+      responses:
+        "201": { $ref: "#/components/responses/Checkout" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}:
+    get:
+      tags: [checkout]
+      summary: Покупка
+      operationId: getCheckout
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200": { $ref: "#/components/responses/Checkout" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/delivery/quotes:
+    post:
+      tags: [checkout]
+      summary: Выбрать пункт выдачи и посчитать доставку
+      description: |
+        Расчёт спрашивается у каждого продавца покупки по его договору.
+        Продавец без этого перевозчика или пункта получает quote.status
+        unavailable с причиной; не ответивший — reason seller_unreachable.
+      operationId: quoteCheckoutDelivery
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [carrier, pickupPointCode]
+              properties:
+                carrier: { type: string }
+                pickupPointCode: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Checkout" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/confirm:
+    post:
+      tags: [checkout]
+      summary: Подтвердить покупку
+      description: |
+        Цены и наличие перепроверяются у магазинов, устаревшая доставка
+        пересчитывается. Изменились цены — 409 checkout.changed: покупка уже
+        обновлена, её нужно перечитать и подтвердить заново. Подтверждённая
+        покупка отдаётся как есть.
+      operationId: confirmCheckout
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200": { $ref: "#/components/responses/Checkout" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/participants:
+    get:
+      tags: [operator]
+      summary: Участники
+      operationId: listParticipants
+      security: [{ operatorToken: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 200 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: Страница участников
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ParticipantList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [operator]
+      summary: Завести участника
+      description: Магазин должен быть в зеркале реестра платформы. Новый участник скрыт.
+      operationId: createParticipant
+      security: [{ operatorToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenantId, name]
+              properties:
+                tenantId: { type: string }
+                name: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "201": { $ref: "#/components/responses/Participant" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/participants/{tenantId}:
+    get:
+      tags: [operator]
+      summary: Участник
+      operationId: getParticipant
+      security: [{ operatorToken: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200": { $ref: "#/components/responses/Participant" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [operator]
+      summary: Переименовать участника
+      operationId: renameParticipant
+      security: [{ operatorToken: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "200": { $ref: "#/components/responses/Participant" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/participants/{tenantId}/payment-account:
+    put:
+      tags: [operator]
+      summary: Привязать магазин продавца в ЮKassa
+      operationId: setParticipantPaymentAccount
+      security: [{ operatorToken: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [paymentAccountId]
+              properties:
+                paymentAccountId: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" }
+      responses:
+        "200": { $ref: "#/components/responses/Participant" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/participants/{tenantId}/enable:
+    post:
+      tags: [operator]
+      summary: Показать участника в каталоге
+      operationId: enableParticipant
+      security: [{ operatorToken: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200": { $ref: "#/components/responses/Participant" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/participants/{tenantId}/disable:
+    post:
+      tags: [operator]
+      summary: Скрыть участника из каталога
+      operationId: disableParticipant
+      security: [{ operatorToken: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200": { $ref: "#/components/responses/Participant" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-mp_session
+      description: Сессия покупателя после входа по звонку.
+    sessionBearer:
+      type: http
+      scheme: bearer
+      description: Та же сессия заголовком — для серверного рендера витрины.
+    operatorToken:
+      type: http
+      scheme: bearer
+      description: Служебный токен оператора (OPERATOR_TOKEN) до входа через панель на неделе 3.
+  parameters:
+    OfferId:
+      name: offerId
+      in: path
+      required: true
+      description: "<tenantId>~<productId>"
+      schema: { type: string, examples: ["t1~p1"] }
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema: { type: string }
+    CheckoutId:
+      name: checkoutId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Error:
+      description: Ошибка
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Cart:
+      description: Корзина
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Cart" }
+    Checkout:
+      description: Покупка
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Checkout" }
+    Participant:
+      description: Участник
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Participant" }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, examples: ["catalog.offer_not_found"] }
+            message: { type: string }
+    Health:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ok, unavailable] }
+        checks:
+          type: object
+          additionalProperties: { type: string, enum: [ok, fail] }
+    Seller:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+    Category:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        url: { type: string }
+    Tag:
+      type: object
+      required: [id, label]
+      properties:
+        id: { type: string }
+        label: { type: string }
+    Offer:
+      type: object
+      required: [id, tenantId, productId, seller, name, categories, tags, price, basePrice, available, inStock, checkoutAvailable, updatedAt]
+      properties:
+        id: { type: string, examples: ["t1~p1"] }
+        tenantId: { type: string }
+        productId: { type: string }
+        seller: { $ref: "#/components/schemas/Seller" }
+        name: { type: string }
+        description: { type: string, description: Только в карточке }
+        image: { type: string }
+        url: { type: string }
+        sku: { type: string }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/Category" }
+        tags:
+          type: array
+          items: { $ref: "#/components/schemas/Tag" }
+        price: { type: integer, format: int64, description: Цена продажи в копейках }
+        basePrice: { type: integer, format: int64, description: Прайс магазина в копейках }
+        available: { type: integer }
+        inStock: { type: boolean }
+        checkoutAvailable: { type: boolean, description: Продавец принимает оплату через маркетплейс }
+        updatedAt: { type: string, format: date-time }
+    OfferPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Offer" }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    Challenge:
+      type: object
+      required: [challengeId, status, expiresAt]
+      properties:
+        challengeId: { type: string, format: uuid }
+        status: { type: string, enum: [pending, confirmed, expired] }
+        callPhone: { type: string, description: Номер для звонка цифрами }
+        callPhonePretty: { type: string }
+        expiresAt: { type: string, format: date-time }
+    LoginResult:
+      allOf:
+        - $ref: "#/components/schemas/Challenge"
+        - type: object
+          properties:
+            buyer: { $ref: "#/components/schemas/Buyer" }
+            sessionExpiresAt: { type: string, format: date-time }
+    Buyer:
+      type: object
+      required: [id, phone]
+      properties:
+        id: { type: string, format: uuid }
+        phone: { type: string, description: Цифры в международном формате без плюса }
+    CartLine:
+      type: object
+      required: [offerId, tenantId, productId, name, quantity, price, amount, issue, addedAt]
+      properties:
+        offerId: { type: string }
+        tenantId: { type: string }
+        productId: { type: string }
+        name: { type: string }
+        quantity: { type: integer, minimum: 1, maximum: 999 }
+        price: { type: integer, format: int64, description: Снимок цены в копейках }
+        amount: { type: integer, format: int64 }
+        issue:
+          type: [string, "null"]
+          enum: [price_changed, not_enough_stock, unavailable, null]
+          description: Пометка после перепроверки у магазина
+        addedAt: { type: string, format: date-time }
+    Cart:
+      type: object
+      required: [id, lines, total, version, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        lines:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/CartLine" }
+        total: { type: integer, format: int64 }
+        version: { type: integer, format: int64 }
+        expiresAt: { type: string, format: date-time }
+    Carrier:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, examples: [cdek, yandex] }
+        name: { type: string }
+    PickupPoint:
+      type: object
+      required: [carrier, code, name, address, city, location, schedule, refreshedAt]
+      properties:
+        carrier: { type: string }
+        code: { type: string }
+        name: { type: string }
+        address: { type: string }
+        city: { type: string }
+        location:
+          type: object
+          required: [lat, lon]
+          properties:
+            lat: { type: number }
+            lon: { type: number }
+        schedule: { type: string }
+        refreshedAt: { type: string, format: date-time }
+    Quote:
+      type: object
+      required: [status, cost, subsidy, buyerCost, minDays, maxDays, expiresAt]
+      properties:
+        status: { type: string, enum: [available, unavailable] }
+        reason: { type: string, examples: [carrier_not_connected, seller_unreachable] }
+        cost: { type: integer, format: int64, description: Стоимость по договору продавца }
+        subsidy: { type: integer, format: int64, description: Сколько оплачивает продавец }
+        buyerCost: { type: integer, format: int64, description: Доля покупателя }
+        minDays: { type: integer }
+        maxDays: { type: integer }
+        expiresAt: { type: string, format: date-time }
+    CheckoutLine:
+      type: object
+      required: [offerId, productId, name, quantity, price, amount]
+      properties:
+        offerId: { type: string }
+        productId: { type: string }
+        name: { type: string }
+        quantity: { type: integer }
+        price: { type: integer, format: int64 }
+        amount: { type: integer, format: int64 }
+    CheckoutGroup:
+      type: object
+      required: [tenantId, externalCheckoutId, lines, goods, quote]
+      properties:
+        tenantId: { type: string }
+        externalCheckoutId: { type: string, description: "<checkoutId>:<tenantId> — ключ заказа у магазина" }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/CheckoutLine" }
+        goods: { type: integer, format: int64 }
+        quote:
+          oneOf:
+            - $ref: "#/components/schemas/Quote"
+            - type: "null"
+    Selection:
+      type: object
+      required: [carrier, pickupPointCode, city, address]
+      properties:
+        carrier: { type: string }
+        pickupPointCode: { type: string }
+        city: { type: string }
+        address: { type: string }
+    Checkout:
+      type: object
+      required: [id, status, groups, delivery, goodsTotal, deliveryTotal, total, version, createdAt, updatedAt, confirmedAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [draft, confirmed] }
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/CheckoutGroup" }
+        delivery:
+          oneOf:
+            - $ref: "#/components/schemas/Selection"
+            - type: "null"
+        goodsTotal: { type: integer, format: int64 }
+        deliveryTotal: { type: integer, format: int64 }
+        total: { type: integer, format: int64 }
+        version: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        confirmedAt: { type: [string, "null"], format: date-time }
+    Subsidy:
+      type: object
+      required: [enabled, value, maxAmount]
+      properties:
+        enabled: { type: boolean }
+        type: { type: string, enum: [fixed, percent] }
+        value: { type: integer, format: int64, description: Копейки для fixed, процент для percent }
+        maxAmount: { type: integer, format: int64, description: Потолок в копейках; 0 — без потолка }
+    Participant:
+      type: object
+      required: [tenantId, slug, name, status, enabled, paymentAccountId, shopEnabled, subsidy, settingsSyncedAt, tenantStatus, visible, checkoutAvailable, version, createdAt, updatedAt]
+      properties:
+        tenantId: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [onboarding, connected] }
+        enabled: { type: boolean, description: Включён оператором }
+        paymentAccountId: { type: [string, "null"] }
+        shopEnabled: { type: boolean, description: Магазин сам включил участие (с сервера) }
+        subsidy: { $ref: "#/components/schemas/Subsidy" }
+        settingsSyncedAt: { type: [string, "null"], format: date-time }
+        tenantStatus: { type: string, enum: [creating, active, suspended, deleting, deleted] }
+        visible: { type: boolean }
+        checkoutAvailable: { type: boolean }
+        version: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ParticipantList:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Participant" }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
