@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
@@ -78,12 +80,18 @@ type quoteJSON struct {
 
 // errorJSON — тело отказа сервера: {"ok":false,"message","status","code","items"}.
 type errorJSON struct {
-	Code string `json:"code"`
+	Code  string `json:"code"`
+	Items []struct {
+		ProductID ids.ProductID `json:"productId"`
+		Price     *int64        `json:"price"`
+	} `json:"items"`
 }
 
 type settingsJSON struct {
-	Enabled bool `json:"enabled"`
-	Subsidy *struct {
+	Enabled          bool                          `json:"enabled"`
+	FreeDeliveryFrom *int64                        `json:"freeDeliveryFrom"`
+	Delivery         *participant.DeliverySettings `json:"delivery"`
+	Subsidy          *struct {
 		Enabled   bool   `json:"enabled"`
 		Type      string `json:"type"`
 		Value     int64  `json:"value"`
@@ -98,7 +106,11 @@ func New(cfg Config) *Client {
 		timeout = 5 * time.Second
 	}
 
-	return &Client{baseURL: strings.TrimRight(cfg.BaseURL, "/"), token: cfg.Token, http: &http.Client{Timeout: timeout}}
+	return &Client{
+		baseURL: strings.TrimRight(cfg.BaseURL, "/"),
+		token:   cfg.Token,
+		http:    &http.Client{Timeout: timeout, CheckRedirect: refuseRedirect},
+	}
 }
 
 // CheckItems — цена и наличие позиций у магазина.
@@ -178,10 +190,28 @@ func (c *Client) QuoteDelivery(
 func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID) (ports.ShopSettings, error) {
 	var answer settingsJSON
 	if err := c.call(ctx, http.MethodGet, tenantID, "/settings/marketplace", nil, &answer); err != nil {
+		if errors.Is(err, ErrInvalidResponse) {
+			return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
+		}
 		return ports.ShopSettings{}, err
 	}
 
 	settings := ports.ShopSettings{Enabled: answer.Enabled}
+	if answer.Enabled && (answer.FreeDeliveryFrom == nil || answer.Subsidy == nil || answer.Delivery == nil) {
+		return ports.ShopSettings{}, ports.ErrInvalidSettings
+	}
+	if answer.FreeDeliveryFrom != nil {
+		if *answer.FreeDeliveryFrom < 0 {
+			return ports.ShopSettings{}, ports.ErrInvalidSettings
+		}
+		settings.FreeDeliveryFrom = money.FromKopecks(*answer.FreeDeliveryFrom)
+	}
+	if answer.Delivery != nil {
+		settings.Delivery = answer.Delivery.Clone()
+	}
+	if answer.Enabled && settings.Delivery.Validate() != nil {
+		return ports.ShopSettings{}, ports.ErrInvalidSettings
+	}
 
 	if s := answer.Subsidy; s != nil {
 		settings.Subsidy = participant.Subsidy{
@@ -193,9 +223,12 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 	}
 
 	if err := settings.Subsidy.Validate(); err != nil {
-		return ports.ShopSettings{}, ErrInvalidResponse.Wrap(err)
+		return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
 	}
 
+	if answer.Enabled && !settings.Subsidy.Enabled {
+		return ports.ShopSettings{}, ports.ErrInvalidSettings
+	}
 	return settings, nil
 }
 
@@ -241,7 +274,11 @@ func (c *Client) call(
 		return refusal(method, path, reply)
 	}
 
-	if err := json.NewDecoder(io.LimitReader(reply.Body, 4<<20)).Decode(out); err != nil {
+	raw, err := io.ReadAll(io.LimitReader(reply.Body, (4<<20)+1))
+	if err != nil || len(raw) > 4<<20 {
+		return ErrInvalidResponse
+	}
+	if err := json.Unmarshal(raw, out); err != nil {
 		return ErrInvalidResponse.Wrap(err)
 	}
 
@@ -251,11 +288,35 @@ func (c *Client) call(
 // refusal — отказ сервера: 403 MARKETPLACE_DISABLED — магазин не участвует,
 // всё остальное — сервер недоступен.
 func refusal(method, path string, reply *http.Response) error {
-	detail, _ := io.ReadAll(io.LimitReader(reply.Body, 512))
+	raw, err := io.ReadAll(io.LimitReader(reply.Body, (4<<20)+1))
+	if err != nil || len(raw) > 4<<20 {
+		return ErrInvalidResponse
+	}
+	detail := raw
+	if len(detail) > 512 {
+		detail = detail[:512]
+	}
 	message := fmt.Sprintf("%s %s: HTTP %d %s", method, path, reply.StatusCode, strings.TrimSpace(string(detail)))
 
 	var body errorJSON
-	if reply.StatusCode == http.StatusForbidden && json.Unmarshal(detail, &body) == nil {
+	if reply.StatusCode == http.StatusConflict && json.Unmarshal(raw, &body) == nil && body.Code == "PRICE_CHANGED" {
+		changed := &ports.PriceChanged{}
+		for _, item := range body.Items {
+			_, err := ids.ParseProductID(string(item.ProductID))
+			if err != nil || item.Price == nil || *item.Price < 0 {
+				return ErrInvalidResponse
+			}
+			changed.Items = append(changed.Items, checkout.PriceChange{
+				ProductID: item.ProductID,
+				Price:     money.FromKopecks(*item.Price),
+			})
+		}
+		if len(changed.Items) == 0 {
+			return ErrInvalidResponse
+		}
+		return changed
+	}
+	if reply.StatusCode == http.StatusForbidden && json.Unmarshal(raw, &body) == nil {
 		if body.Code == codeMarketplaceDisabled {
 			return ports.ErrMarketplaceDisabled.WithMessage(message)
 		}
@@ -272,3 +333,5 @@ func itemsJSON(items []ports.ItemRequest) []itemJSON {
 
 	return out
 }
+
+func refuseRedirect(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }

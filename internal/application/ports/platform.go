@@ -18,6 +18,9 @@ var ErrMarketplaceDisabled = errs.New(
 	"магазин не участвует в маркетплейсе",
 )
 
+// ErrInvalidSettings — отсутствие обязательных настроек скрывает участника.
+var ErrInvalidSettings = errs.New(errs.Invalid, "platform.invalid_settings", "настройки участия не по контракту")
+
 // ItemRequest — позиция заказа продавца.
 type ItemRequest struct {
 	ProductID ids.ProductID
@@ -42,14 +45,17 @@ type QuoteRequest struct {
 
 // ShopSettings — настройки магазина для маркетплейса.
 type ShopSettings struct {
-	Enabled bool
-	Subsidy participant.Subsidy
+	Enabled          bool
+	Subsidy          participant.Subsidy
+	FreeDeliveryFrom money.Money
+	Delivery         participant.DeliverySettings
 }
 
 // PlatformAPI — внутренний API сервера установки в контексте магазина
 // (контракт PR-M1, docs/server-contract.md). Магазин, который не участвует в
 // маркетплейсе, — ErrMarketplaceDisabled.
 type PlatformAPI interface {
+	SellerOrders
 	// CheckItems — цена и наличие позиций у магазина сейчас.
 	CheckItems(ctx context.Context, tenantID ids.TenantID, items []ItemRequest) ([]ItemCheck, error)
 	// QuoteDelivery — стоимость и срок доставки по договору магазина.

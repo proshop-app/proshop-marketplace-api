@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,6 +49,7 @@ type pickupPoint struct {
 	Name    string `json:"name"`
 	Address struct {
 		FullAddress string `json:"full_address"`
+		GeoID       int    `json:"geoId"`
 		Locality    string `json:"locality"`
 	} `json:"address"`
 	Position struct {
@@ -158,6 +160,9 @@ func (p *Provider) Fetch(ctx context.Context, yield func([]delivery.PickupPoint)
 			continue
 		}
 
+		if pp.Address.GeoID > 0 {
+			point.RegionCode = strconv.Itoa(pp.Address.GeoID)
+		}
 		if batch = append(batch, point); len(batch) == batchSize {
 			if err := yield(batch); err != nil {
 				return err

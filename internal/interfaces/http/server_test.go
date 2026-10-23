@@ -54,6 +54,9 @@ type response struct {
 	body   map[string]any
 }
 
+var w3ServerDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3ServerSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
+
 func newEnv(t *testing.T) *env {
 	t.Helper()
 
@@ -112,7 +115,12 @@ func newEnv(t *testing.T) *env {
 			directory,
 			identities,
 			e.clock,
-			appcheckout.Config{QuoteTTL: 30 * time.Minute, QuoteTimeout: time.Second},
+			appcheckout.Config{
+				DeliverySubsidyMinPercent: 30,
+				QuoteTTL:                  30 * time.Minute,
+				QuoteTimeout:              time.Second,
+				ReturnBaseURL:             "https://market.example",
+			},
 		),
 		OperatorToken: token,
 		Checks:        []transport.Check{{Name: "postgres", Probe: func(context.Context) error { return e.healthy }}},
@@ -248,8 +256,7 @@ func TestOperatorFlow(t *testing.T) {
 	}
 
 	r = e.call(t, http.MethodPost, "/api/v1/operator/participants", `{"tenantId":"t1","name":"Магазин"}`, true)
-	if r.status != http.StatusCreated || r.body["slug"] != "shop-one" || r.body["status"] != "onboarding" ||
-		r.body["paymentAccountId"] != nil {
+	if r.status != http.StatusCreated || r.body["slug"] != "shop-one" || r.body["status"] != "onboarding" {
 		t.Fatalf("создание: %+v", r)
 	}
 
@@ -271,18 +278,6 @@ func TestOperatorFlow(t *testing.T) {
 	r = e.call(t, http.MethodPatch, "/api/v1/operator/participants/t1", `{"name":"Новое имя"}`, true)
 	if r.status != http.StatusOK || r.body["name"] != "Новое имя" {
 		t.Fatalf("переименование: %+v", r)
-	}
-
-	paymentAccount := "/api/v1/operator/participants/t1/payment-account"
-
-	r = e.call(t, http.MethodPut, paymentAccount, `{"paymentAccountId":"506751"}`, true)
-	if r.status != http.StatusOK || r.body["status"] != "connected" || r.body["paymentAccountId"] != "506751" {
-		t.Fatalf("касса продавца: %+v", r)
-	}
-
-	r = e.call(t, http.MethodPut, paymentAccount, `{"paymentAccountId":"bad id"}`, true)
-	if r.status != http.StatusBadRequest {
-		t.Fatalf("некорректный идентификатор кассы: %+v", r)
 	}
 
 	r = e.call(t, http.MethodPost, "/api/v1/operator/participants/t1/enable", "", true)
@@ -332,6 +327,8 @@ func TestCatalog(t *testing.T) {
 		Status:      participant.StatusOnboarding,
 		Enabled:     true,
 		ShopEnabled: true,
+		Delivery:    w3ServerDelivery,
+		Subsidy:     w3ServerSubsidy,
 		Version:     1,
 		CreatedAt:   t0,
 		UpdatedAt:   t0,
@@ -349,7 +346,7 @@ func TestCatalog(t *testing.T) {
 	first, _ := items[0].(map[string]any)
 	seller, _ := first["seller"].(map[string]any)
 	if first["id"] != "t1~p2" || first["price"] != float64(50000) || seller["slug"] != "shop-one" ||
-		first["checkoutAvailable"] != false {
+		first["checkoutAvailable"] != true {
 		t.Fatalf("предложение в выдаче: %+v", first)
 	}
 	if _, ok := first["description"]; ok {

@@ -246,3 +246,54 @@ func (r pickupPoints) Page(
 
 	return page, nil
 }
+
+func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Checkout, error) {
+	var found []*checkout.Checkout
+	for _, state := range r.d.checkouts {
+		if state.ID <= f.AfterID || (f.BuyerID != "" && state.BuyerID != f.BuyerID) {
+			continue
+		}
+		if f.OrdersOnly && (state.Status == checkout.StatusDraft || state.Status == checkout.StatusConfirmed) {
+			continue
+		}
+		if !f.AwaitingBefore.IsZero() {
+			stuck := false
+			for _, g := range state.Groups {
+				if g.Status == checkout.GroupAwaitingPayment && !g.AwaitingSince.After(f.AwaitingBefore) {
+					stuck = true
+				}
+			}
+			if !stuck {
+				continue
+			}
+		}
+		if !f.WorkDueAt.IsZero() && !checkoutWorkDue(state, f.WorkDueAt) {
+			continue
+		}
+		found = append(found, checkout.Restore(copyCheckout(state)))
+	}
+	sort.Slice(found, func(i, j int) bool { return found[i].ID() < found[j].ID() })
+	if len(found) > f.Limit {
+		found = found[:f.Limit]
+	}
+	return found, nil
+}
+
+func checkoutWorkDue(state checkout.State, now time.Time) bool {
+	if !state.CartConsumed {
+		return true
+	}
+	for _, g := range state.Groups {
+		if g.Status == checkout.GroupCreating || g.Status == checkout.GroupSellerUnreachable {
+			return true
+		}
+		if (g.Status == checkout.GroupCancelled || g.Status == checkout.GroupPriceChanged) && !g.CartReturned {
+			return true
+		}
+		if g.OrderID != "" && g.Status != checkout.GroupCancelled && g.Status != checkout.GroupReturned &&
+			!now.Before(g.NextPollAt) {
+			return true
+		}
+	}
+	return false
+}

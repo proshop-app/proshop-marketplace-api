@@ -64,7 +64,11 @@ func TestSettingsTaskDisablesShop(t *testing.T) {
 	platform := fake.NewPlatform()
 	settings := appparticipant.NewSettings(store, platform, clock)
 
-	platform.SetSettings("t1", ports.ShopSettings{Enabled: true})
+	platform.SetSettings("t1", ports.ShopSettings{
+		Enabled:  true,
+		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+		Delivery: participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}},
+	})
 	if changed, err := settings.SyncOne(ctx, "t1"); err != nil || !changed {
 		t.Fatalf("участие включено: %v %v", changed, err)
 	}
@@ -95,7 +99,7 @@ func TestSettingsTaskDisablesShop(t *testing.T) {
 	}
 
 	if p, _ := store.Participant("t1"); p.Status != participant.StatusOnboarding {
-		t.Fatalf("сверка не трогает подключение к оплате: %+v", p)
+		t.Fatalf("выключенное участие возвращает статус настройки: %+v", p)
 	}
 }
 

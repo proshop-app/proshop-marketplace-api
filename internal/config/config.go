@@ -91,8 +91,11 @@ type Cart struct {
 
 // Checkout — расчёты доставки.
 type Checkout struct {
-	QuoteTTL     time.Duration
-	QuoteTimeout time.Duration
+	DeliverySubsidyMinPercent int
+	ReturnBaseURL             string
+	OrdersInterval            time.Duration
+	QuoteTTL                  time.Duration
+	QuoteTimeout              time.Duration
 }
 
 // Carrier — учётная запись платформы у перевозчика только на чтение справочника.
@@ -236,8 +239,11 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		},
 		Cart: Cart{TTL: r.duration("CART_TTL", 30*24*time.Hour)},
 		Checkout: Checkout{
-			QuoteTTL:     r.duration("QUOTE_TTL", 30*time.Minute),
-			QuoteTimeout: r.duration("QUOTE_TIMEOUT", 5*time.Second),
+			DeliverySubsidyMinPercent: r.subsidyPercent(),
+			ReturnBaseURL:             r.httpURL("MARKETPLACE_PUBLIC_URL"),
+			OrdersInterval:            r.duration("ORDERS_SYNC_INTERVAL", 30*time.Second),
+			QuoteTTL:                  r.duration("QUOTE_TTL", 30*time.Minute),
+			QuoteTimeout:              r.duration("QUOTE_TIMEOUT", 5*time.Second),
 		},
 		Delivery: Delivery{
 			CDEK: Carrier{
@@ -511,4 +517,12 @@ func (r *reader) oneOf(name, fallback string, allowed ...string) string {
 	r.fail(name, "допустимо: "+strings.Join(allowed, ", "))
 
 	return fallback
+}
+
+func (r *reader) subsidyPercent() int {
+	value, ok := r.integer("DELIVERY_SUBSIDY_MIN_PERCENT", 30)
+	if ok && (value < 0 || value > 100) {
+		r.fail("DELIVERY_SUBSIDY_MIN_PERCENT", "ожидается целый процент от 0 до 100")
+	}
+	return value
 }

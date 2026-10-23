@@ -13,8 +13,8 @@ import (
 
 const (
 	participantColumns = `
-		tenant_id, slug, name, status, enabled, coalesce(payment_account_id, ''), shop_enabled, subsidy,
-		settings_synced_at, version, created_at, updated_at`
+		tenant_id, slug, name, status, enabled, shop_enabled, subsidy,
+		settings_synced_at, version, created_at, updated_at, free_delivery_from, delivery_settings`
 
 	selectParticipant = `
 		SELECT ` + participantColumns + `
@@ -31,10 +31,10 @@ const (
 
 	insertParticipant = `
 		INSERT INTO participants (
-			tenant_id, slug, name, status, enabled, payment_account_id, shop_enabled, subsidy,
-			settings_synced_at, version, created_at, updated_at
+			tenant_id, slug, name, status, enabled, shop_enabled, subsidy,
+			settings_synced_at, version, created_at, updated_at, free_delivery_from, delivery_settings
 		)
-		VALUES ($1, $2, $3, $4, $5, nullif($6, ''), $7, $8, $9, $10, $11, $12)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
 
 	updateParticipant = `
 		UPDATE participants
@@ -42,12 +42,13 @@ const (
 			name = $5,
 			status = $6,
 			enabled = $7,
-			payment_account_id = nullif($8, ''),
-			shop_enabled = $9,
-			subsidy = $10,
-			settings_synced_at = $11,
-			version = $12,
-			updated_at = $13
+			shop_enabled = $8,
+			subsidy = $9,
+			settings_synced_at = $10,
+			version = $11,
+			updated_at = $12,
+			free_delivery_from = $13,
+			delivery_settings = $14
 		WHERE tenant_id = $1 AND status = $2 AND version = $3`
 )
 
@@ -130,13 +131,14 @@ func (r *Participants) Add(ctx context.Context, p *participant.Participant) erro
 		s.Name,
 		string(s.Status),
 		s.Enabled,
-		s.PaymentAccountID,
 		s.ShopEnabled,
 		subsidy,
 		nullTime(s.SettingsSyncedAt),
 		s.Version,
 		s.CreatedAt,
 		s.UpdatedAt,
+		s.FreeDeliveryFrom.Kopecks(),
+		encodeDelivery(s.Delivery),
 	)
 
 	switch {
@@ -176,12 +178,13 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 		s.Name,
 		string(s.Status),
 		s.Enabled,
-		s.PaymentAccountID,
 		s.ShopEnabled,
 		subsidy,
 		nullTime(s.SettingsSyncedAt),
 		s.Version,
 		s.UpdatedAt,
+		s.FreeDeliveryFrom.Kopecks(),
+		encodeDelivery(s.Delivery),
 	)
 
 	switch {
@@ -205,6 +208,8 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 		status   string
 		subsidy  []byte
 		synced   *time.Time
+		free     int64
+		delivery []byte
 	)
 
 	err := row.Scan(
@@ -213,18 +218,23 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 		&state.Name,
 		&status,
 		&state.Enabled,
-		&state.PaymentAccountID,
 		&state.ShopEnabled,
 		&subsidy,
 		&synced,
 		&state.Version,
 		&state.CreatedAt,
 		&state.UpdatedAt,
+		&free,
+		&delivery,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	state.FreeDeliveryFrom = money.FromKopecks(free)
+	if err := json.Unmarshal(delivery, &state.Delivery); err != nil {
+		return nil, err
+	}
 	state.TenantID = ids.TenantID(tenantID)
 	state.Status = participant.Status(status)
 
@@ -270,4 +280,9 @@ func decodeSubsidy(raw []byte) (participant.Subsidy, error) {
 	}
 
 	return subsidy, nil
+}
+
+func encodeDelivery(d participant.DeliverySettings) string {
+	raw, _ := json.Marshal(d)
+	return string(raw)
 }

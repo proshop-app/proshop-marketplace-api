@@ -6,34 +6,37 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 )
 
 // document — предложение в индексе; суммы — копейки.
 type document struct {
-	CategoryID        string                     `json:"categoryId,omitempty"`
-	CategoryPath      []string                   `json:"categoryPath,omitempty"`
-	Attributes        map[string]json.RawMessage `json:"attributes,omitempty"`
-	OfferID           string                     `json:"offerId"`
-	TenantID          string                     `json:"tenantId"`
-	ProductID         string                     `json:"productId"`
-	SellerSlug        string                     `json:"sellerSlug,omitempty"`
-	SellerName        string                     `json:"sellerName,omitempty"`
-	Name              string                     `json:"name,omitempty"`
-	Description       string                     `json:"description,omitempty"`
-	Image             string                     `json:"image,omitempty"`
-	URL               string                     `json:"url,omitempty"`
-	SKU               string                     `json:"sku,omitempty"`
-	Categories        []category                 `json:"categories,omitempty"`
-	Tags              []string                   `json:"tags,omitempty"`
-	VariantsID        string                     `json:"variantsId,omitempty"`
-	Price             int64                      `json:"price"`
-	BasePrice         int64                      `json:"basePrice"`
-	Available         int                        `json:"available"`
-	InStock           bool                       `json:"inStock"`
-	Visible           bool                       `json:"visible"`
-	Listed            bool                       `json:"listed"`
-	CheckoutAvailable bool                       `json:"checkoutAvailable"`
-	UpdatedAt         time.Time                  `json:"updatedAt"`
+	Delivery          participant.DeliverySettings `json:"delivery"`
+	FreeDeliveryFrom  int64                        `json:"freeDeliveryFrom"`
+	CategoryID        string                       `json:"categoryId,omitempty"`
+	CategoryPath      []string                     `json:"categoryPath,omitempty"`
+	Attributes        map[string]json.RawMessage   `json:"attributes,omitempty"`
+	OfferID           string                       `json:"offerId"`
+	TenantID          string                       `json:"tenantId"`
+	ProductID         string                       `json:"productId"`
+	SellerSlug        string                       `json:"sellerSlug,omitempty"`
+	SellerName        string                       `json:"sellerName,omitempty"`
+	Name              string                       `json:"name,omitempty"`
+	Description       string                       `json:"description,omitempty"`
+	Image             string                       `json:"image,omitempty"`
+	URL               string                       `json:"url,omitempty"`
+	SKU               string                       `json:"sku,omitempty"`
+	Categories        []category                   `json:"categories,omitempty"`
+	Tags              []string                     `json:"tags,omitempty"`
+	VariantsID        string                       `json:"variantsId,omitempty"`
+	Price             int64                        `json:"price"`
+	BasePrice         int64                        `json:"basePrice"`
+	Available         int                          `json:"available"`
+	InStock           bool                         `json:"inStock"`
+	Visible           bool                         `json:"visible"`
+	Listed            bool                         `json:"listed"`
+	CheckoutAvailable bool                         `json:"checkoutAvailable"`
+	UpdatedAt         time.Time                    `json:"updatedAt"`
 }
 
 type category struct {
@@ -52,6 +55,8 @@ func toDocument(doc ports.OfferDocument) document {
 		ProductID:         doc.ProductID,
 		SellerSlug:        doc.SellerSlug,
 		SellerName:        doc.SellerName,
+		Delivery:          doc.Delivery.Clone(),
+		FreeDeliveryFrom:  doc.FreeDeliveryFrom,
 		Name:              doc.Name,
 		Description:       doc.Description,
 		Image:             doc.Image,
@@ -85,6 +90,8 @@ func fromDocument(doc document, version int64) ports.OfferDocument {
 		ProductID:         doc.ProductID,
 		SellerSlug:        doc.SellerSlug,
 		SellerName:        doc.SellerName,
+		Delivery:          doc.Delivery.Clone(),
+		FreeDeliveryFrom:  doc.FreeDeliveryFrom,
 		Name:              doc.Name,
 		Description:       doc.Description,
 		Image:             doc.Image,

@@ -263,6 +263,8 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 
 	doc.SellerSlug = offer.Seller.Slug
 	doc.SellerName = offer.Seller.Name
+	doc.Delivery = state.Participant.State().Delivery
+	doc.FreeDeliveryFrom = state.Participant.State().FreeDeliveryFrom.Kopecks()
 	doc.Name = offer.Card.Name
 	doc.Description = offer.Card.Description
 	doc.Image = offer.Card.Image

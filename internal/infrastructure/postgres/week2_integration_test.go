@@ -25,6 +25,8 @@ const (
 	buyerB ids.UUID = "7a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b"
 )
 
+var w3Week2IntegrationDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+
 func do(t *testing.T, uow *postgres.UnitOfWork, fn func(ctx context.Context, tx ports.Tx) error) error {
 	t.Helper()
 
@@ -60,7 +62,7 @@ func TestParticipantShopSettings(t *testing.T) {
 			return err
 		}
 
-		if _, err := p.ApplyShopSettings(true, subsidy, at(1)); err != nil {
+		if _, err := p.ApplyShopSettings(true, subsidy, money.Money{}, w3Week2IntegrationDelivery, at(1)); err != nil {
 			return err
 		}
 
@@ -443,7 +445,7 @@ func TestParticipantSettingsMigrationSchedulesReindex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Проверяется переход с версии 3: последующие миграции не меняют исходную точку теста.
+	// Проверяется полный переход с версии 3: миграции 4 и 21 обе инвалидируют старую видимость.
 	for _, status := range statuses {
 		if status.Source.Version < 4 {
 			continue
@@ -476,8 +478,10 @@ func TestParticipantSettingsMigrationSchedulesReindex(t *testing.T) {
 	participant := `SELECT version, shop_enabled FROM participants WHERE tenant_id = 't1'`
 
 	err = pool.QueryRow(ctx, participant).Scan(&version, &shop)
-	if err != nil || version != 2 || shop {
-		t.Fatalf("версия участника выросла, согласия магазина пока нет: %d %v %v", version, shop, err)
+	// Версия 1 увеличивается до 2 при добавлении согласия магазина (4),
+	// затем до 3 при введении обязательных настроек доставки (21).
+	if err != nil || version != 3 || shop {
+		t.Fatalf("две инвалидации видимости, согласия магазина пока нет: %d %v %v", version, shop, err)
 	}
 
 	sync := `

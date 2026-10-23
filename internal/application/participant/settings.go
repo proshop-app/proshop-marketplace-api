@@ -75,6 +75,11 @@ func (s *Settings) Sync(ctx context.Context) (SettingsResult, error) {
 // SyncOne сверяет одного участника; true — видимое поменялось.
 func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, error) {
 	settings, err := s.platform.MarketplaceSettings(ctx, tenantID)
+	var invalid error
+	if errors.Is(err, ports.ErrInvalidSettings) {
+		invalid = err
+		settings, err = ports.ShopSettings{}, nil
+	}
 	if errors.Is(err, ports.ErrMarketplaceDisabled) {
 		// сервер отказал магазину-неучастнику — участие выключено, субсидии нет
 		settings, err = ports.ShopSettings{}, nil
@@ -92,7 +97,14 @@ func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, er
 		}
 
 		now := s.clock.Now()
-		if changed, err = p.ApplyShopSettings(settings.Enabled, settings.Subsidy, now); err != nil {
+		changed, err = p.ApplyShopSettings(
+			settings.Enabled,
+			settings.Subsidy,
+			settings.FreeDeliveryFrom,
+			settings.Delivery,
+			now,
+		)
+		if err != nil {
 			return err
 		}
 
@@ -106,7 +118,7 @@ func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, er
 		return tx.Outbox().Enqueue(ctx, appcatalog.SyncTenantTask(tenantID, now))
 	})
 
-	return changed, err
+	return changed, errors.Join(err, invalid)
 }
 
 // HandleTask — внеочередная сверка из outbox. Участника уже нет — сверять нечего.

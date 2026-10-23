@@ -51,6 +51,7 @@ type Provider struct {
 }
 
 type location struct {
+	RegionCode  int     `json:"region_code"`
 	City        string  `json:"city"`
 	Address     string  `json:"address"`
 	AddressFull string  `json:"address_full"`
@@ -127,6 +128,9 @@ func (p *Provider) Fetch(ctx context.Context, yield func([]delivery.PickupPoint)
 				continue
 			}
 
+			if dp.Location.RegionCode > 0 {
+				point.RegionCode = strconv.Itoa(dp.Location.RegionCode)
+			}
 			points = append(points, point)
 		}
 

@@ -166,6 +166,14 @@ paths:
         Для пустой выдачи универсальные фасеты пусты, атрибутные отсутствуют.
       operationId: listOffers
       parameters:
+        - name: deliveryCarrier
+          in: query
+          schema: { type: string }
+          description: Код перевозчика; передаётся вместе с deliveryRegion.
+        - name: deliveryRegion
+          in: query
+          schema: { type: string }
+          description: Код региона перевозчика из ПВЗ.
         - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Строка поиска }
         - { name: tenant, in: query, schema: { type: string }, description: Магазин }
         - { name: category, in: query, schema: { type: string }, description: Категория площадки с потомками }
@@ -191,6 +199,14 @@ paths:
       summary: Карточка предложения
       operationId: getOffer
       parameters:
+        - name: deliveryCarrier
+          in: query
+          schema: { type: string }
+          description: Код перевозчика; передаётся вместе с deliveryRegion.
+        - name: deliveryRegion
+          in: query
+          schema: { type: string }
+          description: Код региона перевозчика из ПВЗ.
         - $ref: "#/components/parameters/OfferId"
       responses:
         "200":
@@ -581,30 +597,6 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
-  /api/v1/operator/participants/{tenantId}/payment-account:
-    put:
-      tags: [operator]
-      summary: Привязать магазин продавца в ЮKassa
-      operationId: setParticipantPaymentAccount
-      security: [{ operatorToken: [] }]
-      parameters:
-        - $ref: "#/components/parameters/TenantId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [paymentAccountId]
-              properties:
-                paymentAccountId: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" }
-      responses:
-        "200": { $ref: "#/components/responses/Participant" }
-        "400": { $ref: "#/components/responses/Error" }
-        "401": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/Error" }
-        "409": { $ref: "#/components/responses/Error" }
   /api/v1/operator/participants/{tenantId}/enable:
     post:
       tags: [operator]
@@ -633,6 +625,142 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/orders:
+    post:
+      tags: [checkout]
+      summary: Создать независимые заказы и получить первую ссылку
+      operationId: createCheckoutOrders
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contact]
+              additionalProperties: false
+              properties:
+                contact:
+                  type: object
+                  required: [phone, name]
+                  additionalProperties: false
+                  properties:
+                    phone: { type: string }
+                    name: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Checkout" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/groups/{groupId}/pay:
+    post:
+      tags: [checkout]
+      summary: Повторная ссылка до окончания окна оплаты магазина
+      operationId: payCheckoutGroup
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+        - name: groupId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Ссылка на кассу магазина
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentLink" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/return:
+    get:
+      tags: [checkout]
+      summary: Экран проверки оплаты; параметры кассы не подтверждают оплату
+      operationId: checkoutPaymentReturn
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200":
+          description: Проверяем оплату; клиент опрашивает GET checkout
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, message, checkoutId]
+                properties:
+                  status: { type: string, const: checking_payment }
+                  message: { type: string }
+                  checkoutId: { type: string, format: uuid }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/orders:
+    get:
+      tags: [checkout]
+      summary: Покупки владельца со статусами групп, треками и ПВЗ
+      operationId: listBuyerOrders
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - name: after
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: До 100 покупок; next — последний ID для следующей страницы
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/checkouts:
+    get:
+      tags: [operator]
+      summary: Покупки с группами; stuck=true — ожидают оплату не менее 15 минут
+      operationId: listOperatorCheckouts
+      security: [{ operatorToken: [] }]
+      parameters:
+        - name: after
+          in: query
+          schema: { type: string, format: uuid }
+        - name: stuck
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: До 100 покупок; next — последний ID
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /api/v1/delivery/settings:
+    get:
+      tags: [delivery]
+      summary: Действующий минимальный процент субсидии продавца для PR-A1
+      operationId: getDeliverySettings
+      security: []
+      description: Настройка продавца ниже порога принимается; нижняя граница применяется после maxAmount.
+      responses:
+        "200":
+          description: Публичные правила доставки площадки
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deliverySubsidyMinPercent]
+                properties:
+                  deliverySubsidyMinPercent:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                    default: 30
+                    description: DELIVERY_SUBSIDY_MIN_PERCENT; действующая субсидия — max настройки с потолком и процента cost.
+
 components:
   securitySchemes:
     sessionCookie:
@@ -647,7 +775,7 @@ components:
     operatorToken:
       type: http
       scheme: bearer
-      description: Служебный токен оператора (OPERATOR_TOKEN) до входа через панель на неделе 3.
+      description: Служебный токен оператора (OPERATOR_TOKEN) для панели оператора.
   parameters:
     TaxonomyCache:
       name: If-None-Match
@@ -708,6 +836,29 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Participant" }
   schemas:
+    ParticipationDelivery:
+      type: object
+      required: [regions, carriers]
+      properties:
+        regions: { type: array, items: { type: string }, description: "<carrier>:<код зоны перевозчика>" }
+        carriers: { type: array, items: { type: string } }
+    PaymentLink:
+      type: object
+      required: [tenantId, url, expiresAt, position, count]
+      properties:
+        tenantId: { type: string }
+        url: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+        position: { type: integer, minimum: 1 }
+        count: { type: integer, minimum: 1 }
+    PurchaseList:
+      type: object
+      required: [items, next]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Checkout" }
+        next: { type: string, description: Последний ID; пусто при пустой странице }
     TaxonomyVersion:
       type: object
       required: [version]
@@ -821,8 +972,10 @@ components:
           additionalProperties: { type: string, enum: [ok, fail] }
     Seller:
       type: object
-      required: [slug, name]
+      required: [slug, name, delivery, freeDeliveryFrom]
       properties:
+        delivery: { $ref: "#/components/schemas/ParticipationDelivery" }
+        freeDeliveryFrom: { type: integer, format: int64, minimum: 0 }
         slug: { type: string }
         name: { type: string }
     Category:
@@ -839,9 +992,11 @@ components:
         id: { type: string }
         label: { type: string }
     Offer:
+      description: При паре deliveryCarrier и deliveryRegion возвращает deliveryAvailable; вне зон товар виден, доставка недоступна.
       type: object
       required: [id, tenantId, productId, seller, name, categoryId, attributes, categories, tags, price, basePrice, available, inStock, checkoutAvailable, updatedAt]
       properties:
+        deliveryAvailable: { type: boolean }
         categoryId: { type: string, description: Категория площадки }
         attributes: { $ref: "#/components/schemas/CanonicalAttributes" }
         id: { type: string, examples: ["t1~p1"] }
@@ -938,6 +1093,7 @@ components:
       type: object
       required: [carrier, code, name, address, city, location, schedule, refreshedAt]
       properties:
+        regionCode: { type: string }
         carrier: { type: string }
         code: { type: string }
         name: { type: string }
@@ -983,9 +1139,27 @@ components:
         amount: { type: integer, format: int64 }
     CheckoutGroup:
       type: object
-      required: [tenantId, externalCheckoutId, lines, goods, quote]
+      required: [tenantId, externalCheckoutId, lines, goods, quote, status, paymentOrder, deliveryPrice]
       properties:
         tenantId: { type: string }
+        status:
+          type: string
+          enum: ["", creating_order, awaiting_payment, paid, cancelled, shipped, delivered, returned, seller_unreachable, price_changed]
+        orderId: { type: string }
+        paymentUrl: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+        paymentOrder: { type: integer }
+        deliveryPrice: { type: integer, format: int64, minimum: 0, description: Плата на кассе этого магазина; 0 — строка доставки скрыта }
+        reason: { type: string }
+        track: { type: string }
+        currentPrices:
+          type: array
+          items:
+            type: object
+            required: [productId, price]
+            properties:
+              productId: { type: string }
+              price: { type: integer, format: int64, minimum: 0 }
         externalCheckoutId: { type: string, description: "<checkoutId>:<tenantId> — ключ заказа у магазина" }
         lines:
           type: array
@@ -1008,7 +1182,7 @@ components:
       required: [id, status, groups, delivery, goodsTotal, deliveryTotal, total, version, createdAt, updatedAt, confirmedAt]
       properties:
         id: { type: string, format: uuid }
-        status: { type: string, enum: [draft, confirmed] }
+        status: { type: string, enum: [draft, confirmed, creating_orders, awaiting_payment, partially_paid, paid, cancelled] }
         groups:
           type: array
           items: { $ref: "#/components/schemas/CheckoutGroup" }
@@ -1023,6 +1197,10 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         confirmedAt: { type: [string, "null"], format: date-time }
+        nextPayment:
+          oneOf:
+            - $ref: "#/components/schemas/PaymentLink"
+            - type: "null"
     Subsidy:
       type: object
       required: [enabled, value, maxAmount]
@@ -1033,14 +1211,15 @@ components:
         maxAmount: { type: integer, format: int64, description: Потолок в копейках; 0 — без потолка }
     Participant:
       type: object
-      required: [tenantId, slug, name, status, enabled, paymentAccountId, shopEnabled, subsidy, settingsSyncedAt, tenantStatus, visible, checkoutAvailable, version, createdAt, updatedAt]
+      required: [tenantId, slug, name, status, enabled, freeDeliveryFrom, delivery, shopEnabled, subsidy, settingsSyncedAt, tenantStatus, visible, checkoutAvailable, version, createdAt, updatedAt]
       properties:
         tenantId: { type: string }
         slug: { type: string }
         name: { type: string }
         status: { type: string, enum: [onboarding, connected] }
         enabled: { type: boolean, description: Включён оператором }
-        paymentAccountId: { type: [string, "null"] }
+        freeDeliveryFrom: { type: integer, format: int64, minimum: 0 }
+        delivery: { $ref: "#/components/schemas/ParticipationDelivery" }
         shopEnabled: { type: boolean, description: Магазин сам включил участие (с сервера) }
         subsidy: { $ref: "#/components/schemas/Subsidy" }
         settingsSyncedAt: { type: [string, "null"], format: date-time }

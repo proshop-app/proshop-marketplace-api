@@ -38,6 +38,9 @@ type env struct {
 	service  *appcheckout.Service
 }
 
+var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3ServiceSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
+
 func setup(t *testing.T) *env {
 	t.Helper()
 
@@ -62,7 +65,11 @@ func setup(t *testing.T) *env {
 		directory,
 		identities,
 		e.clock,
-		appcheckout.Config{QuoteTTL: 30 * time.Minute, QuoteTimeout: time.Second},
+		appcheckout.Config{
+			QuoteTTL:      30 * time.Minute,
+			QuoteTimeout:  time.Second,
+			ReturnBaseURL: "https://market.example",
+		},
 	)
 
 	ctx := context.Background()
@@ -111,14 +118,16 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	point.RegionCode = "r1"
 	e.store.SeedPickupPoint(point)
 
 	e.store.SeedParticipant(participant.State{
 		TenantID:         "t1",
+		Delivery:         w3ServiceDelivery,
+		FreeDeliveryFrom: money.FromKopecks(1000000),
 		Slug:             "s1",
 		Name:             "Первый",
 		Status:           participant.StatusConnected,
-		PaymentAccountID: "acc",
 		Enabled:          true,
 		ShopEnabled:      true,
 		Subsidy: participant.Subsidy{
@@ -131,6 +140,15 @@ func setup(t *testing.T) *env {
 		UpdatedAt: t0,
 	})
 
+	e.platform.OrderNow = t0
+	e.store.SeedParticipant(participant.State{
+		TenantID:         "t2",
+		ShopEnabled:      true,
+		Enabled:          true,
+		Delivery:         w3ServiceDelivery,
+		Subsidy:          w3ServiceSubsidy,
+		FreeDeliveryFrom: money.FromKopecks(1000000),
+	})
 	e.platform.SetItem(
 		"t1",
 		ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(199000), Available: 3},

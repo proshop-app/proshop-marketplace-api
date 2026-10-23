@@ -122,8 +122,11 @@ func (s *server) services(ctx context.Context) services {
 	)
 
 	checkouts := appcheckout.NewService(uow, s.store.index, resyncing, pickups, identities, now, appcheckout.Config{
-		QuoteTTL:     cfg.Checkout.QuoteTTL,
-		QuoteTimeout: cfg.Checkout.QuoteTimeout,
+		DeliverySubsidyMinPercent: cfg.Checkout.DeliverySubsidyMinPercent,
+		QuoteTTL:                  cfg.Checkout.QuoteTTL,
+		ReturnBaseURL:             cfg.Checkout.ReturnBaseURL,
+		CartTTL:                   cfg.Cart.TTL,
+		QuoteTimeout:              cfg.Checkout.QuoteTimeout,
 	})
 
 	dispatcher := messaging.NewDispatcher(
@@ -249,6 +252,7 @@ func (s *server) jobs() []func(context.Context) error {
 	cfg := s.cfg
 
 	return []func(context.Context) error{
+		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
 		jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, cfg.Outbox.Batch, s.logger, s.metrics).Run,
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
 		jobs.NewPickupRefreshRunner(s.app.directory, cfg.Delivery.RefreshInterval, s.logger, s.metrics).Run,

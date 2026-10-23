@@ -31,11 +31,20 @@ type quoteJSON struct {
 }
 
 type checkoutGroupJSON struct {
-	TenantID           string             `json:"tenantId"`
-	ExternalCheckoutID string             `json:"externalCheckoutId"`
-	Lines              []checkoutLineJSON `json:"lines"`
-	Goods              int64              `json:"goods"`
-	Quote              *quoteJSON         `json:"quote"`
+	TenantID           string                 `json:"tenantId"`
+	ExternalCheckoutID string                 `json:"externalCheckoutId"`
+	Lines              []checkoutLineJSON     `json:"lines"`
+	Goods              int64                  `json:"goods"`
+	Quote              *quoteJSON             `json:"quote"`
+	Status             checkout.GroupStatus   `json:"status"`
+	OrderID            string                 `json:"orderId,omitempty"`
+	PaymentURL         string                 `json:"paymentUrl,omitempty"`
+	ExpiresAt          *time.Time             `json:"expiresAt,omitempty"`
+	PaymentOrder       int                    `json:"paymentOrder"`
+	DeliveryPrice      int64                  `json:"deliveryPrice"`
+	Reason             string                 `json:"reason,omitempty"`
+	Track              string                 `json:"track,omitempty"`
+	CurrentPrices      []checkout.PriceChange `json:"currentPrices,omitempty"`
 }
 
 type selectionJSON struct {
@@ -47,17 +56,18 @@ type selectionJSON struct {
 
 // checkoutJSON — покупка; суммы — копейки.
 type checkoutJSON struct {
-	ID            string              `json:"id"`
-	Status        string              `json:"status"`
-	Groups        []checkoutGroupJSON `json:"groups"`
-	Delivery      *selectionJSON      `json:"delivery"`
-	GoodsTotal    int64               `json:"goodsTotal"`
-	DeliveryTotal int64               `json:"deliveryTotal"`
-	Total         int64               `json:"total"`
-	Version       int64               `json:"version"`
-	CreatedAt     time.Time           `json:"createdAt"`
-	UpdatedAt     time.Time           `json:"updatedAt"`
-	ConfirmedAt   *time.Time          `json:"confirmedAt"`
+	ID            string                `json:"id"`
+	Status        string                `json:"status"`
+	Groups        []checkoutGroupJSON   `json:"groups"`
+	Delivery      *selectionJSON        `json:"delivery"`
+	GoodsTotal    int64                 `json:"goodsTotal"`
+	DeliveryTotal int64                 `json:"deliveryTotal"`
+	Total         int64                 `json:"total"`
+	Version       int64                 `json:"version"`
+	CreatedAt     time.Time             `json:"createdAt"`
+	UpdatedAt     time.Time             `json:"updatedAt"`
+	ConfirmedAt   *time.Time            `json:"confirmedAt"`
+	NextPayment   *checkout.PaymentLink `json:"nextPayment"`
 }
 
 type checkoutHandlers struct {
@@ -102,8 +112,20 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 			ExternalCheckoutID: group.ExternalCheckoutID,
 			Lines:              make([]checkoutLineJSON, 0, len(group.Lines)),
 			Goods:              group.Goods.Kopecks(),
+			Status:             group.Status,
+			OrderID:            group.OrderID,
+			PaymentURL:         group.PaymentURL,
+			PaymentOrder:       group.PaymentOrder,
+			DeliveryPrice:      group.DeliveryPrice.Kopecks(),
+			Reason:             group.Reason,
+			Track:              group.Track,
+			CurrentPrices:      group.CurrentPrices,
 		}
 
+		if !group.ExpiresAt.IsZero() {
+			expires := group.ExpiresAt
+			g.ExpiresAt = &expires
+		}
 		for _, line := range group.Lines {
 			amount, err := line.Price.MulRatio(int64(line.Quantity), 1)
 			if err != nil {
@@ -153,6 +175,7 @@ func (h *checkoutHandlers) respond(
 	}
 
 	body, err := toCheckoutJSON(state)
+	body.NextPayment = h.checkouts.NextPayment(state)
 	if err != nil {
 		writeError(w, r, err)
 
@@ -176,7 +199,7 @@ func (h *checkoutHandlers) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.checkouts.Get(r.Context(), BuyerID(r.Context()), checkoutID)
+	state, err := h.checkouts.Refresh(r.Context(), BuyerID(r.Context()), checkoutID)
 	h.respond(w, r, http.StatusOK, state, err)
 }
 

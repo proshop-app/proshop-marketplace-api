@@ -91,11 +91,6 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/operator/participants", operator(participants.create)},
 		{http.MethodGet, "/api/v1/operator/participants/{tenantId}", operator(participants.get)},
 		{http.MethodPatch, "/api/v1/operator/participants/{tenantId}", operator(participants.rename)},
-		{
-			http.MethodPut,
-			"/api/v1/operator/participants/{tenantId}/payment-account",
-			operator(participants.setPaymentAccount),
-		},
 		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/enable", operator(participants.enable)},
 		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/disable", operator(participants.disable)},
 
@@ -112,12 +107,18 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/cart/verify", signedIn(carts.verify)},
 
 		{http.MethodGet, "/api/v1/delivery/carriers", shipping.carriers},
+		{http.MethodGet, "/api/v1/delivery/settings", checkouts.deliverySettings},
 		{http.MethodGet, "/api/v1/delivery/pickup-points", shipping.pickupPoints},
 
 		{http.MethodPost, "/api/v1/checkout", signedIn(checkouts.create)},
 		{http.MethodGet, "/api/v1/checkout/{checkoutId}", signedIn(checkouts.get)},
 		{http.MethodPost, "/api/v1/checkout/{checkoutId}/delivery/quotes", signedIn(checkouts.quote)},
 		{http.MethodPost, "/api/v1/checkout/{checkoutId}/confirm", signedIn(checkouts.confirm)},
+		{http.MethodPost, "/api/v1/checkout/{checkoutId}/orders", signedIn(checkouts.createOrders)},
+		{http.MethodPost, "/api/v1/checkout/{checkoutId}/groups/{groupId}/pay", signedIn(checkouts.pay)},
+		{http.MethodGet, "/api/v1/checkout/{checkoutId}/return", signedIn(checkouts.paymentReturn)},
+		{http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
+		{http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},
 	}
 }
 

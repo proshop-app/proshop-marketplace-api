@@ -21,13 +21,10 @@ CREATE TABLE participants (
     name               text        NOT NULL,
     status             text        NOT NULL CHECK (status IN ('onboarding', 'connected')),
     enabled            boolean     NOT NULL DEFAULT false,
-    payment_account_id text,
     version            bigint      NOT NULL CHECK (version > 0),
     created_at         timestamptz NOT NULL,
     updated_at         timestamptz NOT NULL,
-    CONSTRAINT participants_slug_key UNIQUE (slug),
-    CONSTRAINT participants_payment_account_status
-        CHECK ((status = 'connected') = (payment_account_id IS NOT NULL))
+    CONSTRAINT participants_slug_key UNIQUE (slug)
 );
 
 CREATE INDEX participants_created_idx ON participants (created_at, tenant_id);

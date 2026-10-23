@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -91,4 +92,14 @@ func SyncSettingsTask(tenantID ids.TenantID, at time.Time) ports.NewTask {
 		Payload:  payload,
 		At:       at,
 	}
+}
+
+// CreateOrder сохраняет отказ участия для внеочередной сверки настроек.
+func (p *ResyncingPlatform) CreateOrder(
+	ctx context.Context,
+	tenantID ids.TenantID,
+	request ports.CreateOrderRequest,
+) (checkout.SellerOrder, error) {
+	order, err := p.PlatformAPI.CreateOrder(ctx, tenantID, request)
+	return order, p.resync(ctx, tenantID, err)
 }

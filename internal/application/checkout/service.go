@@ -1,5 +1,4 @@
-// Package checkout — сценарии покупки до подтверждения: снимок корзины,
-// расчёт доставки у продавцов, перепроверка цен и наличия.
+// Package checkout — покупка, расчёты доставки и независимые заказы магазинов.
 package checkout
 
 import (
@@ -16,6 +15,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 // PointLookup — действующий пункт выдачи из справочника.
@@ -25,8 +25,12 @@ type PointLookup interface {
 
 // Config — сроки расчётов.
 type Config struct {
+	// DeliverySubsidyMinPercent — нижняя граница субсидии продавца, 0–100.
+	DeliverySubsidyMinPercent int
 	// QuoteTTL — дольше этого цена доставки не держится, что бы ни обещал магазин.
-	QuoteTTL time.Duration
+	QuoteTTL      time.Duration
+	ReturnBaseURL string
+	CartTTL       time.Duration
 	// QuoteTimeout — сколько ждать ответа магазина на расчёт.
 	QuoteTimeout time.Duration
 }
@@ -158,6 +162,7 @@ func (s *Service) Quote(
 		PickupPointCode: point.Code,
 		City:            point.City,
 		Address:         point.Address,
+		RegionCode:      point.RegionCode,
 	}
 
 	quotes, err := s.quote(ctx, c.Groups(), selection)
@@ -295,8 +300,15 @@ func (s *Service) quoteGroup(
 	ctx context.Context,
 	group checkout.Group,
 	selection checkout.Selection,
-	subsidy participant.Subsidy,
+	settings participant.State,
 ) delivery.Quote {
+	if !settings.Delivery.Allows(string(selection.Carrier), selection.RegionCode) {
+		return delivery.Quote{
+			Status:    delivery.QuoteUnavailable,
+			Reason:    delivery.ReasonPickupPointUnavailable,
+			ExpiresAt: s.clock.Now().Add(s.config.QuoteTTL),
+		}
+	}
 	callCtx, cancel := context.WithTimeout(ctx, s.config.QuoteTimeout)
 	defer cancel()
 
@@ -317,7 +329,16 @@ func (s *Service) quoteGroup(
 		return delivery.Unreachable(now)
 	}
 
-	quote, err := delivery.NewQuote(offered, subsidy.Apply, now, s.config.QuoteTTL)
+	apply := func(cost money.Money) (money.Money, error) {
+		return group.DeliverySubsidy(
+			settings.FreeDeliveryFrom,
+			settings.Subsidy,
+			cost,
+			s.config.DeliverySubsidyMinPercent,
+		)
+	}
+
+	quote, err := delivery.NewQuote(offered, apply, now, s.config.QuoteTTL)
 	if err != nil {
 		return delivery.Unreachable(now)
 	}
@@ -325,12 +346,12 @@ func (s *Service) quoteGroup(
 	return quote
 }
 
-// subsidies — субсидии продавцов из их настроек; магазин без участника — без субсидии.
+// subsidies — обязательные настройки продавцов; без участника доставка недоступна.
 func (s *Service) subsidies(
 	ctx context.Context,
 	groups []checkout.Group,
-) (map[ids.TenantID]participant.Subsidy, error) {
-	subsidies := make(map[ids.TenantID]participant.Subsidy, len(groups))
+) (map[ids.TenantID]participant.State, error) {
+	subsidies := make(map[ids.TenantID]participant.State, len(groups))
 
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		for _, group := range groups {
@@ -342,7 +363,7 @@ func (s *Service) subsidies(
 				return err
 			}
 
-			subsidies[group.TenantID] = p.Subsidy()
+			subsidies[group.TenantID] = p.State()
 		}
 
 		return nil
@@ -395,7 +416,7 @@ func (s *Service) visible(ctx context.Context, lines []checkout.Line) error {
 			return checkout.ErrOfferUnavailable.WithMessage("предложение больше недоступно: " + line.Offer.String())
 		}
 		if !doc.CheckoutAvailable {
-			message := "продавец ещё не принимает оплату через маркетплейс: " + line.Offer.String()
+			message := "продавец ещё не готов к оформлению: " + line.Offer.String()
 
 			return checkout.ErrOfferUnavailable.WithMessage(message)
 		}
@@ -483,3 +504,6 @@ func joinTenants(tenants []ids.TenantID) string {
 
 	return strings.Join(parts, ", ")
 }
+
+// DeliverySubsidyMinPercent — действующий порог для админки магазина.
+func (s *Service) DeliverySubsidyMinPercent() int { return s.config.DeliverySubsidyMinPercent }

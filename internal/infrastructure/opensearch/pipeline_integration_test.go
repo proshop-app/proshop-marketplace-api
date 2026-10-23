@@ -26,6 +26,12 @@ import (
 
 // TestProjectionToIndex — проекция в PostgreSQL, задачи outbox, индекс в
 // OpenSearch и выдача: весь путь синхронизации на настоящих хранилищах.
+var w3PipelineIntegrationDelivery = participant.DeliverySettings{
+	Regions:  []string{"cdek:r1"},
+	Carriers: []string{"cdek"},
+}
+var w3PipelineIntegrationSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
+
 func TestProjectionToIndex(t *testing.T) {
 	pool := pgtest.Pool(t)
 	index := testIndex(t)
@@ -137,25 +143,24 @@ func TestProjectionToIndex(t *testing.T) {
 		t.Fatalf("магазин не включил участие в настройках — не в выдаче: %+v", list)
 	}
 
-	platform.SetSettings("t1", ports.ShopSettings{Enabled: true})
+	platform.SetSettings("t1", ports.ShopSettings{
+		Enabled:  true,
+		Subsidy:  w3PipelineIntegrationSubsidy,
+		Delivery: w3PipelineIntegrationDelivery,
+	})
 	if changed, err := settings.SyncOne(ctx, "t1"); err != nil || !changed {
 		t.Fatalf("настройки магазина: %v, %v", changed, err)
 	}
 	drain()
 
 	list, err := queries.Search(ctx, ports.OfferQuery{Text: "товари", Sort: ports.SortPriceDesc})
-	if err != nil || list.Total != 2 || list.Items[0].Offer.ID != "t1~p2" || list.Items[0].Offer.CheckoutAvailable {
-		t.Fatalf("включённый участник в выдаче, без кассы — без checkout: %+v, %v", list, err)
+	if err != nil || list.Total != 2 || list.Items[0].Offer.ID != "t1~p2" || !list.Items[0].Offer.CheckoutAvailable {
+		t.Fatalf("включённый участник в выдаче, с настройками доступен для оформления: %+v, %v", list, err)
 	}
-
-	if _, err := participants.SetPaymentAccount(ctx, "t1", "506751"); err != nil {
-		t.Fatal(err)
-	}
-	drain()
 
 	card, err := queries.Offer(ctx, ids.OfferID{Tenant: "t1", Product: "p1"})
 	if err != nil || !card.Offer.CheckoutAvailable || card.Offer.SellerName != "Первый магазин" {
-		t.Fatalf("карточка после привязки кассы: %+v, %v", card, err)
+		t.Fatalf("карточка после настроек участия: %+v, %v", card, err)
 	}
 
 	suspended := participant.RegistryEvent{

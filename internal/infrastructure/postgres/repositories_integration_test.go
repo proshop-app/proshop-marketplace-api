@@ -16,6 +16,12 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
+var w3RepositoriesIntegrationDelivery = participant.DeliverySettings{
+	Regions:  []string{"cdek:r1"},
+	Carriers: []string{"cdek"},
+}
+var w3RepositoriesIntegrationSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
+
 func TestMigrationsDownAndUp(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
@@ -176,7 +182,13 @@ func TestParticipantsRepository(t *testing.T) {
 		}
 		stale := participant.Restore(p.State())
 
-		if _, err := p.SetPaymentAccount("acc-1", at(2)); err != nil {
+		if _, err := p.ApplyShopSettings(
+			true,
+			w3RepositoriesIntegrationSubsidy,
+			money.Money{},
+			w3RepositoriesIntegrationDelivery,
+			at(2),
+		); err != nil {
 			return err
 		}
 		if err := tx.Participants().Update(ctx, p); err != nil {
@@ -196,7 +208,7 @@ func TestParticipantsRepository(t *testing.T) {
 
 	_ = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		p, err := tx.Participants().Get(ctx, "t1")
-		if err != nil || p.Status() != participant.StatusConnected || p.PaymentAccountID() != "acc-1" ||
+		if err != nil || p.Status() != participant.StatusConnected ||
 			p.Version() != 2 ||
 			p.Enabled() {
 			t.Fatalf("участник: %+v, %v", p.State(), err)

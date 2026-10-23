@@ -1,1 +1,1 @@
-{"enabled":true,"subsidy":{"enabled":true,"type":"percent","value":50,"maxAmount":30000}}
+{"enabled": true, "subsidy": {"enabled": true, "type": "percent", "value": 50, "maxAmount": 30000}, "freeDeliveryFrom": 0, "delivery": {"regions": ["cdek:r1"], "carriers": ["cdek"]}}
