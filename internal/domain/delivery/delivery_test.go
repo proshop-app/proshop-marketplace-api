@@ -155,15 +155,26 @@ func TestNewQuote(t *testing.T) {
 		t.Fatalf("срок — не позже обещанного магазином: %+v", short)
 	}
 
-	unavailable, err := delivery.NewQuote(delivery.Offered{Reason: "carrier_not_connected"}, halfSubsidy, t0, time.Hour)
-	if err != nil || unavailable.Status != delivery.QuoteUnavailable || unavailable.Reason != "carrier_not_connected" {
-		t.Fatalf("недоступно: %+v %v", unavailable, err)
+	reasons := []string{
+		delivery.ReasonCarrierNotConnected,
+		delivery.ReasonPickupPointUnavailable,
+		delivery.ReasonNoRate,
+	}
+
+	for _, reason := range reasons {
+		unavailable, err := delivery.NewQuote(delivery.Offered{Reason: reason}, halfSubsidy, t0, time.Hour)
+		if err != nil || unavailable.Status != delivery.QuoteUnavailable || unavailable.Reason != reason {
+			t.Fatalf("недоступно, %s: %+v %v", reason, unavailable, err)
+		}
 	}
 
 	for name, offered := range map[string]delivery.Offered{
-		"отрицательная цена": {Available: true, Cost: money.FromKopecks(-1)},
-		"сроки наоборот":     {Available: true, MinDays: 5, MaxDays: 2},
-		"истёкший":           {Available: true, ExpiresAt: t0.Add(-time.Second)},
+		"отрицательная цена":    {Available: true, Cost: money.FromKopecks(-1)},
+		"сроки наоборот":        {Available: true, MinDays: 5, MaxDays: 2},
+		"истёкший":              {Available: true, ExpiresAt: t0.Add(-time.Second)},
+		"причина не из словаря": {Reason: "too_far"},
+		"без причины":           {},
+		"причина маркетплейса":  {Reason: delivery.ReasonSellerUnreachable},
 	} {
 		if _, err := delivery.NewQuote(offered, halfSubsidy, t0, time.Hour); !errors.Is(err, delivery.ErrInvalidQuote) {
 			t.Fatalf("%s: %v", name, err)

@@ -16,11 +16,26 @@ const (
 	QuoteUnavailable QuoteStatus = "unavailable"
 )
 
-// Причины недоступности, которые маркетплейс ставит сам. Остальные приходят от магазина.
+// Причины недоступности доставки — закрытый словарь docs/server-contract.md,
+// расширяется только через него. Первые три присылает магазин,
+// seller_unreachable маркетплейс ставит сам.
 const (
+	// ReasonCarrierNotConnected — у магазина нет этого перевозчика.
+	ReasonCarrierNotConnected = "carrier_not_connected"
+	// ReasonPickupPointUnavailable — перевозчик не везёт в этот пункт.
+	ReasonPickupPointUnavailable = "pickup_point_unavailable"
+	// ReasonNoRate — тариф не рассчитан: вес, габариты или зона.
+	ReasonNoRate = "no_rate"
 	// ReasonSellerUnreachable — магазин не ответил на расчёт.
 	ReasonSellerUnreachable = "seller_unreachable"
 )
+
+// sellerReasons — причины, которые вправе прислать магазин.
+var sellerReasons = map[string]bool{
+	ReasonCarrierNotConnected:    true,
+	ReasonPickupPointUnavailable: true,
+	ReasonNoRate:                 true,
+}
 
 // Quote — расчёт доставки заказа одного продавца до пункта выдачи. Cost —
 // стоимость по договору продавца, Subsidy — сколько из неё оплачивает
@@ -48,7 +63,8 @@ type Offered struct {
 }
 
 // NewQuote собирает расчёт: субсидию продавца вычитает из стоимости, срок
-// цены — не позже maxAge от расчёта, даже если магазин обещал дольше.
+// цены — не позже maxAge от расчёта, даже если магазин обещал дольше. Причина
+// недоступности не из словаря — ответ не по контракту.
 func NewQuote(
 	offered Offered,
 	subsidy func(money.Money) (money.Money, error),
@@ -61,12 +77,11 @@ func NewQuote(
 	}
 
 	if !offered.Available {
-		reason := offered.Reason
-		if reason == "" {
-			reason = "unavailable"
+		if !sellerReasons[offered.Reason] {
+			return Quote{}, ErrInvalidQuote.WithMessage("причина недоступности не из словаря: " + offered.Reason)
 		}
 
-		return Quote{Status: QuoteUnavailable, Reason: reason, ExpiresAt: expires}, nil
+		return Quote{Status: QuoteUnavailable, Reason: offered.Reason, ExpiresAt: expires}, nil
 	}
 
 	if offered.Cost.IsNegative() || offered.MinDays < 0 || offered.MaxDays < offered.MinDays {

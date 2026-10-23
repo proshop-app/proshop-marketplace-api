@@ -179,3 +179,29 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("сервер не отвечает: %v", err)
 	}
 }
+
+func TestMarketplaceDisabled(t *testing.T) {
+	routes := map[string][2]string{
+		"POST " + prefix + "/items/check":    {"", "marketplace_disabled.json"},
+		"POST " + prefix + "/delivery/quote": {"", "marketplace_disabled.json"},
+	}
+	disabled := server(t, routes, http.StatusForbidden)
+
+	_, err := disabled.CheckItems(context.Background(), "t1", []ports.ItemRequest{{ProductID: "p1", Quantity: 1}})
+	if !errors.Is(err, ports.ErrMarketplaceDisabled) || errs.CodeOf(err) != errs.Unavailable {
+		t.Fatalf("позиции у магазина-неучастника: %v", err)
+	}
+
+	_, err = disabled.QuoteDelivery(context.Background(), "t1", ports.QuoteRequest{Carrier: "cdek"})
+	if !errors.Is(err, ports.ErrMarketplaceDisabled) {
+		t.Fatalf("расчёт у магазина-неучастника: %v", err)
+	}
+
+	// код учитывается только у 403: тот же ответ с другим статусом — просто недоступность
+	failing := server(t, routes, http.StatusInternalServerError)
+
+	_, err = failing.CheckItems(context.Background(), "t1", nil)
+	if !errors.Is(err, platformapi.ErrUnavailable) || errors.Is(err, ports.ErrMarketplaceDisabled) {
+		t.Fatalf("500 с кодом участия: %v", err)
+	}
+}

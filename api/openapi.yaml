@@ -354,8 +354,9 @@ paths:
       summary: Выбрать пункт выдачи и посчитать доставку
       description: |
         Расчёт спрашивается у каждого продавца покупки по его договору.
-        Продавец без этого перевозчика или пункта получает quote.status
-        unavailable с причиной; не ответивший — reason seller_unreachable.
+        Продавец, который не везёт, получает quote.status unavailable с
+        причиной из словаря (`reason`); не ответивший, ответивший не по
+        контракту или выключивший участие — reason seller_unreachable.
       operationId: quoteCheckoutDelivery
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
@@ -727,7 +728,15 @@ components:
       required: [status, cost, subsidy, buyerCost, minDays, maxDays, expiresAt]
       properties:
         status: { type: string, enum: [available, unavailable] }
-        reason: { type: string, examples: [carrier_not_connected, seller_unreachable] }
+        reason:
+          type: string
+          enum: [carrier_not_connected, pickup_point_unavailable, no_rate, seller_unreachable]
+          description: |
+            Только при status unavailable. Закрытый словарь docs/server-contract.md:
+            carrier_not_connected — у продавца нет этого перевозчика;
+            pickup_point_unavailable — перевозчик не везёт в этот пункт;
+            no_rate — тариф не рассчитан (вес, габариты, зона);
+            seller_unreachable — продавец не ответил, повтор при подтверждении.
         cost: { type: integer, format: int64, description: Стоимость по договору продавца }
         subsidy: { type: integer, format: int64, description: Сколько оплачивает продавец }
         buyerCost: { type: integer, format: int64, description: Доля покупателя }

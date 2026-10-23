@@ -311,7 +311,7 @@ func (p *Platform) QuoteDelivery(
 
 	offered, ok := p.quotes[tenant]
 	if !ok {
-		return delivery.Offered{Reason: "carrier_not_connected"}, nil
+		return delivery.Offered{Reason: delivery.ReasonCarrierNotConnected}, nil
 	}
 
 	return offered, nil
