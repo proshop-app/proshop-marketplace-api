@@ -8,14 +8,15 @@ type Visibility struct {
 	CheckoutAvailable bool
 }
 
-// VisibilityOf — участник виден, если оператор его включил и магазин работает
-// в реестре платформы; оформить заказ можно только у подключённого к оплате.
+// VisibilityOf — участник виден, если оператор его включил, магазин сам
+// включил участие и работает в реестре платформы; оформить заказ можно только
+// у подключённого к оплате.
 func VisibilityOf(p *Participant, tenant *Tenant) Visibility {
 	if p == nil || tenant == nil || tenant.ID() != p.TenantID() {
 		return Visibility{}
 	}
 
-	visible := p.Enabled() && tenant.Status() == TenantActive
+	visible := p.Enabled() && p.ShopEnabled() && tenant.Status() == TenantActive
 
 	return Visibility{Visible: visible, CheckoutAvailable: visible && p.Status() == StatusConnected}
 }

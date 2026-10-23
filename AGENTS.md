@@ -22,11 +22,17 @@
 7. **Kafka.** Топики — сервера: не заводить их у брокера. Магазин — из ключа,
    тела или `x-tenant`; без магазина — в `parked_events` с метрикой. Коммит —
    после записи, дедуп — `processed_events`.
+8. **Раскладка кода.** `const`/`var`/`type` в начале файла, функции после;
+   `cmd/*/main.go` — только `main`; строки ≤ 120; многострочный литерал или
+   вызов — по элементу на строку; SQL — константами в начале файла. Держат
+   `internal/architecture` и `lll`.
+9. **Сервер.** Внутренний API сервера — только по `docs/server-contract.md`;
+   адаптеры внешних API тестируются на `testdata`, живые вызовы — под флагом.
 
 Проверки перед пушем:
 
 ```bash
-go build ./... && go vet ./... && make lint && make test && make test-integration
+go build ./... && go vet ./... && go vet -tags integration ./... && make lint && make test && make test-integration
 ```
 
 `make dev` поднимает всё одной командой. Коммиты и PR — по-русски, в master

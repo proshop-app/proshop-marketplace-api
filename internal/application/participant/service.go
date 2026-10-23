@@ -165,7 +165,11 @@ func (s *Service) List(ctx context.Context, page participant.Page) (List, error)
 	return list, err
 }
 
-func (s *Service) change(ctx context.Context, tenantID ids.TenantID, mutate func(*participant.Participant) (bool, error)) (View, error) {
+func (s *Service) change(
+	ctx context.Context,
+	tenantID ids.TenantID,
+	mutate func(*participant.Participant) (bool, error),
+) (View, error) {
 	var view View
 
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {

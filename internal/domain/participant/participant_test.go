@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 var (
@@ -17,9 +18,14 @@ var (
 func activeTenant(t *testing.T, status participant.TenantStatus) *participant.Tenant {
 	t.Helper()
 
-	tenant, err := participant.NewTenant(participant.RegistryEvent{
-		TenantID: "t1", Slug: "shop-one", Status: status, At: t0,
-	}, t0)
+	event := participant.RegistryEvent{
+		TenantID: "t1",
+		Slug:     "shop-one",
+		Status:   status,
+		At:       t0,
+	}
+
+	tenant, err := participant.NewTenant(event, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +60,8 @@ func TestNewParticipant(t *testing.T) {
 
 func TestNewRejectsUnavailableTenantAndBadName(t *testing.T) {
 	for _, status := range []participant.TenantStatus{participant.TenantDeleting, participant.TenantDeleted} {
-		if _, err := participant.New(activeTenant(t, status), "x", t0); !errors.Is(err, participant.ErrTenantUnavailable) {
+		_, err := participant.New(activeTenant(t, status), "x", t0)
+		if !errors.Is(err, participant.ErrTenantUnavailable) {
 			t.Fatalf("%s: ожидалось ErrTenantUnavailable, получено %v", status, err)
 		}
 	}
@@ -66,7 +73,8 @@ func TestNewRejectsUnavailableTenantAndBadName(t *testing.T) {
 	}
 
 	for _, name := range []string{"", "   ", strings.Repeat("я", 201), "a\nb"} {
-		if _, err := participant.New(activeTenant(t, participant.TenantActive), name, t0); !errors.Is(err, participant.ErrInvalidName) {
+		_, err := participant.New(activeTenant(t, participant.TenantActive), name, t0)
+		if !errors.Is(err, participant.ErrInvalidName) {
 			t.Fatalf("%q: ожидалось ErrInvalidName, получено %v", name, err)
 		}
 	}
@@ -92,7 +100,11 @@ func TestSetPaymentAccountTransitions(t *testing.T) {
 		t.Fatalf("ожидался connected: %+v", p.State())
 	}
 	if p.Origin().Status != participant.StatusOnboarding || p.Origin().Version != 1 || p.Version() != 2 {
-		t.Fatalf("исходное состояние должно остаться для условного обновления: origin=%+v version=%d", p.Origin(), p.Version())
+		t.Fatalf(
+			"исходное состояние должно остаться для условного обновления: origin=%+v version=%d",
+			p.Origin(),
+			p.Version(),
+		)
 	}
 
 	if changed, _ := p.SetPaymentAccount("506751", t1); changed {
@@ -156,7 +168,8 @@ func TestSyncSlug(t *testing.T) {
 		t.Fatal("тот же слаг не меняет участника")
 	}
 
-	if _, err := tenant.Apply(participant.RegistryEvent{TenantID: "t1", Slug: "shop-renamed", Status: participant.TenantActive, At: t1}, t1); err != nil {
+	renamed := participant.RegistryEvent{TenantID: "t1", Slug: "shop-renamed", Status: participant.TenantActive, At: t1}
+	if _, err := tenant.Apply(renamed, t1); err != nil {
 		t.Fatal(err)
 	}
 	if !p.SyncSlug(tenant, t1) || p.Slug() != "shop-renamed" {
@@ -174,6 +187,13 @@ func TestVisibility(t *testing.T) {
 	}
 
 	p.Enable(t1)
+	if got := participant.VisibilityOf(p, active); got.Visible {
+		t.Fatalf("включённый оператором, но не включившийся сам магазин не виден: %+v", got)
+	}
+
+	if _, err := p.ApplyShopSettings(true, participant.Subsidy{}, t1); err != nil {
+		t.Fatal(err)
+	}
 	if got := participant.VisibilityOf(p, active); !got.Visible || got.CheckoutAvailable {
 		t.Fatalf("включённый без оплаты виден, но без checkout: %+v", got)
 	}
@@ -189,5 +209,78 @@ func TestVisibility(t *testing.T) {
 	}
 	if got := participant.VisibilityOf(nil, active); got.Visible {
 		t.Fatal("без участника магазин не виден")
+	}
+}
+
+func TestApplyShopSettings(t *testing.T) {
+	p := restored(t)
+	subsidy := participant.Subsidy{
+		Enabled:   true,
+		Type:      participant.SubsidyPercent,
+		Value:     50,
+		MaxAmount: money.FromKopecks(30000),
+	}
+
+	changed, err := p.ApplyShopSettings(true, subsidy, t1)
+	if err != nil || !changed || !p.ShopEnabled() || p.Subsidy() != subsidy || p.Version() != 2 {
+		t.Fatalf("настройки магазина: changed=%v err=%v %+v", changed, err, p.State())
+	}
+	p.MarkSaved()
+
+	changed, err = p.ApplyShopSettings(true, subsidy, t1.Add(time.Hour))
+	if err != nil || changed || p.Version() != 2 || !p.State().SettingsSyncedAt.Equal(t1.Add(time.Hour)) {
+		t.Fatalf("те же настройки не меняют версию, но время сверки обновляется: %+v", p.State())
+	}
+
+	overPercent := participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 101}
+
+	_, err = p.ApplyShopSettings(true, overPercent, t1)
+	if !errors.Is(err, participant.ErrInvalidSubsidy) {
+		t.Fatalf("процент больше 100: %v", err)
+	}
+}
+
+func TestSubsidyApply(t *testing.T) {
+	cost := money.FromKopecks(40000)
+	cases := map[string]struct {
+		subsidy participant.Subsidy
+		want    int64
+	}{
+		"выключена": {participant.Subsidy{Type: participant.SubsidyFixed, Value: 10000}, 0},
+		"фиксированная": {
+			participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 15000},
+			15000,
+		},
+		"больше стоимости": {
+			participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 99999},
+			40000,
+		},
+		"процент": {participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 25}, 10000},
+		"процент под потолок": {
+			participant.Subsidy{
+				Enabled:   true,
+				Type:      participant.SubsidyPercent,
+				Value:     50,
+				MaxAmount: money.FromKopecks(12000),
+			},
+			12000,
+		},
+	}
+
+	for name, tc := range cases {
+		got, err := tc.subsidy.Apply(cost)
+		if err != nil || got.Kopecks() != tc.want {
+			t.Fatalf("%s: %d, %v, ожидалось %d", name, got.Kopecks(), err, tc.want)
+		}
+	}
+
+	fixed := participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 100}
+	if got, _ := fixed.Apply(money.Money{}); !got.IsZero() {
+		t.Fatal("бесплатная доставка — субсидии нет")
+	}
+
+	err := (participant.Subsidy{Enabled: true, Type: "gift"}).Validate()
+	if !errors.Is(err, participant.ErrInvalidSubsidy) {
+		t.Fatalf("неизвестный вид субсидии: %v", err)
 	}
 }

@@ -88,7 +88,11 @@ type PurgeRequest struct {
 	ProcessedBefore  time.Time
 	OutboxDoneBefore time.Time
 	ParkedBefore     time.Time
-	Batch            int
+	// ChallengesBefore — проверки входа, истёкшие раньше этого времени.
+	ChallengesBefore time.Time
+	// CartsBefore — корзины, просроченные раньше этого времени.
+	CartsBefore time.Time
+	Batch       int
 }
 
 // PurgeResult — сколько записей удалено.
@@ -96,6 +100,8 @@ type PurgeResult struct {
 	Processed  int64
 	OutboxDone int64
 	Parked     int64
+	Challenges int64
+	Carts      int64
 }
 
 // Retention — чистка служебных записей по сроку.

@@ -21,7 +21,7 @@ func TestMigrationsDownAndUp(t *testing.T) {
 	ctx := context.Background()
 
 	statuses, err := postgres.MigrationStatus(ctx, pool)
-	if err != nil || len(statuses) != 3 {
+	if err != nil || len(statuses) != 8 {
 		t.Fatalf("статус миграций: %d, %v", len(statuses), err)
 	}
 
@@ -36,11 +36,20 @@ func TestMigrationsDownAndUp(t *testing.T) {
 	}
 }
 
-func registryEvent(id ids.TenantID, slug string, status participant.TenantStatus, minute int) participant.RegistryEvent {
+func registryEvent(
+	id ids.TenantID,
+	slug string,
+	status participant.TenantStatus,
+	minute int,
+) participant.RegistryEvent {
 	return participant.RegistryEvent{
-		TenantID: id, Slug: slug, Status: status, Cell: "cell-a",
-		Plan: json.RawMessage(`{"code":"base","limits":{"products":100}}`), Hosts: json.RawMessage(`[{"host":"a.example"}]`),
-		At: at(minute),
+		TenantID: id,
+		Slug:     slug,
+		Status:   status,
+		Cell:     "cell-a",
+		Plan:     json.RawMessage(`{"code":"base","limits":{"products":100}}`),
+		Hosts:    json.RawMessage(`[{"host":"a.example"}]`),
+		At:       at(minute),
 	}
 }
 
@@ -187,7 +196,9 @@ func TestParticipantsRepository(t *testing.T) {
 
 	_ = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		p, err := tx.Participants().Get(ctx, "t1")
-		if err != nil || p.Status() != participant.StatusConnected || p.PaymentAccountID() != "acc-1" || p.Version() != 2 || p.Enabled() {
+		if err != nil || p.Status() != participant.StatusConnected || p.PaymentAccountID() != "acc-1" ||
+			p.Version() != 2 ||
+			p.Enabled() {
 			t.Fatalf("участник: %+v, %v", p.State(), err)
 		}
 
@@ -208,13 +219,24 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, minute
 	promo := money.FromKopecks(8000)
 
 	return catalog.Snapshot{
-		TenantID: tenant, ProductID: product, Revision: revision, At: at(minute),
+		TenantID:  tenant,
+		ProductID: product,
+		Revision:  revision,
+		At:        at(minute),
 		Card: catalog.Card{
-			Name: "Товар " + string(product), Description: "Описание", Image: "/img.png", URL: "/p", SKU: "SKU-1",
-			Categories: []catalog.Category{{ID: "c1", Name: "Категория", URL: "/c"}}, Tags: []string{"tag-1"},
-			VariantsID: "v1", Visible: true,
+			Name:        "Товар " + string(product),
+			Description: "Описание",
+			Image:       "/img.png",
+			URL:         "/p",
+			SKU:         "SKU-1",
+			Categories:  []catalog.Category{{ID: "c1", Name: "Категория", URL: "/c"}},
+			Tags:        []string{"tag-1"},
+			VariantsID:  "v1",
+			Visible:     true,
 		},
-		Price: money.FromKopecks(10000), PromoPrice: &promo, Available: 5,
+		Price:      money.FromKopecks(10000),
+		PromoPrice: &promo,
+		Available:  5,
 	}
 }
 
@@ -279,14 +301,20 @@ func TestProductRoundTrip(t *testing.T) {
 		}
 
 		state := product.State()
-		if state.Card.Name != "Товар p1" || state.Card.Categories[0].Name != "Категория" || state.Price.Kopecks() != 10000 ||
-			state.PromoPrice == nil || state.PromoPrice.Kopecks() != 8000 || state.Available != 5 || !state.ProjectedAt.Equal(at(0)) {
+		if state.Card.Name != "Товар p1" ||
+			state.Card.Categories[0].Name != "Категория" ||
+			state.Price.Kopecks() != 10000 ||
+			state.PromoPrice == nil ||
+			state.PromoPrice.Kopecks() != 8000 ||
+			state.Available != 5 ||
+			!state.ProjectedAt.Equal(at(0)) {
 			t.Fatalf("товар после хранения: %+v", state)
 		}
 
 		stale := catalog.RestoreProduct(state)
 
-		if _, err := product.Apply(catalog.Snapshot{TenantID: "t1", ProductID: "p1", Revision: 2, Deleted: true, At: at(1)}, at(1)); err != nil {
+		deletion := catalog.Snapshot{TenantID: "t1", ProductID: "p1", Revision: 2, Deleted: true, At: at(1)}
+		if _, err := product.Apply(deletion, at(1)); err != nil {
 			return err
 		}
 		if err := tx.Products().Save(ctx, product); err != nil {
@@ -332,19 +360,26 @@ func TestSignalsAndTags(t *testing.T) {
 			return err
 		}
 
-		if _, err := signals.ApplyPrice(catalog.PriceSignal{Price: money.FromKopecks(700), At: at(2)}, at(2)); err != nil {
+		price := catalog.PriceSignal{Price: money.FromKopecks(700), At: at(2)}
+		if _, err := signals.ApplyPrice(price, at(2)); err != nil {
 			return err
 		}
 		if err := tx.Signals().Save(ctx, signals); err != nil {
 			return err
 		}
 
-		tag, _ := catalog.NewTag(catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "Новинка"}, at(0))
+		tag, _ := catalog.NewTag(
+			catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "Новинка"},
+			at(0),
+		)
 		if err := tx.Tags().Save(ctx, tag); err != nil {
 			return err
 		}
 
-		gone, _ := catalog.NewTag(catalog.TagSnapshot{TenantID: "t1", TagID: "tag-2", Revision: 1, Deleted: true}, at(0))
+		gone, _ := catalog.NewTag(
+			catalog.TagSnapshot{TenantID: "t1", TagID: "tag-2", Revision: 1, Deleted: true},
+			at(0),
+		)
 
 		return tx.Tags().Save(ctx, gone)
 	})
@@ -355,7 +390,8 @@ func TestSignalsAndTags(t *testing.T) {
 	_ = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		signals, err := tx.Signals().Get(ctx, "t1", "p1")
 		state := signals.State()
-		if err != nil || !state.HasStock || state.Available != 2 || !state.HasPrice || state.Price.Kopecks() != 700 || state.Version != 2 {
+		if err != nil || !state.HasStock || state.Available != 2 || !state.HasPrice || state.Price.Kopecks() != 700 ||
+			state.Version != 2 {
 			t.Fatalf("сигналы: %+v, %v", state, err)
 		}
 		if _, err := tx.Signals().Get(ctx, "t1", "p2"); !errors.Is(err, catalog.ErrSignalsNotFound) {

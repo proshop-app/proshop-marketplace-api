@@ -103,3 +103,32 @@ func TestCmpAndString(t *testing.T) {
 		}
 	}
 }
+
+func TestMulRatioAndMin(t *testing.T) {
+	cases := []struct {
+		kopecks, num, den, want int64
+	}{
+		{10000, 15, 100, 1500},
+		{999, 1, 3, 333},
+		{-999, 1, 3, -333},
+		{12345, 0, 100, 0},
+	}
+
+	for _, tc := range cases {
+		got, err := money.FromKopecks(tc.kopecks).MulRatio(tc.num, tc.den)
+		if err != nil || got.Kopecks() != tc.want {
+			t.Fatalf("%d*%d/%d: %d, %v, ожидалось %d", tc.kopecks, tc.num, tc.den, got.Kopecks(), err, tc.want)
+		}
+	}
+
+	if _, err := money.FromKopecks(1).MulRatio(1, 0); !errors.Is(err, money.ErrInvalid) {
+		t.Fatalf("нулевой знаменатель: %v", err)
+	}
+	if _, err := money.FromKopecks(math.MaxInt64).MulRatio(2, 1); !errors.Is(err, money.ErrOverflow) {
+		t.Fatalf("переполнение доли: %v", err)
+	}
+	if money.Min(money.FromKopecks(5), money.FromKopecks(3)).Kopecks() != 3 ||
+		money.Min(money.FromKopecks(2), money.FromKopecks(3)).Kopecks() != 2 {
+		t.Fatal("меньшая сумма")
+	}
+}

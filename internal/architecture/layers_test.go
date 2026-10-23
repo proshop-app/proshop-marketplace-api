@@ -52,10 +52,15 @@ var rules = []rule{
 		tests:      true,
 	},
 	{
-		layer:     "приложение",
-		prefix:    module + "/internal/application/",
-		forbidden: []string{module + "/internal/infrastructure/", module + "/internal/interfaces/", module + "/internal/config", module + "/cmd/"},
-		tests:     true,
+		layer:  "приложение",
+		prefix: module + "/internal/application/",
+		forbidden: []string{
+			module + "/internal/infrastructure/",
+			module + "/internal/interfaces/",
+			module + "/internal/config",
+			module + "/cmd/",
+		},
+		tests: true,
 	},
 	{
 		layer:     "интерфейсы",
@@ -201,7 +206,10 @@ func TestGuardCatchesViolations(t *testing.T) {
 		},
 		module + "/internal/interfaces/http": {
 			ImportPath: module + "/internal/interfaces/http",
-			Deps:       []string{module + "/internal/application/catalog", module + "/internal/infrastructure/opensearch"},
+			Deps: []string{
+				module + "/internal/application/catalog",
+				module + "/internal/infrastructure/opensearch",
+			},
 		},
 		module + "/internal/infrastructure/postgres": {
 			ImportPath: module + "/internal/infrastructure/postgres",
@@ -210,12 +218,13 @@ func TestGuardCatchesViolations(t *testing.T) {
 	}
 
 	got := violations(packages)
+	internal := module + "/internal"
 	want := []string{
-		"домен: " + module + "/internal/domain/catalog зависит от github.com/x/thirdparty",
-		"домен: " + module + "/internal/domain/participant в тестах импортирует " + module + "/internal/application/fake",
-		"интерфейсы: " + module + "/internal/interfaces/http зависит от " + module + "/internal/infrastructure/opensearch",
-		"инфраструктура: " + module + "/internal/infrastructure/postgres зависит от " + module + "/internal/interfaces/kafka",
-		"приложение: " + module + "/internal/application/catalog зависит от " + module + "/internal/infrastructure/postgres",
+		"домен: " + internal + "/domain/catalog зависит от github.com/x/thirdparty",
+		"домен: " + internal + "/domain/participant в тестах импортирует " + internal + "/application/fake",
+		"интерфейсы: " + internal + "/interfaces/http зависит от " + internal + "/infrastructure/opensearch",
+		"инфраструктура: " + internal + "/infrastructure/postgres зависит от " + internal + "/interfaces/kafka",
+		"приложение: " + internal + "/application/catalog зависит от " + internal + "/infrastructure/postgres",
 	}
 
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {

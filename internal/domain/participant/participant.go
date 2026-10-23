@@ -32,6 +32,12 @@ type State struct {
 	Status           Status
 	Enabled          bool
 	PaymentAccountID string
+	// ShopEnabled — магазин сам включил участие (marketplace.enabled в его настройках на сервере).
+	ShopEnabled bool
+	// Subsidy — субсидия доставки из настроек магазина.
+	Subsidy Subsidy
+	// SettingsSyncedAt — когда настройки магазина последний раз прочитаны с сервера; ноль — ещё не читались.
+	SettingsSyncedAt time.Time
 	Version          int64
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
@@ -105,6 +111,34 @@ func (p *Participant) PaymentAccountID() string { return p.state.PaymentAccountI
 
 // Version — версия состояния.
 func (p *Participant) Version() int64 { return p.state.Version }
+
+// ShopEnabled — магазин сам включил участие в маркетплейсе.
+func (p *Participant) ShopEnabled() bool { return p.state.ShopEnabled }
+
+// Subsidy — субсидия доставки продавца.
+func (p *Participant) Subsidy() Subsidy { return p.state.Subsidy }
+
+// ApplyShopSettings переносит настройки магазина с сервера. Версия растёт,
+// только если поменялось видимое: флаг участия или субсидия; время сверки
+// обновляется всегда.
+func (p *Participant) ApplyShopSettings(enabled bool, subsidy Subsidy, now time.Time) (bool, error) {
+	if err := subsidy.Validate(); err != nil {
+		return false, err
+	}
+
+	changed := p.state.ShopEnabled != enabled || p.state.Subsidy != subsidy
+	p.state.SettingsSyncedAt = now
+
+	if !changed {
+		return false, nil
+	}
+
+	p.state.ShopEnabled = enabled
+	p.state.Subsidy = subsidy
+	p.touch(now)
+
+	return true, nil
+}
 
 // Rename меняет название. Возвращает, изменилось ли состояние.
 func (p *Participant) Rename(name string, now time.Time) (bool, error) {

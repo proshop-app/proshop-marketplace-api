@@ -54,6 +54,10 @@ type offerPageJSON struct {
 	Offset int         `json:"offset"`
 }
 
+type catalogHandlers struct {
+	queries *appcatalog.Queries
+}
+
 func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	doc := card.Offer
 	tags := make([]tagJSON, 0, len(card.Tags))
@@ -62,12 +66,22 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	}
 
 	out := offerJSON{
-		ID: doc.ID, TenantID: doc.TenantID, ProductID: doc.ProductID,
-		Seller: sellerJSON{Slug: doc.SellerSlug, Name: doc.SellerName},
-		Name:   doc.Name, Image: doc.Image, URL: doc.URL, SKU: doc.SKU,
-		Categories: make([]categoryJSON, 0, len(doc.Categories)), Tags: tags,
-		Price: doc.Price, BasePrice: doc.BasePrice, Available: doc.Available, InStock: doc.InStock,
-		CheckoutAvailable: doc.CheckoutAvailable, UpdatedAt: doc.UpdatedAt.UTC(),
+		ID:                doc.ID,
+		TenantID:          doc.TenantID,
+		ProductID:         doc.ProductID,
+		Seller:            sellerJSON{Slug: doc.SellerSlug, Name: doc.SellerName},
+		Name:              doc.Name,
+		Image:             doc.Image,
+		URL:               doc.URL,
+		SKU:               doc.SKU,
+		Categories:        make([]categoryJSON, 0, len(doc.Categories)),
+		Tags:              tags,
+		Price:             doc.Price,
+		BasePrice:         doc.BasePrice,
+		Available:         doc.Available,
+		InStock:           doc.InStock,
+		CheckoutAvailable: doc.CheckoutAvailable,
+		UpdatedAt:         doc.UpdatedAt.UTC(),
 	}
 	if withDescription {
 		out.Description = doc.Description
@@ -77,10 +91,6 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	}
 
 	return out
-}
-
-type catalogHandlers struct {
-	queries *appcatalog.Queries
 }
 
 // list — выдача: GET /api/v1/catalog/offers?q=&tenant=&category=&tag=&priceMin=&priceMax=&inStock=&sort=&limit=&offset=
@@ -104,7 +114,12 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		limit = appcatalog.DefaultLimit
 	}
 
-	body := offerPageJSON{Items: make([]offerJSON, 0, len(list.Items)), Total: list.Total, Limit: limit, Offset: query.Offset}
+	body := offerPageJSON{
+		Items:  make([]offerJSON, 0, len(list.Items)),
+		Total:  list.Total,
+		Limit:  limit,
+		Offset: query.Offset,
+	}
 	for _, card := range list.Items {
 		body.Items = append(body.Items, toOfferJSON(card, false))
 	}

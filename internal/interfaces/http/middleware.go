@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 const (
@@ -29,7 +31,25 @@ type contextKey int
 const (
 	keyRequestID contextKey = iota
 	keyLogger
+	keyBuyer
+	keyFacts
 )
+
+// requestFacts — что обработчики узнали о запросе; observe дописывает это
+// в строку журнала запроса.
+type requestFacts struct {
+	buyerID ids.UUID
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+type httpMetrics struct {
+	requests *prometheus.CounterVec
+	duration *prometheus.HistogramVec
+}
 
 // RequestID — идентификатор запроса из контекста.
 func RequestID(ctx context.Context) string {
@@ -46,32 +66,28 @@ func loggerFrom(ctx context.Context) *slog.Logger {
 	return slog.Default()
 }
 
-type statusRecorder struct {
-	http.ResponseWriter
-	status int
-}
-
 func (s *statusRecorder) WriteHeader(status int) {
 	s.status = status
 	s.ResponseWriter.WriteHeader(status)
 }
 
-type httpMetrics struct {
-	requests *prometheus.CounterVec
-	duration *prometheus.HistogramVec
-}
-
 func newHTTPMetrics(registerer prometheus.Registerer) *httpMetrics {
 	m := &httpMetrics{
-		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "marketplace_http_requests_total",
-			Help: "Запросы HTTP по маршруту и коду ответа.",
-		}, []string{"route", "code"}),
-		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "marketplace_http_request_duration_seconds",
-			Help:    "Длительность запросов HTTP по маршруту.",
-			Buckets: prometheus.DefBuckets,
-		}, []string{"route"}),
+		requests: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_http_requests_total",
+				Help: "Запросы HTTP по маршруту и коду ответа.",
+			},
+			[]string{"route", "code"},
+		),
+		duration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "marketplace_http_request_duration_seconds",
+				Help:    "Длительность запросов HTTP по маршруту.",
+				Buckets: prometheus.DefBuckets,
+			},
+			[]string{"route"},
+		),
 	}
 	registerer.MustRegister(m.requests, m.duration)
 
@@ -89,7 +105,11 @@ func observe(logger *slog.Logger, metrics *httpMetrics, next http.Handler) http.
 		}
 
 		requestLogger := logger.With(slog.String("requestId", id))
-		ctx := context.WithValue(context.WithValue(r.Context(), keyRequestID, id), keyLogger, requestLogger)
+		facts := &requestFacts{}
+
+		ctx := context.WithValue(r.Context(), keyRequestID, id)
+		ctx = context.WithValue(ctx, keyLogger, requestLogger)
+		ctx = context.WithValue(ctx, keyFacts, facts)
 		r = r.WithContext(ctx)
 		w.Header().Set(headerRequestID, id)
 
@@ -98,7 +118,11 @@ func observe(logger *slog.Logger, metrics *httpMetrics, next http.Handler) http.
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				requestLogger.Error("http: паника обработчика", slog.Any("panic", recovered))
-				writeJSON(recorder, http.StatusInternalServerError, errorBody{Error: errorDetail{Code: "internal", Message: "внутренняя ошибка"}})
+				writeJSON(
+					recorder,
+					http.StatusInternalServerError,
+					errorBody{Error: errorDetail{Code: "internal", Message: "внутренняя ошибка"}},
+				)
 			}
 
 			route := r.Pattern
@@ -109,8 +133,17 @@ func observe(logger *slog.Logger, metrics *httpMetrics, next http.Handler) http.
 			elapsed := time.Since(started)
 			metrics.requests.WithLabelValues(route, strconv.Itoa(recorder.status)).Inc()
 			metrics.duration.WithLabelValues(route).Observe(elapsed.Seconds())
-			requestLogger.Info("http", slog.String("method", r.Method), slog.String("route", route),
-				slog.Int("status", recorder.status), slog.Duration("duration", elapsed))
+			attrs := []any{
+				slog.String("method", r.Method),
+				slog.String("route", route),
+				slog.Int("status", recorder.status),
+				slog.Duration("duration", elapsed),
+			}
+			if facts.buyerID != "" {
+				attrs = append(attrs, slog.String("buyerId", string(facts.buyerID)))
+			}
+
+			requestLogger.Info("http", attrs...)
 		}()
 
 		next.ServeHTTP(recorder, r)
@@ -162,4 +195,11 @@ func readJSON(w http.ResponseWriter, r *http.Request, out any) error {
 	}
 
 	return nil
+}
+
+// rememberBuyer отмечает покупателя запроса для строки журнала запроса.
+func rememberBuyer(ctx context.Context, buyerID ids.UUID) {
+	if facts, ok := ctx.Value(keyFacts).(*requestFacts); ok {
+		facts.buyerID = buyerID
+	}
 }

@@ -35,19 +35,41 @@ type OutboxRunner struct {
 	errors     prometheus.Counter
 }
 
+// RetentionRunner чистит служебные записи по расписанию.
+type RetentionRunner struct {
+	purger   Purger
+	interval time.Duration
+	logger   *slog.Logger
+}
+
 // NewOutboxRunner — цикл разбора outbox с метриками.
-func NewOutboxRunner(dispatcher Dispatcher, interval time.Duration, batch int, logger *slog.Logger, registerer prometheus.Registerer) *OutboxRunner {
+func NewOutboxRunner(
+	dispatcher Dispatcher,
+	interval time.Duration,
+	batch int,
+	logger *slog.Logger,
+	registerer prometheus.Registerer,
+) *OutboxRunner {
 	r := &OutboxRunner{
-		dispatcher: dispatcher, interval: interval, batch: batch, logger: logger,
-		tasks: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "marketplace_outbox_tasks_total",
-			Help: "Задачи outbox по итогу: done — выполнена, retry — отложена на повтор.",
-		}, []string{"kind", "tenant", "result"}),
-		lag: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "marketplace_outbox_task_lag_seconds",
-			Help:    "Время от постановки задачи до её выполнения.",
-			Buckets: []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60, 300, 900},
-		}, []string{"kind"}),
+		dispatcher: dispatcher,
+		interval:   interval,
+		batch:      batch,
+		logger:     logger,
+		tasks: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_outbox_tasks_total",
+				Help: "Задачи outbox по итогу: done — выполнена, retry — отложена на повтор.",
+			},
+			[]string{"kind", "tenant", "result"},
+		),
+		lag: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "marketplace_outbox_task_lag_seconds",
+				Help:    "Время от постановки задачи до её выполнения.",
+				Buckets: []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60, 300, 900},
+			},
+			[]string{"kind"},
+		),
 		errors: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "marketplace_outbox_cycle_errors_total",
 			Help: "Сбои цикла разбора outbox: взятие или отметка задач.",
@@ -91,17 +113,18 @@ func (r *OutboxRunner) record(outcomes []messaging.Outcome) {
 		}
 
 		r.tasks.WithLabelValues(outcome.Task.Kind, tenant, "retry").Inc()
-		r.logger.Warn("outbox: задача отложена",
-			slog.String("kind", outcome.Task.Kind), slog.String("tenantId", tenant),
-			slog.Int64("taskId", outcome.Task.ID), slog.Int("attempt", outcome.Task.Attempts), slog.Any("error", outcome.Err))
+		r.logger.Warn(
+			"outbox: задача отложена",
+			slog.String("kind", outcome.Task.Kind),
+			slog.String("tenantId", tenant),
+			slog.Int64(
+				"taskId",
+				outcome.Task.ID,
+			),
+			slog.Int("attempt", outcome.Task.Attempts),
+			slog.Any("error", outcome.Err),
+		)
 	}
-}
-
-// RetentionRunner чистит служебные записи по расписанию.
-type RetentionRunner struct {
-	purger   Purger
-	interval time.Duration
-	logger   *slog.Logger
 }
 
 // NewRetentionRunner — чистка раз в interval.
@@ -118,8 +141,12 @@ func (r *RetentionRunner) Run(ctx context.Context) error {
 		case err != nil && ctx.Err() == nil:
 			r.logger.Error("чистка: не удалась", slog.Any("error", err))
 		case err == nil:
-			r.logger.Info("чистка: готово", slog.Int64("processedEvents", result.Processed),
-				slog.Int64("outboxDone", result.OutboxDone), slog.Int64("parkedEvents", result.Parked))
+			r.logger.Info(
+				"чистка: готово",
+				slog.Int64("processedEvents", result.Processed),
+				slog.Int64("outboxDone", result.OutboxDone),
+				slog.Int64("parkedEvents", result.Parked),
+			)
 		}
 
 		if !wait(ctx, r.interval) {

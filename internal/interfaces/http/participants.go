@@ -12,18 +12,29 @@ import (
 
 // participantJSON — участник в операторском ответе.
 type participantJSON struct {
-	TenantID          string    `json:"tenantId"`
-	Slug              string    `json:"slug"`
-	Name              string    `json:"name"`
-	Status            string    `json:"status"`
-	Enabled           bool      `json:"enabled"`
-	PaymentAccountID  *string   `json:"paymentAccountId"`
-	TenantStatus      string    `json:"tenantStatus"`
-	Visible           bool      `json:"visible"`
-	CheckoutAvailable bool      `json:"checkoutAvailable"`
-	Version           int64     `json:"version"`
-	CreatedAt         time.Time `json:"createdAt"`
-	UpdatedAt         time.Time `json:"updatedAt"`
+	TenantID          string      `json:"tenantId"`
+	Slug              string      `json:"slug"`
+	Name              string      `json:"name"`
+	Status            string      `json:"status"`
+	Enabled           bool        `json:"enabled"`
+	PaymentAccountID  *string     `json:"paymentAccountId"`
+	ShopEnabled       bool        `json:"shopEnabled"`
+	Subsidy           subsidyJSON `json:"subsidy"`
+	SettingsSyncedAt  *time.Time  `json:"settingsSyncedAt"`
+	TenantStatus      string      `json:"tenantStatus"`
+	Visible           bool        `json:"visible"`
+	CheckoutAvailable bool        `json:"checkoutAvailable"`
+	Version           int64       `json:"version"`
+	CreatedAt         time.Time   `json:"createdAt"`
+	UpdatedAt         time.Time   `json:"updatedAt"`
+}
+
+// subsidyJSON — субсидия доставки продавца: value — копейки для fixed, процент для percent.
+type subsidyJSON struct {
+	Enabled   bool   `json:"enabled"`
+	Type      string `json:"type,omitempty"`
+	Value     int64  `json:"value"`
+	MaxAmount int64  `json:"maxAmount"`
 }
 
 type participantListJSON struct {
@@ -31,22 +42,6 @@ type participantListJSON struct {
 	Total  int               `json:"total"`
 	Limit  int               `json:"limit"`
 	Offset int               `json:"offset"`
-}
-
-func toParticipantJSON(view appparticipant.View) participantJSON {
-	p := view.Participant
-	out := participantJSON{
-		TenantID: string(p.TenantID), Slug: p.Slug, Name: p.Name, Status: string(p.Status), Enabled: p.Enabled,
-		TenantStatus: string(view.TenantStatus), Visible: view.Visibility.Visible,
-		CheckoutAvailable: view.Visibility.CheckoutAvailable, Version: p.Version,
-		CreatedAt: p.CreatedAt.UTC(), UpdatedAt: p.UpdatedAt.UTC(),
-	}
-	if p.PaymentAccountID != "" {
-		account := p.PaymentAccountID
-		out.PaymentAccountID = &account
-	}
-
-	return out
 }
 
 type participantHandlers struct {
@@ -64,6 +59,40 @@ type renameParticipantJSON struct {
 
 type paymentAccountJSON struct {
 	PaymentAccountID string `json:"paymentAccountId"`
+}
+
+func toParticipantJSON(view appparticipant.View) participantJSON {
+	p := view.Participant
+	out := participantJSON{
+		TenantID:          string(p.TenantID),
+		Slug:              p.Slug,
+		Name:              p.Name,
+		Status:            string(p.Status),
+		Enabled:           p.Enabled,
+		TenantStatus:      string(view.TenantStatus),
+		Visible:           view.Visibility.Visible,
+		CheckoutAvailable: view.Visibility.CheckoutAvailable,
+		Version:           p.Version,
+		CreatedAt:         p.CreatedAt.UTC(),
+		UpdatedAt:         p.UpdatedAt.UTC(),
+		ShopEnabled:       p.ShopEnabled,
+		Subsidy: subsidyJSON{
+			Enabled:   p.Subsidy.Enabled,
+			Type:      string(p.Subsidy.Type),
+			Value:     p.Subsidy.Value,
+			MaxAmount: p.Subsidy.MaxAmount.Kopecks(),
+		},
+	}
+	if !p.SettingsSyncedAt.IsZero() {
+		synced := p.SettingsSyncedAt.UTC()
+		out.SettingsSyncedAt = &synced
+	}
+	if p.PaymentAccountID != "" {
+		account := p.PaymentAccountID
+		out.PaymentAccountID = &account
+	}
+
+	return out
 }
 
 func (h *participantHandlers) list(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +122,12 @@ func (h *participantHandlers) list(w http.ResponseWriter, r *http.Request) {
 		page.Limit = appparticipant.MaxPageLimit
 	}
 
-	body := participantListJSON{Items: make([]participantJSON, 0, len(list.Items)), Total: list.Total, Limit: page.Limit, Offset: max(page.Offset, 0)}
+	body := participantListJSON{
+		Items:  make([]participantJSON, 0, len(list.Items)),
+		Total:  list.Total,
+		Limit:  page.Limit,
+		Offset: max(page.Offset, 0),
+	}
 	for _, view := range list.Items {
 		body.Items = append(body.Items, toParticipantJSON(view))
 	}
@@ -164,7 +198,11 @@ func (h *participantHandlers) disable(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *participantHandlers) withTenant(w http.ResponseWriter, r *http.Request, run func(ids.TenantID) (appparticipant.View, error)) {
+func (h *participantHandlers) withTenant(
+	w http.ResponseWriter,
+	r *http.Request,
+	run func(ids.TenantID) (appparticipant.View, error),
+) {
 	tenantID, err := ids.ParseTenantID(r.PathValue("tenantId"))
 	if err != nil {
 		writeError(w, r, err)

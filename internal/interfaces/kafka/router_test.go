@@ -25,6 +25,12 @@ type recorder struct {
 	err      error
 }
 
+const productBody = `{"version":1,"tenantId":"t1","productId":"p1","revision":7,"operation":"upsert","product":{
+	"id":"p1","name":"Чайник","description":"Описание","image":null,"url":"/p1","sku":"S1",
+	"price":1999.9,"promoPrice":1499.995,"availableQuantity":3,
+	"categories":[{"id":"c1","name":"","title":"Кухня","url":"/c1"}],"tags":["t-1"],
+	"variantsId":"v1","conditions":{"isVisible":true,"isOnlyVariant":false},"unknownField":42}}`
+
 func (r *recorder) ApplyProduct(_ context.Context, e appcatalog.ProductEvent) error {
 	r.products = append(r.products, e)
 
@@ -67,16 +73,11 @@ func handle(t *testing.T, topic string, msg kafkago.Message) (*recorder, error) 
 	t.Helper()
 
 	rec := &recorder{}
-	err := kafka.NewRouter(rec, rec).Handle(context.Background(), kafka.Envelope{Topic: topic, EventID: "ev", Message: msg})
+	err := kafka.NewRouter(rec, rec).
+		Handle(context.Background(), kafka.Envelope{Topic: topic, EventID: "ev", Message: msg})
 
 	return rec, err
 }
-
-const productBody = `{"version":1,"tenantId":"t1","productId":"p1","revision":7,"operation":"upsert","product":{
-	"id":"p1","name":"Чайник","description":"Описание","image":null,"url":"/p1","sku":"S1",
-	"price":1999.9,"promoPrice":1499.995,"availableQuantity":3,
-	"categories":[{"id":"c1","name":"","title":"Кухня","url":"/c1"}],"tags":["t-1"],
-	"variantsId":"v1","conditions":{"isVisible":true,"isOnlyVariant":false},"unknownField":42}}`
 
 func TestProductProjected(t *testing.T) {
 	rec, err := handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, productBody))
@@ -92,7 +93,9 @@ func TestProductProjected(t *testing.T) {
 	if s.Price.Kopecks() != 199990 || s.PromoPrice == nil || s.PromoPrice.Kopecks() != 150000 || s.Available != 3 {
 		t.Fatalf("цены в копейках и остаток: %+v", s)
 	}
-	if s.Card.Name != "Чайник" || s.Card.Categories[0].Name != "Кухня" || !s.Card.Visible || s.Card.VariantsID != "v1" || !s.At.Equal(published) {
+	if s.Card.Name != "Чайник" || s.Card.Categories[0].Name != "Кухня" || !s.Card.Visible ||
+		s.Card.VariantsID != "v1" ||
+		!s.At.Equal(published) {
 		t.Fatalf("карточка: %+v", s.Card)
 	}
 }
@@ -111,19 +114,57 @@ func TestProductProjectedRejects(t *testing.T) {
 		msg  kafkago.Message
 		want error
 	}{
-		"нет магазина в теле":   {message(`["t1","p1"]`, `{"version":1,"productId":"p1","revision":1,"operation":"delete"}`), kafka.ErrTenantMissing},
+		"нет магазина в теле": {
+			message(`["t1","p1"]`, `{"version":1,"productId":"p1","revision":1,"operation":"delete"}`),
+			kafka.ErrTenantMissing,
+		},
 		"ключ другого магазина": {message(`["t2","p1"]`, productBody), kafka.ErrTenantMismatch},
 		"заголовок другого":     {message(`["t1","p1"]`, productBody, tenantHeader("t2")), kafka.ErrTenantMismatch},
 		"ключ не массив":        {message(`p1`, productBody), kafka.ErrInvalidPayload},
 		"другой товар в ключе":  {message(`["t1","p2"]`, productBody), kafka.ErrInvalidPayload},
 		"не JSON":               {message(`["t1","p1"]`, `{`), kafka.ErrInvalidPayload},
-		"версия контракта":      {message(`["t1","p1"]`, `{"version":2,"tenantId":"t1","productId":"p1","revision":1,"operation":"delete"}`), kafka.ErrInvalidPayload},
-		"операция":              {message(`["t1","p1"]`, `{"version":1,"tenantId":"t1","productId":"p1","revision":1,"operation":"merge"}`), kafka.ErrInvalidPayload},
-		"удаление со снимком":   {message(`["t1","p1"]`, `{"version":1,"tenantId":"t1","productId":"p1","revision":1,"operation":"delete","product":{"id":"p1"}}`), kafka.ErrInvalidPayload},
-		"цена с экспонентой":    {message(`["t1","p1"]`, `{"version":1,"tenantId":"t1","productId":"p1","revision":1,"operation":"upsert","product":{"id":"p1","name":"x","price":1e3}}`), kafka.ErrInvalidPayload},
-		"без цены":              {message(`["t1","p1"]`, `{"version":1,"tenantId":"t1","productId":"p1","revision":1,"operation":"upsert","product":{"id":"p1","name":"x"}}`), kafka.ErrInvalidPayload},
-		"дробный остаток":       {message(`["t1","p1"]`, `{"version":1,"tenantId":"t1","productId":"p1","revision":1,"operation":"upsert","product":{"id":"p1","name":"x","price":1,"availableQuantity":1.5}}`), kafka.ErrInvalidPayload},
-		"магазин не по формату": {message(`["t 1","p1"]`, `{"version":1,"tenantId":"t 1","productId":"p1","revision":1,"operation":"delete"}`), kafka.ErrInvalidPayload},
+		"версия контракта": {
+			message(`["t1","p1"]`, `{"version":2,"tenantId":"t1","productId":"p1","revision":1,"operation":"delete"}`),
+			kafka.ErrInvalidPayload,
+		},
+		"операция": {
+			message(`["t1","p1"]`, `{"version":1,"tenantId":"t1","productId":"p1","revision":1,"operation":"merge"}`),
+			kafka.ErrInvalidPayload,
+		},
+		"удаление со снимком": {
+			message(`["t1","p1"]`, `{
+				"version": 1, "tenantId": "t1", "productId": "p1", "revision": 1, "operation": "delete",
+				"product": {"id": "p1"}
+			}`),
+			kafka.ErrInvalidPayload,
+		},
+		"цена с экспонентой": {
+			message(`["t1","p1"]`, `{
+				"version": 1, "tenantId": "t1", "productId": "p1", "revision": 1, "operation": "upsert",
+				"product": {"id": "p1", "name": "x", "price": 1e3}
+			}`),
+			kafka.ErrInvalidPayload,
+		},
+		"без цены": {
+			message(`["t1","p1"]`, `{
+				"version": 1, "tenantId": "t1", "productId": "p1", "revision": 1, "operation": "upsert",
+				"product": {"id": "p1", "name": "x"}
+			}`),
+			kafka.ErrInvalidPayload,
+		},
+		"дробный остаток": {
+			message(`["t1","p1"]`, `{
+				"version": 1, "tenantId": "t1", "productId": "p1", "revision": 1, "operation": "upsert",
+				"product": {"id": "p1", "name": "x", "price": 1, "availableQuantity": 1.5}
+			}`),
+			kafka.ErrInvalidPayload,
+		},
+		"магазин не по формату": {
+			message(`["t 1","p1"]`, `{
+				"version": 1, "tenantId": "t 1", "productId": "p1", "revision": 1, "operation": "delete"
+			}`),
+			kafka.ErrInvalidPayload,
+		},
 	}
 
 	for name, tc := range cases {
@@ -144,19 +185,24 @@ func TestProductProjectedRejects(t *testing.T) {
 }
 
 func TestTagProjected(t *testing.T) {
-	body := `{"version":1,"tenantId":"t1","tagId":"tag-1","revision":2,"operation":"upsert","tag":{"id":"tag-1","value":"Новинка"}}`
+	body := `{
+		"version": 1, "tenantId": "t1", "tagId": "tag-1", "revision": 2, "operation": "upsert",
+		"tag": {"id": "tag-1", "value": "Новинка"}
+	}`
 
 	rec, err := handle(t, kafka.TopicTagProjected, message(`["t1","tag-1"]`, body))
 	if err != nil || rec.tags[0].Snapshot.Value != "Новинка" || rec.tags[0].Snapshot.TenantID != "t1" {
 		t.Fatalf("тег: %+v, %v", rec.tags, err)
 	}
 
-	if _, err := handle(t, kafka.TopicTagProjected, message(`["t2","tag-1"]`, body)); !errors.Is(err, kafka.ErrTenantMismatch) {
+	_, err = handle(t, kafka.TopicTagProjected, message(`["t2","tag-1"]`, body))
+	if !errors.Is(err, kafka.ErrTenantMismatch) {
 		t.Fatalf("ключ другого магазина: %v", err)
 	}
 
 	deleted := `{"version":1,"tenantId":"t1","tagId":"tag-1","revision":3,"operation":"delete"}`
-	if rec, err := handle(t, kafka.TopicTagProjected, message(`["t1","tag-1"]`, deleted)); err != nil || !rec.tags[0].Snapshot.Deleted {
+	rec, err = handle(t, kafka.TopicTagProjected, message(`["t1","tag-1"]`, deleted))
+	if err != nil || !rec.tags[0].Snapshot.Deleted {
 		t.Fatalf("удаление тега: %+v, %v", rec.tags, err)
 	}
 }
@@ -170,12 +216,14 @@ func TestStockItemUpdated(t *testing.T) {
 	}
 
 	got := rec.stock[0]
-	if got.TenantID != "t1" || got.ProductID != "p1" || got.Stock.Available != 6 || got.Price == nil || got.Price.Price.Kopecks() != 25050 {
+	if got.TenantID != "t1" || got.ProductID != "p1" || got.Stock.Available != 6 || got.Price == nil ||
+		got.Price.Price.Kopecks() != 25050 {
 		t.Fatalf("позиция склада: %+v", got)
 	}
 
 	overReserved := `{"id":"s1","productId":"p1","quantity":1,"reserved":4}`
-	if rec, err := handle(t, kafka.TopicStockItemUpdated, message("s1", overReserved, tenantHeader("t1"))); err != nil || rec.stock[0].Stock.Available != 0 || rec.stock[0].Price != nil {
+	rec, err = handle(t, kafka.TopicStockItemUpdated, message("s1", overReserved, tenantHeader("t1")))
+	if err != nil || rec.stock[0].Stock.Available != 0 || rec.stock[0].Price != nil {
 		t.Fatalf("резерв больше остатка — ноль, без цены: %+v, %v", rec.stock, err)
 	}
 
@@ -190,16 +238,22 @@ func TestPriceUpdated(t *testing.T) {
 		t.Fatalf("прайс: %+v, %v", rec.prices, err)
 	}
 
-	if _, err := handle(t, kafka.TopicProductPriceUpdated, message("p1", `{"id":"p1","price":99}`)); !errors.Is(err, kafka.ErrTenantMissing) {
+	_, err = handle(t, kafka.TopicProductPriceUpdated, message("p1", `{"id":"p1","price":99}`))
+	if !errors.Is(err, kafka.ErrTenantMissing) {
 		t.Fatalf("без заголовка магазина: %v", err)
 	}
-	if _, err := handle(t, kafka.TopicProductPriceUpdated, message("p1", `{"id":"p1"}`, tenantHeader("t1"))); !errors.Is(err, kafka.ErrInvalidPayload) {
+
+	_, err = handle(t, kafka.TopicProductPriceUpdated, message("p1", `{"id":"p1"}`, tenantHeader("t1")))
+	if !errors.Is(err, kafka.ErrInvalidPayload) {
 		t.Fatalf("без цены: %v", err)
 	}
 }
 
 func TestTenantEvents(t *testing.T) {
-	body := `{"tenantId":"t1","slug":"shop","status":"active","cell":"a","plan":{"code":"base"},"hosts":[],"at":"2026-10-23T10:00:00.123Z"}`
+	body := `{
+		"tenantId": "t1", "slug": "shop", "status": "active", "cell": "a",
+		"plan": {"code":"base"}, "hosts": [], "at": "2026-10-23T10:00:00.123Z"
+	}`
 
 	rec, err := handle(t, kafka.TopicTenantUpdated, message("t1", body))
 	if err != nil {
@@ -217,13 +271,22 @@ func TestTenantEvents(t *testing.T) {
 		t.Fatalf("удаление переводит в конечный статус: %+v, %v", rec.registry, err)
 	}
 
-	if _, err := handle(t, kafka.TopicTenantCreated, message("t1", `{"slug":"shop","status":"active","at":"2026-10-23T10:00:00Z"}`)); !errors.Is(err, kafka.ErrTenantMissing) {
+	noTenant := `{"slug":"shop","status":"active","at":"2026-10-23T10:00:00Z"}`
+
+	_, err = handle(t, kafka.TopicTenantCreated, message("t1", noTenant))
+	if !errors.Is(err, kafka.ErrTenantMissing) {
 		t.Fatalf("без магазина: %v", err)
 	}
-	if _, err := handle(t, kafka.TopicTenantCreated, message("t1", body, tenantHeader("t2"))); !errors.Is(err, kafka.ErrTenantMismatch) {
+
+	_, err = handle(t, kafka.TopicTenantCreated, message("t1", body, tenantHeader("t2")))
+	if !errors.Is(err, kafka.ErrTenantMismatch) {
 		t.Fatalf("заголовок другого магазина: %v", err)
 	}
-	if _, err := handle(t, kafka.TopicTenantCreated, message("t1", `{"tenantId":"t1","slug":"s","status":"active","at":"вчера"}`)); !errors.Is(err, kafka.ErrInvalidPayload) {
+
+	badTime := `{"tenantId":"t1","slug":"s","status":"active","at":"вчера"}`
+
+	_, err = handle(t, kafka.TopicTenantCreated, message("t1", badTime))
+	if !errors.Is(err, kafka.ErrInvalidPayload) {
 		t.Fatalf("время не по формату: %v", err)
 	}
 }

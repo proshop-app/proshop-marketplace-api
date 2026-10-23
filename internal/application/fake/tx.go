@@ -6,7 +6,11 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -15,17 +19,53 @@ type tx struct {
 	data *data
 }
 
-func (t *tx) Participants() participant.Repository { return participants{t.data} }
-func (t *tx) Registry() participant.Registry       { return registry{t.data} }
-func (t *tx) Products() catalog.ProductRepository  { return products{t.data} }
-func (t *tx) Signals() catalog.SignalsRepository   { return signals{t.data} }
-func (t *tx) Tags() catalog.TagRepository          { return tags{t.data} }
-func (t *tx) Offers() ports.OfferStates            { return offers{t.data} }
-func (t *tx) Outbox() ports.Outbox                 { return outbox{t.data} }
-func (t *tx) Inbox() ports.Inbox                   { return inbox{t.data} }
-func (t *tx) Parked() ports.ParkedEvents           { return parked{t.data} }
-
 type participants struct{ d *data }
+
+type registry struct{ d *data }
+
+type products struct{ d *data }
+
+type signals struct{ d *data }
+
+type tags struct{ d *data }
+
+type outbox struct{ d *data }
+
+type inbox struct{ d *data }
+
+type parked struct{ d *data }
+
+type offers struct{ d *data }
+
+func (t *tx) Participants() participant.Repository { return participants{t.data} }
+
+func (t *tx) Registry() participant.Registry { return registry{t.data} }
+
+func (t *tx) Products() catalog.ProductRepository { return products{t.data} }
+
+func (t *tx) Signals() catalog.SignalsRepository { return signals{t.data} }
+
+func (t *tx) Tags() catalog.TagRepository { return tags{t.data} }
+
+func (t *tx) Offers() ports.OfferStates { return offers{t.data} }
+
+func (t *tx) Outbox() ports.Outbox { return outbox{t.data} }
+
+func (t *tx) Inbox() ports.Inbox { return inbox{t.data} }
+
+func (t *tx) Parked() ports.ParkedEvents { return parked{t.data} }
+
+func (t *tx) Buyers() buyer.Repository { return buyers{t.data} }
+
+func (t *tx) Challenges() buyer.ChallengeRepository { return challenges{t.data} }
+
+func (t *tx) Carts() cart.Repository { return carts{t.data} }
+
+func (t *tx) Checkouts() checkout.Repository { return checkouts{t.data} }
+
+func (t *tx) PickupPoints() delivery.PickupPointRepository {
+	return pickupPoints{t.data}
+}
 
 func (r participants) Get(_ context.Context, id ids.TenantID) (*participant.Participant, error) {
 	state, ok := r.d.participants[id]
@@ -98,8 +138,6 @@ func (r participants) Update(_ context.Context, p *participant.Participant) erro
 	return nil
 }
 
-type registry struct{ d *data }
-
 func (r registry) Get(_ context.Context, id ids.TenantID) (*participant.Tenant, error) {
 	state, ok := r.d.tenants[id]
 	if !ok {
@@ -113,7 +151,8 @@ func (r registry) Save(_ context.Context, tenant *participant.Tenant) error {
 	state := tenant.State()
 	stored, ok := r.d.tenants[state.TenantID]
 
-	if (tenant.OriginVersion() == 0 && ok) || (tenant.OriginVersion() != 0 && (!ok || stored.Version != tenant.OriginVersion())) {
+	if (tenant.OriginVersion() == 0 && ok) ||
+		(tenant.OriginVersion() != 0 && (!ok || stored.Version != tenant.OriginVersion())) {
 		return participant.ErrTenantConflict
 	}
 
@@ -122,8 +161,6 @@ func (r registry) Save(_ context.Context, tenant *participant.Tenant) error {
 
 	return nil
 }
-
-type products struct{ d *data }
 
 func (r products) Get(_ context.Context, tenant ids.TenantID, product ids.ProductID) (*catalog.Product, error) {
 	state, ok := r.d.products[productKey{tenant, product}]
@@ -138,7 +175,12 @@ func (r products) Save(_ context.Context, product *catalog.Product) error {
 	state := product.State()
 	key := productKey{state.TenantID, state.ProductID}
 
-	if !versionMatches(r.d.products, key, product.OriginVersion(), func(s catalog.ProductState) int64 { return s.Version }) {
+	if !versionMatches(
+		r.d.products,
+		key,
+		product.OriginVersion(),
+		func(s catalog.ProductState) int64 { return s.Version },
+	) {
 		return catalog.ErrConflict
 	}
 
@@ -147,8 +189,6 @@ func (r products) Save(_ context.Context, product *catalog.Product) error {
 
 	return nil
 }
-
-type signals struct{ d *data }
 
 func (r signals) Get(_ context.Context, tenant ids.TenantID, product ids.ProductID) (*catalog.Signals, error) {
 	state, ok := r.d.signals[productKey{tenant, product}]
@@ -172,8 +212,6 @@ func (r signals) Save(_ context.Context, s *catalog.Signals) error {
 
 	return nil
 }
-
-type tags struct{ d *data }
 
 func (r tags) Get(_ context.Context, tenant ids.TenantID, tag ids.TagID) (*catalog.Tag, error) {
 	state, ok := r.d.tags[tagKey{tenant, tag}]
@@ -218,8 +256,6 @@ func versionMatches[K comparable, V any](rows map[K]V, key K, origin int64, vers
 	return ok && version(stored) == origin
 }
 
-type outbox struct{ d *data }
-
 func (o outbox) Enqueue(_ context.Context, task ports.NewTask) error {
 	if task.DedupKey != "" {
 		for _, row := range o.d.outbox {
@@ -231,14 +267,17 @@ func (o outbox) Enqueue(_ context.Context, task ports.NewTask) error {
 
 	o.d.nextTaskID++
 	o.d.outbox = append(o.d.outbox, OutboxRow{
-		ID: o.d.nextTaskID, Kind: task.Kind, TenantID: task.TenantID, DedupKey: task.DedupKey,
-		Payload: task.Payload, NextAt: task.At, CreatedAt: task.At,
+		ID:        o.d.nextTaskID,
+		Kind:      task.Kind,
+		TenantID:  task.TenantID,
+		DedupKey:  task.DedupKey,
+		Payload:   task.Payload,
+		NextAt:    task.At,
+		CreatedAt: task.At,
 	})
 
 	return nil
 }
-
-type inbox struct{ d *data }
 
 func (i inbox) MarkProcessed(_ context.Context, eventID string, at time.Time) (bool, error) {
 	if _, ok := i.d.processed[eventID]; ok {
@@ -250,8 +289,6 @@ func (i inbox) MarkProcessed(_ context.Context, eventID string, at time.Time) (b
 	return true, nil
 }
 
-type parked struct{ d *data }
-
 func (p parked) Park(_ context.Context, event ports.ParkedEvent) error {
 	key := parkedKey{event.Topic, event.Partition, event.Offset}
 	if _, ok := p.d.parked[key]; !ok {
@@ -260,8 +297,6 @@ func (p parked) Park(_ context.Context, event ports.ParkedEvent) error {
 
 	return nil
 }
-
-type offers struct{ d *data }
 
 func (o offers) state(key productKey) ports.OfferState {
 	state := ports.OfferState{Product: catalog.RestoreProduct(o.d.products[key])}
@@ -328,22 +363,36 @@ func (o offers) Offer(_ context.Context, tenant ids.TenantID, product ids.Produc
 	return o.state(key), nil
 }
 
-func (o offers) TenantOffers(_ context.Context, tenant ids.TenantID, afterProduct ids.ProductID, limit int) ([]ports.OfferState, error) {
-	return o.page(o.keys(func(key productKey) bool {
+func (o offers) TenantOffers(
+	_ context.Context,
+	tenant ids.TenantID,
+	afterProduct ids.ProductID,
+	limit int,
+) ([]ports.OfferState, error) {
+	keys := o.keys(func(key productKey) bool {
 		return key.tenant == tenant && key.product > afterProduct
-	}), limit), nil
+	})
+
+	return o.page(keys, limit), nil
 }
 
 func (o offers) ParticipantOffers(_ context.Context, position ports.OfferKey, limit int) ([]ports.OfferState, error) {
-	return o.page(o.keys(func(key productKey) bool {
+	keys := o.keys(func(key productKey) bool {
 		_, ok := o.d.participants[key.tenant]
 
 		return ok && after(key, position)
-	}), limit), nil
+	})
+
+	return o.page(keys, limit), nil
 }
 
-func (o offers) ChangedSince(_ context.Context, since time.Time, position ports.OfferKey, limit int) ([]ports.OfferState, error) {
-	return o.page(o.keys(func(key productKey) bool {
+func (o offers) ChangedSince(
+	_ context.Context,
+	since time.Time,
+	position ports.OfferKey,
+	limit int,
+) ([]ports.OfferState, error) {
+	keys := o.keys(func(key productKey) bool {
 		p, ok := o.d.participants[key.tenant]
 		if !ok || !after(key, position) {
 			return false
@@ -358,5 +407,7 @@ func (o offers) ChangedSince(_ context.Context, since time.Time, position ports.
 		}
 
 		return changed
-	}), limit), nil
+	})
+
+	return o.page(keys, limit), nil
 }

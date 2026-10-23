@@ -46,17 +46,24 @@ type Router struct {
 // NewRouter — обработчики всех топиков маркетплейса.
 func NewRouter(projections Projections, registry Registry) *Router {
 	r := &Router{handlers: map[string]handler{
-		TopicProductProjected:    func(ctx context.Context, e Envelope) error { return productProjected(ctx, projections, e) },
-		TopicTagProjected:        func(ctx context.Context, e Envelope) error { return tagProjected(ctx, projections, e) },
-		TopicStockItemUpdated:    func(ctx context.Context, e Envelope) error { return stockItemUpdated(ctx, projections, e) },
-		TopicProductPriceUpdated: func(ctx context.Context, e Envelope) error { return priceUpdated(ctx, projections, e) },
+		TopicProductProjected:    bind(projections, productProjected),
+		TopicTagProjected:        bind(projections, tagProjected),
+		TopicStockItemUpdated:    bind(projections, stockItemUpdated),
+		TopicProductPriceUpdated: bind(projections, priceUpdated),
 	}}
 
-	for _, topic := range []string{TopicTenantCreated, TopicTenantUpdated, TopicTenantSuspended, TopicTenantResumed, TopicTenantDeleted} {
-		r.handlers[topic] = func(ctx context.Context, e Envelope) error { return tenantEvent(ctx, registry, e) }
+	for _, topic := range tenantTopics {
+		r.handlers[topic] = bind(registry, tenantEvent)
 	}
 
 	return r
+}
+
+// bind привязывает обработчик к сценарию, который он вызывает.
+func bind[T any](target T, fn func(ctx context.Context, target T, envelope Envelope) error) handler {
+	return func(ctx context.Context, envelope Envelope) error {
+		return fn(ctx, target, envelope)
+	}
 }
 
 // Topics — топики, которые читает маркетплейс, без префикса.

@@ -85,14 +85,18 @@ func TestOfferCard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if card.Offer.Name != "Товар p1" || len(card.Tags) != 2 || card.Tags[0].Label != "Новинка" || card.Tags[1].Label != "free" {
+	if card.Offer.Name != "Товар p1" || len(card.Tags) != 2 || card.Tags[0].Label != "Новинка" ||
+		card.Tags[1].Label != "free" {
 		t.Fatalf("карточка: %+v", card)
 	}
 
-	if _, err := queries.Offer(ctx, ids.OfferID{Tenant: "t2", Product: "p1"}); !errors.Is(err, catalog.ErrOfferNotFound) {
+	_, err = queries.Offer(ctx, ids.OfferID{Tenant: "t2", Product: "p1"})
+	if !errors.Is(err, catalog.ErrOfferNotFound) {
 		t.Fatalf("скрытое предложение: ожидалось ErrOfferNotFound, получено %v", err)
 	}
-	if _, err := queries.Offer(ctx, ids.OfferID{Tenant: "t9", Product: "p9"}); !errors.Is(err, catalog.ErrOfferNotFound) {
+
+	_, err = queries.Offer(ctx, ids.OfferID{Tenant: "t9", Product: "p9"})
+	if !errors.Is(err, catalog.ErrOfferNotFound) {
 		t.Fatalf("нет предложения: ожидалось ErrOfferNotFound, получено %v", err)
 	}
 }

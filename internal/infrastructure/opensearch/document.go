@@ -40,11 +40,26 @@ type category struct {
 
 func toDocument(doc ports.OfferDocument) document {
 	out := document{
-		OfferID: doc.ID, TenantID: doc.TenantID, ProductID: doc.ProductID, SellerSlug: doc.SellerSlug,
-		SellerName: doc.SellerName, Name: doc.Name, Description: doc.Description, Image: doc.Image, URL: doc.URL,
-		SKU: doc.SKU, Tags: doc.Tags, VariantsID: doc.VariantsID, Price: doc.Price, BasePrice: doc.BasePrice,
-		Available: doc.Available, InStock: doc.InStock, Visible: doc.Visible, Listed: doc.Listed,
-		CheckoutAvailable: doc.CheckoutAvailable, UpdatedAt: doc.UpdatedAt.UTC(),
+		OfferID:           doc.ID,
+		TenantID:          doc.TenantID,
+		ProductID:         doc.ProductID,
+		SellerSlug:        doc.SellerSlug,
+		SellerName:        doc.SellerName,
+		Name:              doc.Name,
+		Description:       doc.Description,
+		Image:             doc.Image,
+		URL:               doc.URL,
+		SKU:               doc.SKU,
+		Tags:              doc.Tags,
+		VariantsID:        doc.VariantsID,
+		Price:             doc.Price,
+		BasePrice:         doc.BasePrice,
+		Available:         doc.Available,
+		InStock:           doc.InStock,
+		Visible:           doc.Visible,
+		Listed:            doc.Listed,
+		CheckoutAvailable: doc.CheckoutAvailable,
+		UpdatedAt:         doc.UpdatedAt.UTC(),
 	}
 	for _, c := range doc.Categories {
 		out.Categories = append(out.Categories, category(c))
@@ -55,11 +70,27 @@ func toDocument(doc ports.OfferDocument) document {
 
 func fromDocument(doc document, version int64) ports.OfferDocument {
 	out := ports.OfferDocument{
-		ID: doc.OfferID, TenantID: doc.TenantID, ProductID: doc.ProductID, SellerSlug: doc.SellerSlug,
-		SellerName: doc.SellerName, Name: doc.Name, Description: doc.Description, Image: doc.Image, URL: doc.URL,
-		SKU: doc.SKU, Tags: doc.Tags, VariantsID: doc.VariantsID, Price: doc.Price, BasePrice: doc.BasePrice,
-		Available: doc.Available, InStock: doc.InStock, Visible: doc.Visible, Listed: doc.Listed,
-		CheckoutAvailable: doc.CheckoutAvailable, UpdatedAt: doc.UpdatedAt, Version: version,
+		ID:                doc.OfferID,
+		TenantID:          doc.TenantID,
+		ProductID:         doc.ProductID,
+		SellerSlug:        doc.SellerSlug,
+		SellerName:        doc.SellerName,
+		Name:              doc.Name,
+		Description:       doc.Description,
+		Image:             doc.Image,
+		URL:               doc.URL,
+		SKU:               doc.SKU,
+		Tags:              doc.Tags,
+		VariantsID:        doc.VariantsID,
+		Price:             doc.Price,
+		BasePrice:         doc.BasePrice,
+		Available:         doc.Available,
+		InStock:           doc.InStock,
+		Visible:           doc.Visible,
+		Listed:            doc.Listed,
+		CheckoutAvailable: doc.CheckoutAvailable,
+		UpdatedAt:         doc.UpdatedAt,
+		Version:           version,
 	}
 	for _, c := range doc.Categories {
 		out.Categories = append(out.Categories, catalog.Category(c))

@@ -73,7 +73,10 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 
 	list := OfferList{Total: page.Total, Items: make([]OfferCard, 0, len(page.Items))}
 	for _, doc := range page.Items {
-		list.Items = append(list.Items, OfferCard{Offer: doc, Tags: catalog.LabelTags(doc.Tags, labels[ids.TenantID(doc.TenantID)])})
+		list.Items = append(
+			list.Items,
+			OfferCard{Offer: doc, Tags: catalog.LabelTags(doc.Tags, labels[ids.TenantID(doc.TenantID)])},
+		)
 	}
 
 	return list, nil
@@ -98,7 +101,10 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID) (OfferCard, er
 }
 
 // labels — подписи тегов из справочников магазинов одной транзакцией чтения.
-func (q *Queries) labels(ctx context.Context, tags map[ids.TenantID][]string) (map[ids.TenantID]map[string]string, error) {
+func (q *Queries) labels(
+	ctx context.Context,
+	tags map[ids.TenantID][]string,
+) (map[ids.TenantID]map[string]string, error) {
 	labels := make(map[ids.TenantID]map[string]string, len(tags))
 
 	wanted := make(map[ids.TenantID][]string, len(tags))

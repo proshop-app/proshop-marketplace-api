@@ -10,6 +10,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 var t0 = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
@@ -20,7 +21,12 @@ func setup(t *testing.T) (*fake.Store, *fake.Clock, *appparticipant.Service) {
 	store := fake.NewStore()
 	clock := fake.NewClock(t0)
 	store.SeedTenant(participant.TenantState{
-		TenantID: "t1", Slug: "shop-one", Status: participant.TenantActive, EventAt: t0, Version: 1, UpdatedAt: t0,
+		TenantID:  "t1",
+		Slug:      "shop-one",
+		Status:    participant.TenantActive,
+		EventAt:   t0,
+		Version:   1,
+		UpdatedAt: t0,
 	})
 
 	return store, clock, appparticipant.NewService(store, clock)
@@ -43,7 +49,8 @@ func TestCreate(t *testing.T) {
 		t.Fatalf("ожидалась задача синхронизации магазина: %+v", rows)
 	}
 
-	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Ещё раз"}); !errors.Is(err, participant.ErrAlreadyExists) {
+	_, err = service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Ещё раз"})
+	if !errors.Is(err, participant.ErrAlreadyExists) {
 		t.Fatalf("повтор: ожидалось ErrAlreadyExists, получено %v", err)
 	}
 }
@@ -52,16 +59,25 @@ func TestCreateRequiresRegistry(t *testing.T) {
 	store, _, service := setup(t)
 	ctx := context.Background()
 
-	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "unknown", Name: "x"}); !errors.Is(err, participant.ErrTenantUnknown) {
+	_, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "unknown", Name: "x"})
+	if !errors.Is(err, participant.ErrTenantUnknown) {
 		t.Fatalf("ожидалось ErrTenantUnknown, получено %v", err)
 	}
 
-	store.SeedTenant(participant.TenantState{TenantID: "t2", Slug: "gone", Status: participant.TenantDeleting, EventAt: t0, Version: 1})
-	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t2", Name: "x"}); !errors.Is(err, participant.ErrTenantUnavailable) {
+	store.SeedTenant(participant.TenantState{
+		TenantID: "t2",
+		Slug:     "gone",
+		Status:   participant.TenantDeleting,
+		EventAt:  t0,
+		Version:  1,
+	})
+	_, err = service.Create(ctx, appparticipant.CreateCommand{TenantID: "t2", Name: "x"})
+	if !errors.Is(err, participant.ErrTenantUnavailable) {
 		t.Fatalf("ожидалось ErrTenantUnavailable, получено %v", err)
 	}
 
-	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: ""}); !errors.Is(err, participant.ErrInvalidName) {
+	_, err = service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: ""})
+	if !errors.Is(err, participant.ErrInvalidName) {
 		t.Fatalf("ожидалось ErrInvalidName, получено %v", err)
 	}
 	if len(store.OutboxRows()) != 0 {
@@ -79,12 +95,12 @@ func TestChangesEnqueueSyncOnlyWhenChanged(t *testing.T) {
 	clock.Advance(time.Minute)
 
 	view, err := service.Enable(ctx, "t1")
-	if err != nil || !view.Visibility.Visible || view.Participant.Version != 2 {
-		t.Fatalf("включение: %+v, %v", view, err)
+	if err != nil || !view.Participant.Enabled || view.Visibility.Visible || view.Participant.Version != 2 {
+		t.Fatalf("включение оператором без согласия магазина не делает видимым: %+v, %v", view, err)
 	}
 
 	view, err = service.SetPaymentAccount(ctx, "t1", "acc-1")
-	if err != nil || !view.Visibility.CheckoutAvailable || view.Participant.Status != participant.StatusConnected {
+	if err != nil || view.Participant.Status != participant.StatusConnected {
 		t.Fatalf("оплата: %+v, %v", view, err)
 	}
 
@@ -125,7 +141,13 @@ func TestGetAndList(t *testing.T) {
 	store, clock, service := setup(t)
 	ctx := context.Background()
 
-	store.SeedTenant(participant.TenantState{TenantID: "t2", Slug: "shop-two", Status: participant.TenantSuspended, EventAt: t0, Version: 1})
+	store.SeedTenant(participant.TenantState{
+		TenantID: "t2",
+		Slug:     "shop-two",
+		Status:   participant.TenantSuspended,
+		EventAt:  t0,
+		Version:  1,
+	})
 
 	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Первый"}); err != nil {
 		t.Fatal(err)
@@ -159,10 +181,13 @@ func TestFailedCommitLeavesNothing(t *testing.T) {
 	store, _, service := setup(t)
 	store.FailCommit = errors.New("сбой фиксации")
 
-	if _, err := service.Create(context.Background(), appparticipant.CreateCommand{TenantID: "t1", Name: "Магазин"}); err == nil {
+	command := appparticipant.CreateCommand{TenantID: "t1", Name: "Магазин"}
+	if _, err := service.Create(context.Background(), command); err == nil {
 		t.Fatal("ожидалась ошибка")
 	}
 	if _, ok := store.Participant("t1"); ok || len(store.OutboxRows()) != 0 {
 		t.Fatal("несостоявшаяся транзакция не оставляет ни участника, ни задачи")
 	}
 }
+
+func participantID(value string) ids.TenantID { return ids.TenantID(value) }

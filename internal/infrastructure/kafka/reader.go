@@ -177,8 +177,11 @@ func (r *Reader) resubscribe(existing []string) (*kafkago.Reader, bool) {
 	}
 
 	if !slices.Equal(missing, r.missing) && len(missing) > 0 {
-		r.config.Logger.Warn("kafka: топики ещё не заведены у брокера, подписка без них",
-			slog.Any("missing", missing), slog.String("group", r.config.GroupID))
+		r.config.Logger.Warn(
+			"kafka: топики ещё не заведены у брокера, подписка без них",
+			slog.Any("missing", missing),
+			slog.String("group", r.config.GroupID),
+		)
 	}
 	r.missing = missing
 

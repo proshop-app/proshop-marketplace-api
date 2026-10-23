@@ -20,6 +20,8 @@ const (
 	Conflict Code = "conflict"
 	// Unauthorized — нет или неверны учётные данные.
 	Unauthorized Code = "unauthorized"
+	// TooManyRequests — превышен лимит частоты; повтор позже пройдёт.
+	TooManyRequests Code = "too_many_requests"
 	// Unavailable — внешняя зависимость недоступна; повтор позже может пройти.
 	Unavailable Code = "unavailable"
 	// Internal — непредвиденная ошибка.

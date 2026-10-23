@@ -63,20 +63,36 @@ type metrics struct {
 }
 
 // NewConsumer — консьюмер с метриками в registerer.
-func NewConsumer(source Source, router *Router, parker Parker, config ConsumerConfig, logger *slog.Logger, registerer prometheus.Registerer) *Consumer {
+func NewConsumer(
+	source Source,
+	router *Router,
+	parker Parker,
+	config ConsumerConfig,
+	logger *slog.Logger,
+	registerer prometheus.Registerer,
+) *Consumer {
 	m := &metrics{
-		messages: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "marketplace_kafka_messages_total",
-			Help: "Сообщения Kafka по итогу: processed — обработано, parked — в отравленных.",
-		}, []string{"topic", "tenant", "result"}),
-		parked: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "marketplace_kafka_parked_total",
-			Help: "Отравленные сообщения по причине; tenant пуст, если магазин не определён.",
-		}, []string{"topic", "tenant", "reason"}),
-		failures: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "marketplace_kafka_handler_failures_total",
-			Help: "Неудачные попытки обработки, после которых сообщение повторяется.",
-		}, []string{"topic", "tenant"}),
+		messages: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_kafka_messages_total",
+				Help: "Сообщения Kafka по итогу: processed — обработано, parked — в отравленных.",
+			},
+			[]string{"topic", "tenant", "result"},
+		),
+		parked: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_kafka_parked_total",
+				Help: "Отравленные сообщения по причине; tenant пуст, если магазин не определён.",
+			},
+			[]string{"topic", "tenant", "reason"},
+		),
+		failures: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_kafka_handler_failures_total",
+				Help: "Неудачные попытки обработки, после которых сообщение повторяется.",
+			},
+			[]string{"topic", "tenant"},
+		),
 	}
 	registerer.MustRegister(m.messages, m.parked, m.failures)
 
@@ -139,8 +155,12 @@ func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
 		Message: message,
 	}
 	tenant := TenantHint(message)
-	log := c.logger.With(slog.String("topic", envelope.Topic), slog.String("tenantId", tenant),
-		slog.Int("partition", message.Partition), slog.Int64("offset", message.Offset))
+	log := c.logger.With(
+		slog.String("topic", envelope.Topic),
+		slog.String("tenantId", tenant),
+		slog.Int("partition", message.Partition),
+		slog.Int64("offset", message.Offset),
+	)
 
 	for attempt := 1; ; attempt++ {
 		err := c.router.Handle(ctx, envelope)
@@ -171,7 +191,14 @@ func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
 	}
 }
 
-func (c *Consumer) park(ctx context.Context, log *slog.Logger, envelope Envelope, tenant, reason string, cause error, attempts int) bool {
+func (c *Consumer) park(
+	ctx context.Context,
+	log *slog.Logger,
+	envelope Envelope,
+	tenant, reason string,
+	cause error,
+	attempts int,
+) bool {
 	message := envelope.Message
 	headers := make(map[string]string, len(message.Headers))
 	for _, h := range message.Headers {
@@ -179,9 +206,17 @@ func (c *Consumer) park(ctx context.Context, log *slog.Logger, envelope Envelope
 	}
 
 	err := c.parker.Park(ctx, ports.ParkedEvent{
-		Topic: message.Topic, Partition: message.Partition, Offset: message.Offset,
-		Key: message.Key, Headers: headers, Value: message.Value, TenantID: tenant,
-		Reason: reason, Error: cause.Error(), Attempts: attempts, ParkedAt: c.config.Now(),
+		Topic:     message.Topic,
+		Partition: message.Partition,
+		Offset:    message.Offset,
+		Key:       message.Key,
+		Headers:   headers,
+		Value:     message.Value,
+		TenantID:  tenant,
+		Reason:    reason,
+		Error:     cause.Error(),
+		Attempts:  attempts,
+		ParkedAt:  c.config.Now(),
 	})
 	if err != nil {
 		c.metrics.failures.WithLabelValues(envelope.Topic, tenant).Inc()

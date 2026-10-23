@@ -12,11 +12,14 @@ type RetentionPolicy struct {
 	ProcessedEvents time.Duration
 	OutboxDone      time.Duration
 	ParkedEvents    time.Duration
-	Batch           int
+	// Challenges — сколько хранить проверки входа после их срока.
+	Challenges time.Duration
+	Batch      int
 }
 
-// Janitor чистит служебные записи по сроку: отметки обработанных событий,
-// выполненные задачи outbox и разобранные отравленные сообщения.
+// Janitor чистит записи по сроку: отметки обработанных событий, выполненные
+// задачи outbox, разобранные отравленные сообщения, отжившие проверки входа и
+// просроченные корзины.
 type Janitor struct {
 	retention ports.Retention
 	clock     ports.Clock
@@ -36,6 +39,8 @@ func (j *Janitor) Purge(ctx context.Context) (ports.PurgeResult, error) {
 		ProcessedBefore:  now.Add(-j.policy.ProcessedEvents),
 		OutboxDoneBefore: now.Add(-j.policy.OutboxDone),
 		ParkedBefore:     now.Add(-j.policy.ParkedEvents),
+		ChallengesBefore: now.Add(-j.policy.Challenges),
+		CartsBefore:      now,
 		Batch:            j.policy.Batch,
 	})
 }

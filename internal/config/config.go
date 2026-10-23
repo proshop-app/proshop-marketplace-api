@@ -28,7 +28,92 @@ type Config struct {
 	Outbox     Outbox
 	Retention  Retention
 	Operator   Operator
+	Redis      Redis
+	SmsRu      SmsRu
+	Login      Login
+	Platform   Platform
+	Cart       Cart
+	Checkout   Checkout
+	Delivery   Delivery
+	Settings   Settings
 	LogLevel   string
+}
+
+// Redis — сессии покупателей и лимиты частоты.
+type Redis struct {
+	URL string
+}
+
+// Режимы шлюза проверки звонком.
+const (
+	SmsRuLive    = "live"
+	SmsRuSandbox = "sandbox"
+)
+
+// SmsRu — шлюз проверки звонком. Песочница сама подтверждает любой номер и
+// включается только явно: на бою это вход в чужой аккаунт.
+type SmsRu struct {
+	Mode                string
+	APIID               string
+	BaseURL             string
+	CallbackURL         string
+	SandboxConfirmAfter time.Duration
+}
+
+// Limit — не больше Count попыток за Window.
+type Limit struct {
+	Count  int
+	Window time.Duration
+}
+
+// Login — сроки и лимиты входа покупателя.
+type Login struct {
+	ChallengeTTL  time.Duration
+	CheckInterval time.Duration
+	SessionTTL    time.Duration
+	PhoneLimit    Limit
+	IPLimit       Limit
+	// TrustProxy — адрес покупателя брать из X-Forwarded-For.
+	TrustProxy bool
+}
+
+// Platform — внутренний API сервера установки.
+type Platform struct {
+	URL     string
+	Token   string
+	Timeout time.Duration
+}
+
+// Cart — корзины.
+type Cart struct {
+	TTL time.Duration
+}
+
+// Checkout — расчёты доставки.
+type Checkout struct {
+	QuoteTTL     time.Duration
+	QuoteTimeout time.Duration
+}
+
+// Carrier — учётная запись платформы у перевозчика только на чтение справочника.
+type Carrier struct {
+	URL          string
+	ClientID     string
+	ClientSecret string
+	Token        string
+}
+
+// Delivery — справочники пунктов выдачи.
+type Delivery struct {
+	CDEK            Carrier
+	Yandex          Carrier
+	RefreshInterval time.Duration
+	PickupIndex     string
+}
+
+// Settings — сверка настроек магазинов с сервером.
+type Settings struct {
+	SyncInterval time.Duration
 }
 
 // HTTP — сервер REST.
@@ -75,12 +160,18 @@ type Retention struct {
 	ProcessedEvents time.Duration
 	OutboxDone      time.Duration
 	ParkedEvents    time.Duration
+	Challenges      time.Duration
 	Interval        time.Duration
 }
 
 // Operator — служебный доступ к операторским ручкам до входа оператора через панель.
 type Operator struct {
 	Token string
+}
+
+type reader struct {
+	env      func(string) (string, bool)
+	problems []string
 }
 
 // Load читает полный конфиг сервиса.
@@ -118,9 +209,50 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			ProcessedEvents: r.duration("RETENTION_PROCESSED_EVENTS", 14*24*time.Hour),
 			OutboxDone:      r.duration("RETENTION_OUTBOX_DONE", 3*24*time.Hour),
 			ParkedEvents:    r.duration("RETENTION_PARKED_EVENTS", 30*24*time.Hour),
+			Challenges:      r.duration("RETENTION_CHALLENGES", 24*time.Hour),
 			Interval:        r.duration("RETENTION_INTERVAL", time.Hour),
 		},
 		Operator: Operator{Token: r.required("OPERATOR_TOKEN")},
+		Redis:    Redis{URL: r.redisURL()},
+		SmsRu: SmsRu{
+			Mode:                r.oneOf("SMSRU_MODE", SmsRuLive, SmsRuLive, SmsRuSandbox),
+			APIID:               r.str("SMSRU_API_ID", ""),
+			BaseURL:             r.str("SMSRU_BASE_URL", "https://sms.ru"),
+			CallbackURL:         r.str("SMSRU_CALLBACK_URL", ""),
+			SandboxConfirmAfter: r.duration("SMSRU_SANDBOX_CONFIRM_AFTER", 10*time.Second),
+		},
+		Login: Login{
+			ChallengeTTL:  r.duration("LOGIN_CHALLENGE_TTL", 5*time.Minute),
+			CheckInterval: r.duration("LOGIN_CHECK_INTERVAL", 2*time.Second),
+			SessionTTL:    r.duration("SESSION_TTL", 30*24*time.Hour),
+			PhoneLimit:    r.limit("LOGIN_PHONE_LIMIT", Limit{Count: 3, Window: 10 * time.Minute}),
+			IPLimit:       r.limit("LOGIN_IP_LIMIT", Limit{Count: 20, Window: time.Hour}),
+			TrustProxy:    r.boolean("HTTP_TRUST_PROXY", false),
+		},
+		Platform: Platform{
+			URL:     r.httpURL("PLATFORM_API_URL"),
+			Token:   r.required("SERVICE_TOKEN_MARKETPLACE"),
+			Timeout: r.duration("PLATFORM_API_TIMEOUT", 5*time.Second),
+		},
+		Cart: Cart{TTL: r.duration("CART_TTL", 30*24*time.Hour)},
+		Checkout: Checkout{
+			QuoteTTL:     r.duration("QUOTE_TTL", 30*time.Minute),
+			QuoteTimeout: r.duration("QUOTE_TIMEOUT", 5*time.Second),
+		},
+		Delivery: Delivery{
+			CDEK: Carrier{
+				URL:          r.str("CDEK_API_URL", "https://api.cdek.ru"),
+				ClientID:     r.str("CDEK_CLIENT_ID", ""),
+				ClientSecret: r.str("CDEK_CLIENT_SECRET", ""),
+			},
+			Yandex: Carrier{
+				URL:   r.str("YANDEX_DELIVERY_API_URL", "https://b2b-authproxy.taxi.yandex.net"),
+				Token: r.str("YANDEX_DELIVERY_TOKEN", ""),
+			},
+			RefreshInterval: r.duration("PICKUP_REFRESH_INTERVAL", 24*time.Hour),
+			PickupIndex:     r.str("OPENSEARCH_PICKUP_INDEX", "marketplace-pickup-points"),
+		},
+		Settings: Settings{SyncInterval: r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute)},
 		LogLevel: r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
 	}
 
@@ -139,6 +271,15 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	if cfg.Outbox.PerTenant > cfg.Outbox.Batch {
 		r.fail("OUTBOX_PER_TENANT", "не больше OUTBOX_BATCH")
 	}
+	if cfg.SmsRu.Mode == SmsRuLive && cfg.SmsRu.APIID == "" {
+		r.fail("SMSRU_API_ID", "обязательна при SMSRU_MODE=live")
+	}
+	if token := cfg.Platform.Token; token != "" && len(token) < minOperatorTokenLength {
+		r.fail("SERVICE_TOKEN_MARKETPLACE", fmt.Sprintf("не короче %d символов", minOperatorTokenLength))
+	}
+	if (cfg.Delivery.CDEK.ClientID == "") != (cfg.Delivery.CDEK.ClientSecret == "") {
+		r.fail("CDEK_CLIENT_ID", "задаётся вместе с CDEK_CLIENT_SECRET")
+	}
 
 	return cfg, r.err()
 }
@@ -149,11 +290,6 @@ func LoadDatabase(env func(string) (string, bool)) (Database, error) {
 	db := r.database()
 
 	return db, r.err()
-}
-
-type reader struct {
-	env      func(string) (string, bool)
-	problems []string
 }
 
 func (r *reader) fail(name, reason string) {
@@ -202,6 +338,50 @@ func (r *reader) database() Database {
 	}
 
 	return Database{URL: raw, MaxConns: r.connections("DATABASE_MAX_CONNS", 10)}
+}
+
+func (r *reader) redisURL() string {
+	raw := r.required("REDIS_URL")
+	if raw != "" {
+		parsed, err := url.Parse(raw)
+		if err != nil || (parsed.Scheme != "redis" && parsed.Scheme != "rediss") {
+			r.fail("REDIS_URL", "ожидается адрес redis://…")
+		}
+	}
+
+	return raw
+}
+
+func (r *reader) httpURL(name string) string {
+	raw := r.required(name)
+	if raw != "" {
+		parsed, err := url.Parse(raw)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			r.fail(name, "ожидается адрес http(s)://хост")
+		}
+	}
+
+	return raw
+}
+
+// limit — лимит вида «3/10m»: столько попыток за такое окно.
+func (r *reader) limit(name string, fallback Limit) Limit {
+	raw, ok := r.lookup(name)
+	if !ok {
+		return fallback
+	}
+
+	count, window, found := strings.Cut(raw, "/")
+	value, err := strconv.Atoi(count)
+	duration, durationErr := time.ParseDuration(window)
+
+	if !found || err != nil || durationErr != nil || value <= 0 || duration <= 0 {
+		r.fail(name, "ожидается «попыток/окно», например 3/10m")
+
+		return fallback
+	}
+
+	return Limit{Count: value, Window: duration}
 }
 
 func (r *reader) list(name string) []string {

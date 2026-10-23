@@ -54,3 +54,22 @@ func TestOfferIDRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestParseUUID(t *testing.T) {
+	if _, err := ids.ParseUUID("6f1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b"); err != nil {
+		t.Fatal(err)
+	}
+
+	invalid := []string{
+		"",
+		"6F1C2B1E-3C4D-4E5F-8A9B-0C1D2E3F4A5B",
+		"6f1c2b1e3c4d4e5f8a9b0c1d2e3f4a5b",
+		"../../etc",
+	}
+
+	for _, invalid := range invalid {
+		if _, err := ids.ParseUUID(invalid); !errors.Is(err, ids.ErrInvalid) {
+			t.Fatalf("%q должен быть отвергнут", invalid)
+		}
+	}
+}

@@ -62,11 +62,27 @@ func offer(id string, name string, price int64, version int64) ports.OfferDocume
 	tenant, product, _ := strings.Cut(id, "~")
 
 	return ports.OfferDocument{
-		ID: id, TenantID: tenant, ProductID: product, SellerSlug: "slug-" + tenant, SellerName: "Магазин " + tenant,
-		Name: name, Description: "Описание товара", Image: "/i.png", URL: "/p", SKU: "SKU-" + product,
-		Categories: []catalog.Category{{ID: "c1", Name: "Кухня", URL: "/c"}}, Tags: []string{"tag-1"},
-		Price: price, BasePrice: price, Available: 3, InStock: true, Visible: true, Listed: true, CheckoutAvailable: true,
-		UpdatedAt: time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC), Version: version,
+		ID:                id,
+		TenantID:          tenant,
+		ProductID:         product,
+		SellerSlug:        "slug-" + tenant,
+		SellerName:        "Магазин " + tenant,
+		Name:              name,
+		Description:       "Описание товара",
+		Image:             "/i.png",
+		URL:               "/p",
+		SKU:               "SKU-" + product,
+		Categories:        []catalog.Category{{ID: "c1", Name: "Кухня", URL: "/c"}},
+		Tags:              []string{"tag-1"},
+		Price:             price,
+		BasePrice:         price,
+		Available:         3,
+		InStock:           true,
+		Visible:           true,
+		Listed:            true,
+		CheckoutAvailable: true,
+		UpdatedAt:         time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC),
+		Version:           version,
 	}
 }
 
@@ -118,7 +134,10 @@ func TestIndexWriteSearchGet(t *testing.T) {
 	}
 
 	low, high := int64(40000), int64(60000)
-	page, err = index.Search(ctx, ports.OfferQuery{PriceMin: &low, PriceMax: &high, CategoryID: "c1", Tag: "tag-1", InStock: true, Limit: 10})
+	page, err = index.Search(
+		ctx,
+		ports.OfferQuery{PriceMin: &low, PriceMax: &high, CategoryID: "c1", Tag: "tag-1", InStock: true, Limit: 10},
+	)
 	if err != nil || page.Total != 1 || page.Items[0].ID != "t1~p2" {
 		t.Fatalf("фильтры: %+v, %v", page, err)
 	}
@@ -176,7 +195,9 @@ func TestIndexGenerationsSwap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := index.PutGeneration(ctx, generation, []ports.OfferDocument{offer("t1~new", "Новый", 100, 1)}); err != nil {
+
+	fresh := []ports.OfferDocument{offer("t1~new", "Новый", 100, 1)}
+	if err := index.PutGeneration(ctx, generation, fresh); err != nil {
 		t.Fatal(err)
 	}
 

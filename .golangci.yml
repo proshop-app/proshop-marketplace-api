@@ -16,6 +16,7 @@ linters:
     - errorlint
     - gocritic
     - gosec
+    - lll
     - nilerr
     - noctx
     - revive
@@ -79,6 +80,9 @@ linters:
     gocritic:
       disabled-checks:
         - appendAssign
+    lll:
+      line-length: 120
+      tab-width: 4
     revive:
       rules:
         - name: exported

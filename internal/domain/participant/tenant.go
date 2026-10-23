@@ -29,16 +29,6 @@ const (
 	TenantDeleted TenantStatus = "deleted"
 )
 
-// ParseTenantStatus проверяет статус из события реестра.
-func ParseTenantStatus(value string) (TenantStatus, error) {
-	switch status := TenantStatus(value); status {
-	case TenantCreating, TenantActive, TenantSuspended, TenantDeleting, TenantDeleted:
-		return status, nil
-	default:
-		return "", ErrInvalidRegistryEvent.WithMessage("неизвестный статус магазина: " + value)
-	}
-}
-
 // RegistryEvent — событие реестра магазинов платформы: снимок записи на момент At.
 type RegistryEvent struct {
 	TenantID ids.TenantID
@@ -67,6 +57,16 @@ type TenantState struct {
 type Tenant struct {
 	state         TenantState
 	originVersion int64
+}
+
+// ParseTenantStatus проверяет статус из события реестра.
+func ParseTenantStatus(value string) (TenantStatus, error) {
+	switch status := TenantStatus(value); status {
+	case TenantCreating, TenantActive, TenantSuspended, TenantDeleting, TenantDeleted:
+		return status, nil
+	default:
+		return "", ErrInvalidRegistryEvent.WithMessage("неизвестный статус магазина: " + value)
+	}
 }
 
 // NewTenant заводит запись зеркала из первого увиденного события.

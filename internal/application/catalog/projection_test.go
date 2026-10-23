@@ -16,7 +16,7 @@ func TestApplyProduct(t *testing.T) {
 	projector := appcatalog.NewProjector(store, fake.NewClock(t1))
 	ctx := context.Background()
 
-	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: "e1", Snapshot: snapshot("t1", "p1", 2, t0)}); err != nil {
+	if err := projector.ApplyProduct(ctx, productEvent("e1", snapshot("t1", "p1", 2, t0))); err != nil {
 		t.Fatal(err)
 	}
 
@@ -30,7 +30,7 @@ func TestApplyProduct(t *testing.T) {
 		t.Fatalf("задача синхронизации предложения: %+v", rows)
 	}
 
-	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: "e2", Snapshot: snapshot("t1", "p1", 1, t1)}); err != nil {
+	if err := projector.ApplyProduct(ctx, productEvent("e2", snapshot("t1", "p1", 1, t1))); err != nil {
 		t.Fatal(err)
 	}
 	if state, _ := store.Product("t1", "p1"); state.Revision != 2 {
@@ -40,7 +40,7 @@ func TestApplyProduct(t *testing.T) {
 		t.Fatal("пропущенное по ревизии событие всё равно отмечено обработанным")
 	}
 
-	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: "e3", Snapshot: snapshot("t1", "p1", 3, t1)}); err != nil {
+	if err := projector.ApplyProduct(ctx, productEvent("e3", snapshot("t1", "p1", 3, t1))); err != nil {
 		t.Fatal(err)
 	}
 	if rows := store.OutboxRows(); len(rows) != 1 {
@@ -53,7 +53,7 @@ func TestApplyProductDeduplicates(t *testing.T) {
 	projector := appcatalog.NewProjector(store, fake.NewClock(t1))
 	ctx := context.Background()
 
-	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: "e1", Snapshot: snapshot("t1", "p1", 1, t0)}); err != nil {
+	if err := projector.ApplyProduct(ctx, productEvent("e1", snapshot("t1", "p1", 1, t0))); err != nil {
 		t.Fatal(err)
 	}
 
@@ -89,12 +89,18 @@ func TestApplyTag(t *testing.T) {
 	projector := appcatalog.NewProjector(store, fake.NewClock(t1))
 	ctx := context.Background()
 
-	event := appcatalog.TagEvent{EventID: "e1", Snapshot: catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "Новинка"}}
+	event := appcatalog.TagEvent{
+		EventID:  "e1",
+		Snapshot: catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "Новинка"},
+	}
 	if err := projector.ApplyTag(ctx, event); err != nil {
 		t.Fatal(err)
 	}
 
-	update := appcatalog.TagEvent{EventID: "e2", Snapshot: catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 2, Value: "Хит"}}
+	update := appcatalog.TagEvent{
+		EventID:  "e2",
+		Snapshot: catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 2, Value: "Хит"},
+	}
 	if err := projector.ApplyTag(ctx, update); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +120,13 @@ func TestApplyStockAndPrice(t *testing.T) {
 	ctx := context.Background()
 
 	price := catalog.PriceSignal{Price: money.FromKopecks(9900), At: t1}
-	stock := appcatalog.StockEvent{EventID: "e1", TenantID: "t1", ProductID: "p1", Stock: catalog.StockSignal{Available: 4, At: t1}, Price: &price}
+	stock := appcatalog.StockEvent{
+		EventID:   "e1",
+		TenantID:  "t1",
+		ProductID: "p1",
+		Stock:     catalog.StockSignal{Available: 4, At: t1},
+		Price:     &price,
+	}
 	if err := projector.ApplyStock(ctx, stock); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +136,12 @@ func TestApplyStockAndPrice(t *testing.T) {
 		t.Fatalf("сигналы: %+v", signals)
 	}
 
-	stale := appcatalog.PriceEvent{EventID: "e2", TenantID: "t1", ProductID: "p1", Price: catalog.PriceSignal{Price: money.FromKopecks(1), At: t0}}
+	stale := appcatalog.PriceEvent{
+		EventID:   "e2",
+		TenantID:  "t1",
+		ProductID: "p1",
+		Price:     catalog.PriceSignal{Price: money.FromKopecks(1), At: t0},
+	}
 	if err := projector.ApplyPrice(ctx, stale); err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +149,12 @@ func TestApplyStockAndPrice(t *testing.T) {
 		t.Fatal("старая цена не применяется")
 	}
 
-	fresh := appcatalog.PriceEvent{EventID: "e3", TenantID: "t1", ProductID: "p1", Price: catalog.PriceSignal{Price: money.FromKopecks(12000), At: t2}}
+	fresh := appcatalog.PriceEvent{
+		EventID:   "e3",
+		TenantID:  "t1",
+		ProductID: "p1",
+		Price:     catalog.PriceSignal{Price: money.FromKopecks(12000), At: t2},
+	}
 	if err := projector.ApplyPrice(ctx, fresh); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +166,12 @@ func TestApplyStockAndPrice(t *testing.T) {
 		t.Fatalf("задача синхронизации склеивается: %+v", rows)
 	}
 
-	bad := appcatalog.PriceEvent{EventID: "e4", TenantID: "t1", ProductID: "p1", Price: catalog.PriceSignal{Price: money.FromKopecks(-1), At: t2}}
+	bad := appcatalog.PriceEvent{
+		EventID:   "e4",
+		TenantID:  "t1",
+		ProductID: "p1",
+		Price:     catalog.PriceSignal{Price: money.FromKopecks(-1), At: t2},
+	}
 	if err := projector.ApplyPrice(ctx, bad); !errors.Is(err, catalog.ErrInvalidSignal) {
 		t.Fatalf("ожидалось ErrInvalidSignal, получено %v", err)
 	}

@@ -5,12 +5,9 @@ package postgres
 import (
 	"context"
 	"embed"
-	"errors"
 	"fmt"
 	"io/fs"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -23,11 +20,6 @@ var migrations embed.FS
 
 // ErrUnavailable — база недоступна: соединение, начало или фиксация транзакции.
 var ErrUnavailable = errs.New(errs.Unavailable, "storage.unavailable", "хранилище недоступно")
-
-const (
-	codeUniqueViolation     = "23505"
-	codeForeignKeyViolation = "23503"
-)
 
 // Open — пул соединений с проверкой связи.
 func Open(ctx context.Context, url string, maxConns int32) (*pgxpool.Pool, error) {
@@ -108,20 +100,4 @@ func runGoose(ctx context.Context, pool *pgxpool.Pool, run func(*goose.Provider)
 	}
 
 	return nil
-}
-
-func isUnique(err error, constraint string) bool {
-	var pgErr *pgconn.PgError
-
-	return errors.As(err, &pgErr) && pgErr.Code == codeUniqueViolation && (constraint == "" || pgErr.ConstraintName == constraint)
-}
-
-func isForeignKey(err error) bool {
-	var pgErr *pgconn.PgError
-
-	return errors.As(err, &pgErr) && pgErr.Code == codeForeignKeyViolation
-}
-
-func notFound(err error) bool {
-	return errors.Is(err, pgx.ErrNoRows)
 }

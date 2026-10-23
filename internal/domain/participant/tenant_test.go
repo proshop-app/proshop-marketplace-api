@@ -11,8 +11,13 @@ import (
 
 func event(status participant.TenantStatus, at time.Time) participant.RegistryEvent {
 	return participant.RegistryEvent{
-		TenantID: "t1", Slug: "shop-one", Status: status, Cell: "cell-a",
-		Plan: json.RawMessage(`{"code":"base"}`), Hosts: json.RawMessage(`[]`), At: at,
+		TenantID: "t1",
+		Slug:     "shop-one",
+		Status:   status,
+		Cell:     "cell-a",
+		Plan:     json.RawMessage(`{"code":"base"}`),
+		Hosts:    json.RawMessage(`[]`),
+		At:       at,
 	}
 }
 

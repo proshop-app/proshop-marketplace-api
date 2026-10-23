@@ -1,10 +1,12 @@
 # proshop-marketplace
 
 Backend федеративного маркетплейса платформы Proshop: единый каталог
-предложений всех участвующих магазинов, затем корзина, checkout с оплатой
-одним платежом и заказы у магазинов. Go 1.23, слоистая архитектура по DDD,
-PostgreSQL, OpenSearch, Kafka. Проект — `proshop-server/docs/marketplace-mvp.md`,
-правила кода — [CLAUDE.md](CLAUDE.md).
+предложений всех участвующих магазинов, вход покупателя по звонку, корзина,
+доставка до пунктов выдачи, checkout с оплатой одним платежом и заказы у
+магазинов. Go 1.23, слоистая архитектура по DDD, PostgreSQL, OpenSearch,
+Kafka, Redis. Проект — `proshop-server/docs/marketplace-mvp.md`, правила кода —
+[CLAUDE.md](CLAUDE.md), HTTP — [api/openapi.yaml](api/openapi.yaml), стык с
+сервером — [docs/server-contract.md](docs/server-contract.md).
 
 ## Запуск
 
@@ -28,6 +30,7 @@ Kafka `29094`, Redis `26379`; любой меняется переменной
 | `make lint` | golangci-lint v2.3.1 с `depguard` по слоям |
 | `make migrate` | миграции к `DATABASE_URL` (`go run ./cmd/migrate up`; ещё `down`, `status`) |
 | `make reindex` | перестроить индекс предложений из проекции |
+| `make refresh-pickup-points` | обновить справочники пунктов выдачи подключённых перевозчиков |
 | `make build` | `bin/marketplace` и `bin/migrate` |
 | `make image` | образ: сборка на `golang:1.23.2-alpine`, запуск на `scratch` |
 | `make infra-up`, `make infra-down` | только инфраструктура |
@@ -40,7 +43,8 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 
 Процесс проверяет окружение на старте и не поднимается, пока не заданы
 обязательные переменные; все ошибки выводятся разом. `make dev` задаёт
-значения для compose сам, полный список с умолчаниями — `.env.example`.
+значения для compose сам (вход по звонку — в песочнице, API сервера —
+`http://localhost:5001`), полный список с умолчаниями — `.env.example`.
 
 | Переменная | Обязательна | По умолчанию | Назначение |
 |---|---|---|---|
@@ -61,6 +65,29 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `LOG_LEVEL` | | `info` | `debug`, `info`, `warn`, `error` |
 | `OUTBOX_POLL_INTERVAL`, `OUTBOX_BATCH`, `OUTBOX_PER_TENANT`, `OUTBOX_LEASE` | | `1s`, `100`, `20`, `1m` | разбор outbox |
 | `RETENTION_PROCESSED_EVENTS`, `RETENTION_OUTBOX_DONE`, `RETENTION_PARKED_EVENTS`, `RETENTION_INTERVAL` | | `336h`, `72h`, `720h`, `1h` | чистка служебных записей |
+| `RETENTION_CHALLENGES` | | `24h` | чистка истёкших проверок входа |
+| `REDIS_URL` | да | — | Redis `redis://…`: сессии и лимиты входа |
+| `SMSRU_MODE` | | `live` | `live` — шлюз sms.ru, `sandbox` — любой номер подтверждается сам, только для разработки |
+| `SMSRU_API_ID` | при `live` | — | ключ sms.ru |
+| `SMSRU_BASE_URL` | | `https://sms.ru` | адрес шлюза |
+| `SMSRU_CALLBACK_URL` | | — | адрес оповещений о звонках; задан — регистрируется у шлюза на старте |
+| `SMSRU_SANDBOX_CONFIRM_AFTER` | | `10s` | через сколько песочница считает звонок состоявшимся |
+| `LOGIN_CHALLENGE_TTL`, `LOGIN_CHECK_INTERVAL` | | `5m`, `2s` | срок проверки входа, частота опроса шлюза |
+| `LOGIN_PHONE_LIMIT`, `LOGIN_IP_LIMIT` | | `3/10m`, `20/1h` | попыток входа на номер и на адрес |
+| `SESSION_TTL` | | `720h` | срок сессии покупателя |
+| `HTTP_TRUST_PROXY` | | `false` | брать адрес клиента из `X-Forwarded-For` (за балансировщиком) |
+| `PLATFORM_API_URL` | да | — | внутренний API сервера установки |
+| `SERVICE_TOKEN_MARKETPLACE` | да | — | токен маркетплейса к API сервера, ≥ 32 символов |
+| `PLATFORM_API_TIMEOUT` | | `5s` | ожидание ответа сервера |
+| `CART_TTL` | | `720h` | срок жизни корзины без изменений |
+| `QUOTE_TTL`, `QUOTE_TIMEOUT` | | `30m`, `5s` | наибольший срок расчёта доставки, ожидание магазина |
+| `CDEK_CLIENT_ID`, `CDEK_CLIENT_SECRET` | | — | задаются парой; без них СДЭК не подключён |
+| `CDEK_API_URL` | | `https://api.cdek.ru` | адрес API СДЭК |
+| `YANDEX_DELIVERY_TOKEN` | | — | без него Яндекс Доставка не подключена |
+| `YANDEX_DELIVERY_API_URL` | | `https://b2b-authproxy.taxi.yandex.net` | адрес API Яндекс Доставки |
+| `PICKUP_REFRESH_INTERVAL` | | `24h` | обновление справочников пунктов выдачи |
+| `OPENSEARCH_PICKUP_INDEX` | | `marketplace-pickup-points` | индекс пунктов выдачи |
+| `SETTINGS_SYNC_INTERVAL` | | `5m` | сверка настроек участия магазинов с сервером |
 
 ## HTTP
 
@@ -80,15 +107,41 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `PUT /api/v1/operator/participants/{tenantId}/payment-account` | оператор | магазин продавца в ЮKassa `{"paymentAccountId"}`: `onboarding → connected` |
 | `POST /api/v1/operator/participants/{tenantId}/enable` | оператор | показать в каталоге |
 | `POST /api/v1/operator/participants/{tenantId}/disable` | оператор | скрыть из каталога |
+| `POST /api/v1/auth/call` | открыт | начать вход `{"phone"}`: номер, на который покупатель звонит |
+| `POST /api/v1/auth/call/check` | открыт | состояние входа `{"challengeId"}`; после звонка ставит куку сессии |
+| `POST /api/v1/auth/webhooks/smsru` | открыт | оповещение sms.ru о звонке |
+| `POST /api/v1/auth/logout` | покупатель | выход |
+| `GET /api/v1/me` | покупатель | текущий покупатель |
+| `GET /api/v1/cart` | покупатель | корзина по продавцам |
+| `POST /api/v1/cart/lines` | покупатель | добавить `{"offerId","quantity"}` |
+| `PUT /api/v1/cart/lines/{offerId}` | покупатель | количество `{"quantity"}` |
+| `DELETE /api/v1/cart/lines/{offerId}` | покупатель | убрать позицию |
+| `POST /api/v1/cart/verify` | покупатель | перепроверить цены и наличие у магазинов |
+| `GET /api/v1/delivery/carriers` | открыт | подключённые перевозчики |
+| `GET /api/v1/delivery/pickup-points` | открыт | пункты: `carrier` и `bbox=minLon,minLat,maxLon,maxLat` или `city`, `limit` |
+| `POST /api/v1/checkout` | покупатель | покупка из корзины; заголовок `Idempotency-Key` |
+| `GET /api/v1/checkout/{checkoutId}` | покупатель | покупка |
+| `POST /api/v1/checkout/{checkoutId}/delivery/quotes` | покупатель | расчёт доставки у каждого продавца `{"carrier","pickupPointCode"}` |
+| `POST /api/v1/checkout/{checkoutId}/confirm` | покупатель | подтвердить: перепроверка цен, повтор расчёта у не ответивших |
 
+Полное описание — [api/openapi.yaml](api/openapi.yaml); тест сверяет его с
+таблицей маршрутов.
+
+**Сессия покупателя** — непрозрачный токен в куке `__Host-mp_session`
+(`Secure`, `HttpOnly`, `SameSite=Lax`); серверный рендер витрины может
+передать его заголовком `Authorization: Bearer`. В Redis лежит только хеш
+токена со сроком `SESSION_TTL`, в теле ответов токена нет. Попытки входа
+ограничены на номер и на адрес клиента.
 **Доступ оператора — временный.** До недели 3 операторские ручки закрыты
 служебным токеном из `OPERATOR_TOKEN` (`Authorization: Bearer <токен>`).
 Вход оператора через панель на Vue 3 со своей ролью придёт на неделе 3;
 токен тогда перестанет быть входом для людей.
 
 Предложение видно в каталоге, если участник включён оператором, магазин
-`active` в реестре платформы и товар включён в магазине. Без
-`paymentAccountId` предложение видно с `checkoutAvailable: false`.
+`active` в реестре платформы, магазин включил участие в маркетплейсе в своих
+настройках (флаг с сервера, сверяется раз в `SETTINGS_SYNC_INTERVAL`) и товар
+включён в магазине. Без `paymentAccountId` предложение видно с
+`checkoutAvailable: false`.
 
 ## Kafka
 
@@ -112,11 +165,15 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 ## Данные
 
 PostgreSQL, миграции goose в `internal/infrastructure/postgres/migrations`:
-`tenants` (зеркало реестра), `participants`, `catalog_products`,
-`catalog_tags`, `offers` (остатки и цены), `outbox`, `processed_events`,
-`parked_events`. Индекс предложений — OpenSearch, алиас `OPENSEARCH_INDEX`
-над поколениями; восстанавливается из проекции (`make reindex`, а на старте —
-сам, если алиаса нет).
+`tenants` (зеркало реестра), `participants` (с настройками участия и
+субсидией доставки), `catalog_products`, `catalog_tags`, `offers` (остатки и
+цены), `outbox`, `processed_events`, `parked_events`, `buyers`,
+`phone_challenges`, `carts`, `cart_lines`, `pickup_points`, `job_leases`
+(аренда фоновых задач), `checkouts`, `checkout_groups`. Индекс предложений —
+OpenSearch, алиас `OPENSEARCH_INDEX` над поколениями; восстанавливается из
+проекции (`make reindex`, а на старте — сам, если алиаса нет). Пункты выдачи —
+индекс `OPENSEARCH_PICKUP_INDEX` с `geo_point`, наполняется из таблицы при
+обновлении справочников. Redis — сессии и лимиты входа.
 
 ## Сделано на неделе 1
 
@@ -134,15 +191,35 @@ PostgreSQL, миграции goose в `internal/infrastructure/postgres/migratio
 - Сторож слоистости (тест и `depguard`), CI: линтер, юнит-тесты,
   интеграционные тесты на compose, сборка образа.
 
+## Сделано на неделе 2
+
+- `buyer`: вход по звонку через sms.ru за портом `CallCheck` (песочница для
+  разработки, живой вызов — только тестом под `SMSRU_LIVE_TEST=1`), сессии и
+  лимиты в Redis, покупатель в контексте запроса и журналах.
+- `cart`: корзина в PostgreSQL со сроком жизни, остаток сверяется с
+  проекцией, цена и наличие — с магазином через API сервера.
+- `delivery`: справочники пунктов выдачи СДЭК и Яндекс Доставки (таблица и
+  индекс с `geo_point`), обновление по расписанию и командой, поиск по
+  области или городу; расчёт доставки у каждого продавца с субсидией и сроком
+  цены.
+- `checkout` до `confirmed`: из корзины, по продавцам, с ключом
+  идемпотентности; денег пока нет.
+- Настройки участия магазина с сервера: флаг участия — условие видимости,
+  субсидия доставки — в расчёте.
+- OpenAPI 3.1 всего HTTP, контракт с сервером — `docs/server-contract.md`.
+
 ## Дальше по неделям
 
 | Неделя | Что придёт |
 |---|---|
-| 2 | `buyer` (вход по звонку через sms.ru, сессии, лимиты в Redis), `cart`, расчёт доставки через сервер (Д1), `checkout` до `creating_orders`; клиент внутреннего API сервера (`SERVICE_TOKEN_MARKETPLACE`) |
 | 3 | `payment` (холд, capture, возврат, чек), `settlement`, `order` из событий `orders.*` и `delivery.*`, сверка; вход оператора через панель на Vue 3 вместо служебного токена |
 | 4 | сквозной прогон в kind, враждебные проверки денежного пути, правки |
 
 ## Стыки с сервером, которых пока нет
+
+- Внутреннего API для маркетплейса (PR-M1, `docs/server-contract.md`) ещё
+  нет: без него флаг участия магазинов выключен, предложения не видны,
+  перепроверка корзины и расчёт доставки отвечают «магазин не ответил».
 
 - Сервер ещё не ставит заголовок `x-tenant` (PR-04a): пока его нет, события
   `stock.item.updated` и `catalog.product.price-updated` уходят в отравленные

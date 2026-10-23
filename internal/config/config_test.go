@@ -18,10 +18,14 @@ func envOf(values map[string]string) func(string) (string, bool) {
 
 func validEnv() map[string]string {
 	return map[string]string{
-		"DATABASE_URL":    "postgres://marketplace:marketplace@localhost:5432/marketplace",
-		"OPENSEARCH_URLS": "http://localhost:9200",
-		"KAFKA_BROKERS":   "localhost:9092, localhost:9093",
-		"OPERATOR_TOKEN":  strings.Repeat("x", 32),
+		"DATABASE_URL":              "postgres://marketplace:marketplace@localhost:5432/marketplace",
+		"OPENSEARCH_URLS":           "http://localhost:9200",
+		"KAFKA_BROKERS":             "localhost:9092, localhost:9093",
+		"OPERATOR_TOKEN":            strings.Repeat("x", 32),
+		"REDIS_URL":                 "redis://localhost:6379/0",
+		"PLATFORM_API_URL":          "http://server:3000",
+		"SERVICE_TOKEN_MARKETPLACE": strings.Repeat("s", 32),
+		"SMSRU_API_ID":              "key",
 	}
 }
 
@@ -48,8 +52,71 @@ func TestLoadReportsAllMissing(t *testing.T) {
 		t.Fatal("ожидалась ошибка")
 	}
 
-	for _, name := range []string{"DATABASE_URL", "OPENSEARCH_URLS", "KAFKA_BROKERS", "OPERATOR_TOKEN"} {
+	required := []string{
+		"DATABASE_URL",
+		"OPENSEARCH_URLS",
+		"KAFKA_BROKERS",
+		"OPERATOR_TOKEN",
+		"REDIS_URL",
+		"PLATFORM_API_URL",
+		"SERVICE_TOKEN_MARKETPLACE",
+		"SMSRU_API_ID",
+	}
+
+	for _, name := range required {
 		if !strings.Contains(err.Error(), name) {
+			t.Fatalf("в ошибке нет %s: %v", name, err)
+		}
+	}
+}
+
+func TestLoadWeekTwo(t *testing.T) {
+	cfg, err := config.Load(envOf(validEnv()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SmsRu.Mode != config.SmsRuLive ||
+		cfg.Login.PhoneLimit.Count != 3 ||
+		cfg.Login.PhoneLimit.Window != 10*time.Minute ||
+		cfg.Cart.TTL != 30*24*time.Hour ||
+		cfg.Delivery.PickupIndex != "marketplace-pickup-points" ||
+		cfg.Delivery.CDEK.ClientID != "" {
+		t.Fatalf("умолчания недели 2: %+v", cfg)
+	}
+
+	env := validEnv()
+	env["SMSRU_MODE"] = "sandbox"
+	delete(env, "SMSRU_API_ID")
+	env["LOGIN_IP_LIMIT"] = "50/30m"
+	env["CDEK_CLIENT_ID"] = "id"
+	env["CDEK_CLIENT_SECRET"] = "secret"
+
+	cfg, err = config.Load(envOf(env))
+	if err != nil || cfg.SmsRu.Mode != config.SmsRuSandbox || cfg.Login.IPLimit.Count != 50 ||
+		cfg.Delivery.CDEK.ClientSecret != "secret" {
+		t.Fatalf("песочница без ключа и свои лимиты: %+v %v", cfg, err)
+	}
+
+	bad := validEnv()
+	bad["LOGIN_PHONE_LIMIT"] = "three"
+	bad["REDIS_URL"] = "http://x"
+	bad["PLATFORM_API_URL"] = "server"
+	bad["SERVICE_TOKEN_MARKETPLACE"] = "short"
+	bad["CDEK_CLIENT_ID"] = "only-id"
+	bad["SMSRU_MODE"] = "fake"
+
+	_, err = config.Load(envOf(bad))
+	invalid := []string{
+		"LOGIN_PHONE_LIMIT",
+		"REDIS_URL",
+		"PLATFORM_API_URL",
+		"SERVICE_TOKEN_MARKETPLACE",
+		"CDEK_CLIENT_ID",
+		"SMSRU_MODE",
+	}
+
+	for _, name := range invalid {
+		if err == nil || !strings.Contains(err.Error(), name) {
 			t.Fatalf("в ошибке нет %s: %v", name, err)
 		}
 	}
@@ -71,7 +138,18 @@ func TestLoadValidatesValues(t *testing.T) {
 		t.Fatal("ожидалась ошибка")
 	}
 
-	for _, name := range []string{"OPERATOR_TOKEN", "DATABASE_URL", "OPENSEARCH_URLS", "OUTBOX_BATCH", "OUTBOX_LEASE", "OPENSEARCH_USERNAME", "LOG_LEVEL", "KAFKA_MAX_ATTEMPTS"} {
+	invalid := []string{
+		"OPERATOR_TOKEN",
+		"DATABASE_URL",
+		"OPENSEARCH_URLS",
+		"OUTBOX_BATCH",
+		"OUTBOX_LEASE",
+		"OPENSEARCH_USERNAME",
+		"LOG_LEVEL",
+		"KAFKA_MAX_ATTEMPTS",
+	}
+
+	for _, name := range invalid {
 		if !strings.Contains(err.Error(), name) {
 			t.Fatalf("в ошибке нет %s: %v", name, err)
 		}

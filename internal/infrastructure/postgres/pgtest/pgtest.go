@@ -17,8 +17,11 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
 
-// DefaultURL — база compose; переопределяется TEST_DATABASE_URL.
-const DefaultURL = "postgres://marketplace:marketplace@localhost:25432/marketplace?sslmode=disable" //nolint:gosec // учётные данные локального compose, только для интеграционных тестов
+// DefaultURL — база compose; переопределяется TEST_DATABASE_URL. Учётные данные
+// локального compose, только для интеграционных тестов.
+//
+//nolint:gosec // не секрет: пароль локального compose
+const DefaultURL = "postgres://marketplace:marketplace@localhost:25432/marketplace?sslmode=disable"
 
 // Pool — новая база с миграциями с нуля; удаляется после теста.
 func Pool(t *testing.T) *pgxpool.Pool {
