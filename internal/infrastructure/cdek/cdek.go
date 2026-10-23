@@ -32,6 +32,7 @@ var ErrUnavailable = errs.New(errs.Unavailable, "cdek.unavailable", "справ�
 
 // Config — учётная запись платформы и адрес API.
 type Config struct {
+	RegionCodes  map[string]string
 	BaseURL      string
 	ClientID     string
 	ClientSecret string
@@ -129,7 +130,7 @@ func (p *Provider) Fetch(ctx context.Context, yield func([]delivery.PickupPoint)
 			}
 
 			if dp.Location.RegionCode > 0 {
-				point.RegionCode = strconv.Itoa(dp.Location.RegionCode)
+				point.RegionCode = p.config.RegionCodes[strconv.Itoa(dp.Location.RegionCode)]
 			}
 			points = append(points, point)
 		}

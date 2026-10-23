@@ -100,6 +100,7 @@ type Checkout struct {
 
 // Carrier — учётная запись платформы у перевозчика только на чтение справочника.
 type Carrier struct {
+	RegionCodes  map[string]string
 	URL          string
 	ClientID     string
 	ClientSecret string
@@ -167,9 +168,14 @@ type Retention struct {
 	Interval        time.Duration
 }
 
-// Operator — служебный доступ к операторским ручкам до входа оператора через панель.
+// Operator — машинный токен и отдельная учётная запись платформы для панели.
 type Operator struct {
-	Token string
+	Email        string
+	Name         string
+	PasswordHash string
+	SessionTTL   time.Duration
+	Origin       string
+	Token        string
 }
 
 type reader struct {
@@ -215,8 +221,15 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			Challenges:      r.duration("RETENTION_CHALLENGES", 24*time.Hour),
 			Interval:        r.duration("RETENTION_INTERVAL", time.Hour),
 		},
-		Operator: Operator{Token: r.required("OPERATOR_TOKEN")},
-		Redis:    Redis{URL: r.redisURL()},
+		Operator: Operator{
+			Token:        r.required("OPERATOR_TOKEN"),
+			Email:        r.str("OPERATOR_EMAIL", ""),
+			Name:         r.str("OPERATOR_NAME", "Оператор"),
+			PasswordHash: r.str("OPERATOR_PASSWORD_HASH", ""),
+			SessionTTL:   r.duration("OPERATOR_SESSION_TTL", 8*time.Hour),
+			Origin:       r.str("OPERATOR_ORIGIN", ""),
+		},
+		Redis: Redis{URL: r.redisURL()},
 		SmsRu: SmsRu{
 			Mode:                r.oneOf("SMSRU_MODE", SmsRuLive, SmsRuLive, SmsRuSandbox),
 			APIID:               r.str("SMSRU_API_ID", ""),
@@ -248,12 +261,14 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		Delivery: Delivery{
 			CDEK: Carrier{
 				URL:          r.str("CDEK_API_URL", "https://api.cdek.ru"),
+				RegionCodes:  r.regionCodes("CDEK_REGION_CODES"),
 				ClientID:     r.str("CDEK_CLIENT_ID", ""),
 				ClientSecret: r.str("CDEK_CLIENT_SECRET", ""),
 			},
 			Yandex: Carrier{
-				URL:   r.str("YANDEX_DELIVERY_API_URL", "https://b2b-authproxy.taxi.yandex.net"),
-				Token: r.str("YANDEX_DELIVERY_TOKEN", ""),
+				URL:         r.str("YANDEX_DELIVERY_API_URL", "https://b2b-authproxy.taxi.yandex.net"),
+				RegionCodes: r.regionCodes("YANDEX_REGION_CODES"),
+				Token:       r.str("YANDEX_DELIVERY_TOKEN", ""),
 			},
 			RefreshInterval: r.duration("PICKUP_REFRESH_INTERVAL", 24*time.Hour),
 			PickupIndex:     r.str("OPENSEARCH_PICKUP_INDEX", "marketplace-pickup-points"),
@@ -287,6 +302,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		r.fail("CDEK_CLIENT_ID", "задаётся вместе с CDEK_CLIENT_SECRET")
 	}
 
+	r.validateOperator(cfg.Operator)
 	return cfg, r.err()
 }
 

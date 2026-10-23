@@ -21,7 +21,7 @@ const (
 
 	purgeParkedEvents = `
 		DELETE FROM parked_events
-		WHERE id IN (SELECT id FROM parked_events WHERE parked_at < $1 LIMIT $2)`
+		WHERE id IN (SELECT id FROM parked_events WHERE parked_at < $1 AND status <> 'queued' LIMIT $2)`
 
 	purgeChallenges = `
 		DELETE FROM phone_challenges

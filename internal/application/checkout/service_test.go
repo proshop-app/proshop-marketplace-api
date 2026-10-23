@@ -38,7 +38,7 @@ type env struct {
 	service  *appcheckout.Service
 }
 
-var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
 var w3ServiceSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func setup(t *testing.T) *env {
@@ -119,7 +119,7 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	point.RegionCode = "r1"
+	point.RegionCode = "RU-MOW"
 	e.store.SeedPickupPoint(point)
 
 	e.store.SeedParticipant(participant.State{

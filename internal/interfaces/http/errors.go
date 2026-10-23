@@ -21,6 +21,7 @@ var (
 // statusByCode — единственная таблица перевода ошибок в коды ответа. Доменная
 // ошибка несёт класс, транспорт выбирает ответ только по нему.
 var statusByCode = map[errs.Code]int{
+	errs.Forbidden:       http.StatusForbidden,
 	errs.Invalid:         http.StatusBadRequest,
 	errs.NotFound:        http.StatusNotFound,
 	errs.Conflict:        http.StatusConflict,
@@ -31,8 +32,9 @@ var statusByCode = map[errs.Code]int{
 }
 
 type errorBody struct {
-	Error    errorDetail   `json:"error"`
-	Checkout *checkoutJSON `json:"checkout,omitempty"`
+	Error    errorDetail      `json:"error"`
+	Checkout *checkoutJSON    `json:"checkout,omitempty"`
+	Event    *parkedEventJSON `json:"event,omitempty"`
 }
 
 type errorDetail struct {
@@ -46,6 +48,20 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func writeErrorWithCheckout(w http.ResponseWriter, r *http.Request, err error, state *checkoutJSON) {
+	writeErrorWithState(w, r, err, state, nil)
+}
+
+func writeErrorWithEvent(w http.ResponseWriter, r *http.Request, err error, state *parkedEventJSON) {
+	writeErrorWithState(w, r, err, nil, state)
+}
+
+func writeErrorWithState(
+	w http.ResponseWriter,
+	r *http.Request,
+	err error,
+	checkout *checkoutJSON,
+	event *parkedEventJSON,
+) {
 	code := errs.CodeOf(err)
 	status := statusByCode[code]
 
@@ -59,10 +75,12 @@ func writeErrorWithCheckout(w http.ResponseWriter, r *http.Request, err error, s
 	}
 
 	switch detail.Code {
+	case "event.idempotency_key_reused":
+		detail.Code = "IDEMPOTENCY_KEY_REUSED"
 	case "checkout.delivery_changed":
 		detail.Code = "DELIVERY_CHANGED"
 	case "checkout.payment_order":
 		detail.Code = "PAYMENT_ORDER"
 	}
-	writeJSON(w, status, errorBody{Error: detail, Checkout: state})
+	writeJSON(w, status, errorBody{Error: detail, Checkout: checkout, Event: event})
 }

@@ -27,7 +27,7 @@ import (
 // TestProjectionToIndex — проекция в PostgreSQL, задачи outbox, индекс в
 // OpenSearch и выдача: весь путь синхронизации на настоящих хранилищах.
 var w3PipelineIntegrationDelivery = participant.DeliverySettings{
-	Regions:  []string{"cdek:r1"},
+	Regions:  []string{"RU-MOW"},
 	Carriers: []string{"cdek"},
 }
 var w3PipelineIntegrationSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}

@@ -40,7 +40,11 @@ func replay(t *testing.T, file string, status int) *httptest.Server {
 }
 
 func TestFetch(t *testing.T) {
-	provider := New(Config{BaseURL: replay(t, "pickup_points_list.json", http.StatusOK).URL, Token: "token"})
+	provider := New(Config{
+		RegionCodes: map[string]string{"213": "RU-MOW"},
+		BaseURL:     replay(t, "pickup_points_list.json", http.StatusOK).URL,
+		Token:       "token",
+	})
 
 	var points []delivery.PickupPoint
 	err := provider.Fetch(context.Background(), func(batch []delivery.PickupPoint) error {
@@ -57,6 +61,9 @@ func TestFetch(t *testing.T) {
 	}
 
 	first := points[0]
+	if first.RegionCode != "RU-MOW" {
+		t.Fatalf("соответствие ISO: %+v", first)
+	}
 	if first.Carrier != "yandex" ||
 		first.Code != "0a1b2c3d4e5f60718293a4b5c6d7e8f9" ||
 		first.City != "Город" ||

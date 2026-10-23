@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -11,7 +10,6 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -148,23 +146,6 @@ func observe(logger *slog.Logger, metrics *httpMetrics, next http.Handler) http.
 
 		next.ServeHTTP(recorder, r)
 	})
-}
-
-// operatorOnly пропускает запрос со служебным токеном оператора в заголовке
-// Authorization: Bearer. Сравнение — за постоянное время.
-func operatorOnly(token string, next http.HandlerFunc) http.HandlerFunc {
-	expected := []byte(token)
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		presented, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !found || subtle.ConstantTimeCompare([]byte(presented), expected) != 1 {
-			writeError(w, r, ErrUnauthorized)
-
-			return
-		}
-
-		next(w, r)
-	}
 }
 
 func newRequestID() string {

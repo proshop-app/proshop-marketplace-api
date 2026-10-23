@@ -16,6 +16,8 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
+	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
+	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 )
@@ -30,14 +32,17 @@ type Check struct {
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
-	Taxonomy      *apptaxonomy.Service
-	Catalog       *appcatalog.Queries
-	Participants  *appparticipant.Service
-	Auth          *appbuyer.Auth
-	Carts         *appcart.Service
-	Directory     *appdelivery.Directory
-	Checkouts     *appcheckout.Service
-	OperatorToken string
+	Taxonomy       *apptaxonomy.Service
+	Catalog        *appcatalog.Queries
+	Participants   *appparticipant.Service
+	Auth           *appbuyer.Auth
+	Carts          *appcart.Service
+	Directory      *appdelivery.Directory
+	Checkouts      *appcheckout.Service
+	OperatorToken  string
+	OperatorAuth   *appoperator.Auth
+	Events         *messaging.Events
+	OperatorOrigin string
 	// TrustProxy — адрес покупателя брать из X-Forwarded-For: сервис за доверенным прокси.
 	TrustProxy bool
 	Checks     []Check
@@ -68,12 +73,25 @@ func routes(deps Deps) []route {
 	carts := &cartHandlers{carts: deps.Carts}
 	shipping := &deliveryHandlers{directory: deps.Directory}
 	checkouts := &checkoutHandlers{checkouts: deps.Checkouts}
-	operator := func(next http.HandlerFunc) http.HandlerFunc { return operatorOnly(deps.OperatorToken, next) }
+	gateway := &operatorHandlers{
+		auth:       deps.OperatorAuth,
+		events:     deps.Events,
+		origin:     deps.OperatorOrigin,
+		trustProxy: deps.TrustProxy,
+	}
+	operator := func(next http.HandlerFunc) http.HandlerFunc { return gateway.only(deps.OperatorToken, next) }
 	signedIn := func(next http.HandlerFunc) http.HandlerFunc { return buyerOnly(deps.Auth, next) }
 
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
+		{http.MethodPost, "/api/v1/operator/session", gateway.login},
+		{http.MethodGet, "/api/v1/operator/session", gateway.session},
+		{http.MethodDelete, "/api/v1/operator/session", gateway.logout},
+		{http.MethodGet, "/api/v1/operator/events", operator(gateway.listEvents)},
+		{http.MethodPost, "/api/v1/operator/events/{eventId}/retry", operator(gateway.retry)},
+		{http.MethodPost, "/api/v1/operator/events/{eventId}/resolve", operator(gateway.resolve)},
+		{http.MethodPut, "/api/v1/operator/participants/{tenantId}/delivery", operator(participants.delivery)},
 		{http.MethodGet, "/health", health(deps.Checks)},
 		{http.MethodGet, "/metrics", metrics},
 

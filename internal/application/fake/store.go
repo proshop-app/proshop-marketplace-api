@@ -49,6 +49,7 @@ type OutboxRow struct {
 }
 
 type data struct {
+	decisions    map[string]ports.EventDecision
 	taxonomy     taxonomy.Definition
 	participants map[ids.TenantID]participant.State
 	tenants      map[ids.TenantID]participant.TenantState
@@ -57,6 +58,7 @@ type data struct {
 	tags         map[tagKey]catalog.TagState
 	outbox       []OutboxRow
 	nextTaskID   int64
+	nextParkedID int64
 	processed    map[string]time.Time
 	parked       map[parkedKey]ports.ParkedEvent
 	buyers       map[ids.UUID]buyer.Buyer
@@ -88,6 +90,7 @@ type Store struct {
 func (d *data) clone() *data {
 	return &data{
 		taxonomy:     d.taxonomy,
+		decisions:    maps.Clone(d.decisions),
 		participants: maps.Clone(d.participants),
 		tenants:      maps.Clone(d.tenants),
 		products:     maps.Clone(d.products),
@@ -95,6 +98,7 @@ func (d *data) clone() *data {
 		tags:         maps.Clone(d.tags),
 		outbox:       append([]OutboxRow(nil), d.outbox...),
 		nextTaskID:   d.nextTaskID,
+		nextParkedID: d.nextParkedID,
 		processed:    maps.Clone(d.processed),
 		parked:       maps.Clone(d.parked),
 		buyers:       maps.Clone(d.buyers),
@@ -109,6 +113,7 @@ func (d *data) clone() *data {
 // NewStore — пустое хранилище.
 func NewStore() *Store {
 	return &Store{data: &data{
+		decisions:    map[string]ports.EventDecision{},
 		participants: map[ids.TenantID]participant.State{},
 		tenants:      map[ids.TenantID]participant.TenantState{},
 		products:     map[productKey]catalog.ProductState{},
@@ -366,7 +371,7 @@ func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.Purg
 	s.data.outbox = kept
 
 	for key, event := range s.data.parked {
-		if event.ParkedAt.Before(request.ParkedBefore) {
+		if event.ParkedAt.Before(request.ParkedBefore) && event.Control.Status != "queued" {
 			delete(s.data.parked, key)
 			result.Parked++
 		}

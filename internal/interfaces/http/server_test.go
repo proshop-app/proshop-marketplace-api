@@ -21,11 +21,14 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
+	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
@@ -54,7 +57,7 @@ type response struct {
 	body   map[string]any
 }
 
-var w3ServerDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3ServerDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
 var w3ServerSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func newEnv(t *testing.T) *env {
@@ -122,11 +125,30 @@ func newEnv(t *testing.T) *env {
 				ReturnBaseURL:             "https://market.example",
 			},
 		),
-		OperatorToken: token,
-		Checks:        []transport.Check{{Name: "postgres", Probe: func(context.Context) error { return e.healthy }}},
-		Metrics:       promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
-		Registerer:    registry,
-		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		OperatorToken:  token,
+		OperatorOrigin: "https://admin.example",
+		OperatorAuth: appoperator.NewAuth(
+			fake.NewOperatorSessions(),
+			fake.NewLimiter(),
+			fake.Passwords{},
+			identities,
+			e.clock,
+			appoperator.Config{
+				Principal: operator.Principal{
+					ID:    "op1",
+					Name:  "Оператор",
+					Email: "op@example.test",
+					Role:  operator.Role,
+				},
+				PasswordHash: "fake:password",
+				SessionTTL:   time.Hour,
+			},
+		),
+		Events:     messaging.NewEvents(e.store, e.clock, &fake.Replay{}),
+		Checks:     []transport.Check{{Name: "postgres", Probe: func(context.Context) error { return e.healthy }}},
+		Metrics:    promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
+		Registerer: registry,
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 
 	e.server = httptest.NewServer(handler)

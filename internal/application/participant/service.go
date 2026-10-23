@@ -209,3 +209,15 @@ func viewOf(p *participant.Participant, tenant *participant.Tenant) View {
 		Visibility:   participant.VisibilityOf(p, tenant),
 	}
 }
+
+// SetDelivery сохраняет покрытие через общий транзакционный сценарий и outbox.
+func (s *Service) SetDelivery(
+	ctx context.Context,
+	tenantID ids.TenantID,
+	settings participant.DeliverySettings,
+	version int64,
+) (View, error) {
+	return s.change(ctx, tenantID, func(p *participant.Participant) (bool, error) {
+		return p.SetDelivery(settings, version, s.clock.Now())
+	})
+}

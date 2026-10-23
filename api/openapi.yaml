@@ -1,12 +1,12 @@
 openapi: 3.1.0
 info:
   title: Proshop Marketplace API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     API федеративного маркетплейса для витрины (Nuxt 4) и панели оператора
     (Vue 3). Все суммы — целые копейки. Время — RFC 3339 в UTC. Ошибка —
     `{"error": {"code": "<ключ>", "message": "<текст>"}}`; код ответа
-    выбирается по классу ошибки: invalid → 400, unauthorized → 401,
+    выбирается по классу ошибки: invalid → 400, unauthorized → 401, forbidden → 403,
     not_found → 404, conflict → 409, too_many_requests → 429,
     unavailable → 503, internal → 500. Ключ ошибки стабилен, текст — для
     человека. Идентификатор запроса — заголовок `X-Request-Id` (входящий,
@@ -24,6 +24,349 @@ tags:
   - name: checkout
   - name: operator
 paths:
+  /api/v1/operator/session:
+    post:
+      tags:
+      - operator
+      operationId: operatorLogin
+      security: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operator'
+          headers:
+            Set-Cookie:
+              description: __Host-kvazar_operator=<opaque>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=<TTL>.
+                Без Domain.
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - email
+              - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                password:
+                  type: string
+                  minLength: 1
+                  maxLength: 1024
+      description: 'HTTPS, Origin = OPERATOR_ORIGIN и X-Requested-With: KvazarOperator обязательны. Argon2id, лимиты
+        IP/логина/сервиса. Ротация прежней cookie.'
+    get:
+      tags:
+      - operator
+      operationId: operatorSession
+      security:
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operator'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+    delete:
+      tags:
+      - operator
+      operationId: operatorLogout
+      security:
+      - operatorSession: []
+      responses:
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '204':
+          description: Сессия отозвана; cookie удалена с теми же атрибутами и Max-Age=0.
+  /api/v1/operator/participants/{tenantId}/delivery:
+    put:
+      tags:
+      - operator
+      operationId: updateParticipantDelivery
+      security: &id001
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - version
+              - delivery
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                delivery:
+                  $ref: '#/components/schemas/ParticipationDelivery'
+      description: Сверяет version атомарно. PATCH участника по-прежнему меняет только name. Плановая сверка с магазином
+        заменяет покрытие его авторитетными настройками.
+  /api/v1/operator/events:
+    get:
+      tags:
+      - operator
+      operationId: parkedEvents
+      security: *id001
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkedEventPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: tenantId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - parked
+          - queued
+          - resolved
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Точное полное имя Kafka-топика
+      - name: reason
+        in: query
+        required: false
+        schema:
+          type: string
+      description: Порядок id DESC. Все статусы по умолчанию. Ответ {items,total,limit,offset}; отличается от массива
+        в раннем черновике панели. payload содержит только безопасные метаданные, error — ключ причины без сырого
+        текста.
+  /api/v1/operator/events/{eventId}/retry:
+    post:
+      tags:
+      - operator
+      operationId: retryParkedEvent
+      security: *id001
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkedEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/EventConflict'
+        '503':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: >-
+          Необязательный ключ оператора, действующий 24 часа после успешного решения.
+          Повтор для того же события, действия и тела (expectedVersion и note) возвращает
+          первоначальный ответ 200, даже если событие уже изменилось. Порядок полей JSON несущественен.
+          Другое тело, событие или действие с тем же ключом — 409 IDEMPOTENCY_KEY_REUSED.
+          Без ключа применяется только проверка expectedVersion. Ошибки не сохраняются.
+        schema:
+          type: string
+          minLength: 1
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[1-9][0-9]*$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - note
+              - expectedVersion
+              properties:
+                expectedVersion:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                  description: Версия из последнего прочитанного ParkedEvent.
+                note:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+                  description: После удаления пробелов заметка непустая.
+      description: Только из parked при совпадении expectedVersion; устаревший запрос без сохранённого ключа — 409 с текущим event.
+        Аудит автора/времени/заметки. Retry атомарно ставит outbox с версией решения и отдельным бюджетом попыток;
+        queued не означает успех, после ошибки событие возвращается в parked.
+  /api/v1/operator/events/{eventId}/resolve:
+    post:
+      tags:
+      - operator
+      operationId: resolveParkedEvent
+      security: *id001
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkedEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/EventConflict'
+        '503':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: >-
+          Необязательный ключ оператора, действующий 24 часа после успешного решения.
+          Повтор для того же события, действия и тела (expectedVersion и note) возвращает
+          первоначальный ответ 200, даже если событие уже изменилось. Порядок полей JSON несущественен.
+          Другое тело, событие или действие с тем же ключом — 409 IDEMPOTENCY_KEY_REUSED.
+          Без ключа применяется только проверка expectedVersion. Ошибки не сохраняются.
+        schema:
+          type: string
+          minLength: 1
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[1-9][0-9]*$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - note
+              - expectedVersion
+              properties:
+                expectedVersion:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                  description: Версия из последнего прочитанного ParkedEvent.
+                note:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+                  description: После удаления пробелов заметка непустая.
+      description: Только из parked при совпадении expectedVersion; устаревший запрос без сохранённого ключа — 409 с текущим event.
+        Аудит автора/времени/заметки. Retry атомарно ставит outbox с версией решения и отдельным бюджетом попыток;
+        queued не означает успех, после ошибки событие возвращается в parked.
   /api/v1/taxonomy/categories:
     get:
       tags: [taxonomy]
@@ -75,7 +418,7 @@ paths:
       tags: [operator]
       summary: Прочитать текущую версию таксономии
       operationId: operatorTaxonomy
-      security: [{ operatorToken: [] }]
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - { $ref: "#/components/parameters/TaxonomyCache" }
       responses:
@@ -86,7 +429,7 @@ paths:
       tags: [operator]
       summary: Атомарно загрузить версию и перепроверить карточки
       operationId: loadTaxonomy
-      security: [{ operatorToken: [] }]
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       description: |
         Один YAML-документ до 2 MiB, формат taxonomy/example.yaml. Идемпотентен
         для той же версии с тем же содержимым. Новая версия строго больше текущей.
@@ -111,7 +454,7 @@ paths:
       tags: [operator]
       summary: Диагностика публикации из проекции, включая скрытые предложения
       operationId: offerPublication
-      security: [{ operatorToken: [] }]
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - { $ref: "#/components/parameters/OfferId" }
       responses:
@@ -173,7 +516,7 @@ paths:
         - name: deliveryRegion
           in: query
           schema: { type: string }
-          description: Код региона перевозчика из ПВЗ.
+          description: Код ISO 3166-2 RU из ПВЗ.
         - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Строка поиска }
         - { name: tenant, in: query, schema: { type: string }, description: Магазин }
         - { name: category, in: query, schema: { type: string }, description: Категория площадки с потомками }
@@ -206,7 +549,7 @@ paths:
         - name: deliveryRegion
           in: query
           schema: { type: string }
-          description: Код региона перевозчика из ПВЗ.
+          description: Код ISO 3166-2 RU из ПВЗ.
         - $ref: "#/components/parameters/OfferId"
       responses:
         "200":
@@ -527,7 +870,7 @@ paths:
       tags: [operator]
       summary: Участники
       operationId: listParticipants
-      security: [{ operatorToken: [] }]
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 200 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
@@ -544,7 +887,7 @@ paths:
       summary: Завести участника
       description: Магазин должен быть в зеркале реестра платформы. Новый участник скрыт.
       operationId: createParticipant
-      security: [{ operatorToken: [] }]
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       requestBody:
         required: true
         content:
@@ -566,7 +909,7 @@ paths:
       tags: [operator]
       summary: Участник
       operationId: getParticipant
-      security: [{ operatorToken: [] }]
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - $ref: "#/components/parameters/TenantId"
       responses:
@@ -578,7 +921,7 @@ paths:
       tags: [operator]
       summary: Переименовать участника
       operationId: renameParticipant
-      security: [{ operatorToken: [] }]
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - $ref: "#/components/parameters/TenantId"
       requestBody:
@@ -602,7 +945,7 @@ paths:
       tags: [operator]
       summary: Показать участника в каталоге
       operationId: enableParticipant
-      security: [{ operatorToken: [] }]
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - $ref: "#/components/parameters/TenantId"
       responses:
@@ -616,7 +959,7 @@ paths:
       tags: [operator]
       summary: Скрыть участника из каталога
       operationId: disableParticipant
-      security: [{ operatorToken: [] }]
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - $ref: "#/components/parameters/TenantId"
       responses:
@@ -723,7 +1066,7 @@ paths:
       tags: [operator]
       summary: Покупки с группами; stuck=true — ожидают оплату не менее 15 минут
       operationId: listOperatorCheckouts
-      security: [{ operatorToken: [] }]
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - name: after
           in: query
@@ -765,6 +1108,10 @@ paths:
 
 components:
   securitySchemes:
+    operatorSession:
+      type: apiKey
+      in: cookie
+      name: __Host-kvazar_operator
     sessionCookie:
       type: apiKey
       in: cookie
@@ -777,7 +1124,7 @@ components:
     operatorToken:
       type: http
       scheme: bearer
-      description: Служебный токен оператора (OPERATOR_TOKEN) для панели оператора.
+      description: Машинный токен OPERATOR_TOKEN; панель использует operatorSession.
   parameters:
     TaxonomyCache:
       name: If-None-Match
@@ -817,6 +1164,19 @@ components:
               categories:
                 type: array
                 items: { $ref: "#/components/schemas/TaxonomyCategory" }
+    EventConflict:
+      description: >-
+        Состояние или версия изменились — event содержит текущий снимок.
+        IDEMPOTENCY_KEY_REUSED — тот же ключ использован с другим телом, событием или действием;
+        event отсутствует. Новое решение и задача не созданы.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - type: object
+                properties:
+                  event: { $ref: '#/components/schemas/ParkedEvent' }
     Error:
       description: Ошибка
       content:
@@ -838,12 +1198,105 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Participant" }
   schemas:
+    Operator:
+      type: object
+      required:
+      - id
+      - name
+      - email
+      - role
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum:
+          - operator
+    ParkedEvent:
+      type: object
+      required:
+      - id
+      - type
+      - tenantId
+      - occurredAt
+      - attempts
+      - error
+      - payload
+      - status
+      - resolution
+      - operatorId
+      - updatedAt
+      - version
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        tenantId:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        attempts:
+          type: integer
+        error:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum:
+          - parked
+          - queued
+          - resolved
+        resolution:
+          type: string
+        operatorId:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    ParkedEventPage:
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParkedEvent'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
     ParticipationDelivery:
       type: object
       required: [regions, carriers]
       properties:
-        regions: { type: array, items: { type: string }, description: "<carrier>:<код зоны перевозчика>" }
-        carriers: { type: array, items: { type: string } }
+        regions: { type: array, minItems: 1, items: { type: string, pattern: "^RU-[A-Z]{2,3}$" },
+                   description: "Существующие коды ISO 3166-2 RU, например RU-MOW" }
+        carriers: { type: array, minItems: 1, items: { type: string, enum: [cdek, yandex] } }
+    ParticipantDelivery:
+      type: object
+      required: [regions, carriers]
+      description: До настройки покрытия массивы пусты; всегда массивы, никогда null.
+      properties:
+        regions: { type: array, items: { type: string, pattern: "^RU-[A-Z]{2,3}$" } }
+        carriers: { type: array, items: { type: string, enum: [cdek, yandex] } }
     PaymentLink:
       type: object
       required: [tenantId, url, expiresAt, position, count]
@@ -979,7 +1432,7 @@ components:
       type: object
       required: [slug, name, delivery, freeDeliveryFrom]
       properties:
-        delivery: { $ref: "#/components/schemas/ParticipationDelivery" }
+        delivery: { $ref: "#/components/schemas/ParticipantDelivery" }
         freeDeliveryFrom: { type: integer, format: int64, minimum: 0 }
         slug: { type: string }
         name: { type: string }
@@ -1098,7 +1551,7 @@ components:
       type: object
       required: [carrier, code, name, address, city, location, schedule, refreshedAt]
       properties:
-        regionCode: { type: string }
+        regionCode: { type: string, description: "ISO 3166-2 RU; пусто при неизвестном соответствии" }
         carrier: { type: string }
         code: { type: string }
         name: { type: string }
@@ -1242,7 +1695,7 @@ components:
         status: { type: string, enum: [onboarding, connected] }
         enabled: { type: boolean, description: Включён оператором }
         freeDeliveryFrom: { type: integer, format: int64, minimum: 0 }
-        delivery: { $ref: "#/components/schemas/ParticipationDelivery" }
+        delivery: { $ref: "#/components/schemas/ParticipantDelivery" }
         shopEnabled: { type: boolean, description: Магазин сам включил участие (с сервера) }
         subsidy: { $ref: "#/components/schemas/Subsidy" }
         settingsSyncedAt: { type: [string, "null"], format: date-time }

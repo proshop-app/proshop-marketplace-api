@@ -13,7 +13,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-var w3SettingsDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3SettingsDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
 
 func TestSettingsSync(t *testing.T) {
 	store, clock, service := setup(t)
@@ -93,7 +93,7 @@ func TestInvalidParticipationSettingsHideSeller(t *testing.T) {
 	platform.SetSettings("t1", ports.ShopSettings{
 		Enabled:  true,
 		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
-		Delivery: participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
 	})
 	syncer := appparticipant.NewSettings(store, platform, clock)
 	if _, err := syncer.SyncOne(ctx, "t1"); err != nil {

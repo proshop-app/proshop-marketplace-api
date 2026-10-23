@@ -62,7 +62,13 @@ func replay(t *testing.T, pages map[string]string, tokens *int) *httptest.Server
 func TestFetchPages(t *testing.T) {
 	tokens := 0
 	server := replay(t, map[string]string{"0": "deliverypoints_page0.json", "1": "deliverypoints_page1.json"}, &tokens)
-	provider := New(Config{BaseURL: server.URL, ClientID: "id", ClientSecret: "secret", PageSize: 2})
+	provider := New(Config{
+		RegionCodes:  map[string]string{"81": "RU-MOW"},
+		BaseURL:      server.URL,
+		ClientID:     "id",
+		ClientSecret: "secret",
+		PageSize:     2,
+	})
 
 	var points []delivery.PickupPoint
 	err := provider.Fetch(context.Background(), func(batch []delivery.PickupPoint) error {
@@ -78,6 +84,9 @@ func TestFetchPages(t *testing.T) {
 		t.Fatalf("пункт без координат пропускается: %d", len(points))
 	}
 	first := points[0]
+	if first.RegionCode != "RU-MOW" {
+		t.Fatalf("соответствие ISO: %+v", first)
+	}
 	if first.Carrier != "cdek" ||
 		first.Code != "MSK123" ||
 		first.Name != "На Примерной" ||
@@ -90,6 +99,9 @@ func TestFetchPages(t *testing.T) {
 	}
 	if points[1].Name != "пр. Образцовый, 7" || points[1].Address != "пр. Образцовый, 7" {
 		t.Fatalf("без названия и полного адреса — короткий адрес: %+v", points[1])
+	}
+	if points[2].RegionCode != "" {
+		t.Fatal("неизвестная зона не угадывается", points[2])
 	}
 	if tokens != 1 {
 		t.Fatalf("токен переиспользуется: %d", tokens)

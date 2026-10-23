@@ -58,6 +58,11 @@ type renameParticipantJSON struct {
 	Name string `json:"name"`
 }
 
+type participantDeliveryJSON struct {
+	Version  int64                        `json:"version"`
+	Delivery participant.DeliverySettings `json:"delivery"`
+}
+
 func toParticipantJSON(view appparticipant.View) participantJSON {
 	p := view.Participant
 	out := participantJSON{
@@ -204,4 +209,15 @@ func respond(w http.ResponseWriter, r *http.Request, status int, view apppartici
 	}
 
 	writeJSON(w, status, toParticipantJSON(view))
+}
+
+func (h *participantHandlers) delivery(w http.ResponseWriter, r *http.Request) {
+	var body participantDeliveryJSON
+	if err := readJSON(w, r, &body); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
+		return h.service.SetDelivery(r.Context(), tenantID, body.Delivery, body.Version)
+	})
 }

@@ -36,7 +36,7 @@ func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 	selection := checkout.Selection{
 		Carrier:         "cdek",
 		PickupPointCode: "P1",
-		RegionCode:      "r1",
+		RegionCode:      "RU-MOW",
 		City:            "Город",
 		Address:         "Адрес",
 	}
@@ -53,7 +53,7 @@ func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 		Enabled:          true,
 		FreeDeliveryFrom: money.Money{},
 		Subsidy:          participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
-		Delivery:         participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"cdek:r1"}},
+		Delivery:         participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}},
 	})
 	e.platform.SetQuote("t1", delivery.Offered{Available: true})
 	if err := c.Confirm(t0); err != nil {
@@ -153,7 +153,7 @@ func TestCatalogShowsDeliveryUnavailableOutsideSellerRegions(t *testing.T) {
 		Enabled:     true,
 		ShopEnabled: true,
 		Version:     1,
-		Delivery:    participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}},
+		Delivery:    participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
 		Subsidy:     participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 	})
 	e.seedOffer(t, "t1", "p1", 10000)
@@ -161,7 +161,7 @@ func TestCatalogShowsDeliveryUnavailableOutsideSellerRegions(t *testing.T) {
 		region  string
 		allowed bool
 	}{
-		{"r1", true},
+		{"RU-MOW", true},
 		{"other", false},
 	} {
 		path := "/api/v1/catalog/offers?deliveryCarrier=cdek&deliveryRegion=" + selected.region

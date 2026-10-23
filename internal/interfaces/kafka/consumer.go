@@ -206,17 +206,18 @@ func (c *Consumer) park(
 	}
 
 	err := c.parker.Park(ctx, ports.ParkedEvent{
-		Topic:     message.Topic,
-		Partition: message.Partition,
-		Offset:    message.Offset,
-		Key:       message.Key,
-		Headers:   headers,
-		Value:     message.Value,
-		TenantID:  tenant,
-		Reason:    reason,
-		Error:     cause.Error(),
-		Attempts:  attempts,
-		ParkedAt:  c.config.Now(),
+		Topic:       message.Topic,
+		Partition:   message.Partition,
+		Offset:      message.Offset,
+		Key:         message.Key,
+		Headers:     headers,
+		Value:       message.Value,
+		TenantID:    tenant,
+		Reason:      reason,
+		Error:       cause.Error(),
+		Attempts:    attempts,
+		PublishedAt: message.Time,
+		ParkedAt:    c.config.Now(),
 	})
 	if err != nil {
 		c.metrics.failures.WithLabelValues(envelope.Topic, tenant).Inc()

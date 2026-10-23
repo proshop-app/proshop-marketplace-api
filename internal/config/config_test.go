@@ -209,3 +209,30 @@ func TestDeliverySubsidyMinPercent(t *testing.T) {
 		})
 	}
 }
+
+func TestOperatorAndRegionConfiguration(t *testing.T) {
+	values := validEnv()
+	values["OPERATOR_EMAIL"] = "op@example.test"
+	if _, err := config.Load(envOf(values)); err == nil {
+		t.Fatal("неполный вход")
+	}
+	values["OPERATOR_PASSWORD_HASH"] = "hash-validated-by-startup"
+	values["OPERATOR_ORIGIN"] = "https://admin.example"
+	values["CDEK_REGION_CODES"] = `{"81":"RU-MOW"}`
+	cfg, err := config.Load(envOf(values))
+	if err != nil || cfg.Operator.SessionTTL != 8*time.Hour || cfg.Delivery.CDEK.RegionCodes["81"] != "RU-MOW" {
+		t.Fatal(cfg.Operator, err)
+	}
+	for name, value := range map[string]string{
+		"OPERATOR_ORIGIN":      "https://admin.example/path",
+		"OPERATOR_SESSION_TTL": "25h",
+		"CDEK_REGION_CODES":    `{"81":"fake:abc"}`,
+	} {
+		saved := values[name]
+		values[name] = value
+		if _, err := config.Load(envOf(values)); err == nil {
+			t.Fatal(name, value)
+		}
+		values[name] = saved
+	}
+}

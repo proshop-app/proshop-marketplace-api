@@ -184,3 +184,33 @@ func TestFailedCommitLeavesNothing(t *testing.T) {
 }
 
 func participantID(value string) ids.TenantID { return ids.TenantID(value) }
+
+func TestDeliveryVersionAndTransactionalRollback(t *testing.T) {
+	store, _, service := setup(t)
+	ctx := context.Background()
+	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Магазин"}); err != nil {
+		t.Fatal(err)
+	}
+	settings := participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
+	store.FailCommit = errors.New("commit")
+	if _, err := service.SetDelivery(ctx, "t1", settings, 1); err == nil {
+		t.Fatal("ожидался откат")
+	}
+	store.FailCommit = nil
+	view, err := service.Get(ctx, "t1")
+	if err != nil || view.Participant.Version != 1 || len(view.Participant.Delivery.Regions) != 0 {
+		t.Fatal(view, err)
+	}
+	view, err = service.SetDelivery(ctx, "t1", settings, 1)
+	if err != nil || view.Participant.Version != 2 {
+		t.Fatal(view, err)
+	}
+	_, err = service.SetDelivery(ctx, "t1", settings, 1)
+	if !errors.Is(err, participant.ErrConflict) {
+		t.Fatal(err)
+	}
+	_, err = service.SetDelivery(ctx, "t1", participant.DeliverySettings{}, 2)
+	if !errors.Is(err, participant.ErrInvalidDeliverySettings) {
+		t.Fatal(err)
+	}
+}

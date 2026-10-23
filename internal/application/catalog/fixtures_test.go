@@ -18,7 +18,7 @@ var (
 	t2 = t0.Add(2 * time.Minute)
 )
 
-var w3FixturesDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3FixturesDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
 var w3FixturesSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at time.Time) catalog.Snapshot {
