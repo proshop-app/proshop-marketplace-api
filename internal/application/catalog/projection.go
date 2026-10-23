@@ -52,6 +52,12 @@ func NewProjector(uow ports.UnitOfWork, clock ports.Clock) *Projector {
 }
 
 // ApplyProduct применяет снимок товара.
+//
+// Задача синхронизации ставится и для магазина, который ещё не участвует:
+// проверка участия здесь гонялась бы с заведением участника в соседней
+// транзакции, и новый товар мог бы не попасть в индекс. Индексатор сам
+// пропускает товары магазинов без участия, а невзятые задачи по одному
+// товару склеиваются.
 func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error {
 	now := p.clock.Now()
 	snapshot := event.Snapshot

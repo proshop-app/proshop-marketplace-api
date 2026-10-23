@@ -25,10 +25,16 @@ const (
 // ErrInvalidQuery — параметры выдачи некорректны.
 var ErrInvalidQuery = errs.New(errs.Invalid, "catalog.invalid_query", "некорректные параметры выдачи")
 
-// OfferCard — карточка предложения с подписями тегов.
+// OfferCard — предложение с подписями тегов.
 type OfferCard struct {
 	Offer ports.OfferDocument
 	Tags  []catalog.TagLabel
+}
+
+// OfferList — страница выдачи с подписями тегов.
+type OfferList struct {
+	Total int
+	Items []OfferCard
 }
 
 // Queries — чтение выдачи и карточек.
@@ -42,14 +48,35 @@ func NewQueries(uow ports.UnitOfWork, index ports.OfferIndex) *Queries {
 	return &Queries{uow: uow, index: index}
 }
 
-// Search — страница выдачи. Пустые лимит и порядок берутся по умолчанию.
-func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (ports.OfferPage, error) {
+// Search — страница выдачи с подписями тегов. Пустые лимит и порядок берутся по умолчанию.
+func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList, error) {
 	normalized, err := normalize(query)
 	if err != nil {
-		return ports.OfferPage{}, err
+		return OfferList{}, err
 	}
 
-	return q.index.Search(ctx, normalized)
+	page, err := q.index.Search(ctx, normalized)
+	if err != nil {
+		return OfferList{}, err
+	}
+
+	tagsByTenant := map[ids.TenantID][]string{}
+	for _, doc := range page.Items {
+		tenant := ids.TenantID(doc.TenantID)
+		tagsByTenant[tenant] = append(tagsByTenant[tenant], doc.Tags...)
+	}
+
+	labels, err := q.labels(ctx, tagsByTenant)
+	if err != nil {
+		return OfferList{}, err
+	}
+
+	list := OfferList{Total: page.Total, Items: make([]OfferCard, 0, len(page.Items))}
+	for _, doc := range page.Items {
+		list.Items = append(list.Items, OfferCard{Offer: doc, Tags: catalog.LabelTags(doc.Tags, labels[ids.TenantID(doc.TenantID)])})
+	}
+
+	return list, nil
 }
 
 // Offer — карточка предложения; скрытое предложение не отдаётся.
@@ -62,21 +89,42 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID) (OfferCard, er
 		return OfferCard{}, catalog.ErrOfferNotFound
 	}
 
-	var labels map[string]string
-
-	if len(doc.Tags) > 0 {
-		err = q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-			var err error
-			labels, err = tx.Tags().Labels(ctx, offerID.Tenant, doc.Tags)
-
-			return err
-		})
-		if err != nil {
-			return OfferCard{}, err
-		}
+	labels, err := q.labels(ctx, map[ids.TenantID][]string{offerID.Tenant: doc.Tags})
+	if err != nil {
+		return OfferCard{}, err
 	}
 
-	return OfferCard{Offer: doc, Tags: catalog.LabelTags(doc.Tags, labels)}, nil
+	return OfferCard{Offer: doc, Tags: catalog.LabelTags(doc.Tags, labels[offerID.Tenant])}, nil
+}
+
+// labels — подписи тегов из справочников магазинов одной транзакцией чтения.
+func (q *Queries) labels(ctx context.Context, tags map[ids.TenantID][]string) (map[ids.TenantID]map[string]string, error) {
+	labels := make(map[ids.TenantID]map[string]string, len(tags))
+
+	wanted := make(map[ids.TenantID][]string, len(tags))
+	for tenant, list := range tags {
+		if len(list) > 0 {
+			wanted[tenant] = list
+		}
+	}
+	if len(wanted) == 0 {
+		return labels, nil
+	}
+
+	err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		for tenant, list := range wanted {
+			tenantLabels, err := tx.Tags().Labels(ctx, tenant, list)
+			if err != nil {
+				return err
+			}
+
+			labels[tenant] = tenantLabels
+		}
+
+		return nil
+	})
+
+	return labels, err
 }
 
 func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {

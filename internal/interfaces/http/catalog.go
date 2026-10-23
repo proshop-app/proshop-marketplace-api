@@ -54,14 +54,20 @@ type offerPageJSON struct {
 	Offset int         `json:"offset"`
 }
 
-func toOfferJSON(doc ports.OfferDocument, tags []tagJSON, withDescription bool) offerJSON {
+func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
+	doc := card.Offer
+	tags := make([]tagJSON, 0, len(card.Tags))
+	for _, tag := range card.Tags {
+		tags = append(tags, tagJSON{ID: tag.ID, Label: tag.Label})
+	}
+
 	out := offerJSON{
 		ID: doc.ID, TenantID: doc.TenantID, ProductID: doc.ProductID,
 		Seller: sellerJSON{Slug: doc.SellerSlug, Name: doc.SellerName},
 		Name:   doc.Name, Image: doc.Image, URL: doc.URL, SKU: doc.SKU,
 		Categories: make([]categoryJSON, 0, len(doc.Categories)), Tags: tags,
 		Price: doc.Price, BasePrice: doc.BasePrice, Available: doc.Available, InStock: doc.InStock,
-		CheckoutAvailable: doc.CheckoutAvailable, UpdatedAt: doc.UpdatedAt,
+		CheckoutAvailable: doc.CheckoutAvailable, UpdatedAt: doc.UpdatedAt.UTC(),
 	}
 	if withDescription {
 		out.Description = doc.Description
@@ -86,7 +92,7 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, err := h.queries.Search(r.Context(), query)
+	list, err := h.queries.Search(r.Context(), query)
 	if err != nil {
 		writeError(w, r, err)
 
@@ -98,14 +104,9 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		limit = appcatalog.DefaultLimit
 	}
 
-	body := offerPageJSON{Items: make([]offerJSON, 0, len(page.Items)), Total: page.Total, Limit: limit, Offset: query.Offset}
-	for _, doc := range page.Items {
-		tags := make([]tagJSON, 0, len(doc.Tags))
-		for _, tag := range doc.Tags {
-			tags = append(tags, tagJSON{ID: tag, Label: tag})
-		}
-
-		body.Items = append(body.Items, toOfferJSON(doc, tags, false))
+	body := offerPageJSON{Items: make([]offerJSON, 0, len(list.Items)), Total: list.Total, Limit: limit, Offset: query.Offset}
+	for _, card := range list.Items {
+		body.Items = append(body.Items, toOfferJSON(card, false))
 	}
 
 	writeJSON(w, http.StatusOK, body)
@@ -127,12 +128,7 @@ func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tags := make([]tagJSON, 0, len(card.Tags))
-	for _, tag := range card.Tags {
-		tags = append(tags, tagJSON{ID: tag.ID, Label: tag.Label})
-	}
-
-	writeJSON(w, http.StatusOK, toOfferJSON(card.Offer, tags, true))
+	writeJSON(w, http.StatusOK, toOfferJSON(card, true))
 }
 
 func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {

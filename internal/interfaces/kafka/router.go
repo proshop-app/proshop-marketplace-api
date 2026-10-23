@@ -80,18 +80,24 @@ func (r *Router) Handle(ctx context.Context, envelope Envelope) error {
 }
 
 // TenantHint — магазин сообщения для меток журналов и метрик: заголовок или
-// ключ проекции. Ничего не проверяет.
+// ключ проекции. Согласованность источников не проверяет; значение не по
+// формату идентификатора отбрасывается, чтобы повреждённые сообщения не
+// плодили метки.
 func TenantHint(message kafkago.Message) string {
-	if tenant := tenantHeader(message); tenant != "" {
-		return tenant
+	candidate := tenantHeader(message)
+
+	if candidate == "" {
+		var key []string
+		if json.Unmarshal(message.Key, &key) == nil && len(key) == 2 {
+			candidate = key[0]
+		}
 	}
 
-	var key []string
-	if json.Unmarshal(message.Key, &key) == nil && len(key) == 2 {
-		return key[0]
+	if _, err := ids.ParseTenantID(candidate); err != nil {
+		return ""
 	}
 
-	return ""
+	return candidate
 }
 
 // tenantHeader — значение заголовка x-tenant; имя без учёта регистра.

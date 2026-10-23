@@ -39,7 +39,7 @@ func toParticipantJSON(view appparticipant.View) participantJSON {
 		TenantID: string(p.TenantID), Slug: p.Slug, Name: p.Name, Status: string(p.Status), Enabled: p.Enabled,
 		TenantStatus: string(view.TenantStatus), Visible: view.Visibility.Visible,
 		CheckoutAvailable: view.Visibility.CheckoutAvailable, Version: p.Version,
-		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		CreatedAt: p.CreatedAt.UTC(), UpdatedAt: p.UpdatedAt.UTC(),
 	}
 	if p.PaymentAccountID != "" {
 		account := p.PaymentAccountID

@@ -35,14 +35,17 @@ func TestSearchDefaultsAndFilters(t *testing.T) {
 	_, queries := indexed(t)
 	ctx := context.Background()
 
-	page, err := queries.Search(ctx, ports.OfferQuery{})
-	if err != nil || page.Total != 2 {
-		t.Fatalf("в выдаче только предложения видимых участников: %+v, %v", page, err)
+	list, err := queries.Search(ctx, ports.OfferQuery{})
+	if err != nil || list.Total != 2 {
+		t.Fatalf("в выдаче только предложения видимых участников: %+v, %v", list, err)
+	}
+	if tags := list.Items[0].Tags; len(tags) != 2 || tags[0].Label != "Новинка" || tags[1].Label != "free" {
+		t.Fatalf("подписи тегов в выдаче — как в карточке: %+v", tags)
 	}
 
-	page, err = queries.Search(ctx, ports.OfferQuery{TenantID: "t1", Limit: 1})
-	if err != nil || page.Total != 2 || len(page.Items) != 1 {
-		t.Fatalf("страница: %+v, %v", page, err)
+	list, err = queries.Search(ctx, ports.OfferQuery{TenantID: "t1", Limit: 1})
+	if err != nil || list.Total != 2 || len(list.Items) != 1 {
+		t.Fatalf("страница: %+v, %v", list, err)
 	}
 }
 

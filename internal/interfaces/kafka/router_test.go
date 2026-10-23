@@ -242,4 +242,7 @@ func TestUnknownTopicAndHint(t *testing.T) {
 	if hint := kafka.TenantHint(message(`x`, "{}")); hint != "" {
 		t.Fatalf("магазина нет: %q", hint)
 	}
+	if hint := kafka.TenantHint(message(`x`, "{}", tenantHeader("не id {}"))); hint != "" {
+		t.Fatalf("значение не по формату не становится меткой: %q", hint)
+	}
 }
