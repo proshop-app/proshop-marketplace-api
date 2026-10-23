@@ -1,0 +1,85 @@
+package postgres
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+)
+
+// querier — общее у транзакции и пула.
+type querier interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// UnitOfWork — транзакция PostgreSQL на каждый вызов Do.
+type UnitOfWork struct {
+	pool *pgxpool.Pool
+}
+
+// NewUnitOfWork — UnitOfWork поверх пула.
+func NewUnitOfWork(pool *pgxpool.Pool) *UnitOfWork {
+	return &UnitOfWork{pool: pool}
+}
+
+// Do открывает транзакцию, выполняет fn и фиксирует; ошибка или паника fn откатывают.
+func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx ports.Tx) error) (err error) {
+	tx, err := u.pool.Begin(ctx)
+	if err != nil {
+		return ErrUnavailable.Wrap(err)
+	}
+
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback(context.WithoutCancel(ctx))
+		}
+	}()
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			_ = tx.Rollback(context.WithoutCancel(ctx))
+			panic(recovered)
+		}
+	}()
+
+	if err = fn(ctx, &scope{q: tx}); err != nil {
+		return err
+	}
+
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		switch {
+		case errors.Is(commitErr, pgx.ErrTxCommitRollback):
+			// сценарий проглотил ошибку запроса, и база уже прервала транзакцию
+			return fmt.Errorf("транзакция прервана базой и откатилась: %w", commitErr)
+		case errors.Is(commitErr, context.Canceled) || errors.Is(commitErr, context.DeadlineExceeded):
+			return commitErr
+		default:
+			return ErrUnavailable.Wrap(commitErr)
+		}
+	}
+
+	return nil
+}
+
+type scope struct {
+	q querier
+}
+
+func (s *scope) Participants() participant.Repository { return &Participants{q: s.q} }
+func (s *scope) Registry() participant.Registry       { return &Registry{q: s.q} }
+func (s *scope) Products() catalog.ProductRepository  { return &Products{q: s.q} }
+func (s *scope) Signals() catalog.SignalsRepository   { return &Signals{q: s.q} }
+func (s *scope) Tags() catalog.TagRepository          { return &Tags{q: s.q} }
+func (s *scope) Offers() ports.OfferStates            { return &Offers{q: s.q} }
+func (s *scope) Outbox() ports.Outbox                 { return &Outbox{q: s.q} }
+func (s *scope) Inbox() ports.Inbox                   { return &Inbox{q: s.q} }
+func (s *scope) Parked() ports.ParkedEvents           { return &Parked{q: s.q} }
