@@ -66,9 +66,10 @@ func setup(t *testing.T) *env {
 		identities,
 		e.clock,
 		appcheckout.Config{
-			QuoteTTL:      30 * time.Minute,
-			QuoteTimeout:  time.Second,
-			ReturnBaseURL: "https://market.example",
+			DeliverySubsidyMinPercent: 30,
+			QuoteTTL:                  30 * time.Minute,
+			QuoteTimeout:              time.Second,
+			ReturnBaseURL:             "https://market.example",
 		},
 	)
 
@@ -149,6 +150,15 @@ func setup(t *testing.T) *env {
 		Subsidy:          w3ServiceSubsidy,
 		FreeDeliveryFrom: money.FromKopecks(1000000),
 	})
+	for _, tenant := range []ids.TenantID{"t1", "t2"} {
+		p, _ := e.store.Participant(tenant)
+		e.platform.SetSettings(tenant, ports.ShopSettings{
+			Enabled:          true,
+			FreeDeliveryFrom: p.FreeDeliveryFrom,
+			Subsidy:          p.Subsidy,
+			Delivery:         p.Delivery,
+		})
+	}
 	e.platform.SetItem(
 		"t1",
 		ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(199000), Available: 3},
@@ -251,10 +261,10 @@ func TestQuote(t *testing.T) {
 	if t1.Status != delivery.QuoteAvailable || t1.Subsidy.Kopecks() != 15000 || t1.BuyerCost.Kopecks() != 15000 {
 		t.Fatalf("субсидия продавца — половина доставки: %+v", t1)
 	}
-	if t2.Subsidy.Kopecks() != 0 || !t2.ExpiresAt.Equal(t0.Add(10*time.Minute)) {
-		t.Fatalf("без участника — без субсидии, срок магазина короче своего: %+v", t2)
+	if t2.Subsidy.Kopecks() != 7500 || !t2.ExpiresAt.Equal(t0.Add(10*time.Minute)) {
+		t.Fatalf("действует порог 30%%, срок магазина короче своего: %+v", t2)
 	}
-	if state.DeliveryTotal.Kopecks() != 15000+25000 || state.Delivery.City != "Город" {
+	if state.DeliveryTotal.Kopecks() != 15000+17500 || state.Delivery.City != "Город" {
 		t.Fatalf("итог доставки и выбранный пункт: %+v", state)
 	}
 
@@ -316,7 +326,7 @@ func TestConfirm(t *testing.T) {
 		t.Fatal(err)
 	}
 	if state.Status != checkout.StatusConfirmed || state.Groups[1].Quote.Cost.Kopecks() != 26000 ||
-		state.Total.Kopecks() != 2*199000+35000+15000+26000 {
+		state.Total.Kopecks() != 2*199000+35000+15000+18200 {
 		t.Fatalf("устаревший расчёт пересчитан, покупка подтверждена: %+v", state)
 	}
 

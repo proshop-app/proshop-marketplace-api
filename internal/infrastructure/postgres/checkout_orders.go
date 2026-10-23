@@ -20,9 +20,13 @@ const listCheckouts = `
   ))
  AND ($6::timestamptz IS NULL OR order_context->>'CartConsumed' IS DISTINCT FROM 'true' OR EXISTS (
   SELECT 1 FROM checkout_groups g WHERE g.checkout_id = c.id AND (
-   g.order_progress->>'Status' IN ('creating_order', 'seller_unreachable')
-   OR (g.order_progress->>'Status' IN ('cancelled', 'price_changed')
-    AND g.order_progress->>'CartReturned' IS DISTINCT FROM 'true')
+   (g.order_progress->>'Status' IN ('creating_order', 'seller_unreachable')
+    AND coalesce(g.order_progress->>'OrderID', '') = ''
+    AND g.order_progress->>'CreateExhausted' IS DISTINCT FROM 'true'
+    AND coalesce((g.order_progress->>'NextCreateAt')::timestamptz, '-infinity') <= $6)
+   OR (g.order_progress->>'Status' IN ('cancelled', 'price_changed', 'delivery_unavailable')
+    AND g.order_progress->>'CartReturned' IS DISTINCT FROM 'true'
+    AND coalesce((g.order_progress->>'NextReturnAt')::timestamptz, '-infinity') <= $6)
    OR (g.order_progress->>'OrderID' <> ''
     AND g.order_progress->>'Status' NOT IN ('cancelled', 'returned')
     AND (g.order_progress->>'NextPollAt')::timestamptz <= $6)

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -80,8 +81,9 @@ type quoteJSON struct {
 
 // errorJSON — тело отказа сервера: {"ok":false,"message","status","code","items"}.
 type errorJSON struct {
-	Code  string `json:"code"`
-	Items []struct {
+	Code   string `json:"code"`
+	Reason string `json:"reason"`
+	Items  []struct {
 		ProductID ids.ProductID `json:"productId"`
 		Price     *int64        `json:"price"`
 	} `json:"items"`
@@ -271,7 +273,7 @@ func (c *Client) call(
 	defer func() { _ = reply.Body.Close() }()
 
 	if reply.StatusCode != http.StatusOK {
-		return refusal(method, path, reply)
+		return refusal(method, path, tenantID, reply)
 	}
 
 	raw, err := io.ReadAll(io.LimitReader(reply.Body, (4<<20)+1))
@@ -285,9 +287,8 @@ func (c *Client) call(
 	return nil
 }
 
-// refusal — отказ сервера: 403 MARKETPLACE_DISABLED — магазин не участвует,
-// всё остальное — сервер недоступен.
-func refusal(method, path string, reply *http.Response) error {
+// refusal разбирает словарь отказов; неизвестный код сохраняется отдельно от терминального отказа.
+func refusal(method, path string, tenant ids.TenantID, reply *http.Response) error {
 	raw, err := io.ReadAll(io.LimitReader(reply.Body, (4<<20)+1))
 	if err != nil || len(raw) > 4<<20 {
 		return ErrInvalidResponse
@@ -322,6 +323,22 @@ func refusal(method, path string, reply *http.Response) error {
 		}
 	}
 
+	if json.Unmarshal(raw, &body) == nil && body.Code != "" {
+		switch {
+		case reply.StatusCode == http.StatusConflict && (body.Code == "DELIVERY_UNAVAILABLE" ||
+			body.Code == "DELIVERY_CHANGED" || body.Code == "OUT_OF_STOCK" || body.Code == "IDEMPOTENCY_CONFLICT"):
+			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
+		case reply.StatusCode == http.StatusNotFound && body.Code == "ORDER_NOT_FOUND":
+			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
+		}
+		slog.Warn(
+			"неизвестный отказ сервера магазина",
+			slog.String("tenantId", string(tenant)),
+			slog.String("code", body.Code),
+			slog.Int("status", reply.StatusCode),
+		)
+		return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason, Unexpected: true}
+	}
 	return ErrUnavailable.WithMessage(message)
 }
 

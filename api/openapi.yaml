@@ -629,6 +629,7 @@ paths:
     post:
       tags: [checkout]
       summary: Создать независимые заказы и получить первую ссылку
+      description: Сначала обновляются все расчёты и настройки. Новая плата — 409 DELIVERY_CHANGED с checkout и новыми итогами, заказов нет.
       operationId: createCheckoutOrders
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
@@ -658,7 +659,8 @@ paths:
   /api/v1/checkout/{checkoutId}/groups/{groupId}/pay:
     post:
       tags: [checkout]
-      summary: Повторная ссылка до окончания окна оплаты магазина
+      summary: Ссылка только для текущей группы до окончания её окна
+      description: Более поздняя awaiting_payment — 409 PAYMENT_ORDER; GET и pay не обходят NextPollAt.
       operationId: payCheckoutGroup
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
@@ -956,6 +958,9 @@ components:
       type: object
       required: [error]
       properties:
+        checkout:
+          $ref: "#/components/schemas/Checkout"
+          description: Новый снимок при DELIVERY_CHANGED; требуется подтверждение.
         error:
           type: object
           required: [code, message]
@@ -1139,19 +1144,37 @@ components:
         amount: { type: integer, format: int64 }
     CheckoutGroup:
       type: object
-      required: [tenantId, externalCheckoutId, lines, goods, quote, status, paymentOrder, deliveryPrice]
+      required: [tenantId, externalCheckoutId, lines, goods, quote, status, paymentOrder, deliveryPrice, paymentUrl, returnFailed, pollFailures, nextPollAt, createFailures, createExhausted]
       properties:
         tenantId: { type: string }
         status:
           type: string
-          enum: ["", creating_order, awaiting_payment, paid, cancelled, shipped, delivered, returned, seller_unreachable, price_changed]
+          enum: ["", creating_order, awaiting_payment, paid, cancelled, shipped, delivered, returned, seller_unreachable, price_changed, delivery_unavailable]
         orderId: { type: string }
-        paymentUrl: { type: string, format: uri }
+        paymentUrl:
+          type: [string, "null"]
+          format: uri
+          description: Только текущая awaiting_payment и now < expiresAt; у остальных null.
         expiresAt: { type: string, format: date-time }
         paymentOrder: { type: integer }
         deliveryPrice: { type: integer, format: int64, minimum: 0, description: Плата на кассе этого магазина; 0 — строка доставки скрыта }
         reason: { type: string }
         track: { type: string }
+        returnFailed: { type: boolean }
+        returnReason: { type: string }
+        returnRemaining:
+          type: array
+          items:
+            type: object
+            required: [offerId, quantity]
+            properties:
+              offerId: { type: string }
+              quantity: { type: integer, minimum: 1 }
+        pollFailures: { type: integer, minimum: 0, maximum: 5 }
+        nextPollAt: { type: string, format: date-time }
+        createFailures: { type: integer, minimum: 0, maximum: 5 }
+        createExhausted: { type: boolean }
+        lastErrorCode: { type: string }
         currentPrices:
           type: array
           items:

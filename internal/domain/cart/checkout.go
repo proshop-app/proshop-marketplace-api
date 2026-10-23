@@ -47,3 +47,29 @@ func (c *Cart) Return(
 	c.touch(now, ttl)
 	return nil
 }
+
+// ReturnUpTo возвращает помещающееся количество; остаток остаётся в группе покупки.
+func (c *Cart) ReturnUpTo(line Line, now time.Time, ttl time.Duration) (int, error) {
+	index := c.find(line.Offer)
+	capacity := MaxQuantity
+	if index >= 0 {
+		capacity -= c.state.Lines[index].Quantity
+	}
+	if index < 0 && len(c.state.Lines) >= MaxLines {
+		return 0, ErrTooManyLines
+	}
+	quantity := line.Quantity
+	if quantity > capacity {
+		quantity = capacity
+	}
+	if quantity <= 0 {
+		return 0, ErrInvalidQuantity
+	}
+	if err := c.Return(line.Offer, line.Name, line.Price, quantity, now, ttl); err != nil {
+		return 0, err
+	}
+	if quantity < line.Quantity {
+		return quantity, ErrInvalidQuantity
+	}
+	return quantity, nil
+}

@@ -2,7 +2,6 @@ package checkout
 
 import (
 	"net/url"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -32,11 +31,14 @@ const (
 	GroupDelivered GroupStatus = "delivered"
 	// GroupReturned — возврат оформлен магазином.
 	GroupReturned GroupStatus = "returned"
-	// GroupSellerUnreachable — не получен корректный ответ на создание, нужен повтор.
+	// GroupSellerUnreachable — магазин не отвечает при создании или сверке заказа.
 	GroupSellerUnreachable GroupStatus = "seller_unreachable"
 	// GroupPriceChanged — магазин отказал по цене, группа вернулась в корзину.
 	GroupPriceChanged GroupStatus = "price_changed"
 )
+
+// GroupDeliveryUnavailable — окончательный отказ, нужен новый ПВЗ и новая покупка.
+const GroupDeliveryUnavailable GroupStatus = "delivery_unavailable"
 
 // Contact — гостевой покупатель для кассы и доставки магазина.
 type Contact struct {
@@ -135,37 +137,6 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	return true, c.touch(now)
 }
 
-// CreationFailed изолирует сбой продавца; новая цена требует нового оформления группы.
-func (c *Checkout) CreationFailed(
-	tenant ids.TenantID,
-	prices []PriceChange,
-	priceChanged bool,
-	now time.Time,
-) (bool, error) {
-	g := c.group(tenant)
-	if g == nil {
-		return false, ErrNotFound
-	}
-	if g.OrderID != "" || g.Status == GroupPriceChanged {
-		return false, nil
-	}
-	if g.Status != GroupCreating && g.Status != GroupSellerUnreachable {
-		return false, ErrTransition
-	}
-	status, reason := GroupSellerUnreachable, "seller_unreachable"
-	if priceChanged {
-		status, reason = GroupPriceChanged, "PRICE_CHANGED"
-	}
-	if g.Status == status && g.Reason == reason && slices.Equal(g.CurrentPrices, prices) {
-		return false, nil
-	}
-	g.Status, g.Reason = status, reason
-	g.CurrentPrices = append([]PriceChange(nil), prices...)
-
-	c.rollup()
-	return true, c.touch(now)
-}
-
 // Observe принимает только допустимые переходы. Истечение окна запрещает ссылку,
 // но отмену подтверждает магазин: он мог получить оплату перед границей окна.
 func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Time, now time.Time) (bool, error) {
@@ -173,7 +144,11 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	if g == nil {
 		return false, ErrNotFound
 	}
-	if g.OrderID == "" || g.OrderID != order.OrderID || !allowed(g.Status, order.Status) {
+	from := g.Status
+	if from == GroupSellerUnreachable {
+		from = g.LastOrderStatus
+	}
+	if g.OrderID == "" || g.OrderID != order.OrderID || !allowed(from, order.Status) {
 		return false, ErrTransition
 	}
 	if order.Status == GroupCancelled && order.Reason == "" {
@@ -184,6 +159,9 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	}
 	g.Status, g.Reason, g.Track = order.Status, order.Reason, order.Track
 	g.NextPollAt = next
+	g.PollFailures = 0
+	g.LastErrorCode = ""
+	g.LastOrderStatus = order.Status
 	c.rollup()
 	return true, c.touch(now)
 }
@@ -200,25 +178,35 @@ func (c *Checkout) Payment(tenant ids.TenantID, now time.Time) (*PaymentLink, er
 	if !now.Before(g.ExpiresAt) {
 		return nil, ErrPaymentExpired
 	}
-	return &PaymentLink{
-		TenantID:  tenant,
-		URL:       g.PaymentURL,
-		ExpiresAt: g.ExpiresAt,
-		Position:  g.PaymentOrder,
-		Count:     len(c.state.Groups),
-	}, nil
+	current := c.NextPayment(now)
+	if current == nil || current.TenantID != tenant {
+		return nil, ErrPaymentOrder
+	}
+	return current, nil
 }
 
-// NextPayment выбирает первую доступную группу в сохранённом порядке.
+// NextPayment выбирает только текущий магазин с действующим окном.
 func (c *Checkout) NextPayment(now time.Time) *PaymentLink {
-	var next *PaymentLink
+	var current *Group
 	for _, g := range c.state.Groups {
-		link, err := c.Payment(g.TenantID, now)
-		if err == nil && (next == nil || link.Position < next.Position) {
-			next = link
+		if g.Status != GroupAwaitingPayment || !now.Before(g.ExpiresAt) {
+			continue
+		}
+		if current == nil || g.PaymentOrder < current.PaymentOrder {
+			copy := g
+			current = &copy
 		}
 	}
-	return next
+	if current == nil {
+		return nil
+	}
+	return &PaymentLink{
+		TenantID:  current.TenantID,
+		URL:       current.PaymentURL,
+		ExpiresAt: current.ExpiresAt,
+		Position:  current.PaymentOrder,
+		Count:     len(c.state.Groups),
+	}
 }
 
 // MarkCartConsumed отмечает атомарное изъятие снимка из корзины.
@@ -230,22 +218,6 @@ func (c *Checkout) MarkCartConsumed(now time.Time) (bool, error) {
 		return false, ErrTransition
 	}
 	c.state.CartConsumed = true
-	return true, c.touch(now)
-}
-
-// MarkCartReturned отмечает возврат отменённой группы в корзину.
-func (c *Checkout) MarkCartReturned(tenant ids.TenantID, now time.Time) (bool, error) {
-	g := c.group(tenant)
-	if g == nil {
-		return false, ErrNotFound
-	}
-	if g.CartReturned {
-		return false, nil
-	}
-	if g.Status != GroupCancelled && g.Status != GroupPriceChanged {
-		return false, ErrTransition
-	}
-	g.CartReturned = true
 	return true, c.touch(now)
 }
 
@@ -261,10 +233,14 @@ func (c *Checkout) group(tenant ids.TenantID) *Group {
 func (c *Checkout) rollup() {
 	paid, cancelled, pending := 0, 0, 0
 	for _, g := range c.state.Groups {
-		switch g.Status {
+		status := g.Status
+		if status == GroupSellerUnreachable && g.OrderID != "" && g.LastOrderStatus != "" {
+			status = g.LastOrderStatus
+		}
+		switch status {
 		case GroupPaid, GroupShipped, GroupDelivered, GroupReturned:
 			paid++
-		case GroupCancelled, GroupPriceChanged:
+		case GroupCancelled, GroupPriceChanged, GroupDeliveryUnavailable:
 			cancelled++
 		case GroupCreating, GroupSellerUnreachable:
 			pending++
@@ -315,6 +291,7 @@ func cloneState(state State) State {
 		g := &state.Groups[i]
 		g.Lines = append([]Line(nil), g.Lines...)
 		g.CurrentPrices = append([]PriceChange(nil), g.CurrentPrices...)
+		g.ReturnRemaining = append([]Line(nil), g.ReturnRemaining...)
 		if g.Quote != nil {
 			q := *g.Quote
 			g.Quote = &q

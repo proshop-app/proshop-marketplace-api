@@ -44,6 +44,7 @@ func TestResumeAfterOrderCreatedBeforeCommit(t *testing.T) {
 		t.Fatal("заказ успел появиться у магазина")
 	}
 	e.platform.AfterCreate, e.store.FailCommit = nil, nil
+	e.clock.Advance(checkout.OrderCallLease)
 	if err := e.service.Resume(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -66,13 +67,14 @@ func TestResumeAfterOrderCreatedBeforeCommit(t *testing.T) {
 func TestSellerFailureDoesNotBlockOtherGroups(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
-	e.platform.Fail("t1", errors.New("магазин не отвечает"))
+	e.platform.FailCreate("t1", errors.New("магазин не отвечает"))
 	state, err := e.service.CreateOrders(context.Background(), buyerID, c.ID, orderContact)
 	if err != nil || state.Groups[0].Status != checkout.GroupSellerUnreachable ||
 		state.Groups[1].Status != checkout.GroupAwaitingPayment || e.service.NextPayment(state).TenantID != "t2" {
 		t.Fatalf("независимые группы: %+v %v", state, err)
 	}
-	e.platform.Fail("t1", nil)
+	e.platform.FailCreate("t1", nil)
+	e.clock.Advance(checkout.OrderRetryBase)
 	if err := e.service.Resume(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +188,7 @@ func TestDeliveryThresholdsAndRegions(t *testing.T) {
 		if threshold > 398000 {
 			want = 15000
 		}
-		if c.Groups[0].DeliveryPrice.Kopecks() != want || c.DeliveryTotal.Kopecks() != want+25000 {
+		if c.Groups[0].DeliveryPrice.Kopecks() != want || c.DeliveryTotal.Kopecks() != want+17500 {
 			t.Fatalf("порог %d: %+v", threshold, c)
 		}
 	}
@@ -212,6 +214,7 @@ func TestInvalidSellerTotalDoesNotBlockOtherSeller(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.AfterCreate, e.store.FailCommit = nil, nil
+	e.clock.Advance(checkout.OrderCallLease)
 	e.platform.SetOrderTotal("order-1", money.FromKopecks(1))
 	if err := e.service.Resume(ctx); err != nil {
 		t.Fatal(err)

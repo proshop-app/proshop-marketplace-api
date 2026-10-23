@@ -201,7 +201,9 @@ func TestMarketplaceDisabled(t *testing.T) {
 	failing := server(t, routes, http.StatusInternalServerError)
 
 	_, err = failing.CheckItems(context.Background(), "t1", nil)
-	if !errors.Is(err, platformapi.ErrUnavailable) || errors.Is(err, ports.ErrMarketplaceDisabled) {
-		t.Fatalf("500 с кодом участия: %v", err)
+	var refusal *ports.OrderRefusal
+	if !errors.As(err, &refusal) || !refusal.Unexpected || refusal.Code != "MARKETPLACE_DISABLED" ||
+		errors.Is(err, ports.ErrMarketplaceDisabled) {
+		t.Fatalf("500 с кодом участия — неизвестный протоколу отказ, не выключение магазина: %v", err)
 	}
 }

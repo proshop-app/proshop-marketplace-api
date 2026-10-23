@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -38,13 +39,21 @@ type checkoutGroupJSON struct {
 	Quote              *quoteJSON             `json:"quote"`
 	Status             checkout.GroupStatus   `json:"status"`
 	OrderID            string                 `json:"orderId,omitempty"`
-	PaymentURL         string                 `json:"paymentUrl,omitempty"`
+	PaymentURL         *string                `json:"paymentUrl"`
 	ExpiresAt          *time.Time             `json:"expiresAt,omitempty"`
 	PaymentOrder       int                    `json:"paymentOrder"`
 	DeliveryPrice      int64                  `json:"deliveryPrice"`
 	Reason             string                 `json:"reason,omitempty"`
 	Track              string                 `json:"track,omitempty"`
 	CurrentPrices      []checkout.PriceChange `json:"currentPrices,omitempty"`
+	ReturnFailed       bool                   `json:"returnFailed"`
+	ReturnReason       string                 `json:"returnReason,omitempty"`
+	ReturnRemaining    []returnLineJSON       `json:"returnRemaining,omitempty"`
+	PollFailures       int                    `json:"pollFailures"`
+	NextPollAt         time.Time              `json:"nextPollAt"`
+	LastErrorCode      string                 `json:"lastErrorCode,omitempty"`
+	CreateFailures     int                    `json:"createFailures"`
+	CreateExhausted    bool                   `json:"createExhausted"`
 }
 
 type selectionJSON struct {
@@ -79,9 +88,15 @@ type quoteRequestJSON struct {
 	PickupPointCode string `json:"pickupPointCode"`
 }
 
-func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
+type returnLineJSON struct {
+	OfferID  string `json:"offerId"`
+	Quantity int    `json:"quantity"`
+}
+
+func toCheckoutJSON(state checkout.State, next *checkout.PaymentLink) (checkoutJSON, error) {
 	out := checkoutJSON{
 		ID:            string(state.ID),
+		NextPayment:   next,
 		Status:        string(state.Status),
 		Groups:        make([]checkoutGroupJSON, 0, len(state.Groups)),
 		GoodsTotal:    state.GoodsTotal.Kopecks(),
@@ -114,14 +129,30 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 			Goods:              group.Goods.Kopecks(),
 			Status:             group.Status,
 			OrderID:            group.OrderID,
-			PaymentURL:         group.PaymentURL,
 			PaymentOrder:       group.PaymentOrder,
 			DeliveryPrice:      group.DeliveryPrice.Kopecks(),
 			Reason:             group.Reason,
 			Track:              group.Track,
 			CurrentPrices:      group.CurrentPrices,
+			ReturnFailed:       group.ReturnFailed,
+			ReturnReason:       group.ReturnReason,
+			PollFailures:       group.PollFailures,
+			NextPollAt:         group.NextPollAt,
+			CreateFailures:     group.CreateFailures,
+			LastErrorCode:      group.LastErrorCode,
+			CreateExhausted:    group.CreateExhausted,
 		}
 
+		if next != nil && next.TenantID == group.TenantID {
+			value := next.URL
+			g.PaymentURL = &value
+		}
+		for _, remaining := range group.ReturnRemaining {
+			g.ReturnRemaining = append(g.ReturnRemaining, returnLineJSON{
+				OfferID:  remaining.Offer.String(),
+				Quantity: remaining.Quantity,
+			})
+		}
 		if !group.ExpiresAt.IsZero() {
 			expires := group.ExpiresAt
 			g.ExpiresAt = &expires
@@ -169,13 +200,19 @@ func (h *checkoutHandlers) respond(
 	err error,
 ) {
 	if err != nil {
+		if errors.Is(err, checkout.ErrDeliveryChanged) {
+			body, encodeErr := toCheckoutJSON(state, nil)
+			if encodeErr != nil {
+				writeError(w, r, encodeErr)
+				return
+			}
+			writeErrorWithCheckout(w, r, err, &body)
+			return
+		}
 		writeError(w, r, err)
-
 		return
 	}
-
-	body, err := toCheckoutJSON(state)
-	body.NextPayment = h.checkouts.NextPayment(state)
+	body, err := toCheckoutJSON(state, h.checkouts.NextPayment(state))
 	if err != nil {
 		writeError(w, r, err)
 

@@ -3,6 +3,15 @@ package checkout
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrDeliveryChanged — новые условия доставки требуют согласия покупателя.
+	ErrDeliveryChanged = errs.New(
+		errs.Conflict,
+		"checkout.delivery_changed",
+		"условия доставки изменились, подтвердите заново",
+	)
+	// ErrPaymentOrder — сначала нужно оплатить текущий магазин.
+	ErrPaymentOrder = errs.New(errs.Conflict, "checkout.payment_order", "сначала оплатите текущий магазин")
+
 	// ErrInvalidSubsidyPercent — порог площадки вне допустимого диапазона.
 	ErrInvalidSubsidyPercent = errs.New(errs.Invalid, "checkout.invalid_subsidy_percent", "порог субсидии: от 0 до 100")
 

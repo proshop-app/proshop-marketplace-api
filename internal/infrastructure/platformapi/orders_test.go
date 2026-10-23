@@ -72,3 +72,47 @@ func TestSettingsRequireDeliveryAndMinimum(t *testing.T) {
 		t.Fatalf("обязательные настройки: %v", err)
 	}
 }
+
+func TestOrderRefusalDictionary(t *testing.T) {
+	for _, tc := range []struct {
+		fixture    string
+		code       string
+		status     int
+		unexpected bool
+	}{
+		{"order_delivery_unavailable.json", "DELIVERY_UNAVAILABLE", http.StatusConflict, false},
+		{"order_delivery_changed.json", "DELIVERY_CHANGED", http.StatusConflict, false},
+		{"order_out_of_stock.json", "OUT_OF_STOCK", http.StatusConflict, false},
+		{"order_idempotency_conflict.json", "IDEMPOTENCY_CONFLICT", http.StatusConflict, false},
+		{"order_not_found.json", "ORDER_NOT_FOUND", http.StatusNotFound, false},
+		{"order_unknown_error.json", "NEW_FAILURE", http.StatusConflict, true},
+		{"order_delivery_unavailable.json", "DELIVERY_UNAVAILABLE", http.StatusInternalServerError, true},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			client := server(
+				t,
+				map[string][2]string{"POST " + prefix + "/orders": {"", tc.fixture}},
+				tc.status,
+			)
+			_, err := client.CreateOrder(context.Background(), "t1", orderRequest())
+			var refusal *ports.OrderRefusal
+			if !errors.As(err, &refusal) || refusal.Code != tc.code || refusal.Unexpected != tc.unexpected {
+				t.Fatalf("код отказа потерян: %+v", err)
+			}
+			if tc.code == "DELIVERY_UNAVAILABLE" && refusal.Reason != "pickup_point_unavailable" {
+				t.Fatal("потеряна причина недоступности ПВЗ")
+			}
+		})
+	}
+}
+
+func TestUnknownOrderStatusIsTypedFailure(t *testing.T) {
+	client := server(
+		t,
+		map[string][2]string{"GET " + prefix + "/orders/o1": {"", "order_unknown_status.json"}},
+		http.StatusOK,
+	)
+	if _, err := client.GetOrder(context.Background(), "t1", "o1"); !errors.Is(err, ports.ErrInvalidOrderStatus) {
+		t.Fatalf("неизвестный статус должен запускать задержку опроса: %v", err)
+	}
+}

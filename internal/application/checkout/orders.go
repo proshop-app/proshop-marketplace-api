@@ -9,6 +9,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/order"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -21,17 +22,15 @@ const (
 // CreateOrders фиксирует намерение и контакт до вызова магазина. Повтор использует тот же снимок.
 func (s *Service) CreateOrders(
 	ctx context.Context,
-	buyerID, checkoutID ids.UUID,
+	buyerID,
+	checkoutID ids.UUID,
 	contact checkout.Contact,
 ) (checkout.State, error) {
-	returnURL := s.config.ReturnBaseURL + "/api/v1/checkout/" + string(checkoutID) + "/return"
-	_, err := s.update(ctx, buyerID, checkoutID, func(c *checkout.Checkout, now time.Time) error {
-		_, err := c.BeginOrders(contact, returnURL, now)
-		return err
-	})
+	state, err := s.prepareOrders(ctx, buyerID, checkoutID, contact)
 	if err != nil {
-		return checkout.State{}, err
+		return state, err
 	}
+
 	if err := s.consumeCart(ctx, buyerID, checkoutID); err != nil {
 		return checkout.State{}, err
 	}
@@ -44,44 +43,10 @@ func (s *Service) createGroups(ctx context.Context, buyerID, id ids.UUID) (check
 		return checkout.State{}, err
 	}
 	for _, g := range c.Groups() {
-		if g.Status != checkout.GroupCreating && g.Status != checkout.GroupSellerUnreachable {
+		if !g.CreationDue(s.clock.Now()) {
 			continue
 		}
-		state := c.State()
-		request := ports.CreateOrderRequest{
-			ExternalCheckoutID: g.ExternalCheckoutID,
-			GroupID:            g.TenantID,
-			Carrier:            string(state.Delivery.Carrier),
-			PickupPointCode:    state.Delivery.PickupPointCode,
-			Contact:            state.Contact,
-			DeliveryPrice:      g.DeliveryPrice,
-			ReturnURL:          state.ReturnURL,
-		}
-		for _, line := range g.Lines {
-			request.Items = append(request.Items, ports.OrderItem{
-				ProductID: line.Offer.Product,
-				Quantity:  line.Quantity,
-				Price:     line.Price,
-			})
-		}
-		answer, failed := s.platform.CreateOrder(ctx, g.TenantID, request)
-		_, err = s.update(ctx, buyerID, id, func(current *checkout.Checkout, now time.Time) error {
-			if failed == nil {
-				_, err := current.AttachOrder(g.TenantID, answer, now)
-				if errors.Is(err, checkout.ErrInvalidOrder) {
-					_, err = current.CreationFailed(g.TenantID, nil, false, now)
-				}
-				return err
-			}
-			var changed *ports.PriceChanged
-			var prices []checkout.PriceChange
-			if errors.As(failed, &changed) {
-				prices = changed.Items
-			}
-			_, err := current.CreationFailed(g.TenantID, prices, errors.Is(failed, ports.ErrPriceChanged), now)
-			return err
-		})
-		if err != nil {
+		if err := s.createGroup(ctx, buyerID, id, g.TenantID); err != nil {
 			return checkout.State{}, err
 		}
 	}
@@ -91,32 +56,17 @@ func (s *Service) createGroups(ctx context.Context, buyerID, id ids.UUID) (check
 	return s.Get(ctx, buyerID, id)
 }
 
-// Refresh опрашивает магазины; просроченные группы продолжают сверяться до подтверждённой отмены.
+// Refresh сверяет только захваченные через CAS группы; отказ также сдвигает NextPollAt.
 func (s *Service) Refresh(ctx context.Context, buyerID, id ids.UUID) (checkout.State, error) {
 	c, err := s.load(ctx, buyerID, id)
 	if err != nil {
 		return checkout.State{}, err
 	}
 	for _, g := range c.Groups() {
-		if g.OrderID == "" || g.Status == checkout.GroupCancelled || g.Status == checkout.GroupReturned {
+		if !g.PollDue(s.clock.Now()) {
 			continue
 		}
-		if s.clock.Now().Before(g.NextPollAt) {
-			continue
-		}
-		answer, err := s.platform.GetOrder(ctx, g.TenantID, g.OrderID)
-		if err != nil {
-			continue
-		}
-		interval := paidPoll
-		if answer.Status == checkout.GroupAwaitingPayment {
-			interval = unpaidPoll
-		}
-		_, err = s.update(ctx, buyerID, id, func(current *checkout.Checkout, now time.Time) error {
-			_, err := current.Observe(g.TenantID, answer, now.Add(interval), now)
-			return err
-		})
-		if err != nil {
+		if err := s.pollGroup(ctx, buyerID, id, g.TenantID); err != nil {
 			return checkout.State{}, err
 		}
 	}
@@ -233,8 +183,29 @@ func (s *Service) consumeCart(ctx context.Context, buyerID, id ids.UUID) error {
 	})
 }
 
-// ReturnCancelled атомарно возвращает отменённые группы и отмечает возврат в покупке.
+// ReturnCancelled изолирует возврат каждой группы от остальных групп и сверки заказов.
 func (s *Service) ReturnCancelled(ctx context.Context, buyerID, id ids.UUID) error {
+	c, err := s.load(ctx, buyerID, id)
+	if err != nil {
+		return err
+	}
+	var failures []error
+	for _, g := range c.Groups() {
+		if !g.ReturnDue(s.clock.Now()) {
+			continue
+		}
+		if err := s.returnCancelledGroup(ctx, buyerID, id, g.TenantID); err != nil {
+			// Транзакция возврата откатилась. Запоминаем текущий остаток отдельно:
+			// временная проблема корзины не должна закрывать оплату другого магазина.
+			if deferred := s.deferCartReturn(ctx, buyerID, id, g.TenantID, err); deferred != nil {
+				failures = append(failures, errors.Join(err, deferred))
+			}
+		}
+	}
+	return errors.Join(failures...)
+}
+
+func (s *Service) returnCancelledGroup(ctx context.Context, buyerID, id ids.UUID, tenant ids.TenantID) error {
 	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Checkouts().Get(ctx, id)
 		if err != nil {
@@ -244,40 +215,83 @@ func (s *Service) ReturnCancelled(ctx context.Context, buyerID, id ids.UUID) err
 			return checkout.ErrNotFound
 		}
 		now, ttl := s.clock.Now(), s.cartTTL()
-		var basket *cart.Cart
-		changed := false
 		for _, g := range c.Groups() {
-			if g.CartReturned || (g.Status != checkout.GroupCancelled && g.Status != checkout.GroupPriceChanged) {
+			if g.TenantID != tenant || !g.ReturnDue(now) {
 				continue
 			}
-			if basket == nil {
-				basket, err = tx.Carts().ByBuyer(ctx, buyerID)
-				if errors.Is(err, cart.ErrNotFound) {
-					basket, err = cart.New(s.ids.NewUUID(), buyerID, now, ttl), nil
-				}
-				if err != nil {
-					return err
-				}
-				basket.ResetIfExpired(now, ttl)
+			basket, err := tx.Carts().ByBuyer(ctx, buyerID)
+			if errors.Is(err, cart.ErrNotFound) {
+				basket, err = cart.New(s.ids.NewUUID(), buyerID, now, ttl), nil
 			}
-			for _, line := range g.Lines {
-				if err := basket.Return(line.Offer, line.Name, line.Price, line.Quantity, now, ttl); err != nil {
-					return err
-				}
-			}
-			if _, err := c.MarkCartReturned(g.TenantID, now); err != nil {
+			if err != nil {
 				return err
 			}
-			changed = true
+			basket.ResetIfExpired(now, ttl)
+			lines := g.Lines
+			if g.ReturnFailed {
+				lines = g.ReturnRemaining
+			}
+			remaining, reason := returnGroup(basket, lines, now, ttl)
+			if _, err := c.RecordCartReturn(tenant, remaining, reason, now); err != nil {
+				return err
+			}
+			if err := tx.Carts().Save(ctx, basket); err != nil {
+				return err
+			}
+			return tx.Checkouts().Update(ctx, c)
 		}
-		if !changed {
-			return nil
-		}
-		if err := tx.Carts().Save(ctx, basket); err != nil {
+		return nil
+	})
+}
+
+func (s *Service) deferCartReturn(ctx context.Context, buyerID, id ids.UUID, tenant ids.TenantID, cause error) error {
+	reason := "cart.return_failed"
+	if typed, ok := errs.As(cause); ok {
+		reason = typed.Key()
+	}
+	_, err := s.update(ctx, buyerID, id, func(c *checkout.Checkout, now time.Time) error {
+		for _, g := range c.Groups() {
+			if g.TenantID != tenant || !g.ReturnDue(now) {
+				continue
+			}
+			remaining := g.Lines
+			if g.ReturnFailed {
+				remaining = g.ReturnRemaining
+			}
+			_, err := c.RecordCartReturn(tenant, remaining, reason, now)
 			return err
 		}
-		return tx.Checkouts().Update(ctx, c)
+		return nil
 	})
+	return err
+}
+
+func returnGroup(basket *cart.Cart, lines []checkout.Line, now time.Time, ttl time.Duration) ([]checkout.Line, string) {
+	var remaining []checkout.Line
+	reason := ""
+	for _, line := range lines {
+		restored, err := basket.ReturnUpTo(
+			cart.Line{
+				Offer:    line.Offer,
+				Name:     line.Name,
+				Quantity: line.Quantity,
+				Price:    line.Price,
+			},
+			now,
+			ttl,
+		)
+		if err != nil {
+			reason = "cart.return_failed"
+			if typed, ok := errs.As(err); ok {
+				reason = typed.Key()
+			}
+		}
+		if restored < line.Quantity {
+			line.Quantity -= restored
+			remaining = append(remaining, line)
+		}
+	}
+	return remaining, reason
 }
 
 func (s *Service) cartTTL() time.Duration {

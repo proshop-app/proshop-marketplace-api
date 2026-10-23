@@ -116,12 +116,11 @@ func (h *checkoutHandlers) respondList(w http.ResponseWriter, r *http.Request, s
 	items := make([]checkoutJSON, 0, len(states))
 	next := ""
 	for _, state := range states {
-		item, err := toCheckoutJSON(state)
+		item, err := toCheckoutJSON(state, h.checkouts.NextPayment(state))
 		if err != nil {
 			writeError(w, r, err)
 			return
 		}
-		item.NextPayment = h.checkouts.NextPayment(state)
 		items = append(items, item)
 		next = string(state.ID)
 	}

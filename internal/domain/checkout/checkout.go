@@ -51,19 +51,31 @@ type Group struct {
 	Lines              []Line
 	Goods              money.Money
 	// Quote — расчёт доставки до выбранного пункта; нет — нужно посчитать.
-	Quote         *delivery.Quote
-	Status        GroupStatus
-	OrderID       string
-	PaymentURL    string
-	ExpiresAt     time.Time
-	PaymentOrder  int
-	DeliveryPrice money.Money
-	Reason        string
-	Track         string
-	NextPollAt    time.Time
-	AwaitingSince time.Time
-	CartReturned  bool
-	CurrentPrices []PriceChange
+	Quote           *delivery.Quote
+	Status          GroupStatus
+	OrderID         string
+	PaymentURL      string
+	ExpiresAt       time.Time
+	PaymentOrder    int
+	DeliveryPrice   money.Money
+	Reason          string
+	Track           string
+	NextPollAt      time.Time
+	AwaitingSince   time.Time
+	CartReturned    bool
+	CurrentPrices   []PriceChange
+	LastErrorCode   string
+	CreateFailures  int
+	CreateExhausted bool
+	NextCreateAt    time.Time
+	CreateToken     string
+	PollFailures    int
+	PollToken       string
+	LastOrderStatus GroupStatus
+	ReturnFailed    bool
+	ReturnReason    string
+	ReturnRemaining []Line
+	NextReturnAt    time.Time
 }
 
 // Selection — выбранная доставка.

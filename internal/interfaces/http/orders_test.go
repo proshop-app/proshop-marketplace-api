@@ -33,7 +33,13 @@ func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	selection := checkout.Selection{Carrier: "cdek", PickupPointCode: "P1", City: "Город", Address: "Адрес"}
+	selection := checkout.Selection{
+		Carrier:         "cdek",
+		PickupPointCode: "P1",
+		RegionCode:      "r1",
+		City:            "Город",
+		Address:         "Адрес",
+	}
 	if err := c.SelectDelivery(
 		selection,
 		map[ids.TenantID]delivery.Quote{
@@ -43,6 +49,13 @@ func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 	); err != nil {
 		t.Fatal(err)
 	}
+	e.platform.SetSettings("t1", ports.ShopSettings{
+		Enabled:          true,
+		FreeDeliveryFrom: money.Money{},
+		Subsidy:          participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+		Delivery:         participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"cdek:r1"}},
+	})
+	e.platform.SetQuote("t1", delivery.Offered{Available: true})
 	if err := c.Confirm(t0); err != nil {
 		t.Fatal(err)
 	}

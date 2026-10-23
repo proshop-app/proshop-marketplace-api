@@ -2,6 +2,8 @@ package platformapi
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -47,7 +49,15 @@ func (c *Client) GetOrder(ctx context.Context, tenant ids.TenantID, id string) (
 	if answer.OrderID != id {
 		return checkout.SellerOrder{}, ErrInvalidResponse
 	}
-	return answer.order(false)
+	order, err := answer.order(false)
+	if errors.Is(err, ports.ErrInvalidOrderStatus) {
+		slog.Warn(
+			"неизвестный статус заказа магазина",
+			slog.String("tenantId", string(tenant)),
+			slog.String("status", string(answer.Status)),
+		)
+	}
+	return order, err
 }
 
 func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
@@ -55,7 +65,7 @@ func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
 	case checkout.GroupAwaitingPayment, checkout.GroupPaid, checkout.GroupCancelled,
 		checkout.GroupShipped, checkout.GroupDelivered, checkout.GroupReturned:
 	default:
-		return checkout.SellerOrder{}, ErrInvalidResponse
+		return checkout.SellerOrder{}, ports.ErrInvalidOrderStatus
 	}
 	if a.OrderID == "" || (a.Status == checkout.GroupCancelled && a.Reason == "") {
 		return checkout.SellerOrder{}, ErrInvalidResponse

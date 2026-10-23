@@ -73,7 +73,7 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := stale.CreationFailed("t1", nil, false, at(2)); err != nil {
+	if _, err := stale.ClaimCreation("t1", "stale-attempt", at(2)); err != nil {
 		t.Fatal(err)
 	}
 	err = do(t, uow, func(ctx context.Context, tx ports.Tx) error { return tx.Checkouts().Update(ctx, stale) })

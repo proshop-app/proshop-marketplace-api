@@ -12,6 +12,16 @@ import (
 // ErrPriceChanged — магазин отклонил создание из-за актуальной цены.
 var ErrPriceChanged = errs.New(errs.Conflict, "checkout.price_changed", "цена магазина изменилась")
 
+// ErrOrderRefusal — магазин отклонил команду или сверку заказа.
+var ErrOrderRefusal = errs.New(errs.Unavailable, "platform.order_refusal", "магазин отклонил заказ")
+
+// ErrInvalidOrderStatus — сервер вернул статус вне словаря §4.
+var ErrInvalidOrderStatus = errs.New(
+	errs.Unavailable,
+	"platform.invalid_order_status",
+	"неизвестный статус заказа магазина",
+)
+
 // PriceChanged содержит актуальные цены для повторного оформления, без изменения снимка заказа.
 type PriceChanged struct{ Items []checkout.PriceChange }
 
@@ -40,5 +50,16 @@ type SellerOrders interface {
 	GetOrder(context.Context, ids.TenantID, string) (checkout.SellerOrder, error)
 }
 
+// OrderRefusal — код отказа магазина из словаря §4; неизвестный код сохраняется для оператора.
+type OrderRefusal struct {
+	Code       string
+	Reason     string
+	Unexpected bool
+}
+
 func (e *PriceChanged) Error() string { return ErrPriceChanged.Error() }
 func (e *PriceChanged) Unwrap() error { return ErrPriceChanged }
+
+func (e *OrderRefusal) Error() string { return "platform.order_refusal: " + e.Code }
+
+func (e *OrderRefusal) Unwrap() error { return ErrOrderRefusal }

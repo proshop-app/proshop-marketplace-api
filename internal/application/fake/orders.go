@@ -2,6 +2,8 @@ package fake
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,15 +21,34 @@ func (p *Platform) CreateOrder(
 ) (checkout.SellerOrder, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	key := string(tenant) + ":" + request.ExternalCheckoutID + ":" + string(request.GroupID)
+	request.Items = append([]ports.OrderItem(nil), request.Items...)
+	p.orderRequests[tenant] = append(p.orderRequests[tenant], request)
+	raw, _ := json.Marshal(request)
+	if body, ok := p.orderBodies[key]; ok && body != string(raw) {
+		return checkout.SellerOrder{}, &ports.OrderRefusal{Code: "IDEMPOTENCY_CONFLICT"}
+	}
+	p.orderBodies[key] = string(raw)
 	if err := p.failing[tenant]; err != nil {
 		return checkout.SellerOrder{}, err
 	}
-	key := string(tenant) + ":" + request.ExternalCheckoutID + ":" + string(request.GroupID)
 	if existing, ok := p.orders[key]; ok {
 		return existing, nil
 	}
 	if refused, ok := p.orderRefusals[key]; ok {
 		return checkout.SellerOrder{}, refused
+	}
+	if err := p.createErrors[tenant]; err != nil {
+		var refusal *ports.OrderRefusal
+		if errors.As(err, &refusal) && !refusal.Unexpected && (refusal.Code == "DELIVERY_UNAVAILABLE" ||
+			refusal.Code == "DELIVERY_CHANGED" || refusal.Code == "OUT_OF_STOCK") {
+			p.orderRefusals[key] = err
+		}
+		return checkout.SellerOrder{}, err
+	}
+	if err := p.validateOrderDelivery(tenant, request); err != nil {
+		p.orderRefusals[key] = err
+		return checkout.SellerOrder{}, err
 	}
 	total := request.DeliveryPrice
 	for _, item := range request.Items {
@@ -66,6 +87,10 @@ func (p *Platform) CreateOrder(
 func (p *Platform) GetOrder(_ context.Context, tenant ids.TenantID, id string) (checkout.SellerOrder, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.pollCalls[tenant]++
+	if err := p.pollErrors[tenant]; err != nil {
+		return checkout.SellerOrder{}, err
+	}
 	if err := p.failing[tenant]; err != nil {
 		return checkout.SellerOrder{}, err
 	}
@@ -107,4 +132,75 @@ func (p *Platform) SetOrderTotal(id string, total money.Money) {
 			p.orders[key] = order
 		}
 	}
+}
+
+// FailCreate моделирует отказ создания независимо от проверки настроек и расчёта.
+func (p *Platform) FailCreate(tenant ids.TenantID, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.createErrors[tenant] = err
+}
+
+// FailPoll моделирует отказ опроса уже созданного заказа.
+func (p *Platform) FailPoll(tenant ids.TenantID, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pollErrors[tenant] = err
+}
+
+// PollCalls — обращения к магазину, включая неудачные.
+func (p *Platform) PollCalls(tenant ids.TenantID) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.pollCalls[tenant]
+}
+
+// OrderRequests возвращает копии тел всех попыток создания для проверки неизменности.
+func (p *Platform) OrderRequests(tenant ids.TenantID) []ports.CreateOrderRequest {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	result := append([]ports.CreateOrderRequest(nil), p.orderRequests[tenant]...)
+	for i := range result {
+		result[i].Items = append([]ports.OrderItem(nil), result[i].Items...)
+	}
+	return result
+}
+
+func (p *Platform) validateOrderDelivery(tenant ids.TenantID, request ports.CreateOrderRequest) error {
+	settings, hasSettings := p.settings[tenant]
+	offered, hasQuote := p.quotes[tenant]
+	if !hasSettings || !hasQuote {
+		return nil
+	}
+	if !offered.Available {
+		return &ports.OrderRefusal{Code: "DELIVERY_UNAVAILABLE"}
+	}
+	goods := money.Money{}
+	for _, item := range request.Items {
+		amount, err := item.Price.MulRatio(int64(item.Quantity), 1)
+		if err != nil {
+			return err
+		}
+		goods, err = goods.Add(amount)
+		if err != nil {
+			return err
+		}
+	}
+	contribution, err := (checkout.Group{Goods: goods}).DeliverySubsidy(
+		settings.FreeDeliveryFrom,
+		settings.Subsidy,
+		offered.Cost,
+		p.MinSubsidyPercent,
+	)
+	if err != nil {
+		return err
+	}
+	fee, err := offered.Cost.Sub(contribution)
+	if err != nil {
+		return err
+	}
+	if fee != request.DeliveryPrice {
+		return &ports.OrderRefusal{Code: "DELIVERY_CHANGED"}
+	}
+	return nil
 }

@@ -31,7 +31,8 @@ var statusByCode = map[errs.Code]int{
 }
 
 type errorBody struct {
-	Error errorDetail `json:"error"`
+	Error    errorDetail   `json:"error"`
+	Checkout *checkoutJSON `json:"checkout,omitempty"`
 }
 
 type errorDetail struct {
@@ -41,6 +42,10 @@ type errorDetail struct {
 
 // writeError отвечает ошибкой по таблице; внутренние ошибки не раскрываются клиенту.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	writeErrorWithCheckout(w, r, err, nil)
+}
+
+func writeErrorWithCheckout(w http.ResponseWriter, r *http.Request, err error, state *checkoutJSON) {
 	code := errs.CodeOf(err)
 	status := statusByCode[code]
 
@@ -53,5 +58,11 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		loggerFrom(r.Context()).Error("http: запрос не выполнен", slog.Int("status", status), slog.Any("error", err))
 	}
 
-	writeJSON(w, status, errorBody{Error: detail})
+	switch detail.Code {
+	case "checkout.delivery_changed":
+		detail.Code = "DELIVERY_CHANGED"
+	case "checkout.payment_order":
+		detail.Code = "PAYMENT_ORDER"
+	}
+	writeJSON(w, status, errorBody{Error: detail, Checkout: state})
 }
