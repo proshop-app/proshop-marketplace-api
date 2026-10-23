@@ -2,6 +2,8 @@ package participant
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -73,6 +75,10 @@ func (s *Settings) Sync(ctx context.Context) (SettingsResult, error) {
 // SyncOne сверяет одного участника; true — видимое поменялось.
 func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, error) {
 	settings, err := s.platform.MarketplaceSettings(ctx, tenantID)
+	if errors.Is(err, ports.ErrMarketplaceDisabled) {
+		// сервер отказал магазину-неучастнику — участие выключено, субсидии нет
+		settings, err = ports.ShopSettings{}, nil
+	}
 	if err != nil {
 		return false, err
 	}
@@ -101,4 +107,22 @@ func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, er
 	})
 
 	return changed, err
+}
+
+// HandleTask — внеочередная сверка из outbox. Участника уже нет — сверять нечего.
+func (s *Settings) HandleTask(ctx context.Context, task ports.Task) error {
+	var payload settingsTaskPayload
+	if err := json.Unmarshal(task.Payload, &payload); err != nil {
+		return ErrInvalidTask.Wrap(err)
+	}
+	if task.Kind != TaskSyncSettings || payload.TenantID != string(task.TenantID) {
+		return ErrInvalidTask.WithMessage("задача не сверки настроек или магазин не совпадает")
+	}
+
+	_, err := s.SyncOne(ctx, task.TenantID)
+	if errors.Is(err, participant.ErrNotFound) {
+		return nil
+	}
+
+	return err
 }

@@ -1,1 +1,1 @@
-{"message":"Tenant is not a marketplace participant"}
+{"ok":false,"message":"Forbidden","status":403,"code":null,"items":null}

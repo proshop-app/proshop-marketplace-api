@@ -96,6 +96,9 @@ func (s *server) services(ctx context.Context) services {
 		Token:   cfg.Platform.Token,
 		Timeout: cfg.Platform.Timeout,
 	})
+	// корзина и покупка узнают об отказе участия первыми — по нему сверка настроек внеочередная
+	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
+	settings := appparticipant.NewSettings(uow, platform, now)
 
 	indexer := appcatalog.NewIndexer(uow, s.store.index, now, indexBatch)
 	pickups := directory(s.store, cfg)
@@ -116,7 +119,7 @@ func (s *server) services(ctx context.Context) services {
 		},
 	)
 
-	checkouts := appcheckout.NewService(uow, s.store.index, platform, pickups, identities, now, appcheckout.Config{
+	checkouts := appcheckout.NewService(uow, s.store.index, resyncing, pickups, identities, now, appcheckout.Config{
 		QuoteTTL:     cfg.Checkout.QuoteTTL,
 		QuoteTimeout: cfg.Checkout.QuoteTimeout,
 	})
@@ -130,8 +133,9 @@ func (s *server) services(ctx context.Context) services {
 			Lease:     cfg.Outbox.Lease,
 		},
 		map[string]messaging.Handler{
-			appcatalog.TaskSyncOffer:  indexer.HandleTask,
-			appcatalog.TaskSyncTenant: indexer.HandleTask,
+			appcatalog.TaskSyncOffer:        indexer.HandleTask,
+			appcatalog.TaskSyncTenant:       indexer.HandleTask,
+			appparticipant.TaskSyncSettings: settings.HandleTask,
 		},
 	)
 
@@ -149,9 +153,9 @@ func (s *server) services(ctx context.Context) services {
 		queries:      appcatalog.NewQueries(uow, s.store.index),
 		participants: appparticipant.NewService(uow, now),
 		registry:     appparticipant.NewRegistry(uow, now),
-		settings:     appparticipant.NewSettings(uow, platform, now),
+		settings:     settings,
 		auth:         auth,
-		carts:        appcart.NewService(uow, s.store.index, platform, identities, now, cfg.Cart.TTL),
+		carts:        appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL),
 		directory:    pickups,
 		checkouts:    checkouts,
 		dispatcher:   dispatcher,

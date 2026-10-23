@@ -22,8 +22,13 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-// HeaderToken — заголовок служебного токена, как у сервера.
-const HeaderToken = "x-internal-token"
+const (
+	// HeaderToken — заголовок служебного токена, как у сервера.
+	HeaderToken = "x-internal-token"
+
+	// codeMarketplaceDisabled — код отказа сервера для магазина, который не участвует в маркетплейсе.
+	codeMarketplaceDisabled = "MARKETPLACE_DISABLED"
+)
 
 var (
 	// ErrUnavailable — сервер недоступен или отказал.
@@ -69,6 +74,11 @@ type quoteJSON struct {
 	MinDays   int    `json:"minDays"`
 	MaxDays   int    `json:"maxDays"`
 	ExpiresAt string `json:"expiresAt"`
+}
+
+// errorJSON — тело отказа сервера: {"ok":false,"message","status","code","items"}.
+type errorJSON struct {
+	Code string `json:"code"`
 }
 
 type settingsJSON struct {
@@ -228,11 +238,7 @@ func (c *Client) call(
 	defer func() { _ = reply.Body.Close() }()
 
 	if reply.StatusCode != http.StatusOK {
-		detail, _ := io.ReadAll(io.LimitReader(reply.Body, 512))
-
-		message := fmt.Sprintf("%s %s: HTTP %d %s", method, path, reply.StatusCode, strings.TrimSpace(string(detail)))
-
-		return ErrUnavailable.WithMessage(message)
+		return refusal(method, path, reply)
 	}
 
 	if err := json.NewDecoder(io.LimitReader(reply.Body, 4<<20)).Decode(out); err != nil {
@@ -240,6 +246,22 @@ func (c *Client) call(
 	}
 
 	return nil
+}
+
+// refusal — отказ сервера: 403 MARKETPLACE_DISABLED — магазин не участвует,
+// всё остальное — сервер недоступен.
+func refusal(method, path string, reply *http.Response) error {
+	detail, _ := io.ReadAll(io.LimitReader(reply.Body, 512))
+	message := fmt.Sprintf("%s %s: HTTP %d %s", method, path, reply.StatusCode, strings.TrimSpace(string(detail)))
+
+	var body errorJSON
+	if reply.StatusCode == http.StatusForbidden && json.Unmarshal(detail, &body) == nil {
+		if body.Code == codeMarketplaceDisabled {
+			return ports.ErrMarketplaceDisabled.WithMessage(message)
+		}
+	}
+
+	return ErrUnavailable.WithMessage(message)
 }
 
 func itemsJSON(items []ports.ItemRequest) []itemJSON {
