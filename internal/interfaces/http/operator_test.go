@@ -8,8 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/event"
 )
 
 const (
@@ -93,6 +95,13 @@ func TestOperatorCookieRoutesAndCSRF(t *testing.T) {
 	if created.status != http.StatusCreated {
 		t.Fatal(created)
 	}
+	emptyDelivery := created.body["delivery"].(map[string]any)
+	for _, key := range []string{"regions", "carriers"} {
+		array, ok := emptyDelivery[key].([]any)
+		if !ok || len(array) != 0 {
+			t.Fatal("пустое покрытие сериализуется массивами", created)
+		}
+	}
 	delivery := `{"version":1,"delivery":{"regions":["RU-MOW"],"carriers":["cdek","yandex"]}}`
 	updated := call("PUT", deliveryPath, delivery, cookie)
 	if updated.status != http.StatusOK || updated.body["version"] != float64(2) {
@@ -118,15 +127,42 @@ func TestOperatorCookieRoutesAndCSRF(t *testing.T) {
 	if strings.Contains(fmtBody(listed.body), "secret") || strings.Contains(fmtBody(listed.body), "personal") {
 		t.Fatal("секреты в ответе", listed)
 	}
-	if r := call("POST", eventPath+"/resolve", `{"note":" "}`, cookie); r.status != http.StatusBadRequest {
-		t.Fatal(r)
+	invalidNote := call("POST", eventPath+"/resolve", `{"expectedVersion":1,"note":" "}`, cookie)
+	if invalidNote.status != http.StatusBadRequest {
+		t.Fatal(invalidNote)
 	}
-	retried := call("POST", eventPath+"/retry", `{"note":"исправлено"}`, cookie)
+	retried := call("POST", eventPath+"/retry", `{"expectedVersion":1,"note":"исправлено"}`, cookie)
 	if retried.status != http.StatusOK || retried.body["status"] != "queued" {
 		t.Fatal(retried)
 	}
-	if r := call("POST", eventPath+"/resolve", `{"note":"разобрано"}`, cookie); r.status != http.StatusConflict {
-		t.Fatal(r)
+	for _, body := range []string{`{"note":"без версии"}`, `{"expectedVersion":0,"note":"нулевая версия"}`} {
+		if r := call("POST", eventPath+"/retry", body, cookie); r.status != http.StatusBadRequest {
+			t.Fatal(r)
+		}
+	}
+	replay := messaging.NewEvents(e.store, e.clock, &fake.Replay{Err: event.ErrFilter})
+	var task ports.Task
+	tasksBefore := len(e.store.OutboxRows())
+	for _, row := range e.store.OutboxRows() {
+		if row.Kind == messaging.TaskReplay {
+			task = ports.Task{Payload: row.Payload, Attempts: 1}
+		}
+	}
+	if err := replay.HandleTask(context.Background(), task); err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"retry", "resolve"} {
+		r := call("POST", eventPath+"/"+action, `{"expectedVersion":1,"note":"задержавшееся решение"}`, cookie)
+		if r.status != http.StatusConflict {
+			t.Fatal(r)
+		}
+		current := r.body["event"].(map[string]any)
+		if current["status"] != "parked" || current["version"] != float64(3) {
+			t.Fatal("409 возвращает текущее состояние", r)
+		}
+	}
+	if len(e.store.OutboxRows()) != tasksBefore {
+		t.Fatal("устаревшие решения создали задачи", e.store.OutboxRows())
 	}
 	logout := call("DELETE", sessionPath, "", cookie)
 	if logout.status != http.StatusNoContent || !strings.Contains(logout.header.Get("Set-Cookie"), "Max-Age=0") {

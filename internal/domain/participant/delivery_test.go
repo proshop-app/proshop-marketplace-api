@@ -1,6 +1,7 @@
 package participant_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -30,5 +31,22 @@ func TestDeliveryISORegionsAndKnownCarriers(t *testing.T) {
 				t.Fatal("проверка покрытия", value)
 			}
 		})
+	}
+}
+
+func TestDeliveryCloneNormalizesEmptyArraysAndCopiesContents(t *testing.T) {
+	for _, original := range []participant.DeliverySettings{{}, {Regions: []string{}, Carriers: []string{}}} {
+		cloned := original.Clone()
+		encoded, err := json.Marshal(cloned)
+		if err != nil || string(encoded) != `{"regions":[],"carriers":[]}` {
+			t.Fatal(string(encoded), err)
+		}
+	}
+	original := participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
+	cloned := original.Clone()
+	cloned.Regions[0] = "RU-SPE"
+	cloned.Carriers[0] = "yandex"
+	if original.Regions[0] != "RU-MOW" || original.Carriers[0] != "cdek" {
+		t.Fatal("клон изменил исходные массивы", original)
 	}
 }

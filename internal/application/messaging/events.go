@@ -3,6 +3,8 @@ package messaging
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"strconv"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -28,6 +30,12 @@ type EventPage struct {
 	Total  int
 	Limit  int
 	Offset int
+}
+
+// replayTask связывает бюджет попыток outbox с единственным решением оператора.
+type replayTask struct {
+	EventID         int64 `json:"eventId"`
+	DecisionVersion int64 `json:"decisionVersion"`
 }
 
 // NewEvents собирает сценарии без зависимости от брокера и HTTP.
@@ -66,6 +74,7 @@ func (s *Events) Decide(
 	ctx context.Context,
 	actor operator.Principal,
 	id int64,
+	expectedVersion int64,
 	retry bool,
 	note string,
 ) (ports.ParkedEvent, error) {
@@ -78,6 +87,10 @@ func (s *Events) Decide(
 		if err != nil {
 			return err
 		}
+		result = stored
+		if expectedVersion != stored.Control.Version {
+			return event.ErrConflict
+		}
 		aggregate := event.Restore(stored.Control)
 		now := s.clock.Now()
 		if err := aggregate.Decide(retry, note, actor.ID, now); err != nil {
@@ -87,16 +100,18 @@ func (s *Events) Decide(
 			return err
 		}
 		if retry {
-			payload, err := json.Marshal(id)
+			decision := replayTask{EventID: id, DecisionVersion: aggregate.State().Version}
+			payload, err := json.Marshal(decision)
 			if err != nil {
 				return err
 			}
 			if err := tx.Outbox().Enqueue(ctx, ports.NewTask{
 				Kind:     TaskReplay,
 				TenantID: ids.TenantID(stored.TenantID),
-				DedupKey: TaskReplay + ":" + strconv.FormatInt(id, 10),
-				Payload:  payload,
-				At:       now,
+				DedupKey: TaskReplay + ":" + strconv.FormatInt(id, 10) + ":" +
+					strconv.FormatInt(decision.DecisionVersion, 10),
+				Payload: payload,
+				At:      now,
 			}); err != nil {
 				return err
 			}
@@ -105,25 +120,48 @@ func (s *Events) Decide(
 		result = stored
 		return nil
 	})
+	if errors.Is(err, event.ErrConflict) {
+		// CAS мог проиграть уже после чтения: возвращаем актуальный снимок вне откатившейся транзакции.
+		readErr := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+			var err error
+			result, err = tx.Parked().Get(ctx, id)
+			return err
+		})
+		if readErr != nil {
+			return ports.ParkedEvent{}, readErr
+		}
+	}
 	return result, err
 }
 
 // HandleTask сохраняет идентичность Kafka для дедупа при потере ответа/перезапуске.
 func (s *Events) HandleTask(ctx context.Context, task ports.Task) error {
-	var id int64
-	if err := json.Unmarshal(task.Payload, &id); err != nil {
+	var decision replayTask
+	if err := json.Unmarshal(task.Payload, &decision); err != nil {
 		return err
 	}
 	var stored ports.ParkedEvent
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
-		stored, err = tx.Parked().Get(ctx, id)
+		stored, err = tx.Parked().Get(ctx, decision.EventID)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	if stored.Control.Status != event.Queued {
+	if stored.Control.Version != decision.DecisionVersion || stored.Control.Status != event.Queued {
+		slog.InfoContext(
+			ctx,
+			"пропущена устаревшая задача повтора",
+			"eventId",
+			decision.EventID,
+			"decisionVersion",
+			decision.DecisionVersion,
+			"currentVersion",
+			stored.Control.Version,
+			"tenantId",
+			stored.TenantID,
+		)
 		return nil
 	}
 	replayErr := s.replay.Replay(ctx, stored)

@@ -45,8 +45,8 @@ func (d DeliverySettings) Allows(carrier, region string) bool {
 // Clone отделяет списки настроек от изменяемого снимка вызывающего.
 func (d DeliverySettings) Clone() DeliverySettings {
 	return DeliverySettings{
-		Regions:  append([]string(nil), d.Regions...),
-		Carriers: append([]string(nil), d.Carriers...),
+		Regions:  append([]string{}, d.Regions...),
+		Carriers: append([]string{}, d.Carriers...),
 	}
 }
 

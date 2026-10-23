@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/event"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 )
 
@@ -33,7 +35,8 @@ type loginOperatorJSON struct {
 }
 
 type eventNoteJSON struct {
-	Note string `json:"note"`
+	Note            string `json:"note"`
+	ExpectedVersion int64  `json:"expectedVersion"`
 }
 
 type parkedEventJSON struct {
@@ -226,7 +229,16 @@ func (h *operatorHandlers) decide(w http.ResponseWriter, r *http.Request, retry 
 		writeError(w, r, err)
 		return
 	}
-	result, err := h.events.Decide(r.Context(), principalFrom(r), id, retry, body.Note)
+	if body.ExpectedVersion < 1 {
+		writeError(w, r, ErrInvalidBody)
+		return
+	}
+	result, err := h.events.Decide(r.Context(), principalFrom(r), id, body.ExpectedVersion, retry, body.Note)
+	if errors.Is(err, event.ErrConflict) {
+		current := eventJSON(result)
+		writeErrorWithEvent(w, r, err, &current)
+		return
+	}
 	if err != nil {
 		writeError(w, r, err)
 		return

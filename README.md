@@ -104,8 +104,8 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `POST/GET/DELETE /api/v1/operator/session` | оператор платформы | вход по паролю, текущая сессия, выход |
 | `PUT /api/v1/operator/participants/{tenantId}/delivery` | оператор | регионы ISO и перевозчики, CAS по version |
 | `GET /api/v1/operator/events` | оператор | пагинация и фильтры запаркованных сообщений |
-| `POST /api/v1/operator/events/{eventId}/retry` | оператор | повтор через outbox, обязательная note |
-| `POST /api/v1/operator/events/{eventId}/resolve` | оператор | разбор с обязательной note и аудитом |
+| `POST /api/v1/operator/events/{eventId}/retry` | оператор | повтор через outbox, обязательные expectedVersion и note |
+| `POST /api/v1/operator/events/{eventId}/resolve` | оператор | разбор с expectedVersion, note и аудитом |
 | `GET /api/v1/operator/participants` | оператор | участники: `limit` ≤ 200, `offset` |
 | `POST /api/v1/operator/participants` | оператор | завести участника `{"tenantId","name"}`; магазин должен быть в зеркале реестра |
 | `GET /api/v1/operator/participants/{tenantId}` | оператор | участник |

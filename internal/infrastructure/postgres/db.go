@@ -7,6 +7,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -14,6 +15,9 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
+
+const selectDeliveryMigrationReport = `SELECT tenant_id, previous_shop_enabled, previous_status
+ FROM operator_delivery_migration_report ORDER BY tenant_id`
 
 //go:embed migrations/*.sql
 var migrations embed.FS
@@ -47,9 +51,16 @@ func Open(ctx context.Context, url string, maxConns int32) (*pgxpool.Pool, error
 // Migrate применяет миграции из репозитория до последней версии.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	return runGoose(ctx, pool, func(provider *goose.Provider) error {
-		_, err := provider.Up(ctx)
-
-		return err
+		results, err := provider.Up(ctx)
+		if err != nil {
+			return err
+		}
+		for _, result := range results {
+			if result.Source.Version == 22 {
+				return logDeliveryMigrationReport(ctx, pool)
+			}
+		}
+		return nil
 	})
 }
 
@@ -100,4 +111,31 @@ func runGoose(ctx context.Context, pool *pgxpool.Pool, run func(*goose.Provider)
 	}
 
 	return nil
+}
+
+// logDeliveryMigrationReport читает сохранённый отчёт после фиксации миграции.
+func logDeliveryMigrationReport(ctx context.Context, pool *pgxpool.Pool) error {
+	rows, err := pool.Query(ctx, selectDeliveryMigrationReport)
+	if err != nil {
+		return fmt.Errorf("отчёт миграции доставки: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tenant, status string
+		var enabled bool
+		if err := rows.Scan(&tenant, &enabled, &status); err != nil {
+			return fmt.Errorf("участник отчёта миграции: %w", err)
+		}
+		slog.WarnContext(
+			ctx,
+			"миграция 22: участие выключено из-за непереносимых зон доставки",
+			"tenantId",
+			tenant,
+			"previousShopEnabled",
+			enabled,
+			"previousStatus",
+			status,
+		)
+	}
+	return rows.Err()
 }
