@@ -62,15 +62,16 @@ func offer(id string, name string, price int64, version int64) ports.OfferDocume
 	tenant, product, _ := strings.Cut(id, "~")
 
 	return ports.OfferDocument{
-		CategoryID:        "c1",
-		CategoryPath:      []string{"c1"},
-		ID:                id,
-		TenantID:          tenant,
-		ProductID:         product,
-		SellerSlug:        "slug-" + tenant,
-		SellerName:        "Магазин " + tenant,
-		Name:              name,
-		Description:       "Описание товара",
+		CategoryID:   "c1",
+		CategoryPath: []string{"c1"},
+		ID:           id,
+		TenantID:     tenant,
+		ProductID:    product,
+		SellerSlug:   "slug-" + tenant,
+		SellerName:   "Магазин " + tenant,
+		Name:         name,
+		// Поиск учитывает описание: оно не должно давать совпадение в проверке названий.
+		Description:       "Описание",
 		Image:             "/i.png",
 		URL:               "/p",
 		SKU:               "SKU-" + product,
