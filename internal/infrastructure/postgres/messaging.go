@@ -198,6 +198,14 @@ func (r *Retention) Purge(ctx context.Context, request ports.PurgeRequest) (port
 		(SELECT id FROM parked_events WHERE parked_at < $1 LIMIT $2)`, request.ParkedBefore, request.Batch); err != nil {
 		return result, err
 	}
+	if result.Challenges, err = r.purge(ctx, `DELETE FROM phone_challenges WHERE id IN
+		(SELECT id FROM phone_challenges WHERE expires_at < $1 LIMIT $2)`, request.ChallengesBefore, request.Batch); err != nil {
+		return result, err
+	}
+	if result.Carts, err = r.purge(ctx, `DELETE FROM carts WHERE id IN
+		(SELECT id FROM carts WHERE expires_at < $1 LIMIT $2)`, request.CartsBefore, request.Batch); err != nil {
+		return result, err
+	}
 
 	return result, nil
 }

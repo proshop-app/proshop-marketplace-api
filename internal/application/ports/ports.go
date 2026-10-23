@@ -6,7 +6,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 )
 
@@ -32,4 +36,9 @@ type Tx interface {
 	Outbox() Outbox
 	Inbox() Inbox
 	Parked() ParkedEvents
+	Buyers() buyer.Repository
+	Challenges() buyer.ChallengeRepository
+	Carts() cart.Repository
+	Checkouts() checkout.Repository
+	PickupPoints() delivery.PickupPointRepository
 }

@@ -21,7 +21,7 @@ func TestMigrationsDownAndUp(t *testing.T) {
 	ctx := context.Background()
 
 	statuses, err := postgres.MigrationStatus(ctx, pool)
-	if err != nil || len(statuses) != 3 {
+	if err != nil || len(statuses) != 8 {
 		t.Fatalf("статус миграций: %d, %v", len(statuses), err)
 	}
 

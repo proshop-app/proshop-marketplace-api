@@ -11,7 +11,11 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	appbuyer "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
+	appcart "github.com/proshop-app/proshop-marketplace/internal/application/cart"
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
+	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 )
 
@@ -27,11 +31,17 @@ type Check struct {
 type Deps struct {
 	Catalog       *appcatalog.Queries
 	Participants  *appparticipant.Service
+	Auth          *appbuyer.Auth
+	Carts         *appcart.Service
+	Directory     *appdelivery.Directory
+	Checkouts     *appcheckout.Service
 	OperatorToken string
-	Checks        []Check
-	Metrics       http.Handler
-	Registerer    prometheus.Registerer
-	Logger        *slog.Logger
+	// TrustProxy — адрес покупателя брать из X-Forwarded-For: сервис за доверенным прокси.
+	TrustProxy bool
+	Checks     []Check
+	Metrics    http.Handler
+	Registerer prometheus.Registerer
+	Logger     *slog.Logger
 }
 
 // NewHandler — маршруты маркетплейса.
@@ -39,6 +49,11 @@ func NewHandler(deps Deps) http.Handler {
 	catalog := &catalogHandlers{queries: deps.Catalog}
 	participants := &participantHandlers{service: deps.Participants}
 	operator := func(next http.HandlerFunc) http.HandlerFunc { return operatorOnly(deps.OperatorToken, next) }
+	signedIn := func(next http.HandlerFunc) http.HandlerFunc { return buyerOnly(deps.Auth, next) }
+	auth := &authHandlers{auth: deps.Auth, trustProxy: deps.TrustProxy}
+	carts := &cartHandlers{carts: deps.Carts}
+	shipping := &deliveryHandlers{directory: deps.Directory}
+	checkouts := &checkoutHandlers{checkouts: deps.Checkouts}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health(deps.Checks))
@@ -54,6 +69,26 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("PUT /api/v1/operator/participants/{tenantId}/payment-account", operator(participants.setPaymentAccount))
 	mux.HandleFunc("POST /api/v1/operator/participants/{tenantId}/enable", operator(participants.enable))
 	mux.HandleFunc("POST /api/v1/operator/participants/{tenantId}/disable", operator(participants.disable))
+
+	mux.HandleFunc("POST /api/v1/auth/call", auth.start)
+	mux.HandleFunc("POST /api/v1/auth/call/check", auth.check)
+	mux.HandleFunc("POST /api/v1/auth/logout", auth.logout)
+	mux.HandleFunc("POST /api/v1/auth/webhooks/smsru", auth.smsruWebhook)
+	mux.HandleFunc("GET /api/v1/me", signedIn(auth.me))
+
+	mux.HandleFunc("GET /api/v1/cart", signedIn(carts.get))
+	mux.HandleFunc("POST /api/v1/cart/lines", signedIn(carts.add))
+	mux.HandleFunc("PUT /api/v1/cart/lines/{offerId}", signedIn(carts.setQuantity))
+	mux.HandleFunc("DELETE /api/v1/cart/lines/{offerId}", signedIn(carts.remove))
+	mux.HandleFunc("POST /api/v1/cart/verify", signedIn(carts.verify))
+
+	mux.HandleFunc("GET /api/v1/delivery/carriers", shipping.carriers)
+	mux.HandleFunc("GET /api/v1/delivery/pickup-points", shipping.pickupPoints)
+
+	mux.HandleFunc("POST /api/v1/checkout", signedIn(checkouts.create))
+	mux.HandleFunc("GET /api/v1/checkout/{checkoutId}", signedIn(checkouts.get))
+	mux.HandleFunc("POST /api/v1/checkout/{checkoutId}/delivery/quotes", signedIn(checkouts.quote))
+	mux.HandleFunc("POST /api/v1/checkout/{checkoutId}/confirm", signedIn(checkouts.confirm))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeError(w, r, ErrRouteNotFound) })
 

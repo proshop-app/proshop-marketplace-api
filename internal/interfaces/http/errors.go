@@ -21,12 +21,13 @@ var (
 // statusByCode — единственная таблица перевода ошибок в коды ответа. Доменная
 // ошибка несёт класс, транспорт выбирает ответ только по нему.
 var statusByCode = map[errs.Code]int{
-	errs.Invalid:      http.StatusBadRequest,
-	errs.NotFound:     http.StatusNotFound,
-	errs.Conflict:     http.StatusConflict,
-	errs.Unauthorized: http.StatusUnauthorized,
-	errs.Unavailable:  http.StatusServiceUnavailable,
-	errs.Internal:     http.StatusInternalServerError,
+	errs.Invalid:         http.StatusBadRequest,
+	errs.NotFound:        http.StatusNotFound,
+	errs.Conflict:        http.StatusConflict,
+	errs.Unauthorized:    http.StatusUnauthorized,
+	errs.TooManyRequests: http.StatusTooManyRequests,
+	errs.Unavailable:     http.StatusServiceUnavailable,
+	errs.Internal:        http.StatusInternalServerError,
 }
 
 type errorBody struct {

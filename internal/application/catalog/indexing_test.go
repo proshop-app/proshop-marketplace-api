@@ -127,6 +127,9 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 	tenant, _ := participant.NewTenant(participant.RegistryEvent{TenantID: "t1", Slug: "s", Status: participant.TenantActive, At: t0}, t0)
 	owner, _ := participant.New(tenant, "Магазин", t0)
 	owner.Enable(t0)
+	if _, err := owner.ApplyShopSettings(true, participant.Subsidy{}, t0); err != nil {
+		t.Fatal(err)
+	}
 
 	doc, ok := appcatalog.Document(ports.OfferState{Product: product, Signals: signals, Participant: owner, Tenant: tenant})
 	if !ok || doc.Version != 4 || doc.Price != 5000 || doc.InStock || !doc.Visible || doc.CheckoutAvailable {

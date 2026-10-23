@@ -10,6 +10,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 var t0 = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
@@ -79,12 +80,12 @@ func TestChangesEnqueueSyncOnlyWhenChanged(t *testing.T) {
 	clock.Advance(time.Minute)
 
 	view, err := service.Enable(ctx, "t1")
-	if err != nil || !view.Visibility.Visible || view.Participant.Version != 2 {
-		t.Fatalf("включение: %+v, %v", view, err)
+	if err != nil || !view.Participant.Enabled || view.Visibility.Visible || view.Participant.Version != 2 {
+		t.Fatalf("включение оператором без согласия магазина не делает видимым: %+v, %v", view, err)
 	}
 
 	view, err = service.SetPaymentAccount(ctx, "t1", "acc-1")
-	if err != nil || !view.Visibility.CheckoutAvailable || view.Participant.Status != participant.StatusConnected {
+	if err != nil || view.Participant.Status != participant.StatusConnected {
 		t.Fatalf("оплата: %+v, %v", view, err)
 	}
 
@@ -166,3 +167,5 @@ func TestFailedCommitLeavesNothing(t *testing.T) {
 		t.Fatal("несостоявшаяся транзакция не оставляет ни участника, ни задачи")
 	}
 }
+
+func participantID(value string) ids.TenantID { return ids.TenantID(value) }

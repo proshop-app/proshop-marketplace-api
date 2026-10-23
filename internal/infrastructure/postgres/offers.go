@@ -16,7 +16,8 @@ import (
 // offerSelect — всё, из чего собирается предложение, одним запросом: снимок
 // согласован, поэтому версия документа индекса монотонна.
 const offerSelect = `SELECT ` + productColumns + `, ` + signalsColumns + `,
-	pa.tenant_id, pa.slug, pa.name, pa.status, pa.enabled, coalesce(pa.payment_account_id, ''), pa.version, pa.created_at, pa.updated_at,
+	pa.tenant_id, pa.slug, pa.name, pa.status, pa.enabled, coalesce(pa.payment_account_id, ''), pa.shop_enabled, pa.subsidy,
+	pa.settings_synced_at, pa.version, pa.created_at, pa.updated_at,
 	t.tenant_id, t.slug, t.status, t.cell, t.plan, t.hosts, t.event_at, t.version, t.updated_at
 FROM catalog_products p
 LEFT JOIN offers o ON o.tenant_id = p.tenant_id AND o.product_id = p.product_id
@@ -27,6 +28,9 @@ type participantRow struct {
 	tenantID, slug, name, status *string
 	enabled                      *bool
 	paymentAccountID             *string
+	shopEnabled                  *bool
+	subsidy                      []byte
+	syncedAt                     *time.Time
 	version                      *int64
 	createdAt, updatedAt         *time.Time
 }
@@ -51,7 +55,8 @@ func (r *offerRow) targets() []any {
 
 	return append(targets,
 		&r.participant.tenantID, &r.participant.slug, &r.participant.name, &r.participant.status,
-		&r.participant.enabled, &r.participant.paymentAccountID, &r.participant.version,
+		&r.participant.enabled, &r.participant.paymentAccountID, &r.participant.shopEnabled, &r.participant.subsidy,
+		&r.participant.syncedAt, &r.participant.version,
 		&r.participant.createdAt, &r.participant.updatedAt,
 		&r.tenant.tenantID, &r.tenant.slug, &r.tenant.status, &r.tenant.cell, &r.tenant.plan, &r.tenant.hosts,
 		&r.tenant.eventAt, &r.tenant.version, &r.tenant.updatedAt,
@@ -67,11 +72,21 @@ func (r *offerRow) state() (ports.OfferState, error) {
 	state := ports.OfferState{Product: product, Signals: r.signals.signals()}
 
 	if p := r.participant; p.tenantID != nil {
-		state.Participant = participant.Restore(participant.State{
+		subsidy, err := decodeSubsidy(p.subsidy)
+		if err != nil {
+			return ports.OfferState{}, fmt.Errorf("субсидия участника %s: %w", *p.tenantID, err)
+		}
+
+		participantState := participant.State{
 			TenantID: ids.TenantID(*p.tenantID), Slug: *p.slug, Name: *p.name, Status: participant.Status(*p.status),
-			Enabled: *p.enabled, PaymentAccountID: *p.paymentAccountID, Version: *p.version,
-			CreatedAt: *p.createdAt, UpdatedAt: *p.updatedAt,
-		})
+			Enabled: *p.enabled, PaymentAccountID: *p.paymentAccountID, ShopEnabled: *p.shopEnabled, Subsidy: subsidy,
+			Version: *p.version, CreatedAt: *p.createdAt, UpdatedAt: *p.updatedAt,
+		}
+		if p.syncedAt != nil {
+			participantState.SettingsSyncedAt = *p.syncedAt
+		}
+
+		state.Participant = participant.Restore(participantState)
 	}
 
 	if t := r.tenant; t.tenantID != nil {

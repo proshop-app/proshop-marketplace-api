@@ -1,0 +1,4 @@
+[
+  {"code":"SPB001","name":"Северный","uuid":"7c6f4a5e-1f0b-4d0c-9d6f-1a2b3c4d5e71","address_comment":"","work_time":"Пн-Пт 10:00-19:00","phones":[],"type":"PVZ","owner_code":"cdek","location":{"country_code":"RU","region_code":82,"region":"Другой регион","city_code":137,"city":"Другой город","fias_guid":"","postal_code":"190000","longitude":30.315868,"latitude":59.939095,"address":"наб. Тестовая, 3","address_full":"190000, Россия, Другой город, наб. Тестовая, 3","city_uuid":"8f60c2b0-3b0f-4ae8-8e0e-3b3c1b1a2c3e"}},
+  {"code":"BROKEN","name":"Без координат","uuid":"8d7f4a5e-1f0b-4d0c-9d6f-1a2b3c4d5e72","work_time":"","type":"PVZ","location":{"city":"Другой город","address":"нет","longitude":0,"latitude":0}}
+]

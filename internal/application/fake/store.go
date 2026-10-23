@@ -8,7 +8,11 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -53,6 +57,22 @@ type data struct {
 	nextTaskID   int64
 	processed    map[string]time.Time
 	parked       map[parkedKey]ports.ParkedEvent
+	buyers       map[ids.UUID]buyer.Buyer
+	challenges   map[ids.UUID]buyer.ChallengeState
+	carts        map[ids.UUID]cart.State
+	checkouts    map[ids.UUID]checkout.State
+	points       map[pointKey]delivery.PickupPoint
+	leases       map[string]lease
+}
+
+type pointKey struct {
+	carrier delivery.Carrier
+	code    string
+}
+
+type lease struct {
+	holder string
+	until  time.Time
 }
 
 func (d *data) clone() *data {
@@ -66,6 +86,12 @@ func (d *data) clone() *data {
 		nextTaskID:   d.nextTaskID,
 		processed:    maps.Clone(d.processed),
 		parked:       maps.Clone(d.parked),
+		buyers:       maps.Clone(d.buyers),
+		challenges:   maps.Clone(d.challenges),
+		carts:        maps.Clone(d.carts),
+		checkouts:    maps.Clone(d.checkouts),
+		points:       maps.Clone(d.points),
+		leases:       maps.Clone(d.leases),
 	}
 }
 
@@ -87,6 +113,12 @@ func NewStore() *Store {
 		tags:         map[tagKey]catalog.TagState{},
 		processed:    map[string]time.Time{},
 		parked:       map[parkedKey]ports.ParkedEvent{},
+		buyers:       map[ids.UUID]buyer.Buyer{},
+		challenges:   map[ids.UUID]buyer.ChallengeState{},
+		carts:        map[ids.UUID]cart.State{},
+		checkouts:    map[ids.UUID]checkout.State{},
+		points:       map[pointKey]delivery.PickupPoint{},
+		leases:       map[string]lease{},
 	}}
 }
 
@@ -333,5 +365,117 @@ func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.Purg
 		}
 	}
 
+	for id, challenge := range s.data.challenges {
+		if challenge.ExpiresAt.Before(request.ChallengesBefore) {
+			delete(s.data.challenges, id)
+			result.Challenges++
+		}
+	}
+
+	for buyerID, state := range s.data.carts {
+		if state.ExpiresAt.Before(request.CartsBefore) {
+			delete(s.data.carts, buyerID)
+			result.Carts++
+		}
+	}
+
 	return result, nil
+}
+
+// Acquire берёт аренду, если она свободна, истекла или уже у holder.
+func (s *Store) Acquire(_ context.Context, name, holder string, ttl time.Duration) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	if current, ok := s.data.leases[name]; ok && current.holder != holder && current.until.After(now) {
+		return false, nil
+	}
+
+	s.data.leases[name] = lease{holder: holder, until: now.Add(ttl)}
+
+	return true, nil
+}
+
+// Release отпускает аренду holder.
+func (s *Store) Release(_ context.Context, name, holder string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if current, ok := s.data.leases[name]; ok && current.holder == holder {
+		delete(s.data.leases, name)
+	}
+
+	return nil
+}
+
+// SeedPickupPoint кладёт пункт выдачи.
+func (s *Store) SeedPickupPoint(point delivery.PickupPoint) {
+	s.read(func(d *data) { d.points[pointKey{point.Carrier, point.Code}] = point })
+}
+
+// PickupPoint — пункт выдачи, если есть.
+func (s *Store) PickupPoint(carrier delivery.Carrier, code string) (delivery.PickupPoint, bool) {
+	var (
+		point delivery.PickupPoint
+		ok    bool
+	)
+
+	s.read(func(d *data) { point, ok = d.points[pointKey{carrier, code}] })
+
+	return point, ok
+}
+
+// SeedCart кладёт корзину.
+func (s *Store) SeedCart(state cart.State) {
+	s.read(func(d *data) { d.carts[state.BuyerID] = state })
+}
+
+// Cart — корзина покупателя, если есть.
+func (s *Store) Cart(buyerID ids.UUID) (cart.State, bool) {
+	var (
+		state cart.State
+		ok    bool
+	)
+
+	s.read(func(d *data) { state, ok = d.carts[buyerID] })
+
+	return state, ok
+}
+
+// Challenge — проверка входа, если есть.
+func (s *Store) Challenge(id ids.UUID) (buyer.ChallengeState, bool) {
+	var (
+		state buyer.ChallengeState
+		ok    bool
+	)
+
+	s.read(func(d *data) { state, ok = d.challenges[id] })
+
+	return state, ok
+}
+
+// Buyers — все покупатели.
+func (s *Store) Buyers() []buyer.Buyer {
+	var list []buyer.Buyer
+
+	s.read(func(d *data) {
+		for _, b := range d.buyers {
+			list = append(list, b)
+		}
+	})
+
+	return list
+}
+
+// Checkout — покупка, если есть.
+func (s *Store) Checkout(id ids.UUID) (checkout.State, bool) {
+	var (
+		state checkout.State
+		ok    bool
+	)
+
+	s.read(func(d *data) { state, ok = d.checkouts[id] })
+
+	return state, ok
 }

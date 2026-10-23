@@ -10,7 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 )
 
@@ -74,12 +78,19 @@ type scope struct {
 	q querier
 }
 
-func (s *scope) Participants() participant.Repository { return &Participants{q: s.q} }
-func (s *scope) Registry() participant.Registry       { return &Registry{q: s.q} }
-func (s *scope) Products() catalog.ProductRepository  { return &Products{q: s.q} }
-func (s *scope) Signals() catalog.SignalsRepository   { return &Signals{q: s.q} }
-func (s *scope) Tags() catalog.TagRepository          { return &Tags{q: s.q} }
-func (s *scope) Offers() ports.OfferStates            { return &Offers{q: s.q} }
-func (s *scope) Outbox() ports.Outbox                 { return &Outbox{q: s.q} }
-func (s *scope) Inbox() ports.Inbox                   { return &Inbox{q: s.q} }
-func (s *scope) Parked() ports.ParkedEvents           { return &Parked{q: s.q} }
+func (s *scope) Participants() participant.Repository  { return &Participants{q: s.q} }
+func (s *scope) Registry() participant.Registry        { return &Registry{q: s.q} }
+func (s *scope) Products() catalog.ProductRepository   { return &Products{q: s.q} }
+func (s *scope) Signals() catalog.SignalsRepository    { return &Signals{q: s.q} }
+func (s *scope) Tags() catalog.TagRepository           { return &Tags{q: s.q} }
+func (s *scope) Offers() ports.OfferStates             { return &Offers{q: s.q} }
+func (s *scope) Outbox() ports.Outbox                  { return &Outbox{q: s.q} }
+func (s *scope) Inbox() ports.Inbox                    { return &Inbox{q: s.q} }
+func (s *scope) Parked() ports.ParkedEvents            { return &Parked{q: s.q} }
+func (s *scope) Buyers() buyer.Repository              { return &Buyers{q: s.q} }
+func (s *scope) Challenges() buyer.ChallengeRepository { return &Challenges{q: s.q} }
+func (s *scope) Carts() cart.Repository                { return &Carts{q: s.q} }
+func (s *scope) Checkouts() checkout.Repository        { return &Checkouts{q: s.q} }
+func (s *scope) PickupPoints() delivery.PickupPointRepository {
+	return &PickupPoints{q: s.q}
+}

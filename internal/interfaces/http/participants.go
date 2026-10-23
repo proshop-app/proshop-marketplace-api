@@ -12,18 +12,29 @@ import (
 
 // participantJSON — участник в операторском ответе.
 type participantJSON struct {
-	TenantID          string    `json:"tenantId"`
-	Slug              string    `json:"slug"`
-	Name              string    `json:"name"`
-	Status            string    `json:"status"`
-	Enabled           bool      `json:"enabled"`
-	PaymentAccountID  *string   `json:"paymentAccountId"`
-	TenantStatus      string    `json:"tenantStatus"`
-	Visible           bool      `json:"visible"`
-	CheckoutAvailable bool      `json:"checkoutAvailable"`
-	Version           int64     `json:"version"`
-	CreatedAt         time.Time `json:"createdAt"`
-	UpdatedAt         time.Time `json:"updatedAt"`
+	TenantID          string      `json:"tenantId"`
+	Slug              string      `json:"slug"`
+	Name              string      `json:"name"`
+	Status            string      `json:"status"`
+	Enabled           bool        `json:"enabled"`
+	PaymentAccountID  *string     `json:"paymentAccountId"`
+	ShopEnabled       bool        `json:"shopEnabled"`
+	Subsidy           subsidyJSON `json:"subsidy"`
+	SettingsSyncedAt  *time.Time  `json:"settingsSyncedAt"`
+	TenantStatus      string      `json:"tenantStatus"`
+	Visible           bool        `json:"visible"`
+	CheckoutAvailable bool        `json:"checkoutAvailable"`
+	Version           int64       `json:"version"`
+	CreatedAt         time.Time   `json:"createdAt"`
+	UpdatedAt         time.Time   `json:"updatedAt"`
+}
+
+// subsidyJSON — субсидия доставки продавца: value — копейки для fixed, процент для percent.
+type subsidyJSON struct {
+	Enabled   bool   `json:"enabled"`
+	Type      string `json:"type,omitempty"`
+	Value     int64  `json:"value"`
+	MaxAmount int64  `json:"maxAmount"`
 }
 
 type participantListJSON struct {
@@ -39,7 +50,14 @@ func toParticipantJSON(view appparticipant.View) participantJSON {
 		TenantID: string(p.TenantID), Slug: p.Slug, Name: p.Name, Status: string(p.Status), Enabled: p.Enabled,
 		TenantStatus: string(view.TenantStatus), Visible: view.Visibility.Visible,
 		CheckoutAvailable: view.Visibility.CheckoutAvailable, Version: p.Version,
-		CreatedAt: p.CreatedAt.UTC(), UpdatedAt: p.UpdatedAt.UTC(),
+		CreatedAt: p.CreatedAt.UTC(), UpdatedAt: p.UpdatedAt.UTC(), ShopEnabled: p.ShopEnabled,
+		Subsidy: subsidyJSON{
+			Enabled: p.Subsidy.Enabled, Type: string(p.Subsidy.Type), Value: p.Subsidy.Value, MaxAmount: p.Subsidy.MaxAmount.Kopecks(),
+		},
+	}
+	if !p.SettingsSyncedAt.IsZero() {
+		synced := p.SettingsSyncedAt.UTC()
+		out.SettingsSyncedAt = &synced
 	}
 	if p.PaymentAccountID != "" {
 		account := p.PaymentAccountID

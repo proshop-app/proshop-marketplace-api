@@ -4,6 +4,7 @@ package money
 
 import (
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -99,6 +100,32 @@ func (m Money) Sub(other Money) (Money, error) {
 	}
 
 	return Money{kopecks: m.kopecks - other.kopecks}, nil
+}
+
+// MulRatio — доля суммы num/den с округлением к нулю: процент субсидии,
+// доля доставки. Знаменатель — больше нуля.
+func (m Money) MulRatio(num, den int64) (Money, error) {
+	if den <= 0 {
+		return Money{}, ErrInvalid.WithMessage("знаменатель доли должен быть больше нуля")
+	}
+
+	product := new(big.Int).Mul(big.NewInt(m.kopecks), big.NewInt(num))
+	product.Quo(product, big.NewInt(den))
+
+	if !product.IsInt64() {
+		return Money{}, ErrOverflow
+	}
+
+	return Money{kopecks: product.Int64()}, nil
+}
+
+// Min — меньшая из сумм.
+func Min(a, b Money) Money {
+	if a.Cmp(b) <= 0 {
+		return a
+	}
+
+	return b
 }
 
 // Cmp сравнивает суммы: -1, если m меньше, 0 — равны, 1 — больше.

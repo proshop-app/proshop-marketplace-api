@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 var (
@@ -174,6 +175,13 @@ func TestVisibility(t *testing.T) {
 	}
 
 	p.Enable(t1)
+	if got := participant.VisibilityOf(p, active); got.Visible {
+		t.Fatalf("включённый оператором, но не включившийся сам магазин не виден: %+v", got)
+	}
+
+	if _, err := p.ApplyShopSettings(true, participant.Subsidy{}, t1); err != nil {
+		t.Fatal(err)
+	}
 	if got := participant.VisibilityOf(p, active); !got.Visible || got.CheckoutAvailable {
 		t.Fatalf("включённый без оплаты виден, но без checkout: %+v", got)
 	}
@@ -189,5 +197,53 @@ func TestVisibility(t *testing.T) {
 	}
 	if got := participant.VisibilityOf(nil, active); got.Visible {
 		t.Fatal("без участника магазин не виден")
+	}
+}
+
+func TestApplyShopSettings(t *testing.T) {
+	p := restored(t)
+	subsidy := participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 50, MaxAmount: money.FromKopecks(30000)}
+
+	changed, err := p.ApplyShopSettings(true, subsidy, t1)
+	if err != nil || !changed || !p.ShopEnabled() || p.Subsidy() != subsidy || p.Version() != 2 {
+		t.Fatalf("настройки магазина: changed=%v err=%v %+v", changed, err, p.State())
+	}
+	p.MarkSaved()
+
+	changed, err = p.ApplyShopSettings(true, subsidy, t1.Add(time.Hour))
+	if err != nil || changed || p.Version() != 2 || !p.State().SettingsSyncedAt.Equal(t1.Add(time.Hour)) {
+		t.Fatalf("те же настройки не меняют версию, но время сверки обновляется: %+v", p.State())
+	}
+
+	if _, err := p.ApplyShopSettings(true, participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 101}, t1); !errors.Is(err, participant.ErrInvalidSubsidy) {
+		t.Fatalf("процент больше 100: %v", err)
+	}
+}
+
+func TestSubsidyApply(t *testing.T) {
+	cost := money.FromKopecks(40000)
+	cases := map[string]struct {
+		subsidy participant.Subsidy
+		want    int64
+	}{
+		"выключена":           {participant.Subsidy{Type: participant.SubsidyFixed, Value: 10000}, 0},
+		"фиксированная":       {participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 15000}, 15000},
+		"больше стоимости":    {participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 99999}, 40000},
+		"процент":             {participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 25}, 10000},
+		"процент под потолок": {participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 50, MaxAmount: money.FromKopecks(12000)}, 12000},
+	}
+
+	for name, tc := range cases {
+		got, err := tc.subsidy.Apply(cost)
+		if err != nil || got.Kopecks() != tc.want {
+			t.Fatalf("%s: %d, %v, ожидалось %d", name, got.Kopecks(), err, tc.want)
+		}
+	}
+
+	if got, _ := (participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 100}).Apply(money.Money{}); !got.IsZero() {
+		t.Fatal("бесплатная доставка — субсидии нет")
+	}
+	if err := (participant.Subsidy{Enabled: true, Type: "gift"}).Validate(); !errors.Is(err, participant.ErrInvalidSubsidy) {
+		t.Fatalf("неизвестный вид субсидии: %v", err)
 	}
 }

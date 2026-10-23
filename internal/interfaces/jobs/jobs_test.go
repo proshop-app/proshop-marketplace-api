@@ -11,9 +11,12 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
+	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -130,5 +133,88 @@ func TestRetentionRunnerPurgesOnStart(t *testing.T) {
 
 	if p.calls != 1 {
 		t.Fatalf("чистка сразу на старте и не чаще интервала: %d", p.calls)
+	}
+}
+
+type refresher struct {
+	calls int
+}
+
+func (r *refresher) Refresh(context.Context) []appdelivery.RefreshResult {
+	r.calls++
+
+	return []appdelivery.RefreshResult{
+		{Carrier: "cdek", Fetched: 3},
+		{Carrier: "yandex", Err: errors.New("сбой")},
+		{Carrier: "ozon", Skipped: true},
+	}
+}
+
+func TestPickupRefreshRunnerRecords(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	r := &refresher{}
+	runner := jobs.NewPickupRefreshRunner(r, time.Hour, quiet, registry)
+
+	runner.RunOnce(context.Background())
+
+	results := map[string]float64{}
+	fetched := 0.0
+	families, _ := registry.Gather()
+	for _, family := range families {
+		for _, metric := range family.GetMetric() {
+			labels := map[string]string{}
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+
+			switch family.GetName() {
+			case "marketplace_pickup_points_refresh_total":
+				results[labels["carrier"]+":"+labels["result"]] += metric.GetCounter().GetValue()
+			case "marketplace_pickup_points_fetched":
+				fetched += metric.GetGauge().GetValue()
+			}
+		}
+	}
+
+	if results["cdek:done"] != 1 || results["yandex:failed"] != 1 || results["ozon:skipped"] != 1 || fetched != 3 {
+		t.Fatalf("метрики обновления: %+v %v", results, fetched)
+	}
+}
+
+type syncer struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (s *syncer) Sync(context.Context) (appparticipant.SettingsResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.calls++
+
+	return appparticipant.SettingsResult{Checked: 2, Failed: map[ids.TenantID]error{"t1": errors.New("сбой")}}, nil
+}
+
+func TestSettingsSyncRunnerCountsFailures(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	s := &syncer{}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	if err := jobs.NewSettingsSyncRunner(s, time.Hour, quiet, registry).Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	families, _ := registry.Gather()
+	total := 0.0
+	for _, family := range families {
+		for _, metric := range family.GetMetric() {
+			total += metric.GetCounter().GetValue()
+		}
+	}
+
+	if s.calls != 1 || total != 1 {
+		t.Fatalf("сверка на старте, сбой магазина в метрике: %d %v", s.calls, total)
 	}
 }

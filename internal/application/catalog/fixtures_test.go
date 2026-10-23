@@ -34,7 +34,7 @@ func seedSeller(store *fake.Store, tenant ids.TenantID, status participant.Tenan
 	})
 	store.SeedParticipant(participant.State{
 		TenantID: tenant, Slug: "slug-" + string(tenant), Name: "Магазин " + string(tenant),
-		Status: participant.StatusConnected, PaymentAccountID: "acc", Enabled: enabled,
+		Status: participant.StatusConnected, PaymentAccountID: "acc", Enabled: enabled, ShopEnabled: true,
 		Version: 1, CreatedAt: t0, UpdatedAt: t0,
 	})
 }

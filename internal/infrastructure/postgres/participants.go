@@ -2,14 +2,17 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-const participantColumns = `tenant_id, slug, name, status, enabled, coalesce(payment_account_id, ''), version, created_at, updated_at`
+const participantColumns = `tenant_id, slug, name, status, enabled, coalesce(payment_account_id, ''), shop_enabled, subsidy,
+	settings_synced_at, version, created_at, updated_at`
 
 // Participants — участники в PostgreSQL.
 type Participants struct {
@@ -25,17 +28,57 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 		state    participant.State
 		tenantID string
 		status   string
+		subsidy  []byte
+		synced   *time.Time
 	)
 
 	if err := row.Scan(&tenantID, &state.Slug, &state.Name, &status, &state.Enabled, &state.PaymentAccountID,
-		&state.Version, &state.CreatedAt, &state.UpdatedAt); err != nil {
+		&state.ShopEnabled, &subsidy, &synced, &state.Version, &state.CreatedAt, &state.UpdatedAt); err != nil {
 		return nil, err
 	}
 
 	state.TenantID = ids.TenantID(tenantID)
 	state.Status = participant.Status(status)
 
+	if synced != nil {
+		state.SettingsSyncedAt = *synced
+	}
+
+	var err error
+	if state.Subsidy, err = decodeSubsidy(subsidy); err != nil {
+		return nil, fmt.Errorf("субсидия участника %s: %w", tenantID, err)
+	}
+
 	return participant.Restore(state), nil
+}
+
+// subsidyJSON — субсидия в колонке jsonb: value — копейки или процент, maxAmount — копейки.
+type subsidyJSON struct {
+	Enabled   bool   `json:"enabled"`
+	Type      string `json:"type,omitempty"`
+	Value     int64  `json:"value"`
+	MaxAmount int64  `json:"maxAmount"`
+}
+
+func encodeSubsidy(s participant.Subsidy) (string, error) {
+	encoded, err := json.Marshal(subsidyJSON{Enabled: s.Enabled, Type: string(s.Type), Value: s.Value, MaxAmount: s.MaxAmount.Kopecks()})
+
+	return string(encoded), err
+}
+
+func decodeSubsidy(raw []byte) (participant.Subsidy, error) {
+	if len(raw) == 0 {
+		return participant.Subsidy{}, nil
+	}
+
+	var doc subsidyJSON
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return participant.Subsidy{}, err
+	}
+
+	return participant.Subsidy{
+		Enabled: doc.Enabled, Type: participant.SubsidyType(doc.Type), Value: doc.Value, MaxAmount: money.FromKopecks(doc.MaxAmount),
+	}, nil
 }
 
 // Get — участник.
@@ -86,10 +129,16 @@ func (r *Participants) List(ctx context.Context, page participant.Page) ([]*part
 func (r *Participants) Add(ctx context.Context, p *participant.Participant) error {
 	s := p.State()
 
-	_, err := r.q.Exec(ctx, `INSERT INTO participants
-		(tenant_id, slug, name, status, enabled, payment_account_id, version, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, nullif($6, ''), $7, $8, $9)`,
-		string(s.TenantID), s.Slug, s.Name, string(s.Status), s.Enabled, s.PaymentAccountID, s.Version, s.CreatedAt, s.UpdatedAt)
+	subsidy, err := encodeSubsidy(s.Subsidy)
+	if err != nil {
+		return fmt.Errorf("субсидия участника %s: %w", s.TenantID, err)
+	}
+
+	_, err = r.q.Exec(ctx, `INSERT INTO participants
+		(tenant_id, slug, name, status, enabled, payment_account_id, shop_enabled, subsidy, settings_synced_at, version, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, nullif($6, ''), $7, $8, $9, $10, $11, $12)`,
+		string(s.TenantID), s.Slug, s.Name, string(s.Status), s.Enabled, s.PaymentAccountID, s.ShopEnabled, subsidy,
+		nullTime(s.SettingsSyncedAt), s.Version, s.CreatedAt, s.UpdatedAt)
 
 	switch {
 	case isUnique(err, "participants_pkey"):
@@ -113,11 +162,17 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 	s := p.State()
 	origin := p.Origin()
 
+	subsidy, err := encodeSubsidy(s.Subsidy)
+	if err != nil {
+		return fmt.Errorf("субсидия участника %s: %w", s.TenantID, err)
+	}
+
 	tag, err := r.q.Exec(ctx, `UPDATE participants
-		SET slug = $3, name = $4, status = $5, enabled = $6, payment_account_id = nullif($7, ''), version = $8, updated_at = $9
+		SET slug = $3, name = $4, status = $5, enabled = $6, payment_account_id = nullif($7, ''), version = $8, updated_at = $9,
+			shop_enabled = $11, subsidy = $12, settings_synced_at = $13
 		WHERE tenant_id = $1 AND status = $2 AND version = $10`,
 		string(s.TenantID), string(origin.Status), s.Slug, s.Name, string(s.Status), s.Enabled, s.PaymentAccountID,
-		s.Version, s.UpdatedAt, origin.Version)
+		s.Version, s.UpdatedAt, origin.Version, s.ShopEnabled, subsidy, nullTime(s.SettingsSyncedAt))
 
 	switch {
 	case isUnique(err, "participants_slug_key"):

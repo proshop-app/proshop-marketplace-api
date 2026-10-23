@@ -92,3 +92,18 @@ func ParseOfferID(value string) (OfferID, error) {
 
 	return OfferID{Tenant: tenantID, Product: productID}, nil
 }
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// UUID — идентификатор сущности маркетплейса: покупателя, проверки входа,
+// корзины, покупки. Строчные шестнадцатеричные цифры с дефисами.
+type UUID string
+
+// ParseUUID проверяет запись UUID.
+func ParseUUID(value string) (UUID, error) {
+	if !uuidPattern.MatchString(value) {
+		return "", ErrInvalid.WithMessage("некорректный идентификатор")
+	}
+
+	return UUID(value), nil
+}

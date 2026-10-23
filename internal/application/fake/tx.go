@@ -6,7 +6,11 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -15,15 +19,22 @@ type tx struct {
 	data *data
 }
 
-func (t *tx) Participants() participant.Repository { return participants{t.data} }
-func (t *tx) Registry() participant.Registry       { return registry{t.data} }
-func (t *tx) Products() catalog.ProductRepository  { return products{t.data} }
-func (t *tx) Signals() catalog.SignalsRepository   { return signals{t.data} }
-func (t *tx) Tags() catalog.TagRepository          { return tags{t.data} }
-func (t *tx) Offers() ports.OfferStates            { return offers{t.data} }
-func (t *tx) Outbox() ports.Outbox                 { return outbox{t.data} }
-func (t *tx) Inbox() ports.Inbox                   { return inbox{t.data} }
-func (t *tx) Parked() ports.ParkedEvents           { return parked{t.data} }
+func (t *tx) Participants() participant.Repository  { return participants{t.data} }
+func (t *tx) Registry() participant.Registry        { return registry{t.data} }
+func (t *tx) Products() catalog.ProductRepository   { return products{t.data} }
+func (t *tx) Signals() catalog.SignalsRepository    { return signals{t.data} }
+func (t *tx) Tags() catalog.TagRepository           { return tags{t.data} }
+func (t *tx) Offers() ports.OfferStates             { return offers{t.data} }
+func (t *tx) Outbox() ports.Outbox                  { return outbox{t.data} }
+func (t *tx) Inbox() ports.Inbox                    { return inbox{t.data} }
+func (t *tx) Parked() ports.ParkedEvents            { return parked{t.data} }
+func (t *tx) Buyers() buyer.Repository              { return buyers{t.data} }
+func (t *tx) Challenges() buyer.ChallengeRepository { return challenges{t.data} }
+func (t *tx) Carts() cart.Repository                { return carts{t.data} }
+func (t *tx) Checkouts() checkout.Repository        { return checkouts{t.data} }
+func (t *tx) PickupPoints() delivery.PickupPointRepository {
+	return pickupPoints{t.data}
+}
 
 type participants struct{ d *data }
 

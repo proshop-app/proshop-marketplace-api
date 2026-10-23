@@ -15,10 +15,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	appbuyer "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
+	appcart "github.com/proshop-app/proshop-marketplace/internal/application/cart"
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
+	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -30,22 +36,36 @@ const token = "operator-token-for-tests-0123456789"
 var t0 = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
 
 type env struct {
-	server  *httptest.Server
-	store   *fake.Store
-	index   *fake.Index
-	clock   *fake.Clock
-	healthy error
+	server   *httptest.Server
+	store    *fake.Store
+	index    *fake.Index
+	clock    *fake.Clock
+	calls    *fake.Calls
+	platform *fake.Platform
+	pickups  *fake.PickupIndex
+	healthy  error
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
 
-	e := &env{store: fake.NewStore(), index: fake.NewIndex(), clock: fake.NewClock(t0)}
+	e := &env{store: fake.NewStore(), index: fake.NewIndex(), clock: fake.NewClock(t0), calls: fake.NewCalls(), platform: fake.NewPlatform(), pickups: fake.NewPickupIndex()}
 	registry := prometheus.NewRegistry()
+	identities := &fake.IDs{}
+	provider := &fake.PickupProvider{Info: delivery.CarrierInfo{Code: "cdek", Name: "СДЭК"}}
+	directory := appdelivery.NewDirectory(e.store, []ports.PickupPointsProvider{provider}, e.pickups, e.store, e.clock, "pod")
 
 	handler := transport.NewHandler(transport.Deps{
-		Catalog:       appcatalog.NewQueries(e.store, e.index),
-		Participants:  appparticipant.NewService(e.store, e.clock),
+		Catalog:      appcatalog.NewQueries(e.store, e.index),
+		Participants: appparticipant.NewService(e.store, e.clock),
+		Auth: appbuyer.NewAuth(e.store, e.calls, fake.NewSessions(), fake.NewLimiter(), identities, e.clock, appbuyer.AuthConfig{
+			ChallengeTTL: 5 * time.Minute, CheckInterval: time.Second, SessionTTL: time.Hour,
+			PhoneLimit: appbuyer.Limit{Count: 10, Window: time.Minute}, IPLimit: appbuyer.Limit{Count: 10, Window: time.Minute},
+		}),
+		Carts:     appcart.NewService(e.store, e.index, e.platform, identities, e.clock, time.Hour),
+		Directory: directory,
+		Checkouts: appcheckout.NewService(e.store, e.index, e.platform, directory, identities, e.clock,
+			appcheckout.Config{QuoteTTL: 30 * time.Minute, QuoteTimeout: time.Second}),
 		OperatorToken: token,
 		Checks:        []transport.Check{{Name: "postgres", Probe: func(context.Context) error { return e.healthy }}},
 		Metrics:       promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
@@ -109,12 +129,21 @@ func (e *env) call(t *testing.T, method, path, body string, authorized bool) res
 	out := response{status: raw.StatusCode, header: raw.Header}
 	data, _ := io.ReadAll(raw.Body)
 	if len(data) > 0 && strings.HasPrefix(raw.Header.Get("Content-Type"), "application/json") {
-		if err := json.Unmarshal(data, &out.body); err != nil {
-			t.Fatalf("ответ не JSON: %s", data)
-		}
+		out.body = decode(t, data)
 	}
 
 	return out
+}
+
+func decode(t *testing.T, data []byte) map[string]any {
+	t.Helper()
+
+	var body map[string]any
+	if err := json.Unmarshal(data, &body); err != nil {
+		t.Fatalf("ответ не JSON: %s", data)
+	}
+
+	return body
 }
 
 func errorCode(r response) string {
@@ -175,8 +204,8 @@ func TestOperatorFlow(t *testing.T) {
 	}
 
 	r = e.call(t, http.MethodPost, "/api/v1/operator/participants/t1/enable", "", true)
-	if r.status != http.StatusOK || r.body["enabled"] != true || r.body["visible"] != true || r.body["checkoutAvailable"] != true {
-		t.Fatalf("включение: %+v", r)
+	if r.status != http.StatusOK || r.body["enabled"] != true || r.body["shopEnabled"] != false || r.body["visible"] != false {
+		t.Fatalf("включение оператором без согласия магазина: %+v", r)
 	}
 
 	if r := e.call(t, http.MethodPost, "/api/v1/operator/participants/t1/disable", "", true); r.status != http.StatusOK || r.body["visible"] != false {
@@ -207,7 +236,7 @@ func TestCatalog(t *testing.T) {
 	e := newEnv(t)
 	e.seedTenant("t1", "shop-one")
 	e.store.SeedParticipant(participant.State{
-		TenantID: "t1", Slug: "shop-one", Name: "Магазин", Status: participant.StatusOnboarding, Enabled: true,
+		TenantID: "t1", Slug: "shop-one", Name: "Магазин", Status: participant.StatusOnboarding, Enabled: true, ShopEnabled: true,
 		Version: 1, CreatedAt: t0, UpdatedAt: t0,
 	})
 	e.store.SeedTag(catalog.TagState{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "Новинка", Version: 1})

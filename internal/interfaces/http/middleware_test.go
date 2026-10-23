@@ -13,7 +13,7 @@ import (
 )
 
 func TestEveryCodeHasStatus(t *testing.T) {
-	for _, code := range []errs.Code{errs.Invalid, errs.NotFound, errs.Conflict, errs.Unauthorized, errs.Unavailable, errs.Internal} {
+	for _, code := range []errs.Code{errs.Invalid, errs.NotFound, errs.Conflict, errs.Unauthorized, errs.TooManyRequests, errs.Unavailable, errs.Internal} {
 		if statusByCode[code] == 0 {
 			t.Fatalf("у кода %s нет ответа в таблице", code)
 		}

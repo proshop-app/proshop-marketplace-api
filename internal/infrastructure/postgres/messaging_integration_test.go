@@ -199,7 +199,7 @@ func TestInboxParkedRetention(t *testing.T) {
 	enqueue(t, uow, "t1", "b", 0)
 
 	result, err := postgres.NewRetention(pool).Purge(ctx, ports.PurgeRequest{
-		ProcessedBefore: at(10), OutboxDoneBefore: at(10), ParkedBefore: at(10), Batch: 1,
+		ProcessedBefore: at(10), OutboxDoneBefore: at(10), ParkedBefore: at(10), ChallengesBefore: at(10), CartsBefore: at(10), Batch: 1,
 	})
 	if err != nil || result.Processed != 1 || result.OutboxDone != 1 || result.Parked != 1 {
 		t.Fatalf("чистка пачками: %+v, %v", result, err)
