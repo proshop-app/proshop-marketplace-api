@@ -22,6 +22,7 @@ type PickupIndex struct {
 }
 
 type pickupDocument struct {
+	RegionCode  string    `json:"regionCode"`
 	Carrier     string    `json:"carrier"`
 	Code        string    `json:"code"`
 	Name        string    `json:"name"`
@@ -46,10 +47,15 @@ func pickupID(carrier delivery.Carrier, code string) string {
 	return string(carrier) + ":" + code
 }
 
-// Ensure заводит индекс, если его нет.
+// Ensure заводит индекс или добавляет поле региона в существующую схему.
 func (x *PickupIndex) Ensure(ctx context.Context) (bool, error) {
 	status, err := x.index.do(ctx, http.MethodHead, "/"+url.PathEscape(x.name), nil, nil, http.StatusNotFound)
-	if err != nil || status == http.StatusOK {
+	if err != nil {
+		return false, err
+	}
+	if status == http.StatusOK {
+		body := map[string]any{"properties": map[string]any{"regionCode": map[string]any{"type": "keyword"}}}
+		_, err := x.index.do(ctx, http.MethodPut, "/"+url.PathEscape(x.name)+"/_mapping", body, nil)
 		return false, err
 	}
 
@@ -68,6 +74,7 @@ func (x *PickupIndex) Ensure(ctx context.Context) (bool, error) {
 			"dynamic": "strict",
 			"properties": map[string]any{
 				"carrier":     keyword,
+				"regionCode":  keyword,
 				"code":        keyword,
 				"name":        map[string]any{"type": "text"},
 				"address":     map[string]any{"type": "text"},
@@ -121,11 +128,12 @@ func (x *PickupIndex) Put(ctx context.Context, points []delivery.PickupPoint) er
 		}
 
 		doc := pickupDocument{
-			Carrier: string(p.Carrier),
-			Code:    p.Code,
-			Name:    p.Name,
-			Address: p.Address,
-			City:    p.City,
+			Carrier:    string(p.Carrier),
+			Code:       p.Code,
+			Name:       p.Name,
+			Address:    p.Address,
+			City:       p.City,
+			RegionCode: p.RegionCode,
 			Location: geoPoint{
 				Lat: p.Location.Lat,
 				Lon: p.Location.Lon,
@@ -209,6 +217,7 @@ func (x *PickupIndex) Search(ctx context.Context, query ports.PickupPointQuery) 
 			Name:        doc.Name,
 			Address:     doc.Address,
 			City:        doc.City,
+			RegionCode:  doc.RegionCode,
 			Location:    delivery.Location{Lat: doc.Location.Lat, Lon: doc.Location.Lon},
 			Schedule:    doc.Schedule,
 			Active:      true,

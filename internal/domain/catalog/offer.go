@@ -71,6 +71,13 @@ func ComposeOffer(product *Product, signals *Signals, seller Seller) Offer {
 		price = *promo
 	}
 
+	if card := state.Card.Marketplace; card != nil && card.Price != nil {
+		marketplacePrice, err := money.ParseRubles(string(*card.Price))
+		if err != nil || marketplacePrice.IsNegative() {
+			return offer
+		}
+		base, price = marketplacePrice, marketplacePrice
+	}
 	offer.Card = state.Card
 	offer.Price = price
 	offer.BasePrice = base

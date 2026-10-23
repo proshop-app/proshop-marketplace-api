@@ -155,6 +155,12 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 	}
 
 	snapshot.Price = price
+	if product.Marketplace != nil && product.Marketplace.Price != nil {
+		marketplacePrice, err := rubles(*product.Marketplace.Price)
+		if err != nil || marketplacePrice.IsNegative() {
+			return ErrInvalidPayload.WithMessage("цена площадки не по контракту")
+		}
+	}
 
 	if product.PromoPrice != nil {
 		promo, err := rubles(*product.PromoPrice)

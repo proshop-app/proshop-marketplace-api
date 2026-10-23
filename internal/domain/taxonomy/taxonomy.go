@@ -49,6 +49,7 @@ type Definition struct {
 
 // Card — отдельный блок площадки в проекции магазина.
 type Card struct {
+	Price      *json.Number               `json:"price,omitempty"`
 	CategoryID string                     `json:"categoryId"`
 	Attributes map[string]json.RawMessage `json:"attributes"`
 	Published  bool                       `json:"published"`

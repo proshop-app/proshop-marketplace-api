@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -31,11 +32,28 @@ type quoteJSON struct {
 }
 
 type checkoutGroupJSON struct {
-	TenantID           string             `json:"tenantId"`
-	ExternalCheckoutID string             `json:"externalCheckoutId"`
-	Lines              []checkoutLineJSON `json:"lines"`
-	Goods              int64              `json:"goods"`
-	Quote              *quoteJSON         `json:"quote"`
+	TenantID           string                 `json:"tenantId"`
+	ExternalCheckoutID string                 `json:"externalCheckoutId"`
+	Lines              []checkoutLineJSON     `json:"lines"`
+	Goods              int64                  `json:"goods"`
+	Quote              *quoteJSON             `json:"quote"`
+	Status             checkout.GroupStatus   `json:"status"`
+	OrderID            string                 `json:"orderId,omitempty"`
+	PaymentURL         *string                `json:"paymentUrl"`
+	ExpiresAt          *time.Time             `json:"expiresAt,omitempty"`
+	PaymentOrder       int                    `json:"paymentOrder"`
+	DeliveryPrice      int64                  `json:"deliveryPrice"`
+	Reason             string                 `json:"reason,omitempty"`
+	Track              string                 `json:"track,omitempty"`
+	CurrentPrices      []checkout.PriceChange `json:"currentPrices,omitempty"`
+	ReturnFailed       bool                   `json:"returnFailed"`
+	ReturnReason       string                 `json:"returnReason,omitempty"`
+	ReturnRemaining    []returnLineJSON       `json:"returnRemaining,omitempty"`
+	PollFailures       int                    `json:"pollFailures"`
+	NextPollAt         time.Time              `json:"nextPollAt"`
+	LastErrorCode      string                 `json:"lastErrorCode,omitempty"`
+	CreateFailures     int                    `json:"createFailures"`
+	CreateExhausted    bool                   `json:"createExhausted"`
 }
 
 type selectionJSON struct {
@@ -47,17 +65,18 @@ type selectionJSON struct {
 
 // checkoutJSON — покупка; суммы — копейки.
 type checkoutJSON struct {
-	ID            string              `json:"id"`
-	Status        string              `json:"status"`
-	Groups        []checkoutGroupJSON `json:"groups"`
-	Delivery      *selectionJSON      `json:"delivery"`
-	GoodsTotal    int64               `json:"goodsTotal"`
-	DeliveryTotal int64               `json:"deliveryTotal"`
-	Total         int64               `json:"total"`
-	Version       int64               `json:"version"`
-	CreatedAt     time.Time           `json:"createdAt"`
-	UpdatedAt     time.Time           `json:"updatedAt"`
-	ConfirmedAt   *time.Time          `json:"confirmedAt"`
+	ID            string                `json:"id"`
+	Status        string                `json:"status"`
+	Groups        []checkoutGroupJSON   `json:"groups"`
+	Delivery      *selectionJSON        `json:"delivery"`
+	GoodsTotal    int64                 `json:"goodsTotal"`
+	DeliveryTotal int64                 `json:"deliveryTotal"`
+	Total         int64                 `json:"total"`
+	Version       int64                 `json:"version"`
+	CreatedAt     time.Time             `json:"createdAt"`
+	UpdatedAt     time.Time             `json:"updatedAt"`
+	ConfirmedAt   *time.Time            `json:"confirmedAt"`
+	NextPayment   *checkout.PaymentLink `json:"nextPayment"`
 }
 
 type checkoutHandlers struct {
@@ -69,9 +88,15 @@ type quoteRequestJSON struct {
 	PickupPointCode string `json:"pickupPointCode"`
 }
 
-func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
+type returnLineJSON struct {
+	OfferID  string `json:"offerId"`
+	Quantity int    `json:"quantity"`
+}
+
+func toCheckoutJSON(state checkout.State, next *checkout.PaymentLink) (checkoutJSON, error) {
 	out := checkoutJSON{
 		ID:            string(state.ID),
+		NextPayment:   next,
 		Status:        string(state.Status),
 		Groups:        make([]checkoutGroupJSON, 0, len(state.Groups)),
 		GoodsTotal:    state.GoodsTotal.Kopecks(),
@@ -102,8 +127,36 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 			ExternalCheckoutID: group.ExternalCheckoutID,
 			Lines:              make([]checkoutLineJSON, 0, len(group.Lines)),
 			Goods:              group.Goods.Kopecks(),
+			Status:             group.Status,
+			OrderID:            group.OrderID,
+			PaymentOrder:       group.PaymentOrder,
+			DeliveryPrice:      group.DeliveryPrice.Kopecks(),
+			Reason:             group.Reason,
+			Track:              group.Track,
+			CurrentPrices:      group.CurrentPrices,
+			ReturnFailed:       group.ReturnFailed,
+			ReturnReason:       group.ReturnReason,
+			PollFailures:       group.PollFailures,
+			NextPollAt:         group.NextPollAt,
+			CreateFailures:     group.CreateFailures,
+			LastErrorCode:      group.LastErrorCode,
+			CreateExhausted:    group.CreateExhausted,
 		}
 
+		if next != nil && next.TenantID == group.TenantID {
+			value := next.URL
+			g.PaymentURL = &value
+		}
+		for _, remaining := range group.ReturnRemaining {
+			g.ReturnRemaining = append(g.ReturnRemaining, returnLineJSON{
+				OfferID:  remaining.Offer.String(),
+				Quantity: remaining.Quantity,
+			})
+		}
+		if !group.ExpiresAt.IsZero() {
+			expires := group.ExpiresAt
+			g.ExpiresAt = &expires
+		}
 		for _, line := range group.Lines {
 			amount, err := line.Price.MulRatio(int64(line.Quantity), 1)
 			if err != nil {
@@ -147,12 +200,19 @@ func (h *checkoutHandlers) respond(
 	err error,
 ) {
 	if err != nil {
+		if errors.Is(err, checkout.ErrDeliveryChanged) {
+			body, encodeErr := toCheckoutJSON(state, nil)
+			if encodeErr != nil {
+				writeError(w, r, encodeErr)
+				return
+			}
+			writeErrorWithCheckout(w, r, err, &body)
+			return
+		}
 		writeError(w, r, err)
-
 		return
 	}
-
-	body, err := toCheckoutJSON(state)
+	body, err := toCheckoutJSON(state, h.checkouts.NextPayment(state))
 	if err != nil {
 		writeError(w, r, err)
 
@@ -176,7 +236,7 @@ func (h *checkoutHandlers) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.checkouts.Get(r.Context(), BuyerID(r.Context()), checkoutID)
+	state, err := h.checkouts.Refresh(r.Context(), BuyerID(r.Context()), checkoutID)
 	h.respond(w, r, http.StatusOK, state, err)
 }
 

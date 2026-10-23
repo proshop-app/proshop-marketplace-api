@@ -1,6 +1,5 @@
 // Package checkout — покупка: неизменяемый снимок корзины по продавцам,
-// выбранная доставка и расчёты. Состояния недели 2 — draft и confirmed;
-// создание заказов и деньги идут следующими шагами саги.
+// выбранная доставка и независимые заказы магазинов.
 package checkout
 
 import (
@@ -24,6 +23,16 @@ const (
 	StatusDraft Status = "draft"
 	// StatusConfirmed — покупатель подтвердил: цены и доставка перепроверены у магазинов.
 	StatusConfirmed Status = "confirmed"
+	// StatusCreatingOrders — создаются заказы магазинов.
+	StatusCreatingOrders Status = "creating_orders"
+	// StatusAwaitingPayment — все созданные группы ждут оплаты.
+	StatusAwaitingPayment Status = "awaiting_payment"
+	// StatusPartiallyPaid — оплачена часть магазинов, остальные независимы.
+	StatusPartiallyPaid Status = "partially_paid"
+	// StatusPaid — оплачены все группы.
+	StatusPaid Status = "paid"
+	// StatusCancelled — все группы отменены или требуют нового оформления.
+	StatusCancelled Status = "cancelled"
 )
 
 // Line — позиция снимка.
@@ -42,7 +51,31 @@ type Group struct {
 	Lines              []Line
 	Goods              money.Money
 	// Quote — расчёт доставки до выбранного пункта; нет — нужно посчитать.
-	Quote *delivery.Quote
+	Quote           *delivery.Quote
+	Status          GroupStatus
+	OrderID         string
+	PaymentURL      string
+	ExpiresAt       time.Time
+	PaymentOrder    int
+	DeliveryPrice   money.Money
+	Reason          string
+	Track           string
+	NextPollAt      time.Time
+	AwaitingSince   time.Time
+	CartReturned    bool
+	CurrentPrices   []PriceChange
+	LastErrorCode   string
+	CreateFailures  int
+	CreateExhausted bool
+	NextCreateAt    time.Time
+	CreateToken     string
+	PollFailures    int
+	PollToken       string
+	LastOrderStatus GroupStatus
+	ReturnFailed    bool
+	ReturnReason    string
+	ReturnRemaining []Line
+	NextReturnAt    time.Time
 }
 
 // Selection — выбранная доставка.
@@ -51,6 +84,7 @@ type Selection struct {
 	PickupPointCode string
 	City            string
 	Address         string
+	RegionCode      string
 }
 
 // PriceCheck — ответ магазина по позиции при подтверждении.
@@ -75,6 +109,9 @@ type State struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	ConfirmedAt    time.Time
+	Contact        Contact
+	ReturnURL      string
+	CartConsumed   bool
 }
 
 // Checkout — покупка покупателя.
@@ -146,7 +183,7 @@ func New(id, buyerID ids.UUID, key string, lines []Line, now time.Time) (*Checko
 
 // Restore поднимает покупку из хранилища.
 func Restore(state State) *Checkout {
-	c := &Checkout{state: state}
+	c := &Checkout{state: cloneState(state)}
 	c.origin.status, c.origin.version = state.Status, state.Version
 
 	return c
@@ -154,10 +191,7 @@ func Restore(state State) *Checkout {
 
 // State — снимок для хранения.
 func (c *Checkout) State() State {
-	state := c.state
-	state.Groups = append([]Group(nil), c.state.Groups...)
-
-	return state
+	return cloneState(c.state)
 }
 
 // Origin — статус и версия на момент чтения; у новой покупки версия нулевая.
@@ -176,10 +210,10 @@ func (c *Checkout) BuyerID() ids.UUID { return c.state.BuyerID }
 func (c *Checkout) Status() Status { return c.state.Status }
 
 // Groups — заказы продавцов.
-func (c *Checkout) Groups() []Group { return append([]Group(nil), c.state.Groups...) }
+func (c *Checkout) Groups() []Group { return cloneState(c.state).Groups }
 
 // Delivery — выбранная доставка; nil — не выбрана.
-func (c *Checkout) Delivery() *Selection { return c.state.Delivery }
+func (c *Checkout) Delivery() *Selection { return c.State().Delivery }
 
 // SelectDelivery запоминает пункт выдачи и расчёты всех продавцов.
 func (c *Checkout) SelectDelivery(selection Selection, quotes map[ids.TenantID]delivery.Quote, now time.Time) error {
@@ -372,6 +406,7 @@ func (c *Checkout) recount() error {
 		}
 
 		group.Goods = goods
+		group.DeliveryPrice = money.Money{}
 
 		var err error
 		if goodsTotal, err = goodsTotal.Add(goods); err != nil {
@@ -379,7 +414,8 @@ func (c *Checkout) recount() error {
 		}
 
 		if group.Quote != nil && group.Quote.Status == delivery.QuoteAvailable {
-			if deliveryTotal, err = deliveryTotal.Add(group.Quote.BuyerCost); err != nil {
+			group.DeliveryPrice = group.Quote.BuyerCost
+			if deliveryTotal, err = deliveryTotal.Add(group.DeliveryPrice); err != nil {
 				return err
 			}
 		}

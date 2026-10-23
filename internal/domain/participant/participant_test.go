@@ -15,6 +15,9 @@ var (
 	t1 = t0.Add(time.Minute)
 )
 
+var w3ParticipantDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3ParticipantSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
+
 func activeTenant(t *testing.T, status participant.TenantStatus) *participant.Tenant {
 	t.Helper()
 
@@ -50,7 +53,7 @@ func TestNewParticipant(t *testing.T) {
 	if p.TenantID() != "t1" || p.Slug() != "shop-one" || p.Name() != "Магазин один" {
 		t.Fatalf("неожиданный участник: %+v", p.State())
 	}
-	if p.Status() != participant.StatusOnboarding || p.Enabled() || p.PaymentAccountID() != "" {
+	if p.Status() != participant.StatusOnboarding || p.Enabled() {
 		t.Fatalf("новый участник должен быть скрыт и не подключён: %+v", p.State())
 	}
 	if !p.IsNew() || p.Version() != 1 {
@@ -87,33 +90,6 @@ func restored(t *testing.T) *participant.Participant {
 	p.MarkSaved()
 
 	return participant.Restore(p.State())
-}
-
-func TestSetPaymentAccountTransitions(t *testing.T) {
-	p := restored(t)
-
-	changed, err := p.SetPaymentAccount(" 506751 ", t1)
-	if err != nil || !changed {
-		t.Fatalf("changed=%v err=%v", changed, err)
-	}
-	if p.Status() != participant.StatusConnected || p.PaymentAccountID() != "506751" {
-		t.Fatalf("ожидался connected: %+v", p.State())
-	}
-	if p.Origin().Status != participant.StatusOnboarding || p.Origin().Version != 1 || p.Version() != 2 {
-		t.Fatalf(
-			"исходное состояние должно остаться для условного обновления: origin=%+v version=%d",
-			p.Origin(),
-			p.Version(),
-		)
-	}
-
-	if changed, _ := p.SetPaymentAccount("506751", t1); changed {
-		t.Fatal("повтор того же идентификатора не меняет состояние")
-	}
-
-	if _, err := p.SetPaymentAccount("bad id", t1); !errors.Is(err, participant.ErrInvalidPaymentAccount) {
-		t.Fatalf("ожидалось ErrInvalidPaymentAccount, получено %v", err)
-	}
 }
 
 func TestEnableDisableIdempotent(t *testing.T) {
@@ -191,16 +167,13 @@ func TestVisibility(t *testing.T) {
 		t.Fatalf("включённый оператором, но не включившийся сам магазин не виден: %+v", got)
 	}
 
-	if _, err := p.ApplyShopSettings(true, participant.Subsidy{}, t1); err != nil {
+	if _, err := p.ApplyShopSettings(true, w3ParticipantSubsidy, money.Money{}, w3ParticipantDelivery, t1); err != nil {
 		t.Fatal(err)
 	}
-	if got := participant.VisibilityOf(p, active); !got.Visible || got.CheckoutAvailable {
-		t.Fatalf("включённый без оплаты виден, но без checkout: %+v", got)
+	if got := participant.VisibilityOf(p, active); !got.Visible || !got.CheckoutAvailable {
+		t.Fatalf("участник с настройками доступен на кассе магазина: %+v", got)
 	}
 
-	if _, err := p.SetPaymentAccount("acc-1", t1); err != nil {
-		t.Fatal(err)
-	}
 	if got := participant.VisibilityOf(p, active); !got.Visible || !got.CheckoutAvailable {
 		t.Fatalf("подключённый виден и доступен в checkout: %+v", got)
 	}
@@ -221,20 +194,20 @@ func TestApplyShopSettings(t *testing.T) {
 		MaxAmount: money.FromKopecks(30000),
 	}
 
-	changed, err := p.ApplyShopSettings(true, subsidy, t1)
+	changed, err := p.ApplyShopSettings(true, subsidy, money.Money{}, w3ParticipantDelivery, t1)
 	if err != nil || !changed || !p.ShopEnabled() || p.Subsidy() != subsidy || p.Version() != 2 {
 		t.Fatalf("настройки магазина: changed=%v err=%v %+v", changed, err, p.State())
 	}
 	p.MarkSaved()
 
-	changed, err = p.ApplyShopSettings(true, subsidy, t1.Add(time.Hour))
+	changed, err = p.ApplyShopSettings(true, subsidy, money.Money{}, w3ParticipantDelivery, t1.Add(time.Hour))
 	if err != nil || changed || p.Version() != 2 || !p.State().SettingsSyncedAt.Equal(t1.Add(time.Hour)) {
 		t.Fatalf("те же настройки не меняют версию, но время сверки обновляется: %+v", p.State())
 	}
 
 	overPercent := participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 101}
 
-	_, err = p.ApplyShopSettings(true, overPercent, t1)
+	_, err = p.ApplyShopSettings(true, overPercent, money.Money{}, w3ParticipantDelivery, t1)
 	if !errors.Is(err, participant.ErrInvalidSubsidy) {
 		t.Fatalf("процент больше 100: %v", err)
 	}

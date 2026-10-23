@@ -93,13 +93,6 @@ func (s *Service) Rename(ctx context.Context, tenantID ids.TenantID, name string
 	})
 }
 
-// SetPaymentAccount привязывает магазин продавца у платёжного провайдера.
-func (s *Service) SetPaymentAccount(ctx context.Context, tenantID ids.TenantID, accountID string) (View, error) {
-	return s.change(ctx, tenantID, func(p *participant.Participant) (bool, error) {
-		return p.SetPaymentAccount(accountID, s.clock.Now())
-	})
-}
-
 // Enable включает участника в каталог.
 func (s *Service) Enable(ctx context.Context, tenantID ids.TenantID) (View, error) {
 	return s.change(ctx, tenantID, func(p *participant.Participant) (bool, error) {

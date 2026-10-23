@@ -15,7 +15,7 @@ import (
 const (
 	checkoutColumns = `
 		id, buyer_id, idempotency_key, status, carrier, pickup_point_id, delivery, goods_total, delivery_total,
-		total, version, created_at, updated_at, confirmed_at`
+		total, version, created_at, updated_at, confirmed_at, order_context`
 
 	// selectCheckout дополняется условием отбора.
 	selectCheckout = `
@@ -25,7 +25,7 @@ const (
 
 	insertCheckout = `
 		INSERT INTO checkouts (` + checkoutColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
 
 	updateCheckout = `
 		UPDATE checkouts
@@ -38,22 +38,24 @@ const (
 			total = $10,
 			version = $11,
 			updated_at = $12,
-			confirmed_at = $13
+			confirmed_at = $13,
+			order_context = $14
 		WHERE id = $1 AND status = $2 AND version = $3`
 
 	groupColumns = `
 		tenant_id, external_checkout_id, lines, goods, quote_status, quote_reason, delivery_cost,
-		subsidy, buyer_delivery, min_days, max_days, quote_expires_at`
+		subsidy, buyer_delivery, min_days, max_days, quote_expires_at, order_progress`
 
 	selectCheckoutGroups = `
 		SELECT ` + groupColumns + `
 		FROM checkout_groups
 		WHERE checkout_id = $1
-		ORDER BY tenant_id`
+   AND EXISTS (SELECT 1 FROM checkouts WHERE id = $1 AND version = $2)
+  ORDER BY tenant_id`
 
 	insertCheckoutGroup = `
 		INSERT INTO checkout_groups (checkout_id, ` + groupColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 
 	updateCheckoutGroup = `
 		UPDATE checkout_groups
@@ -67,7 +69,8 @@ const (
 			buyer_delivery = $10,
 			min_days = $11,
 			max_days = $12,
-			quote_expires_at = $13
+			quote_expires_at = $13,
+			order_progress = $14
 		WHERE checkout_id = $1 AND tenant_id = $2`
 )
 
@@ -86,8 +89,9 @@ type lineJSON struct {
 
 // selectionJSON — выбранная доставка в колонке jsonb.
 type selectionJSON struct {
-	City    string `json:"city"`
-	Address string `json:"address"`
+	City       string `json:"city"`
+	Address    string `json:"address"`
+	RegionCode string `json:"regionCode"`
 }
 
 // checkoutRow — строка покупки; доставка пуста, пока её не выбрали.
@@ -98,6 +102,7 @@ type checkoutRow struct {
 	selection           []byte
 	goods, deliv, total int64
 	confirmedAt         *time.Time
+	orderContext        []byte
 }
 
 // groupRow — строка группы; поля расчёта пусты, пока доставку не считали.
@@ -110,6 +115,7 @@ type groupRow struct {
 	cost, subsidy, buyerDelivery *int64
 	minDays, maxDays             *int
 	expiresAt                    *time.Time
+	orderProgress                []byte
 }
 
 // Get — покупка.
@@ -148,6 +154,7 @@ func (r *Checkouts) Add(ctx context.Context, c *checkout.Checkout) error {
 		s.CreatedAt,
 		s.UpdatedAt,
 		nullTime(s.ConfirmedAt),
+		encodeOrderContext(s),
 	)
 	if isUnique(err, "checkouts_buyer_key_key") {
 		return checkout.ErrDuplicateKey
@@ -191,6 +198,7 @@ func (r *Checkouts) Update(ctx context.Context, c *checkout.Checkout) error {
 		s.Version,
 		s.UpdatedAt,
 		nullTime(s.ConfirmedAt),
+		encodeOrderContext(s),
 	)
 	if err != nil {
 		return fmt.Errorf("покупка %s: %w", s.ID, err)
@@ -224,15 +232,15 @@ func (r *Checkouts) one(ctx context.Context, where string, args ...any) (*checko
 		return nil, err
 	}
 
-	if state.Groups, err = r.groups(ctx, row.id); err != nil {
+	if state.Groups, err = r.groups(ctx, row.id, state.Version); err != nil {
 		return nil, err
 	}
 
 	return checkout.Restore(state), nil
 }
 
-func (r *Checkouts) groups(ctx context.Context, checkoutID string) ([]checkout.Group, error) {
-	rows, err := r.q.Query(ctx, selectCheckoutGroups, checkoutID)
+func (r *Checkouts) groups(ctx context.Context, checkoutID string, version int64) ([]checkout.Group, error) {
+	rows, err := r.q.Query(ctx, selectCheckoutGroups, checkoutID, version)
 	if err != nil {
 		return nil, fmt.Errorf("группы покупки: %w", err)
 	}
@@ -254,7 +262,13 @@ func (r *Checkouts) groups(ctx context.Context, checkoutID string) ([]checkout.G
 		groups = append(groups, group)
 	}
 
-	return groups, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(groups) == 0 {
+		return nil, checkout.ErrConflict
+	}
+	return groups, nil
 }
 
 // writeGroups пишет группы покупки запросом вставки или обновления: у обоих
@@ -290,11 +304,17 @@ func (r *checkoutRow) targets() []any {
 		&r.state.CreatedAt,
 		&r.state.UpdatedAt,
 		&r.confirmedAt,
+		&r.orderContext,
 	}
 }
 
 func (r *checkoutRow) checkout() (checkout.State, error) {
 	state := r.state
+	var meta checkoutOrderContext
+	if err := json.Unmarshal(r.orderContext, &meta); err != nil {
+		return checkout.State{}, err
+	}
+	state.Contact, state.ReturnURL, state.CartConsumed = meta.Contact, meta.ReturnURL, meta.CartConsumed
 	state.ID = ids.UUID(r.id)
 	state.BuyerID = ids.UUID(r.buyerID)
 	state.Status = checkout.Status(r.status)
@@ -322,6 +342,7 @@ func (r *checkoutRow) checkout() (checkout.State, error) {
 		PickupPointCode: *r.pointID,
 		City:            doc.City,
 		Address:         doc.Address,
+		RegionCode:      doc.RegionCode,
 	}
 
 	return state, nil
@@ -341,11 +362,15 @@ func (r *groupRow) targets() []any {
 		&r.minDays,
 		&r.maxDays,
 		&r.expiresAt,
+		&r.orderProgress,
 	}
 }
 
 func (r *groupRow) checkoutGroup() (checkout.Group, error) {
 	group := r.group
+	if err := json.Unmarshal(r.orderProgress, &group); err != nil {
+		return checkout.Group{}, err
+	}
 	group.TenantID = ids.TenantID(r.tenantID)
 	group.Goods = money.FromKopecks(r.goods)
 
@@ -401,8 +426,9 @@ func selectionArgs(selection *checkout.Selection) (carrier, point, encoded any, 
 	}
 
 	doc := selectionJSON{
-		City:    selection.City,
-		Address: selection.Address,
+		City:       selection.City,
+		Address:    selection.Address,
+		RegionCode: selection.RegionCode,
 	}
 
 	raw, err := json.Marshal(doc)
@@ -440,7 +466,8 @@ func groupArgs(group checkout.Group) ([]any, error) {
 		group.Goods.Kopecks(),
 	}
 
-	return append(args, quoteArgs(group.Quote)...), nil
+	args = append(args, quoteArgs(group.Quote)...)
+	return append(args, encodeOrderProgress(group)), nil
 }
 
 // quoteArgs — поля расчёта доставки; суммы и сроки есть только у доступного расчёта.

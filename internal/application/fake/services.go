@@ -10,6 +10,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -48,12 +49,24 @@ type Limiter struct {
 
 // Platform — API сервера установки в памяти.
 type Platform struct {
-	mu       sync.Mutex
-	items    map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
-	quotes   map[ids.TenantID]delivery.Offered
-	settings map[ids.TenantID]ports.ShopSettings
-	failing  map[ids.TenantID]error
-	requests []ports.QuoteRequest
+	mu                sync.Mutex
+	items             map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
+	quotes            map[ids.TenantID]delivery.Offered
+	settings          map[ids.TenantID]ports.ShopSettings
+	failing           map[ids.TenantID]error
+	requests          []ports.QuoteRequest
+	orders            map[string]checkout.SellerOrder
+	orderRefusals     map[string]error
+	orderTenants      map[string]ids.TenantID
+	orderBodies       map[string]string
+	orderRequests     map[ids.TenantID][]ports.CreateOrderRequest
+	createErrors      map[ids.TenantID]error
+	pollErrors        map[ids.TenantID]error
+	pollCalls         map[ids.TenantID]int
+	MinSubsidyPercent int
+	BeforeSettings    func(ids.TenantID)
+	OrderNow          time.Time
+	AfterCreate       func()
 }
 
 // PickupProvider — справочник перевозчика в памяти.
@@ -217,10 +230,19 @@ func (l *Limiter) Allow(_ context.Context, key string, limit int, window time.Du
 // NewPlatform — пустой сервер.
 func NewPlatform() *Platform {
 	return &Platform{
-		items:    map[ids.TenantID]map[ids.ProductID]ports.ItemCheck{},
-		quotes:   map[ids.TenantID]delivery.Offered{},
-		settings: map[ids.TenantID]ports.ShopSettings{},
-		failing:  map[ids.TenantID]error{},
+		items:             map[ids.TenantID]map[ids.ProductID]ports.ItemCheck{},
+		orders:            map[string]checkout.SellerOrder{},
+		orderRefusals:     map[string]error{},
+		orderTenants:      map[string]ids.TenantID{},
+		orderBodies:       map[string]string{},
+		orderRequests:     map[ids.TenantID][]ports.CreateOrderRequest{},
+		createErrors:      map[ids.TenantID]error{},
+		pollErrors:        map[ids.TenantID]error{},
+		pollCalls:         map[ids.TenantID]int{},
+		MinSubsidyPercent: 30,
+		quotes:            map[ids.TenantID]delivery.Offered{},
+		settings:          map[ids.TenantID]ports.ShopSettings{},
+		failing:           map[ids.TenantID]error{},
 	}
 }
 
@@ -319,6 +341,9 @@ func (p *Platform) QuoteDelivery(
 
 // MarketplaceSettings — заданные настройки; не заданы — участие выключено.
 func (p *Platform) MarketplaceSettings(_ context.Context, tenant ids.TenantID) (ports.ShopSettings, error) {
+	if p.BeforeSettings != nil {
+		p.BeforeSettings(tenant)
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

@@ -12,21 +12,22 @@ import (
 
 // participantJSON — участник в операторском ответе.
 type participantJSON struct {
-	TenantID          string      `json:"tenantId"`
-	Slug              string      `json:"slug"`
-	Name              string      `json:"name"`
-	Status            string      `json:"status"`
-	Enabled           bool        `json:"enabled"`
-	PaymentAccountID  *string     `json:"paymentAccountId"`
-	ShopEnabled       bool        `json:"shopEnabled"`
-	Subsidy           subsidyJSON `json:"subsidy"`
-	SettingsSyncedAt  *time.Time  `json:"settingsSyncedAt"`
-	TenantStatus      string      `json:"tenantStatus"`
-	Visible           bool        `json:"visible"`
-	CheckoutAvailable bool        `json:"checkoutAvailable"`
-	Version           int64       `json:"version"`
-	CreatedAt         time.Time   `json:"createdAt"`
-	UpdatedAt         time.Time   `json:"updatedAt"`
+	TenantID          string                       `json:"tenantId"`
+	Slug              string                       `json:"slug"`
+	Name              string                       `json:"name"`
+	Status            string                       `json:"status"`
+	Enabled           bool                         `json:"enabled"`
+	ShopEnabled       bool                         `json:"shopEnabled"`
+	Subsidy           subsidyJSON                  `json:"subsidy"`
+	FreeDeliveryFrom  int64                        `json:"freeDeliveryFrom"`
+	Delivery          participant.DeliverySettings `json:"delivery"`
+	SettingsSyncedAt  *time.Time                   `json:"settingsSyncedAt"`
+	TenantStatus      string                       `json:"tenantStatus"`
+	Visible           bool                         `json:"visible"`
+	CheckoutAvailable bool                         `json:"checkoutAvailable"`
+	Version           int64                        `json:"version"`
+	CreatedAt         time.Time                    `json:"createdAt"`
+	UpdatedAt         time.Time                    `json:"updatedAt"`
 }
 
 // subsidyJSON — субсидия доставки продавца: value — копейки для fixed, процент для percent.
@@ -57,14 +58,12 @@ type renameParticipantJSON struct {
 	Name string `json:"name"`
 }
 
-type paymentAccountJSON struct {
-	PaymentAccountID string `json:"paymentAccountId"`
-}
-
 func toParticipantJSON(view appparticipant.View) participantJSON {
 	p := view.Participant
 	out := participantJSON{
 		TenantID:          string(p.TenantID),
+		FreeDeliveryFrom:  p.FreeDeliveryFrom.Kopecks(),
+		Delivery:          p.Delivery,
 		Slug:              p.Slug,
 		Name:              p.Name,
 		Status:            string(p.Status),
@@ -86,10 +85,6 @@ func toParticipantJSON(view appparticipant.View) participantJSON {
 	if !p.SettingsSyncedAt.IsZero() {
 		synced := p.SettingsSyncedAt.UTC()
 		out.SettingsSyncedAt = &synced
-	}
-	if p.PaymentAccountID != "" {
-		account := p.PaymentAccountID
-		out.PaymentAccountID = &account
 	}
 
 	return out
@@ -170,19 +165,6 @@ func (h *participantHandlers) rename(w http.ResponseWriter, r *http.Request) {
 
 	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
 		return h.service.Rename(r.Context(), tenantID, body.Name)
-	})
-}
-
-func (h *participantHandlers) setPaymentAccount(w http.ResponseWriter, r *http.Request) {
-	var body paymentAccountJSON
-	if err := readJSON(w, r, &body); err != nil {
-		writeError(w, r, err)
-
-		return
-	}
-
-	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
-		return h.service.SetPaymentAccount(r.Context(), tenantID, body.PaymentAccountID)
 	})
 }
 

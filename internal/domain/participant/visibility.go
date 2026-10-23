@@ -4,19 +4,20 @@ package participant
 type Visibility struct {
 	// Visible — предложения магазина показываются в каталоге.
 	Visible bool
-	// CheckoutAvailable — предложения можно оформить: магазин продавца у провайдера привязан.
+	// CheckoutAvailable — предложения можно оформить на кассе магазина.
 	CheckoutAvailable bool
 }
 
-// VisibilityOf — участник виден, если оператор его включил, магазин сам
-// включил участие и работает в реестре платформы; оформить заказ можно только
-// у подключённого к оплате.
+// VisibilityOf требует согласия магазина и обязательных настроек доставки.
 func VisibilityOf(p *Participant, tenant *Tenant) Visibility {
 	if p == nil || tenant == nil || tenant.ID() != p.TenantID() {
 		return Visibility{}
 	}
 
-	visible := p.Enabled() && p.ShopEnabled() && tenant.Status() == TenantActive
+	state := p.State()
+	visible := p.Enabled() && p.ShopEnabled() && tenant.Status() == TenantActive &&
+		state.Delivery.Validate() == nil && state.Subsidy.Validate() == nil && state.Subsidy.Enabled &&
+		!state.FreeDeliveryFrom.IsNegative()
 
-	return Visibility{Visible: visible, CheckoutAvailable: visible && p.Status() == StatusConnected}
+	return Visibility{Visible: visible, CheckoutAvailable: visible}
 }

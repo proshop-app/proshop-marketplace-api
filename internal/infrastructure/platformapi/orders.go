@@ -1,0 +1,88 @@
+package platformapi
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"time"
+
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
+)
+
+type sellerOrderJSON struct {
+	OrderID    string               `json:"orderId"`
+	PaymentURL string               `json:"paymentUrl"`
+	ExpiresAt  time.Time            `json:"expiresAt"`
+	Total      *int64               `json:"total"`
+	Status     checkout.GroupStatus `json:"status"`
+	Reason     string               `json:"reason"`
+	Track      string               `json:"track"`
+}
+
+// CreateOrder создаёт заказ на кассе магазина по ключу покупки и группы.
+func (c *Client) CreateOrder(
+	ctx context.Context,
+	tenant ids.TenantID,
+	request ports.CreateOrderRequest,
+) (checkout.SellerOrder, error) {
+	var answer sellerOrderJSON
+	if err := c.call(ctx, http.MethodPost, tenant, "/orders", request, &answer); err != nil {
+		return checkout.SellerOrder{}, err
+	}
+	if answer.Status == "" {
+		answer.Status = checkout.GroupAwaitingPayment
+	}
+	return answer.order(true)
+}
+
+// GetOrder читает статус только по доверенному каналу этого магазина.
+func (c *Client) GetOrder(ctx context.Context, tenant ids.TenantID, id string) (checkout.SellerOrder, error) {
+	var answer sellerOrderJSON
+	if err := c.call(ctx, http.MethodGet, tenant, "/orders/"+url.PathEscape(id), nil, &answer); err != nil {
+		return checkout.SellerOrder{}, err
+	}
+	if answer.OrderID != id {
+		return checkout.SellerOrder{}, ErrInvalidResponse
+	}
+	order, err := answer.order(false)
+	if errors.Is(err, ports.ErrInvalidOrderStatus) {
+		slog.Warn(
+			"неизвестный статус заказа магазина",
+			slog.String("tenantId", string(tenant)),
+			slog.String("status", string(answer.Status)),
+		)
+	}
+	return order, err
+}
+
+func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
+	switch a.Status {
+	case checkout.GroupAwaitingPayment, checkout.GroupPaid, checkout.GroupCancelled,
+		checkout.GroupShipped, checkout.GroupDelivered, checkout.GroupReturned:
+	default:
+		return checkout.SellerOrder{}, ports.ErrInvalidOrderStatus
+	}
+	if a.OrderID == "" || (a.Status == checkout.GroupCancelled && a.Reason == "") {
+		return checkout.SellerOrder{}, ErrInvalidResponse
+	}
+	if creating && (a.Total == nil || *a.Total < 0 || !checkout.ValidURL(a.PaymentURL) || a.ExpiresAt.IsZero()) {
+		return checkout.SellerOrder{}, ErrInvalidResponse
+	}
+	order := checkout.SellerOrder{
+		OrderID:    a.OrderID,
+		PaymentURL: a.PaymentURL,
+		ExpiresAt:  a.ExpiresAt,
+		Status:     a.Status,
+		Reason:     a.Reason,
+		Track:      a.Track,
+	}
+	if a.Total != nil {
+		order.Total = money.FromKopecks(*a.Total)
+	}
+	return order, nil
+}

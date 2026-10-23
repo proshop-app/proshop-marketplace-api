@@ -9,12 +9,15 @@ import (
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 type sellerJSON struct {
-	Slug string `json:"slug"`
-	Name string `json:"name"`
+	Delivery         participant.DeliverySettings `json:"delivery"`
+	FreeDeliveryFrom int64                        `json:"freeDeliveryFrom"`
+	Slug             string                       `json:"slug"`
+	Name             string                       `json:"name"`
 }
 
 type categoryJSON struct {
@@ -30,6 +33,7 @@ type tagJSON struct {
 
 // offerJSON — предложение в ответе. Суммы — целые копейки.
 type offerJSON struct {
+	DeliveryAvailable *bool                      `json:"deliveryAvailable,omitempty"`
 	CategoryID        string                     `json:"categoryId"`
 	Attributes        map[string]json.RawMessage `json:"attributes"`
 	ID                string                     `json:"id"`
@@ -71,12 +75,17 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	}
 
 	out := offerJSON{
-		CategoryID:        doc.CategoryID,
-		Attributes:        doc.Attributes,
-		ID:                doc.ID,
-		TenantID:          doc.TenantID,
-		ProductID:         doc.ProductID,
-		Seller:            sellerJSON{Slug: doc.SellerSlug, Name: doc.SellerName},
+		CategoryID: doc.CategoryID,
+		Attributes: doc.Attributes,
+		ID:         doc.ID,
+		TenantID:   doc.TenantID,
+		ProductID:  doc.ProductID,
+		Seller: sellerJSON{
+			Slug:             doc.SellerSlug,
+			Name:             doc.SellerName,
+			Delivery:         doc.Delivery.Clone(),
+			FreeDeliveryFrom: doc.FreeDeliveryFrom,
+		},
 		Name:              doc.Name,
 		Image:             doc.Image,
 		URL:               doc.URL,
@@ -132,7 +141,9 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		Offset: query.Offset,
 	}
 	for _, card := range list.Items {
-		body.Items = append(body.Items, toOfferJSON(card, false))
+		item := toOfferJSON(card, false)
+		annotateDelivery(&item, r)
+		body.Items = append(body.Items, item)
 	}
 
 	writeJSON(w, http.StatusOK, body)
@@ -140,6 +151,10 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 
 // card — карточка: GET /api/v1/catalog/offers/{offerId}
 func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
+	if err := validateDeliveryContext(r); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	offerID, err := ids.ParseOfferID(r.PathValue("offerId"))
 	if err != nil {
 		writeError(w, r, err)
@@ -154,10 +169,15 @@ func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toOfferJSON(card, true))
+	body := toOfferJSON(card, true)
+	annotateDelivery(&body, r)
+	writeJSON(w, http.StatusOK, body)
 }
 
 func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
+	if err := validateDeliveryContext(r); err != nil {
+		return ports.OfferQuery{}, err
+	}
 	values := r.URL.Query()
 	query := ports.OfferQuery{
 		Text:       values.Get("q"),
@@ -240,4 +260,22 @@ func kopecksParam(raw string) (*int64, error) {
 	}
 
 	return &value, nil
+}
+
+// annotateDelivery оставляет предложение видимым, но явно запрещает доставку вне зон продавца.
+func annotateDelivery(item *offerJSON, r *http.Request) {
+	carrier, region := r.URL.Query().Get("deliveryCarrier"), r.URL.Query().Get("deliveryRegion")
+	if carrier == "" {
+		return
+	}
+	allowed := item.Seller.Delivery.Allows(carrier, region)
+	item.DeliveryAvailable = &allowed
+}
+
+func validateDeliveryContext(r *http.Request) error {
+	carrier, region := r.URL.Query().Get("deliveryCarrier"), r.URL.Query().Get("deliveryRegion")
+	if (carrier == "") != (region == "") || len(carrier) > 64 || len(region) > 128 {
+		return ErrInvalidQuery.WithMessage("deliveryCarrier и deliveryRegion передаются вместе")
+	}
+	return nil
 }

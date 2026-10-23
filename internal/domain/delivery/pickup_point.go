@@ -21,12 +21,13 @@ type Location struct {
 
 // PickupPoint — пункт выдачи перевозчика в справочнике маркетплейса.
 type PickupPoint struct {
-	Carrier  Carrier
-	Code     string
-	Name     string
-	Address  string
-	City     string
-	Location Location
+	Carrier    Carrier
+	Code       string
+	Name       string
+	Address    string
+	City       string
+	RegionCode string
+	Location   Location
 	// Schedule — график работы словами перевозчика.
 	Schedule string
 	// Payload — исходная запись перевозчика: для разбора спорных случаев.

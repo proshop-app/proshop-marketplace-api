@@ -13,6 +13,8 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
+var w3SettingsDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+
 func TestSettingsSync(t *testing.T) {
 	store, clock, service := setup(t)
 	ctx := context.Background()
@@ -38,7 +40,7 @@ func TestSettingsSync(t *testing.T) {
 		Value:     15000,
 		MaxAmount: money.FromKopecks(20000),
 	}
-	platform.SetSettings("t1", ports.ShopSettings{Enabled: true, Subsidy: subsidy})
+	platform.SetSettings("t1", ports.ShopSettings{Enabled: true, Subsidy: subsidy, Delivery: w3SettingsDelivery})
 	platform.Fail("t2", errors.New("сервер недоступен"))
 
 	settings := appparticipant.NewSettings(store, platform, clock)
@@ -78,5 +80,31 @@ func TestSettingsSync(t *testing.T) {
 	}
 	if p, _ := store.Participant("t1"); p.Version != 2 {
 		t.Fatalf("версия участника: %d", p.Version)
+	}
+}
+
+func TestInvalidParticipationSettingsHideSeller(t *testing.T) {
+	store, clock, service := setup(t)
+	ctx := context.Background()
+	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Магазин"}); err != nil {
+		t.Fatal(err)
+	}
+	platform := fake.NewPlatform()
+	platform.SetSettings("t1", ports.ShopSettings{
+		Enabled:  true,
+		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+		Delivery: participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}},
+	})
+	syncer := appparticipant.NewSettings(store, platform, clock)
+	if _, err := syncer.SyncOne(ctx, "t1"); err != nil {
+		t.Fatal(err)
+	}
+	platform.Fail("t1", ports.ErrInvalidSettings)
+	if _, err := syncer.SyncOne(ctx, "t1"); !errors.Is(err, ports.ErrInvalidSettings) {
+		t.Fatal(err)
+	}
+	p, _ := store.Participant("t1")
+	if p.ShopEnabled {
+		t.Fatal("некорректные обязательные настройки должны скрыть участника")
 	}
 }

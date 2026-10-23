@@ -21,6 +21,7 @@ type locationJSON struct {
 }
 
 type pickupPointJSON struct {
+	RegionCode  string       `json:"regionCode"`
 	Carrier     string       `json:"carrier"`
 	Code        string       `json:"code"`
 	Name        string       `json:"name"`
@@ -90,11 +91,12 @@ func (h *deliveryHandlers) pickupPoints(w http.ResponseWriter, r *http.Request) 
 	body := make([]pickupPointJSON, 0, len(points))
 	for _, p := range points {
 		body = append(body, pickupPointJSON{
-			Carrier: string(p.Carrier),
-			Code:    p.Code,
-			Name:    p.Name,
-			Address: p.Address,
-			City:    p.City,
+			Carrier:    string(p.Carrier),
+			Code:       p.Code,
+			Name:       p.Name,
+			Address:    p.Address,
+			City:       p.City,
+			RegionCode: p.RegionCode,
 			Location: locationJSON{
 				Lat: p.Location.Lat,
 				Lon: p.Location.Lon,

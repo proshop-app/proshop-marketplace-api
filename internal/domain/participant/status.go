@@ -1,12 +1,11 @@
 package participant
 
-// Status — подключение участника к приёму оплаты через платформу.
+// Status — полнота настроек участия магазина.
 type Status string
 
 const (
-	// StatusOnboarding — магазин продавца у провайдера ещё не привязан: товары
-	// видны в каталоге с пометкой, в checkout участник не попадает.
+	// StatusOnboarding — магазин ещё не передал обязательные настройки участия.
 	StatusOnboarding Status = "onboarding"
-	// StatusConnected — оператор ввёл идентификатор магазина продавца у провайдера.
+	// StatusConnected — настройки участия получены с сервера.
 	StatusConnected Status = "connected"
 )

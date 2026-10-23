@@ -16,6 +16,9 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
+var w3IndexingDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3IndexingSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
+
 func indexer(store *fake.Store, index *fake.Index, clock *fake.Clock) *appcatalog.Indexer {
 	return appcatalog.NewIndexer(store, index, clock, 2)
 }
@@ -131,7 +134,7 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 	)
 	owner, _ := participant.New(tenant, "Магазин", t0)
 	owner.Enable(t0)
-	if _, err := owner.ApplyShopSettings(true, participant.Subsidy{}, t0); err != nil {
+	if _, err := owner.ApplyShopSettings(true, w3IndexingSubsidy, money.Money{}, w3IndexingDelivery, t0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -143,7 +146,7 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 	}
 
 	doc, ok := appcatalog.Document(state)
-	if !ok || doc.Version != 4 || doc.Price != 5000 || doc.InStock || !doc.Visible || doc.CheckoutAvailable {
+	if !ok || doc.Version != 4 || doc.Price != 5000 || doc.InStock || !doc.Visible || !doc.CheckoutAvailable {
 		t.Fatalf("документ: %+v", doc)
 	}
 	if !doc.UpdatedAt.Equal(t1) {

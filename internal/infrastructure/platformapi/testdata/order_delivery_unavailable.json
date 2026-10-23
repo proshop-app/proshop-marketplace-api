@@ -1,0 +1,1 @@
+{"ok":false,"message":"В этот ПВЗ доставка больше недоступна","status":409,"code":"DELIVERY_UNAVAILABLE","reason":"pickup_point_unavailable","items":null}

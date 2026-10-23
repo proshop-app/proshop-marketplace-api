@@ -134,17 +134,7 @@ func (r carts) DeleteExpired(_ context.Context, before time.Time, limit int) (in
 	return removed, nil
 }
 
-func copyCheckout(state checkout.State) checkout.State {
-	groups := make([]checkout.Group, len(state.Groups))
-	for i, group := range state.Groups {
-		group.Lines = append([]checkout.Line(nil), group.Lines...)
-		groups[i] = group
-	}
-
-	state.Groups = groups
-
-	return state
-}
+func copyCheckout(state checkout.State) checkout.State { return checkout.Restore(state).State() }
 
 func (r checkouts) Get(_ context.Context, id ids.UUID) (*checkout.Checkout, error) {
 	state, ok := r.d.checkouts[id]
@@ -245,4 +235,48 @@ func (r pickupPoints) Page(
 	}
 
 	return page, nil
+}
+
+func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Checkout, error) {
+	var found []*checkout.Checkout
+	for _, state := range r.d.checkouts {
+		if state.ID <= f.AfterID || (f.BuyerID != "" && state.BuyerID != f.BuyerID) {
+			continue
+		}
+		if f.OrdersOnly && (state.Status == checkout.StatusDraft || state.Status == checkout.StatusConfirmed) {
+			continue
+		}
+		if !f.AwaitingBefore.IsZero() {
+			stuck := false
+			for _, g := range state.Groups {
+				if g.Status == checkout.GroupAwaitingPayment && !g.AwaitingSince.After(f.AwaitingBefore) {
+					stuck = true
+				}
+			}
+			if !stuck {
+				continue
+			}
+		}
+		if !f.WorkDueAt.IsZero() && !checkoutWorkDue(state, f.WorkDueAt) {
+			continue
+		}
+		found = append(found, checkout.Restore(copyCheckout(state)))
+	}
+	sort.Slice(found, func(i, j int) bool { return found[i].ID() < found[j].ID() })
+	if len(found) > f.Limit {
+		found = found[:f.Limit]
+	}
+	return found, nil
+}
+
+func checkoutWorkDue(state checkout.State, now time.Time) bool {
+	if !state.CartConsumed {
+		return true
+	}
+	for _, g := range state.Groups {
+		if g.CreationDue(now) || g.PollDue(now) || g.ReturnDue(now) {
+			return true
+		}
+	}
+	return false
 }

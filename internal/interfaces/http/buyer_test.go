@@ -17,6 +17,9 @@ import (
 )
 
 // session — запрос с кукой сессии покупателя.
+var w3BuyerDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3BuyerSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
+
 func (e *env) session(t *testing.T, method, path, body, cookie string, headers ...string) response {
 	t.Helper()
 
@@ -153,16 +156,17 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	ctx := context.Background()
 
 	e.store.SeedParticipant(participant.State{
-		TenantID:         "t1",
-		Slug:             "s1",
-		Name:             "Магазин",
-		Status:           participant.StatusConnected,
-		PaymentAccountID: "acc",
-		Enabled:          true,
-		ShopEnabled:      true,
-		Version:          1,
-		CreatedAt:        t0,
-		UpdatedAt:        t0,
+		TenantID:    "t1",
+		Slug:        "s1",
+		Name:        "Магазин",
+		Status:      participant.StatusConnected,
+		Enabled:     true,
+		ShopEnabled: true,
+		Delivery:    w3BuyerDelivery,
+		Subsidy:     w3BuyerSubsidy,
+		Version:     1,
+		CreatedAt:   t0,
+		UpdatedAt:   t0,
 	})
 
 	offer := ports.OfferDocument{
@@ -190,6 +194,7 @@ func TestCartDeliveryCheckout(t *testing.T) {
 		nil,
 		t0,
 	)
+	point.RegionCode = "r1"
 	e.store.SeedPickupPoint(point)
 	_ = e.pickups.Put(ctx, []delivery.PickupPoint{point})
 	e.platform.SetItem(
@@ -270,13 +275,13 @@ func TestCartDeliveryCheckout(t *testing.T) {
 		token,
 	)
 	groups, _ := quoted.body["groups"].([]any)
-	if quoted.status != http.StatusOK || len(groups) != 1 || quoted.body["deliveryTotal"] != float64(30000) {
+	if quoted.status != http.StatusOK || len(groups) != 1 || quoted.body["deliveryTotal"] != float64(0) {
 		t.Fatalf("расчёт доставки: %+v", quoted)
 	}
 
 	confirmed := e.session(t, http.MethodPost, "/api/v1/checkout/"+id+"/confirm", "", token)
 	if confirmed.status != http.StatusOK || confirmed.body["status"] != "confirmed" ||
-		confirmed.body["total"] != float64(229000) ||
+		confirmed.body["total"] != float64(199000) ||
 		confirmed.body["confirmedAt"] == nil {
 		t.Fatalf("подтверждение: %+v", confirmed)
 	}

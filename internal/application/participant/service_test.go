@@ -99,17 +99,12 @@ func TestChangesEnqueueSyncOnlyWhenChanged(t *testing.T) {
 		t.Fatalf("включение оператором без согласия магазина не делает видимым: %+v, %v", view, err)
 	}
 
-	view, err = service.SetPaymentAccount(ctx, "t1", "acc-1")
-	if err != nil || view.Participant.Status != participant.StatusConnected {
-		t.Fatalf("оплата: %+v, %v", view, err)
-	}
-
 	if _, err := service.Rename(ctx, "t1", "Новое имя"); err != nil {
 		t.Fatal(err)
 	}
 
 	view, err = service.Disable(ctx, "t1")
-	if err != nil || view.Visibility.Visible || view.Participant.Version != 5 {
+	if err != nil || view.Visibility.Visible || view.Participant.Version != 4 {
 		t.Fatalf("выключение: %+v, %v", view, err)
 	}
 
@@ -132,9 +127,7 @@ func TestChangeErrors(t *testing.T) {
 	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Магазин"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.SetPaymentAccount(ctx, "t1", "плохой"); !errors.Is(err, participant.ErrInvalidPaymentAccount) {
-		t.Fatalf("ожидалось ErrInvalidPaymentAccount, получено %v", err)
-	}
+
 }
 
 func TestGetAndList(t *testing.T) {

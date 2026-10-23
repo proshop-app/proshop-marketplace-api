@@ -3,18 +3,17 @@
 package participant
 
 import (
-	"regexp"
+	"reflect"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 const maxNameLength = 200
-
-var paymentAccountPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 // Origin — состояние агрегата на момент чтения. По нему репозиторий строит
 // условное обновление: другой статус или версия в базе — конфликт, а не
@@ -31,7 +30,8 @@ type State struct {
 	Name             string
 	Status           Status
 	Enabled          bool
-	PaymentAccountID string
+	FreeDeliveryFrom money.Money
+	Delivery         DeliverySettings
 	// ShopEnabled — магазин сам включил участие (marketplace.enabled в его настройках на сервере).
 	ShopEnabled bool
 	// Subsidy — субсидия доставки из настроек магазина.
@@ -74,11 +74,16 @@ func New(tenant *Tenant, name string, now time.Time) (*Participant, error) {
 
 // Restore поднимает агрегат из хранилища.
 func Restore(state State) *Participant {
+	state.Delivery = state.Delivery.Clone()
 	return &Participant{state: state, origin: Origin{Status: state.Status, Version: state.Version}}
 }
 
 // State — снимок для хранения.
-func (p *Participant) State() State { return p.state }
+func (p *Participant) State() State {
+	state := p.state
+	state.Delivery = state.Delivery.Clone()
+	return state
+}
 
 // Origin — статус и версия на момент чтения; у нового агрегата версия нулевая.
 func (p *Participant) Origin() Origin { return p.origin }
@@ -100,14 +105,11 @@ func (p *Participant) Slug() string { return p.state.Slug }
 // Name — название участника в маркетплейсе.
 func (p *Participant) Name() string { return p.state.Name }
 
-// Status — подключение к приёму оплаты.
+// Status — полнота настроек участия магазина.
 func (p *Participant) Status() Status { return p.state.Status }
 
 // Enabled — оператор включил участника.
 func (p *Participant) Enabled() bool { return p.state.Enabled }
-
-// PaymentAccountID — магазин продавца у платёжного провайдера; пусто — не привязан.
-func (p *Participant) PaymentAccountID() string { return p.state.PaymentAccountID }
 
 // Version — версия состояния.
 func (p *Participant) Version() int64 { return p.state.Version }
@@ -121,12 +123,22 @@ func (p *Participant) Subsidy() Subsidy { return p.state.Subsidy }
 // ApplyShopSettings переносит настройки магазина с сервера. Версия растёт,
 // только если поменялось видимое: флаг участия или субсидия; время сверки
 // обновляется всегда.
-func (p *Participant) ApplyShopSettings(enabled bool, subsidy Subsidy, now time.Time) (bool, error) {
+func (p *Participant) ApplyShopSettings(
+	enabled bool,
+	subsidy Subsidy,
+	freeDeliveryFrom money.Money,
+	delivery DeliverySettings,
+	now time.Time,
+) (bool, error) {
 	if err := subsidy.Validate(); err != nil {
 		return false, err
 	}
 
-	changed := p.state.ShopEnabled != enabled || p.state.Subsidy != subsidy
+	if enabled && (!subsidy.Enabled || freeDeliveryFrom.IsNegative() || delivery.Validate() != nil) {
+		return false, ErrInvalidDeliverySettings
+	}
+	changed := p.state.ShopEnabled != enabled || p.state.Subsidy != subsidy ||
+		p.state.FreeDeliveryFrom != freeDeliveryFrom || !reflect.DeepEqual(p.state.Delivery, delivery)
 	p.state.SettingsSyncedAt = now
 
 	if !changed {
@@ -135,6 +147,12 @@ func (p *Participant) ApplyShopSettings(enabled bool, subsidy Subsidy, now time.
 
 	p.state.ShopEnabled = enabled
 	p.state.Subsidy = subsidy
+	p.state.FreeDeliveryFrom = freeDeliveryFrom
+	p.state.Delivery = delivery.Clone()
+	p.state.Status = StatusOnboarding
+	if enabled {
+		p.state.Status = StatusConnected
+	}
 	p.touch(now)
 
 	return true, nil
@@ -151,24 +169,6 @@ func (p *Participant) Rename(name string, now time.Time) (bool, error) {
 	}
 
 	p.state.Name = clean
-	p.touch(now)
-
-	return true, nil
-}
-
-// SetPaymentAccount привязывает магазин продавца у провайдера: onboarding → connected,
-// у подключённого — замена идентификатора.
-func (p *Participant) SetPaymentAccount(accountID string, now time.Time) (bool, error) {
-	clean := strings.TrimSpace(accountID)
-	if !paymentAccountPattern.MatchString(clean) {
-		return false, ErrInvalidPaymentAccount
-	}
-	if p.state.Status == StatusConnected && p.state.PaymentAccountID == clean {
-		return false, nil
-	}
-
-	p.state.PaymentAccountID = clean
-	p.state.Status = StatusConnected
 	p.touch(now)
 
 	return true, nil

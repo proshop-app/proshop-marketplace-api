@@ -328,3 +328,19 @@ func TestMarketplaceBlockPreservesTypes(t *testing.T) {
 		t.Fatalf("ошибочный атрибут должен дойти до сценария проекции: %+v %v", rec, err)
 	}
 }
+
+func TestMarketplacePriceProjectedWithoutFloat(t *testing.T) {
+	body := strings.Replace(productBody, `"marketplace":{`, `"marketplace":{"price":249.995,`, 1)
+	rec, err := handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := rec.products[0].Snapshot.Card.Marketplace
+	if card == nil || card.Price == nil || card.Price.String() != "249.995" {
+		t.Fatalf("цена площадки: %+v", card)
+	}
+	invalid := strings.Replace(body, `"price":249.995`, `"price":-1`, 1)
+	if _, err := handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, invalid)); err == nil {
+		t.Fatal("отрицательная цена площадки не принимается")
+	}
+}

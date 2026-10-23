@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	pointColumns = `carrier, code, name, address, city, lat, lon, schedule, payload, active, refreshed_at`
+	pointColumns = `carrier, code, name, address, city, lat, lon, schedule, payload, active, refreshed_at, region_code`
 
 	upsertPoints = `
 		INSERT INTO pickup_points (` + pointColumns + `)
@@ -25,7 +25,8 @@ const (
 			$8::text[],
 			$9::jsonb[],
 			$10::bool[],
-			$11::timestamptz[]
+			$11::timestamptz[],
+			$12::text[]
 		)
 		ON CONFLICT (carrier, code) DO UPDATE
 		SET name = EXCLUDED.name,
@@ -36,7 +37,8 @@ const (
 			schedule = EXCLUDED.schedule,
 			payload = EXCLUDED.payload,
 			active = EXCLUDED.active,
-			refreshed_at = EXCLUDED.refreshed_at`
+			refreshed_at = EXCLUDED.refreshed_at,
+			region_code = EXCLUDED.region_code`
 
 	deactivateStalePoints = `
 		UPDATE pickup_points
@@ -74,6 +76,7 @@ type pointColumnsBatch struct {
 	payloads  []*string
 	active    []bool
 	refreshed []time.Time
+	regions   []string
 }
 
 // Upsert записывает пачку одним запросом.
@@ -98,6 +101,7 @@ func (r *PickupPoints) Upsert(ctx context.Context, points []delivery.PickupPoint
 		batch.payloads,
 		batch.active,
 		batch.refreshed,
+		batch.regions,
 	)
 	if err != nil {
 		return fmt.Errorf("пункты выдачи: %w", err)
@@ -170,6 +174,7 @@ func newPointColumnsBatch(points []delivery.PickupPoint) pointColumnsBatch {
 		payloads:  make([]*string, n),
 		active:    make([]bool, n),
 		refreshed: make([]time.Time, n),
+		regions:   make([]string, n),
 	}
 
 	for i, p := range points {
@@ -178,6 +183,7 @@ func newPointColumnsBatch(points []delivery.PickupPoint) pointColumnsBatch {
 		batch.names[i] = p.Name
 		batch.addresses[i] = p.Address
 		batch.cities[i] = p.City
+		batch.regions[i] = p.RegionCode
 		batch.lats[i] = p.Location.Lat
 		batch.lons[i] = p.Location.Lon
 		batch.schedules[i] = p.Schedule
@@ -212,6 +218,7 @@ func scanPoint(row rowScanner) (delivery.PickupPoint, error) {
 		&payload,
 		&p.Active,
 		&p.RefreshedAt,
+		&p.RegionCode,
 	)
 	if err != nil {
 		return delivery.PickupPoint{}, err

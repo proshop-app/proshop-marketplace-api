@@ -18,7 +18,7 @@ func TestCanonicalMappingAndQueries(t *testing.T) {
 		`"dynamic":true`,
 		`"path_match":"attributes.*"`,
 		`"type":"double"`,
-		`"taxonomySchema":1`,
+		`"taxonomySchema":2`,
 	} {
 		if !strings.Contains(string(encoded), fragment) {
 			t.Fatal(string(encoded))

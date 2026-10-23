@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 const (
@@ -18,8 +20,9 @@ const (
 	// согласован, поэтому версия документа индекса монотонна.
 	offerSelect = `
 		SELECT ` + productColumns + `, ` + signalsColumns + `,
-			pa.tenant_id, pa.slug, pa.name, pa.status, pa.enabled, coalesce(pa.payment_account_id, ''),
+			pa.tenant_id, pa.slug, pa.name, pa.status, pa.enabled,
 			pa.shop_enabled, pa.subsidy, pa.settings_synced_at, pa.version, pa.created_at, pa.updated_at,
+   pa.free_delivery_from, pa.delivery_settings,
 			t.tenant_id, t.slug, t.status, t.cell, t.plan, t.hosts, t.event_at, t.version, t.updated_at
 		FROM catalog_products p
 		LEFT JOIN offers o ON o.tenant_id = p.tenant_id AND o.product_id = p.product_id
@@ -64,7 +67,8 @@ type offerRow struct {
 type participantRow struct {
 	tenantID, slug, name, status *string
 	enabled                      *bool
-	paymentAccountID             *string
+	freeDeliveryFrom             *int64
+	deliverySettings             []byte
 	shopEnabled                  *bool
 	subsidy                      []byte
 	syncedAt                     *time.Time
@@ -191,13 +195,14 @@ func (r *participantRow) targets() []any {
 		&r.name,
 		&r.status,
 		&r.enabled,
-		&r.paymentAccountID,
 		&r.shopEnabled,
 		&r.subsidy,
 		&r.syncedAt,
 		&r.version,
 		&r.createdAt,
 		&r.updatedAt,
+		&r.freeDeliveryFrom,
+		&r.deliverySettings,
 	}
 }
 
@@ -213,19 +218,22 @@ func (r *participantRow) participant() (*participant.Participant, error) {
 	}
 
 	state := participant.State{
-		TenantID:         ids.TenantID(*r.tenantID),
-		Slug:             *r.slug,
-		Name:             *r.name,
-		Status:           participant.Status(*r.status),
-		Enabled:          *r.enabled,
-		PaymentAccountID: *r.paymentAccountID,
-		ShopEnabled:      *r.shopEnabled,
-		Subsidy:          subsidy,
-		Version:          *r.version,
-		CreatedAt:        *r.createdAt,
-		UpdatedAt:        *r.updatedAt,
+		TenantID:    ids.TenantID(*r.tenantID),
+		Slug:        *r.slug,
+		Name:        *r.name,
+		Status:      participant.Status(*r.status),
+		Enabled:     *r.enabled,
+		ShopEnabled: *r.shopEnabled,
+		Subsidy:     subsidy,
+		Version:     *r.version,
+		CreatedAt:   *r.createdAt,
+		UpdatedAt:   *r.updatedAt,
 	}
 
+	state.FreeDeliveryFrom = money.FromKopecks(*r.freeDeliveryFrom)
+	if err := json.Unmarshal(r.deliverySettings, &state.Delivery); err != nil {
+		return nil, err
+	}
 	if r.syncedAt != nil {
 		state.SettingsSyncedAt = *r.syncedAt
 	}

@@ -23,6 +23,7 @@ func validEnv() map[string]string {
 		"KAFKA_BROKERS":             "localhost:9092, localhost:9093",
 		"OPERATOR_TOKEN":            strings.Repeat("x", 32),
 		"REDIS_URL":                 "redis://localhost:6379/0",
+		"MARKETPLACE_PUBLIC_URL":    "https://market.example",
 		"PLATFORM_API_URL":          "http://server:3000",
 		"SERVICE_TOKEN_MARKETPLACE": strings.Repeat("s", 32),
 		"SMSRU_API_ID":              "key",
@@ -174,5 +175,37 @@ func TestLoadDatabase(t *testing.T) {
 
 	if _, err := config.LoadDatabase(envOf(map[string]string{})); err == nil {
 		t.Fatal("ожидалась ошибка без DATABASE_URL")
+	}
+}
+
+func TestDeliverySubsidyMinPercent(t *testing.T) {
+	cfg, err := config.Load(envOf(validEnv()))
+	if err != nil || cfg.Checkout.DeliverySubsidyMinPercent != 30 {
+		t.Fatalf("умолчание: %+v %v", cfg.Checkout, err)
+	}
+	for _, tc := range []struct {
+		raw   string
+		want  int
+		valid bool
+	}{
+		{"0", 0, true},
+		{"45", 45, true},
+		{"100", 100, true},
+		{"-1", 0, false},
+		{"101", 0, false},
+		{"30.5", 0, false},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			env := validEnv()
+			env["DELIVERY_SUBSIDY_MIN_PERCENT"] = tc.raw
+			cfg, err := config.Load(envOf(env))
+			if tc.valid {
+				if err != nil || cfg.Checkout.DeliverySubsidyMinPercent != tc.want {
+					t.Fatalf("порог: %+v %v", cfg.Checkout, err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "DELIVERY_SUBSIDY_MIN_PERCENT") {
+				t.Fatalf("ожидалась ошибка порога: %v", err)
+			}
+		})
 	}
 }
