@@ -19,8 +19,6 @@ const SessionCookie = "__Host-mp_session"
 // smsruAck — ответ, которого sms.ru ждёт от обработчика оповещений; иначе шлёт повторно.
 const smsruAck = "100"
 
-const keyBuyer contextKey = 100
-
 type authHandlers struct {
 	auth       *appbuyer.Auth
 	trustProxy bool
@@ -216,8 +214,11 @@ func buyerOnly(auth *appbuyer.Auth, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		rememberBuyer(r.Context(), session.BuyerID)
+
 		logger := loggerFrom(r.Context()).With(slog.String("buyerId", string(session.BuyerID)))
-		ctx := context.WithValue(context.WithValue(r.Context(), keyBuyer, session.BuyerID), keyLogger, logger)
+		ctx := context.WithValue(r.Context(), keyBuyer, session.BuyerID)
+		ctx = context.WithValue(ctx, keyLogger, logger)
 
 		next(w, r.WithContext(ctx))
 	}

@@ -1,10 +1,12 @@
 package http
 
 import (
+	"bytes"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -53,5 +55,23 @@ func TestObserveRecoversPanic(t *testing.T) {
 
 	if recorder.Code != http.StatusInternalServerError || recorder.Header().Get(headerRequestID) == "" {
 		t.Fatalf("паника — 500 с идентификатором запроса: %d", recorder.Code)
+	}
+}
+
+func TestObserveLogsBuyer(t *testing.T) {
+	var logs bytes.Buffer
+
+	handler := observe(
+		slog.New(slog.NewJSONHandler(&logs, nil)),
+		newHTTPMetrics(prometheus.NewRegistry()),
+		http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			rememberBuyer(r.Context(), "8a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b")
+		}),
+	)
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/me", nil))
+
+	if !strings.Contains(logs.String(), `"buyerId":"8a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b"`) {
+		t.Fatalf("строка журнала запроса с покупателем: %s", logs.String())
 	}
 }

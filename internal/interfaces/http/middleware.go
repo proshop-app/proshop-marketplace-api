@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 const (
@@ -29,7 +31,15 @@ type contextKey int
 const (
 	keyRequestID contextKey = iota
 	keyLogger
+	keyBuyer
+	keyFacts
 )
+
+// requestFacts — что обработчики узнали о запросе; observe дописывает это
+// в строку журнала запроса.
+type requestFacts struct {
+	buyerID ids.UUID
+}
 
 type statusRecorder struct {
 	http.ResponseWriter
@@ -95,7 +105,11 @@ func observe(logger *slog.Logger, metrics *httpMetrics, next http.Handler) http.
 		}
 
 		requestLogger := logger.With(slog.String("requestId", id))
-		ctx := context.WithValue(context.WithValue(r.Context(), keyRequestID, id), keyLogger, requestLogger)
+		facts := &requestFacts{}
+
+		ctx := context.WithValue(r.Context(), keyRequestID, id)
+		ctx = context.WithValue(ctx, keyLogger, requestLogger)
+		ctx = context.WithValue(ctx, keyFacts, facts)
 		r = r.WithContext(ctx)
 		w.Header().Set(headerRequestID, id)
 
@@ -119,13 +133,17 @@ func observe(logger *slog.Logger, metrics *httpMetrics, next http.Handler) http.
 			elapsed := time.Since(started)
 			metrics.requests.WithLabelValues(route, strconv.Itoa(recorder.status)).Inc()
 			metrics.duration.WithLabelValues(route).Observe(elapsed.Seconds())
-			requestLogger.Info(
-				"http",
+			attrs := []any{
 				slog.String("method", r.Method),
 				slog.String("route", route),
 				slog.Int("status", recorder.status),
 				slog.Duration("duration", elapsed),
-			)
+			}
+			if facts.buyerID != "" {
+				attrs = append(attrs, slog.String("buyerId", string(facts.buyerID)))
+			}
+
+			requestLogger.Info("http", attrs...)
 		}()
 
 		next.ServeHTTP(recorder, r)
@@ -177,4 +195,11 @@ func readJSON(w http.ResponseWriter, r *http.Request, out any) error {
 	}
 
 	return nil
+}
+
+// rememberBuyer отмечает покупателя запроса для строки журнала запроса.
+func rememberBuyer(ctx context.Context, buyerID ids.UUID) {
+	if facts, ok := ctx.Value(keyFacts).(*requestFacts); ok {
+		facts.buyerID = buyerID
+	}
 }
