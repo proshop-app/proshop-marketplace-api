@@ -1,0 +1,337 @@
+package fake
+
+import (
+	"context"
+	"maps"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+)
+
+type productKey struct {
+	tenant  ids.TenantID
+	product ids.ProductID
+}
+
+type tagKey struct {
+	tenant ids.TenantID
+	tag    ids.TagID
+}
+
+type parkedKey struct {
+	topic     string
+	partition int
+	offset    int64
+}
+
+// OutboxRow — задача outbox в памяти.
+type OutboxRow struct {
+	ID        int64
+	Kind      string
+	TenantID  ids.TenantID
+	DedupKey  string
+	Payload   []byte
+	Attempts  int
+	NextAt    time.Time
+	DoneAt    *time.Time
+	LastError string
+	CreatedAt time.Time
+}
+
+type data struct {
+	participants map[ids.TenantID]participant.State
+	tenants      map[ids.TenantID]participant.TenantState
+	products     map[productKey]catalog.ProductState
+	signals      map[productKey]catalog.SignalsState
+	tags         map[tagKey]catalog.TagState
+	outbox       []OutboxRow
+	nextTaskID   int64
+	processed    map[string]time.Time
+	parked       map[parkedKey]ports.ParkedEvent
+}
+
+func (d *data) clone() *data {
+	return &data{
+		participants: maps.Clone(d.participants),
+		tenants:      maps.Clone(d.tenants),
+		products:     maps.Clone(d.products),
+		signals:      maps.Clone(d.signals),
+		tags:         maps.Clone(d.tags),
+		outbox:       append([]OutboxRow(nil), d.outbox...),
+		nextTaskID:   d.nextTaskID,
+		processed:    maps.Clone(d.processed),
+		parked:       maps.Clone(d.parked),
+	}
+}
+
+// Store — хранилище в памяти: UnitOfWork, очередь задач и чистка по сроку.
+type Store struct {
+	mu   sync.Mutex
+	data *data
+	// FailCommit, если задан, возвращается вместо фиксации транзакции.
+	FailCommit error
+}
+
+// NewStore — пустое хранилище.
+func NewStore() *Store {
+	return &Store{data: &data{
+		participants: map[ids.TenantID]participant.State{},
+		tenants:      map[ids.TenantID]participant.TenantState{},
+		products:     map[productKey]catalog.ProductState{},
+		signals:      map[productKey]catalog.SignalsState{},
+		tags:         map[tagKey]catalog.TagState{},
+		processed:    map[string]time.Time{},
+		parked:       map[parkedKey]ports.ParkedEvent{},
+	}}
+}
+
+// Do выполняет fn на копии данных и фиксирует её, только если fn вернула nil.
+func (s *Store) Do(ctx context.Context, fn func(ctx context.Context, tx ports.Tx) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	working := s.data.clone()
+	if err := fn(ctx, &tx{data: working}); err != nil {
+		return err
+	}
+	if s.FailCommit != nil {
+		return s.FailCommit
+	}
+
+	s.data = working
+
+	return nil
+}
+
+func (s *Store) read(fn func(d *data)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	fn(s.data)
+}
+
+// SeedTenant кладёт запись реестра.
+func (s *Store) SeedTenant(state participant.TenantState) {
+	s.read(func(d *data) { d.tenants[state.TenantID] = state })
+}
+
+// SeedParticipant кладёт участника.
+func (s *Store) SeedParticipant(state participant.State) {
+	s.read(func(d *data) { d.participants[state.TenantID] = state })
+}
+
+// SeedProduct кладёт товар проекции.
+func (s *Store) SeedProduct(state catalog.ProductState) {
+	s.read(func(d *data) { d.products[productKey{state.TenantID, state.ProductID}] = state })
+}
+
+// SeedTag кладёт тег.
+func (s *Store) SeedTag(state catalog.TagState) {
+	s.read(func(d *data) { d.tags[tagKey{state.TenantID, state.TagID}] = state })
+}
+
+// Participant — участник, если есть.
+func (s *Store) Participant(id ids.TenantID) (participant.State, bool) {
+	var (
+		state participant.State
+		ok    bool
+	)
+
+	s.read(func(d *data) { state, ok = d.participants[id] })
+
+	return state, ok
+}
+
+// Tenant — запись реестра, если есть.
+func (s *Store) Tenant(id ids.TenantID) (participant.TenantState, bool) {
+	var (
+		state participant.TenantState
+		ok    bool
+	)
+
+	s.read(func(d *data) { state, ok = d.tenants[id] })
+
+	return state, ok
+}
+
+// Product — товар проекции, если есть.
+func (s *Store) Product(tenant ids.TenantID, product ids.ProductID) (catalog.ProductState, bool) {
+	var (
+		state catalog.ProductState
+		ok    bool
+	)
+
+	s.read(func(d *data) { state, ok = d.products[productKey{tenant, product}] })
+
+	return state, ok
+}
+
+// Signals — сигналы товара, если есть.
+func (s *Store) Signals(tenant ids.TenantID, product ids.ProductID) (catalog.SignalsState, bool) {
+	var (
+		state catalog.SignalsState
+		ok    bool
+	)
+
+	s.read(func(d *data) { state, ok = d.signals[productKey{tenant, product}] })
+
+	return state, ok
+}
+
+// Tag — тег, если есть.
+func (s *Store) Tag(tenant ids.TenantID, tag ids.TagID) (catalog.TagState, bool) {
+	var (
+		state catalog.TagState
+		ok    bool
+	)
+
+	s.read(func(d *data) { state, ok = d.tags[tagKey{tenant, tag}] })
+
+	return state, ok
+}
+
+// OutboxRows — копия outbox.
+func (s *Store) OutboxRows() []OutboxRow {
+	var rows []OutboxRow
+
+	s.read(func(d *data) { rows = append(rows, d.outbox...) })
+
+	return rows
+}
+
+// Processed — событие отмечено обработанным.
+func (s *Store) Processed(eventID string) bool {
+	var ok bool
+
+	s.read(func(d *data) { _, ok = d.processed[eventID] })
+
+	return ok
+}
+
+// ParkedEvents — отравленные сообщения.
+func (s *Store) ParkedEvents() []ports.ParkedEvent {
+	var events []ports.ParkedEvent
+
+	s.read(func(d *data) {
+		for _, event := range d.parked {
+			events = append(events, event)
+		}
+	})
+
+	sort.Slice(events, func(i, j int) bool { return events[i].Offset < events[j].Offset })
+
+	return events
+}
+
+// Claim берёт созревшие задачи с арендой, не больше PerTenant на магазин.
+func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	due := make([]int, 0)
+	for i, row := range s.data.outbox {
+		if row.DoneAt == nil && !row.NextAt.After(request.Now) {
+			due = append(due, i)
+		}
+	}
+
+	sort.Slice(due, func(a, b int) bool {
+		left, right := s.data.outbox[due[a]], s.data.outbox[due[b]]
+		if !left.NextAt.Equal(right.NextAt) {
+			return left.NextAt.Before(right.NextAt)
+		}
+
+		return left.ID < right.ID
+	})
+
+	perTenant := map[ids.TenantID]int{}
+	tasks := make([]ports.Task, 0, request.Limit)
+
+	for _, i := range due {
+		row := &s.data.outbox[i]
+		if len(tasks) == request.Limit || perTenant[row.TenantID] == request.PerTenant {
+			continue
+		}
+
+		perTenant[row.TenantID]++
+		row.Attempts++
+		row.NextAt = request.LeaseUntil
+		tasks = append(tasks, ports.Task{
+			ID: row.ID, Kind: row.Kind, TenantID: row.TenantID, Payload: row.Payload,
+			Attempts: row.Attempts, CreatedAt: row.CreatedAt,
+		})
+	}
+
+	return tasks, nil
+}
+
+// Complete отмечает задачу выполненной.
+func (s *Store) Complete(_ context.Context, id int64, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i := range s.data.outbox {
+		if s.data.outbox[i].ID == id {
+			done := at
+			s.data.outbox[i].DoneAt = &done
+		}
+	}
+
+	return nil
+}
+
+// Retry откладывает задачу.
+func (s *Store) Retry(_ context.Context, id int64, nextAt time.Time, reason string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i := range s.data.outbox {
+		if s.data.outbox[i].ID == id {
+			s.data.outbox[i].NextAt = nextAt
+			s.data.outbox[i].LastError = reason
+		}
+	}
+
+	return nil
+}
+
+// Purge удаляет служебные записи старше границ.
+func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.PurgeResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var result ports.PurgeResult
+
+	for id, at := range s.data.processed {
+		if at.Before(request.ProcessedBefore) {
+			delete(s.data.processed, id)
+			result.Processed++
+		}
+	}
+
+	kept := s.data.outbox[:0]
+	for _, row := range s.data.outbox {
+		if row.DoneAt != nil && row.DoneAt.Before(request.OutboxDoneBefore) {
+			result.OutboxDone++
+
+			continue
+		}
+
+		kept = append(kept, row)
+	}
+	s.data.outbox = kept
+
+	for key, event := range s.data.parked {
+		if event.ParkedAt.Before(request.ParkedBefore) {
+			delete(s.data.parked, key)
+			result.Parked++
+		}
+	}
+
+	return result, nil
+}
