@@ -16,9 +16,9 @@ domain ← application ← interfaces, infrastructure        сборка гра
 | `pkg/` | деньги, идентификаторы, ошибки с кодами | только стандартную библиотеку и `pkg/` |
 | `internal/domain/<контекст>` | агрегаты, объекты-значения, правила, `errors.go`, `repository.go` (только интерфейсы) | стандартную библиотеку, `pkg/`, другие пакеты домена |
 | `internal/application/<контекст>` | сценарии: команды, запросы, транзакции через `UnitOfWork` | домен, `pkg/`, `application/ports`; **не** `infrastructure`, `interfaces`, `config` |
-| `internal/application/ports` | порты: `UnitOfWork`/`Tx`, outbox, inbox, индекс, часы | домен, `pkg/` |
+| `internal/application/ports` | порты: `UnitOfWork`/`Tx`, outbox, inbox, индексы, часы, сессии и лимиты, звонок (`CallCheck`), API сервера (`PlatformAPI`), справочники перевозчиков | домен, `pkg/` |
 | `internal/application/fake` | реализации портов в памяти для тестов | как приложение |
-| `internal/infrastructure/*` | реализации портов: PostgreSQL, OpenSearch, Kafka, телеметрия | приложение, домен, `pkg/`, библиотеки; **не** `interfaces`, `config` |
+| `internal/infrastructure/*` | реализации портов: PostgreSQL, OpenSearch, Kafka, Redis, sms.ru, СДЭК, Яндекс Доставка, API сервера, телеметрия | приложение, домен, `pkg/`, библиотеки; **не** `interfaces`, `config` |
 | `internal/interfaces/*` | HTTP, обработчики Kafka, фоновые циклы: разбор → сценарий → ответ | приложение, домен, `pkg/`, библиотеки; **не** `infrastructure`, `config` |
 | `internal/config` | окружение с проверкой на старте | читает только `cmd/` |
 | `cmd/` | сборка зависимостей без DI-магии | всё |
@@ -28,8 +28,28 @@ domain ← application ← interfaces, infrastructure        сборка гра
 импорты тестов домена и приложения) и `depguard` в `.golangci.yml`.
 
 Контексты заводятся в свою неделю. Пустых каталогов «на вырост» нет:
-`buyer`, `cart`, `checkout`, `payment`, `settlement`, `order` появятся
-вместе с кодом.
+`participant`, `catalog` — с недели 1, `buyer`, `cart`, `delivery`,
+`checkout` — с недели 2; `payment`, `settlement`, `order` появятся вместе с
+кодом.
+
+## Раскладка кода
+
+- В файле сначала `const`, `var` и `type`, потом функции и методы. Новый
+  тип в конце файла — красный тест.
+- `cmd/*/main.go` — только `func main`. Таблица команд и `run` — в
+  `cli.go`, сборка графа — в `server.go`, `infrastructure.go`, команды — в
+  `commands.go`.
+- Строка — не длиннее 120 символов (табуляция — 4).
+- Многострочный литерал или вызов — по полю или аргументу на строку; либо
+  всё на строке скобки, а многострочным остаётся только последний аргумент:
+  `f(ctx, T{ … })`. Длинное сообщение ошибки или составной аргумент — в
+  переменную, не в перенос.
+- SQL репозиториев — именованные константы в начале файла, в `SET` — по
+  колонке на строку. Репозитории разложены по агрегатам, общие помощники —
+  `postgres/values.go`.
+
+Правила держат `internal/architecture/layout_test.go` (порядок объявлений,
+`main.go`, «по элементу на строку») и `lll` в `.golangci.yml`.
 
 ## Деньги
 
@@ -58,18 +78,25 @@ domain ← application ← interfaces, infrastructure        сборка гра
 
 ## Порты и внешние вызовы
 
-- Любой вызов наружу (база, индекс, брокер, сервер, ЮKassa, sms.ru) — за
-  портом в `application/ports`, реализация — в `infrastructure`.
+- Любой вызов наружу (база, индекс, брокер, сервер, ЮKassa, sms.ru,
+  перевозчики) — за портом в `application/ports`, реализация — в
+  `infrastructure`. Учётные данные внешних сервисов — только из окружения.
+- Контракт с внутренним API сервера — `docs/server-contract.md`; клиент
+  `infrastructure/platformapi` меняется только вместе с ним.
 - Тесты приложения и транспорта — на `application/fake`.
 - Интеграции с настоящими сервисами — только `internal/infrastructure/**/*_test.go`
   под тегом `integration`, на compose: `make test-integration`. Каждый тест
   заводит свою базу (`postgres/pgtest`), свой алиас индекса, свои топики и
   группу и убирает их за собой. Миграции в тестах применяются с нуля.
+- Адаптеры внешних API (sms.ru, СДЭК, Яндекс, сервер) тестируются на
+  `testdata` — записанных ответах — через `httptest`. Живой вызов — только
+  отдельным тестом под флагом окружения (`SMSRU_LIVE_TEST=1`,
+  `CDEK_LIVE_TEST=1`, `YANDEX_LIVE_TEST=1`) с ключами из окружения.
 
 ## Ошибки
 
 - `pkg/errs`: код класса (`invalid`, `not_found`, `conflict`,
-  `unauthorized`, `unavailable`, `internal`) и стабильный ключ
+  `unauthorized`, `too_many_requests`, `unavailable`, `internal`) и стабильный ключ
   `контекст.причина`. Доменные ошибки объявлены в `errors.go` контекста;
   `errors.Is` сравнивает по ключу, `WithMessage`/`Wrap` его сохраняют.
 - HTTP переводит ошибку в ответ одной таблицей
@@ -100,6 +127,16 @@ domain ← application ← interfaces, infrastructure        сборка гра
   за пачку — шумный магазин не задерживает чужие.
 - Метрики и журналы с меткой `tenant`/`tenantId` там, где речь о магазине.
 
+## Покупатель
+
+- Вход — звонок на номер sms.ru; в разработке — песочница
+  (`SMSRU_MODE=sandbox`), она подтверждает любой номер сама.
+- Сессия — непрозрачный токен: в Redis только его `sha256`, в ответах токена
+  нет, кука `__Host-mp_session`, для серверного рендера — `Bearer`.
+- Лимиты входа — на номер и на адрес клиента, окно в Redis; превышение —
+  `too_many_requests` с подсказкой, когда повторить.
+- `buyerId` лежит в контексте запроса и попадает в журнал.
+
 ## Универсальность
 
 Платформа универсальна: ни одной константы, умолчания, фикстуры или
@@ -113,7 +150,8 @@ domain ← application ← interfaces, infrastructure        сборка гра
 |---|---|---|
 | домен, `pkg` | рядом с кодом, без инфраструктуры | `make test` |
 | сценарии приложения, HTTP, Kafka-разбор, циклы | на `application/fake` | `make test` |
-| сторож слоистости | `internal/architecture` | `make test` |
+| сторож слоистости и раскладки кода | `internal/architecture` | `make test` |
+| адаптеры внешних API | `internal/infrastructure/**`, на `testdata` | `make test` |
 | репозитории, индекс, консьюмеры, сквозной путь | `internal/infrastructure/**`, тег `integration` | `make test-integration` |
 
 `make test` идёт с `-race`. Красное чинится, не пропускается.
@@ -123,7 +161,7 @@ domain ← application ← interfaces, infrastructure        сборка гра
 `make dev` — compose (PostgreSQL 16, OpenSearch, Kafka KRaft, Redis),
 миграции и сервис с перезапуском (air). Остальное: `make test`,
 `make test-integration`, `make lint`, `make migrate`, `make reindex`,
-`make build`, `make image`. Инструменты не ставятся глобально: golangci-lint
+`make refresh-pickup-points`, `make build`, `make image`. Инструменты не ставятся глобально: golangci-lint
 и air — `go run` с версиями из `Makefile`, goose встроен в `cmd/migrate`.
 `GOTOOLCHAIN=local`: проект собирается go1.23.2.
 
