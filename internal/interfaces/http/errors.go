@@ -21,6 +21,7 @@ var (
 // statusByCode — единственная таблица перевода ошибок в коды ответа. Доменная
 // ошибка несёт класс, транспорт выбирает ответ только по нему.
 var statusByCode = map[errs.Code]int{
+	errs.Forbidden:       http.StatusForbidden,
 	errs.Invalid:         http.StatusBadRequest,
 	errs.NotFound:        http.StatusNotFound,
 	errs.Conflict:        http.StatusConflict,

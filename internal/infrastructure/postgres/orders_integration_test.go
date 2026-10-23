@@ -36,7 +36,7 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	selection := checkout.Selection{Carrier: "cdek", PickupPointCode: "P1", RegionCode: "r1"}
+	selection := checkout.Selection{Carrier: "cdek", PickupPointCode: "P1", RegionCode: "RU-MOW"}
 	if err := c.SelectDelivery(
 		selection,
 		map[ids.TenantID]delivery.Quote{
@@ -89,7 +89,7 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 		if state.Contact != contact || state.ReturnURL != "https://market.example/return" ||
 			state.Groups[0].OrderID != "o1" || state.Groups[0].PaymentOrder != 1 ||
 			state.Groups[0].PaymentURL != order.PaymentURL || !state.Groups[0].ExpiresAt.Equal(at(60)) ||
-			state.Delivery.RegionCode != "r1" || state.Status != checkout.StatusAwaitingPayment {
+			state.Delivery.RegionCode != "RU-MOW" || state.Status != checkout.StatusAwaitingPayment {
 			t.Fatalf("после загрузки: %+v", state)
 		}
 		items, err := tx.Checkouts().List(ctx, checkout.Filter{

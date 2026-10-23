@@ -1,0 +1,143 @@
+package http_test
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+)
+
+const (
+	sessionPath      = "/api/v1/operator/session"
+	participantsPath = "/api/v1/operator/participants"
+	deliveryPath     = "/api/v1/operator/participants/t1/delivery"
+	eventPath        = "/api/v1/operator/events/1"
+)
+
+func operatorCall(t *testing.T, e *env, method, path, body, cookie, origin string) response {
+	t.Helper()
+	req, err := http.NewRequest(method, e.server.URL+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", origin)
+	req.Header.Set("X-Requested-With", "KvazarOperator")
+	if cookie != "" {
+		req.Header.Set("Cookie", cookie)
+	}
+	raw, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = raw.Body.Close() }()
+	out := response{status: raw.StatusCode, header: raw.Header}
+	if raw.StatusCode != http.StatusNoContent {
+		data, err := io.ReadAll(raw.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(data, &out.body); err != nil {
+			t.Fatal(string(data), err)
+		}
+	}
+	return out
+}
+
+func TestOperatorCookieRoutesAndCSRF(t *testing.T) {
+	e := newEnv(t)
+	origin := "https://admin.example"
+	call := func(method, path, body, cookie string) response {
+		return operatorCall(t, e, method, path, body, cookie, origin)
+	}
+	credentials := `{"email":"op@example.test","password":"password"}`
+	crossLogin := operatorCall(t, e, "POST", sessionPath, credentials, "", "https://other.example")
+	if crossLogin.status != http.StatusForbidden {
+		t.Fatal(crossLogin)
+	}
+	login := call("POST", sessionPath, credentials, "")
+	if login.status != http.StatusOK || login.body["role"] != "operator" {
+		t.Fatal(login)
+	}
+	cookies := (&http.Response{Header: login.header}).Cookies()
+	if len(cookies) != 1 {
+		t.Fatal(cookies)
+	}
+	c := cookies[0]
+	if c.Name != "__Host-kvazar_operator" || !c.Secure || !c.HttpOnly || c.Domain != "" ||
+		c.Path != "/" || c.SameSite != http.SameSiteLaxMode || c.MaxAge != 3600 {
+		t.Fatal(c)
+	}
+	cookie := c.Name + "=" + c.Value
+	if strings.Contains(fmtBody(login.body), c.Value) {
+		t.Fatal("токен попал в JSON")
+	}
+	if r := call("GET", sessionPath, "", cookie); r.status != http.StatusOK {
+		t.Fatal(r)
+	}
+	if r := call("GET", participantsPath, "", cookie); r.status != http.StatusOK {
+		t.Fatal(r)
+	}
+	e.seedTenant("t1", "s1")
+	createBody := `{"tenantId":"t1","name":"Магазин"}`
+	crossCreate := operatorCall(t, e, "POST", participantsPath, createBody, cookie, "https://other.example")
+	if crossCreate.status != http.StatusForbidden {
+		t.Fatal(crossCreate)
+	}
+	created := call("POST", participantsPath, createBody, cookie)
+	if created.status != http.StatusCreated {
+		t.Fatal(created)
+	}
+	delivery := `{"version":1,"delivery":{"regions":["RU-MOW"],"carriers":["cdek","yandex"]}}`
+	updated := call("PUT", deliveryPath, delivery, cookie)
+	if updated.status != http.StatusOK || updated.body["version"] != float64(2) {
+		t.Fatal(updated)
+	}
+	if r := call("PUT", deliveryPath, delivery, cookie); r.status != http.StatusConflict {
+		t.Fatal(r)
+	}
+	if err := messaging.NewParker(e.store).Park(context.Background(), ports.ParkedEvent{
+		Topic:    "topic",
+		TenantID: "t1",
+		ParkedAt: t0,
+		Value:    []byte(`{"password":"secret","phone":"personal","operation":"upsert"}`),
+		Error:    "secret",
+		Reason:   "invalid",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	listed := call("GET", "/api/v1/operator/events?status=parked&tenantId=t1&limit=1", "", cookie)
+	if listed.status != http.StatusOK || listed.body["total"] != float64(1) {
+		t.Fatal(listed)
+	}
+	if strings.Contains(fmtBody(listed.body), "secret") || strings.Contains(fmtBody(listed.body), "personal") {
+		t.Fatal("секреты в ответе", listed)
+	}
+	if r := call("POST", eventPath+"/resolve", `{"note":" "}`, cookie); r.status != http.StatusBadRequest {
+		t.Fatal(r)
+	}
+	retried := call("POST", eventPath+"/retry", `{"note":"исправлено"}`, cookie)
+	if retried.status != http.StatusOK || retried.body["status"] != "queued" {
+		t.Fatal(retried)
+	}
+	if r := call("POST", eventPath+"/resolve", `{"note":"разобрано"}`, cookie); r.status != http.StatusConflict {
+		t.Fatal(r)
+	}
+	logout := call("DELETE", sessionPath, "", cookie)
+	if logout.status != http.StatusNoContent || !strings.Contains(logout.header.Get("Set-Cookie"), "Max-Age=0") {
+		t.Fatal(logout)
+	}
+	if r := call("GET", sessionPath, "", cookie); r.status != http.StatusUnauthorized {
+		t.Fatal(r)
+	}
+	if r := e.call(t, "GET", "/api/v1/operator/events", "", true); r.status != http.StatusOK {
+		t.Fatal(r)
+	}
+}
+
+func fmtBody(body map[string]any) string { raw, _ := json.Marshal(body); return string(raw) }

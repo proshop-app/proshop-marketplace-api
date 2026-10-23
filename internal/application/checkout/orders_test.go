@@ -194,7 +194,7 @@ func TestDeliveryThresholdsAndRegions(t *testing.T) {
 	}
 	e := setup(t)
 	p, _ := e.store.Participant("t1")
-	p.Delivery.Regions = []string{"cdek:other"}
+	p.Delivery.Regions = []string{"RU-SPE"}
 	e.store.SeedParticipant(p)
 	ctx := context.Background()
 	c, _ := e.service.Create(ctx, buyerID, key)

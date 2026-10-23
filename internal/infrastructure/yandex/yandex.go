@@ -32,9 +32,10 @@ var ErrUnavailable = errs.New(errs.Unavailable, "yandex.unavailable", "спра�
 
 // Config — токен учётной записи платформы и адрес API.
 type Config struct {
-	BaseURL string
-	Token   string
-	Timeout time.Duration
+	RegionCodes map[string]string
+	BaseURL     string
+	Token       string
+	Timeout     time.Duration
 }
 
 // Provider — выгрузка пунктов выдачи Яндекс Доставки.
@@ -161,7 +162,7 @@ func (p *Provider) Fetch(ctx context.Context, yield func([]delivery.PickupPoint)
 		}
 
 		if pp.Address.GeoID > 0 {
-			point.RegionCode = strconv.Itoa(pp.Address.GeoID)
+			point.RegionCode = p.config.RegionCodes[strconv.Itoa(pp.Address.GeoID)]
 		}
 		if batch = append(batch, point); len(batch) == batchSize {
 			if err := yield(batch); err != nil {

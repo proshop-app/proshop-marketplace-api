@@ -101,6 +101,11 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `GET /metrics` | открыт | метрики Prometheus |
 | `GET /api/v1/catalog/offers` | открыт | выдача: `q`, `tenant`, `category`, `tag`, `priceMin`, `priceMax`, `inStock`, `sort` (`relevance`, `price_asc`, `price_desc`, `newest`), `limit` ≤ 100, `offset` |
 | `GET /api/v1/catalog/offers/{offerId}` | открыт | карточка; `offerId` = `<tenantId>~<productId>` |
+| `POST/GET/DELETE /api/v1/operator/session` | оператор платформы | вход по паролю, текущая сессия, выход |
+| `PUT /api/v1/operator/participants/{tenantId}/delivery` | оператор | регионы ISO и перевозчики, CAS по version |
+| `GET /api/v1/operator/events` | оператор | пагинация и фильтры запаркованных сообщений |
+| `POST /api/v1/operator/events/{eventId}/retry` | оператор | повтор через outbox, обязательная note |
+| `POST /api/v1/operator/events/{eventId}/resolve` | оператор | разбор с обязательной note и аудитом |
 | `GET /api/v1/operator/participants` | оператор | участники: `limit` ≤ 200, `offset` |
 | `POST /api/v1/operator/participants` | оператор | завести участника `{"tenantId","name"}`; магазин должен быть в зеркале реестра |
 | `GET /api/v1/operator/participants/{tenantId}` | оператор | участник |
@@ -160,7 +165,7 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 его maxAmount ниже. Публичный порог для админки: `GET /api/v1/delivery/settings`. Платформа денег не принимает.
 Выдача и карточка принимают `deliveryCarrier` вместе с `deliveryRegion`:
 `deliveryAvailable=false` оставляет товар видимым, но отмечает доставку недоступной.
-Код зоны доступен в `regionCode` ПВЗ. Обновлённая схема индекса каталога
+Код ISO 3166-2 RU доступен в `regionCode` ПВЗ (пусто при неизвестном соответствии). Обновлённая схема индекса каталога
 автоматически создаёт новое поколение; справочники ПВЗ обновляются на старте.
 Полный внутренний контракт: [docs/server-contract.md](docs/server-contract.md).
 
@@ -360,3 +365,12 @@ make taxonomy-load FILE=taxonomy/example.yaml
 кэширование и токен; compose — миграции, версии, блокировки, динамические
 поля и агрегации. `make test` и `make test-integration` включают эти проверки
 без исключений для сторожа слоёв.
+
+
+## Панель оператора
+
+Встроенный [операторский шлюз](docs/operator-gateway.md): отдельная cookie-сессия
+платформы, роли, доставка участника и разбор запаркованных событий.
+[Контракт для панели](docs/api/marketplace.openapi.yaml) совпадает с `api/openapi.yaml`.
+Для входа нужны `OPERATOR_EMAIL`, `OPERATOR_PASSWORD_HASH`, `OPERATOR_ORIGIN` и HTTPS.
+`OPERATOR_TOKEN` сохраняется для машинного доступа.

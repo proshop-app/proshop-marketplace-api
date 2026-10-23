@@ -88,6 +88,7 @@ func carriers(cfg config.Config) []ports.PickupPointsProvider {
 	if c := cfg.Delivery.CDEK; c.ClientID != "" {
 		providers = append(providers, cdek.New(cdek.Config{
 			BaseURL:      c.URL,
+			RegionCodes:  c.RegionCodes,
 			ClientID:     c.ClientID,
 			ClientSecret: c.ClientSecret,
 		}))
@@ -95,8 +96,9 @@ func carriers(cfg config.Config) []ports.PickupPointsProvider {
 
 	if y := cfg.Delivery.Yandex; y.Token != "" {
 		providers = append(providers, yandex.New(yandex.Config{
-			BaseURL: y.URL,
-			Token:   y.Token,
+			BaseURL:     y.URL,
+			RegionCodes: y.RegionCodes,
+			Token:       y.Token,
 		}))
 	}
 

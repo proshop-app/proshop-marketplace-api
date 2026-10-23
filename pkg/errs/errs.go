@@ -20,6 +20,8 @@ const (
 	Conflict Code = "conflict"
 	// Unauthorized — нет или неверны учётные данные.
 	Unauthorized Code = "unauthorized"
+	// Forbidden — учётная запись не имеет нужной роли.
+	Forbidden Code = "forbidden"
 	// TooManyRequests — превышен лимит частоты; повтор позже пройдёт.
 	TooManyRequests Code = "too_many_requests"
 	// Unavailable — внешняя зависимость недоступна; повтор позже может пройти.

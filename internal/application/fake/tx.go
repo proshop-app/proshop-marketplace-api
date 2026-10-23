@@ -293,6 +293,11 @@ func (i inbox) MarkProcessed(_ context.Context, eventID string, at time.Time) (b
 func (p parked) Park(_ context.Context, event ports.ParkedEvent) error {
 	key := parkedKey{event.Topic, event.Partition, event.Offset}
 	if _, ok := p.d.parked[key]; !ok {
+		event.Control.Status = "parked"
+		event.Control.Version = 1
+		p.d.nextParkedID++
+		event.Control.ID = p.d.nextParkedID
+		event.Control.UpdatedAt = event.ParkedAt
 		p.d.parked[key] = event
 	}
 

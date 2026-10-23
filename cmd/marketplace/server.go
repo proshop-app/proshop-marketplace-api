@@ -19,11 +19,14 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
+	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	infrakafka "github.com/proshop-app/proshop-marketplace/internal/infrastructure/kafka"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/password"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/platformapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
@@ -36,6 +39,8 @@ import (
 
 // services — сценарии приложения процесса.
 type services struct {
+	operatorAuth *appoperator.Auth
+	events       *messaging.Events
 	taxonomy     *apptaxonomy.Service
 	projector    *appcatalog.Projector
 	indexer      *appcatalog.Indexer
@@ -64,6 +69,11 @@ type server struct {
 
 // serve — HTTP, консьюмер Kafka и фоновые задачи до сигнала остановки.
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+	if cfg.Operator.PasswordHash != "" {
+		if err := password.Validate(cfg.Operator.PasswordHash); err != nil {
+			return err
+		}
+	}
 	store, err := openStorage(ctx, cfg)
 	if err != nil {
 		return err
@@ -129,6 +139,27 @@ func (s *server) services(ctx context.Context) services {
 		QuoteTimeout:              cfg.Checkout.QuoteTimeout,
 	})
 
+	projector := appcatalog.NewProjector(uow, now)
+	registry := appparticipant.NewRegistry(uow, now)
+	replay := kafka.NewReplay(kafka.NewRouter(projector, registry), cfg.Kafka.TopicPrefix)
+	events := messaging.NewEvents(uow, now, replay)
+	operatorAuth := appoperator.NewAuth(
+		redis.NewOperatorSessions(s.cache, keyPrefix),
+		redis.NewLimiter(s.cache, keyPrefix),
+		password.Verifier{},
+		identities,
+		now,
+		appoperator.Config{
+			Principal: operator.Principal{
+				ID:    cfg.Operator.Email,
+				Email: cfg.Operator.Email,
+				Name:  cfg.Operator.Name,
+				Role:  operator.Role,
+			},
+			PasswordHash: cfg.Operator.PasswordHash,
+			SessionTTL:   cfg.Operator.SessionTTL,
+		},
+	)
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(s.store.pool),
 		now,
@@ -138,6 +169,7 @@ func (s *server) services(ctx context.Context) services {
 			Lease:     cfg.Outbox.Lease,
 		},
 		map[string]messaging.Handler{
+			messaging.TaskReplay:            events.HandleTask,
 			appcatalog.TaskSyncOffer:        indexer.HandleTask,
 			appcatalog.TaskSyncTenant:       indexer.HandleTask,
 			appparticipant.TaskSyncSettings: settings.HandleTask,
@@ -153,12 +185,14 @@ func (s *server) services(ctx context.Context) services {
 	})
 
 	return services{
+		operatorAuth: operatorAuth,
+		events:       events,
 		taxonomy:     apptaxonomy.NewService(uow, now),
-		projector:    appcatalog.NewProjector(uow, now),
+		projector:    projector,
 		indexer:      indexer,
 		queries:      appcatalog.NewQueries(uow, s.store.index),
 		participants: appparticipant.NewService(uow, now),
-		registry:     appparticipant.NewRegistry(uow, now),
+		registry:     registry,
 		settings:     settings,
 		auth:         auth,
 		carts:        appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL),
@@ -272,19 +306,22 @@ func (s *server) httpServer() *http.Server {
 	}
 
 	handler := transport.NewHandler(transport.Deps{
-		Taxonomy:      s.app.taxonomy,
-		Catalog:       s.app.queries,
-		Participants:  s.app.participants,
-		Auth:          s.app.auth,
-		Carts:         s.app.carts,
-		Directory:     s.app.directory,
-		Checkouts:     s.app.checkouts,
-		OperatorToken: cfg.Operator.Token,
-		TrustProxy:    cfg.Login.TrustProxy,
-		Checks:        checks,
-		Metrics:       promhttp.HandlerFor(s.metrics, promhttp.HandlerOpts{}),
-		Registerer:    s.metrics,
-		Logger:        s.logger,
+		Taxonomy:       s.app.taxonomy,
+		Catalog:        s.app.queries,
+		Participants:   s.app.participants,
+		Auth:           s.app.auth,
+		Carts:          s.app.carts,
+		Directory:      s.app.directory,
+		Checkouts:      s.app.checkouts,
+		OperatorToken:  cfg.Operator.Token,
+		OperatorAuth:   s.app.operatorAuth,
+		Events:         s.app.events,
+		OperatorOrigin: cfg.Operator.Origin,
+		TrustProxy:     cfg.Login.TrustProxy,
+		Checks:         checks,
+		Metrics:        promhttp.HandlerFor(s.metrics, promhttp.HandlerOpts{}),
+		Registerer:     s.metrics,
+		Logger:         s.logger,
 	})
 
 	return &http.Server{

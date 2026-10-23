@@ -18,9 +18,9 @@ const (
 	insertParkedEvent = `
 		INSERT INTO parked_events (
 			topic, kafka_partition, kafka_offset, message_key, headers, value, tenant_id, reason, error,
-			attempts, parked_at
+			attempts, parked_at, published_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (topic, kafka_partition, kafka_offset) DO NOTHING`
 )
 
@@ -70,6 +70,7 @@ func (p *Parked) Park(ctx context.Context, event ports.ParkedEvent) error {
 		event.Error,
 		event.Attempts,
 		event.ParkedAt,
+		event.PublishedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("парковка %s/%d/%d: %w", event.Topic, event.Partition, event.Offset, err)

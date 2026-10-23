@@ -15,7 +15,7 @@ var (
 	t1 = t0.Add(time.Minute)
 )
 
-var w3ParticipantDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3ParticipantDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
 var w3ParticipantSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func activeTenant(t *testing.T, status participant.TenantStatus) *participant.Tenant {

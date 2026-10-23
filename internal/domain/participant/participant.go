@@ -230,3 +230,19 @@ func normalizeName(name string) (string, error) {
 
 	return clean, nil
 }
+
+// SetDelivery меняет покрытие с проверкой версии, включая повтор того же значения.
+func (p *Participant) SetDelivery(settings DeliverySettings, version int64, now time.Time) (bool, error) {
+	if version != p.state.Version {
+		return false, ErrConflict
+	}
+	if err := settings.Validate(); err != nil {
+		return false, err
+	}
+	if reflect.DeepEqual(p.state.Delivery, settings) {
+		return false, nil
+	}
+	p.state.Delivery = settings.Clone()
+	p.touch(now)
+	return true, nil
+}

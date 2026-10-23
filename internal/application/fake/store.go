@@ -57,6 +57,7 @@ type data struct {
 	tags         map[tagKey]catalog.TagState
 	outbox       []OutboxRow
 	nextTaskID   int64
+	nextParkedID int64
 	processed    map[string]time.Time
 	parked       map[parkedKey]ports.ParkedEvent
 	buyers       map[ids.UUID]buyer.Buyer
@@ -95,6 +96,7 @@ func (d *data) clone() *data {
 		tags:         maps.Clone(d.tags),
 		outbox:       append([]OutboxRow(nil), d.outbox...),
 		nextTaskID:   d.nextTaskID,
+		nextParkedID: d.nextParkedID,
 		processed:    maps.Clone(d.processed),
 		parked:       maps.Clone(d.parked),
 		buyers:       maps.Clone(d.buyers),
@@ -366,7 +368,7 @@ func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.Purg
 	s.data.outbox = kept
 
 	for key, event := range s.data.parked {
-		if event.ParkedAt.Before(request.ParkedBefore) {
+		if event.ParkedAt.Before(request.ParkedBefore) && event.Control.Status != "queued" {
 			delete(s.data.parked, key)
 			result.Parked++
 		}

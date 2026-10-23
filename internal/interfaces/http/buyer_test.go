@@ -17,7 +17,7 @@ import (
 )
 
 // session — запрос с кукой сессии покупателя.
-var w3BuyerDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3BuyerDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
 var w3BuyerSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func (e *env) session(t *testing.T, method, path, body, cookie string, headers ...string) response {
@@ -194,7 +194,7 @@ func TestCartDeliveryCheckout(t *testing.T) {
 		nil,
 		t0,
 	)
-	point.RegionCode = "r1"
+	point.RegionCode = "RU-MOW"
 	e.store.SeedPickupPoint(point)
 	_ = e.pickups.Put(ctx, []delivery.PickupPoint{point})
 	e.platform.SetItem(

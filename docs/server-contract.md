@@ -120,7 +120,7 @@
   "enabled": true,
   "freeDeliveryFrom": 500000,
   "subsidy": {"enabled": true, "type": "percent", "value": 50, "maxAmount": 30000},
-  "delivery": {"regions": ["cdek:81", "yandex:213"], "carriers": ["cdek", "yandex"]}
+  "delivery": {"regions": ["RU-MOW"], "carriers": ["cdek", "yandex"]}
 }
 ```
 
@@ -132,14 +132,17 @@
 | subsidy.value | fixed: копейки ≥ 0; percent: целое 0–100 |
 | subsidy.maxAmount | копейки ≥ 0; 0 — без потолка |
 | delivery | обязательный объект при enabled=true, непустые regions и carriers |
-| delivery.regions | коды географических зон из справочника перевозчика, `<carrier>:<code>` |
-| delivery.carriers | непустые коды способов/перевозчиков; коды в regions должны входить в carriers |
+| delivery.regions | непустой список существующих кодов ISO 3166-2 RU, например `RU-MOW` |
+| delivery.carriers | непустой список перевозчиков из закрытого перечня `cdek`, `yandex` |
 
-Для СДЭК code = location.region_code; для Яндекс Доставки code = address.geoId
-(географическая зона справочника). Это не название города и не свободный ввод.
-Новый перевозчик описывает источник кода в своём адаптере и здесь.
-ПВЗ без кода зоны считается недоступным до обновления справочника.
-Поля ПВЗ хранятся маркетплейсом; покупатель не может подставить произвольный регион.
+Географические регионы не привязаны к перевозчику. Формат `<carrier>:<code>`
+заменён ISO 3166-2 RU; числовые `location.region_code` СДЭК и `address.geoId`
+Яндекса не являются ISO. Адаптеры справочников переводят их через явные
+`CDEK_REGION_CODES` / `YANDEX_REGION_CODES`; неизвестный код оставляет
+`regionCode` пустым и запрещает доставку. Магазин возвращает ISO-коды уже в
+`GET /settings/marketplace`; невалидный ответ не включает участие.
+Поля ПВЗ хранятся маркетплейсом; покупатель не подставляет произвольный регион.
+Миграция старых зон и работа оператора описаны в [operator-gateway.md](operator-gateway.md).
 Вне списка регионов или способов предложение доступно для просмотра,
 но недоступно к доставке. Окончательная проверка — quote магазина. В HTTP каталога это поле
 `deliveryAvailable` при паре query `deliveryCarrier` и `deliveryRegion`;

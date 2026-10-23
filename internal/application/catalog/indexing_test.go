@@ -16,7 +16,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-var w3IndexingDelivery = participant.DeliverySettings{Regions: []string{"cdek:r1"}, Carriers: []string{"cdek"}}
+var w3IndexingDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
 var w3IndexingSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func indexer(store *fake.Store, index *fake.Index, clock *fake.Clock) *appcatalog.Indexer {

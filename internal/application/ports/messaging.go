@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/event"
+
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -64,23 +66,38 @@ type Inbox interface {
 // ParkedEvent — сообщение, которое нельзя обработать: без магазина,
 // повреждённое или исчерпавшее попытки.
 type ParkedEvent struct {
-	Topic     string
-	Partition int
-	Offset    int64
-	Key       []byte
-	Headers   map[string]string
-	Value     []byte
-	TenantID  string
-	Reason    string
-	Error     string
-	Attempts  int
-	ParkedAt  time.Time
+	Control     event.State
+	PublishedAt time.Time
+	Topic       string
+	Partition   int
+	Offset      int64
+	Key         []byte
+	Headers     map[string]string
+	Value       []byte
+	TenantID    string
+	Reason      string
+	Error       string
+	Attempts    int
+	ParkedAt    time.Time
 }
 
 // ParkedEvents — отравленные сообщения.
 type ParkedEvents interface {
 	// Park сохраняет сообщение; повтор той же позиции топика ничего не меняет.
 	Park(ctx context.Context, event ParkedEvent) error
+	Get(ctx context.Context, id int64) (ParkedEvent, error)
+	List(ctx context.Context, filter EventFilter) ([]ParkedEvent, int, error)
+	Update(ctx context.Context, aggregate *event.Event, failure string, attempts int) error
+}
+
+// EventFilter — стабильная пагинация по id, необязательные точные фильтры.
+type EventFilter struct {
+	Limit    int
+	Offset   int
+	TenantID string
+	Status   string
+	Topic    string
+	Reason   string
 }
 
 // PurgeRequest — границы чистки служебных записей.

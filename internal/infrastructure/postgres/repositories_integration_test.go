@@ -17,7 +17,7 @@ import (
 )
 
 var w3RepositoriesIntegrationDelivery = participant.DeliverySettings{
-	Regions:  []string{"cdek:r1"},
+	Regions:  []string{"RU-MOW"},
 	Carriers: []string{"cdek"},
 }
 var w3RepositoriesIntegrationSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}

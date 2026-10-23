@@ -1,6 +1,6 @@
 package opensearch
 
-const offerMappingVersion = 2
+const offerMappingVersion = 3
 
 // indexBody — строгая схема поколения. Только проверенные канонические
 // attributes допускают динамические поля; остальные неизвестные поля отклоняются.

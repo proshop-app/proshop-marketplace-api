@@ -1,9 +1,8 @@
 package participant
 
 import (
-	"strings"
-
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+	"github.com/proshop-app/proshop-marketplace/pkg/regions"
 )
 
 // ErrInvalidDeliverySettings — обязательные настройки участия не по контракту.
@@ -13,8 +12,7 @@ var ErrInvalidDeliverySettings = errs.New(
 	"обязательны минимум заказа, субсидия продавца и регионы доставки",
 )
 
-// DeliverySettings — коды регионов перевозчиков и подключённые способы.
-// Регион кодируется как <carrier>:<код региона в справочнике перевозчика>.
+// DeliverySettings — регионы ISO 3166-2 RU и подключённые перевозчики.
 type DeliverySettings struct {
 	Regions  []string `json:"regions"`
 	Carriers []string `json:"carriers"`
@@ -26,13 +24,12 @@ func (d DeliverySettings) Validate() error {
 		return ErrInvalidDeliverySettings
 	}
 	for _, carrier := range d.Carriers {
-		if strings.TrimSpace(carrier) == "" {
+		if carrier != "cdek" && carrier != "yandex" {
 			return ErrInvalidDeliverySettings
 		}
 	}
 	for _, region := range d.Regions {
-		carrier, code, ok := strings.Cut(region, ":")
-		if !ok || code == "" || !contains(d.Carriers, carrier) {
+		if !regions.ValidRU(region) {
 			return ErrInvalidDeliverySettings
 		}
 	}
@@ -41,7 +38,8 @@ func (d DeliverySettings) Validate() error {
 
 // Allows запрещает доставку вне зон или без известного кода региона ПВЗ.
 func (d DeliverySettings) Allows(carrier, region string) bool {
-	return contains(d.Carriers, carrier) && region != "" && contains(d.Regions, carrier+":"+region)
+	return (carrier == "cdek" || carrier == "yandex") &&
+		contains(d.Carriers, carrier) && regions.ValidRU(region) && contains(d.Regions, region)
 }
 
 // Clone отделяет списки настроек от изменяемого снимка вызывающего.

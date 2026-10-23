@@ -12,6 +12,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/pkg/regions"
 )
 
 // PickupIndex — геоиндекс пунктов выдачи. Источник истины — таблица
@@ -211,6 +212,10 @@ func (x *PickupIndex) Search(ctx context.Context, query ports.PickupPointQuery) 
 	points := make([]delivery.PickupPoint, 0, len(response.Hits.Hits))
 	for _, hit := range response.Hits.Hits {
 		doc := hit.Source
+		// Старый геоиндекс может ещё содержать числовые зоны до обновления ПВЗ.
+		if !regions.ValidRU(doc.RegionCode) {
+			doc.RegionCode = ""
+		}
 		points = append(points, delivery.PickupPoint{
 			Carrier:     delivery.Carrier(doc.Carrier),
 			Code:        doc.Code,
