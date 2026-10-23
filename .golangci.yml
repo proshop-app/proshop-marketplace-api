@@ -1,0 +1,112 @@
+# golangci-lint v2.3.1 — версия закреплена в Makefile, запуск через go run.
+version: "2"
+
+run:
+  go: "1.23"
+  build-tags:
+    - integration
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - depguard
+    - errorlint
+    - gocritic
+    - gosec
+    - nilerr
+    - noctx
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - unparam
+  settings:
+    depguard:
+      # Слои по docs/marketplace-mvp.md §3: domain ← application ← interfaces, infrastructure.
+      # Тот же закон проверяет тест internal/architecture по полному графу импортов.
+      rules:
+        domain:
+          list-mode: strict
+          files:
+            - "internal/domain/**"
+            - "**/internal/domain/**"
+          allow:
+            - $gostd
+            - github.com/proshop-app/proshop-marketplace/pkg
+            - github.com/proshop-app/proshop-marketplace/internal/domain
+        pkg:
+          list-mode: strict
+          files:
+            - "pkg/**"
+            - "**/pkg/**"
+          allow:
+            - $gostd
+            - github.com/proshop-app/proshop-marketplace/pkg
+        application:
+          files:
+            - "internal/application/**"
+            - "**/internal/application/**"
+          deny:
+            - pkg: github.com/proshop-app/proshop-marketplace/internal/infrastructure
+              desc: приложение зависит от портов, реализации — в инфраструктуре
+            - pkg: github.com/proshop-app/proshop-marketplace/internal/interfaces
+              desc: приложение не знает о транспорте
+            - pkg: github.com/proshop-app/proshop-marketplace/internal/config
+              desc: настройки приходят параметрами из cmd
+        interfaces:
+          files:
+            - "internal/interfaces/**"
+            - "**/internal/interfaces/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/proshop-app/proshop-marketplace/internal/infrastructure
+              desc: транспорт вызывает приложение, реализации подключает cmd
+            - pkg: github.com/proshop-app/proshop-marketplace/internal/config
+              desc: настройки приходят параметрами из cmd
+        infrastructure:
+          files:
+            - "internal/infrastructure/**"
+            - "**/internal/infrastructure/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/proshop-app/proshop-marketplace/internal/interfaces
+              desc: реализации портов не знают о транспорте
+            - pkg: github.com/proshop-app/proshop-marketplace/internal/config
+              desc: настройки приходят параметрами из cmd
+    gocritic:
+      disabled-checks:
+        - appendAssign
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: indent-error-flow
+        - name: errorf
+        - name: blank-imports
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: receiver-naming
+        - name: unused-parameter
+          disabled: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - noctx
+          - unparam
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/proshop-app/proshop-marketplace

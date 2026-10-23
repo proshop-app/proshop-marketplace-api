@@ -40,6 +40,26 @@ func TestTenantAppliesNewerEventsOnly(t *testing.T) {
 	}
 }
 
+func TestTenantComparesJSONByMeaning(t *testing.T) {
+	tenant, err := participant.NewTenant(event(participant.TenantActive, t0), t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenant.MarkSaved()
+
+	reformatted := event(participant.TenantActive, t0)
+	reformatted.Plan = json.RawMessage(`{ "code" : "base" }`)
+	if changed, _ := tenant.Apply(reformatted, t1); changed {
+		t.Fatal("переформатированный JSON — тот же снимок")
+	}
+
+	other := event(participant.TenantActive, t0)
+	other.Plan = json.RawMessage(`{"code":"pro"}`)
+	if changed, _ := tenant.Apply(other, t1); !changed {
+		t.Fatal("другой тариф — изменение")
+	}
+}
+
 func TestTenantDeletedIsTerminal(t *testing.T) {
 	tenant, err := participant.NewTenant(event(participant.TenantDeleted, t0), t0)
 	if err != nil {

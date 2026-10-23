@@ -3,6 +3,7 @@ package participant
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"time"
 	"unicode"
@@ -120,8 +121,23 @@ func (t *Tenant) sameAs(event RegistryEvent) bool {
 		t.state.Slug == strings.TrimSpace(event.Slug) &&
 		t.state.Status == event.Status &&
 		t.state.Cell == event.Cell &&
-		bytes.Equal(t.state.Plan, event.Plan) &&
-		bytes.Equal(t.state.Hosts, event.Hosts)
+		sameJSON(t.state.Plan, event.Plan) &&
+		sameJSON(t.state.Hosts, event.Hosts)
+}
+
+// sameJSON сравнивает JSON по смыслу: хранилище может переформатировать
+// документ, и побайтное сравнение приняло бы повтор за изменение.
+func sameJSON(left, right json.RawMessage) bool {
+	if bytes.Equal(left, right) {
+		return true
+	}
+
+	var a, b any
+	if json.Unmarshal(left, &a) != nil || json.Unmarshal(right, &b) != nil {
+		return false
+	}
+
+	return reflect.DeepEqual(a, b)
 }
 
 // State — снимок для хранения.

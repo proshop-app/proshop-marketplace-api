@@ -12,8 +12,12 @@ import (
 	"time"
 )
 
-// minOperatorTokenLength — служебный токен оператора не короче 32 символов.
-const minOperatorTokenLength = 32
+const (
+	// minOperatorTokenLength — служебный токен оператора не короче 32 символов.
+	minOperatorTokenLength = 32
+	// maxConnections — потолок пула соединений с базой.
+	maxConnections = 1000
+)
 
 // Config — настройки процесса маркетплейса.
 type Config struct {
@@ -197,7 +201,7 @@ func (r *reader) database() Database {
 		}
 	}
 
-	return Database{URL: raw, MaxConns: int32(r.positive("DATABASE_MAX_CONNS", 10))}
+	return Database{URL: raw, MaxConns: r.connections("DATABASE_MAX_CONNS", 10)}
 }
 
 func (r *reader) list(name string) []string {
@@ -256,6 +260,23 @@ func (r *reader) positive(name string, fallback int) int {
 	}
 
 	return value
+}
+
+// connections — размер пула: от 1 до maxConnections.
+func (r *reader) connections(name string, fallback int32) int32 {
+	raw, ok := r.lookup(name)
+	if !ok {
+		return fallback
+	}
+
+	value, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil || value < 1 || value > maxConnections {
+		r.fail(name, fmt.Sprintf("ожидается число от 1 до %d", maxConnections))
+
+		return fallback
+	}
+
+	return int32(value)
 }
 
 func (r *reader) nonNegative(name string, fallback int) int {

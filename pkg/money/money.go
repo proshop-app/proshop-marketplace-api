@@ -101,7 +101,7 @@ func (m Money) Sub(other Money) (Money, error) {
 	return Money{kopecks: m.kopecks - other.kopecks}, nil
 }
 
-// Cmp: -1, если m меньше, 0 — равны, 1 — больше.
+// Cmp сравнивает суммы: -1, если m меньше, 0 — равны, 1 — больше.
 func (m Money) Cmp(other Money) int {
 	switch {
 	case m.kopecks < other.kopecks:
