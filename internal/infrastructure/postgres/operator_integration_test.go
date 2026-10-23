@@ -5,8 +5,11 @@ package postgres_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"log/slog"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -136,9 +139,23 @@ func TestISORegionMigrationInvalidatesLegacyDelivery(t *testing.T) {
 	previousLogger := slog.Default()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&log, nil)))
 	t.Cleanup(func() { slog.SetDefault(previousLogger) })
-	if err := postgres.MigrateDown(ctx, pool); err != nil {
-		t.Fatal(err)
+	// Откатываем и последующие миграции, чтобы проверять именно переход 21 → 22.
+	rollback := func() {
+		t.Helper()
+		statuses, err := postgres.MigrationStatus(ctx, pool)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, status := range statuses {
+			if status.Source.Version < 22 {
+				continue
+			}
+			if err := postgres.MigrateDown(ctx, pool); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
+	rollback()
 	seed := `INSERT INTO tenants (tenant_id,slug,status,event_at,version,updated_at)
  VALUES ('t1','s1','active',now(),1,now()), ('t2','s2','active',now(),1,now()),
  ('t3','s3','active',now(),1,now());
@@ -156,16 +173,43 @@ func TestISORegionMigrationInvalidatesLegacyDelivery(t *testing.T) {
 	if err := postgres.Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	var enabled bool
-	var version int64
-	var legacy, delivery string
-	query := `SELECT shop_enabled,version,legacy_delivery_settings::text,delivery_settings::text
- FROM participants WHERE tenant_id = 't1'`
-	if err := pool.QueryRow(ctx, query).Scan(&enabled, &version, &legacy, &delivery); err != nil {
-		t.Fatal(err)
-	}
-	if enabled || version != 2 || legacy == delivery {
-		t.Fatal(enabled, version, legacy, delivery)
+	for _, tc := range []struct {
+		tenant   string
+		archived bool
+		version  int64
+		regions  []string
+		carriers []string
+	}{
+		{"t1", true, 2, []string{"cdek:81"}, []string{"cdek"}},
+		{"t2", true, 8, []string{"yandex:1", "RU-MOW"}, []string{"yandex"}},
+		{"t3", false, 4, []string{"RU-MOW"}, []string{"cdek"}},
+	} {
+		t.Run(tc.tenant, func(t *testing.T) {
+			var enabled bool
+			var version int64
+			var legacy sql.NullString
+			var delivery string
+			query := `SELECT shop_enabled,version,legacy_delivery_settings::text,delivery_settings::text
+ FROM participants WHERE tenant_id = $1`
+			if err := pool.QueryRow(ctx, query, tc.tenant).Scan(&enabled, &version, &legacy, &delivery); err != nil {
+				t.Fatal(err)
+			}
+			if enabled == tc.archived || version != tc.version || legacy.Valid != tc.archived {
+				t.Fatal(enabled, version, legacy, delivery)
+			}
+			original, err := json.Marshal(map[string][]string{"regions": tc.regions, "carriers": tc.carriers})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.archived {
+				if !jsonEqual(t, []byte(legacy.String), original) ||
+					!jsonEqual(t, []byte(delivery), []byte(`{"regions":[],"carriers":[]}`)) {
+					t.Fatal("архив и очищенное покрытие", legacy, delivery)
+				}
+			} else if !jsonEqual(t, []byte(delivery), original) {
+				t.Fatal("ISO-покрытие сохранено без архива", delivery)
+			}
+		})
 	}
 	var reported int
 	reportQuery := `SELECT count(*) FROM operator_delivery_migration_report
@@ -178,9 +222,7 @@ func TestISORegionMigrationInvalidatesLegacyDelivery(t *testing.T) {
 		!strings.Contains(log.String(), `"tenantId":"t2"`) || strings.Contains(log.String(), `"tenantId":"t3"`) {
 		t.Fatal("журнал миграции", log.String())
 	}
-	if err := postgres.MigrateDown(ctx, pool); err != nil {
-		t.Fatal(err)
-	}
+	rollback()
 	var restored int
 	restoredQuery := `SELECT count(*) FROM participants
  WHERE (tenant_id = 't1' AND shop_enabled AND status = 'connected' AND enabled AND version = 3
@@ -192,4 +234,16 @@ func TestISORegionMigrationInvalidatesLegacyDelivery(t *testing.T) {
 	if err := pool.QueryRow(ctx, restoredQuery).Scan(&restored); err != nil || restored != 3 {
 		t.Fatal("21 → 22 → 21: доставка, согласие и статус восстановлены", restored, err)
 	}
+}
+
+func jsonEqual(t *testing.T, actual, expected []byte) bool {
+	t.Helper()
+	var got, want any
+	if err := json.Unmarshal(actual, &got); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(expected, &want); err != nil {
+		t.Fatal(err)
+	}
+	return reflect.DeepEqual(got, want)
 }
