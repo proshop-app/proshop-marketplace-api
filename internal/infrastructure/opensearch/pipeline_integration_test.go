@@ -13,8 +13,10 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres/pgtest"
@@ -31,6 +33,12 @@ func TestProjectionToIndex(t *testing.T) {
 	now := clock.System{}
 
 	uow := postgres.NewUnitOfWork(pool)
+	if err := apptaxonomy.NewService(uow, now).Load(ctx, taxonomy.Definition{
+		Version:    1,
+		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	projector := appcatalog.NewProjector(uow, now)
 	indexer := appcatalog.NewIndexer(uow, index, now, 100)
 	registry := appparticipant.NewRegistry(uow, now)
@@ -99,9 +107,10 @@ func TestProjectionToIndex(t *testing.T) {
 				Available: 3,
 				Price:     money.FromKopecks(int64(10000 * (i + 1))),
 				Card: catalog.Card{
-					Name:       "Чайник " + string(product),
-					Visible:    true,
-					Categories: []catalog.Category{{ID: "c1", Name: "Кухня"}},
+					Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
+					Name:        "Товар " + string(product),
+					Visible:     true,
+					Categories:  []catalog.Category{{ID: "c1", Name: "Категория"}},
 				},
 			}},
 		)
@@ -134,7 +143,7 @@ func TestProjectionToIndex(t *testing.T) {
 	}
 	drain()
 
-	list, err := queries.Search(ctx, ports.OfferQuery{Text: "чайники", Sort: ports.SortPriceDesc})
+	list, err := queries.Search(ctx, ports.OfferQuery{Text: "товари", Sort: ports.SortPriceDesc})
 	if err != nil || list.Total != 2 || list.Items[0].Offer.ID != "t1~p2" || list.Items[0].Offer.CheckoutAvailable {
 		t.Fatalf("включённый участник в выдаче, без кассы — без checkout: %+v, %v", list, err)
 	}

@@ -439,7 +439,15 @@ func TestParticipantSettingsMigrationSchedulesReindex(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
 
-	for range 5 {
+	statuses, err := postgres.MigrationStatus(ctx, pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Проверяется переход с версии 3: последующие миграции не меняют исходную точку теста.
+	for _, status := range statuses {
+		if status.Source.Version < 4 {
+			continue
+		}
 		if err := postgres.MigrateDown(ctx, pool); err != nil {
 			t.Fatal(err)
 		}
@@ -467,7 +475,7 @@ func TestParticipantSettingsMigrationSchedulesReindex(t *testing.T) {
 
 	participant := `SELECT version, shop_enabled FROM participants WHERE tenant_id = 't1'`
 
-	err := pool.QueryRow(ctx, participant).Scan(&version, &shop)
+	err = pool.QueryRow(ctx, participant).Scan(&version, &shop)
 	if err != nil || version != 2 || shop {
 		t.Fatalf("версия участника выросла, согласия магазина пока нет: %d %v %v", version, shop, err)
 	}

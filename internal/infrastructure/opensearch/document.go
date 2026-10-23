@@ -1,6 +1,7 @@
 package opensearch
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -9,27 +10,30 @@ import (
 
 // document — предложение в индексе; суммы — копейки.
 type document struct {
-	OfferID           string     `json:"offerId"`
-	TenantID          string     `json:"tenantId"`
-	ProductID         string     `json:"productId"`
-	SellerSlug        string     `json:"sellerSlug,omitempty"`
-	SellerName        string     `json:"sellerName,omitempty"`
-	Name              string     `json:"name,omitempty"`
-	Description       string     `json:"description,omitempty"`
-	Image             string     `json:"image,omitempty"`
-	URL               string     `json:"url,omitempty"`
-	SKU               string     `json:"sku,omitempty"`
-	Categories        []category `json:"categories,omitempty"`
-	Tags              []string   `json:"tags,omitempty"`
-	VariantsID        string     `json:"variantsId,omitempty"`
-	Price             int64      `json:"price"`
-	BasePrice         int64      `json:"basePrice"`
-	Available         int        `json:"available"`
-	InStock           bool       `json:"inStock"`
-	Visible           bool       `json:"visible"`
-	Listed            bool       `json:"listed"`
-	CheckoutAvailable bool       `json:"checkoutAvailable"`
-	UpdatedAt         time.Time  `json:"updatedAt"`
+	CategoryID        string                     `json:"categoryId,omitempty"`
+	CategoryPath      []string                   `json:"categoryPath,omitempty"`
+	Attributes        map[string]json.RawMessage `json:"attributes,omitempty"`
+	OfferID           string                     `json:"offerId"`
+	TenantID          string                     `json:"tenantId"`
+	ProductID         string                     `json:"productId"`
+	SellerSlug        string                     `json:"sellerSlug,omitempty"`
+	SellerName        string                     `json:"sellerName,omitempty"`
+	Name              string                     `json:"name,omitempty"`
+	Description       string                     `json:"description,omitempty"`
+	Image             string                     `json:"image,omitempty"`
+	URL               string                     `json:"url,omitempty"`
+	SKU               string                     `json:"sku,omitempty"`
+	Categories        []category                 `json:"categories,omitempty"`
+	Tags              []string                   `json:"tags,omitempty"`
+	VariantsID        string                     `json:"variantsId,omitempty"`
+	Price             int64                      `json:"price"`
+	BasePrice         int64                      `json:"basePrice"`
+	Available         int                        `json:"available"`
+	InStock           bool                       `json:"inStock"`
+	Visible           bool                       `json:"visible"`
+	Listed            bool                       `json:"listed"`
+	CheckoutAvailable bool                       `json:"checkoutAvailable"`
+	UpdatedAt         time.Time                  `json:"updatedAt"`
 }
 
 type category struct {
@@ -40,6 +44,9 @@ type category struct {
 
 func toDocument(doc ports.OfferDocument) document {
 	out := document{
+		CategoryID:        doc.CategoryID,
+		CategoryPath:      doc.CategoryPath,
+		Attributes:        doc.Attributes,
 		OfferID:           doc.ID,
 		TenantID:          doc.TenantID,
 		ProductID:         doc.ProductID,
@@ -70,6 +77,9 @@ func toDocument(doc ports.OfferDocument) document {
 
 func fromDocument(doc document, version int64) ports.OfferDocument {
 	out := ports.OfferDocument{
+		CategoryID:        doc.CategoryID,
+		CategoryPath:      doc.CategoryPath,
+		Attributes:        doc.Attributes,
 		ID:                doc.OfferID,
 		TenantID:          doc.TenantID,
 		ProductID:         doc.ProductID,

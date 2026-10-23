@@ -62,6 +62,8 @@ func offer(id string, name string, price int64, version int64) ports.OfferDocume
 	tenant, product, _ := strings.Cut(id, "~")
 
 	return ports.OfferDocument{
+		CategoryID:        "c1",
+		CategoryPath:      []string{"c1"},
 		ID:                id,
 		TenantID:          tenant,
 		ProductID:         product,
@@ -72,7 +74,7 @@ func offer(id string, name string, price int64, version int64) ports.OfferDocume
 		Image:             "/i.png",
 		URL:               "/p",
 		SKU:               "SKU-" + product,
-		Categories:        []catalog.Category{{ID: "c1", Name: "Кухня", URL: "/c"}},
+		Categories:        []catalog.Category{{ID: "c1", Name: "Категория", URL: "/c"}},
 		Tags:              []string{"tag-1"},
 		Price:             price,
 		BasePrice:         price,
@@ -113,9 +115,9 @@ func TestIndexWriteSearchGet(t *testing.T) {
 
 	hidden := ports.OfferDocument{ID: "t2~p1", TenantID: "t2", ProductID: "p1", Version: 3, UpdatedAt: time.Now().UTC()}
 	docs := []ports.OfferDocument{
-		offer("t1~p1", "Чайник электрический", 250000, 2),
-		offer("t1~p2", "Кружка керамическая", 50000, 2),
-		offer("t3~p1", "Чайники заварочные", 120000, 2),
+		offer("t1~p1", "Товар первый", 250000, 2),
+		offer("t1~p2", "Позиция вторая", 50000, 2),
+		offer("t3~p1", "Товары новые", 120000, 2),
 		hidden,
 	}
 	if err := index.Put(ctx, docs); err != nil {
@@ -125,7 +127,7 @@ func TestIndexWriteSearchGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	page, err := index.Search(ctx, ports.OfferQuery{Text: "чайник", Sort: ports.SortPriceAsc, Limit: 10})
+	page, err := index.Search(ctx, ports.OfferQuery{Text: "товар", Sort: ports.SortPriceAsc, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +150,7 @@ func TestIndexWriteSearchGet(t *testing.T) {
 	}
 
 	got, found, err := index.Get(ctx, "t1~p1")
-	if err != nil || !found || got.Price != 250000 || got.Categories[0].Name != "Кухня" || got.Version != 2 {
+	if err != nil || !found || got.Price != 250000 || got.Categories[0].Name != "Категория" || got.Version != 2 {
 		t.Fatalf("документ: %+v, %v, %v", got, found, err)
 	}
 

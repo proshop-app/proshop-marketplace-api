@@ -268,7 +268,11 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	doc.Image = offer.Card.Image
 	doc.URL = offer.Card.URL
 	doc.SKU = offer.Card.SKU
-	doc.Categories = offer.Card.Categories
+	publication := offer.Card.Publication
+	doc.CategoryID = publication.CategoryID
+	doc.CategoryPath = publication.CategoryPath
+	doc.Attributes = publication.Attributes
+	doc.Categories = []catalog.Category{{ID: publication.CategoryID, Name: publication.CategoryName}}
 	doc.Tags = offer.Card.Tags
 	doc.VariantsID = offer.Card.VariantsID
 	doc.Price = offer.Price.Kopecks()

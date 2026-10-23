@@ -17,6 +17,7 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
+	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 )
 
 const checkTimeout = 2 * time.Second
@@ -29,6 +30,7 @@ type Check struct {
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
+	Taxonomy      *apptaxonomy.Service
 	Catalog       *appcatalog.Queries
 	Participants  *appparticipant.Service
 	Auth          *appbuyer.Auth
@@ -60,6 +62,7 @@ type healthJSON struct {
 // api/openapi.yaml в тестах: маршрут без описания — красный тест.
 func routes(deps Deps) []route {
 	catalog := &catalogHandlers{queries: deps.Catalog}
+	taxonomy := &taxonomyHandlers{service: deps.Taxonomy, catalog: deps.Catalog}
 	participants := &participantHandlers{service: deps.Participants}
 	auth := &authHandlers{auth: deps.Auth, trustProxy: deps.TrustProxy}
 	carts := &cartHandlers{carts: deps.Carts}
@@ -73,6 +76,13 @@ func routes(deps Deps) []route {
 	return []route{
 		{http.MethodGet, "/health", health(deps.Checks)},
 		{http.MethodGet, "/metrics", metrics},
+
+		{http.MethodGet, "/api/v1/taxonomy/categories", taxonomy.categories},
+		{http.MethodGet, "/api/v1/taxonomy/categories/{id}/schema", taxonomy.schema},
+		{http.MethodGet, "/api/v1/taxonomy/version", taxonomy.version},
+		{http.MethodGet, "/api/v1/operator/taxonomy", operator(taxonomy.categories)},
+		{http.MethodPut, "/api/v1/operator/taxonomy", operator(taxonomy.load)},
+		{http.MethodGet, "/api/v1/operator/catalog/offers/{offerId}/publication", operator(taxonomy.publication)},
 
 		{http.MethodGet, "/api/v1/catalog/offers", catalog.list},
 		{http.MethodGet, "/api/v1/catalog/offers/{offerId}", catalog.card},

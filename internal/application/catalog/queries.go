@@ -2,11 +2,13 @@ package catalog
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -33,8 +35,9 @@ type OfferCard struct {
 
 // OfferList — страница выдачи с подписями тегов.
 type OfferList struct {
-	Total int
-	Items []OfferCard
+	Facets []ports.Facet
+	Total  int
+	Items  []OfferCard
 }
 
 // Queries — чтение выдачи и карточек.
@@ -55,6 +58,32 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 		return OfferList{}, err
 	}
 
+	if err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		d, err := tx.Taxonomy().Current(ctx)
+		if err != nil {
+			return err
+		}
+		if query.CategoryID != "" {
+			if _, _, ok := d.Category(query.CategoryID); !ok {
+				return ErrInvalidQuery.WithMessage("неизвестная категория")
+			}
+		}
+		fields := d.Fields()
+		if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
+			return err
+		}
+		for _, a := range fields {
+			if a.Facet {
+				normalized.FacetFields = append(normalized.FacetFields, a)
+			}
+		}
+		sort.Slice(normalized.FacetFields, func(i, j int) bool {
+			return normalized.FacetFields[i].Code < normalized.FacetFields[j].Code
+		})
+		return nil
+	}); err != nil {
+		return OfferList{}, err
+	}
 	page, err := q.index.Search(ctx, normalized)
 	if err != nil {
 		return OfferList{}, err
@@ -71,7 +100,11 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 		return OfferList{}, err
 	}
 
-	list := OfferList{Total: page.Total, Items: make([]OfferCard, 0, len(page.Items))}
+	list := OfferList{
+		Facets: visibleFacets(page.Facets, page.Total),
+		Total:  page.Total,
+		Items:  make([]OfferCard, 0, len(page.Items)),
+	}
 	for _, doc := range page.Items {
 		list.Items = append(
 			list.Items,
@@ -169,4 +202,18 @@ func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 	}
 
 	return query, nil
+}
+
+// Publication — диагностика из проекции, включая скрытые предложения; транспорт закрыт токеном оператора.
+func (q *Queries) Publication(ctx context.Context, id ids.OfferID) (taxonomy.Publication, error) {
+	var publication taxonomy.Publication
+	err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		product, err := tx.Products().Get(ctx, id.Tenant, id.Product)
+		if err != nil {
+			return err
+		}
+		publication = product.State().Card.Publication
+		return nil
+	})
+	return publication, err
 }

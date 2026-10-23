@@ -7,6 +7,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -24,6 +25,14 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at tim
 		Revision:  revision,
 		At:        at,
 		Card: catalog.Card{
+			Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
+			Publication: taxonomy.Publication{
+				Published:    true,
+				Version:      1,
+				CategoryID:   "c1",
+				CategoryName: "Категория",
+				CategoryPath: []string{"c1"},
+			},
 			Name:       "Товар " + string(product),
 			Visible:    true,
 			Tags:       []string{"tag-1", "free"},
@@ -35,6 +44,10 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at tim
 }
 
 func seedSeller(store *fake.Store, tenant ids.TenantID, status participant.TenantStatus, enabled bool) {
+	store.SeedTaxonomy(taxonomy.Definition{
+		Version:    1,
+		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория"}},
+	})
 	store.SeedTenant(participant.TenantState{
 		TenantID:  tenant,
 		Slug:      "slug-" + string(tenant),

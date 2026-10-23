@@ -1,0 +1,48 @@
+version: 1
+categories:
+  - id: home_textiles
+    name: Текстиль для дома
+    attributes:
+      - code: material
+        name: Материал
+        type: enum
+        required: true
+        values: [хлопок, лён, смешанный]
+        facet: true
+      - code: width
+        name: Ширина
+        type: number
+        unit: см
+        required: false
+        facet: true
+    children: []
+  - id: lighting
+    name: Освещение
+    attributes:
+      - code: power
+        name: Мощность
+        type: number
+        unit: Вт
+        required: true
+        facet: true
+      - code: dimmable
+        name: Регулировка яркости
+        type: boolean
+        required: false
+        facet: true
+    children: []
+  - id: tableware
+    name: Посуда
+    attributes:
+      - code: capacity
+        name: Объём
+        type: number
+        unit: мл
+        required: false
+        facet: true
+      - code: designation
+        name: Обозначение
+        type: string
+        required: false
+        facet: false
+    children: []

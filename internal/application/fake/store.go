@@ -14,6 +14,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -48,6 +49,7 @@ type OutboxRow struct {
 }
 
 type data struct {
+	taxonomy     taxonomy.Definition
 	participants map[ids.TenantID]participant.State
 	tenants      map[ids.TenantID]participant.TenantState
 	products     map[productKey]catalog.ProductState
@@ -85,6 +87,7 @@ type Store struct {
 
 func (d *data) clone() *data {
 	return &data{
+		taxonomy:     d.taxonomy,
 		participants: maps.Clone(d.participants),
 		tenants:      maps.Clone(d.tenants),
 		products:     maps.Clone(d.products),

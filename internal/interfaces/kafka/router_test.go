@@ -3,6 +3,7 @@ package kafka_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,9 +27,10 @@ type recorder struct {
 }
 
 const productBody = `{"version":1,"tenantId":"t1","productId":"p1","revision":7,"operation":"upsert","product":{
-	"id":"p1","name":"Чайник","description":"Описание","image":null,"url":"/p1","sku":"S1",
+	"id":"p1","name":"Товар","description":"Описание","image":null,"url":"/p1","sku":"S1",
 	"price":1999.9,"promoPrice":1499.995,"availableQuantity":3,
-	"categories":[{"id":"c1","name":"","title":"Кухня","url":"/c1"}],"tags":["t-1"],
+	"categories":[{"id":"c1","name":"","title":"Категория","url":"/c1"}],"tags":["t-1"],
+	"marketplace":{"categoryId":"c1","attributes":{"a1":"v1","a2":1.5,"a3":false},"published":true},
 	"variantsId":"v1","conditions":{"isVisible":true,"isOnlyVariant":false},"unknownField":42}}`
 
 func (r *recorder) ApplyProduct(_ context.Context, e appcatalog.ProductEvent) error {
@@ -93,7 +95,7 @@ func TestProductProjected(t *testing.T) {
 	if s.Price.Kopecks() != 199990 || s.PromoPrice == nil || s.PromoPrice.Kopecks() != 150000 || s.Available != 3 {
 		t.Fatalf("цены в копейках и остаток: %+v", s)
 	}
-	if s.Card.Name != "Чайник" || s.Card.Categories[0].Name != "Кухня" || !s.Card.Visible ||
+	if s.Card.Name != "Товар" || s.Card.Categories[0].Name != "Категория" || !s.Card.Visible ||
 		s.Card.VariantsID != "v1" ||
 		!s.At.Equal(published) {
 		t.Fatalf("карточка: %+v", s.Card)
@@ -307,5 +309,22 @@ func TestUnknownTopicAndHint(t *testing.T) {
 	}
 	if hint := kafka.TenantHint(message(`x`, "{}", tenantHeader("не id {}"))); hint != "" {
 		t.Fatalf("значение не по формату не становится меткой: %q", hint)
+	}
+}
+
+func TestMarketplaceBlockPreservesTypes(t *testing.T) {
+	rec, err := handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, productBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := rec.products[0].Snapshot.Card.Marketplace
+	if card == nil || !card.Published || card.CategoryID != "c1" || string(card.Attributes["a2"]) != "1.5" ||
+		string(card.Attributes["a3"]) != "false" {
+		t.Fatalf("%+v", card)
+	}
+	body := strings.Replace(productBody, `"a2":1.5`, `"a2":"bad"`, 1)
+	rec, err = handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, body))
+	if err != nil || string(rec.products[0].Snapshot.Card.Marketplace.Attributes["a2"]) != `"bad"` {
+		t.Fatalf("ошибочный атрибут должен дойти до сценария проекции: %+v %v", rec, err)
 	}
 }

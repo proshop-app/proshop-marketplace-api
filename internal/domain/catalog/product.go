@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -20,6 +21,8 @@ type Category struct {
 
 // Card — то, что покупатель видит о товаре.
 type Card struct {
+	Marketplace *taxonomy.Card
+	Publication taxonomy.Publication
 	Name        string
 	Description string
 	Image       string
