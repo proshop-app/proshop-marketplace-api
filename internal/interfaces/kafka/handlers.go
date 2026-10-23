@@ -53,6 +53,40 @@ type snapshotFlags struct {
 	IsOnlyVariant *bool `json:"isOnlyVariant"`
 }
 
+type tagProjection struct {
+	Version   int    `json:"version"`
+	TenantID  string `json:"tenantId"`
+	TagID     string `json:"tagId"`
+	Revision  int64  `json:"revision"`
+	Operation string `json:"operation"`
+	Tag       *struct {
+		ID    string `json:"id"`
+		Value string `json:"value"`
+	} `json:"tag"`
+}
+
+type stockItem struct {
+	ProductID string       `json:"productId"`
+	Quantity  *json.Number `json:"quantity"`
+	Reserved  *json.Number `json:"reserved"`
+	Price     *json.Number `json:"price"`
+}
+
+type priceChange struct {
+	ID    string       `json:"id"`
+	Price *json.Number `json:"price"`
+}
+
+type tenantRecord struct {
+	TenantID string          `json:"tenantId"`
+	Slug     string          `json:"slug"`
+	Status   string          `json:"status"`
+	Cell     string          `json:"cell"`
+	Plan     json.RawMessage `json:"plan"`
+	Hosts    json.RawMessage `json:"hosts"`
+	At       string          `json:"at"`
+}
+
 // productProjected — снимок товара: магазин в ключе и теле, заголовок — если есть.
 func productProjected(ctx context.Context, projections Projections, envelope Envelope) error {
 	var event productProjection
@@ -134,8 +168,12 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 	}
 
 	card := catalog.Card{
-		Name: product.Name, Description: product.Description, URL: product.URL, SKU: product.SKU,
-		Tags: product.Tags, Visible: true,
+		Name:        product.Name,
+		Description: product.Description,
+		URL:         product.URL,
+		SKU:         product.SKU,
+		Tags:        product.Tags,
+		Visible:     true,
 	}
 	if product.Image != nil {
 		card.Image = *product.Image
@@ -164,18 +202,6 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 	snapshot.Card = card
 
 	return nil
-}
-
-type tagProjection struct {
-	Version   int    `json:"version"`
-	TenantID  string `json:"tenantId"`
-	TagID     string `json:"tagId"`
-	Revision  int64  `json:"revision"`
-	Operation string `json:"operation"`
-	Tag       *struct {
-		ID    string `json:"id"`
-		Value string `json:"value"`
-	} `json:"tag"`
 }
 
 // tagProjected — снимок тега: магазин в ключе и теле.
@@ -226,13 +252,6 @@ func tagProjected(ctx context.Context, projections Projections, envelope Envelop
 	return projections.ApplyTag(ctx, appcatalog.TagEvent{EventID: envelope.EventID, Snapshot: snapshot})
 }
 
-type stockItem struct {
-	ProductID string       `json:"productId"`
-	Quantity  *json.Number `json:"quantity"`
-	Reserved  *json.Number `json:"reserved"`
-	Price     *json.Number `json:"price"`
-}
-
 // stockItemUpdated — позиция склада: магазин только в заголовке.
 func stockItemUpdated(ctx context.Context, projections Projections, envelope Envelope) error {
 	tenant, err := resolveTenant(tenantHeader(envelope.Message))
@@ -266,8 +285,10 @@ func stockItemUpdated(ctx context.Context, projections Projections, envelope Env
 	}
 
 	event := appcatalog.StockEvent{
-		EventID: envelope.EventID, TenantID: tenant, ProductID: product,
-		Stock: catalog.StockSignal{Available: max(physical-reserved, 0), At: at},
+		EventID:   envelope.EventID,
+		TenantID:  tenant,
+		ProductID: product,
+		Stock:     catalog.StockSignal{Available: max(physical-reserved, 0), At: at},
 	}
 
 	if item.Price != nil {
@@ -280,11 +301,6 @@ func stockItemUpdated(ctx context.Context, projections Projections, envelope Env
 	}
 
 	return projections.ApplyStock(ctx, event)
-}
-
-type priceChange struct {
-	ID    string       `json:"id"`
-	Price *json.Number `json:"price"`
 }
 
 // priceUpdated — новый прайс товара: магазин только в заголовке.
@@ -318,19 +334,11 @@ func priceUpdated(ctx context.Context, projections Projections, envelope Envelop
 	}
 
 	return projections.ApplyPrice(ctx, appcatalog.PriceEvent{
-		EventID: envelope.EventID, TenantID: tenant, ProductID: product,
-		Price: catalog.PriceSignal{Price: price, At: at},
+		EventID:   envelope.EventID,
+		TenantID:  tenant,
+		ProductID: product,
+		Price:     catalog.PriceSignal{Price: price, At: at},
 	})
-}
-
-type tenantRecord struct {
-	TenantID string          `json:"tenantId"`
-	Slug     string          `json:"slug"`
-	Status   string          `json:"status"`
-	Cell     string          `json:"cell"`
-	Plan     json.RawMessage `json:"plan"`
-	Hosts    json.RawMessage `json:"hosts"`
-	At       string          `json:"at"`
 }
 
 // tenantEvent — событие реестра: магазин в теле, заголовок — если есть.
@@ -360,8 +368,13 @@ func tenantEvent(ctx context.Context, registry Registry, envelope Envelope) erro
 	}
 
 	return registry.Apply(ctx, appparticipant.RegistryEvent{EventID: envelope.EventID, Event: participant.RegistryEvent{
-		TenantID: tenant, Slug: record.Slug, Status: status, Cell: record.Cell,
-		Plan: nullable(record.Plan), Hosts: nullable(record.Hosts), At: at.UTC().Truncate(time.Microsecond),
+		TenantID: tenant,
+		Slug:     record.Slug,
+		Status:   status,
+		Cell:     record.Cell,
+		Plan:     nullable(record.Plan),
+		Hosts:    nullable(record.Hosts),
+		At:       at.UTC().Truncate(time.Microsecond),
 	}})
 }
 

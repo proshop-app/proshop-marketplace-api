@@ -13,7 +13,11 @@ import (
 )
 
 // ErrCallCheckFailed — шлюз отказал в проверке.
-var ErrCallCheckFailed = errs.New(errs.Unavailable, "buyer.call_check_failed", "проверка звонком сейчас недоступна, попробуйте позже")
+var ErrCallCheckFailed = errs.New(
+	errs.Unavailable,
+	"buyer.call_check_failed",
+	"проверка звонком сейчас недоступна, попробуйте позже",
+)
 
 // Limit — не больше Count попыток за Window.
 type Limit struct {
@@ -67,7 +71,15 @@ type Auth struct {
 // NewAuth — сценарии входа.
 func NewAuth(uow ports.UnitOfWork, calls ports.CallCheck, sessions buyer.SessionRepository, limiter ports.RateLimiter,
 	identities ports.IDs, clock ports.Clock, config AuthConfig) *Auth {
-	return &Auth{uow: uow, calls: calls, sessions: sessions, limiter: limiter, ids: identities, clock: clock, config: config}
+	return &Auth{
+		uow:      uow,
+		calls:    calls,
+		sessions: sessions,
+		limiter:  limiter,
+		ids:      identities,
+		clock:    clock,
+		config:   config,
+	}
 }
 
 // StartLogin начинает вход: лимиты по телефону и адресу, проверка у шлюза.
@@ -328,7 +340,9 @@ func (a *Auth) limit(ctx context.Context, key string, limit Limit) error {
 		return err
 	}
 	if !allowed {
-		return buyer.ErrTooManyAttempts.WithMessage("слишком много попыток входа, повторите через " + retryAfter.Round(time.Second).String())
+		message := "слишком много попыток входа, повторите через " + retryAfter.Round(time.Second).String()
+
+		return buyer.ErrTooManyAttempts.WithMessage(message)
 	}
 
 	return nil
@@ -338,6 +352,10 @@ func viewOf(c *buyer.Challenge) ChallengeView {
 	state := c.State()
 
 	return ChallengeView{
-		ID: state.ID, Status: state.Status, CallPhone: state.CallPhone, CallPhonePretty: state.CallPhonePretty, ExpiresAt: state.ExpiresAt,
+		ID:              state.ID,
+		Status:          state.Status,
+		CallPhone:       state.CallPhone,
+		CallPhonePretty: state.CallPhonePretty,
+		ExpiresAt:       state.ExpiresAt,
 	}
 }

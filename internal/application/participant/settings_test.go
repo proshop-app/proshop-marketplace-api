@@ -16,30 +16,46 @@ import (
 func TestSettingsSync(t *testing.T) {
 	store, clock, service := setup(t)
 	ctx := context.Background()
-	store.SeedTenant(participant.TenantState{TenantID: "t2", Slug: "shop-two", Status: participant.TenantActive, EventAt: t0, Version: 1})
+	store.SeedTenant(participant.TenantState{
+		TenantID: "t2",
+		Slug:     "shop-two",
+		Status:   participant.TenantActive,
+		EventAt:  t0,
+		Version:  1,
+	})
 
 	for _, tenant := range []string{"t1", "t2"} {
-		if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: participantID(tenant), Name: "Магазин " + tenant}); err != nil {
+		command := appparticipant.CreateCommand{TenantID: participantID(tenant), Name: "Магазин " + tenant}
+		if _, err := service.Create(ctx, command); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	platform := fake.NewPlatform()
-	subsidy := participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 15000, MaxAmount: money.FromKopecks(20000)}
+	subsidy := participant.Subsidy{
+		Enabled:   true,
+		Type:      participant.SubsidyFixed,
+		Value:     15000,
+		MaxAmount: money.FromKopecks(20000),
+	}
 	platform.SetSettings("t1", ports.ShopSettings{Enabled: true, Subsidy: subsidy})
 	platform.Fail("t2", errors.New("сервер недоступен"))
 
 	settings := appparticipant.NewSettings(store, platform, clock)
 
 	// задачи создания участников уже отработаны: иначе новая склеилась бы с невзятой
-	tasks, _ := store.Claim(ctx, ports.ClaimRequest{Now: clock.Now(), Limit: 100, PerTenant: 100, LeaseUntil: clock.Now()})
+	tasks, _ := store.Claim(
+		ctx,
+		ports.ClaimRequest{Now: clock.Now(), Limit: 100, PerTenant: 100, LeaseUntil: clock.Now()},
+	)
 	for _, task := range tasks {
 		_ = store.Complete(ctx, task.ID, clock.Now())
 	}
 	before := len(store.OutboxRows())
 
 	result, err := settings.Sync(ctx)
-	if err != nil || result.Checked != 2 || result.Changed != 1 || len(result.Failed) != 1 || result.Failed["t2"] == nil {
+	if err != nil || result.Checked != 2 || result.Changed != 1 || len(result.Failed) != 1 ||
+		result.Failed["t2"] == nil {
 		t.Fatalf("сверка: %+v %v", result, err)
 	}
 

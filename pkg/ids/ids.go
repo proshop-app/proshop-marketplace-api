@@ -26,6 +26,19 @@ type ProductID string
 // TagID — тег в справочнике магазина.
 type TagID string
 
+// OfferID — предложение: товар конкретного магазина. Отдельного offerId
+// платформа не вводит, ключ — пара магазина и товара.
+type OfferID struct {
+	Tenant  TenantID
+	Product ProductID
+}
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// UUID — идентификатор сущности маркетплейса: покупателя, проверки входа,
+// корзины, покупки. Строчные шестнадцатеричные цифры с дефисами.
+type UUID string
+
 // ParseTenantID проверяет формат идентификатора магазина.
 func ParseTenantID(value string) (TenantID, error) {
 	if err := validate("магазина", value); err != nil {
@@ -61,13 +74,6 @@ func validate(subject, value string) error {
 	return nil
 }
 
-// OfferID — предложение: товар конкретного магазина. Отдельного offerId
-// платформа не вводит, ключ — пара магазина и товара.
-type OfferID struct {
-	Tenant  TenantID
-	Product ProductID
-}
-
 // String — запись для адресов и индекса: "<tenantId>~<productId>".
 func (o OfferID) String() string {
 	return string(o.Tenant) + offerSeparator + string(o.Product)
@@ -92,12 +98,6 @@ func ParseOfferID(value string) (OfferID, error) {
 
 	return OfferID{Tenant: tenantID, Product: productID}, nil
 }
-
-var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-
-// UUID — идентификатор сущности маркетплейса: покупателя, проверки входа,
-// корзины, покупки. Строчные шестнадцатеричные цифры с дефисами.
-type UUID string
 
 // ParseUUID проверяет запись UUID.
 func ParseUUID(value string) (UUID, error) {

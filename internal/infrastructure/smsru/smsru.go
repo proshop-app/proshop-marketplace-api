@@ -50,6 +50,16 @@ type Client struct {
 	http    *http.Client
 }
 
+type response struct {
+	Status      string          `json:"status"`
+	StatusCode  int             `json:"status_code"`
+	StatusText  string          `json:"status_text"`
+	CheckID     string          `json:"check_id"`
+	CallPhone   string          `json:"call_phone"`
+	CallPretty  string          `json:"call_phone_pretty"`
+	CheckStatus json.RawMessage `json:"check_status"`
+}
+
 // New — клиент шлюза.
 func New(cfg Config) *Client {
 	base := strings.TrimRight(cfg.BaseURL, "/")
@@ -63,16 +73,6 @@ func New(cfg Config) *Client {
 	}
 
 	return &Client{baseURL: base, apiID: cfg.APIID, http: &http.Client{Timeout: timeout}}
-}
-
-type response struct {
-	Status      string          `json:"status"`
-	StatusCode  int             `json:"status_code"`
-	StatusText  string          `json:"status_text"`
-	CheckID     string          `json:"check_id"`
-	CallPhone   string          `json:"call_phone"`
-	CallPretty  string          `json:"call_phone_pretty"`
-	CheckStatus json.RawMessage `json:"check_status"`
 }
 
 // Start заводит проверку. Частный и локальный адрес покупателя шлюзу не
@@ -92,7 +92,9 @@ func (c *Client) Start(ctx context.Context, phone buyer.Phone, ip string) (buyer
 	case answer.StatusCode == codeInvalidPhone:
 		return buyer.CallInstruction{}, buyer.ErrInvalidPhone
 	case answer.StatusCode != codeAccepted || answer.CheckID == "" || answer.CallPhone == "":
-		return buyer.CallInstruction{}, ErrRejected.WithMessage(fmt.Sprintf("callcheck/add: %d %s", answer.StatusCode, answer.StatusText))
+		message := fmt.Sprintf("callcheck/add: %d %s", answer.StatusCode, answer.StatusText)
+
+		return buyer.CallInstruction{}, ErrRejected.WithMessage(message)
 	}
 
 	pretty := answer.CallPretty
@@ -100,13 +102,25 @@ func (c *Client) Start(ctx context.Context, phone buyer.Phone, ip string) (buyer
 		pretty = answer.CallPhone
 	}
 
-	return buyer.CallInstruction{ProviderRef: answer.CheckID, CallPhone: answer.CallPhone, CallPhonePretty: pretty}, nil
+	instruction := buyer.CallInstruction{
+		ProviderRef:     answer.CheckID,
+		CallPhone:       answer.CallPhone,
+		CallPhonePretty: pretty,
+	}
+
+	return instruction, nil
 }
 
 // Status — состояние проверки у шлюза.
 func (c *Client) Status(ctx context.Context, providerRef string) (buyer.CallStatus, error) {
 	var answer response
-	if err := c.post(ctx, "/callcheck/status", url.Values{"api_id": {c.apiID}, "check_id": {providerRef}, "json": {"1"}}, &answer); err != nil {
+	form := url.Values{
+		"api_id":   {c.apiID},
+		"check_id": {providerRef},
+		"json":     {"1"},
+	}
+
+	if err := c.post(ctx, "/callcheck/status", form, &answer); err != nil {
 		return "", err
 	}
 	if answer.StatusCode != codeAccepted {
@@ -127,7 +141,13 @@ func (c *Client) Status(ctx context.Context, providerRef string) (buyer.CallStat
 // RegisterCallback заводит у шлюза адрес оповещений о проверках.
 func (c *Client) RegisterCallback(ctx context.Context, callbackURL string) error {
 	var answer response
-	if err := c.post(ctx, "/callback/add", url.Values{"api_id": {c.apiID}, "url": {callbackURL}, "json": {"1"}}, &answer); err != nil {
+	form := url.Values{
+		"api_id": {c.apiID},
+		"url":    {callbackURL},
+		"json":   {"1"},
+	}
+
+	if err := c.post(ctx, "/callback/add", form, &answer); err != nil {
 		return err
 	}
 	if answer.StatusCode != codeAccepted {

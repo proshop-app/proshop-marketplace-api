@@ -25,6 +25,16 @@ type source struct {
 	commits  []int64
 }
 
+type parker struct {
+	failures int
+	events   []ports.ParkedEvent
+}
+
+type flaky struct {
+	recorder
+	failures int
+}
+
 func (s *source) Fetch(ctx context.Context) (kafkago.Message, error) {
 	s.mu.Lock()
 	if len(s.messages) > 0 {
@@ -50,11 +60,6 @@ func (s *source) Commit(_ context.Context, message kafkago.Message) error {
 	return nil
 }
 
-type parker struct {
-	failures int
-	events   []ports.ParkedEvent
-}
-
 func (p *parker) Park(_ context.Context, event ports.ParkedEvent) error {
 	if p.failures > 0 {
 		p.failures--
@@ -65,11 +70,6 @@ func (p *parker) Park(_ context.Context, event ports.ParkedEvent) error {
 	p.events = append(p.events, event)
 
 	return nil
-}
-
-type flaky struct {
-	recorder
-	failures int
 }
 
 func (f *flaky) ApplyPrice(ctx context.Context, e appcatalog.PriceEvent) error {
@@ -84,15 +84,23 @@ func (f *flaky) ApplyPrice(ctx context.Context, e appcatalog.PriceEvent) error {
 	return f.recorder.ApplyPrice(ctx, e)
 }
 
-func consumer(src kafka.Source, projections kafka.Projections, park kafka.Parker, ready error) (*kafka.Consumer, *prometheus.Registry) {
+func consumer(
+	src kafka.Source,
+	projections kafka.Projections,
+	park kafka.Parker,
+	ready error,
+) (*kafka.Consumer, *prometheus.Registry) {
 	registry := prometheus.NewRegistry()
-	c := kafka.NewConsumer(src, kafka.NewRouter(projections, &recorder{}), park, kafka.ConsumerConfig{
+	cfg := kafka.ConsumerConfig{
 		TopicPrefix: "shop",
 		MaxAttempts: 3,
 		Backoff:     func(int) time.Duration { return time.Millisecond },
 		Ready:       func(context.Context) error { return ready },
 		Now:         func() time.Time { return published },
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)), registry)
+	}
+	router := kafka.NewRouter(projections, &recorder{})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	c := kafka.NewConsumer(src, router, park, cfg, logger, registry)
 
 	return c, registry
 }
@@ -135,7 +143,8 @@ func TestConsumerParksMessageWithoutTenant(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(park.events) != 1 || park.events[0].Reason != "kafka.tenant_missing" || park.events[0].TenantID != "" || park.events[0].Offset != 6 {
+	if len(park.events) != 1 || park.events[0].Reason != "kafka.tenant_missing" || park.events[0].TenantID != "" ||
+		park.events[0].Offset != 6 {
 		t.Fatalf("отравленное сообщение: %+v", park.events)
 	}
 	if len(src.commits) != 1 {
@@ -169,7 +178,8 @@ func TestConsumerParksAfterAttemptsWhenStorageReady(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(park.events) != 1 || park.events[0].Reason != kafka.ReasonExhausted || park.events[0].Attempts != 3 || park.events[0].TenantID != "t1" {
+	if len(park.events) != 1 || park.events[0].Reason != kafka.ReasonExhausted || park.events[0].Attempts != 3 ||
+		park.events[0].TenantID != "t1" {
 		t.Fatalf("исчерпанные попытки — в отравленные с магазином: %+v", park.events)
 	}
 	if len(src.commits) != 1 {

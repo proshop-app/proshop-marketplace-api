@@ -30,6 +30,10 @@ type UnitOfWork struct {
 	pool *pgxpool.Pool
 }
 
+type scope struct {
+	q querier
+}
+
 // NewUnitOfWork — UnitOfWork поверх пула.
 func NewUnitOfWork(pool *pgxpool.Pool) *UnitOfWork {
 	return &UnitOfWork{pool: pool}
@@ -74,23 +78,32 @@ func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx por
 	return nil
 }
 
-type scope struct {
-	q querier
-}
+func (s *scope) Participants() participant.Repository { return &Participants{q: s.q} }
 
-func (s *scope) Participants() participant.Repository  { return &Participants{q: s.q} }
-func (s *scope) Registry() participant.Registry        { return &Registry{q: s.q} }
-func (s *scope) Products() catalog.ProductRepository   { return &Products{q: s.q} }
-func (s *scope) Signals() catalog.SignalsRepository    { return &Signals{q: s.q} }
-func (s *scope) Tags() catalog.TagRepository           { return &Tags{q: s.q} }
-func (s *scope) Offers() ports.OfferStates             { return &Offers{q: s.q} }
-func (s *scope) Outbox() ports.Outbox                  { return &Outbox{q: s.q} }
-func (s *scope) Inbox() ports.Inbox                    { return &Inbox{q: s.q} }
-func (s *scope) Parked() ports.ParkedEvents            { return &Parked{q: s.q} }
-func (s *scope) Buyers() buyer.Repository              { return &Buyers{q: s.q} }
+func (s *scope) Registry() participant.Registry { return &Registry{q: s.q} }
+
+func (s *scope) Products() catalog.ProductRepository { return &Products{q: s.q} }
+
+func (s *scope) Signals() catalog.SignalsRepository { return &Signals{q: s.q} }
+
+func (s *scope) Tags() catalog.TagRepository { return &Tags{q: s.q} }
+
+func (s *scope) Offers() ports.OfferStates { return &Offers{q: s.q} }
+
+func (s *scope) Outbox() ports.Outbox { return &Outbox{q: s.q} }
+
+func (s *scope) Inbox() ports.Inbox { return &Inbox{q: s.q} }
+
+func (s *scope) Parked() ports.ParkedEvents { return &Parked{q: s.q} }
+
+func (s *scope) Buyers() buyer.Repository { return &Buyers{q: s.q} }
+
 func (s *scope) Challenges() buyer.ChallengeRepository { return &Challenges{q: s.q} }
-func (s *scope) Carts() cart.Repository                { return &Carts{q: s.q} }
-func (s *scope) Checkouts() checkout.Repository        { return &Checkouts{q: s.q} }
+
+func (s *scope) Carts() cart.Repository { return &Carts{q: s.q} }
+
+func (s *scope) Checkouts() checkout.Repository { return &Checkouts{q: s.q} }
+
 func (s *scope) PickupPoints() delivery.PickupPointRepository {
 	return &PickupPoints{q: s.q}
 }

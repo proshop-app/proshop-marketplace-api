@@ -75,6 +75,14 @@ type lease struct {
 	until  time.Time
 }
 
+// Store — хранилище в памяти: UnitOfWork, очередь задач и чистка по сроку.
+type Store struct {
+	mu   sync.Mutex
+	data *data
+	// FailCommit, если задан, возвращается вместо фиксации транзакции.
+	FailCommit error
+}
+
 func (d *data) clone() *data {
 	return &data{
 		participants: maps.Clone(d.participants),
@@ -93,14 +101,6 @@ func (d *data) clone() *data {
 		points:       maps.Clone(d.points),
 		leases:       maps.Clone(d.leases),
 	}
-}
-
-// Store — хранилище в памяти: UnitOfWork, очередь задач и чистка по сроку.
-type Store struct {
-	mu   sync.Mutex
-	data *data
-	// FailCommit, если задан, возвращается вместо фиксации транзакции.
-	FailCommit error
 }
 
 // NewStore — пустое хранилище.
@@ -294,8 +294,12 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Ta
 		row.Attempts++
 		row.NextAt = request.LeaseUntil
 		tasks = append(tasks, ports.Task{
-			ID: row.ID, Kind: row.Kind, TenantID: row.TenantID, Payload: row.Payload,
-			Attempts: row.Attempts, CreatedAt: row.CreatedAt,
+			ID:        row.ID,
+			Kind:      row.Kind,
+			TenantID:  row.TenantID,
+			Payload:   row.Payload,
+			Attempts:  row.Attempts,
+			CreatedAt: row.CreatedAt,
 		})
 	}
 

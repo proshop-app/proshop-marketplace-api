@@ -57,8 +57,12 @@ func TestFetch(t *testing.T) {
 	}
 
 	first := points[0]
-	if first.Carrier != "yandex" || first.Code != "0a1b2c3d4e5f60718293a4b5c6d7e8f9" || first.City != "Город" ||
-		first.Address != "Россия, Город, ул. Примерная, 5" || first.Location.Lon != 37.61 || first.Schedule != "Пн-Пт 10:00-21:00; Сб-Вс 10:30-18:00" {
+	if first.Carrier != "yandex" ||
+		first.Code != "0a1b2c3d4e5f60718293a4b5c6d7e8f9" ||
+		first.City != "Город" ||
+		first.Address != "Россия, Город, ул. Примерная, 5" ||
+		first.Location.Lon != 37.61 ||
+		first.Schedule != "Пн-Пт 10:00-21:00; Сб-Вс 10:30-18:00" {
 		t.Fatalf("разбор пункта: %+v", first)
 	}
 	if points[1].Schedule != "Пн-Вс 00:00-23:59" || len(points[1].Payload) == 0 {
@@ -71,18 +75,21 @@ func TestFetch(t *testing.T) {
 
 func TestFetchErrors(t *testing.T) {
 	unauthorized := New(Config{BaseURL: replay(t, "", http.StatusUnauthorized).URL, Token: "token"})
-	if err := unauthorized.Fetch(context.Background(), func([]delivery.PickupPoint) error { return nil }); !errors.Is(err, ErrUnavailable) {
+	err := unauthorized.Fetch(context.Background(), func([]delivery.PickupPoint) error { return nil })
+	if !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("отказ API: %v", err)
 	}
 
 	wrongToken := New(Config{BaseURL: replay(t, "pickup_points_list.json", http.StatusOK).URL, Token: "other"})
-	if err := wrongToken.Fetch(context.Background(), func([]delivery.PickupPoint) error { return nil }); !errors.Is(err, ErrUnavailable) {
+	err = wrongToken.Fetch(context.Background(), func([]delivery.PickupPoint) error { return nil })
+	if !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("чужой токен: %v", err)
 	}
 
 	stop := errors.New("стоп")
 	provider := New(Config{BaseURL: replay(t, "pickup_points_list.json", http.StatusOK).URL, Token: "token"})
-	if err := provider.Fetch(context.Background(), func([]delivery.PickupPoint) error { return stop }); !errors.Is(err, stop) {
+	err = provider.Fetch(context.Background(), func([]delivery.PickupPoint) error { return stop })
+	if !errors.Is(err, stop) {
 		t.Fatalf("ошибка получателя прерывает выгрузку: %v", err)
 	}
 }

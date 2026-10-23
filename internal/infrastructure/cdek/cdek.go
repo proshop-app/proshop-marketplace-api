@@ -50,6 +50,21 @@ type Provider struct {
 	expires time.Time
 }
 
+type location struct {
+	City        string  `json:"city"`
+	Address     string  `json:"address"`
+	AddressFull string  `json:"address_full"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+}
+
+type deliveryPoint struct {
+	Code     string   `json:"code"`
+	Name     string   `json:"name"`
+	WorkTime string   `json:"work_time"`
+	Location location `json:"location"`
+}
+
 // New — справочник СДЭК.
 func New(cfg Config) *Provider {
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
@@ -69,21 +84,6 @@ func New(cfg Config) *Provider {
 // Carrier — СДЭК.
 func (p *Provider) Carrier() delivery.CarrierInfo {
 	return delivery.CarrierInfo{Code: Carrier, Name: "СДЭК"}
-}
-
-type location struct {
-	City        string  `json:"city"`
-	Address     string  `json:"address"`
-	AddressFull string  `json:"address_full"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-}
-
-type deliveryPoint struct {
-	Code     string   `json:"code"`
-	Name     string   `json:"name"`
-	WorkTime string   `json:"work_time"`
-	Location location `json:"location"`
 }
 
 // Fetch выгружает все пункты постранично. Запись без кода, адреса или
@@ -112,8 +112,17 @@ func (p *Provider) Fetch(ctx context.Context, yield func([]delivery.PickupPoint)
 				address = dp.Location.Address
 			}
 
-			point, err := delivery.NewPickupPoint(Carrier, dp.Code, dp.Name, address, dp.Location.City,
-				delivery.Location{Lat: dp.Location.Latitude, Lon: dp.Location.Longitude}, dp.WorkTime, item, now)
+			point, err := delivery.NewPickupPoint(
+				Carrier,
+				dp.Code,
+				dp.Name,
+				address,
+				dp.Location.City,
+				delivery.Location{Lat: dp.Location.Latitude, Lon: dp.Location.Longitude},
+				dp.WorkTime,
+				item,
+				now,
+			)
 			if err != nil {
 				continue
 			}
@@ -141,7 +150,12 @@ func (p *Provider) page(ctx context.Context, page int) ([]json.RawMessage, error
 
 	query := url.Values{"type": {"ALL"}, "page": {strconv.Itoa(page)}, "size": {strconv.Itoa(p.config.PageSize)}}
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/v2/deliverypoints?"+query.Encode(), nil)
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		p.config.BaseURL+"/v2/deliverypoints?"+query.Encode(),
+		nil,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("запрос к СДЭК: %w", err)
 	}
@@ -164,9 +178,18 @@ func (p *Provider) accessToken(ctx context.Context) (string, error) {
 		return p.token, nil
 	}
 
-	form := url.Values{"grant_type": {"client_credentials"}, "client_id": {p.config.ClientID}, "client_secret": {p.config.ClientSecret}}
+	form := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {p.config.ClientID},
+		"client_secret": {p.config.ClientSecret},
+	}
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, p.config.BaseURL+"/v2/oauth/token", strings.NewReader(form.Encode()))
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		p.config.BaseURL+"/v2/oauth/token",
+		strings.NewReader(form.Encode()),
+	)
 	if err != nil {
 		return "", fmt.Errorf("запрос к СДЭК: %w", err)
 	}
@@ -199,7 +222,9 @@ func (p *Provider) do(request *http.Request, out any) error {
 	if reply.StatusCode != http.StatusOK {
 		detail, _ := io.ReadAll(io.LimitReader(reply.Body, 512))
 
-		return ErrUnavailable.WithMessage(fmt.Sprintf("%s: HTTP %d %s", request.URL.Path, reply.StatusCode, strings.TrimSpace(string(detail))))
+		message := fmt.Sprintf("%s: HTTP %d %s", request.URL.Path, reply.StatusCode, strings.TrimSpace(string(detail)))
+
+		return ErrUnavailable.WithMessage(message)
 	}
 
 	if err := json.NewDecoder(reply.Body).Decode(out); err != nil {

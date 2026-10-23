@@ -43,24 +43,6 @@ type Provider struct {
 	now    func() time.Time
 }
 
-// New — справочник Яндекс Доставки.
-func New(cfg Config) *Provider {
-	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = DefaultBaseURL
-	}
-	if cfg.Timeout <= 0 {
-		cfg.Timeout = 5 * time.Minute
-	}
-
-	return &Provider{config: cfg, http: &http.Client{Timeout: cfg.Timeout}, now: time.Now}
-}
-
-// Carrier — Яндекс Доставка.
-func (p *Provider) Carrier() delivery.CarrierInfo {
-	return delivery.CarrierInfo{Code: Carrier, Name: "Яндекс Доставка"}
-}
-
 type pickupPoint struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -88,11 +70,35 @@ type restriction struct {
 	TimeTo   clock `json:"time_to"`
 }
 
+var weekdays = []string{"", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"}
+
+// New — справочник Яндекс Доставки.
+func New(cfg Config) *Provider {
+	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = DefaultBaseURL
+	}
+	if cfg.Timeout <= 0 {
+		cfg.Timeout = 5 * time.Minute
+	}
+
+	return &Provider{config: cfg, http: &http.Client{Timeout: cfg.Timeout}, now: time.Now}
+}
+
+// Carrier — Яндекс Доставка.
+func (p *Provider) Carrier() delivery.CarrierInfo {
+	return delivery.CarrierInfo{Code: Carrier, Name: "Яндекс Доставка"}
+}
+
 // Fetch выгружает пункты выдачи одним запросом и разбирает ответ потоком:
 // список большой, в память целиком он не поднимается.
 func (p *Provider) Fetch(ctx context.Context, yield func([]delivery.PickupPoint) error) error {
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, p.config.BaseURL+"/api/b2b/platform/pickup-points/list",
-		bytes.NewReader([]byte(`{"type":"pickup_point"}`)))
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		p.config.BaseURL+"/api/b2b/platform/pickup-points/list",
+		bytes.NewReader([]byte(`{"type":"pickup_point"}`)),
+	)
 	if err != nil {
 		return fmt.Errorf("запрос к Яндекс Доставке: %w", err)
 	}
@@ -110,7 +116,9 @@ func (p *Provider) Fetch(ctx context.Context, yield func([]delivery.PickupPoint)
 	if reply.StatusCode != http.StatusOK {
 		detail, _ := io.ReadAll(io.LimitReader(reply.Body, 512))
 
-		return ErrUnavailable.WithMessage(fmt.Sprintf("pickup-points/list: HTTP %d %s", reply.StatusCode, strings.TrimSpace(string(detail))))
+		message := fmt.Sprintf("pickup-points/list: HTTP %d %s", reply.StatusCode, strings.TrimSpace(string(detail)))
+
+		return ErrUnavailable.WithMessage(message)
 	}
 
 	decoder := json.NewDecoder(reply.Body)
@@ -132,8 +140,20 @@ func (p *Provider) Fetch(ctx context.Context, yield func([]delivery.PickupPoint)
 			return ErrUnavailable.Wrap(err)
 		}
 
-		point, err := delivery.NewPickupPoint(Carrier, pp.ID, pp.Name, pp.Address.FullAddress, pp.Address.Locality,
-			delivery.Location{Lat: pp.Position.Latitude, Lon: pp.Position.Longitude}, schedule(pp.Schedule.Restrictions), raw, now)
+		point, err := delivery.NewPickupPoint(
+			Carrier,
+			pp.ID,
+			pp.Name,
+			pp.Address.FullAddress,
+			pp.Address.Locality,
+			delivery.Location{
+				Lat: pp.Position.Latitude,
+				Lon: pp.Position.Longitude,
+			},
+			schedule(pp.Schedule.Restrictions),
+			raw,
+			now,
+		)
 		if err != nil {
 			continue
 		}
@@ -183,8 +203,6 @@ func seekArray(decoder *json.Decoder, key string) error {
 	return ErrUnavailable.WithMessage("в ответе нет списка пунктов")
 }
 
-var weekdays = []string{"", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"}
-
 // schedule — график словами: «Пн-Пт 10:00-21:00; Сб-Вс 10:30-18:00».
 func schedule(restrictions []restriction) string {
 	parts := make([]string, 0, len(restrictions))
@@ -199,7 +217,17 @@ func schedule(restrictions []restriction) string {
 			days += "-" + dayName(last)
 		}
 
-		parts = append(parts, fmt.Sprintf("%s %02d:%02d-%02d:%02d", days, r.TimeFrom.Hours, r.TimeFrom.Minutes, r.TimeTo.Hours, r.TimeTo.Minutes))
+		parts = append(
+			parts,
+			fmt.Sprintf(
+				"%s %02d:%02d-%02d:%02d",
+				days,
+				r.TimeFrom.Hours,
+				r.TimeFrom.Minutes,
+				r.TimeTo.Hours,
+				r.TimeTo.Minutes,
+			),
+		)
 	}
 
 	return strings.Join(parts, "; ")

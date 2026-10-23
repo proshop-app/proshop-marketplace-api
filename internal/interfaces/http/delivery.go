@@ -90,8 +90,17 @@ func (h *deliveryHandlers) pickupPoints(w http.ResponseWriter, r *http.Request) 
 	body := make([]pickupPointJSON, 0, len(points))
 	for _, p := range points {
 		body = append(body, pickupPointJSON{
-			Carrier: string(p.Carrier), Code: p.Code, Name: p.Name, Address: p.Address, City: p.City,
-			Location: locationJSON{Lat: p.Location.Lat, Lon: p.Location.Lon}, Schedule: p.Schedule, RefreshedAt: p.RefreshedAt.UTC(),
+			Carrier: string(p.Carrier),
+			Code:    p.Code,
+			Name:    p.Name,
+			Address: p.Address,
+			City:    p.City,
+			Location: locationJSON{
+				Lat: p.Location.Lat,
+				Lon: p.Location.Lon,
+			},
+			Schedule:    p.Schedule,
+			RefreshedAt: p.RefreshedAt.UTC(),
 		})
 	}
 

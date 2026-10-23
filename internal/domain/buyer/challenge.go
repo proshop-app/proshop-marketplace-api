@@ -68,8 +68,16 @@ type Challenge struct {
 // NewChallenge — проверка, начатая у шлюза.
 func NewChallenge(id ids.UUID, phone Phone, call CallInstruction, now time.Time, ttl time.Duration) *Challenge {
 	return &Challenge{state: ChallengeState{
-		ID: id, Phone: phone, ProviderRef: call.ProviderRef, CallPhone: call.CallPhone, CallPhonePretty: call.CallPhonePretty,
-		Status: ChallengePending, ExpiresAt: now.Add(ttl), CreatedAt: now, UpdatedAt: now, Version: 1,
+		ID:              id,
+		Phone:           phone,
+		ProviderRef:     call.ProviderRef,
+		CallPhone:       call.CallPhone,
+		CallPhonePretty: call.CallPhonePretty,
+		Status:          ChallengePending,
+		ExpiresAt:       now.Add(ttl),
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		Version:         1,
 	}}
 }
 

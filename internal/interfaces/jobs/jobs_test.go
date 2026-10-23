@@ -27,6 +27,20 @@ type dispatcher struct {
 	calls  int
 }
 
+type purger struct {
+	mu    sync.Mutex
+	calls int
+}
+
+type refresher struct {
+	calls int
+}
+
+type syncer struct {
+	mu    sync.Mutex
+	calls int
+}
+
 func (d *dispatcher) RunOnce(context.Context) ([]messaging.Outcome, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -106,11 +120,6 @@ func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
 	}
 }
 
-type purger struct {
-	mu    sync.Mutex
-	calls int
-}
-
 func (p *purger) Purge(context.Context) (ports.PurgeResult, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -134,10 +143,6 @@ func TestRetentionRunnerPurgesOnStart(t *testing.T) {
 	if p.calls != 1 {
 		t.Fatalf("чистка сразу на старте и не чаще интервала: %d", p.calls)
 	}
-}
-
-type refresher struct {
-	calls int
 }
 
 func (r *refresher) Refresh(context.Context) []appdelivery.RefreshResult {
@@ -179,11 +184,6 @@ func TestPickupRefreshRunnerRecords(t *testing.T) {
 	if results["cdek:done"] != 1 || results["yandex:failed"] != 1 || results["ozon:skipped"] != 1 || fetched != 3 {
 		t.Fatalf("метрики обновления: %+v %v", results, fetched)
 	}
-}
-
-type syncer struct {
-	mu    sync.Mutex
-	calls int
 }
 
 func (s *syncer) Sync(context.Context) (appparticipant.SettingsResult, error) {

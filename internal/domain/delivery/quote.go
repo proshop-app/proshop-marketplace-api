@@ -49,7 +49,12 @@ type Offered struct {
 
 // NewQuote собирает расчёт: субсидию продавца вычитает из стоимости, срок
 // цены — не позже maxAge от расчёта, даже если магазин обещал дольше.
-func NewQuote(offered Offered, subsidy func(money.Money) (money.Money, error), now time.Time, maxAge time.Duration) (Quote, error) {
+func NewQuote(
+	offered Offered,
+	subsidy func(money.Money) (money.Money, error),
+	now time.Time,
+	maxAge time.Duration,
+) (Quote, error) {
 	expires := now.Add(maxAge)
 	if !offered.ExpiresAt.IsZero() && offered.ExpiresAt.Before(expires) {
 		expires = offered.ExpiresAt
@@ -82,8 +87,13 @@ func NewQuote(offered Offered, subsidy func(money.Money) (money.Money, error), n
 	}
 
 	return Quote{
-		Status: QuoteAvailable, Cost: offered.Cost, Subsidy: paid, BuyerCost: buyerCost,
-		MinDays: offered.MinDays, MaxDays: offered.MaxDays, ExpiresAt: expires,
+		Status:    QuoteAvailable,
+		Cost:      offered.Cost,
+		Subsidy:   paid,
+		BuyerCost: buyerCost,
+		MinDays:   offered.MinDays,
+		MaxDays:   offered.MaxDays,
+		ExpiresAt: expires,
 	}, nil
 }
 

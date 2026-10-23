@@ -58,7 +58,12 @@ func (d *Directory) Carriers() []delivery.CarrierInfo {
 }
 
 // Search — пункты одного перевозчика в области карты или городе.
-func (d *Directory) Search(ctx context.Context, carrier delivery.Carrier, area delivery.Area, limit int) ([]delivery.PickupPoint, error) {
+func (d *Directory) Search(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	area delivery.Area,
+	limit int,
+) ([]delivery.PickupPoint, error) {
 	if !d.known(carrier) {
 		return nil, delivery.ErrUnknownCarrier
 	}
@@ -132,7 +137,9 @@ func (d *Directory) refresh(ctx context.Context, provider ports.PickupPointsProv
 	result.Err = provider.Fetch(ctx, func(points []delivery.PickupPoint) error {
 		for i := range points {
 			if points[i].Carrier != carrier {
-				return delivery.ErrInvalidPickupPoint.WithMessage("пункт чужого перевозчика в выгрузке " + string(carrier))
+				message := "пункт чужого перевозчика в выгрузке " + string(carrier)
+
+				return delivery.ErrInvalidPickupPoint.WithMessage(message)
 			}
 
 			points[i].RefreshedAt = started

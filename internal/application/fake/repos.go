@@ -14,6 +14,14 @@ import (
 
 type buyers struct{ d *data }
 
+type challenges struct{ d *data }
+
+type carts struct{ d *data }
+
+type checkouts struct{ d *data }
+
+type pickupPoints struct{ d *data }
+
 func (r buyers) FindByPhone(_ context.Context, phone buyer.Phone) (buyer.Buyer, error) {
 	for _, b := range r.d.buyers {
 		if b.Phone == phone {
@@ -44,8 +52,6 @@ func (r buyers) Add(_ context.Context, b buyer.Buyer) error {
 
 	return nil
 }
-
-type challenges struct{ d *data }
 
 func (r challenges) Get(_ context.Context, id ids.UUID) (*buyer.Challenge, error) {
 	state, ok := r.d.challenges[id]
@@ -87,8 +93,6 @@ func (r challenges) Update(_ context.Context, c *buyer.Challenge) error {
 	return nil
 }
 
-type carts struct{ d *data }
-
 func (r carts) ByBuyer(_ context.Context, buyerID ids.UUID) (*cart.Cart, error) {
 	state, ok := r.d.carts[buyerID]
 	if !ok {
@@ -129,8 +133,6 @@ func (r carts) DeleteExpired(_ context.Context, before time.Time, limit int) (in
 
 	return removed, nil
 }
-
-type checkouts struct{ d *data }
 
 func copyCheckout(state checkout.State) checkout.State {
 	groups := make([]checkout.Group, len(state.Groups))
@@ -191,8 +193,6 @@ func (r checkouts) Update(_ context.Context, c *checkout.Checkout) error {
 	return nil
 }
 
-type pickupPoints struct{ d *data }
-
 func (r pickupPoints) Upsert(_ context.Context, points []delivery.PickupPoint) error {
 	for _, point := range points {
 		r.d.points[pointKey{point.Carrier, point.Code}] = point
@@ -224,7 +224,12 @@ func (r pickupPoints) Get(_ context.Context, carrier delivery.Carrier, code stri
 	return point, nil
 }
 
-func (r pickupPoints) Page(_ context.Context, carrier delivery.Carrier, after string, limit int) ([]delivery.PickupPoint, error) {
+func (r pickupPoints) Page(
+	_ context.Context,
+	carrier delivery.Carrier,
+	after string,
+	limit int,
+) ([]delivery.PickupPoint, error) {
 	var page []delivery.PickupPoint
 
 	for key, point := range r.d.points {

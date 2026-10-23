@@ -6,7 +6,11 @@ import (
 )
 
 // ErrInvalidSubsidy — настройки субсидии с сервера не проходят проверку.
-var ErrInvalidSubsidy = errs.New(errs.Invalid, "participant.invalid_subsidy", "некорректные настройки субсидии доставки")
+var ErrInvalidSubsidy = errs.New(
+	errs.Invalid,
+	"participant.invalid_subsidy",
+	"некорректные настройки субсидии доставки",
+)
 
 // SubsidyType — как продавец оплачивает часть доставки покупателя.
 type SubsidyType string

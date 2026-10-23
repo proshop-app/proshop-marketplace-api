@@ -21,7 +21,10 @@ func TestLiveFetch(t *testing.T) {
 	}
 
 	provider := New(Config{
-		BaseURL: os.Getenv("CDEK_API_URL"), ClientID: os.Getenv("CDEK_CLIENT_ID"), ClientSecret: os.Getenv("CDEK_CLIENT_SECRET"), PageSize: 50,
+		BaseURL:      os.Getenv("CDEK_API_URL"),
+		ClientID:     os.Getenv("CDEK_CLIENT_ID"),
+		ClientSecret: os.Getenv("CDEK_CLIENT_SECRET"),
+		PageSize:     50,
 	})
 
 	var got int

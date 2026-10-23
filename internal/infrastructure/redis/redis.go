@@ -19,6 +19,33 @@ import (
 // ErrUnavailable — Redis недоступен.
 var ErrUnavailable = errs.New(errs.Unavailable, "redis.unavailable", "хранилище сессий недоступно")
 
+// Sessions — сессии покупателей: ключ — отпечаток токена, срок жизни — до конца сессии.
+type Sessions struct {
+	client *goredis.Client
+	prefix string
+}
+
+type sessionJSON struct {
+	BuyerID   string    `json:"buyerId"`
+	CreatedAt time.Time `json:"createdAt"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// fixedWindow — счётчик окна: первая попытка заводит ключ со сроком окна.
+var fixedWindow = goredis.NewScript(`
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+end
+return {count, redis.call('PTTL', KEYS[1])}
+`)
+
+// Limiter — лимиты частоты фиксированным окном.
+type Limiter struct {
+	client *goredis.Client
+	prefix string
+}
+
 // Open — клиент с проверкой связи; prefix отделяет ключи маркетплейса.
 func Open(ctx context.Context, url string) (*goredis.Client, error) {
 	options, err := goredis.ParseURL(url)
@@ -36,26 +63,20 @@ func Open(ctx context.Context, url string) (*goredis.Client, error) {
 	return client, nil
 }
 
-// Sessions — сессии покупателей: ключ — отпечаток токена, срок жизни — до конца сессии.
-type Sessions struct {
-	client *goredis.Client
-	prefix string
-}
-
 // NewSessions — сессии с префиксом ключей.
 func NewSessions(client *goredis.Client, prefix string) *Sessions {
 	return &Sessions{client: client, prefix: prefix + "session:"}
 }
 
-type sessionJSON struct {
-	BuyerID   string    `json:"buyerId"`
-	CreatedAt time.Time `json:"createdAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
-}
-
 // Save сохраняет сессию до её конца.
 func (s *Sessions) Save(ctx context.Context, session buyer.Session) error {
-	encoded, err := json.Marshal(sessionJSON{BuyerID: string(session.BuyerID), CreatedAt: session.CreatedAt, ExpiresAt: session.ExpiresAt})
+	doc := sessionJSON{
+		BuyerID:   string(session.BuyerID),
+		CreatedAt: session.CreatedAt,
+		ExpiresAt: session.ExpiresAt,
+	}
+
+	encoded, err := json.Marshal(doc)
 	if err != nil {
 		return fmt.Errorf("сессия: %w", err)
 	}
@@ -83,7 +104,12 @@ func (s *Sessions) Get(ctx context.Context, tokenHash string) (buyer.Session, er
 		return buyer.Session{}, fmt.Errorf("сессия: %w", err)
 	}
 
-	return buyer.Session{TokenHash: tokenHash, BuyerID: ids.UUID(doc.BuyerID), CreatedAt: doc.CreatedAt, ExpiresAt: doc.ExpiresAt}, nil
+	return buyer.Session{
+		TokenHash: tokenHash,
+		BuyerID:   ids.UUID(doc.BuyerID),
+		CreatedAt: doc.CreatedAt,
+		ExpiresAt: doc.ExpiresAt,
+	}, nil
 }
 
 // Delete удаляет сессию.
@@ -93,21 +119,6 @@ func (s *Sessions) Delete(ctx context.Context, tokenHash string) error {
 	}
 
 	return nil
-}
-
-// fixedWindow — счётчик окна: первая попытка заводит ключ со сроком окна.
-var fixedWindow = goredis.NewScript(`
-local count = redis.call('INCR', KEYS[1])
-if count == 1 then
-  redis.call('PEXPIRE', KEYS[1], ARGV[1])
-end
-return {count, redis.call('PTTL', KEYS[1])}
-`)
-
-// Limiter — лимиты частоты фиксированным окном.
-type Limiter struct {
-	client *goredis.Client
-	prefix string
 }
 
 // NewLimiter — лимиты с префиксом ключей.

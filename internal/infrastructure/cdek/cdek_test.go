@@ -28,7 +28,8 @@ func replay(t *testing.T, pages map[string]string, tokens *int) *httptest.Server
 		switch r.URL.Path {
 		case "/v2/oauth/token":
 			_ = r.ParseForm()
-			if r.PostForm.Get("grant_type") != "client_credentials" || r.PostForm.Get("client_id") != "id" || r.PostForm.Get("client_secret") != "secret" {
+			if r.PostForm.Get("grant_type") != "client_credentials" || r.PostForm.Get("client_id") != "id" ||
+				r.PostForm.Get("client_secret") != "secret" {
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{"error":"invalid_client"}`))
 
@@ -37,7 +38,8 @@ func replay(t *testing.T, pages map[string]string, tokens *int) *httptest.Server
 			*tokens++
 			send("oauth_token.json")
 		case "/v2/deliverypoints":
-			if r.Header.Get("Authorization") != "Bearer eyJhbGciOiJSUzI1NiJ9.test" || r.URL.Query().Get("type") != "ALL" {
+			if r.Header.Get("Authorization") != "Bearer eyJhbGciOiJSUzI1NiJ9.test" ||
+				r.URL.Query().Get("type") != "ALL" {
 				w.WriteHeader(http.StatusUnauthorized)
 
 				return
@@ -76,8 +78,14 @@ func TestFetchPages(t *testing.T) {
 		t.Fatalf("пункт без координат пропускается: %d", len(points))
 	}
 	first := points[0]
-	if first.Carrier != "cdek" || first.Code != "MSK123" || first.Name != "На Примерной" || first.City != "Город" ||
-		first.Address != "101000, Россия, Город, ул. Примерная, 1" || first.Location.Lat != 55.755814 || first.Schedule == "" || len(first.Payload) == 0 {
+	if first.Carrier != "cdek" ||
+		first.Code != "MSK123" ||
+		first.Name != "На Примерной" ||
+		first.City != "Город" ||
+		first.Address != "101000, Россия, Город, ул. Примерная, 1" ||
+		first.Location.Lat != 55.755814 ||
+		first.Schedule == "" ||
+		len(first.Payload) == 0 {
 		t.Fatalf("разбор пункта: %+v", first)
 	}
 	if points[1].Name != "пр. Образцовый, 7" || points[1].Address != "пр. Образцовый, 7" {
@@ -115,13 +123,15 @@ func TestFetchErrors(t *testing.T) {
 	server := replay(t, map[string]string{"0": "deliverypoints_page0.json"}, &tokens)
 
 	wrong := New(Config{BaseURL: server.URL, ClientID: "id", ClientSecret: "wrong"})
-	if err := wrong.Fetch(context.Background(), func([]delivery.PickupPoint) error { return nil }); !errors.Is(err, ErrUnavailable) {
+	err := wrong.Fetch(context.Background(), func([]delivery.PickupPoint) error { return nil })
+	if !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("неверные учётные данные: %v", err)
 	}
 
 	stop := errors.New("стоп")
 	provider := New(Config{BaseURL: server.URL, ClientID: "id", ClientSecret: "secret", PageSize: 2})
-	if err := provider.Fetch(context.Background(), func([]delivery.PickupPoint) error { return stop }); !errors.Is(err, stop) {
+	err = provider.Fetch(context.Background(), func([]delivery.PickupPoint) error { return stop })
+	if !errors.Is(err, stop) {
 		t.Fatalf("ошибка получателя прерывает выгрузку: %v", err)
 	}
 }

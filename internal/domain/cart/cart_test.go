@@ -16,8 +16,13 @@ var (
 )
 
 func offer(tenant ids.TenantID, product ids.ProductID, price int64, available int) cart.Offer {
-	return cart.Offer{ID: ids.OfferID{Tenant: tenant, Product: product}, Name: "Товар " + string(product),
-		Price: money.FromKopecks(price), Available: available, Visible: true}
+	return cart.Offer{
+		ID:        ids.OfferID{Tenant: tenant, Product: product},
+		Name:      "Товар " + string(product),
+		Price:     money.FromKopecks(price),
+		Available: available,
+		Visible:   true,
+	}
 }
 
 func newCart() *cart.Cart {
@@ -62,7 +67,8 @@ func TestLinesLimit(t *testing.T) {
 	c := newCart()
 
 	for i := range cart.MaxLines {
-		if err := c.Add(offer("t1", ids.ProductID("p"+string(rune('a'+i%26))+string(rune('a'+i/26))), 1, 10), 1, t0, ttl); err != nil {
+		product := ids.ProductID("p" + string(rune('a'+i%26)) + string(rune('a'+i/26)))
+		if err := c.Add(offer("t1", product, 1, 10), 1, t0, ttl); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -101,12 +107,13 @@ func TestApplyChecks(t *testing.T) {
 	_ = c.Add(offer("t2", "p1", 700, 5), 1, t0, ttl)
 	_ = c.Add(offer("t2", "p2", 100, 5), 1, t0, ttl)
 
-	changed := c.Apply([]cart.Check{
+	checks := []cart.Check{
 		{Offer: ids.OfferID{Tenant: "t1", Product: "p1"}, Exists: true, Price: money.FromKopecks(12000), Available: 9},
 		{Offer: ids.OfferID{Tenant: "t1", Product: "p2"}, Exists: true, Price: money.FromKopecks(5000), Available: 1},
 		{Offer: ids.OfferID{Tenant: "t2", Product: "p1"}, Exists: false},
-	}, t0.Add(time.Hour), ttl)
-	if !changed {
+	}
+
+	if changed := c.Apply(checks, t0.Add(time.Hour), ttl); !changed {
 		t.Fatal("ответы магазинов меняют корзину")
 	}
 
@@ -114,14 +121,26 @@ func TestApplyChecks(t *testing.T) {
 	if lines[0].Issue != cart.IssuePriceChanged || lines[0].Price.Kopecks() != 12000 {
 		t.Fatalf("новая цена: %+v", lines[0])
 	}
-	if lines[1].Issue != cart.IssueNotEnoughStock || lines[2].Issue != cart.IssueUnavailable || lines[3].Issue != cart.IssueNone {
+	if lines[1].Issue != cart.IssueNotEnoughStock || lines[2].Issue != cart.IssueUnavailable ||
+		lines[3].Issue != cart.IssueNone {
 		t.Fatalf("пометки: %+v", lines)
 	}
 	if !c.State().ExpiresAt.Equal(t0.Add(time.Hour + ttl)) {
 		t.Fatal("срок жизни продлевается изменением")
 	}
 
-	unchanged := c.Apply([]cart.Check{{Offer: ids.OfferID{Tenant: "t2", Product: "p2"}, Exists: true, Price: money.FromKopecks(100), Available: 5}}, t0, ttl)
+	unchanged := c.Apply(
+		[]cart.Check{
+			{
+				Offer:     ids.OfferID{Tenant: "t2", Product: "p2"},
+				Exists:    true,
+				Price:     money.FromKopecks(100),
+				Available: 5,
+			},
+		},
+		t0,
+		ttl,
+	)
 	if unchanged {
 		t.Fatal("тот же ответ — не изменение")
 	}

@@ -19,7 +19,12 @@ type CallCheck interface {
 // RateLimiter — лимиты частоты по ключу в окне времени.
 type RateLimiter interface {
 	// Allow засчитывает попытку; false — лимит исчерпан, retryAfter — когда окно откроется.
-	Allow(ctx context.Context, key string, limit int, window time.Duration) (allowed bool, retryAfter time.Duration, err error)
+	Allow(
+		ctx context.Context,
+		key string,
+		limit int,
+		window time.Duration,
+	) (allowed bool, retryAfter time.Duration, err error)
 }
 
 // Leases — аренда фоновых задач между процессами: одну работу делает один процесс.

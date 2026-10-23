@@ -44,29 +44,6 @@ type participantListJSON struct {
 	Offset int               `json:"offset"`
 }
 
-func toParticipantJSON(view appparticipant.View) participantJSON {
-	p := view.Participant
-	out := participantJSON{
-		TenantID: string(p.TenantID), Slug: p.Slug, Name: p.Name, Status: string(p.Status), Enabled: p.Enabled,
-		TenantStatus: string(view.TenantStatus), Visible: view.Visibility.Visible,
-		CheckoutAvailable: view.Visibility.CheckoutAvailable, Version: p.Version,
-		CreatedAt: p.CreatedAt.UTC(), UpdatedAt: p.UpdatedAt.UTC(), ShopEnabled: p.ShopEnabled,
-		Subsidy: subsidyJSON{
-			Enabled: p.Subsidy.Enabled, Type: string(p.Subsidy.Type), Value: p.Subsidy.Value, MaxAmount: p.Subsidy.MaxAmount.Kopecks(),
-		},
-	}
-	if !p.SettingsSyncedAt.IsZero() {
-		synced := p.SettingsSyncedAt.UTC()
-		out.SettingsSyncedAt = &synced
-	}
-	if p.PaymentAccountID != "" {
-		account := p.PaymentAccountID
-		out.PaymentAccountID = &account
-	}
-
-	return out
-}
-
 type participantHandlers struct {
 	service *appparticipant.Service
 }
@@ -82,6 +59,40 @@ type renameParticipantJSON struct {
 
 type paymentAccountJSON struct {
 	PaymentAccountID string `json:"paymentAccountId"`
+}
+
+func toParticipantJSON(view appparticipant.View) participantJSON {
+	p := view.Participant
+	out := participantJSON{
+		TenantID:          string(p.TenantID),
+		Slug:              p.Slug,
+		Name:              p.Name,
+		Status:            string(p.Status),
+		Enabled:           p.Enabled,
+		TenantStatus:      string(view.TenantStatus),
+		Visible:           view.Visibility.Visible,
+		CheckoutAvailable: view.Visibility.CheckoutAvailable,
+		Version:           p.Version,
+		CreatedAt:         p.CreatedAt.UTC(),
+		UpdatedAt:         p.UpdatedAt.UTC(),
+		ShopEnabled:       p.ShopEnabled,
+		Subsidy: subsidyJSON{
+			Enabled:   p.Subsidy.Enabled,
+			Type:      string(p.Subsidy.Type),
+			Value:     p.Subsidy.Value,
+			MaxAmount: p.Subsidy.MaxAmount.Kopecks(),
+		},
+	}
+	if !p.SettingsSyncedAt.IsZero() {
+		synced := p.SettingsSyncedAt.UTC()
+		out.SettingsSyncedAt = &synced
+	}
+	if p.PaymentAccountID != "" {
+		account := p.PaymentAccountID
+		out.PaymentAccountID = &account
+	}
+
+	return out
 }
 
 func (h *participantHandlers) list(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +122,12 @@ func (h *participantHandlers) list(w http.ResponseWriter, r *http.Request) {
 		page.Limit = appparticipant.MaxPageLimit
 	}
 
-	body := participantListJSON{Items: make([]participantJSON, 0, len(list.Items)), Total: list.Total, Limit: page.Limit, Offset: max(page.Offset, 0)}
+	body := participantListJSON{
+		Items:  make([]participantJSON, 0, len(list.Items)),
+		Total:  list.Total,
+		Limit:  page.Limit,
+		Offset: max(page.Offset, 0),
+	}
 	for _, view := range list.Items {
 		body.Items = append(body.Items, toParticipantJSON(view))
 	}
@@ -182,7 +198,11 @@ func (h *participantHandlers) disable(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *participantHandlers) withTenant(w http.ResponseWriter, r *http.Request, run func(ids.TenantID) (appparticipant.View, error)) {
+func (h *participantHandlers) withTenant(
+	w http.ResponseWriter,
+	r *http.Request,
+	run func(ids.TenantID) (appparticipant.View, error),
+) {
 	tenantID, err := ids.ParseTenantID(r.PathValue("tenantId"))
 	if err != nil {
 		writeError(w, r, err)

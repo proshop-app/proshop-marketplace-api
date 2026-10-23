@@ -28,7 +28,54 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
 )
 
+// Сообщения сервера в том виде, в каком их пишет продюсер; время события
+// подставляется в tenantCreatedPayload при отправке.
+const (
+	tenantCreatedPayload = `{
+		"tenantId": "t1",
+		"slug": "shop-one",
+		"status": "active",
+		"cell": "a",
+		"plan": null,
+		"hosts": [],
+		"at": "%s"
+	}`
+
+	productProjectedPayload = `{
+		"version": 1,
+		"tenantId": "t1",
+		"productId": "p1",
+		"revision": 1,
+		"operation": "upsert",
+		"product": {
+			"id": "p1",
+			"name": "Чайник",
+			"price": 1990.5,
+			"promoPrice": null,
+			"availableQuantity": 4,
+			"categories": [],
+			"tags": ["tag-1"],
+			"conditions": {"isVisible": true}
+		}
+	}`
+
+	tagProjectedPayload = `{
+		"version": 1,
+		"tenantId": "t1",
+		"tagId": "tag-1",
+		"revision": 1,
+		"operation": "upsert",
+		"tag": {"id": "tag-1", "value": "Новинка"}
+	}`
+)
+
 var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
+
+type pipeline struct {
+	pool     *pgxpool.Pool
+	consumer *kafka.Consumer
+	reader   *infrakafka.Reader
+}
 
 func brokers() []string {
 	if list := os.Getenv("TEST_KAFKA_BROKERS"); list != "" {
@@ -122,7 +169,11 @@ func produce(t *testing.T, messages ...kafkago.Message) {
 
 	for {
 		// свежий писатель на каждую попытку: метаданные нового топика доходят не сразу
-		writer := &kafkago.Writer{Addr: kafkago.TCP(brokers()...), Balancer: &kafkago.Hash{}, RequiredAcks: kafkago.RequireAll}
+		writer := &kafkago.Writer{
+			Addr:         kafkago.TCP(brokers()...),
+			Balancer:     &kafkago.Hash{},
+			RequiredAcks: kafkago.RequireAll,
+		}
 		err := writer.WriteMessages(context.Background(), messages...)
 		_ = writer.Close()
 
@@ -145,13 +196,23 @@ func TestReaderCommitsOnlyProcessed(t *testing.T) {
 	topic := unique("reader-test-")
 	group := unique("group-")
 	createTopics(t, topic)
-	produce(t, kafkago.Message{Topic: topic, Key: []byte("k"), Value: []byte("first")},
-		kafkago.Message{Topic: topic, Key: []byte("k"), Value: []byte("second")})
+	produce(
+		t,
+		kafkago.Message{Topic: topic, Key: []byte("k"), Value: []byte("first")},
+		kafkago.Message{Topic: topic, Key: []byte("k"), Value: []byte("second")},
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	reader := infrakafka.NewReader(infrakafka.Config{Brokers: brokers(), GroupID: group, Topics: []string{topic}, Logger: quiet})
+	cfg := infrakafka.Config{
+		Brokers: brokers(),
+		GroupID: group,
+		Topics:  []string{topic},
+		Logger:  quiet,
+	}
+
+	reader := infrakafka.NewReader(cfg)
 
 	first, err := reader.Fetch(ctx)
 	if err != nil || string(first.Value) != "first" {
@@ -169,7 +230,7 @@ func TestReaderCommitsOnlyProcessed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	again := infrakafka.NewReader(infrakafka.Config{Brokers: brokers(), GroupID: group, Topics: []string{topic}, Logger: quiet})
+	again := infrakafka.NewReader(cfg)
 	defer func() { _ = again.Close() }()
 
 	redelivered, err := again.Fetch(ctx)
@@ -188,8 +249,11 @@ func TestReaderSubscribesOnlyExistingTopics(t *testing.T) {
 	defer cancel()
 
 	reader := infrakafka.NewReader(infrakafka.Config{
-		Brokers: brokers(), GroupID: unique("group-"), Topics: []string{present, absent},
-		RefreshInterval: time.Second, Logger: quiet,
+		Brokers:         brokers(),
+		GroupID:         unique("group-"),
+		Topics:          []string{present, absent},
+		RefreshInterval: time.Second,
+		Logger:          quiet,
 	})
 	defer func() { _ = reader.Close() }()
 
@@ -221,24 +285,29 @@ func TestReaderSubscribesOnlyExistingTopics(t *testing.T) {
 	}
 }
 
-type pipeline struct {
-	pool     *pgxpool.Pool
-	consumer *kafka.Consumer
-	reader   *infrakafka.Reader
-}
-
 func newPipeline(t *testing.T, pool *pgxpool.Pool, prefix, group string) *pipeline {
 	t.Helper()
 
 	uow := postgres.NewUnitOfWork(pool)
-	router := kafka.NewRouter(appcatalog.NewProjector(uow, clock.System{}), appparticipant.NewRegistry(uow, clock.System{}))
-	reader := infrakafka.NewReader(infrakafka.Config{Brokers: brokers(), GroupID: group, Topics: kafka.FullTopics(prefix, router), Logger: quiet})
+	router := kafka.NewRouter(
+		appcatalog.NewProjector(uow, clock.System{}),
+		appparticipant.NewRegistry(uow, clock.System{}),
+	)
+	reader := infrakafka.NewReader(infrakafka.Config{
+		Brokers: brokers(),
+		GroupID: group,
+		Topics:  kafka.FullTopics(prefix, router),
+		Logger:  quiet,
+	})
 
-	consumer := kafka.NewConsumer(reader, router, messaging.NewParker(uow), kafka.ConsumerConfig{
-		TopicPrefix: prefix, MaxAttempts: 3,
-		Backoff: func(int) time.Duration { return 10 * time.Millisecond },
-		Ready:   pool.Ping, Now: clock.System{}.Now,
-	}, quiet, prometheus.NewRegistry())
+	cfg := kafka.ConsumerConfig{
+		TopicPrefix: prefix,
+		MaxAttempts: 3,
+		Backoff:     func(int) time.Duration { return 10 * time.Millisecond },
+		Ready:       pool.Ping,
+		Now:         clock.System{}.Now,
+	}
+	consumer := kafka.NewConsumer(reader, router, messaging.NewParker(uow), cfg, quiet, prometheus.NewRegistry())
 
 	return &pipeline{pool: pool, consumer: consumer, reader: reader}
 }
@@ -310,21 +379,53 @@ func TestConsumerEndToEnd(t *testing.T) {
 	}
 	now := time.Now().UTC()
 
-	produce(t,
-		kafkago.Message{Topic: topic(kafka.TopicTenantCreated), Key: []byte("t1"), Time: now,
-			Value: []byte(`{"tenantId":"t1","slug":"shop-one","status":"active","cell":"a","plan":null,"hosts":[],"at":"` + now.Format(time.RFC3339Nano) + `"}`)},
-		kafkago.Message{Topic: topic(kafka.TopicProductProjected), Key: []byte(`["t1","p1"]`), Time: now,
-			Value: []byte(`{"version":1,"tenantId":"t1","productId":"p1","revision":1,"operation":"upsert","product":{"id":"p1","name":"Чайник","price":1990.5,"promoPrice":null,"availableQuantity":4,"categories":[],"tags":["tag-1"],"conditions":{"isVisible":true}}}`)},
-		kafkago.Message{Topic: topic(kafka.TopicTagProjected), Key: []byte(`["t1","tag-1"]`), Time: now,
-			Value: []byte(`{"version":1,"tenantId":"t1","tagId":"tag-1","revision":1,"operation":"upsert","tag":{"id":"tag-1","value":"Новинка"}}`)},
-		kafkago.Message{Topic: topic(kafka.TopicStockItemUpdated), Key: []byte("s1"), Time: now.Add(time.Second), Headers: header("t1"),
-			Value: []byte(`{"id":"s1","productId":"p1","quantity":5,"reserved":1,"price":1990.5}`)},
-		kafkago.Message{Topic: topic(kafka.TopicProductPriceUpdated), Key: []byte("p1"), Time: now.Add(2 * time.Second), Headers: header("t1"),
-			Value: []byte(`{"id":"p1","price":2100}`)},
-		kafkago.Message{Topic: topic(kafka.TopicProductPriceUpdated), Key: []byte("p2"), Time: now,
-			Value: []byte(`{"id":"p2","price":100}`)},
-		kafkago.Message{Topic: topic(kafka.TopicStockItemUpdated), Key: []byte("s2"), Time: now, Headers: header("t1"),
-			Value: []byte(`{не json`)},
+	produce(
+		t,
+		kafkago.Message{
+			Topic: topic(kafka.TopicTenantCreated),
+			Key:   []byte("t1"),
+			Time:  now,
+			Value: []byte(fmt.Sprintf(tenantCreatedPayload, now.Format(time.RFC3339Nano))),
+		},
+		kafkago.Message{
+			Topic: topic(kafka.TopicProductProjected),
+			Key:   []byte(`["t1","p1"]`),
+			Time:  now,
+			Value: []byte(productProjectedPayload),
+		},
+		kafkago.Message{
+			Topic: topic(kafka.TopicTagProjected),
+			Key:   []byte(`["t1","tag-1"]`),
+			Time:  now,
+			Value: []byte(tagProjectedPayload),
+		},
+		kafkago.Message{
+			Topic:   topic(kafka.TopicStockItemUpdated),
+			Key:     []byte("s1"),
+			Time:    now.Add(time.Second),
+			Headers: header("t1"),
+			Value:   []byte(`{"id":"s1","productId":"p1","quantity":5,"reserved":1,"price":1990.5}`),
+		},
+		kafkago.Message{
+			Topic:   topic(kafka.TopicProductPriceUpdated),
+			Key:     []byte("p1"),
+			Time:    now.Add(2 * time.Second),
+			Headers: header("t1"),
+			Value:   []byte(`{"id":"p1","price":2100}`),
+		},
+		kafkago.Message{
+			Topic: topic(kafka.TopicProductPriceUpdated),
+			Key:   []byte("p2"),
+			Time:  now,
+			Value: []byte(`{"id":"p2","price":100}`),
+		},
+		kafkago.Message{
+			Topic:   topic(kafka.TopicStockItemUpdated),
+			Key:     []byte("s2"),
+			Time:    now,
+			Headers: header("t1"),
+			Value:   []byte(`{не json`),
+		},
 	)
 
 	first := newPipeline(t, pool, prefix, group)
@@ -334,19 +435,38 @@ func TestConsumerEndToEnd(t *testing.T) {
 	waitFor(t, pool, "обработанные события", `SELECT count(*) FROM processed_events`, 5)
 	stop()
 
-	if n := count(t, pool, `SELECT count(*) FROM parked_events WHERE reason = 'kafka.tenant_missing' AND tenant_id IS NULL`); n != 1 {
+	parkedWithoutTenant := `
+		SELECT count(*)
+		FROM parked_events
+		WHERE reason = 'kafka.tenant_missing' AND tenant_id IS NULL`
+	if n := count(t, pool, parkedWithoutTenant); n != 1 {
 		t.Fatalf("сообщение без магазина — в отравленных без магазина: %d", n)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM parked_events WHERE reason = 'kafka.invalid_payload' AND tenant_id = 't1'`); n != 1 {
+
+	parkedWithTenant := `
+		SELECT count(*)
+		FROM parked_events
+		WHERE reason = 'kafka.invalid_payload' AND tenant_id = 't1'`
+	if n := count(t, pool, parkedWithTenant); n != 1 {
 		t.Fatalf("повреждённое сообщение — в отравленных с магазином: %d", n)
 	}
 	if n := count(t, pool, `SELECT count(*) FROM tenants WHERE tenant_id = 't1' AND status = 'active'`); n != 1 {
 		t.Fatal("зеркало реестра заполнено")
 	}
-	if n := count(t, pool, `SELECT count(*) FROM catalog_products WHERE tenant_id = 't1' AND product_id = 'p1' AND price = 199050 AND available = 4`); n != 1 {
+
+	projected := `
+		SELECT count(*)
+		FROM catalog_products
+		WHERE tenant_id = 't1' AND product_id = 'p1' AND price = 199050 AND available = 4`
+	if n := count(t, pool, projected); n != 1 {
 		t.Fatal("снимок товара в копейках")
 	}
-	if n := count(t, pool, `SELECT count(*) FROM offers WHERE tenant_id = 't1' AND product_id = 'p1' AND available = 4 AND price = 210000`); n != 1 {
+
+	signals := `
+		SELECT count(*)
+		FROM offers
+		WHERE tenant_id = 't1' AND product_id = 'p1' AND available = 4 AND price = 210000`
+	if n := count(t, pool, signals); n != 1 {
 		t.Fatal("сигналы остатка и цены: свежий прайс побеждает")
 	}
 	if n := count(t, pool, `SELECT count(*) FROM catalog_tags WHERE value = 'Новинка'`); n != 1 {
@@ -377,8 +497,15 @@ func TestConsumerDeduplicatesRedelivery(t *testing.T) {
 	defer func() { _ = p.reader.Close() }()
 
 	message := kafkago.Message{
-		Topic: "shop." + kafka.TopicProductPriceUpdated, Partition: 1, Offset: 42, Key: []byte("p1"), Time: time.Now(),
-		Headers: []kafkago.Header{{Key: kafka.HeaderTenant, Value: []byte("t1")}}, Value: []byte(`{"id":"p1","price":10}`),
+		Topic:     "shop." + kafka.TopicProductPriceUpdated,
+		Partition: 1,
+		Offset:    42,
+		Key:       []byte("p1"),
+		Time:      time.Now(),
+		Headers: []kafkago.Header{
+			{Key: kafka.HeaderTenant, Value: []byte("t1")},
+		},
+		Value: []byte(`{"id":"p1","price":10}`),
 	}
 
 	for range 2 {
@@ -390,7 +517,12 @@ func TestConsumerDeduplicatesRedelivery(t *testing.T) {
 	if n := count(t, pool, `SELECT version FROM offers WHERE tenant_id = 't1' AND product_id = 'p1'`); n != 1 {
 		t.Fatalf("повторная доставка той же позиции не применяется дважды: версия %d", n)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM processed_events WHERE id = 'shop.catalog.product.price-updated:1:42'`); n != 1 {
+
+	processed := `
+		SELECT count(*)
+		FROM processed_events
+		WHERE id = 'shop.catalog.product.price-updated:1:42'`
+	if n := count(t, pool, processed); n != 1 {
 		t.Fatal("отметка события по позиции в топике")
 	}
 }

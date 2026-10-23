@@ -20,6 +20,56 @@ type IDs struct {
 	n  int
 }
 
+// Calls — шлюз проверки звонком в памяти.
+type Calls struct {
+	mu       sync.Mutex
+	statuses map[string]buyer.CallStatus
+	started  []buyer.Phone
+	asked    int
+	// StartErr, если задан, возвращается из Start.
+	StartErr error
+	// StatusErr, если задан, возвращается из Status.
+	StatusErr error
+}
+
+// Sessions — сессии в памяти.
+type Sessions struct {
+	mu       sync.Mutex
+	sessions map[string]buyer.Session
+	// SaveErr, если задан, возвращается из Save.
+	SaveErr error
+}
+
+// Limiter — лимиты частоты без окна: счётчик на ключ.
+type Limiter struct {
+	mu     sync.Mutex
+	counts map[string]int
+}
+
+// Platform — API сервера установки в памяти.
+type Platform struct {
+	mu       sync.Mutex
+	items    map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
+	quotes   map[ids.TenantID]delivery.Offered
+	settings map[ids.TenantID]ports.ShopSettings
+	failing  map[ids.TenantID]error
+	requests []ports.QuoteRequest
+}
+
+// PickupProvider — справочник перевозчика в памяти.
+type PickupProvider struct {
+	Info    delivery.CarrierInfo
+	Batches [][]delivery.PickupPoint
+	Err     error
+}
+
+// PickupIndex — геоиндекс пунктов в памяти.
+type PickupIndex struct {
+	mu      sync.Mutex
+	points  map[pointKey]delivery.PickupPoint
+	created bool
+}
+
 // NewUUID — следующий идентификатор вида 00000000-0000-4000-8000-00000000000N.
 func (g *IDs) NewUUID() ids.UUID {
 	g.mu.Lock()
@@ -38,18 +88,6 @@ func (g *IDs) NewToken() string {
 	g.n++
 
 	return fmt.Sprintf("token-%d", g.n)
-}
-
-// Calls — шлюз проверки звонком в памяти.
-type Calls struct {
-	mu       sync.Mutex
-	statuses map[string]buyer.CallStatus
-	started  []buyer.Phone
-	asked    int
-	// StartErr, если задан, возвращается из Start.
-	StartErr error
-	// StatusErr, если задан, возвращается из Status.
-	StatusErr error
 }
 
 // NewCalls — шлюз без проверок.
@@ -107,14 +145,6 @@ func (c *Calls) Asked() int {
 	return c.asked
 }
 
-// Sessions — сессии в памяти.
-type Sessions struct {
-	mu       sync.Mutex
-	sessions map[string]buyer.Session
-	// SaveErr, если задан, возвращается из Save.
-	SaveErr error
-}
-
 // NewSessions — пустое хранилище сессий.
 func NewSessions() *Sessions {
 	return &Sessions{sessions: map[string]buyer.Session{}}
@@ -165,12 +195,6 @@ func (s *Sessions) Count() int {
 	return len(s.sessions)
 }
 
-// Limiter — лимиты частоты без окна: счётчик на ключ.
-type Limiter struct {
-	mu     sync.Mutex
-	counts map[string]int
-}
-
 // NewLimiter — лимиты с нулевыми счётчиками.
 func NewLimiter() *Limiter {
 	return &Limiter{counts: map[string]int{}}
@@ -190,21 +214,13 @@ func (l *Limiter) Allow(_ context.Context, key string, limit int, window time.Du
 	return true, 0, nil
 }
 
-// Platform — API сервера установки в памяти.
-type Platform struct {
-	mu       sync.Mutex
-	items    map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
-	quotes   map[ids.TenantID]delivery.Offered
-	settings map[ids.TenantID]ports.ShopSettings
-	failing  map[ids.TenantID]error
-	requests []ports.QuoteRequest
-}
-
 // NewPlatform — пустой сервер.
 func NewPlatform() *Platform {
 	return &Platform{
-		items: map[ids.TenantID]map[ids.ProductID]ports.ItemCheck{}, quotes: map[ids.TenantID]delivery.Offered{},
-		settings: map[ids.TenantID]ports.ShopSettings{}, failing: map[ids.TenantID]error{},
+		items:    map[ids.TenantID]map[ids.ProductID]ports.ItemCheck{},
+		quotes:   map[ids.TenantID]delivery.Offered{},
+		settings: map[ids.TenantID]ports.ShopSettings{},
+		failing:  map[ids.TenantID]error{},
 	}
 }
 
@@ -253,7 +269,11 @@ func (p *Platform) QuoteRequests() []ports.QuoteRequest {
 }
 
 // CheckItems — ответы по позициям; неизвестная позиция — не продаётся.
-func (p *Platform) CheckItems(_ context.Context, tenant ids.TenantID, items []ports.ItemRequest) ([]ports.ItemCheck, error) {
+func (p *Platform) CheckItems(
+	_ context.Context,
+	tenant ids.TenantID,
+	items []ports.ItemRequest,
+) ([]ports.ItemCheck, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -275,7 +295,11 @@ func (p *Platform) CheckItems(_ context.Context, tenant ids.TenantID, items []po
 }
 
 // QuoteDelivery — заданный расчёт; не задан — магазин не везёт этим перевозчиком.
-func (p *Platform) QuoteDelivery(_ context.Context, tenant ids.TenantID, request ports.QuoteRequest) (delivery.Offered, error) {
+func (p *Platform) QuoteDelivery(
+	_ context.Context,
+	tenant ids.TenantID,
+	request ports.QuoteRequest,
+) (delivery.Offered, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -305,13 +329,6 @@ func (p *Platform) MarketplaceSettings(_ context.Context, tenant ids.TenantID) (
 	return p.settings[tenant], nil
 }
 
-// PickupProvider — справочник перевозчика в памяти.
-type PickupProvider struct {
-	Info    delivery.CarrierInfo
-	Batches [][]delivery.PickupPoint
-	Err     error
-}
-
 // Carrier — перевозчик.
 func (p *PickupProvider) Carrier() delivery.CarrierInfo { return p.Info }
 
@@ -328,13 +345,6 @@ func (p *PickupProvider) Fetch(_ context.Context, yield func([]delivery.PickupPo
 	}
 
 	return p.Err
-}
-
-// PickupIndex — геоиндекс пунктов в памяти.
-type PickupIndex struct {
-	mu      sync.Mutex
-	points  map[pointKey]delivery.PickupPoint
-	created bool
 }
 
 // NewPickupIndex — пустой индекс.

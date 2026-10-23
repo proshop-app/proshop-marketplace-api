@@ -34,7 +34,10 @@ func do(t *testing.T, uow *postgres.UnitOfWork, fn func(ctx context.Context, tx 
 func seedBuyer(t *testing.T, uow *postgres.UnitOfWork, id ids.UUID, phone buyer.Phone) {
 	t.Helper()
 
-	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error { return tx.Buyers().Add(ctx, buyer.New(id, phone, at(0))) }); err != nil {
+	err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
+		return tx.Buyers().Add(ctx, buyer.New(id, phone, at(0)))
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 }
@@ -43,7 +46,12 @@ func TestParticipantShopSettings(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	seedTenant(t, uow, "t1", "shop-one", participant.TenantActive)
 
-	subsidy := participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 30, MaxAmount: money.FromKopecks(50000)}
+	subsidy := participant.Subsidy{
+		Enabled:   true,
+		Type:      participant.SubsidyPercent,
+		Value:     30,
+		MaxAmount: money.FromKopecks(50000),
+	}
 
 	err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		tenant, _ := tx.Registry().Get(ctx, "t1")
@@ -88,7 +96,17 @@ func TestBuyersAndChallenges(t *testing.T) {
 		t.Fatalf("телефон занят: %v", err)
 	}
 
-	challenge := buyer.NewChallenge(buyerB, "79251234567", buyer.CallInstruction{ProviderRef: "201737-542", CallPhone: "78005008275", CallPhonePretty: "+7 (800) 500-8275"}, at(0), 5*time.Minute)
+	challenge := buyer.NewChallenge(
+		buyerB,
+		"79251234567",
+		buyer.CallInstruction{
+			ProviderRef:     "201737-542",
+			CallPhone:       "78005008275",
+			CallPhonePretty: "+7 (800) 500-8275",
+		},
+		at(0),
+		5*time.Minute,
+	)
 
 	err = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		if err := tx.Challenges().Add(ctx, challenge); err != nil {
@@ -124,7 +142,8 @@ func TestBuyersAndChallenges(t *testing.T) {
 
 	_ = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Challenges().Get(ctx, buyerB)
-		if err != nil || c.Status() != buyer.ChallengeConfirmed || c.State().Checks != 1 || !c.State().LastCheckedAt.Equal(at(1)) {
+		if err != nil || c.Status() != buyer.ChallengeConfirmed || c.State().Checks != 1 ||
+			!c.State().LastCheckedAt.Equal(at(1)) {
 			t.Fatalf("проверка после хранения: %+v %v", c.State(), err)
 		}
 		if _, err := tx.Challenges().Get(ctx, buyerA); !errors.Is(err, buyer.ErrChallengeNotFound) {
@@ -144,9 +163,26 @@ func TestCarts(t *testing.T) {
 	ttl := 24 * time.Hour
 
 	c := cart.New(buyerB, buyerA, at(0), ttl)
-	offer := cart.Offer{ID: ids.OfferID{Tenant: "t1", Product: "p1"}, Name: "Чайник", Price: money.FromKopecks(199000), Available: 5, Visible: true}
+	offer := cart.Offer{
+		ID:        ids.OfferID{Tenant: "t1", Product: "p1"},
+		Name:      "Чайник",
+		Price:     money.FromKopecks(199000),
+		Available: 5,
+		Visible:   true,
+	}
 	_ = c.Add(offer, 2, at(0), ttl)
-	_ = c.Add(cart.Offer{ID: ids.OfferID{Tenant: "t2", Product: "p1"}, Name: "Кружка", Price: money.FromKopecks(100), Available: 5, Visible: true}, 1, at(0), ttl)
+	_ = c.Add(
+		cart.Offer{
+			ID:        ids.OfferID{Tenant: "t2", Product: "p1"},
+			Name:      "Кружка",
+			Price:     money.FromKopecks(100),
+			Available: 5,
+			Visible:   true,
+		},
+		1,
+		at(0),
+		ttl,
+	)
 
 	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error { return tx.Carts().Save(ctx, c) }); err != nil {
 		t.Fatal(err)
@@ -159,13 +195,19 @@ func TestCarts(t *testing.T) {
 		}
 
 		lines := loaded.Lines()
-		if len(lines) != 2 || lines[0].Offer.Product != "p1" || lines[0].Price.Kopecks() != 199000 || lines[0].Quantity != 2 || lines[1].Name != "Кружка" {
+		if len(lines) != 2 || lines[0].Offer.Product != "p1" || lines[0].Price.Kopecks() != 199000 ||
+			lines[0].Quantity != 2 ||
+			lines[1].Name != "Кружка" {
 			t.Fatalf("строки по порядку добавления: %+v", lines)
 		}
 
 		stale := cart.Restore(loaded.State())
 
-		loaded.Apply([]cart.Check{{Offer: offer.ID, Exists: true, Price: money.FromKopecks(209000), Available: 5}}, at(1), ttl)
+		loaded.Apply(
+			[]cart.Check{{Offer: offer.ID, Exists: true, Price: money.FromKopecks(209000), Available: 5}},
+			at(1),
+			ttl,
+		)
 		if err := tx.Carts().Save(ctx, loaded); err != nil {
 			return err
 		}
@@ -183,7 +225,8 @@ func TestCarts(t *testing.T) {
 
 	_ = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		loaded, err := tx.Carts().ByBuyer(ctx, buyerA)
-		if err != nil || loaded.Lines()[0].Issue != cart.IssuePriceChanged || loaded.Lines()[0].Price.Kopecks() != 209000 {
+		if err != nil || loaded.Lines()[0].Issue != cart.IssuePriceChanged ||
+			loaded.Lines()[0].Price.Kopecks() != 209000 {
 			t.Fatalf("пометка после хранения: %+v %v", loaded.Lines(), err)
 		}
 
@@ -204,7 +247,12 @@ func TestCheckouts(t *testing.T) {
 	seedBuyer(t, uow, buyerA, "79251234567")
 
 	lines := []checkout.Line{
-		{Offer: ids.OfferID{Tenant: "t1", Product: "p1"}, Name: "Чайник", Quantity: 2, Price: money.FromKopecks(199000)},
+		{
+			Offer:    ids.OfferID{Tenant: "t1", Product: "p1"},
+			Name:     "Чайник",
+			Quantity: 2,
+			Price:    money.FromKopecks(199000),
+		},
 		{Offer: ids.OfferID{Tenant: "t2", Product: "p1"}, Name: "Кружка", Quantity: 1, Price: money.FromKopecks(35000)},
 	}
 	created, err := checkout.New(buyerB, buyerA, "checkout-key-0001", lines, at(0))
@@ -212,18 +260,38 @@ func TestCheckouts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error { return tx.Checkouts().Add(ctx, created) }); err != nil {
+	err = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
+		return tx.Checkouts().Add(ctx, created)
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	duplicate, _ := checkout.New("8b1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b", buyerA, "checkout-key-0001", lines, at(0))
-	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error { return tx.Checkouts().Add(ctx, duplicate) }); !errors.Is(err, checkout.ErrDuplicateKey) {
+
+	err = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
+		return tx.Checkouts().Add(ctx, duplicate)
+	})
+	if !errors.Is(err, checkout.ErrDuplicateKey) {
 		t.Fatalf("ключ занят: %v", err)
 	}
 
-	selection := checkout.Selection{Carrier: "cdek", PickupPointCode: "MSK1", City: "Город", Address: "ул. Примерная, 1"}
+	selection := checkout.Selection{
+		Carrier:         "cdek",
+		PickupPointCode: "MSK1",
+		City:            "Город",
+		Address:         "ул. Примерная, 1",
+	}
 	quotes := map[ids.TenantID]delivery.Quote{
-		"t1": {Status: delivery.QuoteAvailable, Cost: money.FromKopecks(30000), Subsidy: money.FromKopecks(10000), BuyerCost: money.FromKopecks(20000), MinDays: 2, MaxDays: 4, ExpiresAt: at(30)},
+		"t1": {
+			Status:    delivery.QuoteAvailable,
+			Cost:      money.FromKopecks(30000),
+			Subsidy:   money.FromKopecks(10000),
+			BuyerCost: money.FromKopecks(20000),
+			MinDays:   2,
+			MaxDays:   4,
+			ExpiresAt: at(30),
+		},
 		"t2": {Status: delivery.QuoteUnavailable, Reason: "carrier_not_connected", ExpiresAt: at(30)},
 	}
 
@@ -259,16 +327,20 @@ func TestCheckouts(t *testing.T) {
 		}
 
 		state := c.State()
-		if *state.Delivery != selection || state.DeliveryTotal.Kopecks() != 20000 || state.Total.Kopecks() != 2*199000+35000+20000 {
+		if *state.Delivery != selection || state.DeliveryTotal.Kopecks() != 20000 ||
+			state.Total.Kopecks() != 2*199000+35000+20000 {
 			t.Fatalf("покупка после хранения: %+v", state)
 		}
-		if q := state.Groups[0].Quote; q == nil || q.Subsidy.Kopecks() != 10000 || q.MaxDays != 4 || !q.ExpiresAt.Equal(at(30)) {
+		if q := state.Groups[0].Quote; q == nil || q.Subsidy.Kopecks() != 10000 || q.MaxDays != 4 ||
+			!q.ExpiresAt.Equal(at(30)) {
 			t.Fatalf("расчёт продавца: %+v", q)
 		}
-		if q := state.Groups[1].Quote; q == nil || q.Status != delivery.QuoteUnavailable || q.Reason != "carrier_not_connected" {
+		if q := state.Groups[1].Quote; q == nil || q.Status != delivery.QuoteUnavailable ||
+			q.Reason != "carrier_not_connected" {
 			t.Fatalf("недоступный расчёт: %+v", q)
 		}
-		if state.Groups[1].ExternalCheckoutID != string(buyerB)+":t2" || state.Groups[0].Lines[0].Price.Kopecks() != 199000 {
+		if state.Groups[1].ExternalCheckoutID != string(buyerB)+":t2" ||
+			state.Groups[0].Lines[0].Price.Kopecks() != 199000 {
 			t.Fatalf("группа: %+v", state.Groups[1])
 		}
 
@@ -282,8 +354,17 @@ func TestPickupPointsAndLeases(t *testing.T) {
 	ctx := context.Background()
 
 	point := func(code string, refreshed time.Time) delivery.PickupPoint {
-		p, err := delivery.NewPickupPoint("cdek", code, "Пункт "+code, "ул. Примерная, "+code, "Город", delivery.Location{Lat: 55.7, Lon: 37.6},
-			"Пн-Пт", json.RawMessage(`{"code":"`+code+`"}`), refreshed)
+		p, err := delivery.NewPickupPoint(
+			"cdek",
+			code,
+			"Пункт "+code,
+			"ул. Примерная, "+code,
+			"Город",
+			delivery.Location{Lat: 55.7, Lon: 37.6},
+			"Пн-Пт",
+			json.RawMessage(`{"code":"`+code+`"}`),
+			refreshed,
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -292,7 +373,8 @@ func TestPickupPointsAndLeases(t *testing.T) {
 	}
 
 	err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
-		return tx.PickupPoints().Upsert(ctx, []delivery.PickupPoint{point("A1", at(0)), point("A2", at(0)), point("A3", at(0))})
+		return tx.PickupPoints().
+			Upsert(ctx, []delivery.PickupPoint{point("A1", at(0)), point("A2", at(0)), point("A3", at(0))})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -311,7 +393,8 @@ func TestPickupPointsAndLeases(t *testing.T) {
 		}
 
 		p, err := tx.PickupPoints().Get(ctx, "cdek", "A1")
-		if err != nil || p.Name != "Обновлённый" || !p.Active || p.Location.Lat != 55.7 || string(p.Payload) != `{"code": "A1"}` {
+		if err != nil || p.Name != "Обновлённый" || !p.Active || p.Location.Lat != 55.7 ||
+			string(p.Payload) != `{"code": "A1"}` {
 			t.Fatalf("пункт после хранения: %+v %v", p, err)
 		}
 
@@ -362,8 +445,13 @@ func TestParticipantSettingsMigrationSchedulesReindex(t *testing.T) {
 		}
 	}
 
-	if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, slug, status, event_at, version, updated_at) VALUES ('t1', 's', 'active', now(), 1, now());
-		INSERT INTO participants (tenant_id, slug, name, status, enabled, version, created_at, updated_at) VALUES ('t1', 's', 'n', 'onboarding', true, 1, now(), now())`); err != nil {
+	seed := `
+		INSERT INTO tenants (tenant_id, slug, status, event_at, version, updated_at)
+		VALUES ('t1', 's', 'active', now(), 1, now());
+
+		INSERT INTO participants (tenant_id, slug, name, status, enabled, version, created_at, updated_at)
+		VALUES ('t1', 's', 'n', 'onboarding', true, 1, now(), now())`
+	if _, err := pool.Exec(ctx, seed); err != nil {
 		t.Fatal(err)
 	}
 
@@ -376,10 +464,19 @@ func TestParticipantSettingsMigrationSchedulesReindex(t *testing.T) {
 		shop    bool
 		delayed bool
 	)
-	if err := pool.QueryRow(ctx, `SELECT version, shop_enabled FROM participants WHERE tenant_id = 't1'`).Scan(&version, &shop); err != nil || version != 2 || shop {
+
+	participant := `SELECT version, shop_enabled FROM participants WHERE tenant_id = 't1'`
+
+	err := pool.QueryRow(ctx, participant).Scan(&version, &shop)
+	if err != nil || version != 2 || shop {
 		t.Fatalf("версия участника выросла, согласия магазина пока нет: %d %v %v", version, shop, err)
 	}
-	if err := pool.QueryRow(ctx, `SELECT next_at > now() + interval '10 minutes' FROM outbox WHERE kind = 'catalog.tenant.sync' AND tenant_id = 't1'`).Scan(&delayed); err != nil || !delayed {
+
+	sync := `
+		SELECT next_at > now() + interval '10 minutes'
+		FROM outbox
+		WHERE kind = 'catalog.tenant.sync' AND tenant_id = 't1'`
+	if err := pool.QueryRow(ctx, sync).Scan(&delayed); err != nil || !delayed {
 		t.Fatalf("переиндексация отложена до конца выката: %v %v", delayed, err)
 	}
 }

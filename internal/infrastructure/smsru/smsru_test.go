@@ -52,12 +52,14 @@ func TestStart(t *testing.T) {
 	client, forms := gateway(t, map[string]string{"/callcheck/add": "callcheck_add_ok.json"})
 
 	call, err := client.Start(context.Background(), "79251234567", "203.0.113.5")
-	if err != nil || call.ProviderRef != "201737-542" || call.CallPhone != "78005008275" || call.CallPhonePretty != "+7 (800) 500-8275" {
+	if err != nil || call.ProviderRef != "201737-542" || call.CallPhone != "78005008275" ||
+		call.CallPhonePretty != "+7 (800) 500-8275" {
 		t.Fatalf("проверка: %+v %v", call, err)
 	}
 
 	form := (*forms)[0]
-	if form.Get("api_id") != "test-key" || form.Get("phone") != "79251234567" || form.Get("json") != "1" || form.Get("ip") != "203.0.113.5" {
+	if form.Get("api_id") != "test-key" || form.Get("phone") != "79251234567" || form.Get("json") != "1" ||
+		form.Get("ip") != "203.0.113.5" {
 		t.Fatalf("форма запроса: %v", form)
 	}
 
@@ -76,7 +78,8 @@ func TestStartRejections(t *testing.T) {
 	}
 
 	broke, _ := gateway(t, map[string]string{"/callcheck/add": "callcheck_add_no_money.json"})
-	if _, err := broke.Start(context.Background(), "79251234567", ""); !errors.Is(err, ErrRejected) || errs.CodeOf(err) != errs.Unavailable {
+	if _, err := broke.Start(context.Background(), "79251234567", ""); !errors.Is(err, ErrRejected) ||
+		errs.CodeOf(err) != errs.Unavailable {
 		t.Fatalf("отказ кодом в теле при HTTP 200: %v", err)
 	}
 
@@ -114,10 +117,12 @@ func TestStatus(t *testing.T) {
 func TestRegisterCallback(t *testing.T) {
 	client, forms := gateway(t, map[string]string{"/callback/add": "callback_add_ok.json"})
 
-	if err := client.RegisterCallback(context.Background(), "https://marketplace.example/api/v1/auth/webhooks/smsru"); err != nil {
+	const callbackURL = "https://marketplace.example/api/v1/auth/webhooks/smsru"
+
+	if err := client.RegisterCallback(context.Background(), callbackURL); err != nil {
 		t.Fatal(err)
 	}
-	if (*forms)[0].Get("url") != "https://marketplace.example/api/v1/auth/webhooks/smsru" {
+	if (*forms)[0].Get("url") != callbackURL {
 		t.Fatalf("адрес оповещений: %v", (*forms)[0])
 	}
 }

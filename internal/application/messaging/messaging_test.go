@@ -18,7 +18,8 @@ func enqueue(t *testing.T, store *fake.Store, kind string, tenant ids.TenantID, 
 	t.Helper()
 
 	err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
-		return tx.Outbox().Enqueue(ctx, ports.NewTask{Kind: kind, TenantID: tenant, DedupKey: key, Payload: []byte(`{}`), At: at})
+		return tx.Outbox().
+			Enqueue(ctx, ports.NewTask{Kind: kind, TenantID: tenant, DedupKey: key, Payload: []byte(`{}`), At: at})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +91,15 @@ func TestDispatcherLimitsPerTenant(t *testing.T) {
 }
 
 func TestBackoff(t *testing.T) {
-	cases := map[int]time.Duration{0: time.Second, 1: time.Second, 2: 2 * time.Second, 5: 16 * time.Second, 10: 512 * time.Second, 11: messaging.MaxBackoff, 100: messaging.MaxBackoff}
+	cases := map[int]time.Duration{
+		0:   time.Second,
+		1:   time.Second,
+		2:   2 * time.Second,
+		5:   16 * time.Second,
+		10:  512 * time.Second,
+		11:  messaging.MaxBackoff,
+		100: messaging.MaxBackoff,
+	}
 	for attempts, want := range cases {
 		if got := messaging.Backoff(attempts); got != want {
 			t.Fatalf("попытка %d: %s, ожидалось %s", attempts, got, want)
@@ -126,15 +135,23 @@ func TestJanitorPurgesByPolicy(t *testing.T) {
 	})
 
 	enqueue(t, store, "ok", "t1", "a", t0.Add(-4*24*time.Hour))
-	dispatcher := messaging.NewDispatcher(store, fake.NewClock(t0.Add(-4*24*time.Hour)), config(), map[string]messaging.Handler{
-		"ok": func(context.Context, ports.Task) error { return nil },
-	})
+	dispatcher := messaging.NewDispatcher(
+		store,
+		fake.NewClock(t0.Add(-4*24*time.Hour)),
+		config(),
+		map[string]messaging.Handler{
+			"ok": func(context.Context, ports.Task) error { return nil },
+		},
+	)
 	if _, err := dispatcher.RunOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
 
 	janitor := messaging.NewJanitor(store, clock, messaging.RetentionPolicy{
-		ProcessedEvents: 14 * 24 * time.Hour, OutboxDone: 3 * 24 * time.Hour, ParkedEvents: 30 * 24 * time.Hour, Batch: 100,
+		ProcessedEvents: 14 * 24 * time.Hour,
+		OutboxDone:      3 * 24 * time.Hour,
+		ParkedEvents:    30 * 24 * time.Hour,
+		Batch:           100,
 	})
 
 	result, err := janitor.Purge(ctx)

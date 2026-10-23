@@ -127,7 +127,8 @@ func TestMulRatioAndMin(t *testing.T) {
 	if _, err := money.FromKopecks(math.MaxInt64).MulRatio(2, 1); !errors.Is(err, money.ErrOverflow) {
 		t.Fatalf("переполнение доли: %v", err)
 	}
-	if money.Min(money.FromKopecks(5), money.FromKopecks(3)).Kopecks() != 3 || money.Min(money.FromKopecks(2), money.FromKopecks(3)).Kopecks() != 2 {
+	if money.Min(money.FromKopecks(5), money.FromKopecks(3)).Kopecks() != 3 ||
+		money.Min(money.FromKopecks(2), money.FromKopecks(3)).Kopecks() != 2 {
 		t.Fatal("меньшая сумма")
 	}
 }

@@ -19,3 +19,12 @@ const (
 
 // HeaderTenant — заголовок с магазином, который ставит продюсер сервера.
 const HeaderTenant = "x-tenant"
+
+// tenantTopics — события реестра магазинов; все разбирает один обработчик.
+var tenantTopics = []string{
+	TopicTenantCreated,
+	TopicTenantUpdated,
+	TopicTenantSuspended,
+	TopicTenantResumed,
+	TopicTenantDeleted,
+}

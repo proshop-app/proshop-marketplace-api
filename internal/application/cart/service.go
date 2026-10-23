@@ -29,7 +29,14 @@ type Service struct {
 }
 
 // NewService — сценарии корзины; ttl — срок жизни с последнего изменения.
-func NewService(uow ports.UnitOfWork, index ports.OfferIndex, platform ports.PlatformAPI, identities ports.IDs, clock ports.Clock, ttl time.Duration) *Service {
+func NewService(
+	uow ports.UnitOfWork,
+	index ports.OfferIndex,
+	platform ports.PlatformAPI,
+	identities ports.IDs,
+	clock ports.Clock,
+	ttl time.Duration,
+) *Service {
 	return &Service{uow: uow, index: index, platform: platform, ids: identities, clock: clock, ttl: ttl}
 }
 
@@ -75,7 +82,12 @@ func (s *Service) Add(ctx context.Context, buyerID ids.UUID, offerID ids.OfferID
 }
 
 // SetQuantity задаёт количество; ноль убирает строку.
-func (s *Service) SetQuantity(ctx context.Context, buyerID ids.UUID, offerID ids.OfferID, quantity int) (cart.State, error) {
+func (s *Service) SetQuantity(
+	ctx context.Context,
+	buyerID ids.UUID,
+	offerID ids.OfferID,
+	quantity int,
+) (cart.State, error) {
 	offer, err := s.offer(ctx, offerID)
 	if err != nil && !errors.Is(err, cart.ErrOfferUnavailable) {
 		return cart.State{}, err
@@ -140,7 +152,8 @@ func CheckGroups(ctx context.Context, platform ports.PlatformAPI, groups []cart.
 			defer mu.Unlock()
 
 			if err != nil {
-				failed = ErrSellerUnreachable.WithMessage("магазин " + string(group.TenantID) + " не ответил, попробуйте позже").Wrap(err)
+				message := "магазин " + string(group.TenantID) + " не ответил, попробуйте позже"
+				failed = ErrSellerUnreachable.WithMessage(message).Wrap(err)
 
 				return
 			}
@@ -152,7 +165,15 @@ func CheckGroups(ctx context.Context, platform ports.PlatformAPI, groups []cart.
 
 			for _, line := range group.Lines {
 				answer, ok := byProduct[line.Offer.Product]
-				checks = append(checks, cart.Check{Offer: line.Offer, Exists: ok && answer.Exists, Price: answer.Price, Available: answer.Available})
+				checks = append(
+					checks,
+					cart.Check{
+						Offer:     line.Offer,
+						Exists:    ok && answer.Exists,
+						Price:     answer.Price,
+						Available: answer.Available,
+					},
+				)
 			}
 		}(group)
 	}
@@ -162,7 +183,11 @@ func CheckGroups(ctx context.Context, platform ports.PlatformAPI, groups []cart.
 	return checks, failed
 }
 
-func (s *Service) change(ctx context.Context, buyerID ids.UUID, mutate func(*cart.Cart, time.Time) (bool, error)) (cart.State, error) {
+func (s *Service) change(
+	ctx context.Context,
+	buyerID ids.UUID,
+	mutate func(*cart.Cart, time.Time) (bool, error),
+) (cart.State, error) {
 	var state cart.State
 
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -208,5 +233,11 @@ func (s *Service) offer(ctx context.Context, offerID ids.OfferID) (cart.Offer, e
 		return cart.Offer{ID: offerID}, cart.ErrOfferUnavailable
 	}
 
-	return cart.Offer{ID: offerID, Name: doc.Name, Price: money.FromKopecks(doc.Price), Available: doc.Available, Visible: true}, nil
+	return cart.Offer{
+		ID:        offerID,
+		Name:      doc.Name,
+		Price:     money.FromKopecks(doc.Price),
+		Available: doc.Available,
+		Visible:   true,
+	}, nil
 }

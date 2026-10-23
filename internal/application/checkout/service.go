@@ -45,7 +45,15 @@ type Service struct {
 // NewService — сценарии покупки.
 func NewService(uow ports.UnitOfWork, index ports.OfferIndex, platform ports.PlatformAPI, points PointLookup,
 	identities ports.IDs, clock ports.Clock, config Config) *Service {
-	return &Service{uow: uow, index: index, platform: platform, points: points, ids: identities, clock: clock, config: config}
+	return &Service{
+		uow:      uow,
+		index:    index,
+		platform: platform,
+		points:   points,
+		ids:      identities,
+		clock:    clock,
+		config:   config,
+	}
 }
 
 // Create собирает покупку из корзины. Повтор с тем же ключом отдаёт ту же покупку.
@@ -75,10 +83,15 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 
 		for _, line := range c.Lines() {
 			if line.Issue == cart.IssueUnavailable || line.Issue == cart.IssueNotEnoughStock {
-				return checkout.ErrOfferUnavailable.WithMessage("в корзине есть недоступные позиции: " + line.Offer.String())
+				message := "в корзине есть недоступные позиции: " + line.Offer.String()
+
+				return checkout.ErrOfferUnavailable.WithMessage(message)
 			}
 
-			lines = append(lines, checkout.Line{Offer: line.Offer, Name: line.Name, Quantity: line.Quantity, Price: line.Price})
+			lines = append(
+				lines,
+				checkout.Line{Offer: line.Offer, Name: line.Name, Quantity: line.Quantity, Price: line.Price},
+			)
 		}
 
 		return nil
@@ -121,7 +134,12 @@ func (s *Service) Get(ctx context.Context, buyerID, checkoutID ids.UUID) (checko
 
 // Quote выбирает пункт выдачи и спрашивает расчёт у каждого продавца
 // покупки. Продавец без этого перевозчика получает расчёт «недоступно» с причиной.
-func (s *Service) Quote(ctx context.Context, buyerID, checkoutID ids.UUID, carrier delivery.Carrier, pointCode string) (checkout.State, error) {
+func (s *Service) Quote(
+	ctx context.Context,
+	buyerID, checkoutID ids.UUID,
+	carrier delivery.Carrier,
+	pointCode string,
+) (checkout.State, error) {
 	c, err := s.load(ctx, buyerID, checkoutID)
 	if err != nil {
 		return checkout.State{}, err
@@ -135,7 +153,12 @@ func (s *Service) Quote(ctx context.Context, buyerID, checkoutID ids.UUID, carri
 		return checkout.State{}, err
 	}
 
-	selection := checkout.Selection{Carrier: carrier, PickupPointCode: point.Code, City: point.City, Address: point.Address}
+	selection := checkout.Selection{
+		Carrier:         carrier,
+		PickupPointCode: point.Code,
+		City:            point.City,
+		Address:         point.Address,
+	}
 
 	quotes, err := s.quote(ctx, c.Groups(), selection)
 	if err != nil {
@@ -163,7 +186,9 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 		return checkout.State{}, checkout.ErrDeliveryNotSelected
 	}
 	if undeliverable := c.Undeliverable(); len(undeliverable) > 0 {
-		return checkout.State{}, checkout.ErrDeliveryUnavailable.WithMessage("не доставляют в выбранный пункт: " + joinTenants(undeliverable))
+		message := "не доставляют в выбранный пункт: " + joinTenants(undeliverable)
+
+		return checkout.State{}, checkout.ErrDeliveryUnavailable.WithMessage(message)
 	}
 
 	checks, err := s.check(ctx, c.Groups())
@@ -231,7 +256,11 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 
 // quote спрашивает расчёт у продавцов параллельно, каждого — со своим сроком
 // ожидания. Не ответивший продавец получает расчёт «магазин не ответил».
-func (s *Service) quote(ctx context.Context, groups []checkout.Group, selection checkout.Selection) (map[ids.TenantID]delivery.Quote, error) {
+func (s *Service) quote(
+	ctx context.Context,
+	groups []checkout.Group,
+	selection checkout.Selection,
+) (map[ids.TenantID]delivery.Quote, error) {
 	subsidies, err := s.subsidies(ctx, groups)
 	if err != nil {
 		return nil, err
@@ -262,7 +291,12 @@ func (s *Service) quote(ctx context.Context, groups []checkout.Group, selection 
 	return quotes, nil
 }
 
-func (s *Service) quoteGroup(ctx context.Context, group checkout.Group, selection checkout.Selection, subsidy participant.Subsidy) delivery.Quote {
+func (s *Service) quoteGroup(
+	ctx context.Context,
+	group checkout.Group,
+	selection checkout.Selection,
+	subsidy participant.Subsidy,
+) delivery.Quote {
 	callCtx, cancel := context.WithTimeout(ctx, s.config.QuoteTimeout)
 	defer cancel()
 
@@ -272,7 +306,10 @@ func (s *Service) quoteGroup(ctx context.Context, group checkout.Group, selectio
 	}
 
 	offered, err := s.platform.QuoteDelivery(callCtx, group.TenantID, ports.QuoteRequest{
-		Carrier: selection.Carrier, PickupPointCode: selection.PickupPointCode, City: selection.City, Items: items,
+		Carrier:         selection.Carrier,
+		PickupPointCode: selection.PickupPointCode,
+		City:            selection.City,
+		Items:           items,
 	})
 
 	now := s.clock.Now()
@@ -289,7 +326,10 @@ func (s *Service) quoteGroup(ctx context.Context, group checkout.Group, selectio
 }
 
 // subsidies — субсидии продавцов из их настроек; магазин без участника — без субсидии.
-func (s *Service) subsidies(ctx context.Context, groups []checkout.Group) (map[ids.TenantID]participant.Subsidy, error) {
+func (s *Service) subsidies(
+	ctx context.Context,
+	groups []checkout.Group,
+) (map[ids.TenantID]participant.Subsidy, error) {
 	subsidies := make(map[ids.TenantID]participant.Subsidy, len(groups))
 
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -318,7 +358,10 @@ func (s *Service) check(ctx context.Context, groups []checkout.Group) (map[ids.O
 	for _, group := range groups {
 		cartGroup := cart.Group{TenantID: group.TenantID}
 		for _, line := range group.Lines {
-			cartGroup.Lines = append(cartGroup.Lines, cart.Line{Offer: line.Offer, Quantity: line.Quantity, Price: line.Price})
+			cartGroup.Lines = append(
+				cartGroup.Lines,
+				cart.Line{Offer: line.Offer, Quantity: line.Quantity, Price: line.Price},
+			)
 		}
 
 		cartGroups = append(cartGroups, cartGroup)
@@ -331,7 +374,11 @@ func (s *Service) check(ctx context.Context, groups []checkout.Group) (map[ids.O
 
 	checks := make(map[ids.OfferID]checkout.PriceCheck, len(answers))
 	for _, answer := range answers {
-		checks[answer.Offer] = checkout.PriceCheck{Exists: answer.Exists, Price: answer.Price, Available: answer.Available}
+		checks[answer.Offer] = checkout.PriceCheck{
+			Exists:    answer.Exists,
+			Price:     answer.Price,
+			Available: answer.Available,
+		}
 	}
 
 	return checks, nil
@@ -348,7 +395,9 @@ func (s *Service) visible(ctx context.Context, lines []checkout.Line) error {
 			return checkout.ErrOfferUnavailable.WithMessage("предложение больше недоступно: " + line.Offer.String())
 		}
 		if !doc.CheckoutAvailable {
-			return checkout.ErrOfferUnavailable.WithMessage("продавец ещё не принимает оплату через маркетплейс: " + line.Offer.String())
+			message := "продавец ещё не принимает оплату через маркетплейс: " + line.Offer.String()
+
+			return checkout.ErrOfferUnavailable.WithMessage(message)
 		}
 	}
 
@@ -391,7 +440,11 @@ func (s *Service) byKey(ctx context.Context, buyerID ids.UUID, key string) (chec
 	return state, err
 }
 
-func (s *Service) update(ctx context.Context, buyerID, checkoutID ids.UUID, mutate func(*checkout.Checkout, time.Time) error) (checkout.State, error) {
+func (s *Service) update(
+	ctx context.Context,
+	buyerID, checkoutID ids.UUID,
+	mutate func(*checkout.Checkout, time.Time) error,
+) (checkout.State, error) {
 	var state checkout.State
 
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {

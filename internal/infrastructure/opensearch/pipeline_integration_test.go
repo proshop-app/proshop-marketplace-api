@@ -9,6 +9,7 @@ import (
 	"time"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -34,9 +35,18 @@ func TestProjectionToIndex(t *testing.T) {
 	indexer := appcatalog.NewIndexer(uow, index, now, 100)
 	registry := appparticipant.NewRegistry(uow, now)
 	participants := appparticipant.NewService(uow, now)
+	platform := fake.NewPlatform()
+	settings := appparticipant.NewSettings(uow, platform, now)
 	queries := appcatalog.NewQueries(uow, index)
-	dispatcher := messaging.NewDispatcher(postgres.NewTaskQueue(pool), now, messaging.DispatcherConfig{Batch: 50, PerTenant: 50, Lease: time.Minute},
-		map[string]messaging.Handler{appcatalog.TaskSyncOffer: indexer.HandleTask, appcatalog.TaskSyncTenant: indexer.HandleTask})
+	dispatcher := messaging.NewDispatcher(
+		postgres.NewTaskQueue(pool),
+		now,
+		messaging.DispatcherConfig{Batch: 50, PerTenant: 50, Lease: time.Minute},
+		map[string]messaging.Handler{
+			appcatalog.TaskSyncOffer:  indexer.HandleTask,
+			appcatalog.TaskSyncTenant: indexer.HandleTask,
+		},
+	)
 
 	if built, err := indexer.EnsureIndex(ctx); err != nil || !built {
 		t.Fatalf("первый запуск собирает индекс: %v, %v", built, err)
@@ -65,19 +75,36 @@ func TestProjectionToIndex(t *testing.T) {
 		}
 	}
 
-	err := registry.Apply(ctx, appparticipant.RegistryEvent{EventID: "e1", Event: participant.RegistryEvent{
-		TenantID: "t1", Slug: "shop-one", Status: participant.TenantActive, Hosts: json.RawMessage(`[]`), At: now.Now(),
-	}})
+	active := participant.RegistryEvent{
+		TenantID: "t1",
+		Slug:     "shop-one",
+		Status:   participant.TenantActive,
+		Hosts:    json.RawMessage(`[]`),
+		At:       now.Now(),
+	}
+
+	err := registry.Apply(ctx, appparticipant.RegistryEvent{EventID: "e1", Event: active})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for i, product := range []ids.ProductID{"p1", "p2"} {
-		err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: "product-" + string(product), Snapshot: catalog.Snapshot{
-			TenantID: "t1", ProductID: product, Revision: 1, At: now.Now(), Available: 3,
-			Price: money.FromKopecks(int64(10000 * (i + 1))),
-			Card:  catalog.Card{Name: "Чайник " + string(product), Visible: true, Categories: []catalog.Category{{ID: "c1", Name: "Кухня"}}},
-		}})
+		err := projector.ApplyProduct(
+			ctx,
+			appcatalog.ProductEvent{EventID: "product-" + string(product), Snapshot: catalog.Snapshot{
+				TenantID:  "t1",
+				ProductID: product,
+				Revision:  1,
+				At:        now.Now(),
+				Available: 3,
+				Price:     money.FromKopecks(int64(10000 * (i + 1))),
+				Card: catalog.Card{
+					Name:       "Чайник " + string(product),
+					Visible:    true,
+					Categories: []catalog.Category{{ID: "c1", Name: "Кухня"}},
+				},
+			}},
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -88,11 +115,22 @@ func TestProjectionToIndex(t *testing.T) {
 		t.Fatalf("магазин без участия не попадает в выдачу: %+v", list)
 	}
 
-	if _, err := participants.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Первый магазин"}); err != nil {
+	command := appparticipant.CreateCommand{TenantID: "t1", Name: "Первый магазин"}
+	if _, err := participants.Create(ctx, command); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := participants.Enable(ctx, "t1"); err != nil {
 		t.Fatal(err)
+	}
+	drain()
+
+	if list, _ := queries.Search(ctx, ports.OfferQuery{}); list.Total != 0 {
+		t.Fatalf("магазин не включил участие в настройках — не в выдаче: %+v", list)
+	}
+
+	platform.SetSettings("t1", ports.ShopSettings{Enabled: true})
+	if changed, err := settings.SyncOne(ctx, "t1"); err != nil || !changed {
+		t.Fatalf("настройки магазина: %v, %v", changed, err)
 	}
 	drain()
 
@@ -111,9 +149,15 @@ func TestProjectionToIndex(t *testing.T) {
 		t.Fatalf("карточка после привязки кассы: %+v, %v", card, err)
 	}
 
-	err = registry.Apply(ctx, appparticipant.RegistryEvent{EventID: "e2", Event: participant.RegistryEvent{
-		TenantID: "t1", Slug: "shop-one", Status: participant.TenantSuspended, Hosts: json.RawMessage(`[]`), At: now.Now(),
-	}})
+	suspended := participant.RegistryEvent{
+		TenantID: "t1",
+		Slug:     "shop-one",
+		Status:   participant.TenantSuspended,
+		Hosts:    json.RawMessage(`[]`),
+		At:       now.Now(),
+	}
+
+	err = registry.Apply(ctx, appparticipant.RegistryEvent{EventID: "e2", Event: suspended})
 	if err != nil {
 		t.Fatal(err)
 	}

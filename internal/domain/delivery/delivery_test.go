@@ -26,14 +26,34 @@ func TestParseCarrier(t *testing.T) {
 }
 
 func TestNewPickupPoint(t *testing.T) {
-	point, err := delivery.NewPickupPoint("cdek", " MSK1 ", "", "ул. Примерная, 1", "Город", delivery.Location{Lat: 55.7, Lon: 37.6}, "Пн-Пт 10-20", nil, t0)
+	point, err := delivery.NewPickupPoint(
+		"cdek",
+		" MSK1 ",
+		"",
+		"ул. Примерная, 1",
+		"Город",
+		delivery.Location{Lat: 55.7, Lon: 37.6},
+		"Пн-Пт 10-20",
+		nil,
+		t0,
+	)
 	if err != nil || point.Code != "MSK1" || point.Name != "ул. Примерная, 1" || !point.Active {
 		t.Fatalf("пункт: %+v, %v", point, err)
 	}
 
 	cases := map[string]func() error{
 		"без кода": func() error {
-			_, err := delivery.NewPickupPoint("cdek", " ", "n", "a", "c", delivery.Location{Lat: 1, Lon: 1}, "", nil, t0)
+			_, err := delivery.NewPickupPoint(
+				"cdek",
+				" ",
+				"n",
+				"a",
+				"c",
+				delivery.Location{Lat: 1, Lon: 1},
+				"",
+				nil,
+				t0,
+			)
 			return err
 		},
 		"без адреса": func() error {
@@ -45,11 +65,31 @@ func TestNewPickupPoint(t *testing.T) {
 			return err
 		},
 		"широта вне пределов": func() error {
-			_, err := delivery.NewPickupPoint("cdek", "x", "n", "a", "c", delivery.Location{Lat: 91, Lon: 1}, "", nil, t0)
+			_, err := delivery.NewPickupPoint(
+				"cdek",
+				"x",
+				"n",
+				"a",
+				"c",
+				delivery.Location{Lat: 91, Lon: 1},
+				"",
+				nil,
+				t0,
+			)
 			return err
 		},
 		"не число": func() error {
-			_, err := delivery.NewPickupPoint("cdek", "x", "n", "a", "c", delivery.Location{Lat: math.NaN(), Lon: 1}, "", nil, t0)
+			_, err := delivery.NewPickupPoint(
+				"cdek",
+				"x",
+				"n",
+				"a",
+				"c",
+				delivery.Location{Lat: math.NaN(), Lon: 1},
+				"",
+				nil,
+				t0,
+			)
 			return err
 		},
 	}
@@ -89,17 +129,29 @@ func TestArea(t *testing.T) {
 func halfSubsidy(cost money.Money) (money.Money, error) { return cost.MulRatio(1, 2) }
 
 func TestNewQuote(t *testing.T) {
-	quote, err := delivery.NewQuote(delivery.Offered{Available: true, Cost: money.FromKopecks(30001), MinDays: 2, MaxDays: 4},
-		halfSubsidy, t0, 30*time.Minute)
+	quote, err := delivery.NewQuote(
+		delivery.Offered{Available: true, Cost: money.FromKopecks(30001), MinDays: 2, MaxDays: 4},
+		halfSubsidy,
+		t0,
+		30*time.Minute,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if quote.Status != delivery.QuoteAvailable || quote.Subsidy.Kopecks() != 15000 || quote.BuyerCost.Kopecks() != 15001 || !quote.ExpiresAt.Equal(t0.Add(30*time.Minute)) {
+	if quote.Status != delivery.QuoteAvailable || quote.Subsidy.Kopecks() != 15000 ||
+		quote.BuyerCost.Kopecks() != 15001 ||
+		!quote.ExpiresAt.Equal(t0.Add(30*time.Minute)) {
 		t.Fatalf("расчёт: %+v", quote)
 	}
 
-	short, _ := delivery.NewQuote(delivery.Offered{Available: true, Cost: money.FromKopecks(100), ExpiresAt: t0.Add(5 * time.Minute)}, halfSubsidy, t0, time.Hour)
-	if !short.ExpiresAt.Equal(t0.Add(5*time.Minute)) || short.Expired(t0.Add(4*time.Minute)) || !short.Expired(t0.Add(5*time.Minute)) {
+	short, _ := delivery.NewQuote(
+		delivery.Offered{Available: true, Cost: money.FromKopecks(100), ExpiresAt: t0.Add(5 * time.Minute)},
+		halfSubsidy,
+		t0,
+		time.Hour,
+	)
+	if !short.ExpiresAt.Equal(t0.Add(5*time.Minute)) || short.Expired(t0.Add(4*time.Minute)) ||
+		!short.Expired(t0.Add(5*time.Minute)) {
 		t.Fatalf("срок — не позже обещанного магазином: %+v", short)
 	}
 
@@ -118,7 +170,8 @@ func TestNewQuote(t *testing.T) {
 		}
 	}
 
-	if unreachable := delivery.Unreachable(t0); unreachable.Reason != delivery.ReasonSellerUnreachable || !unreachable.Expired(t0) {
+	if unreachable := delivery.Unreachable(t0); unreachable.Reason != delivery.ReasonSellerUnreachable ||
+		!unreachable.Expired(t0) {
 		t.Fatalf("магазин не ответил: %+v", unreachable)
 	}
 }

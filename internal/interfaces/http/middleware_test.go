@@ -13,7 +13,17 @@ import (
 )
 
 func TestEveryCodeHasStatus(t *testing.T) {
-	for _, code := range []errs.Code{errs.Invalid, errs.NotFound, errs.Conflict, errs.Unauthorized, errs.TooManyRequests, errs.Unavailable, errs.Internal} {
+	codes := []errs.Code{
+		errs.Invalid,
+		errs.NotFound,
+		errs.Conflict,
+		errs.Unauthorized,
+		errs.TooManyRequests,
+		errs.Unavailable,
+		errs.Internal,
+	}
+
+	for _, code := range codes {
 		if statusByCode[code] == 0 {
 			t.Fatalf("у кода %s нет ответа в таблице", code)
 		}
@@ -32,8 +42,11 @@ func TestUnavailableMapsTo503(t *testing.T) {
 }
 
 func TestObserveRecoversPanic(t *testing.T) {
-	handler := observe(slog.New(slog.NewTextHandler(io.Discard, nil)), newHTTPMetrics(prometheus.NewRegistry()),
-		http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("сбой") }))
+	handler := observe(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		newHTTPMetrics(prometheus.NewRegistry()),
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("сбой") }),
+	)
 
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))

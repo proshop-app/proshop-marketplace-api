@@ -22,7 +22,11 @@ func enqueue(t *testing.T, uow *postgres.UnitOfWork, tenant ids.TenantID, key st
 
 	err := uow.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 		return tx.Outbox().Enqueue(ctx, ports.NewTask{
-			Kind: "test", TenantID: tenant, DedupKey: key, Payload: []byte(`{"tenantId":"` + string(tenant) + `"}`), At: at(minute),
+			Kind:     "test",
+			TenantID: tenant,
+			DedupKey: key,
+			Payload:  []byte(`{"tenantId":"` + string(tenant) + `"}`),
+			At:       at(minute),
 		})
 	})
 	if err != nil {
@@ -64,12 +68,15 @@ func TestOutboxDedupClaimLease(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if none, _ := queue.Claim(ctx, ports.ClaimRequest{Now: at(20), Limit: 10, PerTenant: 10, LeaseUntil: at(21)}); len(none) != 0 {
+	early := ports.ClaimRequest{Now: at(20), Limit: 10, PerTenant: 10, LeaseUntil: at(21)}
+	if none, _ := queue.Claim(ctx, early); len(none) != 0 {
 		t.Fatalf("отложенная задача не созрела: %+v", none)
 	}
 
 	var lastError string
-	if err := pool.QueryRow(ctx, `SELECT last_error FROM outbox WHERE id = $1`, expired[0].ID).Scan(&lastError); err != nil || lastError != "сбой" {
+
+	err = pool.QueryRow(ctx, `SELECT last_error FROM outbox WHERE id = $1`, expired[0].ID).Scan(&lastError)
+	if err != nil || lastError != "сбой" {
 		t.Fatalf("причина повтора: %q, %v", lastError, err)
 	}
 }
@@ -122,7 +129,10 @@ func TestOutboxConcurrentClaimsDoNotOverlap(t *testing.T) {
 			defer wg.Done()
 
 			for {
-				tasks, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(5), Limit: 3, PerTenant: 2, LeaseUntil: at(30)})
+				tasks, err := queue.Claim(
+					ctx,
+					ports.ClaimRequest{Now: at(5), Limit: 3, PerTenant: 2, LeaseUntil: at(30)},
+				)
 				if err != nil {
 					t.Error(err)
 
@@ -173,8 +183,18 @@ func TestInboxParkedRetention(t *testing.T) {
 		}
 
 		event := ports.ParkedEvent{
-			Topic: "topic", Partition: 0, Offset: 3, Key: []byte("k"), Value: []byte("{"),
-			Headers: map[string]string{"x-tenant": "t1"}, TenantID: "t1", Reason: "invalid_payload", Error: "json", ParkedAt: at(0),
+			Topic:     "topic",
+			Partition: 0,
+			Offset:    3,
+			Key:       []byte("k"),
+			Value:     []byte("{"),
+			Headers: map[string]string{
+				"x-tenant": "t1",
+			},
+			TenantID: "t1",
+			Reason:   "invalid_payload",
+			Error:    "json",
+			ParkedAt: at(0),
 		}
 		if err := tx.Parked().Park(ctx, event); err != nil {
 			return err
@@ -199,14 +219,20 @@ func TestInboxParkedRetention(t *testing.T) {
 	enqueue(t, uow, "t1", "b", 0)
 
 	result, err := postgres.NewRetention(pool).Purge(ctx, ports.PurgeRequest{
-		ProcessedBefore: at(10), OutboxDoneBefore: at(10), ParkedBefore: at(10), ChallengesBefore: at(10), CartsBefore: at(10), Batch: 1,
+		ProcessedBefore:  at(10),
+		OutboxDoneBefore: at(10),
+		ParkedBefore:     at(10),
+		ChallengesBefore: at(10),
+		CartsBefore:      at(10),
+		Batch:            1,
 	})
 	if err != nil || result.Processed != 1 || result.OutboxDone != 1 || result.Parked != 1 {
 		t.Fatalf("чистка пачками: %+v, %v", result, err)
 	}
 
 	var pending int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE done_at IS NULL`).Scan(&pending); err != nil || pending != 1 {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE done_at IS NULL`).Scan(&pending); err != nil ||
+		pending != 1 {
 		t.Fatalf("невыполненные задачи не чистятся: %d, %v", pending, err)
 	}
 }

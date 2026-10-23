@@ -45,37 +45,111 @@ func setup(t *testing.T) *env {
 	identities := &fake.IDs{}
 	pickups := fake.NewPickupIndex()
 	provider := &fake.PickupProvider{Info: delivery.CarrierInfo{Code: "cdek", Name: "СДЭК"}}
-	directory := appdelivery.NewDirectory(e.store, []ports.PickupPointsProvider{provider}, pickups, e.store, e.clock, "pod-1")
+	directory := appdelivery.NewDirectory(
+		e.store,
+		[]ports.PickupPointsProvider{provider},
+		pickups,
+		e.store,
+		e.clock,
+		"pod-1",
+	)
 
 	e.carts = appcart.NewService(e.store, e.index, e.platform, identities, e.clock, 30*24*time.Hour)
-	e.service = appcheckout.NewService(e.store, e.index, e.platform, directory, identities, e.clock,
-		appcheckout.Config{QuoteTTL: 30 * time.Minute, QuoteTimeout: time.Second})
+	e.service = appcheckout.NewService(
+		e.store,
+		e.index,
+		e.platform,
+		directory,
+		identities,
+		e.clock,
+		appcheckout.Config{QuoteTTL: 30 * time.Minute, QuoteTimeout: time.Second},
+	)
 
 	ctx := context.Background()
 
 	err := e.index.Put(ctx, []ports.OfferDocument{
-		{ID: p1.String(), TenantID: "t1", ProductID: "p1", Name: "Чайник", Price: 199000, Available: 3, Visible: true, Listed: true, CheckoutAvailable: true, Version: 1},
-		{ID: p2.String(), TenantID: "t2", ProductID: "p1", Name: "Кружка", Price: 35000, Available: 10, Visible: true, Listed: true, CheckoutAvailable: true, Version: 1},
+		{
+			ID:                p1.String(),
+			TenantID:          "t1",
+			ProductID:         "p1",
+			Name:              "Чайник",
+			Price:             199000,
+			Available:         3,
+			Visible:           true,
+			Listed:            true,
+			CheckoutAvailable: true,
+			Version:           1,
+		},
+		{
+			ID:                p2.String(),
+			TenantID:          "t2",
+			ProductID:         "p1",
+			Name:              "Кружка",
+			Price:             35000,
+			Available:         10,
+			Visible:           true,
+			Listed:            true,
+			CheckoutAvailable: true,
+			Version:           1,
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	point, err := delivery.NewPickupPoint("cdek", "MSK1", "Пункт", "ул. Примерная, 1", "Город", delivery.Location{Lat: 55.7, Lon: 37.6}, "", nil, t0)
+	point, err := delivery.NewPickupPoint(
+		"cdek",
+		"MSK1",
+		"Пункт",
+		"ул. Примерная, 1",
+		"Город",
+		delivery.Location{Lat: 55.7, Lon: 37.6},
+		"",
+		nil,
+		t0,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	e.store.SeedPickupPoint(point)
 
 	e.store.SeedParticipant(participant.State{
-		TenantID: "t1", Slug: "s1", Name: "Первый", Status: participant.StatusConnected, PaymentAccountID: "acc", Enabled: true, ShopEnabled: true,
-		Subsidy: participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 50}, Version: 1, CreatedAt: t0, UpdatedAt: t0,
+		TenantID:         "t1",
+		Slug:             "s1",
+		Name:             "Первый",
+		Status:           participant.StatusConnected,
+		PaymentAccountID: "acc",
+		Enabled:          true,
+		ShopEnabled:      true,
+		Subsidy: participant.Subsidy{
+			Enabled: true,
+			Type:    participant.SubsidyPercent,
+			Value:   50,
+		},
+		Version:   1,
+		CreatedAt: t0,
+		UpdatedAt: t0,
 	})
 
-	e.platform.SetItem("t1", ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(199000), Available: 3})
-	e.platform.SetItem("t2", ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(35000), Available: 10})
+	e.platform.SetItem(
+		"t1",
+		ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(199000), Available: 3},
+	)
+	e.platform.SetItem(
+		"t2",
+		ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(35000), Available: 10},
+	)
 	e.platform.SetQuote("t1", delivery.Offered{Available: true, Cost: money.FromKopecks(30000), MinDays: 2, MaxDays: 4})
-	e.platform.SetQuote("t2", delivery.Offered{Available: true, Cost: money.FromKopecks(25000), MinDays: 3, MaxDays: 5, ExpiresAt: t0.Add(10 * time.Minute)})
+	e.platform.SetQuote(
+		"t2",
+		delivery.Offered{
+			Available: true,
+			Cost:      money.FromKopecks(25000),
+			MinDays:   3,
+			MaxDays:   5,
+			ExpiresAt: t0.Add(10 * time.Minute),
+		},
+	)
 
 	if _, err := e.carts.Add(ctx, buyerID, p1, 2); err != nil {
 		t.Fatal(err)
@@ -110,10 +184,14 @@ func TestCreateIsIdempotent(t *testing.T) {
 	if _, err := e.service.Create(ctx, buyerID, "bad"); !errors.Is(err, checkout.ErrInvalidIdempotencyKey) {
 		t.Fatalf("ключ не по формату: %v", err)
 	}
-	if _, err := e.service.Create(ctx, "8a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b", key); !errors.Is(err, checkout.ErrEmpty) {
+
+	_, err = e.service.Create(ctx, "8a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b", key)
+	if !errors.Is(err, checkout.ErrEmpty) {
 		t.Fatalf("без корзины: %v", err)
 	}
-	if _, err := e.service.Get(ctx, "8a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b", first.ID); !errors.Is(err, checkout.ErrNotFound) {
+
+	_, err = e.service.Get(ctx, "8a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b", first.ID)
+	if !errors.Is(err, checkout.ErrNotFound) {
 		t.Fatalf("чужую покупку не видно: %v", err)
 	}
 }
@@ -122,7 +200,18 @@ func TestCreateRefusesUnpayableSeller(t *testing.T) {
 	e := setup(t)
 
 	_ = e.index.Put(context.Background(), []ports.OfferDocument{
-		{ID: p2.String(), TenantID: "t2", ProductID: "p1", Name: "Кружка", Price: 35000, Available: 10, Visible: true, Listed: true, CheckoutAvailable: false, Version: 2},
+		{
+			ID:                p2.String(),
+			TenantID:          "t2",
+			ProductID:         "p1",
+			Name:              "Кружка",
+			Price:             35000,
+			Available:         10,
+			Visible:           true,
+			Listed:            true,
+			CheckoutAvailable: false,
+			Version:           2,
+		},
 	})
 
 	if _, err := e.service.Create(context.Background(), buyerID, key); !errors.Is(err, checkout.ErrOfferUnavailable) {
@@ -152,11 +241,13 @@ func TestQuote(t *testing.T) {
 	}
 
 	request := e.platform.QuoteRequests()[0]
-	if request.Carrier != "cdek" || request.PickupPointCode != "MSK1" || request.City != "Город" || len(request.Items) != 1 {
+	if request.Carrier != "cdek" || request.PickupPointCode != "MSK1" || request.City != "Город" ||
+		len(request.Items) != 1 {
 		t.Fatalf("запрос магазину: %+v", request)
 	}
 
-	if _, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "NOPE"); !errors.Is(err, delivery.ErrPickupPointNotFound) {
+	_, err = e.service.Quote(ctx, buyerID, created.ID, "cdek", "NOPE")
+	if !errors.Is(err, delivery.ErrPickupPointNotFound) {
 		t.Fatalf("неизвестный пункт: %v", err)
 	}
 }
@@ -173,7 +264,8 @@ func TestQuoteMarksSellersWithoutCarrier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if q := state.Groups[0].Quote; q.Status != delivery.QuoteUnavailable || q.Reason != delivery.ReasonSellerUnreachable {
+	if q := state.Groups[0].Quote; q.Status != delivery.QuoteUnavailable ||
+		q.Reason != delivery.ReasonSellerUnreachable {
 		t.Fatalf("магазин не ответил: %+v", q)
 	}
 	if q := state.Groups[1].Quote; q.Status != delivery.QuoteUnavailable || q.Reason != "carrier_not_connected" {
@@ -205,7 +297,8 @@ func TestConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Status != checkout.StatusConfirmed || state.Groups[1].Quote.Cost.Kopecks() != 26000 || state.Total.Kopecks() != 2*199000+35000+15000+26000 {
+	if state.Status != checkout.StatusConfirmed || state.Groups[1].Quote.Cost.Kopecks() != 26000 ||
+		state.Total.Kopecks() != 2*199000+35000+15000+26000 {
 		t.Fatalf("устаревший расчёт пересчитан, покупка подтверждена: %+v", state)
 	}
 
@@ -224,10 +317,14 @@ func TestConfirmReportsPriceChange(t *testing.T) {
 	created, _ := e.service.Create(ctx, buyerID, key)
 	_, _ = e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1")
 
-	e.platform.SetItem("t1", ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(209000), Available: 3})
+	e.platform.SetItem(
+		"t1",
+		ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(209000), Available: 3},
+	)
 
 	state, err := e.service.Confirm(ctx, buyerID, created.ID)
-	if !errors.Is(err, checkout.ErrChanged) || state.Status != checkout.StatusDraft || state.Groups[0].Lines[0].Price.Kopecks() != 209000 {
+	if !errors.Is(err, checkout.ErrChanged) || state.Status != checkout.StatusDraft ||
+		state.Groups[0].Lines[0].Price.Kopecks() != 209000 {
 		t.Fatalf("новая цена записана, покупка ждёт подтверждения: %+v %v", state, err)
 	}
 	if state.Groups[0].Quote != nil {
@@ -246,7 +343,10 @@ func TestConfirmRefusesMissingStock(t *testing.T) {
 	created, _ := e.service.Create(ctx, buyerID, key)
 	_, _ = e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1")
 
-	e.platform.SetItem("t1", ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(199000), Available: 1})
+	e.platform.SetItem(
+		"t1",
+		ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(199000), Available: 1},
+	)
 
 	if _, err := e.service.Confirm(ctx, buyerID, created.ID); !errors.Is(err, checkout.ErrOfferUnavailable) {
 		t.Fatalf("нехватка у магазина: %v", err)

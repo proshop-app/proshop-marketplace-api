@@ -21,13 +21,6 @@ const smsruAck = "100"
 
 const keyBuyer contextKey = 100
 
-// BuyerID — покупатель сессии из контекста запроса.
-func BuyerID(ctx context.Context) ids.UUID {
-	id, _ := ctx.Value(keyBuyer).(ids.UUID)
-
-	return id
-}
-
 type authHandlers struct {
 	auth       *appbuyer.Auth
 	trustProxy bool
@@ -60,10 +53,20 @@ type buyerJSON struct {
 	Phone string `json:"phone"`
 }
 
+// BuyerID — покупатель сессии из контекста запроса.
+func BuyerID(ctx context.Context) ids.UUID {
+	id, _ := ctx.Value(keyBuyer).(ids.UUID)
+
+	return id
+}
+
 func challengeOf(view appbuyer.ChallengeView) challengeJSON {
 	return challengeJSON{
-		ChallengeID: string(view.ID), Status: string(view.Status), CallPhone: view.CallPhone,
-		CallPhonePretty: view.CallPhonePretty, ExpiresAt: view.ExpiresAt.UTC(),
+		ChallengeID:     string(view.ID),
+		Status:          string(view.Status),
+		CallPhone:       view.CallPhone,
+		CallPhonePretty: view.CallPhonePretty,
+		ExpiresAt:       view.ExpiresAt.UTC(),
 	}
 }
 
@@ -113,8 +116,14 @@ func (h *authHandlers) check(w http.ResponseWriter, r *http.Request) {
 
 	if session := result.Session; session != nil {
 		http.SetCookie(w, &http.Cookie{
-			Name: SessionCookie, Value: session.Token, Path: "/", Expires: session.ExpiresAt,
-			MaxAge: int(time.Until(session.ExpiresAt).Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode,
+			Name:     SessionCookie,
+			Value:    session.Token,
+			Path:     "/",
+			Expires:  session.ExpiresAt,
+			MaxAge:   int(time.Until(session.ExpiresAt).Seconds()),
+			Secure:   true,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
 		})
 
 		// для клиента вход состоялся: внутреннее «проверка использована» наружу не выходит
@@ -135,7 +144,18 @@ func (h *authHandlers) logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: "", Path: "/", MaxAge: -1, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(
+		w,
+		&http.Cookie{
+			Name:     SessionCookie,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			Secure:   true,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		},
+	)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -169,7 +189,8 @@ func (h *authHandlers) smsruWebhook(w http.ResponseWriter, r *http.Request) {
 
 		for _, entry := range values {
 			lines := strings.Split(strings.ReplaceAll(entry, "\r", ""), "\n")
-			if len(lines) < 2 || strings.TrimSpace(lines[0]) != "callcheck_status" || strings.TrimSpace(lines[1]) == "" {
+			if len(lines) < 2 || strings.TrimSpace(lines[0]) != "callcheck_status" ||
+				strings.TrimSpace(lines[1]) == "" {
 				continue
 			}
 

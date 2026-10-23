@@ -3,6 +3,7 @@ package catalog_test
 import (
 	"time"
 
+	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -18,9 +19,14 @@ var (
 
 func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at time.Time) catalog.Snapshot {
 	return catalog.Snapshot{
-		TenantID: tenant, ProductID: product, Revision: revision, At: at,
+		TenantID:  tenant,
+		ProductID: product,
+		Revision:  revision,
+		At:        at,
 		Card: catalog.Card{
-			Name: "Товар " + string(product), Visible: true, Tags: []string{"tag-1", "free"},
+			Name:       "Товар " + string(product),
+			Visible:    true,
+			Tags:       []string{"tag-1", "free"},
 			Categories: []catalog.Category{{ID: "c1", Name: "Категория"}},
 		},
 		Price:     money.FromKopecks(10000),
@@ -30,12 +36,24 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at tim
 
 func seedSeller(store *fake.Store, tenant ids.TenantID, status participant.TenantStatus, enabled bool) {
 	store.SeedTenant(participant.TenantState{
-		TenantID: tenant, Slug: "slug-" + string(tenant), Status: status, EventAt: t0, Version: 1, UpdatedAt: t0,
+		TenantID:  tenant,
+		Slug:      "slug-" + string(tenant),
+		Status:    status,
+		EventAt:   t0,
+		Version:   1,
+		UpdatedAt: t0,
 	})
 	store.SeedParticipant(participant.State{
-		TenantID: tenant, Slug: "slug-" + string(tenant), Name: "Магазин " + string(tenant),
-		Status: participant.StatusConnected, PaymentAccountID: "acc", Enabled: enabled, ShopEnabled: true,
-		Version: 1, CreatedAt: t0, UpdatedAt: t0,
+		TenantID:         tenant,
+		Slug:             "slug-" + string(tenant),
+		Name:             "Магазин " + string(tenant),
+		Status:           participant.StatusConnected,
+		PaymentAccountID: "acc",
+		Enabled:          enabled,
+		ShopEnabled:      true,
+		Version:          1,
+		CreatedAt:        t0,
+		UpdatedAt:        t0,
 	})
 }
 
@@ -46,4 +64,8 @@ func seedProduct(store *fake.Store, tenant ids.TenantID, product ids.ProductID) 
 	}
 
 	store.SeedProduct(p.State())
+}
+
+func productEvent(eventID string, snapshot catalog.Snapshot) appcatalog.ProductEvent {
+	return appcatalog.ProductEvent{EventID: eventID, Snapshot: snapshot}
 }

@@ -19,11 +19,6 @@ type Location struct {
 	Lon float64
 }
 
-// Valid — координаты в допустимых пределах.
-func (l Location) Valid() bool {
-	return !math.IsNaN(l.Lat) && !math.IsNaN(l.Lon) && l.Lat >= -90 && l.Lat <= 90 && l.Lon >= -180 && l.Lon <= 180
-}
-
 // PickupPoint — пункт выдачи перевозчика в справочнике маркетплейса.
 type PickupPoint struct {
 	Carrier  Carrier
@@ -40,12 +35,44 @@ type PickupPoint struct {
 	RefreshedAt time.Time
 }
 
+// Area — где искать пункты: область карты или город.
+type Area struct {
+	// BBox — область карты: юго-западный и северо-восточный углы.
+	BBox *BBox
+	// City — город словами перевозчика.
+	City string
+}
+
+// BBox — прямоугольник карты.
+type BBox struct {
+	MinLon, MinLat, MaxLon, MaxLat float64
+}
+
+// Valid — координаты в допустимых пределах.
+func (l Location) Valid() bool {
+	return !math.IsNaN(l.Lat) && !math.IsNaN(l.Lon) && l.Lat >= -90 && l.Lat <= 90 && l.Lon >= -180 && l.Lon <= 180
+}
+
 // NewPickupPoint проверяет запись перевозчика.
-func NewPickupPoint(carrier Carrier, code, name, address, city string, location Location, schedule string, payload json.RawMessage, now time.Time) (PickupPoint, error) {
+func NewPickupPoint(
+	carrier Carrier,
+	code, name, address, city string,
+	location Location,
+	schedule string,
+	payload json.RawMessage,
+	now time.Time,
+) (PickupPoint, error) {
 	point := PickupPoint{
-		Carrier: carrier, Code: strings.TrimSpace(code), Name: strings.TrimSpace(name), Address: strings.TrimSpace(address),
-		City: strings.TrimSpace(city), Location: location, Schedule: strings.TrimSpace(schedule), Payload: payload,
-		Active: true, RefreshedAt: now,
+		Carrier:     carrier,
+		Code:        strings.TrimSpace(code),
+		Name:        strings.TrimSpace(name),
+		Address:     strings.TrimSpace(address),
+		City:        strings.TrimSpace(city),
+		Location:    location,
+		Schedule:    strings.TrimSpace(schedule),
+		Payload:     payload,
+		Active:      true,
+		RefreshedAt: now,
 	}
 
 	switch {
@@ -62,19 +89,6 @@ func NewPickupPoint(carrier Carrier, code, name, address, city string, location 
 	}
 
 	return point, nil
-}
-
-// Area — где искать пункты: область карты или город.
-type Area struct {
-	// BBox — область карты: юго-западный и северо-восточный углы.
-	BBox *BBox
-	// City — город словами перевозчика.
-	City string
-}
-
-// BBox — прямоугольник карты.
-type BBox struct {
-	MinLon, MinLat, MaxLon, MaxLat float64
 }
 
 // Validate проверяет область поиска: ровно одно из двух.

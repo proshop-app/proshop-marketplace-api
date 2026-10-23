@@ -15,8 +15,13 @@ import (
 
 func registryEvent(id string, slug string, status participant.TenantStatus, at time.Time) appparticipant.RegistryEvent {
 	return appparticipant.RegistryEvent{EventID: id, Event: participant.RegistryEvent{
-		TenantID: "t9", Slug: slug, Status: status, Cell: "cell-a",
-		Plan: json.RawMessage(`{"code":"base"}`), Hosts: json.RawMessage(`[]`), At: at,
+		TenantID: "t9",
+		Slug:     slug,
+		Status:   status,
+		Cell:     "cell-a",
+		Plan:     json.RawMessage(`{"code":"base"}`),
+		Hosts:    json.RawMessage(`[]`),
+		At:       at,
 	}}
 }
 
@@ -29,7 +34,8 @@ func TestRegistryMirrorsTenants(t *testing.T) {
 	if err := registry.Apply(ctx, registryEvent("e1", "shop-nine", participant.TenantCreating, t0)); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Apply(ctx, registryEvent("e2", "shop-nine", participant.TenantActive, t0.Add(time.Minute))); err != nil {
+	event := registryEvent("e2", "shop-nine", participant.TenantActive, t0.Add(time.Minute))
+	if err := registry.Apply(ctx, event); err != nil {
 		t.Fatal(err)
 	}
 
@@ -57,7 +63,8 @@ func TestRegistryDeduplicatesEvents(t *testing.T) {
 	if err := registry.Apply(ctx, registryEvent("e1", "shop-nine", participant.TenantActive, t0)); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Apply(ctx, registryEvent("e1", "other-slug", participant.TenantSuspended, t0.Add(time.Hour))); err != nil {
+	event := registryEvent("e1", "other-slug", participant.TenantSuspended, t0.Add(time.Hour))
+	if err := registry.Apply(ctx, event); err != nil {
 		t.Fatal(err)
 	}
 
@@ -81,7 +88,8 @@ func TestRegistrySyncsParticipant(t *testing.T) {
 	}
 	clock.Advance(time.Minute)
 
-	if err := registry.Apply(ctx, registryEvent("e2", "shop-nine-renamed", participant.TenantSuspended, t0.Add(time.Minute))); err != nil {
+	renamed := registryEvent("e2", "shop-nine-renamed", participant.TenantSuspended, t0.Add(time.Minute))
+	if err := registry.Apply(ctx, renamed); err != nil {
 		t.Fatal(err)
 	}
 

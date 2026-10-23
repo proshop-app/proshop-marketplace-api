@@ -169,6 +169,11 @@ type Operator struct {
 	Token string
 }
 
+type reader struct {
+	env      func(string) (string, bool)
+	problems []string
+}
+
 // Load читает полный конфиг сервиса.
 func Load(env func(string) (string, bool)) (Config, error) {
 	r := reader{env: env}
@@ -229,14 +234,20 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			Token:   r.required("SERVICE_TOKEN_MARKETPLACE"),
 			Timeout: r.duration("PLATFORM_API_TIMEOUT", 5*time.Second),
 		},
-		Cart:     Cart{TTL: r.duration("CART_TTL", 30*24*time.Hour)},
-		Checkout: Checkout{QuoteTTL: r.duration("QUOTE_TTL", 30*time.Minute), QuoteTimeout: r.duration("QUOTE_TIMEOUT", 5*time.Second)},
+		Cart: Cart{TTL: r.duration("CART_TTL", 30*24*time.Hour)},
+		Checkout: Checkout{
+			QuoteTTL:     r.duration("QUOTE_TTL", 30*time.Minute),
+			QuoteTimeout: r.duration("QUOTE_TIMEOUT", 5*time.Second),
+		},
 		Delivery: Delivery{
 			CDEK: Carrier{
-				URL: r.str("CDEK_API_URL", "https://api.cdek.ru"), ClientID: r.str("CDEK_CLIENT_ID", ""), ClientSecret: r.str("CDEK_CLIENT_SECRET", ""),
+				URL:          r.str("CDEK_API_URL", "https://api.cdek.ru"),
+				ClientID:     r.str("CDEK_CLIENT_ID", ""),
+				ClientSecret: r.str("CDEK_CLIENT_SECRET", ""),
 			},
 			Yandex: Carrier{
-				URL: r.str("YANDEX_DELIVERY_API_URL", "https://b2b-authproxy.taxi.yandex.net"), Token: r.str("YANDEX_DELIVERY_TOKEN", ""),
+				URL:   r.str("YANDEX_DELIVERY_API_URL", "https://b2b-authproxy.taxi.yandex.net"),
+				Token: r.str("YANDEX_DELIVERY_TOKEN", ""),
 			},
 			RefreshInterval: r.duration("PICKUP_REFRESH_INTERVAL", 24*time.Hour),
 			PickupIndex:     r.str("OPENSEARCH_PICKUP_INDEX", "marketplace-pickup-points"),
@@ -279,11 +290,6 @@ func LoadDatabase(env func(string) (string, bool)) (Database, error) {
 	db := r.database()
 
 	return db, r.err()
-}
-
-type reader struct {
-	env      func(string) (string, bool)
-	problems []string
 }
 
 func (r *reader) fail(name, reason string) {

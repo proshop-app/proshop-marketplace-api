@@ -48,7 +48,10 @@ type Index struct {
 func New(cfg Config) (*Index, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if cfg.InsecureSkipVerify {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // явно включается окружением для локального кластера с самоподписанным сертификатом
+		// явно включается окружением для локального кластера с самоподписанным сертификатом
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true, //nolint:gosec // проверку выключает только настройка окружения
+		}
 	}
 
 	client, err := opensearchgo.NewClient(opensearchgo.Config{
@@ -106,7 +109,9 @@ func (x *Index) Activate(ctx context.Context, generation string) error {
 		return err
 	}
 
-	actions := []any{map[string]any{"add": map[string]any{"index": generation, "alias": x.alias, "is_write_index": true}}}
+	actions := []any{
+		map[string]any{"add": map[string]any{"index": generation, "alias": x.alias, "is_write_index": true}},
+	}
 	for _, name := range aliased {
 		if name != generation {
 			actions = append(actions, map[string]any{"remove": map[string]any{"index": name, "alias": x.alias}})
@@ -152,7 +157,8 @@ func (x *Index) generations(ctx context.Context) ([]string, error) {
 		Index string `json:"index"`
 	}
 
-	if _, err := x.do(ctx, http.MethodGet, "/_cat/indices/"+url.PathEscape(x.alias+"-*")+"?format=json&h=index", nil, &rows); err != nil {
+	path := "/_cat/indices/" + url.PathEscape(x.alias+"-*") + "?format=json&h=index"
+	if _, err := x.do(ctx, http.MethodGet, path, nil, &rows); err != nil {
 		return nil, err
 	}
 
@@ -181,7 +187,10 @@ func (x *Index) PutGeneration(ctx context.Context, target string, docs []ports.O
 
 	for _, doc := range docs {
 		meta := map[string]any{"index": map[string]any{
-			"_index": target, "_id": doc.ID, "version": doc.Version, "version_type": "external_gte",
+			"_index":       target,
+			"_id":          doc.ID,
+			"version":      doc.Version,
+			"version_type": "external_gte",
 		}}
 		if err := encoder.Encode(meta); err != nil {
 			return fmt.Errorf("пачка индекса: %w", err)
@@ -216,7 +225,9 @@ func (x *Index) PutGeneration(ctx context.Context, target string, docs []ports.O
 				continue
 			}
 
-			return ErrUnavailable.WithMessage(fmt.Sprintf("документ %s не записан: %s: %s", result.ID, result.Error.Type, result.Error.Reason))
+			message := fmt.Sprintf("документ %s не записан: %s: %s", result.ID, result.Error.Type, result.Error.Reason)
+
+			return ErrUnavailable.WithMessage(message)
 		}
 	}
 
@@ -231,7 +242,14 @@ func (x *Index) Get(ctx context.Context, id string) (ports.OfferDocument, bool, 
 		Source  document `json:"_source"`
 	}
 
-	status, err := x.do(ctx, http.MethodGet, "/"+url.PathEscape(x.alias)+"/_doc/"+url.PathEscape(id), nil, &response, http.StatusNotFound)
+	status, err := x.do(
+		ctx,
+		http.MethodGet,
+		"/"+url.PathEscape(x.alias)+"/_doc/"+url.PathEscape(id),
+		nil,
+		&response,
+		http.StatusNotFound,
+	)
 	if err != nil {
 		return ports.OfferDocument{}, false, err
 	}
@@ -256,11 +274,15 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 		} `json:"hits"`
 	}
 
-	if _, err := x.do(ctx, http.MethodPost, "/"+url.PathEscape(x.alias)+"/_search", searchBody(query), &response); err != nil {
+	path := "/" + url.PathEscape(x.alias) + "/_search"
+	if _, err := x.do(ctx, http.MethodPost, path, searchBody(query), &response); err != nil {
 		return ports.OfferPage{}, err
 	}
 
-	page := ports.OfferPage{Total: response.Hits.Total.Value, Items: make([]ports.OfferDocument, 0, len(response.Hits.Hits))}
+	page := ports.OfferPage{
+		Total: response.Hits.Total.Value,
+		Items: make([]ports.OfferDocument, 0, len(response.Hits.Hits)),
+	}
 	for _, hit := range response.Hits.Hits {
 		page.Items = append(page.Items, fromDocument(hit.Source, hit.Version))
 	}
@@ -290,7 +312,14 @@ func (x *Index) do(ctx context.Context, method, path string, payload any, out an
 	return x.raw(ctx, method, path, body, "application/json", out, accepted...)
 }
 
-func (x *Index) raw(ctx context.Context, method, path string, body io.Reader, contentType string, out any, accepted ...int) (int, error) {
+func (x *Index) raw(
+	ctx context.Context,
+	method, path string,
+	body io.Reader,
+	contentType string,
+	out any,
+	accepted ...int,
+) (int, error) {
 	request, err := http.NewRequestWithContext(ctx, method, path, body)
 	if err != nil {
 		return 0, fmt.Errorf("запрос индекса: %w", err)
@@ -316,7 +345,9 @@ func (x *Index) raw(ctx context.Context, method, path string, body io.Reader, co
 	if response.StatusCode >= http.StatusMultipleChoices {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
 
-		return response.StatusCode, ErrUnavailable.WithMessage(fmt.Sprintf("%s %s: %d %s", method, path, response.StatusCode, strings.TrimSpace(string(detail))))
+		message := fmt.Sprintf("%s %s: %d %s", method, path, response.StatusCode, strings.TrimSpace(string(detail)))
+
+		return response.StatusCode, ErrUnavailable.WithMessage(message)
 	}
 
 	if out == nil || method == http.MethodHead {

@@ -60,53 +60,6 @@ type checkoutJSON struct {
 	ConfirmedAt   *time.Time          `json:"confirmedAt"`
 }
 
-func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
-	out := checkoutJSON{
-		ID: string(state.ID), Status: string(state.Status), Groups: make([]checkoutGroupJSON, 0, len(state.Groups)),
-		GoodsTotal: state.GoodsTotal.Kopecks(), DeliveryTotal: state.DeliveryTotal.Kopecks(), Total: state.Total.Kopecks(),
-		Version: state.Version, CreatedAt: state.CreatedAt.UTC(), UpdatedAt: state.UpdatedAt.UTC(),
-	}
-
-	if !state.ConfirmedAt.IsZero() {
-		confirmed := state.ConfirmedAt.UTC()
-		out.ConfirmedAt = &confirmed
-	}
-
-	if d := state.Delivery; d != nil {
-		out.Delivery = &selectionJSON{Carrier: string(d.Carrier), PickupPointCode: d.PickupPointCode, City: d.City, Address: d.Address}
-	}
-
-	for _, group := range state.Groups {
-		g := checkoutGroupJSON{
-			TenantID: string(group.TenantID), ExternalCheckoutID: group.ExternalCheckoutID,
-			Lines: make([]checkoutLineJSON, 0, len(group.Lines)), Goods: group.Goods.Kopecks(),
-		}
-
-		for _, line := range group.Lines {
-			amount, err := line.Price.MulRatio(int64(line.Quantity), 1)
-			if err != nil {
-				return checkoutJSON{}, err
-			}
-
-			g.Lines = append(g.Lines, checkoutLineJSON{
-				OfferID: line.Offer.String(), ProductID: string(line.Offer.Product), Name: line.Name, Quantity: line.Quantity,
-				Price: line.Price.Kopecks(), Amount: amount.Kopecks(),
-			})
-		}
-
-		if q := group.Quote; q != nil {
-			g.Quote = &quoteJSON{
-				Status: string(q.Status), Reason: q.Reason, Cost: q.Cost.Kopecks(), Subsidy: q.Subsidy.Kopecks(), BuyerCost: q.BuyerCost.Kopecks(),
-				MinDays: q.MinDays, MaxDays: q.MaxDays, ExpiresAt: q.ExpiresAt.UTC(),
-			}
-		}
-
-		out.Groups = append(out.Groups, g)
-	}
-
-	return out, nil
-}
-
 type checkoutHandlers struct {
 	checkouts *appcheckout.Service
 }
@@ -116,7 +69,83 @@ type quoteRequestJSON struct {
 	PickupPointCode string `json:"pickupPointCode"`
 }
 
-func (h *checkoutHandlers) respond(w http.ResponseWriter, r *http.Request, status int, state checkout.State, err error) {
+func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
+	out := checkoutJSON{
+		ID:            string(state.ID),
+		Status:        string(state.Status),
+		Groups:        make([]checkoutGroupJSON, 0, len(state.Groups)),
+		GoodsTotal:    state.GoodsTotal.Kopecks(),
+		DeliveryTotal: state.DeliveryTotal.Kopecks(),
+		Total:         state.Total.Kopecks(),
+		Version:       state.Version,
+		CreatedAt:     state.CreatedAt.UTC(),
+		UpdatedAt:     state.UpdatedAt.UTC(),
+	}
+
+	if !state.ConfirmedAt.IsZero() {
+		confirmed := state.ConfirmedAt.UTC()
+		out.ConfirmedAt = &confirmed
+	}
+
+	if d := state.Delivery; d != nil {
+		out.Delivery = &selectionJSON{
+			Carrier:         string(d.Carrier),
+			PickupPointCode: d.PickupPointCode,
+			City:            d.City,
+			Address:         d.Address,
+		}
+	}
+
+	for _, group := range state.Groups {
+		g := checkoutGroupJSON{
+			TenantID:           string(group.TenantID),
+			ExternalCheckoutID: group.ExternalCheckoutID,
+			Lines:              make([]checkoutLineJSON, 0, len(group.Lines)),
+			Goods:              group.Goods.Kopecks(),
+		}
+
+		for _, line := range group.Lines {
+			amount, err := line.Price.MulRatio(int64(line.Quantity), 1)
+			if err != nil {
+				return checkoutJSON{}, err
+			}
+
+			g.Lines = append(g.Lines, checkoutLineJSON{
+				OfferID:   line.Offer.String(),
+				ProductID: string(line.Offer.Product),
+				Name:      line.Name,
+				Quantity:  line.Quantity,
+				Price:     line.Price.Kopecks(),
+				Amount:    amount.Kopecks(),
+			})
+		}
+
+		if q := group.Quote; q != nil {
+			g.Quote = &quoteJSON{
+				Status:    string(q.Status),
+				Reason:    q.Reason,
+				Cost:      q.Cost.Kopecks(),
+				Subsidy:   q.Subsidy.Kopecks(),
+				BuyerCost: q.BuyerCost.Kopecks(),
+				MinDays:   q.MinDays,
+				MaxDays:   q.MaxDays,
+				ExpiresAt: q.ExpiresAt.UTC(),
+			}
+		}
+
+		out.Groups = append(out.Groups, g)
+	}
+
+	return out, nil
+}
+
+func (h *checkoutHandlers) respond(
+	w http.ResponseWriter,
+	r *http.Request,
+	status int,
+	state checkout.State,
+	err error,
+) {
 	if err != nil {
 		writeError(w, r, err)
 

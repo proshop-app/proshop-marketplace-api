@@ -30,18 +30,39 @@ type PickupRefreshRunner struct {
 	fetched   *prometheus.GaugeVec
 }
 
+// SettingsSyncRunner сверяет настройки магазинов раз в интервал.
+type SettingsSyncRunner struct {
+	syncer   SettingsSyncer
+	interval time.Duration
+	logger   *slog.Logger
+	failures *prometheus.CounterVec
+}
+
 // NewPickupRefreshRunner — обновление справочников с метриками по перевозчику.
-func NewPickupRefreshRunner(refresher Refresher, interval time.Duration, logger *slog.Logger, registerer prometheus.Registerer) *PickupRefreshRunner {
+func NewPickupRefreshRunner(
+	refresher Refresher,
+	interval time.Duration,
+	logger *slog.Logger,
+	registerer prometheus.Registerer,
+) *PickupRefreshRunner {
 	r := &PickupRefreshRunner{
-		refresher: refresher, interval: interval, logger: logger,
-		runs: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "marketplace_pickup_points_refresh_total",
-			Help: "Обновления справочников пунктов выдачи: done, failed, skipped (обновляет другой процесс).",
-		}, []string{"carrier", "result"}),
-		fetched: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "marketplace_pickup_points_fetched",
-			Help: "Пунктов выдачи в последней полной выгрузке перевозчика.",
-		}, []string{"carrier"}),
+		refresher: refresher,
+		interval:  interval,
+		logger:    logger,
+		runs: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_pickup_points_refresh_total",
+				Help: "Обновления справочников пунктов выдачи: done, failed, skipped (обновляет другой процесс).",
+			},
+			[]string{"carrier", "result"},
+		),
+		fetched: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "marketplace_pickup_points_fetched",
+				Help: "Пунктов выдачи в последней полной выгрузке перевозчика.",
+			},
+			[]string{"carrier"},
+		),
 	}
 	registerer.MustRegister(r.runs, r.fetched)
 
@@ -58,13 +79,21 @@ func (r *PickupRefreshRunner) RunOnce(ctx context.Context) {
 			r.runs.WithLabelValues(carrier, "skipped").Inc()
 		case result.Err != nil:
 			r.runs.WithLabelValues(carrier, "failed").Inc()
-			r.logger.Error("пункты выдачи: обновление не удалось", slog.String("carrier", carrier),
-				slog.Int("fetched", result.Fetched), slog.Any("error", result.Err))
+			r.logger.Error(
+				"пункты выдачи: обновление не удалось",
+				slog.String("carrier", carrier),
+				slog.Int("fetched", result.Fetched),
+				slog.Any("error", result.Err),
+			)
 		default:
 			r.runs.WithLabelValues(carrier, "done").Inc()
 			r.fetched.WithLabelValues(carrier).Set(float64(result.Fetched))
-			r.logger.Info("пункты выдачи: обновлены", slog.String("carrier", carrier),
-				slog.Int("fetched", result.Fetched), slog.Int64("closed", result.Deactivated))
+			r.logger.Info(
+				"пункты выдачи: обновлены",
+				slog.String("carrier", carrier),
+				slog.Int("fetched", result.Fetched),
+				slog.Int64("closed", result.Deactivated),
+			)
 		}
 	}
 }
@@ -80,22 +109,24 @@ func (r *PickupRefreshRunner) Run(ctx context.Context) error {
 	}
 }
 
-// SettingsSyncRunner сверяет настройки магазинов раз в интервал.
-type SettingsSyncRunner struct {
-	syncer   SettingsSyncer
-	interval time.Duration
-	logger   *slog.Logger
-	failures *prometheus.CounterVec
-}
-
 // NewSettingsSyncRunner — сверка настроек с метрикой сбоев по магазину.
-func NewSettingsSyncRunner(syncer SettingsSyncer, interval time.Duration, logger *slog.Logger, registerer prometheus.Registerer) *SettingsSyncRunner {
+func NewSettingsSyncRunner(
+	syncer SettingsSyncer,
+	interval time.Duration,
+	logger *slog.Logger,
+	registerer prometheus.Registerer,
+) *SettingsSyncRunner {
 	r := &SettingsSyncRunner{
-		syncer: syncer, interval: interval, logger: logger,
-		failures: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "marketplace_shop_settings_sync_failures_total",
-			Help: "Неудачные сверки настроек магазина с сервером.",
-		}, []string{"tenant"}),
+		syncer:   syncer,
+		interval: interval,
+		logger:   logger,
+		failures: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_shop_settings_sync_failures_total",
+				Help: "Неудачные сверки настроек магазина с сервером.",
+			},
+			[]string{"tenant"},
+		),
 	}
 	registerer.MustRegister(r.failures)
 
@@ -113,11 +144,19 @@ func (r *SettingsSyncRunner) Run(ctx context.Context) error {
 		case err == nil:
 			for tenant, cause := range result.Failed {
 				r.failures.WithLabelValues(string(tenant)).Inc()
-				r.logger.Warn("настройки магазина: сервер не ответил", slog.String("tenantId", string(tenant)), slog.Any("error", cause))
+				r.logger.Warn(
+					"настройки магазина: сервер не ответил",
+					slog.String("tenantId", string(tenant)),
+					slog.Any("error", cause),
+				)
 			}
 
-			r.logger.Info("настройки магазинов: сверены", slog.Int("checked", result.Checked), slog.Int("changed", result.Changed),
-				slog.Int("failed", len(result.Failed)))
+			r.logger.Info(
+				"настройки магазинов: сверены",
+				slog.Int("checked", result.Checked),
+				slog.Int("changed", result.Changed),
+				slog.Int("failed", len(result.Failed)),
+			)
 		}
 
 		if !wait(ctx, r.interval) {

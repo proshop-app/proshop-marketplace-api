@@ -33,6 +33,12 @@ type Tag struct {
 	originVersion int64
 }
 
+// TagLabel — тег карточки с подписью.
+type TagLabel struct {
+	ID    string
+	Label string
+}
+
 // NewTag заводит тег из первого снимка.
 func NewTag(snapshot TagSnapshot, now time.Time) (*Tag, error) {
 	if err := snapshot.validate(); err != nil {
@@ -98,12 +104,6 @@ func (s TagSnapshot) validate() error {
 	default:
 		return nil
 	}
-}
-
-// TagLabel — тег карточки с подписью.
-type TagLabel struct {
-	ID    string
-	Label string
 }
 
 // LabelTags подписывает теги карточки по справочнику магазина; тег без

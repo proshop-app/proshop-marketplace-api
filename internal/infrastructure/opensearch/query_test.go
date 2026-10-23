@@ -11,8 +11,16 @@ import (
 func TestSearchBodyFilters(t *testing.T) {
 	low, high := int64(100), int64(900)
 	body := searchBody(ports.OfferQuery{
-		Text: "чайник", TenantID: "t1", CategoryID: "c1", Tag: "tag-1", InStock: true,
-		PriceMin: &low, PriceMax: &high, Sort: ports.SortPriceAsc, Offset: 20, Limit: 10,
+		Text:       "чайник",
+		TenantID:   "t1",
+		CategoryID: "c1",
+		Tag:        "tag-1",
+		InStock:    true,
+		PriceMin:   &low,
+		PriceMax:   &high,
+		Sort:       ports.SortPriceAsc,
+		Offset:     20,
+		Limit:      10,
 	})
 
 	encoded, err := json.Marshal(body)
@@ -22,9 +30,16 @@ func TestSearchBodyFilters(t *testing.T) {
 
 	text := string(encoded)
 	for _, fragment := range []string{
-		`{"term":{"listed":true}}`, `{"term":{"tenantId":"t1"}}`, `{"term":{"categories.id":"c1"}}`,
-		`{"term":{"tags":"tag-1"}}`, `{"term":{"inStock":true}}`, `{"range":{"price":{"gte":100,"lte":900}}}`,
-		`"query":"чайник"`, `"from":20`, `"size":10`, `[{"price":"asc"},{"offerId":"asc"}]`,
+		`{"term":{"listed":true}}`,
+		`{"term":{"tenantId":"t1"}}`,
+		`{"term":{"categories.id":"c1"}}`,
+		`{"term":{"tags":"tag-1"}}`,
+		`{"term":{"inStock":true}}`,
+		`{"range":{"price":{"gte":100,"lte":900}}}`,
+		`"query":"чайник"`,
+		`"from":20`,
+		`"size":10`,
+		`[{"price":"asc"},{"offerId":"asc"}]`,
 	} {
 		if !strings.Contains(text, fragment) {
 			t.Fatalf("в запросе нет %s:\n%s", fragment, text)

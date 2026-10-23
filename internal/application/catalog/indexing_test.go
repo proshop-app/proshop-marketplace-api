@@ -32,7 +32,8 @@ func TestSyncOfferWritesParticipantOffers(t *testing.T) {
 	}
 
 	doc, ok := index.Doc("t1~p1")
-	if !ok || !doc.Visible || !doc.Listed || !doc.CheckoutAvailable || doc.Price != 10000 || doc.SellerSlug != "slug-t1" {
+	if !ok || !doc.Visible || !doc.Listed || !doc.CheckoutAvailable || doc.Price != 10000 ||
+		doc.SellerSlug != "slug-t1" {
 		t.Fatalf("документ: %+v", doc)
 	}
 	if doc.Version != 3 {
@@ -124,14 +125,24 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 	_, _ = signals.ApplyStock(catalog.StockSignal{Available: 0, At: t1}, t1)
 	_, _ = signals.ApplyPrice(catalog.PriceSignal{Price: money.FromKopecks(5000), At: t1}, t1)
 
-	tenant, _ := participant.NewTenant(participant.RegistryEvent{TenantID: "t1", Slug: "s", Status: participant.TenantActive, At: t0}, t0)
+	tenant, _ := participant.NewTenant(
+		participant.RegistryEvent{TenantID: "t1", Slug: "s", Status: participant.TenantActive, At: t0},
+		t0,
+	)
 	owner, _ := participant.New(tenant, "Магазин", t0)
 	owner.Enable(t0)
 	if _, err := owner.ApplyShopSettings(true, participant.Subsidy{}, t0); err != nil {
 		t.Fatal(err)
 	}
 
-	doc, ok := appcatalog.Document(ports.OfferState{Product: product, Signals: signals, Participant: owner, Tenant: tenant})
+	state := ports.OfferState{
+		Product:     product,
+		Signals:     signals,
+		Participant: owner,
+		Tenant:      tenant,
+	}
+
+	doc, ok := appcatalog.Document(state)
 	if !ok || doc.Version != 4 || doc.Price != 5000 || doc.InStock || !doc.Visible || doc.CheckoutAvailable {
 		t.Fatalf("документ: %+v", doc)
 	}
@@ -206,27 +217,34 @@ func TestHandleTask(t *testing.T) {
 	ctx := context.Background()
 	idx := indexer(store, index, clock)
 
-	offerTask := appcatalog.SyncOfferTask("t1", "p1", t1)
-	if err := idx.HandleTask(ctx, ports.Task{Kind: offerTask.Kind, TenantID: offerTask.TenantID, Payload: offerTask.Payload}); err != nil {
+	if err := idx.HandleTask(ctx, taskOf(appcatalog.SyncOfferTask("t1", "p1", t1))); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := index.Doc("t1~p1"); !ok {
 		t.Fatal("задача предложения выполнена")
 	}
 
-	tenantTask := appcatalog.SyncTenantTask("t1", t1)
-	if err := idx.HandleTask(ctx, ports.Task{Kind: tenantTask.Kind, TenantID: tenantTask.TenantID, Payload: tenantTask.Payload}); err != nil {
+	tenantTask := taskOf(appcatalog.SyncTenantTask("t1", t1))
+	if err := idx.HandleTask(ctx, tenantTask); err != nil {
 		t.Fatal(err)
 	}
 
 	mismatch, _ := json.Marshal(map[string]string{"tenantId": "t2", "productId": "p1"})
-	if err := idx.HandleTask(ctx, ports.Task{Kind: appcatalog.TaskSyncOffer, TenantID: "t1", Payload: mismatch}); !errors.Is(err, appcatalog.ErrInvalidTask) {
+
+	err := idx.HandleTask(ctx, ports.Task{Kind: appcatalog.TaskSyncOffer, TenantID: "t1", Payload: mismatch})
+	if !errors.Is(err, appcatalog.ErrInvalidTask) {
 		t.Fatalf("магазин задачи не совпадает: получено %v", err)
 	}
-	if err := idx.HandleTask(ctx, ports.Task{Kind: appcatalog.TaskSyncOffer, TenantID: "t1", Payload: []byte("{")}); !errors.Is(err, appcatalog.ErrInvalidTask) {
+
+	err = idx.HandleTask(ctx, ports.Task{Kind: appcatalog.TaskSyncOffer, TenantID: "t1", Payload: []byte("{")})
+	if !errors.Is(err, appcatalog.ErrInvalidTask) {
 		t.Fatalf("повреждённая задача: получено %v", err)
 	}
-	if err := idx.HandleTask(ctx, ports.Task{Kind: "other", TenantID: "t1", Payload: tenantTask.Payload}); !errors.Is(err, appcatalog.ErrInvalidTask) {
+
+	tenantTask.Kind = "other"
+
+	err = idx.HandleTask(ctx, tenantTask)
+	if !errors.Is(err, appcatalog.ErrInvalidTask) {
 		t.Fatalf("неизвестная задача: получено %v", err)
 	}
 }
@@ -239,5 +257,14 @@ func TestSyncOfferPropagatesIndexFailure(t *testing.T) {
 
 	if err := indexer(store, index, clock).SyncOffer(context.Background(), "t1", "p1"); err == nil {
 		t.Fatal("сбой индекса возвращается, задача уйдёт на повтор")
+	}
+}
+
+// taskOf — задача outbox в том виде, в каком её отдаёт очередь.
+func taskOf(task ports.NewTask) ports.Task {
+	return ports.Task{
+		Kind:     task.Kind,
+		TenantID: task.TenantID,
+		Payload:  task.Payload,
 	}
 }

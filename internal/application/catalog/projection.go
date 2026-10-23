@@ -120,23 +120,35 @@ func (p *Projector) ApplyTag(ctx context.Context, event TagEvent) error {
 
 // ApplyStock применяет остаток и прайс позиции склада.
 func (p *Projector) ApplyStock(ctx context.Context, event StockEvent) error {
-	return p.applySignals(ctx, event.EventID, event.TenantID, event.ProductID, func(signals *catalog.Signals) (bool, error) {
-		stockChanged, err := signals.ApplyStock(event.Stock, p.clock.Now())
-		if err != nil || event.Price == nil {
-			return stockChanged, err
-		}
+	return p.applySignals(
+		ctx,
+		event.EventID,
+		event.TenantID,
+		event.ProductID,
+		func(signals *catalog.Signals) (bool, error) {
+			stockChanged, err := signals.ApplyStock(event.Stock, p.clock.Now())
+			if err != nil || event.Price == nil {
+				return stockChanged, err
+			}
 
-		priceChanged, err := signals.ApplyPrice(*event.Price, p.clock.Now())
+			priceChanged, err := signals.ApplyPrice(*event.Price, p.clock.Now())
 
-		return stockChanged || priceChanged, err
-	})
+			return stockChanged || priceChanged, err
+		},
+	)
 }
 
 // ApplyPrice применяет новый прайс товара.
 func (p *Projector) ApplyPrice(ctx context.Context, event PriceEvent) error {
-	return p.applySignals(ctx, event.EventID, event.TenantID, event.ProductID, func(signals *catalog.Signals) (bool, error) {
-		return signals.ApplyPrice(event.Price, p.clock.Now())
-	})
+	return p.applySignals(
+		ctx,
+		event.EventID,
+		event.TenantID,
+		event.ProductID,
+		func(signals *catalog.Signals) (bool, error) {
+			return signals.ApplyPrice(event.Price, p.clock.Now())
+		},
+	)
 }
 
 func (p *Projector) applySignals(

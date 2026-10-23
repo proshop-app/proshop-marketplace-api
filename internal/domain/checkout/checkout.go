@@ -111,7 +111,10 @@ func New(id, buyerID ids.UUID, key string, lines []Line, now time.Time) (*Checko
 
 		group, ok := byTenant[line.Offer.Tenant]
 		if !ok {
-			group = &Group{TenantID: line.Offer.Tenant, ExternalCheckoutID: string(id) + ":" + string(line.Offer.Tenant)}
+			group = &Group{
+				TenantID:           line.Offer.Tenant,
+				ExternalCheckoutID: string(id) + ":" + string(line.Offer.Tenant),
+			}
 			byTenant[line.Offer.Tenant] = group
 		}
 
@@ -119,7 +122,13 @@ func New(id, buyerID ids.UUID, key string, lines []Line, now time.Time) (*Checko
 	}
 
 	c := &Checkout{state: State{
-		ID: id, BuyerID: buyerID, IdempotencyKey: key, Status: StatusDraft, Version: 1, CreatedAt: now, UpdatedAt: now,
+		ID:             id,
+		BuyerID:        buyerID,
+		IdempotencyKey: key,
+		Status:         StatusDraft,
+		Version:        1,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}}
 
 	for _, group := range byTenant {
@@ -224,7 +233,8 @@ func (c *Checkout) Undeliverable() []ids.TenantID {
 	var tenants []ids.TenantID
 
 	for _, group := range c.state.Groups {
-		if q := group.Quote; q != nil && q.Status == delivery.QuoteUnavailable && q.Reason != delivery.ReasonSellerUnreachable {
+		if q := group.Quote; q != nil && q.Status == delivery.QuoteUnavailable &&
+			q.Reason != delivery.ReasonSellerUnreachable {
 			tenants = append(tenants, group.TenantID)
 		}
 	}

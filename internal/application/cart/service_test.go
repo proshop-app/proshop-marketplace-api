@@ -39,8 +39,28 @@ func setup(t *testing.T) *env {
 	e.service = appcart.NewService(e.store, e.index, e.platform, &fake.IDs{}, e.clock, 30*24*time.Hour)
 
 	err := e.index.Put(context.Background(), []ports.OfferDocument{
-		{ID: p1.String(), TenantID: "t1", ProductID: "p1", Name: "Чайник", Price: 199000, Available: 3, Visible: true, Listed: true, Version: 1},
-		{ID: p2.String(), TenantID: "t2", ProductID: "p1", Name: "Кружка", Price: 35000, Available: 10, Visible: true, Listed: true, Version: 1},
+		{
+			ID:        p1.String(),
+			TenantID:  "t1",
+			ProductID: "p1",
+			Name:      "Чайник",
+			Price:     199000,
+			Available: 3,
+			Visible:   true,
+			Listed:    true,
+			Version:   1,
+		},
+		{
+			ID:        p2.String(),
+			TenantID:  "t2",
+			ProductID: "p1",
+			Name:      "Кружка",
+			Price:     35000,
+			Available: 10,
+			Visible:   true,
+			Listed:    true,
+			Version:   1,
+		},
 		{ID: "t3~p1", TenantID: "t3", ProductID: "p1", Visible: false, Version: 1},
 	})
 	if err != nil {
@@ -62,17 +82,22 @@ func TestAddChangeRemove(t *testing.T) {
 	}
 
 	state, err := e.service.Add(ctx, buyerID, p1, 2)
-	if err != nil || len(state.Lines) != 1 || state.Lines[0].Price.Kopecks() != 199000 || state.Lines[0].Name != "Чайник" {
+	if err != nil || len(state.Lines) != 1 || state.Lines[0].Price.Kopecks() != 199000 ||
+		state.Lines[0].Name != "Чайник" {
 		t.Fatalf("добавление со снимком цены индекса: %+v %v", state, err)
 	}
 
 	if _, err := e.service.Add(ctx, buyerID, p1, 2); !errors.Is(err, cart.ErrNotEnoughStock) {
 		t.Fatalf("сверх остатка проекции: %v", err)
 	}
-	if _, err := e.service.Add(ctx, buyerID, ids.OfferID{Tenant: "t3", Product: "p1"}, 1); !errors.Is(err, cart.ErrOfferUnavailable) {
+
+	_, err = e.service.Add(ctx, buyerID, ids.OfferID{Tenant: "t3", Product: "p1"}, 1)
+	if !errors.Is(err, cart.ErrOfferUnavailable) {
 		t.Fatalf("скрытое предложение: %v", err)
 	}
-	if _, err := e.service.Add(ctx, buyerID, ids.OfferID{Tenant: "t9", Product: "p9"}, 1); !errors.Is(err, cart.ErrOfferUnavailable) {
+
+	_, err = e.service.Add(ctx, buyerID, ids.OfferID{Tenant: "t9", Product: "p9"}, 1)
+	if !errors.Is(err, cart.ErrOfferUnavailable) {
 		t.Fatalf("нет предложения: %v", err)
 	}
 
@@ -116,7 +141,10 @@ func TestVerify(t *testing.T) {
 	_, _ = e.service.Add(ctx, buyerID, p1, 2)
 	_, _ = e.service.Add(ctx, buyerID, p2, 1)
 
-	e.platform.SetItem("t1", ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(209000), Available: 5})
+	e.platform.SetItem(
+		"t1",
+		ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(209000), Available: 5},
+	)
 
 	state, err := e.service.Verify(ctx, buyerID)
 	if err != nil {
@@ -136,7 +164,8 @@ func TestVerify(t *testing.T) {
 	}
 
 	e.platform.Fail("t2", errors.New("сервер недоступен"))
-	if _, err := e.service.Verify(ctx, buyerID); !errors.Is(err, appcart.ErrSellerUnreachable) || errs.CodeOf(err) != errs.Unavailable {
+	if _, err := e.service.Verify(ctx, buyerID); !errors.Is(err, appcart.ErrSellerUnreachable) ||
+		errs.CodeOf(err) != errs.Unavailable {
 		t.Fatalf("магазин не ответил: %v", err)
 	}
 }

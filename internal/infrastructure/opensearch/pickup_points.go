@@ -21,11 +21,6 @@ type PickupIndex struct {
 	name  string
 }
 
-// NewPickupIndex — геоиндекс на том же кластере, что индекс предложений.
-func NewPickupIndex(index *Index, name string) *PickupIndex {
-	return &PickupIndex{index: index, name: name}
-}
-
 type pickupDocument struct {
 	Carrier     string    `json:"carrier"`
 	Code        string    `json:"code"`
@@ -40,6 +35,11 @@ type pickupDocument struct {
 type geoPoint struct {
 	Lat float64 `json:"lat"`
 	Lon float64 `json:"lon"`
+}
+
+// NewPickupIndex — геоиндекс на том же кластере, что индекс предложений.
+func NewPickupIndex(index *Index, name string) *PickupIndex {
+	return &PickupIndex{index: index, name: name}
 }
 
 func pickupID(carrier delivery.Carrier, code string) string {
@@ -59,7 +59,9 @@ func (x *PickupIndex) Ensure(ctx context.Context) (bool, error) {
 			"number_of_shards":   x.index.shards,
 			"number_of_replicas": x.index.replicas,
 			"analysis": map[string]any{
-				"normalizer": map[string]any{"lowercase": map[string]any{"type": "custom", "filter": []string{"lowercase"}}},
+				"normalizer": map[string]any{
+					"lowercase": map[string]any{"type": "custom", "filter": []string{"lowercase"}},
+				},
 			},
 		},
 		"mappings": map[string]any{
@@ -77,13 +79,16 @@ func (x *PickupIndex) Ensure(ctx context.Context) (bool, error) {
 		},
 	}
 
-	status, err = x.index.do(ctx, http.MethodPut, "/"+url.PathEscape(x.name), body, nil, http.StatusBadRequest)
+	path := "/" + url.PathEscape(x.name)
+
+	status, err = x.index.do(ctx, http.MethodPut, path, body, nil, http.StatusBadRequest)
 	if err != nil || status == http.StatusOK {
 		return status == http.StatusOK, err
 	}
 
 	// 400: индекс завёл соседний процесс между проверкой и созданием — или схема неверна
-	if exists, err := x.index.do(ctx, http.MethodHead, "/"+url.PathEscape(x.name), nil, nil, http.StatusNotFound); err != nil || exists != http.StatusOK {
+	exists, err := x.index.do(ctx, http.MethodHead, path, nil, nil, http.StatusNotFound)
+	if err != nil || exists != http.StatusOK {
 		return false, ErrUnavailable.WithMessage("индекс пунктов выдачи не заведён: " + x.name)
 	}
 
@@ -103,7 +108,8 @@ func (x *PickupIndex) Put(ctx context.Context, points []delivery.PickupPoint) er
 		id := pickupID(p.Carrier, p.Code)
 
 		if !p.Active {
-			if err := encoder.Encode(map[string]any{"delete": map[string]any{"_index": x.name, "_id": id}}); err != nil {
+			action := map[string]any{"delete": map[string]any{"_index": x.name, "_id": id}}
+			if err := encoder.Encode(action); err != nil {
 				return fmt.Errorf("пачка пунктов: %w", err)
 			}
 
@@ -115,8 +121,17 @@ func (x *PickupIndex) Put(ctx context.Context, points []delivery.PickupPoint) er
 		}
 
 		doc := pickupDocument{
-			Carrier: string(p.Carrier), Code: p.Code, Name: p.Name, Address: p.Address, City: p.City,
-			Location: geoPoint{Lat: p.Location.Lat, Lon: p.Location.Lon}, Schedule: p.Schedule, RefreshedAt: p.RefreshedAt.UTC(),
+			Carrier: string(p.Carrier),
+			Code:    p.Code,
+			Name:    p.Name,
+			Address: p.Address,
+			City:    p.City,
+			Location: geoPoint{
+				Lat: p.Location.Lat,
+				Lon: p.Location.Lon,
+			},
+			Schedule:    p.Schedule,
+			RefreshedAt: p.RefreshedAt.UTC(),
 		}
 		if err := encoder.Encode(doc); err != nil {
 			return fmt.Errorf("пачка пунктов: %w", err)
@@ -145,7 +160,9 @@ func (x *PickupIndex) Put(ctx context.Context, points []delivery.PickupPoint) er
 				continue
 			}
 
-			return ErrUnavailable.WithMessage(fmt.Sprintf("пункт %s не записан: %s: %s", result.ID, result.Error.Type, result.Error.Reason))
+			message := fmt.Sprintf("пункт %s не записан: %s: %s", result.ID, result.Error.Type, result.Error.Reason)
+
+			return ErrUnavailable.WithMessage(message)
 		}
 	}
 
@@ -187,9 +204,15 @@ func (x *PickupIndex) Search(ctx context.Context, query ports.PickupPointQuery) 
 	for _, hit := range response.Hits.Hits {
 		doc := hit.Source
 		points = append(points, delivery.PickupPoint{
-			Carrier: delivery.Carrier(doc.Carrier), Code: doc.Code, Name: doc.Name, Address: doc.Address, City: doc.City,
-			Location: delivery.Location{Lat: doc.Location.Lat, Lon: doc.Location.Lon}, Schedule: doc.Schedule,
-			Active: true, RefreshedAt: doc.RefreshedAt,
+			Carrier:     delivery.Carrier(doc.Carrier),
+			Code:        doc.Code,
+			Name:        doc.Name,
+			Address:     doc.Address,
+			City:        doc.City,
+			Location:    delivery.Location{Lat: doc.Location.Lat, Lon: doc.Location.Lon},
+			Schedule:    doc.Schedule,
+			Active:      true,
+			RefreshedAt: doc.RefreshedAt,
 		})
 	}
 

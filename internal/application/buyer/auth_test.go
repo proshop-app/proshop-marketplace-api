@@ -24,10 +24,24 @@ type env struct {
 
 func setup() *env {
 	e := &env{store: fake.NewStore(), calls: fake.NewCalls(), sessions: fake.NewSessions(), clock: fake.NewClock(t0)}
-	e.auth = appbuyer.NewAuth(e.store, e.calls, e.sessions, fake.NewLimiter(), &fake.IDs{}, e.clock, appbuyer.AuthConfig{
-		ChallengeTTL: 5 * time.Minute, CheckInterval: 2 * time.Second, SessionTTL: 30 * 24 * time.Hour,
-		PhoneLimit: appbuyer.Limit{Count: 3, Window: 10 * time.Minute}, IPLimit: appbuyer.Limit{Count: 5, Window: time.Hour},
-	})
+	e.auth = appbuyer.NewAuth(
+		e.store,
+		e.calls,
+		e.sessions,
+		fake.NewLimiter(),
+		&fake.IDs{},
+		e.clock,
+		appbuyer.AuthConfig{
+			ChallengeTTL:  5 * time.Minute,
+			CheckInterval: 2 * time.Second,
+			SessionTTL:    30 * 24 * time.Hour,
+			PhoneLimit: appbuyer.Limit{
+				Count:  3,
+				Window: 10 * time.Minute,
+			},
+			IPLimit: appbuyer.Limit{Count: 5, Window: time.Hour},
+		},
+	)
 
 	return e
 }
@@ -40,12 +54,14 @@ func TestLoginByCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if view.Status != buyer.ChallengePending || view.CallPhonePretty != "+7 (800) 500-8275" || !view.ExpiresAt.Equal(t0.Add(5*time.Minute)) {
+	if view.Status != buyer.ChallengePending || view.CallPhonePretty != "+7 (800) 500-8275" ||
+		!view.ExpiresAt.Equal(t0.Add(5*time.Minute)) {
 		t.Fatalf("проверка: %+v", view)
 	}
 
 	result, err := e.auth.CheckLogin(ctx, view.ID)
-	if err != nil || result.Session != nil || result.Challenge.Status != buyer.ChallengePending || e.calls.Asked() != 1 {
+	if err != nil || result.Session != nil || result.Challenge.Status != buyer.ChallengePending ||
+		e.calls.Asked() != 1 {
 		t.Fatalf("звонка ещё не было: %+v %v", result, err)
 	}
 
@@ -57,7 +73,8 @@ func TestLoginByCall(t *testing.T) {
 
 	e.clock.Advance(2 * time.Second)
 	result, err = e.auth.CheckLogin(ctx, view.ID)
-	if err != nil || result.Session == nil || result.Session.Token == "" || result.Session.Buyer.Phone != "79251234567" {
+	if err != nil || result.Session == nil || result.Session.Token == "" ||
+		result.Session.Buyer.Phone != "79251234567" {
 		t.Fatalf("звонок подтверждён — сессия: %+v %v", result, err)
 	}
 
@@ -101,6 +118,7 @@ func TestLoginLimitsAndErrors(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+
 	_, err := e.auth.StartLogin(ctx, "79251234567", "203.0.113.5")
 	if !errors.Is(err, buyer.ErrTooManyAttempts) || errs.CodeOf(err) != errs.TooManyRequests {
 		t.Fatalf("лимит по телефону: %v", err)
@@ -116,7 +134,8 @@ func TestLoginLimitsAndErrors(t *testing.T) {
 	}
 
 	e.calls.StartErr = errors.New("связь")
-	if _, err := e.auth.StartLogin(ctx, "79990000000", ""); !errors.Is(err, appbuyer.ErrCallCheckFailed) || errs.CodeOf(err) != errs.Unavailable {
+	if _, err := e.auth.StartLogin(ctx, "79990000000", ""); !errors.Is(err, appbuyer.ErrCallCheckFailed) ||
+		errs.CodeOf(err) != errs.Unavailable {
 		t.Fatalf("шлюз отказал: %v", err)
 	}
 

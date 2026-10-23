@@ -20,11 +20,18 @@ KAFKA_BROKERS       ?= localhost:29094
 KAFKA_TOPIC_PREFIX  ?=
 OPERATOR_TOKEN      ?= local-operator-token-0123456789abcdef
 HTTP_ADDR           ?= :8080
+REDIS_URL           ?= redis://localhost:26379/0
+# внутренний API сервера Proshop (PORT из его .env.example) и служебный токен к нему
+PLATFORM_API_URL          ?= http://localhost:5001
+SERVICE_TOKEN_MARKETPLACE ?= local-marketplace-service-token-0123456789
+# песочница входа по звонку: любой номер подтверждается сам, sms.ru не вызывается
+SMSRU_MODE ?= sandbox
 export DATABASE_URL OPENSEARCH_URLS OPENSEARCH_REPLICAS KAFKA_BROKERS KAFKA_TOPIC_PREFIX OPERATOR_TOKEN HTTP_ADDR
+export REDIS_URL PLATFORM_API_URL SERVICE_TOKEN_MARKETPLACE SMSRU_MODE
 
 IMAGE ?= proshop-marketplace:dev
 
-.PHONY: dev infra-up infra-down migrate reindex test test-integration lint build image
+.PHONY: dev infra-up infra-down migrate reindex refresh-pickup-points test test-integration lint build image
 
 ## dev: инфраструктура в compose, миграции и сервис с перезапуском при правках
 dev: infra-up migrate
@@ -45,6 +52,10 @@ migrate:
 ## reindex: перестроить индекс предложений из проекции
 reindex:
 	go run ./cmd/marketplace reindex
+
+## refresh-pickup-points: обновить справочники пунктов выдачи подключённых перевозчиков
+refresh-pickup-points:
+	go run ./cmd/marketplace refresh-pickup-points
 
 ## test: юнит-тесты домена, приложения, транспорта и сторож слоистости
 test:

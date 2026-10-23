@@ -18,9 +18,14 @@ var (
 func activeTenant(t *testing.T, status participant.TenantStatus) *participant.Tenant {
 	t.Helper()
 
-	tenant, err := participant.NewTenant(participant.RegistryEvent{
-		TenantID: "t1", Slug: "shop-one", Status: status, At: t0,
-	}, t0)
+	event := participant.RegistryEvent{
+		TenantID: "t1",
+		Slug:     "shop-one",
+		Status:   status,
+		At:       t0,
+	}
+
+	tenant, err := participant.NewTenant(event, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +60,8 @@ func TestNewParticipant(t *testing.T) {
 
 func TestNewRejectsUnavailableTenantAndBadName(t *testing.T) {
 	for _, status := range []participant.TenantStatus{participant.TenantDeleting, participant.TenantDeleted} {
-		if _, err := participant.New(activeTenant(t, status), "x", t0); !errors.Is(err, participant.ErrTenantUnavailable) {
+		_, err := participant.New(activeTenant(t, status), "x", t0)
+		if !errors.Is(err, participant.ErrTenantUnavailable) {
 			t.Fatalf("%s: ожидалось ErrTenantUnavailable, получено %v", status, err)
 		}
 	}
@@ -67,7 +73,8 @@ func TestNewRejectsUnavailableTenantAndBadName(t *testing.T) {
 	}
 
 	for _, name := range []string{"", "   ", strings.Repeat("я", 201), "a\nb"} {
-		if _, err := participant.New(activeTenant(t, participant.TenantActive), name, t0); !errors.Is(err, participant.ErrInvalidName) {
+		_, err := participant.New(activeTenant(t, participant.TenantActive), name, t0)
+		if !errors.Is(err, participant.ErrInvalidName) {
 			t.Fatalf("%q: ожидалось ErrInvalidName, получено %v", name, err)
 		}
 	}
@@ -93,7 +100,11 @@ func TestSetPaymentAccountTransitions(t *testing.T) {
 		t.Fatalf("ожидался connected: %+v", p.State())
 	}
 	if p.Origin().Status != participant.StatusOnboarding || p.Origin().Version != 1 || p.Version() != 2 {
-		t.Fatalf("исходное состояние должно остаться для условного обновления: origin=%+v version=%d", p.Origin(), p.Version())
+		t.Fatalf(
+			"исходное состояние должно остаться для условного обновления: origin=%+v version=%d",
+			p.Origin(),
+			p.Version(),
+		)
 	}
 
 	if changed, _ := p.SetPaymentAccount("506751", t1); changed {
@@ -157,7 +168,8 @@ func TestSyncSlug(t *testing.T) {
 		t.Fatal("тот же слаг не меняет участника")
 	}
 
-	if _, err := tenant.Apply(participant.RegistryEvent{TenantID: "t1", Slug: "shop-renamed", Status: participant.TenantActive, At: t1}, t1); err != nil {
+	renamed := participant.RegistryEvent{TenantID: "t1", Slug: "shop-renamed", Status: participant.TenantActive, At: t1}
+	if _, err := tenant.Apply(renamed, t1); err != nil {
 		t.Fatal(err)
 	}
 	if !p.SyncSlug(tenant, t1) || p.Slug() != "shop-renamed" {
@@ -202,7 +214,12 @@ func TestVisibility(t *testing.T) {
 
 func TestApplyShopSettings(t *testing.T) {
 	p := restored(t)
-	subsidy := participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 50, MaxAmount: money.FromKopecks(30000)}
+	subsidy := participant.Subsidy{
+		Enabled:   true,
+		Type:      participant.SubsidyPercent,
+		Value:     50,
+		MaxAmount: money.FromKopecks(30000),
+	}
 
 	changed, err := p.ApplyShopSettings(true, subsidy, t1)
 	if err != nil || !changed || !p.ShopEnabled() || p.Subsidy() != subsidy || p.Version() != 2 {
@@ -215,7 +232,10 @@ func TestApplyShopSettings(t *testing.T) {
 		t.Fatalf("те же настройки не меняют версию, но время сверки обновляется: %+v", p.State())
 	}
 
-	if _, err := p.ApplyShopSettings(true, participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 101}, t1); !errors.Is(err, participant.ErrInvalidSubsidy) {
+	overPercent := participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 101}
+
+	_, err = p.ApplyShopSettings(true, overPercent, t1)
+	if !errors.Is(err, participant.ErrInvalidSubsidy) {
 		t.Fatalf("процент больше 100: %v", err)
 	}
 }
@@ -226,11 +246,25 @@ func TestSubsidyApply(t *testing.T) {
 		subsidy participant.Subsidy
 		want    int64
 	}{
-		"выключена":           {participant.Subsidy{Type: participant.SubsidyFixed, Value: 10000}, 0},
-		"фиксированная":       {participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 15000}, 15000},
-		"больше стоимости":    {participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 99999}, 40000},
-		"процент":             {participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 25}, 10000},
-		"процент под потолок": {participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 50, MaxAmount: money.FromKopecks(12000)}, 12000},
+		"выключена": {participant.Subsidy{Type: participant.SubsidyFixed, Value: 10000}, 0},
+		"фиксированная": {
+			participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 15000},
+			15000,
+		},
+		"больше стоимости": {
+			participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 99999},
+			40000,
+		},
+		"процент": {participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 25}, 10000},
+		"процент под потолок": {
+			participant.Subsidy{
+				Enabled:   true,
+				Type:      participant.SubsidyPercent,
+				Value:     50,
+				MaxAmount: money.FromKopecks(12000),
+			},
+			12000,
+		},
 	}
 
 	for name, tc := range cases {
@@ -240,10 +274,13 @@ func TestSubsidyApply(t *testing.T) {
 		}
 	}
 
-	if got, _ := (participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 100}).Apply(money.Money{}); !got.IsZero() {
+	fixed := participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 100}
+	if got, _ := fixed.Apply(money.Money{}); !got.IsZero() {
 		t.Fatal("бесплатная доставка — субсидии нет")
 	}
-	if err := (participant.Subsidy{Enabled: true, Type: "gift"}).Validate(); !errors.Is(err, participant.ErrInvalidSubsidy) {
+
+	err := (participant.Subsidy{Enabled: true, Type: "gift"}).Validate()
+	if !errors.Is(err, participant.ErrInvalidSubsidy) {
 		t.Fatalf("неизвестный вид субсидии: %v", err)
 	}
 }

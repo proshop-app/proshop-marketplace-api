@@ -24,6 +24,13 @@ type Indexer struct {
 	batch int
 }
 
+// RebuildResult — итог перестроения.
+type RebuildResult struct {
+	Generation string
+	Indexed    int
+	CaughtUp   int
+}
+
 // NewIndexer — синхронизация индекса пачками по batch предложений.
 func NewIndexer(uow ports.UnitOfWork, index ports.OfferIndex, clock ports.Clock, batch int) *Indexer {
 	return &Indexer{uow: uow, index: index, clock: clock, batch: batch}
@@ -104,13 +111,6 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 	}
 }
 
-// RebuildResult — итог перестроения.
-type RebuildResult struct {
-	Generation string
-	Indexed    int
-	CaughtUp   int
-}
-
 // Rebuild собирает индекс заново из проекции: новое поколение, наполнение,
 // переключение и догоняющий проход по изменениям, случившимся за время
 // наполнения. Версии документов делают догоняющий проход безопасным.
@@ -124,14 +124,16 @@ func (i *Indexer) Rebuild(ctx context.Context) (RebuildResult, error) {
 
 	result := RebuildResult{Generation: generation}
 
-	err = i.pages(ctx, func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error) {
+	participantOffers := func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error) {
 		return tx.Offers().ParticipantOffers(ctx, after, i.batch)
-	}, func(docs []ports.OfferDocument) error {
+	}
+	putGeneration := func(docs []ports.OfferDocument) error {
 		result.Indexed += len(docs)
 
 		return i.index.PutGeneration(ctx, generation, docs)
-	})
-	if err != nil {
+	}
+
+	if err := i.pages(ctx, participantOffers, putGeneration); err != nil {
 		return result, err
 	}
 
@@ -140,15 +142,16 @@ func (i *Indexer) Rebuild(ctx context.Context) (RebuildResult, error) {
 	}
 
 	since := started.Add(-CatchUpMargin)
-	err = i.pages(ctx, func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error) {
+	changedOffers := func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error) {
 		return tx.Offers().ChangedSince(ctx, since, after, i.batch)
-	}, func(docs []ports.OfferDocument) error {
+	}
+	put := func(docs []ports.OfferDocument) error {
 		result.CaughtUp += len(docs)
 
 		return i.index.Put(ctx, docs)
-	})
+	}
 
-	return result, err
+	return result, i.pages(ctx, changedOffers, put)
 }
 
 // EnsureIndex собирает индекс, если рабочего индекса нет: первый запуск или потеря кластера.

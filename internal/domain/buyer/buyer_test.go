@@ -37,8 +37,17 @@ func TestParsePhone(t *testing.T) {
 }
 
 func challenge() *buyer.Challenge {
-	c := buyer.NewChallenge("6f1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b", "79251234567",
-		buyer.CallInstruction{ProviderRef: "201737-542", CallPhone: "78005008275", CallPhonePretty: "+7 (800) 500-8275"}, t0, 5*time.Minute)
+	c := buyer.NewChallenge(
+		"6f1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b",
+		"79251234567",
+		buyer.CallInstruction{
+			ProviderRef:     "201737-542",
+			CallPhone:       "78005008275",
+			CallPhonePretty: "+7 (800) 500-8275",
+		},
+		t0,
+		5*time.Minute,
+	)
 	c.MarkSaved()
 
 	return buyer.RestoreChallenge(c.State())
@@ -105,7 +114,8 @@ func TestChallengeExpiry(t *testing.T) {
 func TestSession(t *testing.T) {
 	session := buyer.NewSession("secret-token", "6f1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b", t0, time.Hour)
 
-	if session.TokenHash == "secret-token" || session.TokenHash != buyer.HashToken("secret-token") || len(session.TokenHash) != 64 {
+	if session.TokenHash == "secret-token" || session.TokenHash != buyer.HashToken("secret-token") ||
+		len(session.TokenHash) != 64 {
 		t.Fatalf("хранится отпечаток, а не токен: %q", session.TokenHash)
 	}
 	if session.Expired(t0.Add(59*time.Minute)) || !session.Expired(t0.Add(time.Hour)) {

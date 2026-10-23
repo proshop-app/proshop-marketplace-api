@@ -30,8 +30,26 @@ type cartJSON struct {
 	ExpiresAt time.Time      `json:"expiresAt"`
 }
 
+type cartHandlers struct {
+	carts *appcart.Service
+}
+
+type addLineJSON struct {
+	OfferID  string `json:"offerId"`
+	Quantity int    `json:"quantity"`
+}
+
+type quantityJSON struct {
+	Quantity int `json:"quantity"`
+}
+
 func toCartJSON(state cart.State) (cartJSON, error) {
-	out := cartJSON{ID: string(state.ID), Lines: make([]cartLineJSON, 0, len(state.Lines)), Version: state.Version, ExpiresAt: state.ExpiresAt.UTC()}
+	out := cartJSON{
+		ID:        string(state.ID),
+		Lines:     make([]cartLineJSON, 0, len(state.Lines)),
+		Version:   state.Version,
+		ExpiresAt: state.ExpiresAt.UTC(),
+	}
 
 	total, err := cart.Restore(state).Total()
 	if err != nil {
@@ -53,25 +71,19 @@ func toCartJSON(state cart.State) (cartJSON, error) {
 		}
 
 		out.Lines = append(out.Lines, cartLineJSON{
-			OfferID: line.Offer.String(), TenantID: string(line.Offer.Tenant), ProductID: string(line.Offer.Product),
-			Name: line.Name, Quantity: line.Quantity, Price: line.Price.Kopecks(), Amount: amount.Kopecks(), Issue: issue, AddedAt: line.AddedAt.UTC(),
+			OfferID:   line.Offer.String(),
+			TenantID:  string(line.Offer.Tenant),
+			ProductID: string(line.Offer.Product),
+			Name:      line.Name,
+			Quantity:  line.Quantity,
+			Price:     line.Price.Kopecks(),
+			Amount:    amount.Kopecks(),
+			Issue:     issue,
+			AddedAt:   line.AddedAt.UTC(),
 		})
 	}
 
 	return out, nil
-}
-
-type cartHandlers struct {
-	carts *appcart.Service
-}
-
-type addLineJSON struct {
-	OfferID  string `json:"offerId"`
-	Quantity int    `json:"quantity"`
-}
-
-type quantityJSON struct {
-	Quantity int `json:"quantity"`
 }
 
 func (h *cartHandlers) respond(w http.ResponseWriter, r *http.Request, state cart.State, err error) {

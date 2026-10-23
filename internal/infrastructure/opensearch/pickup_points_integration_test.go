@@ -31,7 +31,17 @@ func pickupIndex(t *testing.T) *opensearch.PickupIndex {
 }
 
 func pickup(carrier delivery.Carrier, code, city string, lat, lon float64) delivery.PickupPoint {
-	p, err := delivery.NewPickupPoint(carrier, code, "Пункт "+code, "ул. Примерная, "+code, city, delivery.Location{Lat: lat, Lon: lon}, "Пн-Пт", nil, time.Now())
+	p, err := delivery.NewPickupPoint(
+		carrier,
+		code,
+		"Пункт "+code,
+		"ул. Примерная, "+code,
+		city,
+		delivery.Location{Lat: lat, Lon: lon},
+		"Пн-Пт",
+		nil,
+		time.Now(),
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -69,12 +79,18 @@ func TestPickupIndex(t *testing.T) {
 		t.Fatalf("пункты СДЭК в области, без пунктов другого перевозчика: %+v %v", found, err)
 	}
 
-	byCity, err := index.Search(ctx, ports.PickupPointQuery{Carrier: "cdek", Area: delivery.Area{City: "другой"}, Limit: 10})
+	byCity, err := index.Search(
+		ctx,
+		ports.PickupPointQuery{Carrier: "cdek", Area: delivery.Area{City: "другой"}, Limit: 10},
+	)
 	if err != nil || len(byCity) != 1 || byCity[0].Code != "B1" {
 		t.Fatalf("город без учёта регистра: %+v %v", byCity, err)
 	}
 
-	limited, _ := index.Search(ctx, ports.PickupPointQuery{Carrier: "cdek", Area: delivery.Area{City: "Город"}, Limit: 1})
+	limited, _ := index.Search(
+		ctx,
+		ports.PickupPointQuery{Carrier: "cdek", Area: delivery.Area{City: "Город"}, Limit: 1},
+	)
 	if len(limited) != 1 {
 		t.Fatalf("предел ответа: %d", len(limited))
 	}
@@ -89,7 +105,8 @@ func TestPickupIndex(t *testing.T) {
 	}
 	_ = index.RefreshPickups(ctx)
 
-	if found, _ := index.Search(ctx, ports.PickupPointQuery{Carrier: "cdek", Area: delivery.Area{BBox: box}, Limit: 10}); len(found) != 1 {
+	query := ports.PickupPointQuery{Carrier: "cdek", Area: delivery.Area{BBox: box}, Limit: 10}
+	if found, _ := index.Search(ctx, query); len(found) != 1 {
 		t.Fatalf("закрытый пункт ушёл из индекса: %+v", found)
 	}
 }

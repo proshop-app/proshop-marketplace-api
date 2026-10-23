@@ -15,13 +15,18 @@ var (
 	t2 = t0.Add(2 * time.Minute)
 )
 
+var visibleSeller = catalog.Seller{Slug: "shop", Name: "Магазин", Visible: true, CheckoutAvailable: true}
+
 func rub(kopecks int64) money.Money { return money.FromKopecks(kopecks) }
 
 func ptr(m money.Money) *money.Money { return &m }
 
 func snapshot(revision int64, at time.Time) catalog.Snapshot {
 	return catalog.Snapshot{
-		TenantID: "t1", ProductID: "p1", Revision: revision, At: at,
+		TenantID:  "t1",
+		ProductID: "p1",
+		Revision:  revision,
+		At:        at,
 		Card:      catalog.Card{Name: " Товар ", Visible: true, Tags: []string{"tag-1"}},
 		Price:     rub(10000),
 		Available: 5,
@@ -61,7 +66,8 @@ func TestProductDeleteAndResurrect(t *testing.T) {
 	}
 	product.MarkSaved()
 
-	if changed, err := product.Apply(catalog.Snapshot{TenantID: "t1", ProductID: "p1", Revision: 2, Deleted: true, At: t1}, t1); err != nil || !changed {
+	deletion := catalog.Snapshot{TenantID: "t1", ProductID: "p1", Revision: 2, Deleted: true, At: t1}
+	if changed, err := product.Apply(deletion, t1); err != nil || !changed {
 		t.Fatalf("удаление: changed=%v err=%v", changed, err)
 	}
 	if state := product.State(); !state.Deleted || state.Card.Name != "" || !state.Price.IsZero() {
@@ -112,7 +118,8 @@ func TestSignalsOrderedByTime(t *testing.T) {
 	if changed, _ := signals.ApplyStock(catalog.StockSignal{Available: 3, At: t1}, t1); changed {
 		t.Fatal("повтор не меняет сигналы")
 	}
-	if changed, _ := signals.ApplyStock(catalog.StockSignal{Available: -4, At: t2}, t2); !changed || signals.State().Available != 0 {
+	if changed, _ := signals.ApplyStock(catalog.StockSignal{Available: -4, At: t2}, t2); !changed ||
+		signals.State().Available != 0 {
 		t.Fatalf("отрицательный остаток приводится к нулю: %+v", signals.State())
 	}
 
@@ -122,15 +129,15 @@ func TestSignalsOrderedByTime(t *testing.T) {
 	if changed, _ := signals.ApplyPrice(catalog.PriceSignal{Price: rub(700), At: t0}, t1); changed {
 		t.Fatal("старая цена не применяется")
 	}
-	if _, err := signals.ApplyPrice(catalog.PriceSignal{Price: rub(-1), At: t2}, t2); !errors.Is(err, catalog.ErrInvalidSignal) {
+
+	_, err := signals.ApplyPrice(catalog.PriceSignal{Price: rub(-1), At: t2}, t2)
+	if !errors.Is(err, catalog.ErrInvalidSignal) {
 		t.Fatalf("ожидалось ErrInvalidSignal, получено %v", err)
 	}
 	if _, err := signals.ApplyStock(catalog.StockSignal{Available: 1}, t2); !errors.Is(err, catalog.ErrInvalidSignal) {
 		t.Fatalf("ожидалось ErrInvalidSignal, получено %v", err)
 	}
 }
-
-var visibleSeller = catalog.Seller{Slug: "shop", Name: "Магазин", Visible: true, CheckoutAvailable: true}
 
 func TestComposeOfferPrices(t *testing.T) {
 	s := snapshot(1, t1)
@@ -147,13 +154,15 @@ func TestComposeOfferPrices(t *testing.T) {
 
 	stalePrice := catalog.NewSignals("t1", "p1")
 	_, _ = stalePrice.ApplyPrice(catalog.PriceSignal{Price: rub(9000), At: t0}, t0)
-	if offer := catalog.ComposeOffer(product, stalePrice, visibleSeller); offer.BasePrice.Kopecks() != 10000 || offer.Price.Kopecks() != 8000 {
+	if offer := catalog.ComposeOffer(product, stalePrice, visibleSeller); offer.BasePrice.Kopecks() != 10000 ||
+		offer.Price.Kopecks() != 8000 {
 		t.Fatalf("сигнал старше снимка игнорируется: %+v", offer)
 	}
 
 	freshPrice := catalog.NewSignals("t1", "p1")
 	_, _ = freshPrice.ApplyPrice(catalog.PriceSignal{Price: rub(12000), At: t2}, t2)
-	if offer := catalog.ComposeOffer(product, freshPrice, visibleSeller); offer.BasePrice.Kopecks() != 12000 || offer.Price.Kopecks() != 12000 {
+	if offer := catalog.ComposeOffer(product, freshPrice, visibleSeller); offer.BasePrice.Kopecks() != 12000 ||
+		offer.Price.Kopecks() != 12000 {
 		t.Fatalf("свежий прайс отменяет промо снимка: %+v", offer)
 	}
 
@@ -218,7 +227,10 @@ func TestComposeOfferVisibility(t *testing.T) {
 		t.Fatalf("выключенный в магазине товар скрыт: %+v", offer)
 	}
 
-	deleted, _ := catalog.NewProduct(catalog.Snapshot{TenantID: "t1", ProductID: "p1", Revision: 1, Deleted: true, At: t1}, t1)
+	deleted, _ := catalog.NewProduct(
+		catalog.Snapshot{TenantID: "t1", ProductID: "p1", Revision: 1, Deleted: true, At: t1},
+		t1,
+	)
 	if offer := catalog.ComposeOffer(deleted, nil, visibleSeller); offer.Visible || offer.ID.String() != "t1~p1" {
 		t.Fatalf("удалённый товар скрыт: %+v", offer)
 	}
@@ -235,13 +247,18 @@ func TestTags(t *testing.T) {
 	}
 	tag.MarkSaved()
 
-	if changed, _ := tag.Apply(catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "x"}, t1); changed {
+	stale := catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "x"}
+	if changed, _ := tag.Apply(stale, t1); changed {
 		t.Fatal("та же ревизия не применяется")
 	}
-	if changed, err := tag.Apply(catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 2, Deleted: true}, t1); err != nil || !changed || tag.State().Value != "" {
+
+	deletion := catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 2, Deleted: true}
+	if changed, err := tag.Apply(deletion, t1); err != nil || !changed || tag.State().Value != "" {
 		t.Fatalf("удаление: changed=%v err=%v state=%+v", changed, err, tag.State())
 	}
-	if _, err := catalog.NewTag(catalog.TagSnapshot{TenantID: "t1", TagID: "tag-2", Revision: 1}, t0); !errors.Is(err, catalog.ErrInvalidSnapshot) {
+
+	_, err = catalog.NewTag(catalog.TagSnapshot{TenantID: "t1", TagID: "tag-2", Revision: 1}, t0)
+	if !errors.Is(err, catalog.ErrInvalidSnapshot) {
 		t.Fatalf("тег без значения: получено %v", err)
 	}
 

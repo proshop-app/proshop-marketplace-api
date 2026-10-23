@@ -28,12 +28,20 @@ func indexBody(shards, replicas int) map[string]any {
 		"mappings": map[string]any{
 			"dynamic": "strict",
 			"properties": map[string]any{
-				"offerId":     keyword,
-				"tenantId":    keyword,
-				"productId":   keyword,
-				"sellerSlug":  keyword,
-				"sellerName":  map[string]any{"type": "text", "analyzer": "offer_text", "fields": map[string]any{"raw": keyword}},
-				"name":        map[string]any{"type": "text", "analyzer": "offer_text", "fields": map[string]any{"raw": keyword}},
+				"offerId":    keyword,
+				"tenantId":   keyword,
+				"productId":  keyword,
+				"sellerSlug": keyword,
+				"sellerName": map[string]any{
+					"type":     "text",
+					"analyzer": "offer_text",
+					"fields":   map[string]any{"raw": keyword},
+				},
+				"name": map[string]any{
+					"type":     "text",
+					"analyzer": "offer_text",
+					"fields":   map[string]any{"raw": keyword},
+				},
 				"description": text,
 				"image":       stored,
 				"url":         stored,

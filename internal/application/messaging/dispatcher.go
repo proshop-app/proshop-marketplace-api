@@ -44,7 +44,12 @@ type Dispatcher struct {
 }
 
 // NewDispatcher — разбор outbox с обработчиками по видам задач.
-func NewDispatcher(queue ports.TaskQueue, clock ports.Clock, config DispatcherConfig, handlers map[string]Handler) *Dispatcher {
+func NewDispatcher(
+	queue ports.TaskQueue,
+	clock ports.Clock,
+	config DispatcherConfig,
+	handlers map[string]Handler,
+) *Dispatcher {
 	return &Dispatcher{queue: queue, clock: clock, handlers: handlers, config: config}
 }
 

@@ -85,7 +85,9 @@ type Cart struct {
 
 // New — пустая корзина.
 func New(id, buyerID ids.UUID, now time.Time, ttl time.Duration) *Cart {
-	return &Cart{state: State{ID: id, BuyerID: buyerID, Version: 1, CreatedAt: now, UpdatedAt: now, ExpiresAt: now.Add(ttl)}}
+	return &Cart{
+		state: State{ID: id, BuyerID: buyerID, Version: 1, CreatedAt: now, UpdatedAt: now, ExpiresAt: now.Add(ttl)},
+	}
 }
 
 // Restore поднимает корзину из хранилища.
