@@ -75,6 +75,8 @@ func writeErrorWithState(
 	}
 
 	switch detail.Code {
+	case "event.idempotency_key_reused":
+		detail.Code = "IDEMPOTENCY_KEY_REUSED"
 	case "checkout.delivery_changed":
 		detail.Code = "DELIVERY_CHANGED"
 	case "checkout.payment_order":

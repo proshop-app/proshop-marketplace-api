@@ -2,10 +2,13 @@ package messaging
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/event"
@@ -16,6 +19,9 @@ import (
 
 // TaskReplay — повтор исходного сообщения через существующий outbox.
 const TaskReplay = "messaging.event.replay"
+
+// DecisionTTL — срок повторного получения первоначального успешного ответа.
+const DecisionTTL = 24 * time.Hour
 
 // Events — операторские решения и надёжное выполнение повторов.
 type Events struct {
@@ -78,11 +84,41 @@ func (s *Events) Decide(
 	retry bool,
 	note string,
 ) (ports.ParkedEvent, error) {
+	return s.DecideWithKey(ctx, actor, id, expectedVersion, retry, note, "")
+}
+
+// DecideWithKey сохраняет успешный ответ атомарно; пустой ключ оставляет проверку версии.
+func (s *Events) DecideWithKey(
+	ctx context.Context,
+	actor operator.Principal,
+	id int64,
+	expectedVersion int64,
+	retry bool,
+	note string,
+	key string,
+) (ports.ParkedEvent, error) {
 	if err := operator.Require(actor); err != nil {
 		return ports.ParkedEvent{}, err
 	}
+	identity, _ := json.Marshal([]string{actor.ID, key})
+	storageKey := fmt.Sprintf("%x", sha256.Sum256(identity))
+	request, _ := json.Marshal([]any{id, expectedVersion, retry, note})
+	fingerprint := fmt.Sprintf("%x", sha256.Sum256(request))
 	var result ports.ParkedEvent
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		if key != "" {
+			cached, found, err := tx.Parked().Decision(ctx, storageKey, s.clock.Now())
+			if err != nil {
+				return err
+			}
+			if found {
+				if cached.Fingerprint != fingerprint {
+					return event.ErrKeyReused
+				}
+				result = cached.Result
+				return nil
+			}
+		}
 		stored, err := tx.Parked().Get(ctx, id)
 		if err != nil {
 			return err
@@ -118,6 +154,13 @@ func (s *Events) Decide(
 		}
 		stored.Control = aggregate.State()
 		result = stored
+		if key != "" {
+			return tx.Parked().SaveDecision(ctx, storageKey, ports.EventDecision{
+				Fingerprint: fingerprint,
+				Result:      result,
+				ExpiresAt:   now.Add(DecisionTTL),
+			})
+		}
 		return nil
 	})
 	if errors.Is(err, event.ErrConflict) {

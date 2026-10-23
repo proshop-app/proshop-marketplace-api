@@ -81,8 +81,18 @@ type ParkedEvent struct {
 	ParkedAt    time.Time
 }
 
+// EventDecision — сохранённый результат запроса, независимый от последующих переходов события.
+type EventDecision struct {
+	Fingerprint string
+	Result      ParkedEvent
+	ExpiresAt   time.Time
+}
+
 // ParkedEvents — отравленные сообщения.
 type ParkedEvents interface {
+	// Decision блокирует ключ до конца транзакции, в том числе если записи ещё нет.
+	Decision(ctx context.Context, key string, now time.Time) (EventDecision, bool, error)
+	SaveDecision(ctx context.Context, key string, decision EventDecision) error
 	// Park сохраняет сообщение; повтор той же позиции топика ничего не меняет.
 	Park(ctx context.Context, event ParkedEvent) error
 	Get(ctx context.Context, id int64) (ParkedEvent, error)

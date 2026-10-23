@@ -3,6 +3,7 @@ package fake
 import (
 	"context"
 	"sort"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/event"
@@ -50,4 +51,16 @@ func (p parked) Update(_ context.Context, aggregate *event.Event, failure string
 		return nil
 	}
 	return event.ErrConflict
+}
+
+// Decision читает ключ под общей блокировкой транзакции Store.
+func (p parked) Decision(_ context.Context, key string, now time.Time) (ports.EventDecision, bool, error) {
+	value, ok := p.d.decisions[key]
+	return value, ok && now.Before(value.ExpiresAt), nil
+}
+
+// SaveDecision фиксирует снимок вместе с решением.
+func (p parked) SaveDecision(_ context.Context, key string, decision ports.EventDecision) error {
+	p.d.decisions[key] = decision
+	return nil
 }

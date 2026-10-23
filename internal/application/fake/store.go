@@ -49,6 +49,7 @@ type OutboxRow struct {
 }
 
 type data struct {
+	decisions    map[string]ports.EventDecision
 	taxonomy     taxonomy.Definition
 	participants map[ids.TenantID]participant.State
 	tenants      map[ids.TenantID]participant.TenantState
@@ -89,6 +90,7 @@ type Store struct {
 func (d *data) clone() *data {
 	return &data{
 		taxonomy:     d.taxonomy,
+		decisions:    maps.Clone(d.decisions),
 		participants: maps.Clone(d.participants),
 		tenants:      maps.Clone(d.tenants),
 		products:     maps.Clone(d.products),
@@ -111,6 +113,7 @@ func (d *data) clone() *data {
 // NewStore — пустое хранилище.
 func NewStore() *Store {
 	return &Store{data: &data{
+		decisions:    map[string]ports.EventDecision{},
 		participants: map[ids.TenantID]participant.State{},
 		tenants:      map[ids.TenantID]participant.TenantState{},
 		products:     map[productKey]catalog.ProductState{},

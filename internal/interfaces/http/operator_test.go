@@ -21,13 +21,16 @@ const (
 	eventPath        = "/api/v1/operator/events/1"
 )
 
-func operatorCall(t *testing.T, e *env, method, path, body, cookie, origin string) response {
+func operatorCall(t *testing.T, e *env, method, path, body, cookie, origin string, key ...string) response {
 	t.Helper()
 	req, err := http.NewRequest(method, e.server.URL+path, strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if len(key) > 0 {
+		req.Header.Set("Idempotency-Key", key[0])
+	}
 	req.Header.Set("Origin", origin)
 	req.Header.Set("X-Requested-With", "KvazarOperator")
 	if cookie != "" {
@@ -177,3 +180,74 @@ func TestOperatorCookieRoutesAndCSRF(t *testing.T) {
 }
 
 func fmtBody(body map[string]any) string { raw, _ := json.Marshal(body); return string(raw) }
+
+func TestOperatorDecisionIdempotency(t *testing.T) {
+	for _, action := range []string{"retry", "resolve"} {
+		t.Run(action, func(t *testing.T) {
+			e := newEnv(t)
+			origin := "https://admin.example"
+			login := operatorCall(
+				t,
+				e,
+				"POST",
+				sessionPath,
+				`{"email":"op@example.test","password":"password"}`,
+				"",
+				origin,
+			)
+			cookie := (&http.Response{Header: login.header}).Cookies()[0]
+			if err := messaging.NewParker(e.store).Park(context.Background(), ports.ParkedEvent{
+				Topic:    "topic",
+				TenantID: "t1",
+				ParkedAt: t0,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			call := func(body string) response {
+				return operatorCall(
+					t,
+					e,
+					"POST",
+					eventPath+"/"+action,
+					body,
+					cookie.Name+"="+cookie.Value,
+					origin,
+					"decision-key",
+				)
+			}
+			body := `{"expectedVersion":1,"note":"исправлено"}`
+			first := call(body)
+			if first.status != http.StatusOK {
+				t.Fatal(first)
+			}
+			if action == "retry" {
+				row := e.store.OutboxRows()[0]
+				service := messaging.NewEvents(e.store, e.clock, &fake.Replay{})
+				if err := service.HandleTask(context.Background(), ports.Task{Payload: row.Payload}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			again := call(body)
+			if again.status != http.StatusOK || fmtBody(again.body) != fmtBody(first.body) {
+				t.Fatal("повтор должен вернуть первоначальный снимок", first, again)
+			}
+			for _, changed := range []string{
+				`{"expectedVersion":1,"note":"другая заметка"}`,
+				`{"expectedVersion":2,"note":"исправлено"}`,
+			} {
+				reused := call(changed)
+				if reused.status != http.StatusConflict ||
+					reused.body["error"].(map[string]any)["code"] != "IDEMPOTENCY_KEY_REUSED" {
+					t.Fatal(reused)
+				}
+			}
+			expectedTasks := 0
+			if action == "retry" {
+				expectedTasks = 1
+			}
+			if len(e.store.OutboxRows()) != expectedTasks {
+				t.Fatal("повтор создал задачу")
+			}
+		})
+	}
+}

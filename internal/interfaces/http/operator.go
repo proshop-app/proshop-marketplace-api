@@ -233,7 +233,15 @@ func (h *operatorHandlers) decide(w http.ResponseWriter, r *http.Request, retry 
 		writeError(w, r, ErrInvalidBody)
 		return
 	}
-	result, err := h.events.Decide(r.Context(), principalFrom(r), id, body.ExpectedVersion, retry, body.Note)
+	result, err := h.events.DecideWithKey(
+		r.Context(),
+		principalFrom(r),
+		id,
+		body.ExpectedVersion,
+		retry,
+		body.Note,
+		r.Header.Get("Idempotency-Key"),
+	)
 	if errors.Is(err, event.ErrConflict) {
 		current := eventJSON(result)
 		writeErrorWithEvent(w, r, err, &current)

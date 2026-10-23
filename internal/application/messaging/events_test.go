@@ -3,6 +3,8 @@ package messaging_test
 import (
 	"context"
 	"errors"
+	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -148,5 +150,64 @@ func TestReplayTaskAndStaleDecisionsAreBoundToVersion(t *testing.T) {
 	if err != nil || page.Total != 1 || page.Items[0].Control.Version != 5 ||
 		page.Items[0].Control.OperatorID != second.ID || len(replay.Events) != 3 {
 		t.Fatal(page, err, replay.Events)
+	}
+}
+
+func TestDecisionKeySnapshotExpiryAndRollback(t *testing.T) {
+	for _, retry := range []bool{true, false} {
+		t.Run(map[bool]string{true: "retry", false: "resolve"}[retry], func(t *testing.T) {
+			ctx := context.Background()
+			store := fake.NewStore()
+			clock := fake.NewClock(time.Now())
+			service := messaging.NewEvents(store, clock, &fake.Replay{})
+			actor := operator.Principal{ID: "op1", Role: operator.Role}
+			if err := messaging.NewParker(store).Park(ctx, ports.ParkedEvent{
+				Topic:    "topic",
+				ParkedAt: clock.Now(),
+			}); err != nil {
+				t.Fatal(err)
+			}
+			decide := func(note string) (ports.ParkedEvent, error) {
+				return service.DecideWithKey(ctx, actor, 1, 1, retry, note, "key")
+			}
+			store.FailCommit = errors.New("commit")
+			if _, err := decide("откат"); err == nil {
+				t.Fatal("ожидался откат")
+			}
+			store.FailCommit = nil
+			first, err := decide("решение")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if retry {
+				row := store.OutboxRows()[0]
+				if err := service.HandleTask(ctx, ports.Task{Payload: row.Payload}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var wg sync.WaitGroup
+			for i := 0; i < 8; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					again, err := decide("решение")
+					if err != nil || !reflect.DeepEqual(first, again) {
+						t.Error(first, again, err)
+					}
+				}()
+			}
+			wg.Wait()
+			if _, err := decide("другое тело"); !errors.Is(err, event.ErrKeyReused) {
+				t.Fatal(err)
+			}
+			_, err = service.DecideWithKey(ctx, actor, 1, 1, !retry, "решение", "key")
+			if !errors.Is(err, event.ErrKeyReused) {
+				t.Fatal("другое действие", err)
+			}
+			clock.Advance(messaging.DecisionTTL)
+			if _, err := decide("решение"); !errors.Is(err, event.ErrConflict) {
+				t.Fatal("ключ истёк", err)
+			}
+		})
 	}
 }
