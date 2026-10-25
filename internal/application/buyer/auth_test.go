@@ -17,13 +17,14 @@ var t0 = time.Date(2026, 10, 24, 10, 0, 0, 0, time.UTC)
 type env struct {
 	store    *fake.Store
 	calls    *fake.Calls
-	sessions *fake.Sessions
+	sessions *fake.IdentityTokens
 	clock    *fake.Clock
 	auth     *appbuyer.Auth
 }
 
 func setup() *env {
-	e := &env{store: fake.NewStore(), calls: fake.NewCalls(), sessions: fake.NewSessions(), clock: fake.NewClock(t0)}
+	e := &env{store: fake.NewStore(), calls: fake.NewCalls(), clock: fake.NewClock(t0)}
+	e.sessions = fake.NewIdentityTokens(e.clock)
 	e.auth = appbuyer.NewAuth(
 		e.store,
 		e.calls,
@@ -94,11 +95,14 @@ func TestLoginByCall(t *testing.T) {
 		t.Fatalf("тот же телефон — тот же покупатель: %+v %v", second, err)
 	}
 
-	if err := e.auth.Logout(ctx, result.Session.Token); err != nil {
+	if err := e.auth.Logout(ctx, result.Session.Key); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.auth.Authenticate(ctx, result.Session.Token); !errors.Is(err, buyer.ErrSessionNotFound) {
-		t.Fatalf("после выхода сессии нет: %v", err)
+	if _, err := e.auth.Authenticate(ctx, result.Session.Token); err != nil {
+		t.Fatalf("JWT после выхода действует до exp: %v", err)
+	}
+	if _, err := e.auth.Refresh(ctx, result.Session.Key); !errors.Is(err, buyer.ErrSessionNotFound) {
+		t.Fatalf("после выхода refresh закрыт: %v", err)
 	}
 	if me, err := e.auth.Me(ctx, second.Session.Buyer.ID); err != nil || me.Phone != "79251234567" {
 		t.Fatalf("покупатель сессии: %+v %v", me, err)

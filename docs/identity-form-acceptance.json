@@ -1,0 +1,134 @@
+{
+  "buyer": {
+    "login": "PASS",
+    "cookieFlags": "HttpOnly Secure Strict Path=/, access JWT and opaque key; no exp cookie",
+    "silentReload": "PASS",
+    "refreshThenProfile": "PASS",
+    "logout": "PASS",
+    "calls": [
+      {
+        "method": "POST",
+        "path": "/api/account/call",
+        "status": 201
+      },
+      {
+        "method": "POST",
+        "path": "/api/account/check",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/account/me",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/account/refresh",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/account/me",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/account/profile",
+        "status": 204
+      },
+      {
+        "method": "GET",
+        "path": "/api/account/me",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/account/refresh",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/account/me",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/account/profile",
+        "status": 204
+      },
+      {
+        "method": "GET",
+        "path": "/api/account/me",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/account/refresh",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/account/me",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/account/profile",
+        "status": 204
+      },
+      {
+        "method": "POST",
+        "path": "/api/account/logout",
+        "status": 204
+      }
+    ]
+  },
+  "operator": {
+    "login": "PASS",
+    "silentReload": "PASS",
+    "refreshThenProfile": "PASS",
+    "logout": "PASS",
+    "calls": [
+      {
+        "method": "GET",
+        "path": "/api/v1/operator/session",
+        "status": 401
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/operator/session",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/operator/session/refresh",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/operator/session",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/operator/session",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/operator/session/refresh",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/operator/session",
+        "status": 200
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/operator/session",
+        "status": 204
+      }
+    ]
+  }
+}

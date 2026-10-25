@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
+
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
@@ -93,6 +95,23 @@ func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
 		t.Fatalf("возврат не подтверждает оплату: %+v", returned)
 	}
 	e.clock.Advance(16 * time.Minute)
+	renewed := e.session(
+		t,
+		http.MethodPost,
+		"/api/v1/auth/refresh",
+		"",
+		"",
+		"Cookie",
+		transport.RefreshCookie+"="+e.refreshKey,
+	)
+	if renewed.status != http.StatusOK {
+		t.Fatalf("обновление access перед следующим запросом: %+v", renewed)
+	}
+	for _, item := range (&http.Response{Header: renewed.header}).Cookies() {
+		if item.Name == transport.SessionCookie {
+			cookie = item.Value
+		}
+	}
 	operator := e.call(t, http.MethodGet, "/api/v1/operator/checkouts?stuck=true", "", true)
 	items, _ := operator.body["items"].([]any)
 	if operator.status != http.StatusOK || len(items) != 1 {

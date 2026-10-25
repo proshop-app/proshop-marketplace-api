@@ -24,6 +24,16 @@ tags:
   - name: checkout
   - name: operator
 paths:
+  /api/v1/operator/session/refresh:
+    post:
+      operationId: refreshOperatorAccess
+      summary: Обновить JWT оператора по отдельной HttpOnly cookie
+      responses:
+        "200":
+          description: Текущий оператор и exp access JWT
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/operator/session:
     post:
       tags:
@@ -619,6 +629,22 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/auth/refresh:
+    post:
+      operationId: refreshBuyerAccess
+      summary: Обновить JWT по HttpOnly cookie __Host-mp_key
+      description: Refresh-токен хранится только на backend. Access JWT не позволяет продлевать доступ.
+      responses:
+        "200":
+          description: Обновлённый профиль и exp; JWT устанавливается в защищённой cookie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Buyer"
+        "401":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
   /api/v1/auth/logout:
     post:
       tags: [auth]
@@ -1115,7 +1141,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: __Host-mp_session
+      name: __Host-mp_access
       description: Сессия покупателя после входа по звонку.
     sessionBearer:
       type: http
@@ -1512,6 +1538,7 @@ components:
       required: [id, phone]
       properties:
         id: { type: string, format: uuid }
+        exp: { type: integer, format: int64, description: Срок access JWT в Unix-секундах }
         phone: { type: string, description: Цифры в международном формате без плюса }
     CartLine:
       type: object

@@ -6,7 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"errors"
+
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/identity"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 )
 
@@ -19,7 +22,7 @@ type Config struct {
 
 // Auth — сессии оператора; абсолютный срок не продлевается чтением.
 type Auth struct {
-	sessions  ports.OperatorSessions
+	tokens    ports.IdentityTokens
 	limiter   ports.RateLimiter
 	passwords ports.PasswordVerifier
 	ids       ports.IDs
@@ -30,7 +33,7 @@ type Auth struct {
 
 // NewAuth собирает вход через порты, без зависимости от Redis и Argon2.
 func NewAuth(
-	sessions ports.OperatorSessions,
+	tokens ports.IdentityTokens,
 	limiter ports.RateLimiter,
 	passwords ports.PasswordVerifier,
 	ids ports.IDs,
@@ -38,7 +41,7 @@ func NewAuth(
 	cfg Config,
 ) *Auth {
 	return &Auth{
-		sessions:  sessions,
+		tokens:    tokens,
 		limiter:   limiter,
 		passwords: passwords,
 		ids:       ids,
@@ -50,7 +53,10 @@ func NewAuth(
 
 // Login ограничивает работу Argon2 по адресу, учётной записи и всему сервису.
 // Возвращённый токен предназначен только для Set-Cookie.
-func (a *Auth) Login(ctx context.Context, email, password, ip, previous string) (operator.Principal, string, error) {
+func (a *Auth) Login(
+	ctx context.Context,
+	email, password, ip, previous string,
+) (operator.Principal, ports.IdentityAccess, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	for _, limit := range []struct {
 		key   string
@@ -62,73 +68,116 @@ func (a *Auth) Login(ctx context.Context, email, password, ip, previous string) 
 	} {
 		allowed, _, err := a.limiter.Allow(ctx, "operator:"+limit.key, limit.count, 10*time.Minute)
 		if err != nil {
-			return operator.Principal{}, "", err
+			return operator.Principal{}, ports.IdentityAccess{}, err
 		}
 		if !allowed {
-			return operator.Principal{}, "", operator.ErrLimited
+			return operator.Principal{}, ports.IdentityAccess{}, operator.ErrLimited
 		}
 	}
 	if a.cfg.PasswordHash == "" || len(password) == 0 || len(password) > 1024 || len(email) > 254 {
-		return operator.Principal{}, "", operator.ErrUnauthorized
+		return operator.Principal{}, ports.IdentityAccess{}, operator.ErrUnauthorized
 	}
 	// Неизвестный логин требует той же работы Argon2, что и неверный пароль.
 	select {
 	case a.slots <- struct{}{}:
 	case <-ctx.Done():
-		return operator.Principal{}, "", ctx.Err()
+		return operator.Principal{}, ports.IdentityAccess{}, ctx.Err()
 	}
 	valid := a.passwords.Verify(password, a.cfg.PasswordHash)
 	<-a.slots
 	if !valid || email != strings.ToLower(a.cfg.Principal.Email) {
-		return operator.Principal{}, "", operator.ErrUnauthorized
+		return operator.Principal{}, ports.IdentityAccess{}, operator.ErrUnauthorized
 	}
 	if err := operator.Require(a.cfg.Principal); err != nil {
-		return operator.Principal{}, "", err
+		return operator.Principal{}, ports.IdentityAccess{}, err
 	}
 	if previous != "" {
 		if err := a.Logout(ctx, previous); err != nil {
-			return operator.Principal{}, "", err
+			return operator.Principal{}, ports.IdentityAccess{}, err
 		}
 	}
-	token := a.ids.NewToken()
-	session := operator.Session{
-		TokenHash:      operator.Hash(token),
-		Principal:      a.cfg.Principal,
-		CredentialHash: operator.Hash(a.cfg.PasswordHash),
-		ExpiresAt:      a.clock.Now().Add(a.cfg.SessionTTL),
+	access, err := a.tokens.Open(ctx, credentialSubject(a.cfg))
+	if err != nil {
+		return operator.Principal{}, ports.IdentityAccess{}, err
 	}
-	if err := a.sessions.Save(ctx, session); err != nil {
-		return operator.Principal{}, "", err
-	}
-	return session.Principal, token, nil
+
+	return a.cfg.Principal, access, nil
 }
 
 // Current проверяет срок, отзыв конфигурацией и актуальную роль на каждом запросе.
 func (a *Auth) Current(ctx context.Context, token string) (operator.Principal, error) {
-	if a == nil || token == "" {
+	if a == nil || a.tokens == nil || a.cfg.PasswordHash == "" || token == "" {
 		return operator.Principal{}, operator.ErrUnauthorized
 	}
-	session, err := a.sessions.Get(ctx, operator.Hash(token))
+	access, err := a.tokens.Authenticate(ctx, token)
 	if err != nil {
+		if errors.Is(err, identity.ErrUnauthorized) || errors.Is(err, identity.ErrAccessExpired) {
+			return operator.Principal{}, operator.ErrUnauthorized
+		}
+
 		return operator.Principal{}, err
 	}
-	if !a.clock.Now().Before(session.ExpiresAt) ||
-		session.CredentialHash != operator.Hash(a.cfg.PasswordHash) || session.Principal != a.cfg.Principal {
-		return operator.Principal{}, operator.ErrUnauthorized
-	}
-	if err := operator.Require(session.Principal); err != nil {
-		return operator.Principal{}, err
-	}
-	return session.Principal, nil
+
+	return a.principal(access)
 }
 
-// Logout отзывает сессию; повторный выход также успешен.
-func (a *Auth) Logout(ctx context.Context, token string) error {
-	if a == nil || token == "" {
+// Profile разрешает silent refresh только для загрузки профиля оператора.
+func (a *Auth) Profile(ctx context.Context, token, key string) (operator.Principal, ports.IdentityAccess, error) {
+	if a == nil || a.tokens == nil || a.cfg.PasswordHash == "" {
+		return operator.Principal{}, ports.IdentityAccess{}, operator.ErrUnauthorized
+	}
+
+	access, err := a.tokens.Bootstrap(ctx, token, key)
+	if err != nil {
+		return operator.Principal{}, ports.IdentityAccess{}, err
+	}
+
+	principal, err := a.principal(access)
+	if err != nil && access.Key != "" {
+		_ = a.tokens.Logout(ctx, access.Key)
+	}
+
+	return principal, access, err
+}
+
+// Refresh выдаёт новый access, проверяя живые полномочия конфигурации.
+func (a *Auth) Refresh(ctx context.Context, key string) (operator.Principal, ports.IdentityAccess, error) {
+	if a == nil || a.tokens == nil || a.cfg.PasswordHash == "" {
+		return operator.Principal{}, ports.IdentityAccess{}, operator.ErrUnauthorized
+	}
+
+	access, err := a.tokens.Refresh(ctx, key)
+	if err != nil {
+		return operator.Principal{}, ports.IdentityAccess{}, err
+	}
+
+	principal, err := a.principal(access)
+	if err != nil && access.Key != "" {
+		_ = a.tokens.Logout(ctx, access.Key)
+	}
+
+	return principal, access, err
+}
+
+func (a *Auth) principal(access ports.IdentityAccess) (operator.Principal, error) {
+	if access.LocalID != credentialSubject(a.cfg) || a.cfg.PasswordHash == "" {
+		return operator.Principal{}, operator.ErrUnauthorized
+	}
+	if err := operator.Require(a.cfg.Principal); err != nil {
+		return operator.Principal{}, err
+	}
+
+	return a.cfg.Principal, nil
+}
+
+// Logout отзывает только refresh; JWT проверяется stateless до exp.
+func (a *Auth) Logout(ctx context.Context, key string) error {
+	if a == nil || key == "" {
 		return nil
 	}
-	return a.sessions.Delete(ctx, operator.Hash(token))
+
+	return a.tokens.Logout(ctx, key)
 }
 
-// TTL — срок cookie совпадает со сроком серверной сессии.
+// TTL — абсолютное окно refresh оператора.
 func (a *Auth) TTL() time.Duration { return a.cfg.SessionTTL }

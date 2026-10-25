@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	operatorCookie            = "__Host-kvazar_operator"
-	keyOperator    contextKey = 100
+	operatorCookie               = "__Host-kvazar_operator"
+	operatorKeyCookie            = "__Host-kvazar_operator_key"
+	keyOperator       contextKey = 100
 )
 
 type operatorHandlers struct {
@@ -27,6 +28,11 @@ type operatorHandlers struct {
 	events     *messaging.Events
 	origin     string
 	trustProxy bool
+}
+
+type operatorProfileJSON struct {
+	operator.Principal
+	Exp int64 `json:"exp"`
 }
 
 type loginOperatorJSON struct {
@@ -114,12 +120,45 @@ func (h *operatorHandlers) only(machine string, next http.HandlerFunc) http.Hand
 
 func (h *operatorHandlers) session(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	principal, err := h.auth.Current(r.Context(), operatorToken(r))
-	if err != nil {
-		writeError(w, r, err)
+	if !h.profileAllowed(w, r) {
 		return
 	}
-	writeJSON(w, http.StatusOK, principal)
+
+	principal, access, err := h.auth.Profile(r.Context(), operatorToken(r), operatorKey(r))
+	if err != nil {
+		writeError(w, r, err)
+
+		return
+	}
+
+	if access.Key != "" {
+		setOperatorCookies(w, access)
+	}
+
+	writeJSON(w, http.StatusOK, operatorProfileJSON{
+		Principal: principal,
+		Exp:       access.AccessExpiresAt.Unix(),
+	})
+}
+
+func (h *operatorHandlers) refresh(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if !h.csrf(w, r) {
+		return
+	}
+
+	principal, access, err := h.auth.Refresh(r.Context(), operatorKey(r))
+	if err != nil {
+		writeError(w, r, err)
+
+		return
+	}
+
+	setOperatorCookies(w, access)
+	writeJSON(w, http.StatusOK, operatorProfileJSON{
+		Principal: principal,
+		Exp:       access.AccessExpiresAt.Unix(),
+	})
 }
 
 func (h *operatorHandlers) login(w http.ResponseWriter, r *http.Request) {
@@ -136,19 +175,22 @@ func (h *operatorHandlers) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	principal, token, err := h.auth.Login(
+	principal, access, err := h.auth.Login(
 		r.Context(),
 		body.Email,
 		body.Password,
 		clientIP(r, h.trustProxy),
-		operatorToken(r),
+		operatorKey(r),
 	)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	setOperatorCookie(w, token, int(h.auth.TTL()/time.Second))
-	writeJSON(w, http.StatusOK, principal)
+	setOperatorCookies(w, access)
+	writeJSON(w, http.StatusOK, operatorProfileJSON{
+		Principal: principal,
+		Exp:       access.AccessExpiresAt.Unix(),
+	})
 }
 
 func (h *operatorHandlers) logout(w http.ResponseWriter, r *http.Request) {
@@ -156,28 +198,15 @@ func (h *operatorHandlers) logout(w http.ResponseWriter, r *http.Request) {
 	if !h.csrf(w, r) {
 		return
 	}
-	if _, err := h.auth.Current(r.Context(), operatorToken(r)); err != nil {
+	err := h.auth.Logout(r.Context(), operatorKey(r))
+	clearOperatorCookies(w)
+	if err != nil {
 		writeError(w, r, err)
-		return
-	}
-	if err := h.auth.Logout(r.Context(), operatorToken(r)); err != nil {
-		writeError(w, r, err)
-		return
-	}
-	setOperatorCookie(w, "", -1)
-	w.WriteHeader(http.StatusNoContent)
-}
 
-func setOperatorCookie(w http.ResponseWriter, token string, maxAge int) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     operatorCookie,
-		Value:    token,
-		Path:     "/",
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   maxAge,
-	})
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func principalFrom(r *http.Request) operator.Principal {

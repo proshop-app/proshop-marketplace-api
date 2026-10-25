@@ -86,6 +86,7 @@ func routes(deps Deps) []route {
 
 	return []route{
 		{http.MethodPost, "/api/v1/operator/session", gateway.login},
+		{http.MethodPost, "/api/v1/operator/session/refresh", gateway.refresh},
 		{http.MethodGet, "/api/v1/operator/session", gateway.session},
 		{http.MethodDelete, "/api/v1/operator/session", gateway.logout},
 		{http.MethodGet, "/api/v1/operator/events", operator(gateway.listEvents)},
@@ -115,8 +116,9 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/auth/call", auth.start},
 		{http.MethodPost, "/api/v1/auth/call/check", auth.check},
 		{http.MethodPost, "/api/v1/auth/logout", auth.logout},
+		{http.MethodPost, "/api/v1/auth/refresh", auth.refresh},
 		{http.MethodPost, "/api/v1/auth/webhooks/smsru", auth.smsruWebhook},
-		{http.MethodGet, "/api/v1/me", signedIn(auth.me)},
+		{http.MethodGet, "/api/v1/me", auth.me},
 
 		{http.MethodGet, "/api/v1/cart", signedIn(carts.get)},
 		{http.MethodPost, "/api/v1/cart/lines", signedIn(carts.add)},

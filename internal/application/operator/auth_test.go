@@ -13,77 +13,69 @@ import (
 
 func TestSessionRotationExpiryRevocationAndRole(t *testing.T) {
 	ctx := context.Background()
-	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
-	clock := fake.NewClock(now)
-	sessions := fake.NewOperatorSessions()
+	clock := fake.NewClock(time.Now())
+	tokens := fake.NewIdentityTokens(clock)
 	cfg := appoperator.Config{
-		Principal:    operator.Principal{ID: "op1", Email: "op@example.test", Name: "Оператор", Role: operator.Role},
+		Principal: operator.Principal{
+			ID:    "op1",
+			Email: "op@example.test",
+			Name:  "Оператор",
+			Role:  operator.Role,
+		},
 		PasswordHash: "fake:secret",
 		SessionTTL:   time.Hour,
 	}
-	auth := appoperator.NewAuth(sessions, fake.NewLimiter(), fake.Passwords{}, &fake.IDs{}, clock, cfg)
+	auth := appoperator.NewAuth(tokens, fake.NewLimiter(), fake.Passwords{}, &fake.IDs{}, clock, cfg)
 	if _, _, err := auth.Login(ctx, cfg.Principal.Email, "bad", "ip", ""); !errors.Is(err, operator.ErrUnauthorized) {
 		t.Fatal(err)
 	}
-	principal, token, err := auth.Login(ctx, cfg.Principal.Email, "secret", "ip", "")
-	if err != nil || principal != cfg.Principal || token == "" {
+	principal, access, err := auth.Login(ctx, cfg.Principal.Email, "secret", "ip", "")
+	if err != nil || principal != cfg.Principal || access.Token == "" || access.Key == "" {
 		t.Fatalf("вход: %+v %v", principal, err)
 	}
-	stored, err := sessions.Get(ctx, operator.Hash(token))
-	if err != nil || stored.TokenHash == token {
-		t.Fatal("в хранилище нужен отпечаток", err)
+	_, rotated, err := auth.Login(ctx, cfg.Principal.Email, "secret", "ip", access.Key)
+	if err != nil || rotated.Token == access.Token {
+		t.Fatal("повторный вход", err)
 	}
-	_, rotated, err := auth.Login(ctx, cfg.Principal.Email, "secret", "ip", token)
-	if err != nil || rotated == token {
-		t.Fatal("ротация", err)
+	if _, _, err := auth.Refresh(ctx, access.Key); err == nil {
+		t.Fatal("предыдущий refresh не отозван")
 	}
-	if _, err := auth.Current(ctx, token); !errors.Is(err, operator.ErrUnauthorized) {
-		t.Fatal("старый токен", err)
+	if _, err := auth.Current(ctx, access.Token); err != nil {
+		t.Fatal("старый JWT действует до exp", err)
 	}
-	if _, err := auth.Current(ctx, rotated); err != nil {
-		t.Fatal(err)
+	clock.Advance(6 * time.Minute)
+	if _, err := auth.Current(ctx, rotated.Token); !errors.Is(err, operator.ErrUnauthorized) {
+		t.Fatal("срок JWT", err)
 	}
-	clock.Advance(time.Hour)
-	if _, err := auth.Current(ctx, rotated); !errors.Is(err, operator.ErrUnauthorized) {
-		t.Fatal("срок", err)
-	}
-	_, token, err = auth.Login(ctx, cfg.Principal.Email, "secret", "ip", "")
+	_, renewed, err := auth.Profile(ctx, rotated.Token, rotated.Key)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("silent profile", err)
 	}
 	cfg.PasswordHash = "fake:new-secret"
-	changed := appoperator.NewAuth(sessions, fake.NewLimiter(), fake.Passwords{}, &fake.IDs{}, clock, cfg)
-	if _, err := changed.Current(ctx, token); !errors.Is(err, operator.ErrUnauthorized) {
-		t.Fatal("отзыв", err)
+	changed := appoperator.NewAuth(tokens, fake.NewLimiter(), fake.Passwords{}, &fake.IDs{}, clock, cfg)
+	if _, err := changed.Current(ctx, renewed.Token); !errors.Is(err, operator.ErrUnauthorized) {
+		t.Fatal("смена пароля отзывает старый local subject", err)
 	}
-	if err := auth.Logout(ctx, token); err != nil {
+	if err := auth.Logout(ctx, renewed.Key); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := auth.Current(ctx, token); !errors.Is(err, operator.ErrUnauthorized) {
-		t.Fatal("выход", err)
+	if _, _, err := auth.Refresh(ctx, renewed.Key); err == nil {
+		t.Fatal("refresh после выхода")
+	}
+	if _, err := auth.Current(ctx, renewed.Token); err != nil {
+		t.Fatal("JWT после выхода действует до exp", err)
 	}
 	cfg.Principal.Role = "viewer"
-	wrongRole := appoperator.NewAuth(sessions, fake.NewLimiter(), fake.Passwords{}, &fake.IDs{}, clock, cfg)
+	wrongRole := appoperator.NewAuth(tokens, fake.NewLimiter(), fake.Passwords{}, &fake.IDs{}, clock, cfg)
 	_, _, err = wrongRole.Login(ctx, cfg.Principal.Email, "new-secret", "ip", "")
 	if !errors.Is(err, operator.ErrForbidden) {
 		t.Fatal("роль", err)
-	}
-	if err := sessions.Save(ctx, operator.Session{
-		TokenHash:      operator.Hash("viewer-token"),
-		Principal:      cfg.Principal,
-		CredentialHash: operator.Hash(cfg.PasswordHash),
-		ExpiresAt:      clock.Now().Add(time.Hour),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := wrongRole.Current(ctx, "viewer-token"); !errors.Is(err, operator.ErrForbidden) {
-		t.Fatal(err)
 	}
 }
 
 func TestLoginLimits(t *testing.T) {
 	auth := appoperator.NewAuth(
-		fake.NewOperatorSessions(),
+		fake.NewIdentityTokens(fake.NewClock(time.Now())),
 		fake.NewLimiter(),
 		fake.Passwords{},
 		&fake.IDs{},

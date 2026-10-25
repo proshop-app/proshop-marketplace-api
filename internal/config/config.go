@@ -21,6 +21,7 @@ const (
 
 // Config — настройки процесса маркетплейса.
 type Config struct {
+	Identity   Identity
 	HTTP       HTTP
 	Database   Database
 	OpenSearch OpenSearch
@@ -188,6 +189,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	r := reader{env: env}
 
 	cfg := Config{
+		Identity: r.identity(),
 		HTTP: HTTP{
 			Addr:            r.str("HTTP_ADDR", ":8080"),
 			ShutdownTimeout: r.duration("SHUTDOWN_TIMEOUT", 20*time.Second),
@@ -303,6 +305,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	}
 
 	r.validateOperator(cfg.Operator)
+	r.validateIdentityOperator(cfg)
 	return cfg, r.err()
 }
 

@@ -92,11 +92,14 @@ func (e *env) login(t *testing.T) string {
 
 	var cookie *http.Cookie
 	for _, c := range (&http.Response{Header: confirmed.header}).Cookies() {
+		if c.Name == transport.RefreshCookie {
+			e.refreshKey = c.Value
+		}
 		if c.Name == transport.SessionCookie {
 			cookie = c
 		}
 	}
-	if cookie == nil || !cookie.Secure || !cookie.HttpOnly || cookie.SameSite != http.SameSiteLaxMode ||
+	if cookie == nil || !cookie.Secure || !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode ||
 		cookie.Path != "/" {
 		t.Fatalf("кука __Host-: %+v", cookie)
 	}
@@ -132,8 +135,8 @@ func TestLoginFlow(t *testing.T) {
 	if out.status != http.StatusNoContent || !strings.Contains(out.header.Get("Set-Cookie"), "Max-Age=0") {
 		t.Fatalf("выход стирает куку: %+v", out)
 	}
-	if r := e.session(t, http.MethodGet, "/api/v1/me", "", token); r.status != http.StatusUnauthorized {
-		t.Fatalf("после выхода: %+v", r)
+	if r := e.session(t, http.MethodGet, "/api/v1/me", "", token); r.status != http.StatusOK {
+		t.Fatalf("скопированный JWT после выхода действует до exp: %+v", r)
 	}
 }
 

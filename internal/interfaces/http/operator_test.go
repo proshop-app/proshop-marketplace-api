@@ -70,15 +70,15 @@ func TestOperatorCookieRoutesAndCSRF(t *testing.T) {
 		t.Fatal(login)
 	}
 	cookies := (&http.Response{Header: login.header}).Cookies()
-	if len(cookies) != 1 {
+	if len(cookies) != 2 {
 		t.Fatal(cookies)
 	}
 	c := cookies[0]
 	if c.Name != "__Host-kvazar_operator" || !c.Secure || !c.HttpOnly || c.Domain != "" ||
-		c.Path != "/" || c.SameSite != http.SameSiteLaxMode || c.MaxAge != 3600 {
+		c.Path != "/" || c.SameSite != http.SameSiteStrictMode || (c.MaxAge <= 0 || c.MaxAge > 3600) {
 		t.Fatal(c)
 	}
-	cookie := c.Name + "=" + c.Value
+	cookie := c.Name + "=" + c.Value + "; " + cookies[1].Name + "=" + cookies[1].Value
 	if strings.Contains(fmtBody(login.body), c.Value) {
 		t.Fatal("токен попал в JSON")
 	}
@@ -171,7 +171,10 @@ func TestOperatorCookieRoutesAndCSRF(t *testing.T) {
 	if logout.status != http.StatusNoContent || !strings.Contains(logout.header.Get("Set-Cookie"), "Max-Age=0") {
 		t.Fatal(logout)
 	}
-	if r := call("GET", sessionPath, "", cookie); r.status != http.StatusUnauthorized {
+	if r := call("GET", sessionPath, "", ""); r.status != http.StatusUnauthorized {
+		t.Fatal(r)
+	}
+	if r := call("POST", sessionPath+"/refresh", "", cookie); r.status != http.StatusUnauthorized {
 		t.Fatal(r)
 	}
 	if r := e.call(t, "GET", "/api/v1/operator/events", "", true); r.status != http.StatusOK {

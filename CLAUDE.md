@@ -131,8 +131,10 @@ domain ← application ← interfaces, infrastructure        сборка гра
 
 - Вход — звонок на номер sms.ru; в разработке — песочница
   (`SMSRU_MODE=sandbox`), она подтверждает любой номер сама.
-- Сессия — непрозрачный токен: в Redis только его `sha256`, в ответах токена
-  нет, кука `__Host-mp_session`, для серверного рендера — `Bearer`.
+- Access — JWT identity-hub в `__Host-mp_access`; обычная проверка без Redis/userinfo.
+  В Redis только зашифрованный refresh, браузерный указатель — `__Host-mp_key`.
+  Оператор использует отдельный client realm platform. Полный контракт —
+  `docs/identity-jwt-cookies.md`. Старые opaque-токены не принимаются.
 - Лимиты входа — на номер и на адрес клиента, окно в Redis; превышение —
   `too_many_requests` с подсказкой, когда повторить.
 - `buyerId` лежит в контексте запроса и попадает в журнал.

@@ -14,7 +14,11 @@ import (
 )
 
 // SessionCookie — кука сессии покупателя: только HTTPS, только этот хост, без доступа из JS.
-const SessionCookie = "__Host-mp_session"
+const (
+	SessionCookie      = "__Host-mp_access"
+	RefreshCookie      = "__Host-mp_key"
+	staleSessionCookie = "__Host-mp_session"
+)
 
 // smsruAck — ответ, которого sms.ru ждёт от обработчика оповещений; иначе шлёт повторно.
 const smsruAck = "100"
@@ -26,6 +30,7 @@ type authHandlers struct {
 
 type startLoginJSON struct {
 	Phone string `json:"phone"`
+	Exp   int64  `json:"exp,omitempty"`
 }
 
 type checkLoginJSON struct {
@@ -47,6 +52,7 @@ type loginJSON struct {
 }
 
 type buyerJSON struct {
+	Exp   int64  `json:"exp,omitempty"`
 	ID    string `json:"id"`
 	Phone string `json:"phone"`
 }
@@ -70,6 +76,9 @@ func challengeOf(view appbuyer.ChallengeView) challengeJSON {
 
 // start — начать вход: POST /api/v1/auth/call {phone}.
 func (h *authHandlers) start(w http.ResponseWriter, r *http.Request) {
+	if !allowBuyerMutation(w, r) {
+		return
+	}
 	var body startLoginJSON
 	if err := readJSON(w, r, &body); err != nil {
 		writeError(w, r, err)
@@ -89,6 +98,9 @@ func (h *authHandlers) start(w http.ResponseWriter, r *http.Request) {
 
 // check — состояние проверки; подтверждённый звонок выдаёт сессию в куке.
 func (h *authHandlers) check(w http.ResponseWriter, r *http.Request) {
+	if !allowBuyerMutation(w, r) {
+		return
+	}
 	var body checkLoginJSON
 	if err := readJSON(w, r, &body); err != nil {
 		writeError(w, r, err)
@@ -113,60 +125,71 @@ func (h *authHandlers) check(w http.ResponseWriter, r *http.Request) {
 	out := loginJSON{challengeJSON: challengeOf(result.Challenge)}
 
 	if session := result.Session; session != nil {
-		http.SetCookie(w, &http.Cookie{
-			Name:     SessionCookie,
-			Value:    session.Token,
-			Path:     "/",
-			Expires:  session.ExpiresAt,
-			MaxAge:   int(time.Until(session.ExpiresAt).Seconds()),
-			Secure:   true,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		})
+		setBuyerCookies(w, *session)
 
 		// для клиента вход состоялся: внутреннее «проверка использована» наружу не выходит
-		expires := session.ExpiresAt.UTC()
+		expires := session.AccessExpiresAt.UTC()
 		out.Status = string(buyer.ChallengeConfirmed)
-		out.Buyer = &buyerJSON{ID: string(session.Buyer.ID), Phone: string(session.Buyer.Phone)}
+		out.Buyer = buyerOf(*session)
 		out.SessionExpiresAt = &expires
 	}
 
 	writeJSON(w, http.StatusOK, out)
 }
 
-// logout — завершить сессию и стереть куку.
+// logout закрывает только refresh; JWT остаётся действителен до exp.
 func (h *authHandlers) logout(w http.ResponseWriter, r *http.Request) {
-	if err := h.auth.Logout(r.Context(), sessionToken(r)); err != nil {
-		writeError(w, r, err)
-
+	if !allowBuyerMutation(w, r) {
 		return
 	}
 
-	http.SetCookie(
-		w,
-		&http.Cookie{
-			Name:     SessionCookie,
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			Secure:   true,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		},
-	)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// me — покупатель сессии.
-func (h *authHandlers) me(w http.ResponseWriter, r *http.Request) {
-	found, err := h.auth.Me(r.Context(), BuyerID(r.Context()))
+	err := h.auth.Logout(r.Context(), refreshKey(r))
+	clearBuyerCookies(w)
 	if err != nil {
 		writeError(w, r, err)
 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, buyerJSON{ID: string(found.ID), Phone: string(found.Phone)})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// refresh доступен только по отдельному HttpOnly ключу, не по access JWT.
+func (h *authHandlers) refresh(w http.ResponseWriter, r *http.Request) {
+	if !allowBuyerMutation(w, r) {
+		return
+	}
+
+	session, err := h.auth.Refresh(r.Context(), refreshKey(r))
+	if err != nil {
+		writeError(w, r, err)
+
+		return
+	}
+
+	setBuyerCookies(w, session)
+	writeJSON(w, http.StatusOK, buyerOf(session))
+}
+
+// me — единственная GET-ручка, допускающая silent refresh при загрузке.
+func (h *authHandlers) me(w http.ResponseWriter, r *http.Request) {
+	// Не разрешаем cross-site загрузкой вращать cookie через GET.
+	if !allowBuyerMutation(w, r) {
+		return
+	}
+
+	session, err := h.auth.Bootstrap(r.Context(), sessionToken(r), refreshKey(r))
+	if err != nil {
+		writeError(w, r, err)
+
+		return
+	}
+
+	if session.Key != "" {
+		setBuyerCookies(w, session)
+	}
+
+	writeJSON(w, http.StatusOK, buyerOf(session))
 }
 
 // smsruWebhook — оповещение sms.ru: форма с записями data[N] вида
@@ -207,6 +230,10 @@ func (h *authHandlers) smsruWebhook(w http.ResponseWriter, r *http.Request) {
 // витрины пересылает сессию заголовком).
 func buyerOnly(auth *appbuyer.Auth, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !allowBuyerMutation(w, r) {
+			return
+		}
+
 		session, err := auth.Authenticate(r.Context(), sessionToken(r))
 		if err != nil {
 			writeError(w, r, err)

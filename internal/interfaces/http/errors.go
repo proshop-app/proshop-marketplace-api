@@ -8,6 +8,8 @@ import (
 )
 
 var (
+	// ErrForbidden — недоверенный браузерный origin.
+	ErrForbidden = errs.New(errs.Forbidden, "http.origin_forbidden", "недопустимый источник запроса")
 	// ErrInvalidBody — тело запроса не разбирается.
 	ErrInvalidBody = errs.New(errs.Invalid, "http.invalid_body", "тело запроса не разбирается")
 	// ErrInvalidQuery — параметры адреса не разбираются.

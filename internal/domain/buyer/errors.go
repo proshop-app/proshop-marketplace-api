@@ -1,8 +1,13 @@
 package buyer
 
-import "github.com/proshop-app/proshop-marketplace/pkg/errs"
+import (
+	"github.com/proshop-app/proshop-marketplace/internal/domain/identity"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+)
 
 var (
+	// ErrAccessExpired — подпись и границы JWT верны, истёк только access.
+	ErrAccessExpired = identity.ErrAccessExpired
 	// ErrInvalidPhone — номер не похож на телефон.
 	ErrInvalidPhone = errs.New(errs.Invalid, "buyer.invalid_phone", "некорректный номер телефона")
 	// ErrNotFound — покупателя нет.
@@ -32,7 +37,7 @@ var (
 		"проверка изменена параллельно, повторите запрос",
 	)
 	// ErrSessionNotFound — сессии нет или она истекла.
-	ErrSessionNotFound = errs.New(errs.Unauthorized, "buyer.unauthorized", "нужен вход покупателя")
+	ErrSessionNotFound = identity.ErrUnauthorized
 	// ErrTooManyAttempts — превышен лимит попыток входа.
 	ErrTooManyAttempts = errs.New(
 		errs.TooManyRequests,

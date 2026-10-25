@@ -46,9 +46,11 @@ type ChallengeView struct {
 
 // IssuedSession — выданная сессия; токен виден только здесь.
 type IssuedSession struct {
-	Token     string
-	ExpiresAt time.Time
-	Buyer     buyer.Buyer
+	Token           string
+	Key             string
+	AccessExpiresAt time.Time
+	ExpiresAt       time.Time
+	Buyer           buyer.Buyer
 }
 
 // CheckResult — состояние проверки и сессия, если вход состоялся.
@@ -59,26 +61,26 @@ type CheckResult struct {
 
 // Auth — вход покупателя по звонку.
 type Auth struct {
-	uow      ports.UnitOfWork
-	calls    ports.CallCheck
-	sessions buyer.SessionRepository
-	limiter  ports.RateLimiter
-	ids      ports.IDs
-	clock    ports.Clock
-	config   AuthConfig
+	uow     ports.UnitOfWork
+	calls   ports.CallCheck
+	tokens  ports.IdentityTokens
+	limiter ports.RateLimiter
+	ids     ports.IDs
+	clock   ports.Clock
+	config  AuthConfig
 }
 
 // NewAuth — сценарии входа.
-func NewAuth(uow ports.UnitOfWork, calls ports.CallCheck, sessions buyer.SessionRepository, limiter ports.RateLimiter,
+func NewAuth(uow ports.UnitOfWork, calls ports.CallCheck, tokens ports.IdentityTokens, limiter ports.RateLimiter,
 	identities ports.IDs, clock ports.Clock, config AuthConfig) *Auth {
 	return &Auth{
-		uow:      uow,
-		calls:    calls,
-		sessions: sessions,
-		limiter:  limiter,
-		ids:      identities,
-		clock:    clock,
-		config:   config,
+		uow:     uow,
+		calls:   calls,
+		tokens:  tokens,
+		limiter: limiter,
+		ids:     identities,
+		clock:   clock,
+		config:  config,
 	}
 }
 
@@ -184,30 +186,69 @@ func (a *Auth) RefreshByProvider(ctx context.Context, providerRef string) error 
 	return err
 }
 
-// Authenticate — сессия по токену из куки или заголовка.
+// Authenticate — локальная проверка JWT и существования покупателя.
 func (a *Auth) Authenticate(ctx context.Context, token string) (buyer.Session, error) {
-	if token == "" {
-		return buyer.Session{}, buyer.ErrSessionNotFound
-	}
-
-	session, err := a.sessions.Get(ctx, buyer.HashToken(token))
+	session, err := a.tokens.Authenticate(ctx, token)
 	if err != nil {
 		return buyer.Session{}, err
 	}
-	if session.Expired(a.clock.Now()) {
-		return buyer.Session{}, buyer.ErrSessionNotFound
+
+	if _, err := a.Me(ctx, ids.UUID(session.LocalID)); err != nil {
+		if errors.Is(err, buyer.ErrNotFound) {
+			return buyer.Session{}, buyer.ErrSessionNotFound
+		}
+
+		return buyer.Session{}, err
 	}
 
-	return session, nil
+	return buyer.Session{
+		BuyerID:   ids.UUID(session.LocalID),
+		ExpiresAt: session.AccessExpiresAt,
+	}, nil
 }
 
-// Logout завершает сессию.
-func (a *Auth) Logout(ctx context.Context, token string) error {
-	if token == "" {
-		return nil
+// Logout отзывает refresh, не пытаясь превратить JWT в серверную сессию.
+func (a *Auth) Logout(ctx context.Context, key string) error {
+	return a.tokens.Logout(ctx, key)
+}
+
+// Refresh обновляет access отдельным браузерным ключом.
+func (a *Auth) Refresh(ctx context.Context, key string) (IssuedSession, error) {
+	access, err := a.tokens.Refresh(ctx, key)
+	if err != nil {
+		return IssuedSession{}, err
 	}
 
-	return a.sessions.Delete(ctx, buyer.HashToken(token))
+	return a.issued(ctx, access)
+}
+
+// Bootstrap разрешён только ручке me; бизнес-запросы refresh не запускают.
+func (a *Auth) Bootstrap(ctx context.Context, token, key string) (IssuedSession, error) {
+	access, err := a.tokens.Bootstrap(ctx, token, key)
+	if err != nil {
+		return IssuedSession{}, err
+	}
+
+	return a.issued(ctx, access)
+}
+
+func (a *Auth) issued(ctx context.Context, access ports.IdentityAccess) (IssuedSession, error) {
+	found, err := a.Me(ctx, ids.UUID(access.LocalID))
+	if err != nil {
+		if errors.Is(err, buyer.ErrNotFound) {
+			return IssuedSession{}, buyer.ErrSessionNotFound
+		}
+
+		return IssuedSession{}, err
+	}
+
+	return IssuedSession{
+		Token:           access.Token,
+		Key:             access.Key,
+		AccessExpiresAt: access.AccessExpiresAt,
+		ExpiresAt:       access.ExpiresAt,
+		Buyer:           found,
+	}, nil
 }
 
 // Me — покупатель сессии.
@@ -297,16 +338,20 @@ func (a *Auth) issue(ctx context.Context, challengeID ids.UUID) (CheckResult, er
 		return CheckResult{}, err
 	}
 
-	token := a.ids.NewToken()
-	session := buyer.NewSession(token, found.ID, now, a.config.SessionTTL)
-
-	if err := a.sessions.Save(ctx, session); err != nil {
+	access, err := a.tokens.Open(ctx, string(found.ID))
+	if err != nil {
 		return CheckResult{}, err
 	}
 
 	return CheckResult{
 		Challenge: viewOf(challenge),
-		Session:   &IssuedSession{Token: token, ExpiresAt: session.ExpiresAt, Buyer: found},
+		Session: &IssuedSession{
+			Token:           access.Token,
+			Key:             access.Key,
+			AccessExpiresAt: access.AccessExpiresAt,
+			ExpiresAt:       access.ExpiresAt,
+			Buyer:           found,
+		},
 	}, nil
 }
 

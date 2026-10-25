@@ -21,6 +21,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
@@ -87,7 +88,10 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	defer func() { _ = cache.Close() }()
 
 	s := &server{cfg: cfg, logger: logger, store: store, cache: cache, metrics: telemetry.NewRegistry()}
-	s.app = s.services(ctx)
+	s.app, err = s.services(ctx)
+	if err != nil {
+		return err
+	}
 
 	if err := s.prepareIndexes(ctx); err != nil {
 		return err
@@ -97,7 +101,16 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 }
 
 // services собирает сценарии приложения поверх хранилищ и внешних адаптеров.
-func (s *server) services(ctx context.Context) services {
+func (s *server) services(ctx context.Context) (services, error) {
+	tokens, err := s.identityTokens(
+		s.cfg.Identity.ClientID,
+		s.cfg.Identity.Secret,
+		"marketplace",
+		s.cfg.Login.SessionTTL,
+	)
+	if err != nil {
+		return services{}, err
+	}
 	cfg := s.cfg
 	now := clock.System{}
 	identities := random.IDs{}
@@ -118,7 +131,7 @@ func (s *server) services(ctx context.Context) services {
 	auth := appbuyer.NewAuth(
 		uow,
 		callCheck(ctx, cfg, s.logger),
-		redis.NewSessions(s.cache, keyPrefix),
+		tokens,
 		redis.NewLimiter(s.cache, keyPrefix),
 		identities,
 		now,
@@ -143,8 +156,20 @@ func (s *server) services(ctx context.Context) services {
 	registry := appparticipant.NewRegistry(uow, now)
 	replay := kafka.NewReplay(kafka.NewRouter(projector, registry), cfg.Kafka.TopicPrefix)
 	events := messaging.NewEvents(uow, now, replay)
+	var operatorTokens ports.IdentityTokens
+	if cfg.Operator.Email != "" {
+		operatorTokens, err = s.identityTokens(
+			cfg.Identity.OperatorClientID,
+			cfg.Identity.OperatorSecret,
+			"platform",
+			cfg.Operator.SessionTTL,
+		)
+		if err != nil {
+			return services{}, err
+		}
+	}
 	operatorAuth := appoperator.NewAuth(
-		redis.NewOperatorSessions(s.cache, keyPrefix),
+		operatorTokens,
 		redis.NewLimiter(s.cache, keyPrefix),
 		password.Verifier{},
 		identities,
@@ -201,7 +226,7 @@ func (s *server) services(ctx context.Context) services {
 		dispatcher:   dispatcher,
 		janitor:      janitor,
 		parker:       messaging.NewParker(uow),
-	}
+	}, nil
 }
 
 // prepareIndexes заводит индексы, которых нет: первый запуск или потеря кластера.

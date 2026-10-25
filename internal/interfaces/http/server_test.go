@@ -41,14 +41,15 @@ const token = "operator-token-for-tests-0123456789"
 var t0 = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
 
 type env struct {
-	server   *httptest.Server
-	store    *fake.Store
-	index    *fake.Index
-	clock    *fake.Clock
-	calls    *fake.Calls
-	platform *fake.Platform
-	pickups  *fake.PickupIndex
-	healthy  error
+	refreshKey string
+	server     *httptest.Server
+	store      *fake.Store
+	index      *fake.Index
+	clock      *fake.Clock
+	calls      *fake.Calls
+	platform   *fake.Platform
+	pickups    *fake.PickupIndex
+	healthy    error
 }
 
 type response struct {
@@ -94,7 +95,7 @@ func newEnv(t *testing.T) *env {
 		Auth: appbuyer.NewAuth(
 			e.store,
 			e.calls,
-			fake.NewSessions(),
+			fake.NewIdentityTokens(e.clock),
 			fake.NewLimiter(),
 			identities,
 			e.clock,
@@ -128,7 +129,7 @@ func newEnv(t *testing.T) *env {
 		OperatorToken:  token,
 		OperatorOrigin: "https://admin.example",
 		OperatorAuth: appoperator.NewAuth(
-			fake.NewOperatorSessions(),
+			fake.NewIdentityTokens(e.clock, time.Hour),
 			fake.NewLimiter(),
 			fake.Passwords{},
 			identities,

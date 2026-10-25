@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 	"time"
@@ -18,15 +19,21 @@ func envOf(values map[string]string) func(string) (string, bool) {
 
 func validEnv() map[string]string {
 	return map[string]string{
-		"DATABASE_URL":              "postgres://marketplace:marketplace@localhost:5432/marketplace",
-		"OPENSEARCH_URLS":           "http://localhost:9200",
-		"KAFKA_BROKERS":             "localhost:9092, localhost:9093",
-		"OPERATOR_TOKEN":            strings.Repeat("x", 32),
-		"REDIS_URL":                 "redis://localhost:6379/0",
-		"MARKETPLACE_PUBLIC_URL":    "https://market.example",
-		"PLATFORM_API_URL":          "http://server:3000",
-		"SERVICE_TOKEN_MARKETPLACE": strings.Repeat("s", 32),
-		"SMSRU_API_ID":              "key",
+		"IDENTITY_HUB_URL":            "https://identity.example.test",
+		"IDENTITY_OPERATOR_CLIENT_ID": "marketplace-operator-test",
+		"IDENTITY_OPERATOR_SECRET":    strings.Repeat("o", 32),
+		"IDENTITY_CLIENT_ID":          "marketplace-test",
+		"IDENTITY_BACKEND_SECRET":     strings.Repeat("i", 32),
+		"IDENTITY_REFRESH_KEY":        base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", 32))),
+		"DATABASE_URL":                "postgres://marketplace:marketplace@localhost:5432/marketplace",
+		"OPENSEARCH_URLS":             "http://localhost:9200",
+		"KAFKA_BROKERS":               "localhost:9092, localhost:9093",
+		"OPERATOR_TOKEN":              strings.Repeat("x", 32),
+		"REDIS_URL":                   "redis://localhost:6379/0",
+		"MARKETPLACE_PUBLIC_URL":      "https://market.example",
+		"PLATFORM_API_URL":            "http://server:3000",
+		"SERVICE_TOKEN_MARKETPLACE":   strings.Repeat("s", 32),
+		"SMSRU_API_ID":                "key",
 	}
 }
 
