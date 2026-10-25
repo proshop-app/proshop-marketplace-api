@@ -16,6 +16,8 @@ import (
 // ErrRefreshBusy — другой экземпляр уже меняет refresh; прежний секрет не повторяется.
 var ErrRefreshBusy = errs.New(errs.Unavailable, "buyer.refresh_busy", "обновление доступа уже выполняется")
 
+const refreshCleanupTimeout = 2 * time.Second
+
 // Tokens — сценарии JWT-доступа и серверного хранения refresh.
 type Tokens struct {
 	hub        ports.IdentityHub
@@ -176,8 +178,8 @@ func (s *Tokens) exchange(ctx context.Context, key string, expected string) (por
 		return ports.IdentityAccess{}, err
 	}
 
-	// Claim резервирует запись навсегда до Finish/Delete: после неизвестного
-	// исхода сетевого обмена повторять прежний refresh запрещено.
+	// После отправки обмена запись можно только завершить либо закрыть:
+	// неопределённый исход никогда не разрешает повтор прежнего refresh.
 	if !s.clock.Now().Before(record.ExpiresAt) || (expected != "" && record.LocalID != expected) {
 		_, _ = s.refreshes.Delete(ctx, hash)
 
@@ -202,20 +204,24 @@ func (s *Tokens) exchange(ctx context.Context, key string, expected string) (por
 
 	bundle, err := s.hub.Refresh(ctx, plain, record.Subject)
 	if err != nil {
-		return ports.IdentityAccess{}, err
+		s.invalidateAfterExchange(ctx, hash)
+
+		return ports.IdentityAccess{}, identity.ErrUnauthorized
 	}
 
 	record.Encrypted, err = s.cipher.Seal(bundle.Refresh, hash)
 	if err != nil {
 		_ = s.hub.Revoke(ctx, bundle.Refresh)
+		s.invalidateAfterExchange(ctx, hash)
 
-		return ports.IdentityAccess{}, err
+		return ports.IdentityAccess{}, identity.ErrUnauthorized
 	}
 
 	if err := s.refreshes.Finish(ctx, hash, owner, record); err != nil {
 		_ = s.hub.Revoke(ctx, bundle.Refresh)
+		s.invalidateAfterExchange(ctx, hash)
 
-		return ports.IdentityAccess{}, err
+		return ports.IdentityAccess{}, identity.ErrUnauthorized
 	}
 
 	return accessOf(bundle, key, record.LocalID, record.ExpiresAt), nil
@@ -256,8 +262,16 @@ func accessOf(bundle ports.HubTokens, key string, id string, end time.Time) port
 
 // releaseBeforeExchange безопасен только пока запрос ротации не отправлялся.
 func (s *Tokens) releaseBeforeExchange(ctx context.Context, hash, owner string, record ports.IdentityRefresh) {
-	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshCleanupTimeout)
 	defer cancel()
 
 	_ = s.refreshes.Finish(cleanup, hash, owner, record)
+}
+
+// Неопределённый обмен требует нового входа, даже если HTTP-запрос уже отменён.
+func (s *Tokens) invalidateAfterExchange(ctx context.Context, hash string) {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshCleanupTimeout)
+	defer cancel()
+
+	_, _ = s.refreshes.Delete(cleanup, hash)
 }

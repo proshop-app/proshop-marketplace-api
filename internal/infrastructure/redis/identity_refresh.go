@@ -21,8 +21,17 @@ local raw = redis.call('GET', KEYS[1])
 if not raw then return {0, ''} end
 local doc = cjson.decode(raw)
 if ARGV[2] ~= '' and doc.record.LocalID ~= ARGV[2] then return {0, ''} end
-if doc.owner ~= '' then return {2, ''} end
+local now = redis.call('TIME')
+local millis = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+if doc.owner ~= '' then
+    if not doc.claimedAt or millis - doc.claimedAt >= tonumber(ARGV[3]) then
+        redis.call('DEL', KEYS[1])
+        return {0, ''}
+    end
+    return {2, ''}
+end
 doc.owner = ARGV[1]
+doc.claimedAt = millis
 redis.call('SET', KEYS[1], cjson.encode(doc), 'KEEPTTL')
 return {1, cjson.encode(doc.record)}
 `)
@@ -73,7 +82,7 @@ func (s *IdentityRefreshes) Save(ctx context.Context, hash string, record ports.
 	return nil
 }
 
-// Claim ждёт чужую успешную ротацию, но не крадёт зависший обмен после таймаута.
+// Claim ждёт успешную ротацию; зависший обмен закрывает, не повторяя старый refresh.
 func (s *IdentityRefreshes) Claim(
 	ctx context.Context,
 	hash, owner string,
@@ -83,8 +92,19 @@ func (s *IdentityRefreshes) Claim(
 	defer deadline.Stop()
 
 	for {
-		result, err := claimIdentityRefresh.Run(ctx, s.client, []string{s.prefix + hash}, owner, expected).Slice()
+		result, err := claimIdentityRefresh.Run(
+			ctx,
+			s.client,
+			[]string{s.prefix + hash},
+			owner,
+			expected,
+			refreshWait.Milliseconds(),
+		).Slice()
 		if err != nil || len(result) != 2 {
+			if ctx.Err() != nil {
+				return ports.IdentityRefresh{}, ctx.Err()
+			}
+
 			return ports.IdentityRefresh{}, ErrUnavailable
 		}
 

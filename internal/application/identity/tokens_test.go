@@ -93,6 +93,7 @@ func (s *refreshStore) Save(_ context.Context, _ string, record ports.IdentityRe
 	defer s.mu.Unlock()
 	s.record = record
 	s.deleted = false
+	s.owner = ""
 
 	return nil
 }
@@ -159,14 +160,24 @@ func TestUnknownExchangeOutcomeNeverRetriesOldRefresh(t *testing.T) {
 	h, m, s := &hub{refreshErr: unavailable}, &mappings{}, &refreshStore{}
 	tokens := service(h, m, s)
 	access, _ := tokens.Open(context.Background(), "account-one")
-	if _, err := tokens.Refresh(context.Background(), access.Key); !errors.Is(err, unavailable) {
+	if _, err := tokens.Refresh(context.Background(), access.Key); !errors.Is(err, identity.ErrUnauthorized) {
 		t.Fatal(err)
 	}
-	if _, err := tokens.Refresh(context.Background(), access.Key); !errors.Is(err, appidentity.ErrRefreshBusy) {
-		t.Fatal(err)
+	h.refreshErr = nil
+	for range 3 {
+		if _, err := tokens.Refresh(context.Background(), access.Key); !errors.Is(err, identity.ErrUnauthorized) {
+			t.Fatal("неопределённый обмен требует входа, а не вечного busy", err)
+		}
 	}
 	if h.calls.Load() != 1 {
 		t.Fatal("старый refresh был отправлен повторно")
+	}
+	fresh, err := tokens.Open(context.Background(), "account-one")
+	if err != nil {
+		t.Fatal("новый вход после восстановления hub должен работать", err)
+	}
+	if _, err := tokens.Refresh(context.Background(), fresh.Key); err != nil || h.calls.Load() != 2 {
+		t.Fatal("новый вход должен получить собственный рабочий refresh", err)
 	}
 }
 
@@ -189,6 +200,41 @@ func TestLogoutDuringRefreshCannotResurrectRecord(t *testing.T) {
 	}
 	if _, err := tokens.Refresh(context.Background(), access.Key); !errors.Is(err, identity.ErrUnauthorized) {
 		t.Fatal(err)
+	}
+}
+
+func TestAnotherInstanceWithActiveExchangeRemainsBusy(t *testing.T) {
+	h := &hub{
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	store := &refreshStore{}
+	first := service(h, &mappings{}, store)
+	second := service(h, &mappings{}, store)
+	access, err := first.Open(context.Background(), "account-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, exchangeErr := first.Refresh(context.Background(), access.Key)
+		done <- exchangeErr
+	}()
+	<-h.entered
+
+	if _, err := second.Refresh(context.Background(), access.Key); !errors.Is(err, appidentity.ErrRefreshBusy) {
+		close(h.release)
+		<-done
+		t.Fatal("незавершённый обмен должен оставаться busy", err)
+	}
+
+	close(h.release)
+	if err := <-done; err != nil {
+		t.Fatal("ожидающий запрос не должен закрыть живой обмен", err)
+	}
+	if h.calls.Load() != 1 {
+		t.Fatal("одновременный обмен вызвал hub повторно")
 	}
 }
 
