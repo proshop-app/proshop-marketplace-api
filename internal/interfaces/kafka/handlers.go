@@ -27,20 +27,21 @@ type productProjection struct {
 }
 
 type productSnapshot struct {
-	Marketplace       *taxonomy.Card  `json:"marketplace"`
-	ID                string          `json:"id"`
-	Name              string          `json:"name"`
-	Description       string          `json:"description"`
-	Image             *string         `json:"image"`
-	URL               string          `json:"url"`
-	SKU               string          `json:"sku"`
-	Price             *json.Number    `json:"price"`
-	PromoPrice        *json.Number    `json:"promoPrice"`
-	AvailableQuantity *json.Number    `json:"availableQuantity"`
-	Categories        []snapshotGroup `json:"categories"`
-	Tags              []string        `json:"tags"`
-	VariantsID        *string         `json:"variantsId"`
-	Conditions        *snapshotFlags  `json:"conditions"`
+	PriceProfiles     []priceProfileJSON `json:"priceProfiles"`
+	Marketplace       *taxonomy.Card     `json:"marketplace"`
+	ID                string             `json:"id"`
+	Name              string             `json:"name"`
+	Description       string             `json:"description"`
+	Image             *string            `json:"image"`
+	URL               string             `json:"url"`
+	SKU               string             `json:"sku"`
+	Price             *json.Number       `json:"price"`
+	PromoPrice        *json.Number       `json:"promoPrice"`
+	AvailableQuantity *json.Number       `json:"availableQuantity"`
+	Categories        []snapshotGroup    `json:"categories"`
+	Tags              []string           `json:"tags"`
+	VariantsID        *string            `json:"variantsId"`
+	Conditions        *snapshotFlags     `json:"conditions"`
 }
 
 type snapshotGroup struct {
@@ -121,7 +122,6 @@ func productProjected(ctx context.Context, projections Projections, envelope Env
 	if err != nil {
 		return err
 	}
-
 	snapshot := catalog.Snapshot{TenantID: tenant, ProductID: product, Revision: event.Revision, At: at}
 
 	switch event.Operation {
@@ -154,6 +154,12 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 		return err
 	}
 
+	profiles, err := snapshotPrices(product.PriceProfiles)
+	if err != nil {
+		return err
+	}
+	snapshot.PriceProfiles = profiles
+
 	snapshot.Price = price
 	if product.Marketplace != nil && product.Marketplace.Price != nil {
 		marketplacePrice, err := rubles(*product.Marketplace.Price)
@@ -174,7 +180,6 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 	if snapshot.Available, err = quantity(product.AvailableQuantity); err != nil {
 		return err
 	}
-
 	card := catalog.Card{
 		Marketplace: product.Marketplace,
 		Name:        product.Name,
@@ -240,7 +245,6 @@ func tagProjected(ctx context.Context, projections Projections, envelope Envelop
 	if err != nil {
 		return ErrInvalidPayload.Wrap(err)
 	}
-
 	snapshot := catalog.TagSnapshot{TenantID: tenant, TagID: tag, Revision: event.Revision}
 
 	switch event.Operation {
@@ -292,7 +296,6 @@ func stockItemUpdated(ctx context.Context, projections Projections, envelope Env
 	if err != nil {
 		return err
 	}
-
 	event := appcatalog.StockEvent{
 		EventID:   envelope.EventID,
 		TenantID:  tenant,
@@ -370,7 +373,6 @@ func tenantEvent(ctx context.Context, registry Registry, envelope Envelope) erro
 	if err != nil {
 		return ErrInvalidPayload.WithMessage("время события реестра не в RFC 3339: " + record.At)
 	}
-
 	status := participant.TenantStatus(record.Status)
 	if envelope.Topic == TopicTenantDeleted {
 		status = participant.TenantDeleted

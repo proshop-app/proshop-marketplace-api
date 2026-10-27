@@ -42,13 +42,14 @@ type OfferList struct {
 
 // Queries — чтение выдачи и карточек.
 type Queries struct {
-	uow   ports.UnitOfWork
-	index ports.OfferIndex
+	uow     ports.UnitOfWork
+	index   ports.OfferIndex
+	pricing ports.CatalogPricing
 }
 
 // NewQueries — запросы каталога.
-func NewQueries(uow ports.UnitOfWork, index ports.OfferIndex) *Queries {
-	return &Queries{uow: uow, index: index}
+func NewQueries(uow ports.UnitOfWork, index ports.OfferIndex, pricing ports.CatalogPricing) *Queries {
+	return &Queries{uow: uow, index: index, pricing: pricing}
 }
 
 // Search — страница выдачи с подписями тегов. Пустые лимит и порядок берутся по умолчанию.
@@ -84,11 +85,14 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 	}); err != nil {
 		return OfferList{}, err
 	}
+	normalized.PriceContexts, err = q.priceContexts(ctx, normalized.BuyerID, normalized.TenantID)
+	if err != nil {
+		return OfferList{}, err
+	}
 	page, err := q.index.Search(ctx, normalized)
 	if err != nil {
 		return OfferList{}, err
 	}
-
 	tagsByTenant := map[ids.TenantID][]string{}
 	for _, doc := range page.Items {
 		tenant := ids.TenantID(doc.TenantID)
@@ -99,7 +103,6 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 	if err != nil {
 		return OfferList{}, err
 	}
-
 	list := OfferList{
 		Facets: visibleFacets(page.Facets, page.Total),
 		Total:  page.Total,
@@ -116,7 +119,7 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 }
 
 // Offer — карточка предложения; скрытое предложение не отдаётся.
-func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID) (OfferCard, error) {
+func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UUID) (OfferCard, error) {
 	doc, found, err := q.index.Get(ctx, offerID.String())
 	if err != nil {
 		return OfferCard{}, err
@@ -124,6 +127,21 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID) (OfferCard, er
 	if !found || !doc.Visible {
 		return OfferCard{}, catalog.ErrOfferNotFound
 	}
+
+	contexts, err := q.priceContexts(ctx, buyerID, string(offerID.Tenant))
+	if err != nil {
+		return OfferCard{}, err
+	}
+	key := catalog.DefaultPriceProfile
+	if contexts != nil {
+		key = contexts[offerID.Tenant]
+	}
+	profile, found := catalog.SelectPrice(doc.PriceProfiles, key)
+	if !found {
+		return OfferCard{}, catalog.ErrOfferNotFound
+	}
+	doc.Price = profile.EffectivePrice.Kopecks()
+	doc.BasePrice = profile.Price.Kopecks()
 
 	labels, err := q.labels(ctx, map[ids.TenantID][]string{offerID.Tenant: doc.Tags})
 	if err != nil {
@@ -139,7 +157,6 @@ func (q *Queries) labels(
 	tags map[ids.TenantID][]string,
 ) (map[ids.TenantID]map[string]string, error) {
 	labels := make(map[ids.TenantID]map[string]string, len(tags))
-
 	wanted := make(map[ids.TenantID][]string, len(tags))
 	for tenant, list := range tags {
 		if len(list) > 0 {
@@ -149,7 +166,6 @@ func (q *Queries) labels(
 	if len(wanted) == 0 {
 		return labels, nil
 	}
-
 	err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		for tenant, list := range wanted {
 			tenantLabels, err := tx.Tags().Labels(ctx, tenant, list)

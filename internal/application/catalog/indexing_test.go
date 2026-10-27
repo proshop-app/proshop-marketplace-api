@@ -123,7 +123,6 @@ func TestStaleDocumentDoesNotOverwrite(t *testing.T) {
 func TestDocumentVersionIncludesSignals(t *testing.T) {
 	product, _ := catalog.NewProduct(snapshot("t1", "p1", 1, t0), t0)
 	product.MarkSaved()
-
 	signals := catalog.NewSignals("t1", "p1")
 	_, _ = signals.ApplyStock(catalog.StockSignal{Available: 0, At: t1}, t1)
 	_, _ = signals.ApplyPrice(catalog.PriceSignal{Price: money.FromKopecks(5000), At: t1}, t1)
@@ -137,7 +136,6 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 	if _, err := owner.ApplyShopSettings(true, w3IndexingSubsidy, money.Money{}, w3IndexingDelivery, t0); err != nil {
 		t.Fatal(err)
 	}
-
 	state := ports.OfferState{
 		Product:     product,
 		Signals:     signals,
@@ -146,7 +144,7 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 	}
 
 	doc, ok := appcatalog.Document(state)
-	if !ok || doc.Version != 4 || doc.Price != 5000 || doc.InStock || !doc.Visible || !doc.CheckoutAvailable {
+	if !ok || doc.Version != 4 || doc.Price != 10000 || doc.InStock || !doc.Visible || !doc.CheckoutAvailable {
 		t.Fatalf("документ: %+v", doc)
 	}
 	if !doc.UpdatedAt.Equal(t1) {
@@ -165,7 +163,20 @@ func TestRebuildCreatesGenerationAndCatchesUp(t *testing.T) {
 	seedProduct(store, "outsider", "p1")
 	ctx := context.Background()
 
-	if err := index.Put(ctx, []ports.OfferDocument{{ID: "garbage~x", Listed: true, Visible: true}}); err != nil {
+	if err := index.Put(ctx, []ports.OfferDocument{
+		{
+			ID:      "garbage~x",
+			Listed:  true,
+			Visible: true,
+			PriceProfiles: []catalog.PriceProfile{
+				{
+					Key:            catalog.DefaultPriceProfile,
+					Price:          money.FromKopecks(0),
+					EffectivePrice: money.FromKopecks(0),
+				},
+			},
+		},
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -226,14 +237,12 @@ func TestHandleTask(t *testing.T) {
 	if _, ok := index.Doc("t1~p1"); !ok {
 		t.Fatal("задача предложения выполнена")
 	}
-
 	tenantTask := taskOf(appcatalog.SyncTenantTask("t1", t1))
 	if err := idx.HandleTask(ctx, tenantTask); err != nil {
 		t.Fatal(err)
 	}
 
 	mismatch, _ := json.Marshal(map[string]string{"tenantId": "t2", "productId": "p1"})
-
 	err := idx.HandleTask(ctx, ports.Task{Kind: appcatalog.TaskSyncOffer, TenantID: "t1", Payload: mismatch})
 	if !errors.Is(err, appcatalog.ErrInvalidTask) {
 		t.Fatalf("магазин задачи не совпадает: получено %v", err)

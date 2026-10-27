@@ -49,6 +49,9 @@ type Limiter struct {
 
 // Platform — API сервера установки в памяти.
 type Platform struct {
+	buyerProfiles     map[ids.UUID]map[ids.TenantID]string
+	buyerItems        map[ids.UUID]map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
+	checks            []ItemCheckCall
 	mu                sync.Mutex
 	items             map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
 	quotes            map[ids.TenantID]delivery.Offered
@@ -294,7 +297,7 @@ func (p *Platform) QuoteRequests() []ports.QuoteRequest {
 func (p *Platform) CheckItems(
 	_ context.Context,
 	tenant ids.TenantID,
-	items []ports.ItemRequest,
+	request ports.ItemsCheckRequest,
 ) ([]ports.ItemCheck, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -303,9 +306,13 @@ func (p *Platform) CheckItems(
 		return nil, err
 	}
 
-	checks := make([]ports.ItemCheck, 0, len(items))
-	for _, item := range items {
-		check, ok := p.items[tenant][item.ProductID]
+	p.checks = append(p.checks, ItemCheckCall{TenantID: tenant, Request: request})
+	checks := make([]ports.ItemCheck, 0, len(request.Items))
+	for _, item := range request.Items {
+		check, ok := p.buyerItems[request.BuyerID][tenant][item.ProductID]
+		if !ok {
+			check, ok = p.items[tenant][item.ProductID]
+		}
 		if !ok {
 			check = ports.ItemCheck{ProductID: item.ProductID}
 		}
@@ -381,7 +388,6 @@ func NewPickupIndex() *PickupIndex {
 func (x *PickupIndex) Ensure(context.Context) (bool, error) {
 	x.mu.Lock()
 	defer x.mu.Unlock()
-
 	created := !x.created
 	x.created = true
 
@@ -416,7 +422,6 @@ func (x *PickupIndex) Search(_ context.Context, query ports.PickupPointQuery) ([
 		if point.Carrier != query.Carrier || len(found) == query.Limit {
 			continue
 		}
-
 		box := query.Area.BBox
 		switch {
 		case box != nil && point.Location.Lat >= box.MinLat && point.Location.Lat <= box.MaxLat &&

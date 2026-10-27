@@ -26,7 +26,7 @@ func (s *Service) prepareOrders(
 	if c.Status() != checkout.StatusConfirmed {
 		return c.State(), nil
 	}
-	quotes := s.freshQuotes(ctx, c.Groups(), *c.Delivery())
+	quotes := s.freshQuotes(ctx, buyerID, c.Groups(), *c.Delivery())
 	expected := c.State().Version
 	returnURL := s.config.ReturnBaseURL + "/api/v1/checkout/" + string(id) + "/return"
 	deliveryChanged := false
@@ -54,6 +54,7 @@ func (s *Service) prepareOrders(
 // freshQuotes всегда читает настройки сервера, даже если локальная проекция и quote ещё свежие.
 func (s *Service) freshQuotes(
 	ctx context.Context,
+	buyerID ids.UUID,
 	groups []checkout.Group,
 	selection checkout.Selection,
 ) map[ids.TenantID]delivery.Quote {
@@ -64,7 +65,7 @@ func (s *Service) freshQuotes(
 		wg.Add(1)
 		go func(g checkout.Group) {
 			defer wg.Done()
-			q := s.freshGroupQuote(ctx, g, selection)
+			q := s.freshGroupQuote(ctx, buyerID, g, selection)
 			mu.Lock()
 			quotes[g.TenantID] = q
 			mu.Unlock()
@@ -76,6 +77,7 @@ func (s *Service) freshQuotes(
 
 func (s *Service) freshGroupQuote(
 	ctx context.Context,
+	buyerID ids.UUID,
 	group checkout.Group,
 	selection checkout.Selection,
 ) delivery.Quote {
@@ -93,7 +95,7 @@ func (s *Service) freshGroupQuote(
 			ExpiresAt: s.clock.Now().Add(s.config.QuoteTTL),
 		}
 	}
-	return s.quoteGroup(callCtx, group, selection, participant.State{
+	return s.quoteGroup(callCtx, buyerID, group, selection, participant.State{
 		ShopEnabled:      settings.Enabled,
 		FreeDeliveryFrom: settings.FreeDeliveryFrom,
 		Delivery:         settings.Delivery,

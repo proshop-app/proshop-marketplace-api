@@ -31,6 +31,7 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		}
 	}
 	request := ports.CreateOrderRequest{
+		BuyerID:            buyerID,
 		ExternalCheckoutID: group.ExternalCheckoutID,
 		GroupID:            tenant,
 		Carrier:            string(state.Delivery.Carrier),

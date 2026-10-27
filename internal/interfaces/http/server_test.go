@@ -63,7 +63,6 @@ var w3ServerSubsidy = participant.Subsidy{Enabled: true, Type: participant.Subsi
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
-
 	e := &env{
 		store:    fake.NewStore(),
 		index:    fake.NewIndex(),
@@ -87,10 +86,9 @@ func newEnv(t *testing.T) *env {
 		e.clock,
 		"pod",
 	)
-
 	handler := transport.NewHandler(transport.Deps{
 		Taxonomy:     apptaxonomy.NewService(e.store, e.clock),
-		Catalog:      appcatalog.NewQueries(e.store, e.index),
+		Catalog:      appcatalog.NewQueries(e.store, e.index, e.platform),
 		Participants: appparticipant.NewService(e.store, e.clock),
 		Auth: appbuyer.NewAuth(
 			e.store,
@@ -171,7 +169,6 @@ func (e *env) seedTenant(id ids.TenantID, slug string) {
 
 func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID, price int64, tags ...string) {
 	t.Helper()
-
 	snapshot := catalog.Snapshot{
 		TenantID:  tenant,
 		ProductID: product,
@@ -193,6 +190,13 @@ func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID
 			Visible:     true,
 			Tags:        tags,
 			Categories:  []catalog.Category{{ID: "c1", Name: "Категория"}},
+		},
+		PriceProfiles: []catalog.PriceProfile{
+			{
+				Key:            catalog.DefaultPriceProfile,
+				Price:          money.FromKopecks(price),
+				EffectivePrice: money.FromKopecks(price),
+			},
 		},
 	}
 
@@ -226,7 +230,6 @@ func (e *env) call(t *testing.T, method, path, body string, authorized bool) res
 		t.Fatal(err)
 	}
 	defer func() { _ = raw.Body.Close() }()
-
 	out := response{status: raw.StatusCode, header: raw.Header}
 	data, _ := io.ReadAll(raw.Body)
 	if len(data) > 0 && strings.HasPrefix(raw.Header.Get("Content-Type"), "application/json") {
@@ -272,7 +275,6 @@ func TestHealth(t *testing.T) {
 func TestOperatorFlow(t *testing.T) {
 	e := newEnv(t)
 	e.seedTenant("t1", "shop-one")
-
 	r := e.call(t, http.MethodGet, "/api/v1/operator/participants", "", false)
 	if r.status != http.StatusUnauthorized || errorCode(r) != "http.unauthorized" {
 		t.Fatalf("без токена: %+v", r)
@@ -359,7 +361,6 @@ func TestCatalog(t *testing.T) {
 	e.store.SeedTag(catalog.TagState{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "Новинка", Version: 1})
 	e.seedOffer(t, "t1", "p1", 150000, "tag-1")
 	e.seedOffer(t, "t1", "p2", 50000)
-
 	r := e.call(t, http.MethodGet, "/api/v1/catalog/offers?sort=price_asc&limit=1", "", false)
 	items, _ := r.body["items"].([]any)
 	if r.status != http.StatusOK || len(items) != 1 || r.body["total"] != float64(2) || r.body["limit"] != float64(1) {
@@ -375,7 +376,6 @@ func TestCatalog(t *testing.T) {
 	if _, ok := first["description"]; ok {
 		t.Fatal("описание — только в карточке")
 	}
-
 	invalid := []string{
 		"limit=101",
 		"limit=x",
@@ -412,7 +412,6 @@ func TestCatalog(t *testing.T) {
 
 func TestServiceRoutes(t *testing.T) {
 	e := newEnv(t)
-
 	r := e.call(t, http.MethodGet, "/nowhere", "", false)
 	if r.status != http.StatusNotFound || errorCode(r) != "http.not_found" || r.header.Get("X-Request-Id") != "req-1" {
 		t.Fatalf("неизвестный адрес: %+v", r)
@@ -437,7 +436,6 @@ func TestServiceRoutes(t *testing.T) {
 func TestUnexpectedErrorIsNotDisclosed(t *testing.T) {
 	e := newEnv(t)
 	e.store.FailCommit = errors.New("сбой фиксации")
-
 	r := e.call(t, http.MethodGet, "/api/v1/operator/participants", "", true)
 	if r.status != http.StatusInternalServerError || errorCode(r) != "internal" {
 		t.Fatalf("непредвиденная ошибка не раскрывается: %+v", r)

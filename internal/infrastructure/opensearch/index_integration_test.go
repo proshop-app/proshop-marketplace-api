@@ -14,6 +14,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/opensearch"
+	pricemoney "github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func clusterURL() string {
@@ -26,15 +27,12 @@ func clusterURL() string {
 
 func testIndex(t *testing.T) *opensearch.Index {
 	t.Helper()
-
 	urls := clusterURL()
-
 	alias := fmt.Sprintf("test-offers-%d", time.Now().UnixNano())
 	index, err := opensearch.New(opensearch.Config{URLs: []string{urls}, Alias: alias, Shards: 1, Replicas: 0})
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	ctx := context.Background()
 	if err := index.Ping(ctx); err != nil {
 		t.Fatalf("кластер для тестов: %v", err)
@@ -86,12 +84,18 @@ func offer(id string, name string, price int64, version int64) ports.OfferDocume
 		CheckoutAvailable: true,
 		UpdatedAt:         time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC),
 		Version:           version,
+		PriceProfiles: []catalog.PriceProfile{
+			{
+				Key:            catalog.DefaultPriceProfile,
+				Price:          pricemoney.FromKopecks(price),
+				EffectivePrice: pricemoney.FromKopecks(price),
+			},
+		},
 	}
 }
 
 func activate(t *testing.T, index *opensearch.Index) {
 	t.Helper()
-
 	ctx := context.Background()
 	generation, err := index.NewGeneration(ctx)
 	if err != nil {
@@ -113,8 +117,20 @@ func TestIndexWriteSearchGet(t *testing.T) {
 	if exists, err := index.Exists(ctx); err != nil || !exists {
 		t.Fatalf("алиас заведён: %v, %v", exists, err)
 	}
-
-	hidden := ports.OfferDocument{ID: "t2~p1", TenantID: "t2", ProductID: "p1", Version: 3, UpdatedAt: time.Now().UTC()}
+	hidden := ports.OfferDocument{
+		ID:        "t2~p1",
+		TenantID:  "t2",
+		ProductID: "p1",
+		Version:   3,
+		UpdatedAt: time.Now().UTC(),
+		PriceProfiles: []catalog.PriceProfile{
+			{
+				Key:            catalog.DefaultPriceProfile,
+				Price:          pricemoney.FromKopecks(0),
+				EffectivePrice: pricemoney.FromKopecks(0),
+			},
+		},
+	}
 	docs := []ports.OfferDocument{
 		offer("t1~p1", "Товар первый", 250000, 2),
 		offer("t1~p2", "Позиция вторая", 50000, 2),
@@ -198,7 +214,6 @@ func TestIndexGenerationsSwap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	fresh := []ports.OfferDocument{offer("t1~new", "Новый", 100, 1)}
 	if err := index.PutGeneration(ctx, generation, fresh); err != nil {
 		t.Fatal(err)

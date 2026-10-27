@@ -10,7 +10,9 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	pricecatalog "github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
+	pricemoney "github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestCanonicalFiltersAndCoverage(t *testing.T) {
@@ -44,12 +46,19 @@ func TestCanonicalFiltersAndCoverage(t *testing.T) {
 			Listed:       true,
 			Visible:      true,
 			Version:      1,
+			PriceProfiles: []pricecatalog.PriceProfile{
+				{
+					Key:            pricecatalog.DefaultPriceProfile,
+					Price:          pricemoney.FromKopecks(0),
+					EffectivePrice: pricemoney.FromKopecks(0),
+				},
+			},
 		}
 		if err := index.Put(ctx, []ports.OfferDocument{doc}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	q := appcatalog.NewQueries(store, index)
+	q := appcatalog.NewQueries(store, index, fake.NewPlatform())
 	page, err := q.Search(ctx, ports.OfferQuery{Limit: 1, Offset: 8})
 	if err != nil || page.Total != 10 || len(page.Facets) != 6 {
 		t.Fatalf("%+v %v", page, err)

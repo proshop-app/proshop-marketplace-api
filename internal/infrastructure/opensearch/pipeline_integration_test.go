@@ -37,7 +37,6 @@ func TestProjectionToIndex(t *testing.T) {
 	index := testIndex(t)
 	ctx := context.Background()
 	now := clock.System{}
-
 	uow := postgres.NewUnitOfWork(pool)
 	if err := apptaxonomy.NewService(uow, now).Load(ctx, taxonomy.Definition{
 		Version:    1,
@@ -51,7 +50,7 @@ func TestProjectionToIndex(t *testing.T) {
 	participants := appparticipant.NewService(uow, now)
 	platform := fake.NewPlatform()
 	settings := appparticipant.NewSettings(uow, platform, now)
-	queries := appcatalog.NewQueries(uow, index)
+	queries := appcatalog.NewQueries(uow, index, platform)
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(pool),
 		now,
@@ -65,7 +64,6 @@ func TestProjectionToIndex(t *testing.T) {
 	if built, err := indexer.EnsureIndex(ctx); err != nil || !built {
 		t.Fatalf("первый запуск собирает индекс: %v, %v", built, err)
 	}
-
 	drain := func() {
 		t.Helper()
 
@@ -88,7 +86,6 @@ func TestProjectionToIndex(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
 	active := participant.RegistryEvent{
 		TenantID: "t1",
 		Slug:     "shop-one",
@@ -96,7 +93,6 @@ func TestProjectionToIndex(t *testing.T) {
 		Hosts:    json.RawMessage(`[]`),
 		At:       now.Now(),
 	}
-
 	err := registry.Apply(ctx, appparticipant.RegistryEvent{EventID: "e1", Event: active})
 	if err != nil {
 		t.Fatal(err)
@@ -105,20 +101,30 @@ func TestProjectionToIndex(t *testing.T) {
 	for i, product := range []ids.ProductID{"p1", "p2"} {
 		err := projector.ApplyProduct(
 			ctx,
-			appcatalog.ProductEvent{EventID: "product-" + string(product), Snapshot: catalog.Snapshot{
-				TenantID:  "t1",
-				ProductID: product,
-				Revision:  1,
-				At:        now.Now(),
-				Available: 3,
-				Price:     money.FromKopecks(int64(10000 * (i + 1))),
-				Card: catalog.Card{
-					Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
-					Name:        "Товар " + string(product),
-					Visible:     true,
-					Categories:  []catalog.Category{{ID: "c1", Name: "Категория"}},
+			appcatalog.ProductEvent{
+				EventID: "product-" + string(product),
+				Snapshot: catalog.Snapshot{
+					TenantID:  "t1",
+					ProductID: product,
+					Revision:  1,
+					At:        now.Now(),
+					Available: 3,
+					Price:     money.FromKopecks(int64(10000 * (i + 1))),
+					Card: catalog.Card{
+						Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
+						Name:        "Товар " + string(product),
+						Visible:     true,
+						Categories:  []catalog.Category{{ID: "c1", Name: "Категория"}},
+					},
+					PriceProfiles: []catalog.PriceProfile{
+						{
+							Key:            catalog.DefaultPriceProfile,
+							Price:          money.FromKopecks(int64(10000 * (i + 1))),
+							EffectivePrice: money.FromKopecks(int64(10000 * (i + 1))),
+						},
+					},
 				},
-			}},
+			},
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -129,7 +135,6 @@ func TestProjectionToIndex(t *testing.T) {
 	if list, _ := queries.Search(ctx, ports.OfferQuery{}); list.Total != 0 {
 		t.Fatalf("магазин без участия не попадает в выдачу: %+v", list)
 	}
-
 	command := appparticipant.CreateCommand{TenantID: "t1", Name: "Первый магазин"}
 	if _, err := participants.Create(ctx, command); err != nil {
 		t.Fatal(err)
@@ -158,11 +163,10 @@ func TestProjectionToIndex(t *testing.T) {
 		t.Fatalf("включённый участник в выдаче, с настройками доступен для оформления: %+v, %v", list, err)
 	}
 
-	card, err := queries.Offer(ctx, ids.OfferID{Tenant: "t1", Product: "p1"})
+	card, err := queries.Offer(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, "")
 	if err != nil || !card.Offer.CheckoutAvailable || card.Offer.SellerName != "Первый магазин" {
 		t.Fatalf("карточка после настроек участия: %+v, %v", card, err)
 	}
-
 	suspended := participant.RegistryEvent{
 		TenantID: "t1",
 		Slug:     "shop-one",
@@ -185,7 +189,7 @@ func TestProjectionToIndex(t *testing.T) {
 	if err != nil || result.Indexed != 2 {
 		t.Fatalf("перестроение из проекции: %+v, %v", result, err)
 	}
-	if _, err := queries.Offer(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}); err == nil {
+	if _, err := queries.Offer(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, ""); err == nil {
 		t.Fatal("после перестроения скрытое предложение по-прежнему скрыто")
 	}
 }

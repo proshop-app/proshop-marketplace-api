@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // Index — индекс предложений в памяти с поколениями и версиями документов.
@@ -90,6 +92,16 @@ func (x *Index) Search(_ context.Context, query ports.OfferQuery) (ports.OfferPa
 	var hits []ports.OfferDocument
 
 	for _, doc := range x.generations[x.active] {
+		key := catalog.DefaultPriceProfile
+		if query.PriceContexts != nil {
+			key = query.PriceContexts[ids.TenantID(doc.TenantID)]
+		}
+		profile, ok := catalog.SelectPrice(doc.PriceProfiles, key)
+		if !ok {
+			continue
+		}
+		doc.Price = profile.EffectivePrice.Kopecks()
+		doc.BasePrice = profile.Price.Kopecks()
 		if matches(doc, query) {
 			hits = append(hits, doc)
 		}
@@ -113,7 +125,6 @@ func (x *Index) Search(_ context.Context, query ports.OfferQuery) (ports.OfferPa
 
 		return hits[i].ID < hits[j].ID
 	})
-
 	page := ports.OfferPage{Facets: fakeFacets(hits, query.FacetFields), Total: len(hits)}
 	for i := query.Offset; i < len(hits) && len(page.Items) < query.Limit; i++ {
 		page.Items = append(page.Items, hits[i])

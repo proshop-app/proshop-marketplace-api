@@ -27,6 +27,12 @@ type ItemRequest struct {
 	Quantity  int
 }
 
+// ItemsCheckRequest привязывает проверку к аккаунту, а не контакту получателя.
+type ItemsCheckRequest struct {
+	BuyerID ids.UUID
+	Items   []ItemRequest
+}
+
 // ItemCheck — ответ магазина по позиции: продаёт ли, по какой цене, сколько есть.
 type ItemCheck struct {
 	ProductID ids.ProductID
@@ -37,6 +43,7 @@ type ItemCheck struct {
 
 // QuoteRequest — расчёт доставки заказа продавца до пункта выдачи.
 type QuoteRequest struct {
+	BuyerID         ids.UUID
 	Carrier         delivery.Carrier
 	PickupPointCode string
 	City            string
@@ -51,13 +58,17 @@ type ShopSettings struct {
 	Delivery         participant.DeliverySettings
 }
 
-// PlatformAPI — внутренний API сервера установки в контексте магазина
-// (контракт PR-M1, docs/server-contract.md). Магазин, который не участвует в
-// маркетплейсе, — ErrMarketplaceDisabled.
+// CatalogPricing — выбор профилей до фильтрации и пагинации каталога.
+type CatalogPricing interface {
+	PriceContexts(context.Context, ids.UUID, []ids.TenantID) (map[ids.TenantID]string, error)
+}
+
+// PlatformAPI — доверенный канал продавца; цены выбираются по проверенному аккаунту.
 type PlatformAPI interface {
 	SellerOrders
+	CatalogPricing
 	// CheckItems — цена и наличие позиций у магазина сейчас.
-	CheckItems(ctx context.Context, tenantID ids.TenantID, items []ItemRequest) ([]ItemCheck, error)
+	CheckItems(ctx context.Context, tenantID ids.TenantID, request ItemsCheckRequest) ([]ItemCheck, error)
 	// QuoteDelivery — стоимость и срок доставки по договору магазина.
 	QuoteDelivery(ctx context.Context, tenantID ids.TenantID, request QuoteRequest) (delivery.Offered, error)
 	// MarketplaceSettings — флаг участия и субсидия из настроек магазина.

@@ -43,7 +43,6 @@ func NewService(
 // Get — корзина покупателя; нет или просрочена — пустая.
 func (s *Service) Get(ctx context.Context, buyerID ids.UUID) (cart.State, error) {
 	var state cart.State
-
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Carts().ByBuyer(ctx, buyerID)
 		if errors.Is(err, cart.ErrNotFound) {
@@ -71,7 +70,11 @@ func (s *Service) Get(ctx context.Context, buyerID ids.UUID) (cart.State, error)
 
 // Add кладёт предложение в корзину.
 func (s *Service) Add(ctx context.Context, buyerID ids.UUID, offerID ids.OfferID, quantity int) (cart.State, error) {
-	offer, err := s.offer(ctx, offerID)
+	if quantity == 0 {
+		return s.Remove(ctx, buyerID, offerID)
+	}
+
+	offer, err := s.offer(ctx, buyerID, offerID)
 	if err != nil {
 		return cart.State{}, err
 	}
@@ -88,7 +91,7 @@ func (s *Service) SetQuantity(
 	offerID ids.OfferID,
 	quantity int,
 ) (cart.State, error) {
-	offer, err := s.offer(ctx, offerID)
+	offer, err := s.offer(ctx, buyerID, offerID)
 	if err != nil && !errors.Is(err, cart.ErrOfferUnavailable) {
 		return cart.State{}, err
 	}
@@ -116,7 +119,7 @@ func (s *Service) Verify(ctx context.Context, buyerID ids.UUID) (cart.State, err
 		return current, err
 	}
 
-	checks, err := CheckGroups(ctx, s.platform, cart.Restore(current).Groups())
+	checks, err := CheckGroups(ctx, s.platform, buyerID, cart.Restore(current).Groups())
 	if err != nil {
 		return cart.State{}, err
 	}
@@ -127,7 +130,12 @@ func (s *Service) Verify(ctx context.Context, buyerID ids.UUID) (cart.State, err
 }
 
 // CheckGroups спрашивает магазины параллельно, по запросу на магазин.
-func CheckGroups(ctx context.Context, platform ports.PlatformAPI, groups []cart.Group) ([]cart.Check, error) {
+func CheckGroups(
+	ctx context.Context,
+	platform ports.PlatformAPI,
+	buyerID ids.UUID,
+	groups []cart.Group,
+) ([]cart.Check, error) {
 	var (
 		mu     sync.Mutex
 		wg     sync.WaitGroup
@@ -140,13 +148,15 @@ func CheckGroups(ctx context.Context, platform ports.PlatformAPI, groups []cart.
 
 		go func(group cart.Group) {
 			defer wg.Done()
-
 			items := make([]ports.ItemRequest, 0, len(group.Lines))
 			for _, line := range group.Lines {
 				items = append(items, ports.ItemRequest{ProductID: line.Offer.Product, Quantity: line.Quantity})
 			}
 
-			answers, err := platform.CheckItems(ctx, group.TenantID, items)
+			answers, err := platform.CheckItems(ctx, group.TenantID, ports.ItemsCheckRequest{
+				BuyerID: buyerID,
+				Items:   items,
+			})
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -157,7 +167,6 @@ func CheckGroups(ctx context.Context, platform ports.PlatformAPI, groups []cart.
 
 				return
 			}
-
 			byProduct := make(map[ids.ProductID]ports.ItemCheck, len(answers))
 			for _, answer := range answers {
 				byProduct[answer.ProductID] = answer
@@ -189,7 +198,6 @@ func (s *Service) change(
 	mutate func(*cart.Cart, time.Time) (bool, error),
 ) (cart.State, error) {
 	var state cart.State
-
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		now := s.clock.Now()
 
@@ -200,7 +208,6 @@ func (s *Service) change(
 		if err != nil {
 			return err
 		}
-
 		reset := c.ResetIfExpired(now, s.ttl)
 
 		changed, err := mutate(c, now)
@@ -224,7 +231,7 @@ func (s *Service) change(
 }
 
 // offer — предложение из индекса каталога, как его видит покупатель сейчас.
-func (s *Service) offer(ctx context.Context, offerID ids.OfferID) (cart.Offer, error) {
+func (s *Service) offer(ctx context.Context, buyerID ids.UUID, offerID ids.OfferID) (cart.Offer, error) {
 	doc, found, err := s.index.Get(ctx, offerID.String())
 	if err != nil {
 		return cart.Offer{}, err
@@ -232,6 +239,19 @@ func (s *Service) offer(ctx context.Context, offerID ids.OfferID) (cart.Offer, e
 	if !found || !doc.Visible {
 		return cart.Offer{ID: offerID}, cart.ErrOfferUnavailable
 	}
+
+	checks, err := s.platform.CheckItems(ctx, offerID.Tenant, ports.ItemsCheckRequest{
+		BuyerID: buyerID,
+		Items:   []ports.ItemRequest{{ProductID: offerID.Product, Quantity: 1}},
+	})
+	if err != nil {
+		return cart.Offer{}, err
+	}
+	if len(checks) != 1 || checks[0].ProductID != offerID.Product || !checks[0].Exists {
+		return cart.Offer{ID: offerID}, cart.ErrOfferUnavailable
+	}
+	doc.Price = checks[0].Price.Kopecks()
+	doc.Available = checks[0].Available
 
 	return cart.Offer{
 		ID:        offerID,

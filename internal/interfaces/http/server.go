@@ -81,7 +81,6 @@ func routes(deps Deps) []route {
 	}
 	operator := func(next http.HandlerFunc) http.HandlerFunc { return gateway.only(deps.OperatorToken, next) }
 	signedIn := func(next http.HandlerFunc) http.HandlerFunc { return buyerOnly(deps.Auth, next) }
-
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
@@ -103,8 +102,8 @@ func routes(deps Deps) []route {
 		{http.MethodPut, "/api/v1/operator/taxonomy", operator(taxonomy.load)},
 		{http.MethodGet, "/api/v1/operator/catalog/offers/{offerId}/publication", operator(taxonomy.publication)},
 
-		{http.MethodGet, "/api/v1/catalog/offers", catalog.list},
-		{http.MethodGet, "/api/v1/catalog/offers/{offerId}", catalog.card},
+		{http.MethodGet, "/api/v1/catalog/offers", optionalBuyer(deps.Auth, catalog.list)},
+		{http.MethodGet, "/api/v1/catalog/offers/{offerId}", optionalBuyer(deps.Auth, catalog.card)},
 
 		{http.MethodGet, "/api/v1/operator/participants", operator(participants.list)},
 		{http.MethodPost, "/api/v1/operator/participants", operator(participants.create)},

@@ -129,7 +129,6 @@ func (x *Index) Activate(ctx context.Context, generation string) error {
 	if err != nil {
 		return err
 	}
-
 	actions := []any{
 		map[string]any{"add": map[string]any{"index": generation, "alias": x.alias, "is_write_index": true}},
 	}
@@ -163,7 +162,6 @@ func (x *Index) aliased(ctx context.Context) ([]string, error) {
 	if err != nil || status == http.StatusNotFound {
 		return nil, err
 	}
-
 	names := make([]string, 0, len(aliases))
 	for name := range aliases {
 		names = append(names, name)
@@ -177,12 +175,10 @@ func (x *Index) generations(ctx context.Context) ([]string, error) {
 	var rows []struct {
 		Index string `json:"index"`
 	}
-
 	path := "/_cat/indices/" + url.PathEscape(x.alias+"-*") + "?format=json&h=index"
 	if _, err := x.do(ctx, http.MethodGet, path, nil, &rows); err != nil {
 		return nil, err
 	}
-
 	names := make([]string, 0, len(rows))
 	for _, row := range rows {
 		names = append(names, row.Index)
@@ -245,7 +241,6 @@ func (x *Index) PutGeneration(ctx context.Context, target string, docs []ports.O
 			if result.Error == nil || result.Status == http.StatusConflict {
 				continue
 			}
-
 			message := fmt.Sprintf("документ %s не записан: %s: %s", result.ID, result.Error.Type, result.Error.Reason)
 
 			return ErrUnavailable.WithMessage(message)
@@ -295,7 +290,6 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 			} `json:"hits"`
 		} `json:"hits"`
 	}
-
 	path := "/" + url.PathEscape(x.alias) + "/_search"
 	if _, err := x.do(ctx, http.MethodPost, path, searchBody(query), &response); err != nil {
 		return ports.OfferPage{}, err
@@ -311,7 +305,11 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 		Items:  make([]ports.OfferDocument, 0, len(response.Hits.Hits)),
 	}
 	for _, hit := range response.Hits.Hits {
-		page.Items = append(page.Items, fromDocument(hit.Source, hit.Version))
+		doc, found := selectProfile(fromDocument(hit.Source, hit.Version), query)
+		if !found {
+			return ports.OfferPage{}, fmt.Errorf("в индексе отсутствует выбранный ценовой профиль")
+		}
+		page.Items = append(page.Items, doc)
 	}
 
 	return page, nil
@@ -371,7 +369,6 @@ func (x *Index) raw(
 
 	if response.StatusCode >= http.StatusMultipleChoices {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
-
 		message := fmt.Sprintf("%s %s: %d %s", method, path, response.StatusCode, strings.TrimSpace(string(detail)))
 
 		return response.StatusCode, ErrUnavailable.WithMessage(message)

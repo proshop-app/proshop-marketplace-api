@@ -43,9 +43,9 @@ func NewResyncingPlatform(platform ports.PlatformAPI, uow ports.UnitOfWork, cloc
 func (p *ResyncingPlatform) CheckItems(
 	ctx context.Context,
 	tenantID ids.TenantID,
-	items []ports.ItemRequest,
+	request ports.ItemsCheckRequest,
 ) ([]ports.ItemCheck, error) {
-	checks, err := p.PlatformAPI.CheckItems(ctx, tenantID, items)
+	checks, err := p.PlatformAPI.CheckItems(ctx, tenantID, request)
 
 	return checks, p.resync(ctx, tenantID, err)
 }
@@ -68,7 +68,6 @@ func (p *ResyncingPlatform) resync(ctx context.Context, tenantID ids.TenantID, e
 	if !errors.Is(err, ports.ErrMarketplaceDisabled) {
 		return err
 	}
-
 	task := SyncSettingsTask(tenantID, p.clock.Now())
 	enqueue := func(ctx context.Context, tx ports.Tx) error {
 		return tx.Outbox().Enqueue(ctx, task)

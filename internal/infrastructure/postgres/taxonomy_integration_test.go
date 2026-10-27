@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
@@ -70,7 +72,8 @@ func TestTaxonomyVersionsAndProjection(t *testing.T) {
 	}
 	read := func() taxonomy.Publication {
 		t.Helper()
-		p, err := appcatalog.NewQueries(uow, nil).Publication(ctx, ids.OfferID{Tenant: "t1", Product: "p1"})
+		queries := appcatalog.NewQueries(uow, nil, fake.NewPlatform())
+		p, err := queries.Publication(ctx, ids.OfferID{Tenant: "t1", Product: "p1"})
 		if err != nil {
 			t.Fatal(err)
 		}

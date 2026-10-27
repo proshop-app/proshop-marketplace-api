@@ -27,7 +27,6 @@ func TestSearchBodyFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	text := string(encoded)
 	for _, fragment := range []string{
 		`{"term":{"listed":true}}`,
@@ -35,11 +34,12 @@ func TestSearchBodyFilters(t *testing.T) {
 		`{"term":{"categoryPath":"c1"}}`,
 		`{"term":{"tags":"tag-1"}}`,
 		`{"term":{"inStock":true}}`,
-		`{"range":{"price":{"gte":100,"lte":900}}}`,
+		`{"range":{"priceProfiles.effectivePrice":{"gte":100,"lte":900}}}`,
 		`"query":"товар"`,
 		`"from":20`,
 		`"size":10`,
-		`[{"price":"asc"},{"offerId":"asc"}]`,
+		`"priceProfiles.effectivePrice":{"nested":` +
+			`{"filter":{"term":{"priceProfiles.key":"marketplace:default"}},"path":"priceProfiles"},"order":"asc"}`,
 	} {
 		if !strings.Contains(text, fragment) {
 			t.Fatalf("в запросе нет %s:\n%s", fragment, text)
@@ -49,7 +49,8 @@ func TestSearchBodyFilters(t *testing.T) {
 
 func TestSearchBodySorts(t *testing.T) {
 	cases := map[ports.OfferSort]string{
-		ports.SortPriceDesc: `[{"price":"desc"},{"offerId":"asc"}]`,
+		ports.SortPriceDesc: `"priceProfiles.effectivePrice":{"nested":` +
+			`{"filter":{"term":{"priceProfiles.key":"marketplace:default"}},"path":"priceProfiles"},"order":"desc"}`,
 		ports.SortNewest:    `[{"updatedAt":"desc"},{"offerId":"asc"}]`,
 		ports.SortRelevance: `["_score",{"offerId":"asc"}]`,
 	}

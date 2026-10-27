@@ -41,6 +41,7 @@ type OfferStates interface {
 
 // OfferDocument — предложение в индексе поиска. Суммы — в копейках.
 type OfferDocument struct {
+	PriceProfiles     []catalog.PriceProfile
 	CategoryID        string
 	CategoryPath      []string
 	Attributes        map[string]json.RawMessage
@@ -88,19 +89,21 @@ const (
 
 // OfferQuery — поиск по выдаче каталога.
 type OfferQuery struct {
-	InStockSet  bool
-	Attributes  map[string]AttributeFilter
-	FacetFields []taxonomy.Attribute
-	Text        string
-	TenantID    string
-	CategoryID  string
-	Tag         string
-	PriceMin    *int64
-	PriceMax    *int64
-	InStock     bool
-	Sort        OfferSort
-	Offset      int
-	Limit       int
+	BuyerID       ids.UUID
+	PriceContexts map[ids.TenantID]string
+	InStockSet    bool
+	Attributes    map[string]AttributeFilter
+	FacetFields   []taxonomy.Attribute
+	Text          string
+	TenantID      string
+	CategoryID    string
+	Tag           string
+	PriceMin      *int64
+	PriceMax      *int64
+	InStock       bool
+	Sort          OfferSort
+	Offset        int
+	Limit         int
 }
 
 // OfferPage — страница выдачи.

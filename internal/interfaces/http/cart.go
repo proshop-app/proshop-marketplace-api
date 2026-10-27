@@ -104,7 +104,7 @@ func (h *cartHandlers) respond(w http.ResponseWriter, r *http.Request, state car
 }
 
 func (h *cartHandlers) get(w http.ResponseWriter, r *http.Request) {
-	state, err := h.carts.Get(r.Context(), BuyerID(r.Context()))
+	state, err := h.carts.Verify(r.Context(), BuyerID(r.Context()))
 	h.respond(w, r, state, err)
 }
 

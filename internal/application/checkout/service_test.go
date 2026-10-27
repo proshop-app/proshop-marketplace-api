@@ -11,6 +11,7 @@ import (
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	pricecatalog "github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -43,7 +44,6 @@ var w3ServiceSubsidy = participant.Subsidy{Enabled: true, Type: participant.Subs
 
 func setup(t *testing.T) *env {
 	t.Helper()
-
 	e := &env{store: fake.NewStore(), index: fake.NewIndex(), platform: fake.NewPlatform(), clock: fake.NewClock(t0)}
 	identities := &fake.IDs{}
 	pickups := fake.NewPickupIndex()
@@ -72,9 +72,7 @@ func setup(t *testing.T) *env {
 			ReturnBaseURL:             "https://market.example",
 		},
 	)
-
 	ctx := context.Background()
-
 	err := e.index.Put(ctx, []ports.OfferDocument{
 		{
 			ID:                p1.String(),
@@ -87,6 +85,13 @@ func setup(t *testing.T) *env {
 			Listed:            true,
 			CheckoutAvailable: true,
 			Version:           1,
+			PriceProfiles: []pricecatalog.PriceProfile{
+				{
+					Key:            pricecatalog.DefaultPriceProfile,
+					Price:          money.FromKopecks(199000),
+					EffectivePrice: money.FromKopecks(199000),
+				},
+			},
 		},
 		{
 			ID:                p2.String(),
@@ -99,6 +104,13 @@ func setup(t *testing.T) *env {
 			Listed:            true,
 			CheckoutAvailable: true,
 			Version:           1,
+			PriceProfiles: []pricecatalog.PriceProfile{
+				{
+					Key:            pricecatalog.DefaultPriceProfile,
+					Price:          money.FromKopecks(35000),
+					EffectivePrice: money.FromKopecks(35000),
+				},
+			},
 		},
 	})
 	if err != nil {
@@ -239,6 +251,13 @@ func TestCreateRefusesUnpayableSeller(t *testing.T) {
 			Listed:            true,
 			CheckoutAvailable: false,
 			Version:           2,
+			PriceProfiles: []pricecatalog.PriceProfile{
+				{
+					Key:            pricecatalog.DefaultPriceProfile,
+					Price:          money.FromKopecks(35000),
+					EffectivePrice: money.FromKopecks(35000),
+				},
+			},
 		},
 	})
 
@@ -267,7 +286,6 @@ func TestQuote(t *testing.T) {
 	if state.DeliveryTotal.Kopecks() != 15000+17500 || state.Delivery.City != "Город" {
 		t.Fatalf("итог доставки и выбранный пункт: %+v", state)
 	}
-
 	request := e.platform.QuoteRequests()[0]
 	if request.Carrier != "cdek" || request.PickupPointCode != "MSK1" || request.City != "Город" ||
 		len(request.Items) != 1 {

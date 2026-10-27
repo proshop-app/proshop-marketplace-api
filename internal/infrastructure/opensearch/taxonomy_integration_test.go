@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	pricecatalog "github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
+	pricemoney "github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestDynamicCanonicalFieldsAndAggregations(t *testing.T) {
@@ -82,12 +84,21 @@ func TestDynamicCanonicalFieldsAndAggregations(t *testing.T) {
 		t.Fatalf("%+v %v", page, err)
 	}
 	// Устаревший документ не возвращает атрибуты после скрытия новой версией.
-	if err := index.Put(ctx, []ports.OfferDocument{{
-		ID:        d1.ID,
-		TenantID:  d1.TenantID,
-		ProductID: d1.ProductID,
-		Version:   2,
-	}}); err != nil {
+	if err := index.Put(ctx, []ports.OfferDocument{
+		{
+			ID:        d1.ID,
+			TenantID:  d1.TenantID,
+			ProductID: d1.ProductID,
+			Version:   2,
+			PriceProfiles: []pricecatalog.PriceProfile{
+				{
+					Key:            pricecatalog.DefaultPriceProfile,
+					Price:          pricemoney.FromKopecks(0),
+					EffectivePrice: pricemoney.FromKopecks(0),
+				},
+			},
+		},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := index.Put(ctx, []ports.OfferDocument{d1}); err != nil {

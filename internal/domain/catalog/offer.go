@@ -32,18 +32,11 @@ type Offer struct {
 	CheckoutAvailable bool
 }
 
-// ComposeOffer собирает предложение из снимка карточки, сигналов склада и
-// цены и видимости продавца.
-//
-// Сигнал свежее снимка побеждает: остаток и прайс меняются чаще карточки.
-// Новый прайс отменяет промо-цену снимка: она посчитана от старого прайса, и
-// показывать её до следующего снимка — значит обещать цену, которой у
-// магазина уже может не быть.
+// ComposeOffer берёт цену из проекции Pricing и остаток из последнего складского события.
 func ComposeOffer(product *Product, signals *Signals, seller Seller) Offer {
 	if product == nil {
 		return Offer{}
 	}
-
 	state := product.State()
 	offer := Offer{ID: ids.OfferID{Tenant: state.TenantID, Product: state.ProductID}, Seller: seller}
 
@@ -51,33 +44,21 @@ func ComposeOffer(product *Product, signals *Signals, seller Seller) Offer {
 		return offer
 	}
 
-	base := state.Price
-	promo := state.PromoPrice
+	profile, found := SelectPrice(state.PriceProfiles, DefaultPriceProfile)
+	if !found {
+		return offer
+	}
+	base := profile.Price
+	price := profile.EffectivePrice
 	available := state.Available
 
 	if signals != nil {
 		sig := signals.State()
-		if sig.HasPrice && sig.PriceAt.After(state.ProjectedAt) {
-			base = sig.Price
-			promo = nil
-		}
 		if sig.HasStock && sig.StockAt.After(state.ProjectedAt) {
 			available = sig.Available
 		}
 	}
 
-	price := base
-	if promo != nil && !promo.IsZero() && promo.Cmp(base) < 0 {
-		price = *promo
-	}
-
-	if card := state.Card.Marketplace; card != nil && card.Price != nil {
-		marketplacePrice, err := money.ParseRubles(string(*card.Price))
-		if err != nil || marketplacePrice.IsNegative() {
-			return offer
-		}
-		base, price = marketplacePrice, marketplacePrice
-	}
 	offer.Card = state.Card
 	offer.Price = price
 	offer.BasePrice = base

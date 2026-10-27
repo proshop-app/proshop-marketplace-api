@@ -32,7 +32,9 @@ func TestResyncOnMarketplaceDisabled(t *testing.T) {
 
 	platform.Fail("t1", ports.ErrMarketplaceDisabled)
 
-	_, err := resyncing.CheckItems(ctx, "t1", []ports.ItemRequest{{ProductID: "p1", Quantity: 1}})
+	_, err := resyncing.CheckItems(ctx, "t1", ports.ItemsCheckRequest{
+		Items: []ports.ItemRequest{{ProductID: "p1", Quantity: 1}},
+	})
 	if !errors.Is(err, ports.ErrMarketplaceDisabled) {
 		t.Fatalf("отказ сервера возвращается как есть: %v", err)
 	}
@@ -41,14 +43,15 @@ func TestResyncOnMarketplaceDisabled(t *testing.T) {
 	if !errors.Is(err, ports.ErrMarketplaceDisabled) {
 		t.Fatalf("отказ сервера на расчёте: %v", err)
 	}
-
 	tasks := settingsTasks(store)
 	if len(tasks) != 1 || tasks[0].TenantID != "t1" || tasks[0].DedupKey != "participant.settings.sync:t1" {
 		t.Fatalf("одна внеочередная сверка на магазин, повтор склеивается: %+v", tasks)
 	}
 
 	platform.Fail("t2", errors.New("сервер недоступен"))
-	if _, err := resyncing.CheckItems(ctx, "t2", nil); err == nil || len(settingsTasks(store)) != 1 {
+	if _, err := resyncing.CheckItems(ctx, "t2", ports.ItemsCheckRequest{
+		Items: nil,
+	}); err == nil || len(settingsTasks(store)) != 1 {
 		t.Fatalf("прочие сбои сверку не ставят: %v", err)
 	}
 }
@@ -60,7 +63,6 @@ func TestSettingsTaskDisablesShop(t *testing.T) {
 	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Магазин"}); err != nil {
 		t.Fatal(err)
 	}
-
 	platform := fake.NewPlatform()
 	settings := appparticipant.NewSettings(store, platform, clock)
 
@@ -74,7 +76,6 @@ func TestSettingsTaskDisablesShop(t *testing.T) {
 	}
 
 	platform.Fail("t1", ports.ErrMarketplaceDisabled)
-
 	task := appparticipant.SyncSettingsTask("t1", clock.Now())
 	if err := settings.HandleTask(ctx, taskOf(task)); err != nil {
 		t.Fatal(err)
@@ -82,17 +83,14 @@ func TestSettingsTaskDisablesShop(t *testing.T) {
 	if p, _ := store.Participant("t1"); p.ShopEnabled {
 		t.Fatalf("отказ «магазин не участвует» выключает участие: %+v", p)
 	}
-
 	unknown := appparticipant.SyncSettingsTask("t9", clock.Now())
 	if err := settings.HandleTask(ctx, taskOf(unknown)); err != nil {
 		t.Fatalf("участника нет — сверять нечего: %v", err)
 	}
-
 	mismatch := ports.Task{Kind: task.Kind, TenantID: "t2", Payload: task.Payload}
 	if err := settings.HandleTask(ctx, mismatch); !errors.Is(err, appparticipant.ErrInvalidTask) {
 		t.Fatalf("магазин задачи не совпадает: %v", err)
 	}
-
 	broken := ports.Task{Kind: task.Kind, TenantID: "t1"}
 	if err := settings.HandleTask(ctx, broken); !errors.Is(err, appparticipant.ErrInvalidTask) {
 		t.Fatalf("повреждённая задача: %v", err)

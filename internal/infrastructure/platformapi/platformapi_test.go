@@ -50,7 +50,6 @@ func sameJSON(t *testing.T, got []byte, want []byte) {
 // server — сервер на записанных примерах контракта: путь → запрос и ответ.
 func server(t *testing.T, routes map[string][2]string, status int) *platformapi.Client {
 	t.Helper()
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(platformapi.HeaderToken) != "service-token" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -88,9 +87,13 @@ func TestCheckItems(t *testing.T) {
 	)
 
 	checks, err := client.CheckItems(
+
 		context.Background(),
+
 		"t1",
-		[]ports.ItemRequest{{ProductID: "p1", Quantity: 2}, {ProductID: "p2", Quantity: 1}},
+		ports.ItemsCheckRequest{
+			Items: []ports.ItemRequest{{ProductID: "p1", Quantity: 2}, {ProductID: "p2", Quantity: 1}},
+		},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +111,6 @@ func TestQuoteDelivery(t *testing.T) {
 		City:            "Город",
 		Items:           []ports.ItemRequest{{ProductID: "p1", Quantity: 2}},
 	}
-
 	available := server(
 		t,
 		map[string][2]string{
@@ -121,7 +123,6 @@ func TestQuoteDelivery(t *testing.T) {
 		!offered.ExpiresAt.Equal(time.Date(2026, 10, 24, 10, 30, 0, 0, time.UTC)) {
 		t.Fatalf("расчёт: %+v %v", offered, err)
 	}
-
 	unavailable := server(
 		t,
 		map[string][2]string{
@@ -160,7 +161,6 @@ func TestErrors(t *testing.T) {
 		errs.CodeOf(err) != errs.Unavailable {
 		t.Fatalf("отказ сервера: %v", err)
 	}
-
 	broken := server(
 		t,
 		map[string][2]string{"GET " + prefix + "/settings/marketplace": {"", "items_check_request.json"}},
@@ -169,13 +169,14 @@ func TestErrors(t *testing.T) {
 	if settings, err := broken.MarketplaceSettings(context.Background(), "t1"); err != nil || settings.Enabled {
 		t.Fatalf("тело без полей — участие выключено: %+v %v", settings, err)
 	}
-
 	wrongToken := platformapi.New(platformapi.Config{
 		BaseURL: "http://127.0.0.1:1",
 		Token:   "x",
 		Timeout: 100 * time.Millisecond,
 	})
-	if _, err := wrongToken.CheckItems(context.Background(), "t1", nil); !errors.Is(err, platformapi.ErrUnavailable) {
+	if _, err := wrongToken.CheckItems(context.Background(), "t1", ports.ItemsCheckRequest{
+		Items: nil,
+	}); !errors.Is(err, platformapi.ErrUnavailable) {
 		t.Fatalf("сервер не отвечает: %v", err)
 	}
 }
@@ -187,7 +188,9 @@ func TestMarketplaceDisabled(t *testing.T) {
 	}
 	disabled := server(t, routes, http.StatusForbidden)
 
-	_, err := disabled.CheckItems(context.Background(), "t1", []ports.ItemRequest{{ProductID: "p1", Quantity: 1}})
+	_, err := disabled.CheckItems(context.Background(), "t1", ports.ItemsCheckRequest{
+		Items: []ports.ItemRequest{{ProductID: "p1", Quantity: 1}},
+	})
 	if !errors.Is(err, ports.ErrMarketplaceDisabled) || errs.CodeOf(err) != errs.Unavailable {
 		t.Fatalf("позиции у магазина-неучастника: %v", err)
 	}
@@ -200,7 +203,9 @@ func TestMarketplaceDisabled(t *testing.T) {
 	// код учитывается только у 403: тот же ответ с другим статусом — просто недоступность
 	failing := server(t, routes, http.StatusInternalServerError)
 
-	_, err = failing.CheckItems(context.Background(), "t1", nil)
+	_, err = failing.CheckItems(context.Background(), "t1", ports.ItemsCheckRequest{
+		Items: nil,
+	})
 	var refusal *ports.OrderRefusal
 	if !errors.As(err, &refusal) || !refusal.Unexpected || refusal.Code != "MARKETPLACE_DISABLED" ||
 		errors.Is(err, ports.ErrMarketplaceDisabled) {

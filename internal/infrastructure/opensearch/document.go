@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
+
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -11,6 +13,7 @@ import (
 
 // document — предложение в индексе; суммы — копейки.
 type document struct {
+	PriceProfiles     []priceProfileDocument       `json:"priceProfiles"`
 	Delivery          participant.DeliverySettings `json:"delivery"`
 	FreeDeliveryFrom  int64                        `json:"freeDeliveryFrom"`
 	CategoryID        string                       `json:"categoryId,omitempty"`
@@ -47,6 +50,7 @@ type category struct {
 
 func toDocument(doc ports.OfferDocument) document {
 	out := document{
+		PriceProfiles:     priceProfileDocuments(doc),
 		CategoryID:        doc.CategoryID,
 		CategoryPath:      doc.CategoryPath,
 		Attributes:        doc.Attributes,
@@ -108,6 +112,13 @@ func fromDocument(doc document, version int64) ports.OfferDocument {
 		CheckoutAvailable: doc.CheckoutAvailable,
 		UpdatedAt:         doc.UpdatedAt,
 		Version:           version,
+	}
+	for _, profile := range doc.PriceProfiles {
+		out.PriceProfiles = append(out.PriceProfiles, catalog.PriceProfile{
+			Key:            profile.Key,
+			Price:          money.FromKopecks(profile.Price),
+			EffectivePrice: money.FromKopecks(profile.EffectivePrice),
+		})
 	}
 	for _, c := range doc.Categories {
 		out.Categories = append(out.Categories, catalog.Category(c))

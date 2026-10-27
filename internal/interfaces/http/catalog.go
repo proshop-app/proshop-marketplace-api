@@ -73,7 +73,6 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	for _, tag := range card.Tags {
 		tags = append(tags, tagJSON{ID: tag.ID, Label: tag.Label})
 	}
-
 	out := offerJSON{
 		CategoryID: doc.CategoryID,
 		Attributes: doc.Attributes,
@@ -121,18 +120,17 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	query.BuyerID = BuyerID(r.Context())
 	list, err := h.queries.Search(r.Context(), query)
 	if err != nil {
 		writeError(w, r, err)
 
 		return
 	}
-
 	limit := query.Limit
 	if limit == 0 {
 		limit = appcatalog.DefaultLimit
 	}
-
 	body := offerPageJSON{
 		Facets: list.Facets,
 		Items:  make([]offerJSON, 0, len(list.Items)),
@@ -162,13 +160,12 @@ func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	card, err := h.queries.Offer(r.Context(), offerID)
+	card, err := h.queries.Offer(r.Context(), offerID, BuyerID(r.Context()))
 	if err != nil {
 		writeError(w, r, err)
 
 		return
 	}
-
 	body := toOfferJSON(card, true)
 	annotateDelivery(&body, r)
 	writeJSON(w, http.StatusOK, body)

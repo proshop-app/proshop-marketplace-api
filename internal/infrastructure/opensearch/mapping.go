@@ -1,6 +1,6 @@
 package opensearch
 
-const offerMappingVersion = 3
+const offerMappingVersion = 4
 
 // indexBody — строгая схема поколения. Только проверенные канонические
 // attributes допускают динамические поля; остальные неизвестные поля отклоняются.
@@ -75,8 +75,17 @@ func indexBody(shards, replicas int) map[string]any {
 						"url":  stored,
 					},
 				},
-				"tags":              keyword,
-				"variantsId":        keyword,
+				"tags":       keyword,
+				"variantsId": keyword,
+				"priceProfiles": map[string]any{
+					"type": "nested",
+					"properties": map[string]any{
+						"context":        keyword,
+						"key":            keyword,
+						"price":          map[string]any{"type": "long"},
+						"effectivePrice": map[string]any{"type": "long"},
+					},
+				},
 				"price":             map[string]any{"type": "long"},
 				"basePrice":         map[string]any{"type": "long"},
 				"available":         map[string]any{"type": "integer"},

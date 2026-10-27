@@ -40,31 +40,33 @@ type Card struct {
 // Snapshot — снимок товара из события проекции: полная карточка или удаление
 // с монотонной ревизией источника.
 type Snapshot struct {
-	TenantID   ids.TenantID
-	ProductID  ids.ProductID
-	Revision   int64
-	Deleted    bool
-	Card       Card
-	Price      money.Money
-	PromoPrice *money.Money
-	Available  int
+	PriceProfiles []PriceProfile
+	TenantID      ids.TenantID
+	ProductID     ids.ProductID
+	Revision      int64
+	Deleted       bool
+	Card          Card
+	Price         money.Money
+	PromoPrice    *money.Money
+	Available     int
 	// At — время публикации события; по нему снимок сравнивается с сигналами.
 	At time.Time
 }
 
 // ProductState — плоский снимок записи проекции.
 type ProductState struct {
-	TenantID    ids.TenantID
-	ProductID   ids.ProductID
-	Revision    int64
-	Deleted     bool
-	Card        Card
-	Price       money.Money
-	PromoPrice  *money.Money
-	Available   int
-	ProjectedAt time.Time
-	Version     int64
-	UpdatedAt   time.Time
+	PriceProfiles []PriceProfile
+	TenantID      ids.TenantID
+	ProductID     ids.ProductID
+	Revision      int64
+	Deleted       bool
+	Card          Card
+	Price         money.Money
+	PromoPrice    *money.Money
+	Available     int
+	ProjectedAt   time.Time
+	Version       int64
+	UpdatedAt     time.Time
 }
 
 // Product — товар магазина в проекции маркетплейса.
@@ -78,7 +80,6 @@ func NewProduct(snapshot Snapshot, now time.Time) (*Product, error) {
 	if err := snapshot.validate(); err != nil {
 		return nil, err
 	}
-
 	product := &Product{}
 	product.assign(snapshot, now)
 
@@ -123,6 +124,7 @@ func (p *Product) assign(snapshot Snapshot, now time.Time) {
 	p.state.UpdatedAt = now
 
 	if snapshot.Deleted {
+		p.state.PriceProfiles = nil
 		p.state.Card = Card{}
 		p.state.Price = money.Money{}
 		p.state.PromoPrice = nil
@@ -131,6 +133,7 @@ func (p *Product) assign(snapshot Snapshot, now time.Time) {
 		return
 	}
 
+	p.state.PriceProfiles = append([]PriceProfile(nil), snapshot.PriceProfiles...)
 	p.state.Card = snapshot.Card
 	p.state.Card.Name = strings.TrimSpace(snapshot.Card.Name)
 	p.state.Price = snapshot.Price
@@ -151,6 +154,10 @@ func (p *Product) MarkSaved() { p.originVersion = p.state.Version }
 func (p *Product) Version() int64 { return p.state.Version }
 
 func (s Snapshot) validate() error {
+	if err := ValidatePrices(s.PriceProfiles); err != nil {
+		return err
+	}
+
 	switch {
 	case s.Revision < 1:
 		return ErrInvalidSnapshot.WithMessage("ревизия снимка должна быть больше нуля")

@@ -119,24 +119,24 @@ func New(cfg Config) *Client {
 func (c *Client) CheckItems(
 	ctx context.Context,
 	tenantID ids.TenantID,
-	items []ports.ItemRequest,
+	request ports.ItemsCheckRequest,
 ) ([]ports.ItemCheck, error) {
 	var answer struct {
 		Items []itemCheckJSON `json:"items"`
 	}
-
-	body := map[string]any{"items": itemsJSON(items)}
+	body := map[string]any{"items": itemsJSON(request.Items)}
+	if request.BuyerID != "" {
+		body["buyerId"] = request.BuyerID
+	}
 	if err := c.call(ctx, http.MethodPost, tenantID, "/items/check", body, &answer); err != nil {
 		return nil, err
 	}
-
 	checks := make([]ports.ItemCheck, 0, len(answer.Items))
 	for _, item := range answer.Items {
 		product, err := ids.ParseProductID(item.ProductID)
 		if err != nil || item.Price < 0 || item.AvailableQuantity < 0 {
 			return nil, ErrInvalidResponse.WithMessage("позиция ответа не по контракту: " + item.ProductID)
 		}
-
 		check := ports.ItemCheck{
 			ProductID: product,
 			Exists:    item.Available,
@@ -163,11 +163,14 @@ func (c *Client) QuoteDelivery(
 		"items":           itemsJSON(request.Items),
 	}
 
+	if request.BuyerID != "" {
+		body["buyerId"] = request.BuyerID
+	}
+
 	var answer quoteJSON
 	if err := c.call(ctx, http.MethodPost, tenantID, "/delivery/quote", body, &answer); err != nil {
 		return delivery.Offered{}, err
 	}
-
 	offered := delivery.Offered{
 		Available: answer.Available,
 		Reason:    answer.Reason,
@@ -197,7 +200,6 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 		}
 		return ports.ShopSettings{}, err
 	}
-
 	settings := ports.ShopSettings{Enabled: answer.Enabled}
 	if answer.Enabled && (answer.FreeDeliveryFrom == nil || answer.Subsidy == nil || answer.Delivery == nil) {
 		return ports.ShopSettings{}, ports.ErrInvalidSettings
@@ -252,8 +254,10 @@ func (c *Client) call(
 
 		body = bytes.NewReader(encoded)
 	}
-
-	endpoint := c.baseURL + "/api/v1/internal/marketplace/tenants/" + url.PathEscape(string(tenantID)) + path
+	endpoint := c.baseURL + "/api/v1/internal/marketplace" + path
+	if tenantID != "" {
+		endpoint = c.baseURL + "/api/v1/internal/marketplace/tenants/" + url.PathEscape(string(tenantID)) + path
+	}
 
 	request, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {

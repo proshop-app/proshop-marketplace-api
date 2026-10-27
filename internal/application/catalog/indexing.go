@@ -57,7 +57,6 @@ func (i *Indexer) HandleTask(ctx context.Context, task ports.Task) error {
 // участвует в маркетплейсе, в индекс не попадает.
 func (i *Indexer) SyncOffer(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) error {
 	var state ports.OfferState
-
 	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
 		state, err = tx.Offers().Offer(ctx, tenantID, productID)
@@ -86,7 +85,6 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 
 	for {
 		var states []ports.OfferState
-
 		err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var err error
 			states, err = tx.Offers().TenantOffers(ctx, tenantID, after, i.batch)
@@ -121,9 +119,7 @@ func (i *Indexer) Rebuild(ctx context.Context) (RebuildResult, error) {
 	if err != nil {
 		return RebuildResult{}, err
 	}
-
 	result := RebuildResult{Generation: generation}
-
 	participantOffers := func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error) {
 		return tx.Offers().ParticipantOffers(ctx, after, i.batch)
 	}
@@ -140,7 +136,6 @@ func (i *Indexer) Rebuild(ctx context.Context) (RebuildResult, error) {
 	if err := i.index.Activate(ctx, generation); err != nil {
 		return result, err
 	}
-
 	since := started.Add(-CatchUpMargin)
 	changedOffers := func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error) {
 		return tx.Offers().ChangedSince(ctx, since, after, i.batch)
@@ -175,7 +170,6 @@ func (i *Indexer) pages(
 
 	for {
 		var states []ports.OfferState
-
 		err := i.uow.Do(ctx, func(_ context.Context, tx ports.Tx) error {
 			var err error
 			states, err = read(tx, after)
@@ -194,7 +188,6 @@ func (i *Indexer) pages(
 				return err
 			}
 		}
-
 		last := states[len(states)-1].Product.State()
 		after = ports.OfferKey{TenantID: last.TenantID, ProductID: last.ProductID}
 
@@ -226,7 +219,6 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	if state.Product == nil || state.Participant == nil {
 		return ports.OfferDocument{}, false
 	}
-
 	visibility := participant.VisibilityOf(state.Participant, state.Tenant)
 	offer := catalog.ComposeOffer(state.Product, state.Signals, catalog.Seller{
 		Slug:              state.Participant.Slug(),
@@ -234,7 +226,6 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 		Visible:           visibility.Visible,
 		CheckoutAvailable: visibility.CheckoutAvailable,
 	})
-
 	product := state.Product.State()
 	version := state.Product.Version() + state.Participant.Version()
 	updatedAt := product.UpdatedAt
@@ -248,13 +239,13 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	if state.Tenant != nil {
 		version += state.Tenant.Version()
 	}
-
 	doc := ports.OfferDocument{
-		ID:        offer.ID.String(),
-		TenantID:  string(product.TenantID),
-		ProductID: string(product.ProductID),
-		UpdatedAt: updatedAt,
-		Version:   version,
+		PriceProfiles: product.PriceProfiles,
+		ID:            offer.ID.String(),
+		TenantID:      string(product.TenantID),
+		ProductID:     string(product.ProductID),
+		UpdatedAt:     updatedAt,
+		Version:       version,
 	}
 
 	if !offer.Visible {

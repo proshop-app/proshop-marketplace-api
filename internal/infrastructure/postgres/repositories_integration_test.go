@@ -61,7 +61,6 @@ func registryEvent(
 
 func seedTenant(t *testing.T, uow *postgres.UnitOfWork, id ids.TenantID, slug string, status participant.TenantStatus) {
 	t.Helper()
-
 	err := uow.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 		tenant, err := participant.NewTenant(registryEvent(id, slug, status, 0), at(0))
 		if err != nil {
@@ -79,19 +78,16 @@ func TestRegistryRoundTripAndConflict(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	ctx := context.Background()
 	seedTenant(t, uow, "t1", "shop-one", participant.TenantCreating)
-
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		tenant, err := tx.Registry().Get(ctx, "t1")
 		if err != nil {
 			return err
 		}
-
 		reformatted := registryEvent("t1", "shop-one", participant.TenantCreating, 0)
 		reformatted.Plan = json.RawMessage(`{"limits":{"products":100},"code":"base"}`)
 		if changed, _ := tenant.Apply(reformatted, at(1)); changed {
 			t.Fatal("тот же снимок после хранения в jsonb не считается изменением")
 		}
-
 		stale := participant.RestoreTenant(tenant.State())
 		if _, err := tenant.Apply(registryEvent("t1", "shop-one", participant.TenantActive, 1), at(1)); err != nil {
 			return err
@@ -131,7 +127,6 @@ func TestParticipantsRepository(t *testing.T) {
 	ctx := context.Background()
 	seedTenant(t, uow, "t1", "shop-one", participant.TenantActive)
 	seedTenant(t, uow, "t2", "shop-one", participant.TenantActive)
-
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		tenant, _ := tx.Registry().Get(ctx, "t1")
 		p, err := participant.New(tenant, "Магазин", at(1))
@@ -249,13 +244,19 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, minute
 		Price:      money.FromKopecks(10000),
 		PromoPrice: &promo,
 		Available:  5,
+		PriceProfiles: []catalog.PriceProfile{
+			{
+				Key:            catalog.DefaultPriceProfile,
+				Price:          money.FromKopecks(10000),
+				EffectivePrice: money.FromKopecks(10000),
+			},
+		},
 	}
 }
 
 func TestProductInsertConflict(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	ctx := context.Background()
-
 	save := func() error {
 		return uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			product, err := catalog.NewProduct(snapshot("t1", "p1", 1, 0), at(0))
@@ -278,7 +279,6 @@ func TestProductInsertConflict(t *testing.T) {
 func TestSwallowedQueryErrorIsNotUnavailable(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	ctx := context.Background()
-
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		_, _ = tx.Products().Get(ctx, "t1", "p1")
 		duplicate, _ := catalog.NewProduct(snapshot("t1", "p1", 1, 0), at(0))
@@ -296,7 +296,6 @@ func TestSwallowedQueryErrorIsNotUnavailable(t *testing.T) {
 func TestProductRoundTrip(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	ctx := context.Background()
-
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		product, _ := catalog.NewProduct(snapshot("t1", "p1", 1, 0), at(0))
 
@@ -311,7 +310,6 @@ func TestProductRoundTrip(t *testing.T) {
 		if err != nil {
 			return err
 		}
-
 		state := product.State()
 		if state.Card.Name != "Товар p1" ||
 			state.Card.Categories[0].Name != "Категория" ||
@@ -322,9 +320,7 @@ func TestProductRoundTrip(t *testing.T) {
 			!state.ProjectedAt.Equal(at(0)) {
 			t.Fatalf("товар после хранения: %+v", state)
 		}
-
 		stale := catalog.RestoreProduct(state)
-
 		deletion := catalog.Snapshot{TenantID: "t1", ProductID: "p1", Revision: 2, Deleted: true, At: at(1)}
 		if _, err := product.Apply(deletion, at(1)); err != nil {
 			return err
@@ -362,7 +358,6 @@ func TestProductRoundTrip(t *testing.T) {
 func TestSignalsAndTags(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	ctx := context.Background()
-
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		signals := catalog.NewSignals("t1", "p1")
 		if _, err := signals.ApplyStock(catalog.StockSignal{Available: 2, At: at(1)}, at(1)); err != nil {
@@ -371,7 +366,6 @@ func TestSignalsAndTags(t *testing.T) {
 		if err := tx.Signals().Save(ctx, signals); err != nil {
 			return err
 		}
-
 		price := catalog.PriceSignal{Price: money.FromKopecks(700), At: at(2)}
 		if _, err := signals.ApplyPrice(price, at(2)); err != nil {
 			return err
@@ -431,7 +425,6 @@ func TestUnitOfWorkRollsBack(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	ctx := context.Background()
 	failure := errors.New("сбой сценария")
-
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		product, _ := catalog.NewProduct(snapshot("t1", "p1", 1, 0), at(0))
 		if err := tx.Products().Save(ctx, product); err != nil {

@@ -18,6 +18,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	pricemoney "github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 const testTaxonomyYAML = `version: 1
@@ -40,7 +41,7 @@ func TestTaxonomyHTTP(t *testing.T) {
 	handler := NewHandler(Deps{
 		Registerer:    prometheus.NewRegistry(),
 		Taxonomy:      apptaxonomy.NewService(store, clock),
-		Catalog:       appcatalog.NewQueries(store, index),
+		Catalog:       appcatalog.NewQueries(store, index, fake.NewPlatform()),
 		OperatorToken: "token",
 		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
@@ -117,17 +118,26 @@ func TestTaxonomyHTTP(t *testing.T) {
 	if w.Code != 401 {
 		t.Fatal(w.Code)
 	}
-	if err := index.Put(context.Background(), []ports.OfferDocument{{
-		ID:           "t1~p1",
-		TenantID:     "t1",
-		ProductID:    "p1",
-		CategoryID:   "c1",
-		CategoryPath: []string{"c1"},
-		Attributes:   map[string]json.RawMessage{"a1": json.RawMessage(`"v1"`)},
-		Listed:       true,
-		Visible:      true,
-		Version:      1,
-	}}); err != nil {
+	if err := index.Put(context.Background(), []ports.OfferDocument{
+		{
+			ID:           "t1~p1",
+			TenantID:     "t1",
+			ProductID:    "p1",
+			CategoryID:   "c1",
+			CategoryPath: []string{"c1"},
+			Attributes:   map[string]json.RawMessage{"a1": json.RawMessage(`"v1"`)},
+			Listed:       true,
+			Visible:      true,
+			Version:      1,
+			PriceProfiles: []catalog.PriceProfile{
+				{
+					Key:            catalog.DefaultPriceProfile,
+					Price:          pricemoney.FromKopecks(0),
+					EffectivePrice: pricemoney.FromKopecks(0),
+				},
+			},
+		},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	w = call(http.MethodGet, "/api/v1/catalog/offers?category=c1&attr.a1=v1", "", "", "")

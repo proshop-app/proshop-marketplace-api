@@ -10,6 +10,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
+	pricecatalog "github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -34,10 +35,8 @@ type env struct {
 
 func setup(t *testing.T) *env {
 	t.Helper()
-
 	e := &env{store: fake.NewStore(), index: fake.NewIndex(), platform: fake.NewPlatform(), clock: fake.NewClock(t0)}
 	e.service = appcart.NewService(e.store, e.index, e.platform, &fake.IDs{}, e.clock, 30*24*time.Hour)
-
 	err := e.index.Put(context.Background(), []ports.OfferDocument{
 		{
 			ID:        p1.String(),
@@ -49,6 +48,13 @@ func setup(t *testing.T) *env {
 			Visible:   true,
 			Listed:    true,
 			Version:   1,
+			PriceProfiles: []pricecatalog.PriceProfile{
+				{
+					Key:            pricecatalog.DefaultPriceProfile,
+					Price:          money.FromKopecks(199000),
+					EffectivePrice: money.FromKopecks(199000),
+				},
+			},
 		},
 		{
 			ID:        p2.String(),
@@ -60,13 +66,45 @@ func setup(t *testing.T) *env {
 			Visible:   true,
 			Listed:    true,
 			Version:   1,
+			PriceProfiles: []pricecatalog.PriceProfile{
+				{
+					Key:            pricecatalog.DefaultPriceProfile,
+					Price:          money.FromKopecks(35000),
+					EffectivePrice: money.FromKopecks(35000),
+				},
+			},
 		},
-		{ID: "t3~p1", TenantID: "t3", ProductID: "p1", Visible: false, Version: 1},
+		{
+			ID:        "t3~p1",
+			TenantID:  "t3",
+			ProductID: "p1",
+			Visible:   false,
+			Version:   1,
+			PriceProfiles: []pricecatalog.PriceProfile{
+				{
+					Key:            pricecatalog.DefaultPriceProfile,
+					Price:          money.FromKopecks(0),
+					EffectivePrice: money.FromKopecks(0),
+				},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	e.platform.SetItem("t1", ports.ItemCheck{
+		ProductID: "p1",
+		Exists:    true,
+		Price:     money.FromKopecks(199000),
+		Available: 3,
+	})
+	e.platform.SetItem("t2", ports.ItemCheck{
+		ProductID: "p1",
+		Exists:    true,
+		Price:     money.FromKopecks(35000),
+		Available: 10,
+	})
 	return e
 }
 
@@ -146,11 +184,11 @@ func TestVerify(t *testing.T) {
 		ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(209000), Available: 5},
 	)
 
+	e.platform.SetItem("t2", ports.ItemCheck{ProductID: "p1", Exists: false})
 	state, err := e.service.Verify(ctx, buyerID)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	byOffer := map[ids.OfferID]cart.Line{}
 	for _, line := range state.Lines {
 		byOffer[line.Offer] = line

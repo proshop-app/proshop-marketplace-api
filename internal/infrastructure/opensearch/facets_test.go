@@ -18,7 +18,7 @@ func TestCanonicalMappingAndQueries(t *testing.T) {
 		`"dynamic":true`,
 		`"path_match":"attributes.*"`,
 		`"type":"double"`,
-		`"taxonomySchema":3`,
+		`"taxonomySchema":4`,
 	} {
 		if !strings.Contains(string(encoded), fragment) {
 			t.Fatal(string(encoded))
@@ -41,7 +41,7 @@ func TestCanonicalMappingAndQueries(t *testing.T) {
 		`"range":{"attributes.a2":{"gte":"1.5","lte":"3"}}`,
 		`"term":{"inStock":false}`,
 		`"stats":{"field":"attributes.a2"}`,
-		`"_source":["price"]`,
+		`"_source":true`,
 	} {
 		if !strings.Contains(string(encoded), fragment) {
 			t.Fatalf("нет %s: %s", fragment, encoded)
@@ -51,8 +51,9 @@ func TestCanonicalMappingAndQueries(t *testing.T) {
 
 func TestReadCanonicalFacetsAndExactPrice(t *testing.T) {
 	raw := map[string]json.RawMessage{
-		"price": json.RawMessage(`{"doc_count":2,"minPrice":{"hits":{"hits":[{"_source":{"price":9007199254740993}}]}},
-		"maxPrice":{"hits":{"hits":[{"_source":{"price":9007199254740995}}]}}}`),
+		"price": json.RawMessage(`{"doc_count":4,"selected":{"doc_count":2,
+        "minPrice":{"hits":{"hits":[{"_source":{"effectivePrice":9007199254740993}}]}},
+		"maxPrice":{"hits":{"hits":[{"_source":{"effectivePrice":9007199254740995}}]}}}}`),
 		"attr.a1": json.RawMessage(`{"doc_count":1,"values":{"buckets":[{"key":"false","doc_count":1}]}}`),
 		"attr.a2": json.RawMessage(`{"doc_count":2,"values":{"min":1.0,"max":1.75,"count":2}}`),
 	}

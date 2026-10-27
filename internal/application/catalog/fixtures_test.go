@@ -23,6 +23,13 @@ var w3FixturesSubsidy = participant.Subsidy{Enabled: true, Type: participant.Sub
 
 func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at time.Time) catalog.Snapshot {
 	return catalog.Snapshot{
+		PriceProfiles: []catalog.PriceProfile{
+			{
+				Key:            catalog.DefaultPriceProfile,
+				Price:          money.FromKopecks(10000),
+				EffectivePrice: money.FromKopecks(10000),
+			},
+		},
 		TenantID:  tenant,
 		ProductID: product,
 		Revision:  revision,

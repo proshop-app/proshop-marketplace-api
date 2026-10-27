@@ -86,7 +86,6 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return err
 	}
 	defer func() { _ = cache.Close() }()
-
 	s := &server{cfg: cfg, logger: logger, store: store, cache: cache, metrics: telemetry.NewRegistry()}
 	s.app, err = s.services(ctx)
 	if err != nil {
@@ -115,7 +114,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 	now := clock.System{}
 	identities := random.IDs{}
 	uow := postgres.NewUnitOfWork(s.store.pool)
-
 	platform := platformapi.New(platformapi.Config{
 		BaseURL: cfg.Platform.URL,
 		Token:   cfg.Platform.Token,
@@ -124,10 +122,8 @@ func (s *server) services(ctx context.Context) (services, error) {
 	// корзина и покупка узнают об отказе участия первыми — по нему сверка настроек внеочередная
 	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
 	settings := appparticipant.NewSettings(uow, platform, now)
-
 	indexer := appcatalog.NewIndexer(uow, s.store.index, now, indexBatch)
 	pickups := directory(s.store, cfg)
-
 	auth := appbuyer.NewAuth(
 		uow,
 		callCheck(ctx, cfg, s.logger),
@@ -143,7 +139,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 			IPLimit:       appbuyer.Limit(cfg.Login.IPLimit),
 		},
 	)
-
 	checkouts := appcheckout.NewService(uow, s.store.index, resyncing, pickups, identities, now, appcheckout.Config{
 		DeliverySubsidyMinPercent: cfg.Checkout.DeliverySubsidyMinPercent,
 		QuoteTTL:                  cfg.Checkout.QuoteTTL,
@@ -151,7 +146,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 		CartTTL:                   cfg.Cart.TTL,
 		QuoteTimeout:              cfg.Checkout.QuoteTimeout,
 	})
-
 	projector := appcatalog.NewProjector(uow, now)
 	registry := appparticipant.NewRegistry(uow, now)
 	replay := kafka.NewReplay(kafka.NewRouter(projector, registry), cfg.Kafka.TopicPrefix)
@@ -200,7 +194,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 			appparticipant.TaskSyncSettings: settings.HandleTask,
 		},
 	)
-
 	janitor := messaging.NewJanitor(postgres.NewRetention(s.store.pool), now, messaging.RetentionPolicy{
 		ProcessedEvents: cfg.Retention.ProcessedEvents,
 		OutboxDone:      cfg.Retention.OutboxDone,
@@ -215,7 +208,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		taxonomy:     apptaxonomy.NewService(uow, now),
 		projector:    projector,
 		indexer:      indexer,
-		queries:      appcatalog.NewQueries(uow, s.store.index),
+		queries:      appcatalog.NewQueries(uow, s.store.index, resyncing),
 		participants: appparticipant.NewService(uow, now),
 		registry:     registry,
 		settings:     settings,
@@ -249,7 +242,6 @@ func (s *server) prepareIndexes(ctx context.Context) error {
 // run запускает HTTP, консьюмер и фоновые циклы; первый сбой останавливает остальных.
 func (s *server) run(ctx context.Context) error {
 	cfg := s.cfg
-
 	router := kafka.NewRouter(s.app.projector, s.app.registry)
 	topics := kafka.FullTopics(cfg.Kafka.TopicPrefix, router)
 	reader := infrakafka.NewReader(infrakafka.Config{
@@ -266,7 +258,6 @@ func (s *server) run(ctx context.Context) error {
 		Now:         clock.System{}.Now,
 	}
 	consumer := kafka.NewConsumer(reader, router, s.app.parker, consumerConfig, s.logger, s.metrics)
-
 	httpServer := s.httpServer()
 	group, groupCtx := errgroup.WithContext(ctx)
 
@@ -322,14 +313,12 @@ func (s *server) jobs() []func(context.Context) error {
 // httpServer — HTTP с маршрутами маркетплейса и проверками зависимостей.
 func (s *server) httpServer() *http.Server {
 	cfg := s.cfg
-
 	checks := []transport.Check{
 		{Name: "postgres", Probe: s.store.pool.Ping},
 		{Name: "opensearch", Probe: s.store.index.Ping},
 		{Name: "redis", Probe: func(ctx context.Context) error { return s.cache.Ping(ctx).Err() }},
 		{Name: "kafka", Probe: func(ctx context.Context) error { return infrakafka.Ping(ctx, cfg.Kafka.Brokers) }},
 	}
-
 	handler := transport.NewHandler(transport.Deps{
 		Taxonomy:       s.app.taxonomy,
 		Catalog:        s.app.queries,

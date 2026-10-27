@@ -14,16 +14,23 @@ type priceHit struct {
 	Hits struct {
 		Hits []struct {
 			Source struct {
-				Price json.Number `json:"price"`
+				Price json.Number `json:"effectivePrice"`
 			} `json:"_source"`
 		} `json:"hits"`
 	} `json:"hits"`
 }
 
-type facetAggregation struct {
+type priceProfileFacet struct {
+	Count    int      `json:"doc_count"`
 	MinPrice priceHit `json:"minPrice"`
 	MaxPrice priceHit `json:"maxPrice"`
-	Count    int      `json:"doc_count"`
+}
+
+type facetAggregation struct {
+	Selected *priceProfileFacet `json:"selected"`
+	MinPrice priceHit           `json:"minPrice"`
+	MaxPrice priceHit           `json:"maxPrice"`
+	Count    int                `json:"doc_count"`
 	Values   struct {
 		Buckets []struct {
 			Key         json.RawMessage `json:"key"`
@@ -36,7 +43,7 @@ type facetAggregation struct {
 	} `json:"values"`
 }
 
-func facetAggregations(fields []taxonomy.Attribute) map[string]any {
+func facetAggregations(query ports.OfferQuery) map[string]any {
 	aggs := map[string]any{}
 	for code, field := range map[string]string{"category": "categoryId", "tenant": "tenantId", "inStock": "inStock"} {
 		aggs[code] = map[string]any{
@@ -45,13 +52,18 @@ func facetAggregations(fields []taxonomy.Attribute) map[string]any {
 		}
 	}
 	aggs["price"] = map[string]any{
-		"filter": map[string]any{"exists": map[string]any{"field": "price"}},
+		"nested": map[string]any{"path": "priceProfiles"},
 		"aggs": map[string]any{
-			"minPrice": priceBound("asc"),
-			"maxPrice": priceBound("desc"),
+			"selected": map[string]any{
+				"filter": profileFilter(query),
+				"aggs": map[string]any{
+					"minPrice": priceBound("asc"),
+					"maxPrice": priceBound("desc"),
+				},
+			},
 		},
 	}
-	for _, a := range fields {
+	for _, a := range query.FacetFields {
 		aggs["attr."+a.Code] = facetAggregationBody("attributes."+a.Code, a.Type)
 	}
 	return aggs
@@ -75,8 +87,8 @@ func facetAggregationBody(field, kind string) map[string]any {
 func priceBound(order string) map[string]any {
 	return map[string]any{"top_hits": map[string]any{
 		"size":    1,
-		"sort":    []any{map[string]any{"price": order}},
-		"_source": []string{"price"},
+		"sort":    []any{map[string]any{"priceProfiles.effectivePrice": order}},
+		"_source": true,
 	}}
 }
 
@@ -108,6 +120,11 @@ func readFacets(raw map[string]json.RawMessage, fields []taxonomy.Attribute) ([]
 			Min:    agg.Values.Min,
 			Max:    agg.Values.Max,
 			Values: []ports.FacetBucket{},
+		}
+		if a.Code == "price" && agg.Selected != nil {
+			agg.MinPrice = agg.Selected.MinPrice
+			agg.MaxPrice = agg.Selected.MaxPrice
+			f.Count = agg.Selected.Count
 		}
 		if a.Code == "price" {
 			if len(agg.MinPrice.Hits.Hits) > 0 {

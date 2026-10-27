@@ -15,7 +15,7 @@ import (
 const (
 	productColumns = `
 		p.tenant_id, p.product_id, p.revision, p.deleted, p.card, p.price, p.promo_price,
-		p.available, p.projected_at, p.version, p.updated_at`
+		p.available, p.projected_at, p.version, p.updated_at, p.price_profiles`
 
 	selectProduct = `
 		SELECT ` + productColumns + `
@@ -25,9 +25,9 @@ const (
 	insertProduct = `
 		INSERT INTO catalog_products (
 			tenant_id, product_id, revision, deleted, card, price, promo_price,
-			available, projected_at, version, updated_at
+			available, projected_at, version, updated_at, price_profiles
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
 
 	updateProduct = `
 		UPDATE catalog_products
@@ -39,8 +39,9 @@ const (
 			available = $8,
 			projected_at = $9,
 			version = $10,
-			updated_at = $11
-		WHERE tenant_id = $1 AND product_id = $2 AND version = $12`
+			updated_at = $11,
+			price_profiles = $12
+		WHERE tenant_id = $1 AND product_id = $2 AND version = $13`
 )
 
 // Products — проекция товаров в PostgreSQL.
@@ -76,6 +77,7 @@ type productRow struct {
 	revision            int64
 	deleted             bool
 	card                []byte
+	priceProfiles       []byte
 	price, promo        *int64
 	available           int
 	projectedAt         time.Time
@@ -86,7 +88,6 @@ type productRow struct {
 // Get — товар проекции.
 func (r *Products) Get(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) (*catalog.Product, error) {
 	var row productRow
-
 	err := r.q.QueryRow(ctx, selectProduct, string(tenantID), string(productID)).Scan(row.targets()...)
 	if notFound(err) {
 		return nil, catalog.ErrProductNotFound
@@ -118,6 +119,10 @@ func (r *Products) Save(ctx context.Context, product *catalog.Product) error {
 		promo = s.PromoPrice.Kopecks()
 	}
 
+	profiles, err := json.Marshal(s.PriceProfiles)
+	if err != nil {
+		return err
+	}
 	args := []any{
 		string(s.TenantID),
 		string(s.ProductID),
@@ -130,6 +135,7 @@ func (r *Products) Save(ctx context.Context, product *catalog.Product) error {
 		s.ProjectedAt,
 		s.Version,
 		s.UpdatedAt,
+		string(profiles),
 	}
 
 	if product.OriginVersion() == 0 {
@@ -158,6 +164,7 @@ func (r *productRow) targets() []any {
 		&r.projectedAt,
 		&r.version,
 		&r.updatedAt,
+		&r.priceProfiles,
 	}
 }
 
@@ -166,7 +173,6 @@ func (r *productRow) product() (*catalog.Product, error) {
 	if err != nil {
 		return nil, fmt.Errorf("карточка %s/%s: %w", r.tenantID, r.productID, err)
 	}
-
 	state := catalog.ProductState{
 		TenantID:    ids.TenantID(r.tenantID),
 		ProductID:   ids.ProductID(r.productID),
@@ -177,6 +183,10 @@ func (r *productRow) product() (*catalog.Product, error) {
 		ProjectedAt: r.projectedAt,
 		Version:     r.version,
 		UpdatedAt:   r.updatedAt,
+	}
+
+	if err := json.Unmarshal(r.priceProfiles, &state.PriceProfiles); err != nil {
+		return nil, fmt.Errorf("ценовые профили %s/%s: %w", r.tenantID, r.productID, err)
 	}
 
 	if r.price != nil {
@@ -222,7 +232,6 @@ func decodeCard(raw []byte) (catalog.Card, error) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return catalog.Card{}, err
 	}
-
 	card := catalog.Card{
 		Marketplace: doc.Marketplace,
 		Publication: doc.Publication,

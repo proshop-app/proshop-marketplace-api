@@ -10,6 +10,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	pricecatalog "github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
@@ -39,7 +40,6 @@ func (e *env) session(t *testing.T, method, path, body, cookie string, headers .
 		t.Fatal(err)
 	}
 	defer func() { _ = raw.Body.Close() }()
-
 	out := response{status: raw.StatusCode, header: raw.Header}
 	data, _ := io.ReadAll(raw.Body)
 	if len(data) > 0 && strings.HasPrefix(raw.Header.Get("Content-Type"), "application/json") {
@@ -54,21 +54,17 @@ func (e *env) session(t *testing.T, method, path, body, cookie string, headers .
 // login проходит вход по звонку и отдаёт токен из куки.
 func (e *env) login(t *testing.T) string {
 	t.Helper()
-
 	started := e.session(t, http.MethodPost, "/api/v1/auth/call", `{"phone":"+7 925 123-45-67"}`, "")
 	if started.status != http.StatusCreated || started.body["callPhonePretty"] != "+7 (800) 500-8275" ||
 		started.body["status"] != "pending" {
 		t.Fatalf("начало входа: %+v", started)
 	}
-
 	challenge := started.body["challengeId"].(string)
-
 	pending := e.session(t, http.MethodPost, "/api/v1/auth/call/check", `{"challengeId":"`+challenge+`"}`, "")
 	if pending.status != http.StatusOK || pending.body["status"] != "pending" ||
 		pending.header.Get("Set-Cookie") != "" {
 		t.Fatalf("звонка ещё не было: %+v", pending)
 	}
-
 	form := url.Values{"data[0]": {"callcheck_status\nref-1\n401\n1500000000"}}
 	e.calls.Set("ref-1", buyer.CallConfirmed)
 
@@ -81,7 +77,6 @@ func (e *env) login(t *testing.T) string {
 	if string(text) != "100" {
 		t.Fatalf("ответ шлюзу: %q", text)
 	}
-
 	confirmed := e.session(t, http.MethodPost, "/api/v1/auth/call/check", `{"challengeId":"`+challenge+`"}`, "")
 	if confirmed.status != http.StatusOK || confirmed.body["status"] != "confirmed" || confirmed.body["buyer"] == nil {
 		t.Fatalf("вход состоялся: %+v", confirmed)
@@ -110,7 +105,6 @@ func (e *env) login(t *testing.T) string {
 func TestLoginFlow(t *testing.T) {
 	e := newEnv(t)
 	token := e.login(t)
-
 	r := e.session(t, http.MethodGet, "/api/v1/me", "", "")
 	if r.status != http.StatusUnauthorized || errorCode(r) != "buyer.unauthorized" {
 		t.Fatalf("без сессии: %+v", r)
@@ -130,7 +124,6 @@ func TestLoginFlow(t *testing.T) {
 	if r.status != http.StatusBadRequest || errorCode(r) != "buyer.invalid_phone" {
 		t.Fatalf("неверный номер: %+v", r)
 	}
-
 	out := e.session(t, http.MethodPost, "/api/v1/auth/logout", "", token)
 	if out.status != http.StatusNoContent || !strings.Contains(out.header.Get("Set-Cookie"), "Max-Age=0") {
 		t.Fatalf("выход стирает куку: %+v", out)
@@ -146,7 +139,6 @@ func TestLoginRateLimit(t *testing.T) {
 	for range 10 {
 		e.session(t, http.MethodPost, "/api/v1/auth/call", `{"phone":"79251234567"}`, "")
 	}
-
 	r := e.session(t, http.MethodPost, "/api/v1/auth/call", `{"phone":"79251234567"}`, "")
 	if r.status != http.StatusTooManyRequests || errorCode(r) != "buyer.too_many_attempts" {
 		t.Fatalf("лимит попыток — 429: %+v", r)
@@ -171,7 +163,6 @@ func TestCartDeliveryCheckout(t *testing.T) {
 		CreatedAt:   t0,
 		UpdatedAt:   t0,
 	})
-
 	offer := ports.OfferDocument{
 		ID:                "t1~p1",
 		TenantID:          "t1",
@@ -183,6 +174,13 @@ func TestCartDeliveryCheckout(t *testing.T) {
 		Listed:            true,
 		CheckoutAvailable: true,
 		Version:           1,
+		PriceProfiles: []pricecatalog.PriceProfile{
+			{
+				Key:            pricecatalog.DefaultPriceProfile,
+				Price:          money.FromKopecks(199000),
+				EffectivePrice: money.FromKopecks(199000),
+			},
+		},
 	}
 	_ = e.index.Put(ctx, []ports.OfferDocument{offer})
 
@@ -209,12 +207,10 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	if r := e.session(t, http.MethodGet, "/api/v1/cart", "", ""); r.status != http.StatusUnauthorized {
 		t.Fatalf("корзина только с сессией: %+v", r)
 	}
-
 	added := e.session(t, http.MethodPost, "/api/v1/cart/lines", `{"offerId":"t1~p1","quantity":2}`, token)
 	if added.status != http.StatusOK || added.body["total"] != float64(398000) {
 		t.Fatalf("добавление: %+v", added)
 	}
-
 	r := e.session(t, http.MethodPost, "/api/v1/cart/lines", `{"offerId":"t1~p1","quantity":5}`, token)
 	if r.status != http.StatusConflict || errorCode(r) != "cart.not_enough_stock" {
 		t.Fatalf("сверх остатка: %+v", r)
@@ -227,7 +223,6 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	if r := e.session(t, http.MethodPost, "/api/v1/cart/verify", "", token); r.status != http.StatusOK {
 		t.Fatalf("перепроверка: %+v", r)
 	}
-
 	carriers := e.session(t, http.MethodGet, "/api/v1/delivery/carriers", "", "")
 	if items, _ := carriers.body["items"].([]any); carriers.status != http.StatusOK || len(items) != 1 {
 		t.Fatalf("перевозчики: %+v", carriers)
@@ -257,19 +252,16 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	if r.status != http.StatusBadRequest || errorCode(r) != "checkout.invalid_idempotency_key" {
 		t.Fatalf("без ключа идемпотентности: %+v", r)
 	}
-
 	created := e.session(t, http.MethodPost, "/api/v1/checkout", "", token, "Idempotency-Key", "checkout-key-0001")
 	if created.status != http.StatusCreated || created.body["status"] != "draft" ||
 		created.body["goodsTotal"] != float64(199000) {
 		t.Fatalf("покупка: %+v", created)
 	}
 	id := created.body["id"].(string)
-
 	again := e.session(t, http.MethodPost, "/api/v1/checkout", "", token, "Idempotency-Key", "checkout-key-0001")
 	if again.body["id"] != id {
 		t.Fatalf("тот же ключ — та же покупка: %+v", again)
 	}
-
 	quoted := e.session(
 		t,
 		http.MethodPost,
@@ -281,7 +273,6 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	if quoted.status != http.StatusOK || len(groups) != 1 || quoted.body["deliveryTotal"] != float64(0) {
 		t.Fatalf("расчёт доставки: %+v", quoted)
 	}
-
 	confirmed := e.session(t, http.MethodPost, "/api/v1/checkout/"+id+"/confirm", "", token)
 	if confirmed.status != http.StatusOK || confirmed.body["status"] != "confirmed" ||
 		confirmed.body["total"] != float64(199000) ||

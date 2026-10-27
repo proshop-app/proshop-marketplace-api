@@ -5,7 +5,7 @@ import "github.com/proshop-app/proshop-marketplace/internal/application/ports"
 // searchBody — запрос выдачи: только предложения в выдаче, фильтры без
 // влияния на релевантность, детерминированный порядок при равенстве.
 func searchBody(query ports.OfferQuery) map[string]any {
-	filters := []any{term("listed", true)}
+	filters := []any{term("listed", true), profileQuery(query)}
 
 	if query.TenantID != "" {
 		filters = append(filters, term("tenantId", query.TenantID))
@@ -18,17 +18,6 @@ func searchBody(query ports.OfferQuery) map[string]any {
 	}
 	if query.InStockSet || query.InStock {
 		filters = append(filters, term("inStock", query.InStock))
-	}
-	if query.PriceMin != nil || query.PriceMax != nil {
-		bounds := map[string]any{}
-		if query.PriceMin != nil {
-			bounds["gte"] = *query.PriceMin
-		}
-		if query.PriceMax != nil {
-			bounds["lte"] = *query.PriceMax
-		}
-
-		filters = append(filters, map[string]any{"range": map[string]any{"price": bounds}})
 	}
 
 	for code, filter := range query.Attributes {
@@ -60,7 +49,7 @@ func searchBody(query ports.OfferQuery) map[string]any {
 	}
 
 	return map[string]any{
-		"aggs":             facetAggregations(query.FacetFields),
+		"aggs":             facetAggregations(query),
 		"query":            map[string]any{"bool": boolQuery},
 		"from":             query.Offset,
 		"size":             query.Limit,
@@ -79,9 +68,9 @@ func sortOf(query ports.OfferQuery) []any {
 
 	switch query.Sort {
 	case ports.SortPriceAsc:
-		return []any{map[string]any{"price": "asc"}, tie}
+		return []any{profileSort(query, "asc"), tie}
 	case ports.SortPriceDesc:
-		return []any{map[string]any{"price": "desc"}, tie}
+		return []any{profileSort(query, "desc"), tie}
 	case ports.SortNewest:
 		return []any{map[string]any{"updatedAt": "desc"}, tie}
 	default:
