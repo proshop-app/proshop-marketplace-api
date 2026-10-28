@@ -30,11 +30,14 @@ export DATABASE_URL OPENSEARCH_URLS OPENSEARCH_REPLICAS KAFKA_BROKERS KAFKA_TOPI
 export REDIS_URL PLATFORM_API_URL SERVICE_TOKEN_MARKETPLACE SMSRU_MODE
 
 IMAGE ?= proshop-marketplace:dev
+TAXONOMY_IMAGE ?= proshop-marketplace-taxonomy:dev
 
 .PHONY: dev infra-up infra-down migrate reindex refresh-pickup-points test test-integration lint build image
 
 ## dev: инфраструктура в compose, миграции и сервис с перезапуском при правках
-dev: infra-up migrate
+dev: infra-up
+	$(MAKE) migrate
+	$(MAKE) taxonomy-apply
 	$(AIR) -c .air.toml
 
 ## infra-up: PostgreSQL, OpenSearch, Kafka (KRaft) и Redis, ждать готовности
@@ -83,3 +86,19 @@ image:
 ## taxonomy-load: загрузить версию схем площадки из YAML
 taxonomy-load:
 	go run ./cmd/taxonomy load "$(FILE)"
+
+## taxonomy-check: проверить встроенную поставку без базы и внешних сервисов
+taxonomy-check:
+	go run ./cmd/taxonomy check
+
+## taxonomy-apply: идемпотентно установить готовую поставку после миграций
+taxonomy-apply:
+	go run ./cmd/taxonomy apply
+
+## taxonomy-rollback: восстановить предыдущее содержимое новой версией
+taxonomy-rollback:
+	go run ./cmd/taxonomy rollback
+
+## taxonomy-image: собрать готовый образ с данными каталога
+taxonomy-image:
+	docker build --target taxonomy -t $(TAXONOMY_IMAGE) .

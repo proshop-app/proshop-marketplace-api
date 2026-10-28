@@ -13,14 +13,17 @@ import (
 
 const (
 	// MaxAttributes ограничивает число динамических полей индекса.
-	MaxAttributes = 128
+	MaxAttributes = 256
 	// MaxCategories ограничивает размер операторского дерева.
-	MaxCategories = 1000
+	MaxCategories = 4096
 	// MaxDepth ограничивает глубину дерева.
 	MaxDepth = 16
 )
 
-var codePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+var (
+	codePattern       = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+	categoryIDPattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,127}$`)
+)
 
 // Attribute — скалярное поле; код имеет один тип и единицу во всей площадке.
 type Attribute struct {
@@ -89,7 +92,7 @@ func (d Definition) Validate() error {
 		}
 		for _, c := range categories {
 			invalidName := strings.TrimSpace(c.Name) == "" || utf8.RuneCountInString(c.Name) > 256
-			if !ValidCode(c.ID) || ids[c.ID] || invalidName {
+			if !categoryIDPattern.MatchString(c.ID) || ids[c.ID] || invalidName {
 				return ErrInvalid.WithMessage("неверный или повторный id категории, пустое или длинное имя")
 			}
 			ids[c.ID] = true

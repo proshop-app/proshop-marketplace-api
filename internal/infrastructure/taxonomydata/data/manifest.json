@@ -1,0 +1,12 @@
+{
+    "release": 1,
+    "checksum": "e8116e45519060156763ee3b385f8eee036c79c7564546a2a61df7833dc88b5e",
+    "coverage": {
+        "directions": 29,
+        "categories": 1204,
+        "leaves": 1047,
+        "schemas": 139,
+        "attributes": 214,
+        "values": 90
+    }
+}
