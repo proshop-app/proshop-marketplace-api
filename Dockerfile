@@ -14,11 +14,19 @@ COPY cmd ./cmd
 COPY internal ./internal
 COPY pkg ./pkg
 RUN go build -trimpath -ldflags="-s -w" -o /out/marketplace ./cmd/marketplace \
- && go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate
+ && go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate \
+ && go build -trimpath -ldflags="-s -w" -o /out/taxonomy ./cmd/taxonomy
 
-FROM scratch
+FROM scratch AS taxonomy
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /out/marketplace /out/migrate /
+COPY --from=build /out/taxonomy /taxonomy
+USER 65532:65532
+ENTRYPOINT ["/taxonomy"]
+CMD ["check"]
+
+FROM scratch AS runtime
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /out/marketplace /out/migrate /out/taxonomy /
 USER 65532:65532
 EXPOSE 8080
 ENTRYPOINT ["/marketplace"]

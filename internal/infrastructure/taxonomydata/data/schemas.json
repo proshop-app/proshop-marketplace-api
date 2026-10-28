@@ -1,0 +1,2291 @@
+{
+    "phone": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "color",
+            "ram",
+            "storage_capacity",
+            "screen_diagonal",
+            "resolution",
+            "screen_matrix",
+            "processor",
+            "os",
+            "battery_capacity",
+            "camera_resolution",
+            "network_standard",
+            "nfc",
+            "waterproof"
+        ],
+        "required": [
+            "storage_capacity",
+            "screen_diagonal"
+        ]
+    },
+    "tablet": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "color",
+            "ram",
+            "storage_capacity",
+            "screen_diagonal",
+            "resolution",
+            "processor",
+            "os",
+            "battery_capacity",
+            "network_standard"
+        ],
+        "required": [
+            "storage_capacity",
+            "screen_diagonal"
+        ]
+    },
+    "wearable": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "color",
+            "screen_diagonal",
+            "os",
+            "battery_capacity",
+            "wireless",
+            "waterproof",
+            "compatibility"
+        ],
+        "required": [
+            "compatibility"
+        ]
+    },
+    "phone_accessory": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "color",
+            "compatibility",
+            "body_material",
+            "connector",
+            "wireless",
+            "battery_capacity",
+            "power",
+            "cable_length"
+        ],
+        "required": [
+            "compatibility"
+        ]
+    },
+    "headphone": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "color",
+            "connection",
+            "connector",
+            "wireless",
+            "noise_level",
+            "battery_capacity",
+            "waterproof"
+        ],
+        "required": [
+            "connection"
+        ]
+    },
+    "speaker": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "color",
+            "connection",
+            "power",
+            "audio_channels",
+            "wireless",
+            "battery_capacity"
+        ],
+        "required": [
+            "connection",
+            "power"
+        ]
+    },
+    "tv": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "screen_diagonal",
+            "resolution",
+            "screen_matrix",
+            "refresh_rate",
+            "os",
+            "interfaces",
+            "power"
+        ],
+        "required": [
+            "screen_diagonal",
+            "resolution"
+        ]
+    },
+    "video": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "resolution",
+            "video_format",
+            "interfaces",
+            "connection",
+            "storage_capacity"
+        ],
+        "required": [
+            "interfaces"
+        ]
+    },
+    "camera": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "sensor_format",
+            "camera_resolution",
+            "video_format",
+            "lens_mount",
+            "interfaces",
+            "battery_capacity"
+        ],
+        "required": [
+            "camera_resolution"
+        ]
+    },
+    "lens": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "lens_mount",
+            "focal_length",
+            "compatibility",
+            "sensor_format"
+        ],
+        "required": [
+            "lens_mount",
+            "focal_length"
+        ]
+    },
+    "optics": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "body_material",
+            "weight",
+            "waterproof",
+            "purpose"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "gaming": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "supported_platform",
+            "connection",
+            "storage_capacity",
+            "wireless",
+            "color"
+        ],
+        "required": [
+            "supported_platform"
+        ]
+    },
+    "drone": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "camera_resolution",
+            "video_format",
+            "battery_capacity",
+            "weight",
+            "wireless"
+        ],
+        "required": [
+            "battery_capacity"
+        ]
+    },
+    "electronic_accessory": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "compatibility",
+            "connector",
+            "connection",
+            "color",
+            "cable_length",
+            "power"
+        ],
+        "required": [
+            "compatibility"
+        ]
+    },
+    "laptop": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "color",
+            "processor",
+            "cpu_cores",
+            "ram",
+            "storage_type",
+            "storage_capacity",
+            "gpu",
+            "gpu_memory",
+            "screen_diagonal",
+            "resolution",
+            "os",
+            "interfaces",
+            "battery_energy",
+            "backlight"
+        ],
+        "required": [
+            "processor",
+            "ram",
+            "storage_capacity",
+            "screen_diagonal"
+        ]
+    },
+    "computer": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "processor",
+            "cpu_cores",
+            "ram",
+            "storage_type",
+            "storage_capacity",
+            "gpu",
+            "os",
+            "interfaces"
+        ],
+        "required": [
+            "processor",
+            "ram",
+            "storage_capacity"
+        ]
+    },
+    "monitor": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "screen_diagonal",
+            "resolution",
+            "screen_matrix",
+            "refresh_rate",
+            "interfaces",
+            "touchscreen"
+        ],
+        "required": [
+            "screen_diagonal",
+            "resolution"
+        ]
+    },
+    "cpu": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "cpu_socket",
+            "cpu_cores",
+            "cpu_frequency",
+            "chipset",
+            "power"
+        ],
+        "required": [
+            "cpu_socket",
+            "cpu_cores"
+        ]
+    },
+    "motherboard": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "cpu_socket",
+            "chipset",
+            "memory_type",
+            "interfaces"
+        ],
+        "required": [
+            "cpu_socket",
+            "chipset"
+        ]
+    },
+    "ram_module": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "ram",
+            "memory_type",
+            "memory_frequency"
+        ],
+        "required": [
+            "ram",
+            "memory_type"
+        ]
+    },
+    "gpu": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "gpu",
+            "gpu_memory",
+            "interfaces",
+            "power"
+        ],
+        "required": [
+            "gpu",
+            "gpu_memory"
+        ]
+    },
+    "drive": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "storage_type",
+            "storage_capacity",
+            "drive_interface",
+            "drive_form_factor"
+        ],
+        "required": [
+            "storage_capacity",
+            "drive_interface"
+        ]
+    },
+    "pc_case": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "body_material",
+            "color",
+            "length",
+            "width",
+            "height",
+            "compatibility"
+        ],
+        "required": [
+            "compatibility"
+        ]
+    },
+    "pc_power": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "power",
+            "voltage",
+            "interfaces",
+            "compatibility"
+        ],
+        "required": [
+            "power"
+        ]
+    },
+    "pc_cooling": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "compatibility",
+            "power",
+            "noise_level",
+            "backlight"
+        ],
+        "required": [
+            "compatibility"
+        ]
+    },
+    "keyboard": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "connection",
+            "keyboard_layout",
+            "switch_type",
+            "wireless",
+            "backlight",
+            "color"
+        ],
+        "required": [
+            "connection",
+            "keyboard_layout"
+        ]
+    },
+    "mouse": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "connection",
+            "wireless",
+            "color",
+            "backlight"
+        ],
+        "required": [
+            "connection"
+        ]
+    },
+    "printer": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "print_technology",
+            "paper_format",
+            "print_color",
+            "connection",
+            "interfaces"
+        ],
+        "required": [
+            "print_technology",
+            "paper_format"
+        ]
+    },
+    "printer_supply": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "compatibility",
+            "print_color",
+            "count"
+        ],
+        "required": [
+            "compatibility"
+        ]
+    },
+    "network": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "network_standard",
+            "network_speed",
+            "interfaces",
+            "wireless"
+        ],
+        "required": [
+            "network_standard"
+        ]
+    },
+    "cable": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "connector",
+            "cable_length",
+            "interfaces",
+            "compatibility"
+        ],
+        "required": [
+            "connector",
+            "cable_length"
+        ]
+    },
+    "ups": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "power",
+            "battery_energy",
+            "voltage",
+            "interfaces"
+        ],
+        "required": [
+            "power"
+        ]
+    },
+    "fridge": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "capacity_l",
+            "energy_class",
+            "appliance_installation",
+            "color",
+            "length",
+            "width",
+            "height"
+        ],
+        "required": [
+            "capacity_l",
+            "appliance_installation"
+        ]
+    },
+    "washer": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "wash_load",
+            "spin_speed",
+            "energy_class",
+            "appliance_installation",
+            "noise_level",
+            "width",
+            "height"
+        ],
+        "required": [
+            "wash_load",
+            "appliance_installation"
+        ]
+    },
+    "dishwasher": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "place_settings",
+            "energy_class",
+            "appliance_installation",
+            "width",
+            "noise_level"
+        ],
+        "required": [
+            "place_settings",
+            "appliance_installation"
+        ]
+    },
+    "cooker": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "power",
+            "burner_count",
+            "appliance_installation",
+            "capacity_l",
+            "color",
+            "width"
+        ],
+        "required": [
+            "appliance_installation"
+        ]
+    },
+    "kitchen_appliance": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "power",
+            "capacity_l",
+            "body_material",
+            "color",
+            "equipment"
+        ],
+        "required": [
+            "power"
+        ]
+    },
+    "cleaning_appliance": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "power",
+            "power_source",
+            "capacity_l",
+            "filter_type",
+            "noise_level",
+            "equipment"
+        ],
+        "required": [
+            "power",
+            "power_source"
+        ]
+    },
+    "climate": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "power",
+            "room_area",
+            "capacity_l",
+            "noise_level",
+            "energy_class"
+        ],
+        "required": [
+            "room_area"
+        ]
+    },
+    "personal_appliance": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "power",
+            "power_source",
+            "equipment",
+            "color",
+            "waterproof"
+        ],
+        "required": [
+            "power_source"
+        ]
+    },
+    "sewing_machine": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "power",
+            "purpose",
+            "equipment"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "cookware": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "cookware_material",
+            "capacity_l",
+            "diameter",
+            "induction",
+            "dishwasher_safe",
+            "color"
+        ],
+        "required": [
+            "cookware_material"
+        ]
+    },
+    "tableware": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "cookware_material",
+            "count",
+            "capacity_l",
+            "diameter",
+            "color",
+            "dishwasher_safe"
+        ],
+        "required": [
+            "cookware_material",
+            "count"
+        ]
+    },
+    "kitchen_tool": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "cookware_material",
+            "length",
+            "count",
+            "purpose",
+            "dishwasher_safe"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "storage": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "material",
+            "capacity_l",
+            "length",
+            "width",
+            "height",
+            "count",
+            "color"
+        ],
+        "required": [
+            "material"
+        ]
+    },
+    "home_decor": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "material",
+            "color",
+            "length",
+            "width",
+            "height",
+            "purpose"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "lighting": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "power",
+            "voltage",
+            "light_temperature",
+            "light_flux",
+            "body_material",
+            "color",
+            "protection_class"
+        ],
+        "required": [
+            "power",
+            "voltage"
+        ]
+    },
+    "bed": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "furniture_frame",
+            "bed_width",
+            "bed_length",
+            "upholstery",
+            "load_kg",
+            "color",
+            "furniture_style"
+        ],
+        "required": [
+            "bed_width",
+            "bed_length",
+            "furniture_frame"
+        ]
+    },
+    "sofa": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "furniture_frame",
+            "upholstery",
+            "length",
+            "width",
+            "height",
+            "bed_width",
+            "bed_length",
+            "foldable",
+            "color"
+        ],
+        "required": [
+            "length",
+            "width",
+            "upholstery"
+        ]
+    },
+    "chair": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "furniture_frame",
+            "upholstery",
+            "load_kg",
+            "height",
+            "color",
+            "furniture_style"
+        ],
+        "required": [
+            "furniture_frame"
+        ]
+    },
+    "table": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "furniture_frame",
+            "length",
+            "width",
+            "height",
+            "foldable",
+            "color",
+            "furniture_style"
+        ],
+        "required": [
+            "length",
+            "width",
+            "height"
+        ]
+    },
+    "cabinet": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "furniture_frame",
+            "length",
+            "width",
+            "height",
+            "color",
+            "furniture_style"
+        ],
+        "required": [
+            "length",
+            "width",
+            "height"
+        ]
+    },
+    "mattress": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "bed_width",
+            "bed_length",
+            "height",
+            "firmness",
+            "mattress_filling",
+            "load_kg",
+            "orthopedic"
+        ],
+        "required": [
+            "bed_width",
+            "bed_length",
+            "firmness"
+        ]
+    },
+    "furniture_part": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "compatibility",
+            "material",
+            "length",
+            "count",
+            "color"
+        ],
+        "required": [
+            "compatibility"
+        ]
+    },
+    "bed_linen": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "textile_material",
+            "fabric_composition",
+            "size",
+            "count",
+            "color",
+            "fabric_density"
+        ],
+        "required": [
+            "textile_material",
+            "size"
+        ]
+    },
+    "blanket": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "textile_material",
+            "fabric_composition",
+            "length",
+            "width",
+            "color",
+            "season"
+        ],
+        "required": [
+            "textile_material",
+            "length",
+            "width"
+        ]
+    },
+    "pillow": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "textile_material",
+            "mattress_filling",
+            "length",
+            "width",
+            "orthopedic"
+        ],
+        "required": [
+            "length",
+            "width"
+        ]
+    },
+    "towel": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "textile_material",
+            "fabric_composition",
+            "length",
+            "width",
+            "fabric_density",
+            "color",
+            "count"
+        ],
+        "required": [
+            "textile_material",
+            "length",
+            "width"
+        ]
+    },
+    "curtain": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "textile_material",
+            "fabric_composition",
+            "length",
+            "width",
+            "color",
+            "count"
+        ],
+        "required": [
+            "length",
+            "width",
+            "textile_material"
+        ]
+    },
+    "carpet": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "textile_material",
+            "length",
+            "width",
+            "color",
+            "purpose"
+        ],
+        "required": [
+            "length",
+            "width"
+        ]
+    },
+    "clothing": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "size",
+            "gender",
+            "age",
+            "color",
+            "textile_material",
+            "fabric_composition",
+            "season",
+            "clothing_fit",
+            "clothing_fastener"
+        ],
+        "required": [
+            "size",
+            "fabric_composition"
+        ]
+    },
+    "outerwear": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "size",
+            "gender",
+            "age",
+            "color",
+            "fabric_composition",
+            "season",
+            "clothing_fastener",
+            "hood",
+            "insulated"
+        ],
+        "required": [
+            "size",
+            "season",
+            "fabric_composition"
+        ]
+    },
+    "underwear": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "size",
+            "gender",
+            "age",
+            "color",
+            "fabric_composition",
+            "count"
+        ],
+        "required": [
+            "size",
+            "fabric_composition"
+        ]
+    },
+    "swimwear": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "size",
+            "gender",
+            "age",
+            "color",
+            "fabric_composition"
+        ],
+        "required": [
+            "size",
+            "fabric_composition"
+        ]
+    },
+    "shoe": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "size",
+            "gender",
+            "age",
+            "color",
+            "season",
+            "shoe_upper",
+            "shoe_lining",
+            "shoe_sole",
+            "shoe_fastener",
+            "heel_height"
+        ],
+        "required": [
+            "size",
+            "shoe_upper",
+            "season"
+        ]
+    },
+    "bag": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "gender",
+            "color",
+            "material",
+            "length",
+            "width",
+            "height",
+            "capacity_l",
+            "purpose"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "accessory": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "gender",
+            "size",
+            "color",
+            "textile_material",
+            "material",
+            "purpose"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "watch": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "gender",
+            "color",
+            "body_material",
+            "connection",
+            "waterproof"
+        ],
+        "required": [
+            "body_material"
+        ]
+    },
+    "jewelry": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "gender",
+            "size",
+            "jewelry_metal",
+            "jewelry_sample",
+            "jewelry_insert",
+            "jewelry_weight",
+            "color"
+        ],
+        "required": [
+            "jewelry_metal"
+        ]
+    },
+    "cosmetic": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "skin_type",
+            "skin_effect",
+            "ingredients",
+            "volume",
+            "net_weight",
+            "shelf_life",
+            "spf"
+        ],
+        "required": [
+            "purpose",
+            "ingredients"
+        ]
+    },
+    "haircare": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "hair_type",
+            "skin_effect",
+            "ingredients",
+            "volume",
+            "shelf_life"
+        ],
+        "required": [
+            "ingredients"
+        ]
+    },
+    "makeup": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "color",
+            "skin_type",
+            "ingredients",
+            "volume",
+            "net_weight",
+            "shelf_life"
+        ],
+        "required": [
+            "color"
+        ]
+    },
+    "perfume": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "fragrance",
+            "volume",
+            "gender",
+            "shelf_life"
+        ],
+        "required": [
+            "fragrance",
+            "volume"
+        ]
+    },
+    "beauty_tool": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "material",
+            "count",
+            "color"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "hygiene": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "ingredients",
+            "count",
+            "volume",
+            "net_weight",
+            "age"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "medical_device": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "medical_application",
+            "power_source",
+            "equipment",
+            "measurement_range"
+        ],
+        "required": [
+            "medical_application"
+        ]
+    },
+    "medical_supply": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "medical_application",
+            "medical_size",
+            "count",
+            "sterile",
+            "material"
+        ],
+        "required": [
+            "medical_application",
+            "count"
+        ]
+    },
+    "orthopedic": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "medical_application",
+            "medical_size",
+            "material",
+            "load_kg",
+            "orthopedic"
+        ],
+        "required": [
+            "medical_application",
+            "medical_size"
+        ]
+    },
+    "baby_transport": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "min_age",
+            "load_kg",
+            "weight",
+            "foldable",
+            "color",
+            "equipment"
+        ],
+        "required": [
+            "min_age",
+            "load_kg"
+        ]
+    },
+    "car_seat": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "min_age",
+            "load_kg",
+            "weight",
+            "color",
+            "protection_class"
+        ],
+        "required": [
+            "min_age",
+            "load_kg"
+        ]
+    },
+    "baby_feeding": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "min_age",
+            "volume",
+            "cookware_material",
+            "count"
+        ],
+        "required": [
+            "min_age"
+        ]
+    },
+    "baby_hygiene": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "age",
+            "size",
+            "count",
+            "ingredients",
+            "purpose"
+        ],
+        "required": [
+            "purpose",
+            "count"
+        ]
+    },
+    "baby_furniture": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "min_age",
+            "load_kg",
+            "furniture_frame",
+            "length",
+            "width",
+            "height"
+        ],
+        "required": [
+            "furniture_frame"
+        ]
+    },
+    "toy": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "min_age",
+            "material",
+            "color",
+            "count",
+            "purpose"
+        ],
+        "required": [
+            "min_age"
+        ]
+    },
+    "construction_toy": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "min_age",
+            "toy_parts",
+            "material",
+            "craft_theme"
+        ],
+        "required": [
+            "min_age",
+            "toy_parts"
+        ]
+    },
+    "board_game": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "min_age",
+            "players",
+            "craft_theme",
+            "book_language"
+        ],
+        "required": [
+            "min_age",
+            "players"
+        ]
+    },
+    "puzzle": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "min_age",
+            "puzzle_parts",
+            "craft_theme"
+        ],
+        "required": [
+            "min_age",
+            "puzzle_parts"
+        ]
+    },
+    "rc_toy": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "min_age",
+            "battery_capacity",
+            "power_source",
+            "connection"
+        ],
+        "required": [
+            "min_age",
+            "power_source"
+        ]
+    },
+    "sport_equipment": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "sport",
+            "size",
+            "weight",
+            "material",
+            "load_kg",
+            "purpose"
+        ],
+        "required": [
+            "sport"
+        ]
+    },
+    "fitness": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "sport",
+            "weight",
+            "load_kg",
+            "material",
+            "power_source",
+            "foldable"
+        ],
+        "required": [
+            "sport"
+        ]
+    },
+    "bicycle": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "wheel_diameter",
+            "frame_size",
+            "bike_frame",
+            "bike_brake",
+            "bike_gears",
+            "gender",
+            "age"
+        ],
+        "required": [
+            "wheel_diameter",
+            "bike_frame"
+        ]
+    },
+    "ride": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "wheel_diameter",
+            "load_kg",
+            "material",
+            "foldable",
+            "battery_capacity",
+            "power"
+        ],
+        "required": [
+            "load_kg"
+        ]
+    },
+    "outdoor": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "material",
+            "weight",
+            "length",
+            "width",
+            "height"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "tent": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "tent_places",
+            "water_resistance",
+            "weight",
+            "season",
+            "equipment"
+        ],
+        "required": [
+            "tent_places",
+            "water_resistance"
+        ]
+    },
+    "sleeping_bag": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "comfort_temperature",
+            "season",
+            "weight",
+            "textile_material",
+            "length"
+        ],
+        "required": [
+            "comfort_temperature"
+        ]
+    },
+    "backpack": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "capacity_l",
+            "weight",
+            "textile_material",
+            "purpose",
+            "waterproof"
+        ],
+        "required": [
+            "capacity_l"
+        ]
+    },
+    "rod": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "rod_length",
+            "fishing_test",
+            "fishing_action",
+            "material"
+        ],
+        "required": [
+            "rod_length"
+        ]
+    },
+    "fishing": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "weight",
+            "line_diameter",
+            "material",
+            "count"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "auto_part": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "auto_make",
+            "auto_model",
+            "part_number",
+            "auto_position",
+            "compatibility"
+        ],
+        "required": [
+            "compatibility",
+            "part_number"
+        ]
+    },
+    "auto_accessory": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "compatibility",
+            "material",
+            "color",
+            "voltage"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "tire": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "tire_width",
+            "tire_profile",
+            "rim_diameter",
+            "tire_season",
+            "tire_load_index",
+            "tire_speed_index",
+            "studded"
+        ],
+        "required": [
+            "tire_width",
+            "tire_profile",
+            "rim_diameter",
+            "tire_season"
+        ]
+    },
+    "wheel": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "rim_diameter",
+            "rim_width",
+            "wheel_bolt_pattern",
+            "wheel_offset",
+            "material"
+        ],
+        "required": [
+            "rim_diameter",
+            "wheel_bolt_pattern"
+        ]
+    },
+    "auto_battery": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "car_battery_capacity",
+            "starting_current",
+            "voltage",
+            "battery_chemistry",
+            "length",
+            "width",
+            "height"
+        ],
+        "required": [
+            "car_battery_capacity",
+            "starting_current",
+            "voltage"
+        ]
+    },
+    "oil": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "oil_viscosity",
+            "oil_specification",
+            "auto_engine",
+            "volume",
+            "purpose"
+        ],
+        "required": [
+            "volume",
+            "purpose"
+        ]
+    },
+    "auto_chemical": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "volume",
+            "ingredients",
+            "temperature_max"
+        ],
+        "required": [
+            "purpose",
+            "volume"
+        ]
+    },
+    "power_tool": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "power",
+            "power_source",
+            "voltage",
+            "tool_speed",
+            "torque",
+            "equipment"
+        ],
+        "required": [
+            "power_source"
+        ]
+    },
+    "tool_accessory": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "tool_diameter",
+            "tool_mount",
+            "compatibility",
+            "material",
+            "count"
+        ],
+        "required": [
+            "compatibility"
+        ]
+    },
+    "hand_tool": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "material",
+            "length",
+            "count"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "measuring": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "measurement_range",
+            "power_source"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "fastener": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "fastener_standard",
+            "thread_diameter",
+            "fastener_length",
+            "material",
+            "count"
+        ],
+        "required": [
+            "count",
+            "material"
+        ]
+    },
+    "paint": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "paint_base",
+            "surface_type",
+            "color",
+            "volume",
+            "net_weight",
+            "drying_time",
+            "coverage_area"
+        ],
+        "required": [
+            "paint_base",
+            "surface_type"
+        ]
+    },
+    "building_mix": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "net_weight",
+            "surface_type",
+            "drying_time"
+        ],
+        "required": [
+            "purpose",
+            "net_weight"
+        ]
+    },
+    "building_panel": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "material",
+            "length",
+            "width",
+            "height",
+            "coverage_area",
+            "color"
+        ],
+        "required": [
+            "length",
+            "width"
+        ]
+    },
+    "plumbing": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "material",
+            "thread_size",
+            "pressure",
+            "flow_rate"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "electrical": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "voltage",
+            "current",
+            "power",
+            "protection_class",
+            "count",
+            "purpose"
+        ],
+        "required": [
+            "voltage",
+            "purpose"
+        ]
+    },
+    "wire": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "wire_section",
+            "cable_length",
+            "voltage",
+            "purpose"
+        ],
+        "required": [
+            "wire_section",
+            "cable_length"
+        ]
+    },
+    "door": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "length",
+            "width",
+            "height",
+            "material",
+            "color",
+            "purpose"
+        ],
+        "required": [
+            "width",
+            "height",
+            "material"
+        ]
+    },
+    "garden_tool": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "power_source",
+            "power",
+            "material",
+            "weight"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "plant": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "plant_species",
+            "plant_variety",
+            "plant_height",
+            "planting_period",
+            "flowering_period"
+        ],
+        "required": [
+            "plant_species"
+        ]
+    },
+    "seed": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "plant_species",
+            "plant_variety",
+            "seed_count",
+            "net_weight",
+            "planting_period"
+        ],
+        "required": [
+            "plant_species",
+            "plant_variety"
+        ]
+    },
+    "garden_soil": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "fertilizer_composition",
+            "net_weight",
+            "capacity_l"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "garden_watering": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "flow_rate",
+            "pressure",
+            "cable_length",
+            "material"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "garden_furniture": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "furniture_frame",
+            "load_kg",
+            "length",
+            "width",
+            "height",
+            "foldable"
+        ],
+        "required": [
+            "furniture_frame"
+        ]
+    },
+    "pet_food": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "target_species",
+            "pet_age",
+            "pet_breed",
+            "food_flavor",
+            "ingredients",
+            "net_weight",
+            "food_diet"
+        ],
+        "required": [
+            "target_species",
+            "ingredients",
+            "net_weight"
+        ]
+    },
+    "pet_supply": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "target_species",
+            "pet_age",
+            "purpose",
+            "size",
+            "material",
+            "count"
+        ],
+        "required": [
+            "target_species",
+            "purpose"
+        ]
+    },
+    "pet_aquarium": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "target_species",
+            "capacity_l",
+            "length",
+            "width",
+            "height",
+            "power"
+        ],
+        "required": [
+            "capacity_l"
+        ]
+    },
+    "food": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "food_category",
+            "ingredients",
+            "net_weight",
+            "shelf_life",
+            "food_storage",
+            "food_energy",
+            "food_protein",
+            "food_fat",
+            "food_carbohydrate",
+            "food_diet",
+            "food_sugar_free",
+            "food_gluten_free",
+            "food_lactose_free"
+        ],
+        "required": [
+            "ingredients",
+            "net_weight",
+            "shelf_life",
+            "food_storage"
+        ]
+    },
+    "drink": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "food_category",
+            "ingredients",
+            "volume",
+            "shelf_life",
+            "food_storage",
+            "food_flavor",
+            "food_sugar_free"
+        ],
+        "required": [
+            "ingredients",
+            "volume",
+            "shelf_life",
+            "food_storage"
+        ]
+    },
+    "stationery": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "color",
+            "count",
+            "material",
+            "paper_format"
+        ],
+        "required": [
+            "purpose",
+            "count"
+        ]
+    },
+    "paper": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "paper_format",
+            "paper_density",
+            "count",
+            "color"
+        ],
+        "required": [
+            "paper_format",
+            "count"
+        ]
+    },
+    "book": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "book_author",
+            "book_publisher",
+            "book_isbn",
+            "book_language",
+            "book_genre",
+            "book_series",
+            "book_binding",
+            "book_pages",
+            "book_year",
+            "age"
+        ],
+        "required": [
+            "book_language",
+            "book_binding",
+            "book_pages"
+        ]
+    },
+    "art": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "art_technique",
+            "purpose",
+            "color",
+            "count",
+            "net_weight",
+            "volume"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "craft": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "craft_theme",
+            "purpose",
+            "material",
+            "count",
+            "min_age"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "musical": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "material",
+            "string_count",
+            "key_count",
+            "instrument_key",
+            "instrument_tuning"
+        ],
+        "required": [
+            "purpose"
+        ]
+    },
+    "audio_pro": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "connection",
+            "interfaces",
+            "power",
+            "audio_channels",
+            "frequency"
+        ],
+        "required": [
+            "connection"
+        ]
+    },
+    "household_chemical": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "surface_type",
+            "ingredients",
+            "volume",
+            "net_weight",
+            "count",
+            "shelf_life",
+            "fragrance"
+        ],
+        "required": [
+            "purpose",
+            "ingredients"
+        ]
+    },
+    "household_supply": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "material",
+            "count",
+            "length",
+            "width"
+        ],
+        "required": [
+            "purpose",
+            "count"
+        ]
+    },
+    "industrial": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "purpose",
+            "industrial_standard",
+            "power",
+            "voltage",
+            "pressure",
+            "flow_rate",
+            "protection_class"
+        ],
+        "required": [
+            "purpose",
+            "industrial_standard"
+        ]
+    },
+    "workwear": {
+        "attributes": [
+            "brand",
+            "model",
+            "country",
+            "size",
+            "gender",
+            "fabric_composition",
+            "season",
+            "protection_class",
+            "purpose"
+        ],
+        "required": [
+            "size",
+            "purpose"
+        ]
+    }
+}
