@@ -16,6 +16,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
@@ -110,3 +111,5 @@ func (s *scope) PickupPoints() delivery.PickupPointRepository {
 }
 
 func (s *scope) Taxonomy() taxonomy.Repository { return &Taxonomy{q: s.q} }
+
+func (s *scope) Reference() reference.Repository { return &References{q: s.q} }

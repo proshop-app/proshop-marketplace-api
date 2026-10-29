@@ -150,6 +150,8 @@ type Kafka struct {
 	TopicPrefix string
 	GroupID     string
 	MaxAttempts int
+	// ReferenceTopic — имя топика catalog.reference.changed без префикса; топик заводит сервер установки.
+	ReferenceTopic string
 }
 
 // Outbox — разбор очереди задач.
@@ -205,10 +207,11 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			Replicas:           r.nonNegative("OPENSEARCH_REPLICAS", 1),
 		},
 		Kafka: Kafka{
-			Brokers:     r.list("KAFKA_BROKERS"),
-			TopicPrefix: r.str("KAFKA_TOPIC_PREFIX", ""),
-			GroupID:     r.str("KAFKA_GROUP_ID", "marketplace"),
-			MaxAttempts: r.positive("KAFKA_MAX_ATTEMPTS", 5),
+			Brokers:        r.list("KAFKA_BROKERS"),
+			TopicPrefix:    r.str("KAFKA_TOPIC_PREFIX", ""),
+			GroupID:        r.str("KAFKA_GROUP_ID", "marketplace"),
+			MaxAttempts:    r.positive("KAFKA_MAX_ATTEMPTS", 5),
+			ReferenceTopic: r.str("KAFKA_TOPIC_REFERENCE_CHANGED", "catalog.reference.changed"),
 		},
 		Outbox: Outbox{
 			PollInterval: r.duration("OUTBOX_POLL_INTERVAL", time.Second),
@@ -290,6 +293,9 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	}
 	if strings.TrimSpace(cfg.Kafka.GroupID) == "" {
 		r.fail("KAFKA_GROUP_ID", "не может быть пустым")
+	}
+	if strings.TrimSpace(cfg.Kafka.ReferenceTopic) == "" {
+		r.fail("KAFKA_TOPIC_REFERENCE_CHANGED", "не может быть пустым")
 	}
 	if cfg.Outbox.PerTenant > cfg.Outbox.Batch {
 		r.fail("OUTBOX_PER_TENANT", "не больше OUTBOX_BATCH")
@@ -544,4 +550,12 @@ func (r *reader) subsidyPercent() int {
 		r.fail("DELIVERY_SUBSIDY_MIN_PERCENT", "ожидается целый процент от 0 до 100")
 	}
 	return value
+}
+
+// FullTopic — имя топика установки: <prefix>.<имя>, без префикса — само имя.
+func (k Kafka) FullTopic(name string) string {
+	if k.TopicPrefix == "" {
+		return name
+	}
+	return k.TopicPrefix + "." + name
 }

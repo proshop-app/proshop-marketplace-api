@@ -49,6 +49,13 @@ func TestLoadDefaults(t *testing.T) {
 	if len(cfg.Kafka.Brokers) != 2 || cfg.Kafka.Brokers[1] != "localhost:9093" {
 		t.Fatalf("брокеры: %v", cfg.Kafka.Brokers)
 	}
+	if topic := cfg.Kafka.FullTopic(cfg.Kafka.ReferenceTopic); topic != "catalog.reference.changed" {
+		t.Fatalf("топик реестра: %s", topic)
+	}
+	prefixed := config.Kafka{TopicPrefix: "p1"}
+	if topic := prefixed.FullTopic("catalog.reference.changed"); topic != "p1.catalog.reference.changed" {
+		t.Fatalf("топик с префиксом: %s", topic)
+	}
 	if cfg.Retention.ProcessedEvents != 14*24*time.Hour || cfg.Outbox.Batch != 100 || cfg.Database.MaxConns != 10 {
 		t.Fatalf("неожиданные умолчания: %+v", cfg)
 	}
