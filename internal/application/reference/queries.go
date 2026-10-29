@@ -2,7 +2,6 @@ package reference
 
 import (
 	"context"
-	"errors"
 	"math"
 	"strconv"
 
@@ -59,21 +58,23 @@ func (s *Service) List(ctx context.Context, code string, filter reference.ListFi
 
 // Resolve — точное совпадение ключа варианта даёт match; иначе до десяти
 // кандидатов по префиксу и триграммам, которые никогда не привязываются сами.
-// Отклонённая и выведенная запись совпадением не считается.
+// Отклонённая и выведенная запись совпадением не считается. Словарь
+// проверяется до текста: отказ invalid всегда относится к существующему словарю.
 func (s *Service) Resolve(ctx context.Context, code, text string) (Resolution, error) {
-	if reference.Length(text) > MaxResolveText {
-		message := "text — не длиннее " + strconv.Itoa(MaxResolveText) + " символов"
-		return Resolution{}, reference.ErrInvalid.WithMessage(message)
-	}
-	key := reference.Key(text)
-	if key == "" {
-		return Resolution{}, reference.ErrInvalid.WithMessage("text пустой")
-	}
-	result := Resolution{Dictionary: code, Key: key, Candidates: []Match{}}
+	result := Resolution{Dictionary: code, Candidates: []Match{}}
 	err := s.read(ctx, code, func(ctx context.Context, repo reference.Repository, dict *reference.Dictionary) error {
 		if err := dict.CheckNormalizer(); err != nil {
 			return err
 		}
+		if reference.Length(text) > MaxResolveText {
+			message := "text — не длиннее " + strconv.Itoa(MaxResolveText) + " символов"
+			return reference.ErrInvalid.WithMessage(message)
+		}
+		key := reference.Key(text)
+		if key == "" {
+			return reference.ErrInvalid.WithMessage("text пустой")
+		}
+		result.Key = key
 		result.Revision, result.Normalizer = dict.Revision(), dict.Normalizer()
 		owners, err := repo.KeyOwners(ctx, code, []string{key})
 		if err != nil {
@@ -214,9 +215,4 @@ func states(entries []*reference.Entry) []reference.EntryState {
 		out = append(out, entry.State())
 	}
 	return out
-}
-
-// isNotFound — записи нет; откат по журналу считает это отсутствием образа.
-func isNotFound(err error) bool {
-	return errors.Is(err, reference.ErrEntryNotFound)
 }

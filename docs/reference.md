@@ -43,6 +43,9 @@ candidate → rejected
 - Кандидат с занятым ключом не заводится второй раз. У владельца ключа растёт
   `occurrences`, в том числе у отклонённой записи. Счётчик ревизии не создаёт:
   ссылки потребителей от него не меняются.
+- Кандидат на занятом ключе, присланный с вариантами или `metadata`, получает
+  409 `REFERENCE_KEY_TAKEN`, и встреча не считается. Иначе присланные данные
+  пропали бы молча. Варианты добавляют к записи-владельцу отдельным вызовом.
 - Объединение — только подтверждённой записи в подтверждённую. Варианты
   переходят к выжившей с теми же `id`. Записи, ранее объединённые в
   объединяемую, переносятся на выжившую той же ревизией, и цепочка не длиннее
@@ -100,29 +103,39 @@ candidate → rejected
 
 ## HTTP
 
-Доступ — служебный токен `Authorization: Bearer <OPERATOR_TOKEN>` или сессия
-оператора панели. Браузеру токен не выдаётся. Все ответы несут
+Доступ разделён:
+
+- **чтение** — снимок, `resolve`, список и запись — открывает токен читателя
+  `Authorization: Bearer <REFERENCE_READ_TOKEN>`. Его получают бэкенды поиска и
+  сервера. Прав оператора площадки он не даёт: мутации реестра и операторские
+  ручки участников ему закрыты (401);
+- **мутации** — `OPERATOR_TOKEN` или сессия оператора панели. Они же читают.
+
+`REFERENCE_READ_TOKEN` необязателен. Без него читает только оператор. Задаётся —
+не короче 32 символов и не совпадает с `OPERATOR_TOKEN`,
+`SERVICE_TOKEN_MARKETPLACE` и секретами identity-hub. Браузеру токены не
+выдаются. Все ответы несут
 `schemaVersion: 1` и `revision` — голову словаря. Поля только добавляются;
 смена смысла поля — новая `schemaVersion`. Полная схема — `api/openapi.yaml`,
 тег `reference`.
 
-| Метод и путь | Что делает |
-|---|---|
-| `GET /internal/reference/{dict}/snapshot?since=&scope=global` | полный снимок или дельта |
-| `POST /internal/reference/{dict}/resolve` | разрешение написания |
-| `GET /internal/reference/{dict}/entries?status=&limit=&offset=` | страница записей, очередь кандидатов |
-| `POST /internal/reference/{dict}/entries` | новая запись |
-| `GET /internal/reference/{dict}/entries/{id}` | запись; объединённая — с выжившей в `resolved` |
-| `PATCH /internal/reference/{dict}/entries/{id}` | имя, статус, `metadata`; нужен `If-Match` |
-| `POST /internal/reference/{dict}/entries/{id}/merge` | объединение `{into}`; нужен `If-Match` |
-| `POST /internal/reference/{dict}/entries/{id}/aliases` | новый вариант |
-| `DELETE /internal/reference/{dict}/aliases/{id}` | удаление варианта |
+| Метод и путь | Доступ | Что делает |
+|---|---|---|
+| `GET /internal/reference/{dict}/snapshot?since=&scope=global` | чтение | полный снимок или дельта |
+| `POST /internal/reference/{dict}/resolve` | чтение | разрешение написания |
+| `GET /internal/reference/{dict}/entries?status=&limit=&offset=` | чтение | страница записей, очередь кандидатов |
+| `GET /internal/reference/{dict}/entries/{id}` | чтение | запись; объединённая — с выжившей в `resolved` |
+| `POST /internal/reference/{dict}/entries` | оператор | новая запись |
+| `PATCH /internal/reference/{dict}/entries/{id}` | оператор | имя, статус, `metadata`; нужен `If-Match` |
+| `POST /internal/reference/{dict}/entries/{id}/merge` | оператор | объединение `{into}`; нужен `If-Match` |
+| `POST /internal/reference/{dict}/entries/{id}/aliases` | оператор | новый вариант |
+| `DELETE /internal/reference/{dict}/aliases/{id}` | оператор | удаление варианта |
 
 `ETag` записи — её ревизия. Её клиент возвращает в `If-Match`.
 
 | Ошибка | Код | Когда |
 |---|---|---|
-| `REFERENCE_KEY_TAKEN` | 409 | написание принадлежит другой записи словаря |
+| `REFERENCE_KEY_TAKEN` | 409 | написание принадлежит другой записи словаря; кандидат с `aliases` или `metadata` на занятом ключе |
 | `REFERENCE_ENTRY_CHANGED` | 409 | `If-Match` устарел или запись изменили параллельно |
 | `reference.if_match_required` | 400 | нет `If-Match` у `PATCH` и `merge` |
 | `reference.status_transition` | 400 | переход статуса недопустим |
@@ -189,7 +202,7 @@ candidate → rejected
 }
 ```
 
-- Одно событие на транзакцию. Поставка из тысячи записей даёт одно событие с
+- Одно событие на транзакцию. Поставка любого размера даёт одно событие с
   `revisionFrom` до неё и `revisionTo` после.
 - `kinds` — `alias-added`, `alias-removed`, `renamed`, `merged`,
   `status-changed`. Они выводятся из образов журнала.
@@ -230,6 +243,11 @@ go run ./cmd/marketplace reference rollback --dir path/to/delivery
 транзакцией и печатают итог: `release`, `revision`, `changed`, `created`,
 `updated`, `skipped`.
 
+- Поставка идёт пачками по 500 записей. На пачку — одно чтение владельцев
+  ключей, одно чтение записей, одна ревизия журнала и одна пачка операторов
+  сохранения за один круг до базы. 5000 записей с вариантами применяются около
+  двух секунд даже под `-race`. Всё это время мутации словаря через API ждут
+  блокировку строки словаря.
 - Повтор той же поставки ничего не меняет (`changed: false`).
 - Понижение номера, подмена `entries.json` при том же номере и повтор
   откаченной поставки дают конфликт.
@@ -248,8 +266,20 @@ go run ./cmd/marketplace reference rollback --dir path/to/delivery
 | `marketplace_reference_revision{dictionary}` | голова журнала словаря |
 | `marketplace_reference_entries{dictionary}` | записей в словаре |
 | `marketplace_reference_candidates{dictionary}` | длина очереди кандидатов |
-| `marketplace_reference_resolve_total{dictionary,result}` | `match`, `candidates`, `miss`, `invalid`, `error`; неизвестный словарь — меткой `unknown` |
+| `marketplace_reference_resolve_total{dictionary,result}` | `match`, `candidates`, `miss`, `invalid`, `error`. Код словаря становится меткой, только когда словарь найден; тело, которое не разбирается, неизвестный словарь и сбой хранилища идут меткой `unknown` |
 | `marketplace_reference_stats_failures_total` | неудачные чтения состояния для метрик |
+
+## Эксплуатация
+
+- **`pg_trgm`.** Миграция `00027` выполняет `CREATE EXTENSION IF NOT EXISTS pg_trgm`.
+  На PostgreSQL 13+ расширение доверенное, его создаёт владелец базы. На
+  управляемом PostgreSQL роли миграций нужно право на доверенные расширения,
+  либо администратор заранее создаёт расширение в базе маркетплейса. Если
+  расширение уже есть, миграции право не нужно. Проверить на целевой базе до
+  выката.
+- **Размер полного снимка.** Полный снимок читает все записи словаря в память и
+  отдаёт одним ответом без страниц. Для десятков тысяч записей это нормально.
+  При росте к сотням тысяч нужна потоковая отдача: это задача этапа 2.
 
 ## Чего нет на первом этапе
 

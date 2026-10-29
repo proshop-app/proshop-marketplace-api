@@ -37,6 +37,7 @@ type Config struct {
 	Checkout   Checkout
 	Delivery   Delivery
 	Settings   Settings
+	Reference  Reference
 	LogLevel   string
 }
 
@@ -171,6 +172,13 @@ type Retention struct {
 	Interval        time.Duration
 }
 
+// Reference — доступ потребителей к чтению реестра справочных сущностей.
+type Reference struct {
+	// ReadToken открывает только снимок, resolve и чтение записей: бэкенды
+	// поиска и сервера не получают прав оператора площадки. Пусто — читает только оператор.
+	ReadToken string
+}
+
 // Operator — машинный токен и отдельная учётная запись платформы для панели.
 type Operator struct {
 	Email        string
@@ -278,8 +286,9 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			RefreshInterval: r.duration("PICKUP_REFRESH_INTERVAL", 24*time.Hour),
 			PickupIndex:     r.str("OPENSEARCH_PICKUP_INDEX", "marketplace-pickup-points"),
 		},
-		Settings: Settings{SyncInterval: r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute)},
-		LogLevel: r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
+		Settings:  Settings{SyncInterval: r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute)},
+		Reference: Reference{ReadToken: r.str("REFERENCE_READ_TOKEN", "")},
+		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
 	}
 
 	if token := cfg.Operator.Token; token != "" && len(token) < minOperatorTokenLength {
@@ -310,6 +319,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		r.fail("CDEK_CLIENT_ID", "задаётся вместе с CDEK_CLIENT_SECRET")
 	}
 
+	r.validateReference(cfg)
 	r.validateOperator(cfg.Operator)
 	r.validateIdentityOperator(cfg)
 	return cfg, r.err()
@@ -558,4 +568,20 @@ func (k Kafka) FullTopic(name string) string {
 		return name
 	}
 	return k.TopicPrefix + "." + name
+}
+
+// validateReference: токен читателя не совпадает с секретами, дающими больше прав.
+func (r *reader) validateReference(cfg Config) {
+	token := cfg.Reference.ReadToken
+	if token == "" {
+		return
+	}
+	if len(token) < minOperatorTokenLength {
+		r.fail("REFERENCE_READ_TOKEN", fmt.Sprintf("не короче %d символов", minOperatorTokenLength))
+	}
+	if token == cfg.Operator.Token || token == cfg.Platform.Token || token == cfg.Identity.Secret ||
+		token == cfg.Identity.OperatorSecret {
+		reason := "отличается от OPERATOR_TOKEN, SERVICE_TOKEN_MARKETPLACE и секретов identity-hub"
+		r.fail("REFERENCE_READ_TOKEN", reason)
+	}
 }

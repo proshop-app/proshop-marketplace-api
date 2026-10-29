@@ -3,8 +3,11 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -169,6 +172,17 @@ type References struct {
 	q querier
 }
 
+// saveCheck — чего ждать от оператора пачки сохранения.
+type saveCheck struct {
+	subject string
+	// conditional — ноль строк значит, что запись изменили параллельно.
+	conditional bool
+	// insert — нарушение уникальности строки записи значит то же.
+	insert bool
+	// key — ключ варианта: нарушение уникальности значит занятое написание.
+	key string
+}
+
 // LockDictionary — словарь с блокировкой строки до конца транзакции.
 func (r *References) LockDictionary(ctx context.Context, code string) (*reference.Dictionary, error) {
 	return r.dictionary(ctx, lockDictionary, code)
@@ -326,36 +340,47 @@ func (r *References) CountStatus(ctx context.Context, dictionary string, status 
 	return count, nil
 }
 
-// Save пишет изменение: удаления записей, затем удалённые варианты всех
-// записей, затем строки записей и новые варианты. Порядок важен: объединение
-// переносит вариант с тем же id и ключом от одной записи к другой.
+// Save пишет изменение одной пачкой операторов: удаления записей, затем
+// удалённые варианты всех записей, затем строки записей и новые варианты.
+// Порядок важен: объединение переносит вариант с тем же id и ключом от одной
+// записи к другой. Пачка — один круг до базы на изменение, будь в нём одна
+// запись или пачка поставки.
 func (r *References) Save(ctx context.Context, saved, deleted []*reference.Entry) error {
+	batch := &pgx.Batch{}
+	var expected []saveCheck
 	for _, e := range deleted {
 		origin := e.Origin()
-		tag, err := r.q.Exec(ctx, deleteReferenceEntry, string(e.ID()), string(origin.Status), origin.Version)
-		if err != nil {
-			return fmt.Errorf("запись %s: %w", e.ID(), err)
-		}
-		if tag.RowsAffected() == 0 {
-			return reference.ErrEntryChanged
-		}
+		batch.Queue(deleteReferenceEntry, string(e.ID()), string(origin.Status), origin.Version)
+		expected = append(expected, saveCheck{subject: string(e.ID()), conditional: true})
 	}
 	for _, e := range saved {
 		for _, alias := range removedAliases(e) {
-			if _, err := r.q.Exec(ctx, deleteReferenceAlias, string(alias.ID), string(e.ID())); err != nil {
-				return fmt.Errorf("вариант %s: %w", alias.ID, err)
-			}
+			batch.Queue(deleteReferenceAlias, string(alias.ID), string(e.ID()))
+			expected = append(expected, saveCheck{subject: string(alias.ID)})
 		}
 	}
 	for _, e := range saved {
-		if err := r.saveEntry(ctx, e); err != nil {
-			return err
-		}
+		expected = append(expected, queueEntry(batch, e))
 	}
 	for _, e := range saved {
-		if err := r.saveAliases(ctx, e); err != nil {
-			return err
+		expected = append(expected, queueAliases(batch, e)...)
+	}
+	if len(expected) == 0 {
+		return nil
+	}
+	results := r.q.SendBatch(ctx, batch)
+	for _, check := range expected {
+		tag, err := results.Exec()
+		if err == nil && check.conditional && tag.RowsAffected() == 0 {
+			err = reference.ErrEntryChanged
 		}
+		if err != nil {
+			_ = results.Close()
+			return check.failure(err)
+		}
+	}
+	if err := results.Close(); err != nil {
+		return fmt.Errorf("записи реестра: %w", err)
 	}
 	for _, e := range saved {
 		e.MarkSaved()
@@ -363,15 +388,28 @@ func (r *References) Save(ctx context.Context, saved, deleted []*reference.Entry
 	return nil
 }
 
-func (r *References) saveEntry(ctx context.Context, e *reference.Entry) error {
+// failure переводит ошибку оператора пачки в ошибку домена.
+func (c saveCheck) failure(err error) error {
+	switch {
+	case errors.Is(err, reference.ErrEntryChanged):
+		return err
+	case c.key != "" && isUnique(err, constraintAliasKey):
+		return reference.ErrKeyTaken.WithMessage("написание «" + c.key + "» уже принадлежит другой записи")
+	case c.insert && isUnique(err, ""):
+		return reference.ErrEntryChanged
+	default:
+		return fmt.Errorf("реестр, %s: %w", c.subject, err)
+	}
+}
+
+func queueEntry(batch *pgx.Batch, e *reference.Entry) saveCheck {
 	s := e.State()
 	var merged any
 	if s.MergedInto != "" {
 		merged = string(s.MergedInto)
 	}
 	if e.IsNew() {
-		_, err := r.q.Exec(
-			ctx,
+		batch.Queue(
 			insertReferenceEntry,
 			string(s.ID),
 			s.Dictionary,
@@ -387,17 +425,10 @@ func (r *References) saveEntry(ctx context.Context, e *reference.Entry) error {
 			s.CreatedAt,
 			s.UpdatedAt,
 		)
-		if isUnique(err, "") {
-			return reference.ErrEntryChanged
-		}
-		if err != nil {
-			return fmt.Errorf("запись %s: %w", s.ID, err)
-		}
-		return nil
+		return saveCheck{subject: string(s.ID), insert: true}
 	}
 	origin := e.Origin()
-	tag, err := r.q.Exec(
-		ctx,
+	batch.Queue(
 		updateReferenceEntry,
 		string(s.ID),
 		string(origin.Status),
@@ -413,41 +444,24 @@ func (r *References) saveEntry(ctx context.Context, e *reference.Entry) error {
 		s.Version,
 		s.UpdatedAt,
 	)
-	if err != nil {
-		return fmt.Errorf("запись %s: %w", s.ID, err)
-	}
-	if tag.RowsAffected() == 0 {
-		return reference.ErrEntryChanged
-	}
-	return nil
+	return saveCheck{subject: string(s.ID), conditional: true}
 }
 
-func (r *References) saveAliases(ctx context.Context, e *reference.Entry) error {
+func queueAliases(batch *pgx.Batch, e *reference.Entry) []saveCheck {
 	s := e.State()
 	before := map[ids.UUID]reference.AliasState{}
 	for _, alias := range e.Origin().Aliases {
 		before[alias.ID] = alias
 	}
+	var expected []saveCheck
 	for _, alias := range s.Aliases {
 		old, existed := before[alias.ID]
 		if existed && old == alias {
 			continue
 		}
-		query := insertReferenceAlias
-		args := []any{
-			string(alias.ID),
-			string(s.ID),
-			s.Dictionary,
-			alias.Text,
-			alias.Key,
-			string(alias.Kind),
-			alias.Locale,
-			string(alias.Source),
-			alias.Weight,
-		}
 		if existed {
-			query = updateReferenceAlias
-			args = []any{
+			batch.Queue(
+				updateReferenceAlias,
 				string(alias.ID),
 				string(s.ID),
 				alias.Text,
@@ -456,17 +470,24 @@ func (r *References) saveAliases(ctx context.Context, e *reference.Entry) error 
 				alias.Locale,
 				string(alias.Source),
 				alias.Weight,
-			}
+			)
+		} else {
+			batch.Queue(
+				insertReferenceAlias,
+				string(alias.ID),
+				string(s.ID),
+				s.Dictionary,
+				alias.Text,
+				alias.Key,
+				string(alias.Kind),
+				alias.Locale,
+				string(alias.Source),
+				alias.Weight,
+			)
 		}
-		_, err := r.q.Exec(ctx, query, args...)
-		if isUnique(err, constraintAliasKey) {
-			return reference.ErrKeyTaken.WithMessage("написание «" + alias.Key + "» уже принадлежит другой записи")
-		}
-		if err != nil {
-			return fmt.Errorf("вариант %s: %w", alias.ID, err)
-		}
+		expected = append(expected, saveCheck{subject: string(alias.ID), key: alias.Key})
 	}
-	return nil
+	return expected
 }
 
 func (r *References) dictionary(ctx context.Context, query, code string) (*reference.Dictionary, error) {

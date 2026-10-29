@@ -17,6 +17,9 @@ import (
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
 )
 
+// readToken — токен читателя реестра в тестах; отличается от операторского.
+const readToken = "reference-reader-token-0123456789abcdef"
+
 type referenceEnv struct {
 	server   *httptest.Server
 	registry *prometheus.Registry
@@ -25,6 +28,8 @@ type referenceEnv struct {
 type referenceCall struct {
 	method, path, body, ifMatch string
 	authorized                  bool
+	// bearer — свой токен вместо операторского
+	bearer string
 }
 
 type referenceReply struct {
@@ -47,10 +52,11 @@ func newReferenceEnv(t *testing.T) *referenceEnv {
 	service := appreference.NewService(store, fake.NewClock(t0), &fake.IDs{}, &fake.Publisher{}, config)
 	registry := prometheus.NewRegistry()
 	handler := transport.NewHandler(transport.Deps{
-		Reference:     service,
-		OperatorToken: token,
-		Registerer:    registry,
-		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Reference:          service,
+		OperatorToken:      token,
+		ReferenceReadToken: readToken,
+		Registerer:         registry,
+		Logger:             slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	e := &referenceEnv{server: httptest.NewServer(handler), registry: registry}
 	t.Cleanup(e.server.Close)
@@ -64,7 +70,10 @@ func (e *referenceEnv) do(t *testing.T, call referenceCall) referenceReply {
 		t.Fatal(err)
 	}
 	request.Header.Set("Content-Type", "application/json")
-	if call.authorized {
+	switch {
+	case call.bearer != "":
+		request.Header.Set("Authorization", "Bearer "+call.bearer)
+	case call.authorized:
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
 	if call.ifMatch != "" {
@@ -102,6 +111,46 @@ func TestReferenceRequiresServiceToken(t *testing.T) {
 	reply := e.do(t, referenceCall{method: http.MethodGet, path: "/internal/reference/b1/snapshot"})
 	if reply.status != http.StatusUnauthorized {
 		t.Fatalf("снимок без токена: %d", reply.status)
+	}
+}
+
+func TestReferenceReadTokenOpensOnlyReads(t *testing.T) {
+	e := newReferenceEnv(t)
+	created := e.do(t, referenceCall{
+		method:     http.MethodPost,
+		path:       "/internal/reference/b1/entries",
+		body:       `{"canonical":"Бренд","status":"confirmed"}`,
+		authorized: true,
+	})
+	id := created.entry(t)["id"].(string)
+	reads := []referenceCall{
+		{method: http.MethodGet, path: "/internal/reference/b1/snapshot"},
+		{method: http.MethodPost, path: "/internal/reference/b1/resolve", body: `{"text":"бренд"}`},
+		{method: http.MethodGet, path: "/internal/reference/b1/entries"},
+		{method: http.MethodGet, path: "/internal/reference/b1/entries/" + id},
+	}
+	for _, call := range reads {
+		call.bearer = readToken
+		if reply := e.do(t, call); reply.status != http.StatusOK {
+			t.Fatalf("чтение %s %s токеном читателя: %d %v", call.method, call.path, reply.status, reply.body)
+		}
+	}
+	writes := []referenceCall{
+		{method: http.MethodPost, path: "/internal/reference/b1/entries", body: `{"canonical":"Бренд Два"}`},
+		{method: http.MethodPatch, path: "/internal/reference/b1/entries/" + id, body: `{}`, ifMatch: created.etag},
+		{method: http.MethodPost, path: "/internal/reference/b1/entries/" + id + "/merge", body: `{"into":"b1"}`},
+		{method: http.MethodPost, path: "/internal/reference/b1/entries/" + id + "/aliases", body: `{"text":"Brend"}`},
+		{method: http.MethodDelete, path: "/internal/reference/b1/aliases/" + id},
+	}
+	for _, call := range writes {
+		call.bearer = readToken
+		if reply := e.do(t, call); reply.status != http.StatusUnauthorized {
+			t.Fatalf("мутация %s %s токеном читателя: %d", call.method, call.path, reply.status)
+		}
+	}
+	stranger := referenceCall{method: http.MethodGet, path: "/internal/reference/b1/snapshot", bearer: "x" + readToken}
+	if reply := e.do(t, stranger); reply.status != http.StatusUnauthorized {
+		t.Fatalf("чужой токен: %d", reply.status)
 	}
 }
 
@@ -257,6 +306,15 @@ func TestReferenceSnapshotAndResolve(t *testing.T) {
 		body:       `{"text":"` + strings.Repeat("b", 5000) + `"}`,
 		authorized: true,
 	})
+	garbage := e.do(t, referenceCall{
+		method:     http.MethodPost,
+		path:       "/internal/reference/garbage1/resolve",
+		body:       `{"text":`,
+		authorized: true,
+	})
+	if garbage.status != http.StatusBadRequest {
+		t.Fatalf("тело не разбирается: %d", garbage.status)
+	}
 	unknown := e.do(t, referenceCall{
 		method:     http.MethodPost,
 		path:       "/internal/reference/b9/resolve",
@@ -272,13 +330,21 @@ func TestReferenceSnapshotAndResolve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	series := 0
+	labels := map[string]bool{}
 	for _, family := range families {
-		if family.GetName() == "marketplace_reference_resolve_total" {
-			series = len(family.GetMetric())
+		if family.GetName() != "marketplace_reference_resolve_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "dictionary" {
+					labels[label.GetValue()] = true
+				}
+			}
 		}
 	}
-	if series != 4 {
-		t.Fatalf("серий метрики resolve: %d", series)
+	// адреса b9 и garbage1 не становятся метками: их словарь не подтверждён
+	if len(labels) != 2 || !labels["b1"] || !labels["unknown"] {
+		t.Fatalf("метки словаря в метрике resolve: %v", labels)
 	}
 }

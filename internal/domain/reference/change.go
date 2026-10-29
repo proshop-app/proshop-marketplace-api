@@ -27,6 +27,8 @@ const (
 	ChangeMerged ChangeKind = "entry.merged"
 	// ChangeReverted — применён обратный набор другой ревизии.
 	ChangeReverted ChangeKind = "change.reverted"
+	// ChangeDelivered — пачка записей поставки одной ревизией: журнал не растёт на каждую запись.
+	ChangeDelivered ChangeKind = "delivery.applied"
 )
 
 // Виды событий из контракта catalog.reference.changed.
@@ -148,6 +150,14 @@ func (d *Draft) Change(kind ChangeKind, primary ids.UUID, meta Meta, at time.Tim
 		change.Inverse = append(change.Inverse, Image{ID: id, State: before})
 	}
 	return change, len(change.EntryIDs) > 0
+}
+
+// Changed — содержимое записи в изменении отличается от исходного.
+func (d *Draft) Changed(id ids.UUID) bool {
+	if _, ok := d.entries[id]; !ok {
+		return false
+	}
+	return !SameContent(d.before[id], d.after(id))
 }
 
 // Saved — записи, которые нужно сохранить: изменённые и не удалённые.

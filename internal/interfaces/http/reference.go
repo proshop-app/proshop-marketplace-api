@@ -1,6 +1,7 @@
 package http
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -22,6 +23,8 @@ const (
 	maxResolveBody = 4 << 10
 	// scopeGlobal — общий реестр; частные записи магазинов — следующий этап.
 	scopeGlobal = "global"
+	// unknownDictionary — метка метрики для запроса, чей словарь не подтверждён.
+	unknownDictionary = "unknown"
 )
 
 var (
@@ -167,6 +170,19 @@ type entriesResponse struct {
 	Entries       []referenceEntryJSON `json:"entries"`
 }
 
+// referenceReader пускает к чтению реестра по токену читателя без прав
+// оператора; любой другой доступ проверяет операторская защита guarded.
+func referenceReader(token string, guarded, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		presented, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if found && token != "" && subtle.ConstantTimeCompare([]byte(presented), []byte(token)) == 1 {
+			next(w, r)
+			return
+		}
+		guarded(w, r)
+	}
+}
+
 func newReferenceHandlers(service *appreference.Service, registerer prometheus.Registerer) *referenceHandlers {
 	h := &referenceHandlers{
 		service: service,
@@ -250,7 +266,8 @@ func (h *referenceHandlers) resolve(w http.ResponseWriter, r *http.Request) {
 		_, err = ids.ParseTenantID(request.TenantID)
 	}
 	if err != nil {
-		h.resolves.WithLabelValues(dictionary, "invalid").Inc()
+		// словарь ещё не проверен: адрес не становится меткой
+		h.resolves.WithLabelValues(unknownDictionary, "invalid").Inc()
 		writeError(w, r, err)
 		return
 	}
@@ -471,16 +488,19 @@ func (h *referenceHandlers) writeChanged(
 	writeEntry(w, status, body)
 }
 
-// countResolve — отказ resolve по классу ошибки; неизвестный словарь не
-// попадает меткой в метрику, иначе адрес раздул бы её кардинальность.
+// countResolve — отказ resolve по классу ошибки. Метка словаря ставится,
+// только когда сценарий уже нашёл словарь (invalid и conflict); иначе адрес
+// стал бы меткой и раздул кардинальность метрики.
 func (h *referenceHandlers) countResolve(dictionary string, err error) {
 	switch errs.CodeOf(err) {
 	case errs.Invalid:
 		h.resolves.WithLabelValues(dictionary, "invalid").Inc()
-	case errs.NotFound:
-		h.resolves.WithLabelValues("unknown", "invalid").Inc()
-	default:
+	case errs.Conflict:
 		h.resolves.WithLabelValues(dictionary, "error").Inc()
+	case errs.NotFound:
+		h.resolves.WithLabelValues(unknownDictionary, "invalid").Inc()
+	default:
+		h.resolves.WithLabelValues(unknownDictionary, "error").Inc()
 	}
 }
 

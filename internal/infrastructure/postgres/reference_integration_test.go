@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -27,7 +28,10 @@ const (
 		SELECT 'b1', kind, identity, alias_kinds, limits
 		FROM reference.dictionaries
 		WHERE code = 'brand'`
-	countReferenceTasks = `SELECT count(*) FROM outbox WHERE kind = 'reference.changed'`
+	countReferenceTasks   = `SELECT count(*) FROM outbox WHERE kind = 'reference.changed'`
+	countReferenceChanges = `SELECT count(*) FROM reference.changes WHERE dictionary_code = 'b1'`
+	// largeDelivery — записей в поставке теста пачек: десять пачек по 500
+	largeDelivery = 5000
 )
 
 var referenceMeta = reference.Meta{Actor: "t1", Source: reference.SourceOperator}
@@ -322,5 +326,45 @@ func TestReferenceConditionalSaveAndPresence(t *testing.T) {
 	})
 	if !errors.Is(err, reference.ErrEntryNotFound) {
 		t.Fatalf("присутствие неизвестной записи: %v", err)
+	}
+}
+
+func TestReferenceLargeDeliveryWritesRevisionPerBatch(t *testing.T) {
+	service, pool, _ := referenceService(t)
+	ctx := context.Background()
+	entries := make([]reference.DeliveryEntry, 0, largeDelivery)
+	for i := 0; i < largeDelivery; i++ {
+		aliases := []reference.DeliveryAlias{{Text: "b" + strconv.Itoa(i) + " x"}}
+		entries = append(entries, reference.DeliveryEntry{
+			Canonical: "b" + strconv.Itoa(i),
+			Status:    reference.StatusConfirmed,
+			Aliases:   aliases,
+		})
+	}
+	delivery := reference.Delivery{
+		Dictionary: referenceDict,
+		Version:    1,
+		Checksum:   strings.Repeat("c", 64),
+		Entries:    entries,
+	}
+	started := time.Now()
+	applied, err := service.Apply(ctx, delivery)
+	if err != nil || applied.Created != largeDelivery {
+		t.Fatalf("поставка: %+v %v", applied, err)
+	}
+	t.Logf("поставка %d записей: %s", largeDelivery, time.Since(started))
+	var changes int
+	if err := pool.QueryRow(ctx, countReferenceChanges).Scan(&changes); err != nil || changes != largeDelivery/500 {
+		t.Fatalf("ревизий журнала: %d %v", changes, err)
+	}
+	started = time.Now()
+	rolled, err := service.Rollback(ctx, delivery)
+	if err != nil || rolled.Updated != largeDelivery {
+		t.Fatalf("откат: %+v %v", rolled, err)
+	}
+	t.Logf("откат %d записей: %s", largeDelivery, time.Since(started))
+	snapshot, err := service.Snapshot(ctx, referenceDict, nil)
+	if err != nil || len(snapshot.Entries) != 0 {
+		t.Fatalf("после отката: %d записей %v", len(snapshot.Entries), err)
 	}
 }

@@ -45,6 +45,24 @@ func TestRepeatedCandidateCountsMeetings(t *testing.T) {
 	if stored.Occurrences != 2 || len(h.store.ReferenceChanges()) != 1 {
 		t.Fatalf("встречи: %d, журнал: %d", stored.Occurrences, len(h.store.ReferenceChanges()))
 	}
+	for _, cmd := range []CreateCommand{
+		{Dictionary: testDict, Name: "бренд", Status: reference.StatusCandidate, Aliases: []AliasSpec{{Text: "Brend"}}},
+		{
+			Dictionary: testDict,
+			Name:       "бренд",
+			Status:     reference.StatusCandidate,
+			Metadata:   []byte(`{"directions":["d1"]}`),
+		},
+	} {
+		cmd.Meta = operatorMeta
+		if _, err := h.service.Create(context.Background(), cmd); !errors.Is(err, reference.ErrKeyTaken) {
+			t.Fatalf("кандидат с данными на занятом ключе: %v", err)
+		}
+	}
+	stored, _ = h.store.ReferenceEntry(first.Entry.ID)
+	if stored.Occurrences != 2 || len(stored.Aliases) != 1 {
+		t.Fatalf("отказ изменил владельца ключа: %+v", stored)
+	}
 }
 
 func TestTakenKeyIsConflict(t *testing.T) {

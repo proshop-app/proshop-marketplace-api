@@ -25,6 +25,8 @@ type querier interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	// SendBatch шлёт пачку операторов за один круг до базы, порядок сохраняется.
+	SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults
 }
 
 // UnitOfWork — транзакция PostgreSQL на каждый вызов Do.

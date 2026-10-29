@@ -45,8 +45,11 @@ func TestDraftWithoutChangesWritesNothing(t *testing.T) {
 	if _, err := e.ChangeStatus(StatusConfirmed, testNow); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := draft.Change(ChangeUpdated, e.ID(), Meta{}, testNow); ok {
+	if _, ok := draft.Change(ChangeUpdated, e.ID(), Meta{}, testNow); ok || draft.Changed(e.ID()) {
 		t.Fatal("повтор записал ревизию")
+	}
+	if draft.Changed("e9") {
+		t.Fatal("запись вне изменения считается изменённой")
 	}
 }
 

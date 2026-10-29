@@ -29,11 +29,12 @@ func TestApplyIsIdempotentAndExtends(t *testing.T) {
 		},
 	)
 	result, err := h.service.Apply(ctx, first)
-	if err != nil || !result.Changed || result.Created != 2 || result.Revision != 2 {
+	// одна пачка — одна ревизия журнала
+	if err != nil || !result.Changed || result.Created != 2 || result.Revision != 1 {
 		t.Fatalf("поставка 1: %+v %v", result, err)
 	}
 	repeat, err := h.service.Apply(ctx, first)
-	if err != nil || repeat.Changed || repeat.Revision != 2 {
+	if err != nil || repeat.Changed || repeat.Revision != 1 {
 		t.Fatalf("повтор поставки: %+v %v", repeat, err)
 	}
 	tampered := first
@@ -100,7 +101,8 @@ func TestRollbackRestoresAndRefusesAfterEdits(t *testing.T) {
 		len(snapshot.Entries[0].Aliases) != 1 {
 		t.Fatalf("после отката: %+v", snapshot.Entries)
 	}
-	since := int64(3)
+	// ревизии: 1 — запись оператора, 2 — пачка поставки, 3 — её откат
+	since := int64(2)
 	delta, _ := h.service.Snapshot(ctx, testDict, &since)
 	if len(delta.Removed) != 1 || len(delta.Entries) != 1 || delta.Entries[0].ID != existing.Entry.ID {
 		t.Fatalf("дельта отката: %+v", delta)
@@ -174,8 +176,15 @@ func TestEventListsAreTruncated(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := h.events(t)
+	// 1001 запись — три пачки и три ревизии журнала, событие одно на транзакцию
+	batches := (maxEventList + deliveryBatch) / deliveryBatch
 	if len(events) != 1 || !events[0].Truncated || len(events[0].AffectedKeys) != maxEventList ||
-		len(events[0].EntryIDs) != maxEventList || events[0].RevisionTo != int64(maxEventList+1) {
-		t.Fatalf("событие поставки: truncated=%v keys=%d", events[0].Truncated, len(events[0].AffectedKeys))
+		len(events[0].EntryIDs) != maxEventList || events[0].RevisionTo != int64(batches) ||
+		len(h.store.ReferenceChanges()) != batches {
+		t.Fatalf("событие поставки: %+v, журнал: %d", events[0].RevisionTo, len(h.store.ReferenceChanges()))
+	}
+	rolled, err := h.service.Rollback(context.Background(), delivery)
+	if err != nil || rolled.Updated != maxEventList+1 || len(h.store.ReferenceChanges()) != 2*batches {
+		t.Fatalf("откат пачек: %+v %v", rolled, err)
 	}
 }

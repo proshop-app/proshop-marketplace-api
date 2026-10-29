@@ -250,3 +250,21 @@ func TestOperatorAndRegionConfiguration(t *testing.T) {
 		values[name] = saved
 	}
 }
+
+func TestReferenceReadTokenIsSeparateSecret(t *testing.T) {
+	env := validEnv()
+	cfg, err := config.Load(envOf(env))
+	if err != nil || cfg.Reference.ReadToken != "" {
+		t.Fatalf("без токена читателя: %q %v", cfg.Reference.ReadToken, err)
+	}
+	env["REFERENCE_READ_TOKEN"] = strings.Repeat("r", 32)
+	if cfg, err := config.Load(envOf(env)); err != nil || cfg.Reference.ReadToken != env["REFERENCE_READ_TOKEN"] {
+		t.Fatalf("токен читателя: %v", err)
+	}
+	for _, bad := range []string{"short", env["OPERATOR_TOKEN"], env["SERVICE_TOKEN_MARKETPLACE"]} {
+		env["REFERENCE_READ_TOKEN"] = bad
+		if _, err := config.Load(envOf(env)); err == nil || !strings.Contains(err.Error(), "REFERENCE_READ_TOKEN") {
+			t.Fatalf("токен читателя %q принят: %v", bad, err)
+		}
+	}
+}

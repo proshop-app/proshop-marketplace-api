@@ -1,6 +1,7 @@
 package reference
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
@@ -9,7 +10,9 @@ import (
 
 // Create заводит запись. Кандидат с занятым ключом не заводится второй раз:
 // встреча считается у владельца ключа, в том числе у отклонённой записи.
-// Подтверждённая запись с занятым ключом — конфликт.
+// Подтверждённая запись с занятым ключом — конфликт. Кандидат с вариантами
+// или metadata на занятом ключе — тоже конфликт: встреча не склеивает данные,
+// и присланные варианты не должны пропасть молча.
 func (s *Service) Create(ctx context.Context, cmd CreateCommand) (EntryResult, error) {
 	var result EntryResult
 	revision, err := s.mutate(ctx, cmd.Dictionary, func(ctx context.Context, m *session) error {
@@ -22,8 +25,12 @@ func (s *Service) Create(ctx context.Context, cmd CreateCommand) (EntryResult, e
 			return err
 		}
 		if owner, taken := owners[key]; taken {
+			message := "написание «" + key + "» уже принадлежит записи " + string(owner)
 			if cmd.Status != reference.StatusCandidate {
-				message := "написание «" + key + "» уже принадлежит записи " + string(owner)
+				return reference.ErrKeyTaken.WithMessage(message)
+			}
+			if len(cmd.Aliases) > 0 || len(bytes.TrimSpace(cmd.Metadata)) > 0 {
+				message += ": варианты и metadata добавьте к этой записи"
 				return reference.ErrKeyTaken.WithMessage(message)
 			}
 			return s.meet(ctx, m, owner, &result)

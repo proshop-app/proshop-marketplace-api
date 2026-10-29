@@ -61,6 +61,7 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `KAFKA_GROUP_ID` | | `marketplace` | своя группа консьюмера |
 | `KAFKA_MAX_ATTEMPTS` | | `5` | неудач до парковки сообщения |
 | `KAFKA_TOPIC_REFERENCE_CHANGED` | | `catalog.reference.changed` | топик событий реестра без префикса, см. `docs/reference.md` |
+| `REFERENCE_READ_TOKEN` | | пусто | токен чтения реестра для бэкендов: снимок, `resolve`, записи; без прав оператора |
 | `OPERATOR_TOKEN` | да | — | служебный токен операторских ручек, ≥ 32 символов |
 | `HTTP_ADDR` | | `:8080` | адрес HTTP |
 | `SHUTDOWN_TIMEOUT` | | `20s` | ожидание запросов при остановке |

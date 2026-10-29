@@ -33,18 +33,20 @@ type Check struct {
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
-	Taxonomy       *apptaxonomy.Service
-	Catalog        *appcatalog.Queries
-	Participants   *appparticipant.Service
-	Auth           *appbuyer.Auth
-	Carts          *appcart.Service
-	Directory      *appdelivery.Directory
-	Checkouts      *appcheckout.Service
-	Reference      *appreference.Service
-	OperatorToken  string
-	OperatorAuth   *appoperator.Auth
-	Events         *messaging.Events
-	OperatorOrigin string
+	Taxonomy      *apptaxonomy.Service
+	Catalog       *appcatalog.Queries
+	Participants  *appparticipant.Service
+	Auth          *appbuyer.Auth
+	Carts         *appcart.Service
+	Directory     *appdelivery.Directory
+	Checkouts     *appcheckout.Service
+	Reference     *appreference.Service
+	OperatorToken string
+	// ReferenceReadToken — токен читателя реестра: снимок, resolve и чтение записей без прав оператора.
+	ReferenceReadToken string
+	OperatorAuth       *appoperator.Auth
+	Events             *messaging.Events
+	OperatorOrigin     string
 	// TrustProxy — адрес покупателя брать из X-Forwarded-For: сервис за доверенным прокси.
 	TrustProxy bool
 	Checks     []Check
@@ -84,6 +86,9 @@ func routes(deps Deps) []route {
 	}
 	operator := func(next http.HandlerFunc) http.HandlerFunc { return gateway.only(deps.OperatorToken, next) }
 	signedIn := func(next http.HandlerFunc) http.HandlerFunc { return buyerOnly(deps.Auth, next) }
+	reader := func(next http.HandlerFunc) http.HandlerFunc {
+		return referenceReader(deps.ReferenceReadToken, operator(next), next)
+	}
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
@@ -142,11 +147,11 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
 		{http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},
 
-		{http.MethodGet, "/internal/reference/{dict}/snapshot", operator(registry.snapshot)},
-		{http.MethodPost, "/internal/reference/{dict}/resolve", operator(registry.resolve)},
-		{http.MethodGet, "/internal/reference/{dict}/entries", operator(registry.list)},
+		{http.MethodGet, "/internal/reference/{dict}/snapshot", reader(registry.snapshot)},
+		{http.MethodPost, "/internal/reference/{dict}/resolve", reader(registry.resolve)},
+		{http.MethodGet, "/internal/reference/{dict}/entries", reader(registry.list)},
 		{http.MethodPost, "/internal/reference/{dict}/entries", operator(registry.create)},
-		{http.MethodGet, "/internal/reference/{dict}/entries/{id}", operator(registry.get)},
+		{http.MethodGet, "/internal/reference/{dict}/entries/{id}", reader(registry.get)},
 		{http.MethodPatch, "/internal/reference/{dict}/entries/{id}", operator(registry.update)},
 		{http.MethodPost, "/internal/reference/{dict}/entries/{id}/merge", operator(registry.merge)},
 		{http.MethodPost, "/internal/reference/{dict}/entries/{id}/aliases", operator(registry.addAlias)},
