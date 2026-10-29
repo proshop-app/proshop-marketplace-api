@@ -203,7 +203,8 @@ func TestAliasRepeatAndRemoval(t *testing.T) {
 		t.Fatalf("удаление: %+v %v", removed, err)
 	}
 	canonical := removed.Entry.Aliases[0].ID
-	_, err = h.service.RemoveAlias(ctx, RemoveAliasCommand{Dictionary: testDict, AliasID: canonical, Meta: operatorMeta})
+	removal := RemoveAliasCommand{Dictionary: testDict, AliasID: canonical, Meta: operatorMeta}
+	_, err = h.service.RemoveAlias(ctx, removal)
 	if !errors.Is(err, reference.ErrCanonicalAlias) {
 		t.Fatalf("удаление канонического варианта: %v", err)
 	}
@@ -232,7 +233,8 @@ func TestEntryLimitAndNormalizer(t *testing.T) {
 		t.Fatalf("лимит записей: %v", err)
 	}
 	limits.Normalizer = "v0"
-	h.store.SeedReferenceDictionary(reference.DictionaryState{Code: "b2", AliasKinds: reference.AliasKinds, Limits: limits})
+	other := reference.DictionaryState{Code: "b2", AliasKinds: reference.AliasKinds, Limits: limits}
+	h.store.SeedReferenceDictionary(other)
 	_, err = h.service.Create(context.Background(), CreateCommand{
 		Dictionary: "b2",
 		Name:       "Бренд",
@@ -242,7 +244,8 @@ func TestEntryLimitAndNormalizer(t *testing.T) {
 	if !errors.Is(err, reference.ErrNormalizer) {
 		t.Fatalf("другая версия нормализации: %v", err)
 	}
-	if _, err := h.service.Resolve(context.Background(), "b3", "Бренд"); !errors.Is(err, reference.ErrDictionaryNotFound) {
+	_, err = h.service.Resolve(context.Background(), "b3", "Бренд")
+	if !errors.Is(err, reference.ErrDictionaryNotFound) {
 		t.Fatalf("неизвестный словарь: %v", err)
 	}
 }

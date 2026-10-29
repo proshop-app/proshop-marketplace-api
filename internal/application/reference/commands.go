@@ -23,7 +23,8 @@ func (s *Service) Create(ctx context.Context, cmd CreateCommand) (EntryResult, e
 		}
 		if owner, taken := owners[key]; taken {
 			if cmd.Status != reference.StatusCandidate {
-				return reference.ErrKeyTaken.WithMessage("написание «" + key + "» уже принадлежит записи " + string(owner))
+				message := "написание «" + key + "» уже принадлежит записи " + string(owner)
+				return reference.ErrKeyTaken.WithMessage(message)
 			}
 			return s.meet(ctx, m, owner, &result)
 		}

@@ -130,7 +130,8 @@ func (m *session) checkKeys(ctx context.Context, draft *reference.Draft) error {
 	}
 	for key, owner := range owners {
 		if owner != claimed[key] && !draft.Releases(key, owner) {
-			return reference.ErrKeyTaken.WithMessage("написание «" + key + "» уже принадлежит записи " + string(owner))
+			message := "написание «" + key + "» уже принадлежит записи " + string(owner)
+			return reference.ErrKeyTaken.WithMessage(message)
 		}
 	}
 	return nil

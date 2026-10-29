@@ -132,7 +132,8 @@ func TestReferenceScenariosOnPostgres(t *testing.T) {
 		t.Fatalf("кандидаты по триграммам: %+v %v", similar, err)
 	}
 	prefix, err := service.Resolve(ctx, referenceDict, "бре")
-	if err != nil || prefix.Match != nil || len(prefix.Candidates) != 2 || !strings.HasPrefix(prefix.Candidates[0].AliasKey, "бре") {
+	if err != nil || prefix.Match != nil || len(prefix.Candidates) != 2 ||
+		!strings.HasPrefix(prefix.Candidates[0].AliasKey, "бре") {
 		t.Fatalf("кандидаты по префиксу: %+v %v", prefix, err)
 	}
 
@@ -152,7 +153,8 @@ func TestReferenceScenariosOnPostgres(t *testing.T) {
 		t.Fatalf("вариант после объединения: %+v %v", resolved, err)
 	}
 	view, err = service.Get(ctx, referenceDict, first.Entry.ID)
-	if err != nil || view.Entry.Status != reference.StatusMerged || view.Resolved == nil || view.Resolved.ID != second.Entry.ID {
+	if err != nil || view.Entry.Status != reference.StatusMerged || view.Resolved == nil ||
+		view.Resolved.ID != second.Entry.ID {
 		t.Fatalf("объединённая запись: %+v %v", view, err)
 	}
 	_, err = service.Merge(ctx, appreference.MergeCommand{
@@ -311,7 +313,8 @@ func TestReferenceConditionalSaveAndPresence(t *testing.T) {
 		}
 	}
 	var count int
-	if err := pool.QueryRow(ctx, "SELECT count(*) FROM reference.entry_presence").Scan(&count); err != nil || count != 1 {
+	err = pool.QueryRow(ctx, "SELECT count(*) FROM reference.entry_presence").Scan(&count)
+	if err != nil || count != 1 {
 		t.Fatalf("присутствие не заменилось целиком: %d %v", count, err)
 	}
 	err = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {

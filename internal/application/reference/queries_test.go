@@ -41,7 +41,8 @@ func TestResolveExactCandidatesAndRefusals(t *testing.T) {
 	if err != nil || refused.Match != nil || len(refused.Candidates) != 0 {
 		t.Fatalf("отклонённая запись совпала: %+v %v", refused, err)
 	}
-	if _, err := h.service.Resolve(ctx, testDict, strings.Repeat("б", MaxResolveText+1)); !errors.Is(err, reference.ErrInvalid) {
+	long := strings.Repeat("б", MaxResolveText+1)
+	if _, err := h.service.Resolve(ctx, testDict, long); !errors.Is(err, reference.ErrInvalid) {
 		t.Fatalf("длинный текст: %v", err)
 	}
 	if _, err := h.service.Resolve(ctx, testDict, " \u00a0 "); !errors.Is(err, reference.ErrInvalid) {
@@ -60,7 +61,8 @@ func TestSnapshotFullAndDelta(t *testing.T) {
 	second := h.create(t, "Бренд Два", reference.StatusConfirmed)
 	since := full.Revision
 	delta, err := h.service.Snapshot(ctx, testDict, &since)
-	if err != nil || delta.Full || delta.Revision != 2 || len(delta.Entries) != 1 || delta.Entries[0].ID != second.Entry.ID {
+	if err != nil || delta.Full || delta.Revision != 2 || len(delta.Entries) != 1 ||
+		delta.Entries[0].ID != second.Entry.ID {
 		t.Fatalf("дельта: %+v %v", delta, err)
 	}
 	head := delta.Revision

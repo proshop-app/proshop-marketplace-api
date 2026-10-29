@@ -22,7 +22,11 @@ func TestApplyIsIdempotentAndExtends(t *testing.T) {
 		1,
 		strings.Repeat("a", 64),
 		reference.DeliveryEntry{Canonical: "Бренд", Status: reference.StatusConfirmed, Aliases: translit},
-		reference.DeliveryEntry{Canonical: "Бренд Два", Status: reference.StatusCandidate, Metadata: []byte(`{"directions":["d1"]}`)},
+		reference.DeliveryEntry{
+			Canonical: "Бренд Два",
+			Status:    reference.StatusCandidate,
+			Metadata:  []byte(`{"directions":["d1"]}`),
+		},
 	)
 	result, err := h.service.Apply(ctx, first)
 	if err != nil || !result.Changed || result.Created != 2 || result.Revision != 2 {
@@ -108,7 +112,8 @@ func TestRollbackRestoresAndRefusesAfterEdits(t *testing.T) {
 		t.Fatalf("повтор откаченной поставки: %v", err)
 	}
 
-	next := testDelivery(2, strings.Repeat("b", 64), reference.DeliveryEntry{Canonical: "Бренд Три", Status: reference.StatusConfirmed})
+	third := reference.DeliveryEntry{Canonical: "Бренд Три", Status: reference.StatusConfirmed}
+	next := testDelivery(2, strings.Repeat("b", 64), third)
 	if _, err := h.service.Apply(ctx, next); err != nil {
 		t.Fatal(err)
 	}
@@ -161,9 +166,11 @@ func TestEventListsAreTruncated(t *testing.T) {
 	h := newHarness(t)
 	entries := make([]reference.DeliveryEntry, 0, maxEventList+1)
 	for i := 0; i <= maxEventList; i++ {
-		entries = append(entries, reference.DeliveryEntry{Canonical: "b" + strconv.Itoa(i), Status: reference.StatusConfirmed})
+		entry := reference.DeliveryEntry{Canonical: "b" + strconv.Itoa(i), Status: reference.StatusConfirmed}
+		entries = append(entries, entry)
 	}
-	if _, err := h.service.Apply(context.Background(), testDelivery(1, strings.Repeat("a", 64), entries...)); err != nil {
+	delivery := testDelivery(1, strings.Repeat("a", 64), entries...)
+	if _, err := h.service.Apply(context.Background(), delivery); err != nil {
 		t.Fatal(err)
 	}
 	events := h.events(t)

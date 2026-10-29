@@ -22,6 +22,7 @@ import (
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
@@ -37,6 +38,9 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
 )
+
+// referenceStatsInterval — как часто обновлять метрики ревизии и очереди кандидатов реестра.
+const referenceStatsInterval = time.Minute
 
 // services — сценарии приложения процесса.
 type services struct {
@@ -56,6 +60,9 @@ type services struct {
 	dispatcher   *messaging.Dispatcher
 	janitor      *messaging.Janitor
 	parker       *messaging.Parker
+	reference    *appreference.Service
+	// writer публикует события площадки; закрывается после остановки разбора outbox
+	writer *infrakafka.Writer
 }
 
 // server — процесс маркетплейса: хранилища, сценарии и метрики.
@@ -91,6 +98,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = s.app.writer.Close() }()
 
 	if err := s.prepareIndexes(ctx); err != nil {
 		return err
@@ -179,6 +187,10 @@ func (s *server) services(ctx context.Context) (services, error) {
 			SessionTTL:   cfg.Operator.SessionTTL,
 		},
 	)
+	writer := infrakafka.NewWriter(cfg.Kafka.Brokers)
+	references := appreference.NewService(uow, now, identities, writer, appreference.Config{
+		Topic: cfg.Kafka.FullTopic(cfg.Kafka.ReferenceTopic),
+	})
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(s.store.pool),
 		now,
@@ -192,6 +204,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			appcatalog.TaskSyncOffer:        indexer.HandleTask,
 			appcatalog.TaskSyncTenant:       indexer.HandleTask,
 			appparticipant.TaskSyncSettings: settings.HandleTask,
+			appreference.TaskChanged:        references.HandleTask,
 		},
 	)
 	janitor := messaging.NewJanitor(postgres.NewRetention(s.store.pool), now, messaging.RetentionPolicy{
@@ -219,6 +232,8 @@ func (s *server) services(ctx context.Context) (services, error) {
 		dispatcher:   dispatcher,
 		janitor:      janitor,
 		parker:       messaging.NewParker(uow),
+		reference:    references,
+		writer:       writer,
 	}, nil
 }
 
@@ -307,6 +322,7 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
 		jobs.NewPickupRefreshRunner(s.app.directory, cfg.Delivery.RefreshInterval, s.logger, s.metrics).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).Run,
+		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).Run,
 	}
 }
 
@@ -327,6 +343,7 @@ func (s *server) httpServer() *http.Server {
 		Carts:          s.app.carts,
 		Directory:      s.app.directory,
 		Checkouts:      s.app.checkouts,
+		Reference:      s.app.reference,
 		OperatorToken:  cfg.Operator.Token,
 		OperatorAuth:   s.app.operatorAuth,
 		Events:         s.app.events,

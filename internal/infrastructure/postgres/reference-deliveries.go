@@ -94,7 +94,12 @@ func (r *References) MarkDeliveryRollback(ctx context.Context, dictionary string
 }
 
 // ReplacePresence заменяет строки присутствия записи целиком.
-func (r *References) ReplacePresence(ctx context.Context, entry ids.UUID, rows []reference.Presence, at time.Time) error {
+func (r *References) ReplacePresence(
+	ctx context.Context,
+	entry ids.UUID,
+	rows []reference.Presence,
+	at time.Time,
+) error {
 	if _, err := r.q.Exec(ctx, deletePresence, string(entry)); err != nil {
 		return fmt.Errorf("присутствие %s: %w", entry, err)
 	}
@@ -106,7 +111,7 @@ func (r *References) ReplacePresence(ctx context.Context, entry ids.UUID, rows [
 	sellers := make([]int32, 0, len(rows))
 	for _, row := range rows {
 		categories = append(categories, row.CategoryID)
-		offers = append(offers, int32(row.Offers))   //nolint:gosec // счётчик предложений меньше int32
+		offers = append(offers, int32(row.Offers))    //nolint:gosec // счётчик предложений меньше int32
 		sellers = append(sellers, int32(row.Sellers)) //nolint:gosec // счётчик продавцов меньше int32
 	}
 	_, err := r.q.Exec(ctx, insertPresence, string(entry), categories, offers, sellers, at)

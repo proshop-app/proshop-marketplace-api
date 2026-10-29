@@ -319,7 +319,11 @@ func (h *referenceHandlers) get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	body := entryResponse{SchemaVersion: appreference.SchemaVersion, Revision: view.Revision, Entry: entryOf(view.Entry)}
+	body := entryResponse{
+		SchemaVersion: appreference.SchemaVersion,
+		Revision:      view.Revision,
+		Entry:         entryOf(view.Entry),
+	}
 	if view.Resolved != nil {
 		resolved := entryOf(*view.Resolved)
 		body.Resolved = &resolved

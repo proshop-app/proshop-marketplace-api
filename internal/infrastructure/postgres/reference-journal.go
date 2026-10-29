@@ -119,7 +119,8 @@ func (r *References) Changes(ctx context.Context, dictionary string, from, to in
 		if err := json.Unmarshal(inverse, &change.Inverse); err != nil {
 			return nil, fmt.Errorf("журнал %s, ревизия %d: %w", dictionary, change.Revision, err)
 		}
-		change.EntryID, change.Kind, change.Meta.Source = ids.UUID(entry), reference.ChangeKind(kind), reference.Source(source)
+		change.EntryID, change.Kind = ids.UUID(entry), reference.ChangeKind(kind)
+		change.Meta.Source = reference.Source(source)
 		for _, id := range entries {
 			change.EntryIDs = append(change.EntryIDs, ids.UUID(id))
 		}

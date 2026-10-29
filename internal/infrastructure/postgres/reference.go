@@ -306,10 +306,12 @@ func (r *References) Candidates(
 			status    string
 			score     float32
 		)
-		if err := rows.Scan(&id, &candidate.Canonical, &candidate.AliasKey, &status, &candidate.Prefix, &score); err != nil {
+		err := rows.Scan(&id, &candidate.Canonical, &candidate.AliasKey, &status, &candidate.Prefix, &score)
+		if err != nil {
 			return nil, err
 		}
-		candidate.EntryID, candidate.Status, candidate.Similarity = ids.UUID(id), reference.Status(status), float64(score)
+		candidate.EntryID, candidate.Status = ids.UUID(id), reference.Status(status)
+		candidate.Similarity = float64(score)
 		out = append(out, candidate)
 	}
 	return out, rows.Err()
@@ -528,7 +530,8 @@ func (r *References) aliases(
 			alias                   reference.AliasState
 			entry, id, kind, source string
 		)
-		if err := rows.Scan(&entry, &id, &alias.Text, &alias.Key, &kind, &alias.Locale, &source, &alias.Weight); err != nil {
+		err := rows.Scan(&entry, &id, &alias.Text, &alias.Key, &kind, &alias.Locale, &source, &alias.Weight)
+		if err != nil {
 			return nil, err
 		}
 		alias.ID, alias.Kind, alias.Source = ids.UUID(id), reference.AliasKind(kind), reference.Source(source)

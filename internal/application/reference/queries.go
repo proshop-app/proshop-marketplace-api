@@ -42,7 +42,8 @@ func (s *Service) List(ctx context.Context, code string, filter reference.ListFi
 		filter.Limit = defaultPage
 	}
 	if filter.Limit > maxPage || filter.Offset < 0 {
-		return EntryPage{}, reference.ErrInvalid.WithMessage("limit — до " + strconv.Itoa(maxPage) + ", offset — не меньше 0")
+		message := "limit — до " + strconv.Itoa(maxPage) + ", offset — не меньше 0"
+		return EntryPage{}, reference.ErrInvalid.WithMessage(message)
 	}
 	var page EntryPage
 	err := s.read(ctx, code, func(ctx context.Context, repo reference.Repository, dict *reference.Dictionary) error {
@@ -61,7 +62,8 @@ func (s *Service) List(ctx context.Context, code string, filter reference.ListFi
 // Отклонённая и выведенная запись совпадением не считается.
 func (s *Service) Resolve(ctx context.Context, code, text string) (Resolution, error) {
 	if reference.Length(text) > MaxResolveText {
-		return Resolution{}, reference.ErrInvalid.WithMessage("text — не длиннее " + strconv.Itoa(MaxResolveText) + " символов")
+		message := "text — не длиннее " + strconv.Itoa(MaxResolveText) + " символов"
+		return Resolution{}, reference.ErrInvalid.WithMessage(message)
 	}
 	key := reference.Key(text)
 	if key == "" {
