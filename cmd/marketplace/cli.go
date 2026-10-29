@@ -21,6 +21,7 @@ var commands = map[string]command{
 	"reindex":               reindex,
 	"refresh-pickup-points": refreshPickupPoints,
 	"reference":             referenceDelivery,
+	"model-keys":            modelKeysReport,
 }
 
 // run проверяет окружение и выполняет команду до сигнала остановки; результат — код выхода.

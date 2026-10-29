@@ -1614,72 +1614,72 @@
                     {
                         "id": "clothing.girls-dresses",
                         "name": "Платья для девочек",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.kids-shirts",
                         "name": "Детские рубашки",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.kids-tshirts",
                         "name": "Детские футболки",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.kids-trousers",
                         "name": "Детские брюки",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.kids-jeans",
                         "name": "Детские джинсы",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.kids-shorts",
                         "name": "Детские шорты",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.kids-sweaters",
                         "name": "Детские свитеры",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.kids-hoodies",
                         "name": "Детские толстовки",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.school-uniform",
                         "name": "Школьная форма",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.baby-bodysuits",
                         "name": "Боди для малышей",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.baby-rompers",
                         "name": "Ползунки и слипы",
-                        "schema": "clothing"
+                        "schema": "clothing_kids"
                     },
                     {
                         "id": "clothing.kids-jackets",
                         "name": "Детские куртки",
-                        "schema": "outerwear"
+                        "schema": "outerwear_kids"
                     },
                     {
                         "id": "clothing.kids-overalls",
                         "name": "Детские комбинезоны",
-                        "schema": "outerwear"
+                        "schema": "outerwear_kids"
                     },
                     {
                         "id": "clothing.kids-coats",
                         "name": "Детские пальто",
-                        "schema": "outerwear"
+                        "schema": "outerwear_kids"
                     }
                 ]
             },
@@ -2132,7 +2132,7 @@
                     {
                         "id": "jewelry.rings",
                         "name": "Ювелирные кольца",
-                        "schema": "jewelry"
+                        "schema": "ring"
                     },
                     {
                         "id": "jewelry.earrings",

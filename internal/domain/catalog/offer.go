@@ -65,7 +65,7 @@ func ComposeOffer(product *Product, signals *Signals, seller Seller) Offer {
 	offer.Available = available
 	offer.InStock = available > 0
 	offer.Visible = seller.Visible && state.Card.Visible && state.Card.Publication.Published
-	offer.Listed = offer.Visible && !state.Card.OnlyVariant
+	offer.Listed = offer.Visible
 	offer.CheckoutAvailable = offer.Visible && seller.CheckoutAvailable
 
 	return offer

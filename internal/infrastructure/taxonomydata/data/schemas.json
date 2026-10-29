@@ -2,6 +2,7 @@
     "phone": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "color",
@@ -26,6 +27,7 @@
     "tablet": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "color",
@@ -46,6 +48,7 @@
     "wearable": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "color",
@@ -63,6 +66,7 @@
     "phone_accessory": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "color",
@@ -81,6 +85,7 @@
     "headphone": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "color",
@@ -98,6 +103,7 @@
     "speaker": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "color",
@@ -115,6 +121,7 @@
     "tv": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "screen_diagonal",
@@ -133,6 +140,7 @@
     "video": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "resolution",
@@ -148,6 +156,7 @@
     "camera": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "sensor_format",
@@ -164,6 +173,7 @@
     "lens": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "lens_mount",
@@ -179,6 +189,7 @@
     "optics": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "body_material",
@@ -193,6 +204,7 @@
     "gaming": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "supported_platform",
@@ -208,6 +220,7 @@
     "drone": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "camera_resolution",
@@ -223,6 +236,7 @@
     "electronic_accessory": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "compatibility",
@@ -239,6 +253,7 @@
     "laptop": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "color",
@@ -266,6 +281,7 @@
     "computer": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "processor",
@@ -286,6 +302,7 @@
     "monitor": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "screen_diagonal",
@@ -303,6 +320,7 @@
     "cpu": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "cpu_socket",
@@ -319,6 +337,7 @@
     "motherboard": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "cpu_socket",
@@ -334,6 +353,7 @@
     "ram_module": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "ram",
@@ -348,6 +368,7 @@
     "gpu": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "gpu",
@@ -363,6 +384,7 @@
     "drive": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "storage_type",
@@ -378,6 +400,7 @@
     "pc_case": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "body_material",
@@ -394,6 +417,7 @@
     "pc_power": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "power",
@@ -408,6 +432,7 @@
     "pc_cooling": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "compatibility",
@@ -422,6 +447,7 @@
     "keyboard": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "connection",
@@ -439,6 +465,7 @@
     "mouse": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "connection",
@@ -453,6 +480,7 @@
     "printer": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "print_technology",
@@ -469,6 +497,7 @@
     "printer_supply": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "compatibility",
@@ -482,6 +511,7 @@
     "network": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "network_standard",
@@ -496,6 +526,7 @@
     "cable": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "connector",
@@ -511,6 +542,7 @@
     "ups": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "power",
@@ -525,6 +557,7 @@
     "fridge": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "capacity_l",
@@ -543,6 +576,7 @@
     "washer": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "wash_load",
@@ -561,6 +595,7 @@
     "dishwasher": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "place_settings",
@@ -577,6 +612,7 @@
     "cooker": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "power",
@@ -593,6 +629,7 @@
     "kitchen_appliance": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "power",
@@ -608,6 +645,7 @@
     "cleaning_appliance": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "power",
@@ -625,6 +663,7 @@
     "climate": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "power",
@@ -640,6 +679,7 @@
     "personal_appliance": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "power",
@@ -655,6 +695,7 @@
     "sewing_machine": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "power",
@@ -668,6 +709,7 @@
     "cookware": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "cookware_material",
@@ -684,6 +726,7 @@
     "tableware": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "cookware_material",
@@ -701,6 +744,7 @@
     "kitchen_tool": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "cookware_material",
@@ -716,6 +760,7 @@
     "storage": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "material",
@@ -733,6 +778,7 @@
     "home_decor": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "material",
@@ -749,6 +795,7 @@
     "lighting": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "power",
@@ -767,6 +814,7 @@
     "bed": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "furniture_frame",
@@ -786,6 +834,7 @@
     "sofa": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "furniture_frame",
@@ -807,6 +856,7 @@
     "chair": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "furniture_frame",
@@ -823,6 +873,7 @@
     "table": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "furniture_frame",
@@ -842,6 +893,7 @@
     "cabinet": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "furniture_frame",
@@ -860,6 +912,7 @@
     "mattress": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "bed_width",
@@ -879,6 +932,7 @@
     "furniture_part": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "compatibility",
@@ -894,6 +948,7 @@
     "bed_linen": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "textile_material",
@@ -911,6 +966,7 @@
     "blanket": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "textile_material",
@@ -929,6 +985,7 @@
     "pillow": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "textile_material",
@@ -945,6 +1002,7 @@
     "towel": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "textile_material",
@@ -964,6 +1022,7 @@
     "curtain": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "textile_material",
@@ -982,6 +1041,7 @@
     "carpet": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "textile_material",
@@ -998,6 +1058,7 @@
     "clothing": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "size",
@@ -1008,7 +1069,8 @@
             "fabric_composition",
             "season",
             "clothing_fit",
-            "clothing_fastener"
+            "clothing_fastener",
+            "size_clothing"
         ],
         "required": [
             "size",
@@ -1018,6 +1080,7 @@
     "outerwear": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "size",
@@ -1028,7 +1091,8 @@
             "season",
             "clothing_fastener",
             "hood",
-            "insulated"
+            "insulated",
+            "size_clothing"
         ],
         "required": [
             "size",
@@ -1039,6 +1103,7 @@
     "underwear": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "size",
@@ -1046,7 +1111,8 @@
             "age",
             "color",
             "fabric_composition",
-            "count"
+            "count",
+            "size_clothing"
         ],
         "required": [
             "size",
@@ -1056,13 +1122,15 @@
     "swimwear": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "size",
             "gender",
             "age",
             "color",
-            "fabric_composition"
+            "fabric_composition",
+            "size_clothing"
         ],
         "required": [
             "size",
@@ -1072,6 +1140,7 @@
     "shoe": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "size",
@@ -1083,7 +1152,8 @@
             "shoe_lining",
             "shoe_sole",
             "shoe_fastener",
-            "heel_height"
+            "heel_height",
+            "size_shoes_eu"
         ],
         "required": [
             "size",
@@ -1094,6 +1164,7 @@
     "bag": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "gender",
@@ -1112,6 +1183,7 @@
     "accessory": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "gender",
@@ -1128,6 +1200,7 @@
     "watch": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "gender",
@@ -1143,6 +1216,7 @@
     "jewelry": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "gender",
@@ -1160,6 +1234,7 @@
     "cosmetic": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1179,6 +1254,7 @@
     "haircare": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "hair_type",
@@ -1194,6 +1270,7 @@
     "makeup": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "color",
@@ -1210,6 +1287,7 @@
     "perfume": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "fragrance",
@@ -1225,6 +1303,7 @@
     "beauty_tool": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1239,6 +1318,7 @@
     "hygiene": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1255,6 +1335,7 @@
     "medical_device": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "medical_application",
@@ -1269,6 +1350,7 @@
     "medical_supply": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "medical_application",
@@ -1285,6 +1367,7 @@
     "orthopedic": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "medical_application",
@@ -1301,6 +1384,7 @@
     "baby_transport": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "min_age",
@@ -1318,6 +1402,7 @@
     "car_seat": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "min_age",
@@ -1334,6 +1419,7 @@
     "baby_feeding": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "min_age",
@@ -1348,6 +1434,7 @@
     "baby_hygiene": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "age",
@@ -1364,6 +1451,7 @@
     "baby_furniture": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "min_age",
@@ -1380,6 +1468,7 @@
     "toy": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "min_age",
@@ -1395,6 +1484,7 @@
     "construction_toy": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "min_age",
@@ -1410,6 +1500,7 @@
     "board_game": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "min_age",
@@ -1425,6 +1516,7 @@
     "puzzle": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "min_age",
@@ -1439,6 +1531,7 @@
     "rc_toy": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "min_age",
@@ -1454,6 +1547,7 @@
     "sport_equipment": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "sport",
@@ -1470,6 +1564,7 @@
     "fitness": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "sport",
@@ -1486,6 +1581,7 @@
     "bicycle": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "wheel_diameter",
@@ -1504,6 +1600,7 @@
     "ride": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "wheel_diameter",
@@ -1520,6 +1617,7 @@
     "outdoor": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1536,6 +1634,7 @@
     "tent": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "tent_places",
@@ -1552,6 +1651,7 @@
     "sleeping_bag": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "comfort_temperature",
@@ -1567,6 +1667,7 @@
     "backpack": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "capacity_l",
@@ -1582,6 +1683,7 @@
     "rod": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "rod_length",
@@ -1596,6 +1698,7 @@
     "fishing": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1611,6 +1714,7 @@
     "auto_part": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "auto_make",
@@ -1627,6 +1731,7 @@
     "auto_accessory": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1642,6 +1747,7 @@
     "tire": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "tire_width",
@@ -1662,6 +1768,7 @@
     "wheel": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "rim_diameter",
@@ -1678,6 +1785,7 @@
     "auto_battery": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "car_battery_capacity",
@@ -1697,6 +1805,7 @@
     "oil": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "oil_viscosity",
@@ -1713,6 +1822,7 @@
     "auto_chemical": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1728,6 +1838,7 @@
     "power_tool": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "power",
@@ -1744,6 +1855,7 @@
     "tool_accessory": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "tool_diameter",
@@ -1759,6 +1871,7 @@
     "hand_tool": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1773,6 +1886,7 @@
     "measuring": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1786,6 +1900,7 @@
     "fastener": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "fastener_standard",
@@ -1802,6 +1917,7 @@
     "paint": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "paint_base",
@@ -1820,6 +1936,7 @@
     "building_mix": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1835,6 +1952,7 @@
     "building_panel": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "material",
@@ -1852,6 +1970,7 @@
     "plumbing": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1867,6 +1986,7 @@
     "electrical": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "voltage",
@@ -1884,6 +2004,7 @@
     "wire": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "wire_section",
@@ -1899,6 +2020,7 @@
     "door": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "length",
@@ -1917,6 +2039,7 @@
     "garden_tool": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1932,6 +2055,7 @@
     "plant": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "plant_species",
@@ -1947,6 +2071,7 @@
     "seed": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "plant_species",
@@ -1963,6 +2088,7 @@
     "garden_soil": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1977,6 +2103,7 @@
     "garden_watering": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -1992,6 +2119,7 @@
     "garden_furniture": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "furniture_frame",
@@ -2008,6 +2136,7 @@
     "pet_food": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "target_species",
@@ -2027,6 +2156,7 @@
     "pet_supply": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "target_species",
@@ -2044,6 +2174,7 @@
     "pet_aquarium": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "target_species",
@@ -2060,6 +2191,7 @@
     "food": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "food_category",
@@ -2086,6 +2218,7 @@
     "drink": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "food_category",
@@ -2106,6 +2239,7 @@
     "stationery": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -2122,6 +2256,7 @@
     "paper": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "paper_format",
@@ -2137,6 +2272,7 @@
     "book": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "book_author",
@@ -2159,6 +2295,7 @@
     "art": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "art_technique",
@@ -2175,6 +2312,7 @@
     "craft": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "craft_theme",
@@ -2190,6 +2328,7 @@
     "musical": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -2206,6 +2345,7 @@
     "audio_pro": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "connection",
@@ -2221,6 +2361,7 @@
     "household_chemical": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -2240,6 +2381,7 @@
     "household_supply": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -2256,6 +2398,7 @@
     "industrial": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "purpose",
@@ -2274,6 +2417,7 @@
     "workwear": {
         "attributes": [
             "brand",
+            "gtin",
             "model",
             "country",
             "size",
@@ -2281,11 +2425,76 @@
             "fabric_composition",
             "season",
             "protection_class",
-            "purpose"
+            "purpose",
+            "size_clothing"
         ],
         "required": [
             "size",
             "purpose"
+        ]
+    },
+    "ring": {
+        "attributes": [
+            "brand",
+            "gtin",
+            "model",
+            "country",
+            "gender",
+            "size",
+            "jewelry_metal",
+            "jewelry_sample",
+            "jewelry_insert",
+            "jewelry_weight",
+            "color",
+            "size_ring"
+        ],
+        "required": [
+            "jewelry_metal"
+        ]
+    },
+    "clothing_kids": {
+        "attributes": [
+            "brand",
+            "gtin",
+            "model",
+            "country",
+            "size",
+            "gender",
+            "age",
+            "color",
+            "textile_material",
+            "fabric_composition",
+            "season",
+            "clothing_fit",
+            "clothing_fastener",
+            "size_kids_height"
+        ],
+        "required": [
+            "size",
+            "fabric_composition"
+        ]
+    },
+    "outerwear_kids": {
+        "attributes": [
+            "brand",
+            "gtin",
+            "model",
+            "country",
+            "size",
+            "gender",
+            "age",
+            "color",
+            "fabric_composition",
+            "season",
+            "clothing_fastener",
+            "hood",
+            "insulated",
+            "size_kids_height"
+        ],
+        "required": [
+            "size",
+            "season",
+            "fabric_composition"
         ]
     }
 }

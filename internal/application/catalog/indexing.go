@@ -18,11 +18,12 @@ const CatchUpMargin = 5 * time.Minute
 // Indexer переносит предложения из проекции в индекс. Источник истины —
 // проекция: индекс всегда можно собрать заново.
 type Indexer struct {
-	uow   ports.UnitOfWork
-	index ports.OfferIndex
-	clock ports.Clock
-	batch int
-	lock  ports.IndexRebuildLock
+	models *ModelKeys
+	uow    ports.UnitOfWork
+	index  ports.OfferIndex
+	clock  ports.Clock
+	batch  int
+	lock   ports.IndexRebuildLock
 }
 
 // RebuildResult — итог перестроения.
@@ -39,13 +40,15 @@ func NewIndexer(
 	clock ports.Clock,
 	batch int,
 	lock ports.IndexRebuildLock,
+	models *ModelKeys,
 ) *Indexer {
 	return &Indexer{
-		uow:   uow,
-		index: index,
-		clock: clock,
-		batch: batch,
-		lock:  lock,
+		uow:    uow,
+		index:  index,
+		clock:  clock,
+		batch:  batch,
+		lock:   lock,
+		models: models,
 	}
 }
 
@@ -84,6 +87,10 @@ func (i *Indexer) SyncOffer(ctx context.Context, tenantID ids.TenantID, productI
 		return err
 	}
 
+	ready, err := i.refreshModelKeys(ctx, []ports.OfferState{state})
+	if err != nil || len(ready) == 0 {
+		return err
+	}
 	doc, ok := Document(state)
 	if !ok {
 		return nil
@@ -113,8 +120,14 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 			return nil
 		}
 
-		if err := i.index.Put(ctx, documents(states)); err != nil {
+		ready, err := i.refreshModelKeys(ctx, states)
+		if err != nil {
 			return err
+		}
+		if docs := documents(ready); len(docs) > 0 {
+			if err := i.index.Put(ctx, docs); err != nil {
+				return err
+			}
 		}
 
 		after = states[len(states)-1].Product.State().ProductID
@@ -212,7 +225,11 @@ func (i *Indexer) pages(
 			return nil
 		}
 
-		if docs := documents(states); len(docs) > 0 {
+		ready, err := i.refreshModelKeys(ctx, states)
+		if err != nil {
+			return err
+		}
+		if docs := documents(ready); len(docs) > 0 {
 			if err := write(docs); err != nil {
 				return err
 			}
@@ -297,6 +314,9 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	doc.Attributes = publication.Attributes
 	doc.Categories = []catalog.Category{{ID: publication.CategoryID, Name: publication.CategoryName}}
 	doc.VariantsID = offer.Card.VariantsID
+	doc.Variants = offer.Card.Variants
+	doc.ModelKey = offer.Card.ModelKey
+	doc.ModelKeySource = offer.Card.ModelKeySource
 	doc.Price = offer.Price.Kopecks()
 	doc.BasePrice = offer.BasePrice.Kopecks()
 	doc.Available = offer.Available

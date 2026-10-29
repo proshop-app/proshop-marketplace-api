@@ -28,6 +28,7 @@ type categoryJSON struct {
 
 // offerJSON — предложение в ответе. Суммы — целые копейки.
 type offerJSON struct {
+	Variants          *appcatalog.VariantBlock   `json:"variants,omitempty"`
 	DeliveryAvailable *bool                      `json:"deliveryAvailable,omitempty"`
 	CategoryID        string                     `json:"categoryId"`
 	Attributes        map[string]json.RawMessage `json:"attributes"`
@@ -92,6 +93,7 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	}
 	if withDescription {
 		out.Description = doc.Description
+		out.Variants = card.Variants
 	}
 	for _, c := range doc.Categories {
 		out.Categories = append(out.Categories, categoryJSON{ID: c.ID, Name: c.Name, URL: c.URL})
@@ -168,6 +170,7 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 	query := ports.OfferQuery{
 		Text:       values.Get("q"),
 		TenantID:   values.Get("tenant"),
+		GroupID:    values.Get("groupId"),
 		CategoryID: values.Get("category"),
 		Sort:       ports.OfferSort(values.Get("sort")),
 	}

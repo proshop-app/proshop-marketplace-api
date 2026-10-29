@@ -27,6 +27,7 @@ type productProjection struct {
 }
 
 type productSnapshot struct {
+	Variants          json.RawMessage    `json:"variants"`
 	PriceProfiles     []priceProfileJSON `json:"priceProfiles"`
 	Marketplace       *taxonomy.Card     `json:"marketplace"`
 	ID                string             `json:"id"`
@@ -180,6 +181,14 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 	}
 	if product.VariantsID != nil {
 		card.VariantsID = *product.VariantsID
+	}
+	if len(product.Variants) > 0 {
+		if err := json.Unmarshal(product.Variants, &card.Variants); err != nil {
+			return ErrInvalidPayload.Wrap(err)
+		}
+	}
+	if err := card.Variants.Validate(card.VariantsID); err != nil {
+		return ErrInvalidPayload.Wrap(err)
 	}
 	if flags := product.Conditions; flags != nil {
 		if flags.IsVisible != nil {

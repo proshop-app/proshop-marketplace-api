@@ -33,6 +33,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
@@ -130,12 +131,22 @@ func (s *server) services(ctx context.Context) (services, error) {
 	// корзина и покупка узнают об отказе участия первыми — по нему сверка настроек внеочередная
 	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
 	settings := appparticipant.NewSettings(uow, platform, now)
+	writer := infrakafka.NewWriter(cfg.Kafka.Brokers)
+	references := appreference.NewService(uow, now, identities, writer, appreference.Config{
+		Topic: cfg.Kafka.FullTopic(cfg.Kafka.ReferenceTopic),
+	})
+	models := appcatalog.NewModelKeys(
+		referencecatalog.New(references),
+		telemetry.NewModelKeys(s.metrics),
+		cfg.ModelKeys,
+	)
 	indexer := appcatalog.NewIndexer(
 		uow,
 		s.store.index,
 		now,
 		indexBatch,
 		postgres.NewIndexRebuildLock(s.store.pool),
+		models,
 	)
 	pickups := directory(s.store, cfg)
 	auth := appbuyer.NewAuth(
@@ -193,10 +204,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			SessionTTL:   cfg.Operator.SessionTTL,
 		},
 	)
-	writer := infrakafka.NewWriter(cfg.Kafka.Brokers)
-	references := appreference.NewService(uow, now, identities, writer, appreference.Config{
-		Topic: cfg.Kafka.FullTopic(cfg.Kafka.ReferenceTopic),
-	})
+
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(s.store.pool),
 		now,
@@ -330,6 +338,7 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewPickupRefreshRunner(s.app.directory, cfg.Delivery.RefreshInterval, s.logger, s.metrics).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).Run,
 		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).Run,
+		jobs.NewModelKeyStatsRunner(postgres.NewModelKeyStats(s.store.pool), s.logger, s.metrics).Run,
 	}
 }
 

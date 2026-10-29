@@ -21,6 +21,7 @@ const (
 
 // Config — настройки процесса маркетплейса.
 type Config struct {
+	ModelKeys  bool
 	Identity   Identity
 	HTTP       HTTP
 	Database   Database
@@ -301,6 +302,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		},
 		Settings:  Settings{SyncInterval: r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute)},
 		Reference: Reference{ReadToken: r.str("REFERENCE_READ_TOKEN", "")},
+		ModelKeys: r.boolean("MARKETPLACE_MODEL_KEYS", false),
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
 	}
 

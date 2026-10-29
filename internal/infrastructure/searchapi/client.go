@@ -208,6 +208,7 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 			InStockSet:    query.InStockSet,
 			Text:          query.Text,
 			TenantID:      query.TenantID,
+			GroupID:       query.GroupID,
 			CategoryID:    query.CategoryID,
 			PriceMin:      query.PriceMin,
 			PriceMax:      query.PriceMax,

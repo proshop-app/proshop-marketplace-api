@@ -41,6 +41,9 @@ type OfferStates interface {
 
 // OfferDocument — предложение в индексе поиска. Суммы — в копейках.
 type OfferDocument struct {
+	Variants          *catalog.Variants
+	ModelKey          string
+	ModelKeySource    string
 	PriceProfiles     []catalog.PriceProfile
 	CategoryID        string
 	CategoryPath      []string
@@ -88,6 +91,7 @@ const (
 
 // OfferQuery — поиск по выдаче каталога.
 type OfferQuery struct {
+	GroupID       string
 	BuyerID       ids.UUID
 	PriceContexts map[ids.TenantID]string
 	InStockSet    bool
@@ -111,8 +115,15 @@ type OfferPage struct {
 	Items  []OfferDocument
 }
 
+// OfferGroup содержит ограниченную выборку вариантов продавца.
+type OfferGroup struct {
+	Items     []OfferDocument
+	Truncated bool
+}
+
 // OfferIndex — индекс предложений.
 type OfferIndex interface {
+	Group(context.Context, string, string) (OfferGroup, error)
 	// NeedsRebuild сообщает о незавершённой сборке или росте каталога.
 	NeedsRebuild(ctx context.Context) (bool, error)
 	// Exists — рабочий индекс заведён.

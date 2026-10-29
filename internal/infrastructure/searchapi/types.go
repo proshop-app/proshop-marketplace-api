@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 )
 
@@ -22,6 +23,9 @@ type priceProfile struct {
 }
 
 type offerDocument struct {
+	Variants          *catalog.Variants            `json:"variants,omitempty"`
+	ModelKey          string                       `json:"modelKey,omitempty"`
+	ModelKeySource    string                       `json:"modelKeySource,omitempty"`
 	PriceProfiles     []priceProfile               `json:"priceProfiles"`
 	CategoryPath      []string                     `json:"categoryPath"`
 	Delivery          participant.DeliverySettings `json:"delivery"`
@@ -58,6 +62,7 @@ type attribute struct {
 }
 
 type offerQuery struct {
+	GroupID       string                           `json:"groupId,omitempty"`
 	PriceContexts map[string]string                `json:"priceContexts"`
 	Attributes    map[string]ports.AttributeFilter `json:"attributes"`
 	FacetFields   []facetField                     `json:"facetFields"`

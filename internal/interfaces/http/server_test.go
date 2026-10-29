@@ -206,7 +206,7 @@ func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID
 
 	e.store.SeedProduct(p.State())
 
-	indexer := appcatalog.NewIndexer(e.store, e.index, e.clock, 100, &fake.IndexRebuildLock{})
+	indexer := appcatalog.NewIndexer(e.store, e.index, e.clock, 100, &fake.IndexRebuildLock{}, nil)
 	err = indexer.SyncTenant(context.Background(), tenant)
 	if err != nil {
 		t.Fatal(err)
