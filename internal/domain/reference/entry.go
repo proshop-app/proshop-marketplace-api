@@ -163,8 +163,9 @@ func NewEntry(dict *Dictionary, input NewEntryInput, now time.Time) (*Entry, err
 			Kind:   AliasSpelling,
 			Source: input.Source,
 		}},
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		Occurrences: 1,
 	}}
 	for _, alias := range input.Aliases {
 		if _, _, err := e.AddAlias(dict, alias, input.Source, now); err != nil {
