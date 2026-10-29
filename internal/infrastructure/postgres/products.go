@@ -51,17 +51,20 @@ type Products struct {
 
 // cardJSON — карточка товара в колонке jsonb.
 type cardJSON struct {
-	Marketplace *taxonomy.Card       `json:"marketplace,omitempty"`
-	Publication taxonomy.Publication `json:"publication"`
-	Name        string               `json:"name"`
-	Description string               `json:"description,omitempty"`
-	Image       string               `json:"image,omitempty"`
-	URL         string               `json:"url,omitempty"`
-	SKU         string               `json:"sku,omitempty"`
-	Categories  []categoryJSON       `json:"categories,omitempty"`
-	VariantsID  string               `json:"variantsId,omitempty"`
-	Visible     bool                 `json:"visible"`
-	OnlyVariant bool                 `json:"onlyVariant,omitempty"`
+	Variants       *catalog.Variants    `json:"variants,omitempty"`
+	ModelKey       string               `json:"modelKey,omitempty"`
+	ModelKeySource string               `json:"modelKeySource,omitempty"`
+	Marketplace    *taxonomy.Card       `json:"marketplace,omitempty"`
+	Publication    taxonomy.Publication `json:"publication"`
+	Name           string               `json:"name"`
+	Description    string               `json:"description,omitempty"`
+	Image          string               `json:"image,omitempty"`
+	URL            string               `json:"url,omitempty"`
+	SKU            string               `json:"sku,omitempty"`
+	Categories     []categoryJSON       `json:"categories,omitempty"`
+	VariantsID     string               `json:"variantsId,omitempty"`
+	Visible        bool                 `json:"visible"`
+	OnlyVariant    bool                 `json:"onlyVariant,omitempty"`
 }
 
 type categoryJSON struct {
@@ -202,16 +205,19 @@ func (r *productRow) product() (*catalog.Product, error) {
 
 func encodeCard(card catalog.Card) ([]byte, error) {
 	doc := cardJSON{
-		Marketplace: card.Marketplace,
-		Publication: card.Publication,
-		Name:        card.Name,
-		Description: card.Description,
-		Image:       card.Image,
-		URL:         card.URL,
-		SKU:         card.SKU,
-		VariantsID:  card.VariantsID,
-		Visible:     card.Visible,
-		OnlyVariant: card.OnlyVariant,
+		Marketplace:    card.Marketplace,
+		Variants:       card.Variants,
+		ModelKey:       card.ModelKey,
+		ModelKeySource: card.ModelKeySource,
+		Publication:    card.Publication,
+		Name:           card.Name,
+		Description:    card.Description,
+		Image:          card.Image,
+		URL:            card.URL,
+		SKU:            card.SKU,
+		VariantsID:     card.VariantsID,
+		Visible:        card.Visible,
+		OnlyVariant:    card.OnlyVariant,
 	}
 
 	for _, category := range card.Categories {
@@ -231,16 +237,19 @@ func decodeCard(raw []byte) (catalog.Card, error) {
 		return catalog.Card{}, err
 	}
 	card := catalog.Card{
-		Marketplace: doc.Marketplace,
-		Publication: doc.Publication,
-		Name:        doc.Name,
-		Description: doc.Description,
-		Image:       doc.Image,
-		URL:         doc.URL,
-		SKU:         doc.SKU,
-		VariantsID:  doc.VariantsID,
-		Visible:     doc.Visible,
-		OnlyVariant: doc.OnlyVariant,
+		Marketplace:    doc.Marketplace,
+		Variants:       doc.Variants,
+		ModelKey:       doc.ModelKey,
+		ModelKeySource: doc.ModelKeySource,
+		Publication:    doc.Publication,
+		Name:           doc.Name,
+		Description:    doc.Description,
+		Image:          doc.Image,
+		URL:            doc.URL,
+		SKU:            doc.SKU,
+		VariantsID:     doc.VariantsID,
+		Visible:        doc.Visible,
+		OnlyVariant:    doc.OnlyVariant,
 	}
 
 	for _, category := range doc.Categories {

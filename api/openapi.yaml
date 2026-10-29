@@ -536,6 +536,7 @@ paths:
           description: Код ISO 3166-2 RU из ПВЗ.
         - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Строка поиска }
         - { name: tenant, in: query, schema: { type: string }, description: Магазин }
+        - { name: groupId, in: query, schema: { type: string }, description: Группа вариантов; требует tenant }
         - { name: category, in: query, schema: { type: string }, description: Категория площадки с потомками }
         - { name: priceMin, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
         - { name: priceMax, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
@@ -1670,6 +1671,13 @@ components:
         values: { type: array, items: { type: string }, description: Обязательный словарь только для enum }
         unit: { type: string, description: Единица только для number }
         facet: { type: boolean, default: false }
+        valuesMeta:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              hex: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+              swatch: { type: string, enum: [multicolor, pattern] }
     CanonicalAttributes:
       type: object
       additionalProperties:
@@ -1773,6 +1781,7 @@ components:
         seller: { $ref: "#/components/schemas/Seller" }
         name: { type: string }
         description: { type: string, description: Только в карточке }
+        variants: { $ref: "#/components/schemas/OfferVariants", description: Только в карточке; один продавец и ценовой контекст }
         image: { type: string }
         url: { type: string }
         sku: { type: string }
@@ -1785,6 +1794,36 @@ components:
         inStock: { type: boolean }
         checkoutAvailable: { type: boolean, description: Продавец принимает оплату через маркетплейс }
         updatedAt: { type: string, format: date-time }
+    OfferVariants:
+      type: object
+      required: [groupId, axis, items, truncated]
+      properties:
+        groupId: { type: string }
+        axis:
+          type: object
+          required: [key, code, name]
+          properties:
+            key: { type: string }
+            code: { type: string }
+            name: { type: string }
+        truncated: { type: boolean }
+        items:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required: [id, current, value, position, price, basePrice, available, inStock]
+            properties:
+              id: { type: string }
+              current: { type: boolean }
+              value: { type: string }
+              position: { type: integer, minimum: 0 }
+              price: { type: integer, format: int64 }
+              basePrice: { type: integer, format: int64 }
+              available: { type: integer }
+              inStock: { type: boolean }
+              image: { type: string }
+              duplicate: { type: boolean }
     OfferPage:
       type: object
       required: [items, total, limit, offset, facets]

@@ -21,15 +21,18 @@ type Category struct {
 
 // Card — то, что покупатель видит о товаре.
 type Card struct {
-	Marketplace *taxonomy.Card
-	Publication taxonomy.Publication
-	Name        string
-	Description string
-	Image       string
-	URL         string
-	SKU         string
-	Categories  []Category
-	VariantsID  string
+	ModelKey       string
+	ModelKeySource string
+	Variants       *Variants
+	Marketplace    *taxonomy.Card
+	Publication    taxonomy.Publication
+	Name           string
+	Description    string
+	Image          string
+	URL            string
+	SKU            string
+	Categories     []Category
+	VariantsID     string
 	// Visible — товар включён в каталоге магазина.
 	Visible bool
 	// OnlyVariant — товар показывается только внутри группы вариантов, не в выдаче.

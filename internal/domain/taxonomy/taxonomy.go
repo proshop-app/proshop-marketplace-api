@@ -25,15 +25,23 @@ var (
 	categoryIDPattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,127}$`)
 )
 
+// ValueMeta задаёт визуальное представление значения перечисления.
+type ValueMeta struct {
+	Hex    string `json:"hex,omitempty" yaml:"hex,omitempty"`
+	Swatch string `json:"swatch,omitempty" yaml:"swatch,omitempty"`
+}
+
+// Attribute обслуживает наблюдение за ключами модели.
 // Attribute — скалярное поле; код имеет один тип и единицу во всей площадке.
 type Attribute struct {
-	Code     string   `json:"code" yaml:"code"`
-	Name     string   `json:"name" yaml:"name"`
-	Type     string   `json:"type" yaml:"type"`
-	Required bool     `json:"required" yaml:"required"`
-	Values   []string `json:"values,omitempty" yaml:"values,omitempty"`
-	Unit     string   `json:"unit,omitempty" yaml:"unit,omitempty"`
-	Facet    bool     `json:"facet" yaml:"facet"`
+	ValuesMeta map[string]ValueMeta `json:"valuesMeta,omitempty" yaml:"valuesMeta,omitempty"`
+	Code       string               `json:"code" yaml:"code"`
+	Name       string               `json:"name" yaml:"name"`
+	Type       string               `json:"type" yaml:"type"`
+	Required   bool                 `json:"required" yaml:"required"`
+	Values     []string             `json:"values,omitempty" yaml:"values,omitempty"`
+	Unit       string               `json:"unit,omitempty" yaml:"unit,omitempty"`
+	Facet      bool                 `json:"facet" yaml:"facet"`
 }
 
 // Category — узел дерева; схема полная, наследования атрибутов нет.
@@ -129,6 +137,9 @@ func (a Attribute) validate() error {
 	if !ValidCode(a.Code) || strings.TrimSpace(a.Name) == "" || utf8.RuneCountInString(a.Name) > 256 {
 		return ErrInvalid.WithMessage("неверный код или имя атрибута")
 	}
+	if err := a.validateValuesMeta(); err != nil {
+		return err
+	}
 	switch a.Type {
 	case "enum":
 		if len(a.Values) == 0 || len(a.Values) > 256 || a.Unit != "" {
@@ -153,7 +164,7 @@ func (a Attribute) validate() error {
 
 func sameField(a, b Attribute) bool {
 	return a.Type == b.Type && a.Unit == b.Unit && a.Name == b.Name && a.Facet == b.Facet &&
-		reflect.DeepEqual(a.Values, b.Values)
+		reflect.DeepEqual(a.Values, b.Values) && reflect.DeepEqual(a.ValuesMeta, b.ValuesMeta)
 }
 
 // Fields — глобальные определения кодов, обязательность зависит от категории.

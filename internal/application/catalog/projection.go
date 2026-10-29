@@ -42,7 +42,10 @@ type Projector struct {
 
 // NewProjector — приём проекций.
 func NewProjector(uow ports.UnitOfWork, clock ports.Clock) *Projector {
-	return &Projector{uow: uow, clock: clock}
+	return &Projector{
+		uow:   uow,
+		clock: clock,
+	}
 }
 
 // ApplyProduct применяет снимок товара.

@@ -16,6 +16,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencedata"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
@@ -33,12 +34,16 @@ func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 	}
 	defer store.close()
 
+	uow := postgres.NewUnitOfWork(store.pool)
+	references := appreference.NewService(uow, clock.System{}, random.IDs{}, nil, appreference.Config{})
+	models := appcatalog.NewModelKeys(referencecatalog.New(references), nil, cfg.ModelKeys)
 	indexer := appcatalog.NewIndexer(
 		postgres.NewUnitOfWork(store.pool),
 		store.index,
 		clock.System{},
 		indexBatch,
 		postgres.NewIndexRebuildLock(store.pool),
+		models,
 	)
 
 	result, err := indexer.Rebuild(ctx)

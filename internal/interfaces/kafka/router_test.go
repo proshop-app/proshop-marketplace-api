@@ -314,3 +314,33 @@ func TestMarketplacePriceProjectedWithoutFloat(t *testing.T) {
 		t.Fatal("отрицательная цена площадки не принимается")
 	}
 }
+
+func TestVariantSnapshotCompatibility(t *testing.T) {
+	for _, payload := range []string{
+		`null`,
+		`{"groupId":"v1","axis":{"key":"platform.color","code":"color","name":"Цвет"},"value":"Синий","position":0}`,
+	} {
+		body := strings.Replace(productBody, `"variantsId":"v1"`, `"variantsId":"v1","variants":`+payload, 1)
+		rec, err := handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		card := rec.products[0].Snapshot.Card
+		if payload == "null" && (card.VariantsID != "v1" || card.Variants != nil) {
+			t.Fatal("null скрывает переключатель, сохраняя группу")
+		}
+		if payload != "null" && (card.Variants == nil || card.VariantsID != "v1") {
+			t.Fatal("потеряна ось")
+		}
+	}
+	body := strings.Replace(
+		productBody,
+		`"variantsId":"v1"`,
+		`"variantsId":"v1","variants":{"groupId":"other",
+ "axis":{"key":"platform.color","code":"color","name":"Цвет"},"value":"Синий","position":0}`,
+		1,
+	)
+	if _, err := handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, body)); err == nil {
+		t.Fatal("принята чужая группа")
+	}
+}

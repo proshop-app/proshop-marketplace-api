@@ -19,8 +19,19 @@ import (
 var w3IndexingDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
 var w3IndexingSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
+type unavailableBrandResolver struct {
+	started chan struct{}
+}
+
+func (r *unavailableBrandResolver) Resolve(ctx context.Context, _ string) (string, bool, error) {
+	close(r.started)
+	<-ctx.Done()
+
+	return "", false, ctx.Err()
+}
+
 func indexer(store *fake.Store, index *fake.Index, clock *fake.Clock) *appcatalog.Indexer {
-	return appcatalog.NewIndexer(store, index, clock, 2, &fake.IndexRebuildLock{})
+	return appcatalog.NewIndexer(store, index, clock, 2, &fake.IndexRebuildLock{}, nil)
 }
 
 func TestSyncOfferWritesParticipantOffers(t *testing.T) {
@@ -279,4 +290,53 @@ func taskOf(task ports.NewTask) ports.Task {
 		TenantID: task.TenantID,
 		Payload:  task.Payload,
 	}
+}
+
+func TestProjectionContinuesWhileBrandRegistryIsUnavailable(t *testing.T) {
+	store, index, clock := fake.NewStore(), fake.NewIndex(), fake.NewClock(t1)
+	seedSeller(store, "t1", participant.TenantActive, true)
+	snap := snapshot("t1", "p1", 1, t0)
+	snap.Card.Publication.Attributes = map[string]json.RawMessage{
+		"brand":       json.RawMessage(`"Unavailable"`),
+		"part_number": json.RawMessage(`"A1"`),
+	}
+	product, err := catalog.NewProduct(snap, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
+		return tx.Products().Save(ctx, product)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resolver := &unavailableBrandResolver{started: make(chan struct{})}
+	indexer := appcatalog.NewIndexer(
+		store,
+		index,
+		clock,
+		1,
+		&fake.IndexRebuildLock{},
+		appcatalog.NewModelKeys(resolver, nil, true),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- indexer.SyncOffer(ctx, "t1", "p1")
+	}()
+	<-resolver.started
+
+	// Пока индексатор ждёт реестр, проекция обрабатывает следующее событие.
+	projectionCtx, stop := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer stop()
+	snap.Revision = 2
+	projector := appcatalog.NewProjector(store, clock)
+	if err := projector.ApplyProduct(projectionCtx, productEvent("next", snap)); err != nil {
+		t.Fatal(err)
+	}
+	if state, _ := store.Product("t1", "p1"); state.Revision != 2 {
+		t.Fatal("проекция ждёт реестр вместо сохранения события")
+	}
+	cancel()
+	<-done
 }

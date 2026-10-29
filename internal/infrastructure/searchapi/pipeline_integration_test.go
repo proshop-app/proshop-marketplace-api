@@ -76,7 +76,7 @@ func TestProjectionToIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	projector := appcatalog.NewProjector(uow, now)
-	indexer := appcatalog.NewIndexer(uow, index, now, 100, postgres.NewIndexRebuildLock(pool))
+	indexer := appcatalog.NewIndexer(uow, index, now, 100, postgres.NewIndexRebuildLock(pool), nil)
 	registry := appparticipant.NewRegistry(uow, now)
 	participants := appparticipant.NewService(uow, now)
 	platform := fake.NewPlatform()

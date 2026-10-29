@@ -29,7 +29,8 @@ var ErrInvalidQuery = errs.New(errs.Invalid, "catalog.invalid_query", "неко�
 
 // OfferCard — проверенное предложение каталога.
 type OfferCard struct {
-	Offer ports.OfferDocument
+	Variants *VariantBlock
+	Offer    ports.OfferDocument
 }
 
 // OfferList — страница выдачи и фасеты.
@@ -138,8 +139,13 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UU
 	doc.Price = profile.EffectivePrice.Kopecks()
 	doc.BasePrice = profile.Price.Kopecks()
 
+	variants, err := q.offerVariants(ctx, doc, key)
+	if err != nil {
+		return OfferCard{}, err
+	}
 	return OfferCard{
-		Offer: doc,
+		Offer:    doc,
+		Variants: variants,
 	}, nil
 }
 
@@ -148,6 +154,9 @@ func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 
 	if utf8.RuneCountInString(query.Text) > MaxQueryLength {
 		return query, ErrInvalidQuery.WithMessage("строка поиска длиннее 200 символов")
+	}
+	if query.GroupID != "" && (query.TenantID == "" || len(query.GroupID) > 128) {
+		return query, ErrInvalidQuery.WithMessage("группа требует магазин и корректный идентификатор")
 	}
 	if query.TenantID != "" {
 		if _, err := ids.ParseTenantID(query.TenantID); err != nil {

@@ -23,7 +23,7 @@ func indexed(t *testing.T) (*fake.Store, *appcatalog.Queries) {
 	seedProduct(store, "t1", "p2")
 	seedProduct(store, "t2", "p1")
 
-	indexer := appcatalog.NewIndexer(store, index, clock, 10, &fake.IndexRebuildLock{})
+	indexer := appcatalog.NewIndexer(store, index, clock, 10, &fake.IndexRebuildLock{}, nil)
 	if _, err := indexer.Rebuild(context.Background()); err != nil {
 		t.Fatal(err)
 	}
