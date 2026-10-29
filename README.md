@@ -51,11 +51,13 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 |---|---|---|---|
 | `DATABASE_URL` | да | — | PostgreSQL `postgres://…` |
 | `DATABASE_MAX_CONNS` | | `10` | размер пула, 1–1000 |
-| `OPENSEARCH_URLS` | да | — | адреса кластера через запятую |
+| `SEARCH_URL` | да | — | адрес общего `proshop-search` без `/api` |
+| `SEARCH_MARKETPLACE_TOKEN` | да | — | отдельный служебный токен поиска, ≥ 32 символов |
+| `SEARCH_TIMEOUT`, `SEARCH_MAINTENANCE_INTERVAL` | | `35s`, `1m` | срок HTTP-запроса и период проверки пересборки |
+| `OPENSEARCH_URLS` | да | — | адреса кластера геоиндекса пунктов выдачи через запятую |
 | `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD` | | — | задаются парой |
 | `OPENSEARCH_INSECURE_SKIP_VERIFY` | | `false` | самоподписанный сертификат локально |
-| `OPENSEARCH_INDEX` | | `marketplace-offers` | алиас рабочего индекса |
-| `OPENSEARCH_SHARDS`, `OPENSEARCH_REPLICAS` | | `1`, `1` | поколения индекса |
+| `OPENSEARCH_SHARDS`, `OPENSEARCH_REPLICAS` | | `1`, `1` | геоиндекс пунктов выдачи |
 | `KAFKA_BROKERS` | да | — | брокеры установки через запятую |
 | `KAFKA_TOPIC_PREFIX` | | пусто | `KAFKA_TOPIC_PREFIX` сервера: топики `<prefix>.<имя>` |
 | `KAFKA_GROUP_ID` | | `marketplace` | своя группа консьюмера |
@@ -180,7 +182,6 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | Топик | Откуда магазин | Что делает |
 |---|---|---|
 | `catalog.product.projected` | ключ `["tenantId","productId"]` и тело | снимок товара по ревизии |
-| `catalog.tag.projected` | ключ `["tenantId","tagId"]` и тело | справочник тегов |
 | `stock.item.updated` | заголовок `x-tenant` | свободный остаток и прайс позиции |
 | `catalog.product.price-updated` | заголовок `x-tenant` | новый прайс |
 | `platform.tenant.created`, `updated`, `suspended`, `resumed`, `deleted` | тело | зеркало реестра магазинов |
@@ -194,12 +195,14 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 
 PostgreSQL, миграции goose в `internal/infrastructure/postgres/migrations`:
 `tenants` (зеркало реестра), `participants` (с настройками участия и
-субсидией доставки), `catalog_products`, `catalog_tags`, `offers` (остатки и
+субсидией доставки), `catalog_products`, `offers` (остатки и
 цены), `outbox`, `processed_events`, `parked_events`, `buyers`,
 `phone_challenges`, `carts`, `cart_lines`, `pickup_points`, `job_leases`
 (аренда фоновых задач), `checkouts`, `checkout_groups`. Индекс предложений —
-OpenSearch, алиас `OPENSEARCH_INDEX` над поколениями; восстанавливается из
-проекции (`make reindex`, а на старте — сам, если алиаса нет). Пункты выдачи —
+отдельный каталог общего `proshop-search`; восстанавливается из
+проекции через служебный HTTP API (`make reindex`, а при первом запуске или
+смене схемы — автоматически). Самостоятельного поискового алгоритма в backend
+маркетплейса больше нет. Пункты выдачи —
 индекс `OPENSEARCH_PICKUP_INDEX` с `geo_point`, наполняется из таблицы при
 обновлении справочников. Redis — сессии и лимиты входа.
 
@@ -213,8 +216,8 @@ OpenSearch, алиас `OPENSEARCH_INDEX` над поколениями; вос�
   дедуп событий, отравленные сообщения, чистка по сроку.
 - Kafka: консьюмеры каталога, остатков, цен и реестра; магазин из ключа,
   тела или `x-tenant`; отравленные с метрикой; коммит после записи.
-- OpenSearch: индекс предложений, поиск и фильтры, карточка, перестроение
-  из проекции.
+- Общий `proshop-search`: индекс предложений, поиск и фильтры, карточка, перестроение
+  из проекции. Прямой OpenSearch остаётся у геоиндекса пунктов выдачи.
 - HTTP: `/health`, `/metrics`, выдача и карточка, операторские ручки участников.
 - Сторож слоистости (тест и `depguard`), CI: линтер, юнит-тесты,
   интеграционные тесты на compose, сборка образа.
@@ -376,3 +379,10 @@ make taxonomy-load FILE=taxonomy/example.yaml
 [Контракт для панели](docs/api/marketplace.openapi.yaml) совпадает с `api/openapi.yaml`.
 Для входа нужны `OPERATOR_EMAIL`, `OPERATOR_PASSWORD_HASH`, `OPERATOR_ORIGIN` и HTTPS.
 `OPERATOR_TOKEN` сохраняется для машинного доступа.
+
+## Общий поиск предложений
+
+Переход, порядок обновления и откат описаны в [docs/shared-search.md](docs/shared-search.md).
+`make dev` требует запущенный `proshop-search` с тем же `SEARCH_MARKETPLACE_TOKEN`;
+одного compose этого репозитория для поиска предложений недостаточно.
+API таксономии, её PostgreSQL-таблицы и поставка данных используют реализацию master.

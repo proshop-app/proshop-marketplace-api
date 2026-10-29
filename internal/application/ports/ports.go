@@ -34,7 +34,6 @@ type Tx interface {
 	Registry() participant.Registry
 	Products() catalog.ProductRepository
 	Signals() catalog.SignalsRepository
-	Tags() catalog.TagRepository
 	Offers() OfferStates
 	Outbox() Outbox
 	Inbox() Inbox

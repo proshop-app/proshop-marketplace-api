@@ -45,7 +45,6 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at tim
 			},
 			Name:       "Товар " + string(product),
 			Visible:    true,
-			Tags:       []string{"tag-1", "free"},
 			Categories: []catalog.Category{{ID: "c1", Name: "Категория"}},
 		},
 		Price:     money.FromKopecks(10000),

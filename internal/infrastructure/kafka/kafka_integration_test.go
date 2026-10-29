@@ -54,18 +54,8 @@ const (
 			"promoPrice": null,
 			"availableQuantity": 4,
 			"categories": [],
-			"tags": ["tag-1"],
 			"conditions": {"isVisible": true}
 		}
-	}`
-
-	tagProjectedPayload = `{
-		"version": 1,
-		"tenantId": "t1",
-		"tagId": "tag-1",
-		"revision": 1,
-		"operation": "upsert",
-		"tag": {"id": "tag-1", "value": "Новинка"}
 	}`
 )
 
@@ -394,12 +384,6 @@ func TestConsumerEndToEnd(t *testing.T) {
 			Value: []byte(productProjectedPayload),
 		},
 		kafkago.Message{
-			Topic: topic(kafka.TopicTagProjected),
-			Key:   []byte(`["t1","tag-1"]`),
-			Time:  now,
-			Value: []byte(tagProjectedPayload),
-		},
-		kafkago.Message{
 			Topic:   topic(kafka.TopicStockItemUpdated),
 			Key:     []byte("s1"),
 			Time:    now.Add(time.Second),
@@ -432,7 +416,7 @@ func TestConsumerEndToEnd(t *testing.T) {
 	stop := first.run(t)
 
 	waitFor(t, pool, "отравленные", `SELECT count(*) FROM parked_events`, 2)
-	waitFor(t, pool, "обработанные события", `SELECT count(*) FROM processed_events`, 5)
+	waitFor(t, pool, "обработанные события", `SELECT count(*) FROM processed_events`, 4)
 	stop()
 
 	parkedWithoutTenant := `
@@ -468,9 +452,6 @@ func TestConsumerEndToEnd(t *testing.T) {
 		WHERE tenant_id = 't1' AND product_id = 'p1' AND available = 4 AND price = 210000`
 	if n := count(t, pool, signals); n != 1 {
 		t.Fatal("сигналы остатка и цены: свежий прайс побеждает")
-	}
-	if n := count(t, pool, `SELECT count(*) FROM catalog_tags WHERE value = 'Новинка'`); n != 1 {
-		t.Fatal("тег в проекции")
 	}
 	if n := count(t, pool, `SELECT count(*) FROM outbox WHERE kind = 'catalog.offer.sync'`); n < 1 {
 		t.Fatal("изменения проекции ставят задачу синхронизации индекса")

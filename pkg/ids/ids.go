@@ -23,9 +23,6 @@ type TenantID string
 // ProductID — товар в каталоге магазина.
 type ProductID string
 
-// TagID — тег в справочнике магазина.
-type TagID string
-
 // OfferID — предложение: товар конкретного магазина. Отдельного offerId
 // платформа не вводит, ключ — пара магазина и товара.
 type OfferID struct {
@@ -55,15 +52,6 @@ func ParseProductID(value string) (ProductID, error) {
 	}
 
 	return ProductID(value), nil
-}
-
-// ParseTagID проверяет формат идентификатора тега.
-func ParseTagID(value string) (TagID, error) {
-	if err := validate("тега", value); err != nil {
-		return "", err
-	}
-
-	return TagID(value), nil
 }
 
 func validate(subject, value string) error {

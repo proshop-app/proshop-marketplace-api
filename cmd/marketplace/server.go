@@ -130,7 +130,13 @@ func (s *server) services(ctx context.Context) (services, error) {
 	// корзина и покупка узнают об отказе участия первыми — по нему сверка настроек внеочередная
 	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
 	settings := appparticipant.NewSettings(uow, platform, now)
-	indexer := appcatalog.NewIndexer(uow, s.store.index, now, indexBatch)
+	indexer := appcatalog.NewIndexer(
+		uow,
+		s.store.index,
+		now,
+		indexBatch,
+		postgres.NewIndexRebuildLock(s.store.pool),
+	)
 	pickups := directory(s.store, cfg)
 	auth := appbuyer.NewAuth(
 		uow,
@@ -317,6 +323,7 @@ func (s *server) jobs() []func(context.Context) error {
 	cfg := s.cfg
 
 	return []func(context.Context) error{
+		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
 		jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, cfg.Outbox.Batch, s.logger, s.metrics).Run,
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
@@ -331,7 +338,14 @@ func (s *server) httpServer() *http.Server {
 	cfg := s.cfg
 	checks := []transport.Check{
 		{Name: "postgres", Probe: s.store.pool.Ping},
-		{Name: "opensearch", Probe: s.store.index.Ping},
+		{
+			Name:  "search",
+			Probe: s.store.index.Ping,
+		},
+		{
+			Name:  "opensearch-pickups",
+			Probe: s.store.pickups.Ping,
+		},
 		{Name: "redis", Probe: func(ctx context.Context) error { return s.cache.Ping(ctx).Err() }},
 		{Name: "kafka", Probe: func(ctx context.Context) error { return infrakafka.Ping(ctx, cfg.Kafka.Brokers) }},
 	}

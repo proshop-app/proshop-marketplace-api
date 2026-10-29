@@ -25,6 +25,7 @@ type Config struct {
 	HTTP       HTTP
 	Database   Database
 	OpenSearch OpenSearch
+	Search     Search
 	Kafka      Kafka
 	Outbox     Outbox
 	Retention  Retention
@@ -134,13 +135,20 @@ type Database struct {
 	MaxConns int32
 }
 
-// OpenSearch — кластер индекса предложений.
+// Search — общий движок каталога площадки.
+type Search struct {
+	MaintenanceInterval time.Duration
+	URL                 string
+	Token               string
+	Timeout             time.Duration
+}
+
+// OpenSearch — кластер геоиндекса пунктов выдачи.
 type OpenSearch struct {
 	URLs               []string
 	Username           string
 	Password           string
 	InsecureSkipVerify bool
-	Index              string
 	Shards             int
 	Replicas           int
 }
@@ -205,12 +213,17 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			ShutdownTimeout: r.duration("SHUTDOWN_TIMEOUT", 20*time.Second),
 		},
 		Database: r.database(),
+		Search: Search{
+			MaintenanceInterval: r.duration("SEARCH_MAINTENANCE_INTERVAL", time.Minute),
+			URL:                 r.httpURL("SEARCH_URL"),
+			Token:               r.required("SEARCH_MARKETPLACE_TOKEN"),
+			Timeout:             r.duration("SEARCH_TIMEOUT", 35*time.Second),
+		},
 		OpenSearch: OpenSearch{
 			URLs:               r.urls("OPENSEARCH_URLS"),
 			Username:           r.str("OPENSEARCH_USERNAME", ""),
 			Password:           r.str("OPENSEARCH_PASSWORD", ""),
 			InsecureSkipVerify: r.boolean("OPENSEARCH_INSECURE_SKIP_VERIFY", false),
-			Index:              r.str("OPENSEARCH_INDEX", "marketplace-offers"),
 			Shards:             r.positive("OPENSEARCH_SHARDS", 1),
 			Replicas:           r.nonNegative("OPENSEARCH_REPLICAS", 1),
 		},
@@ -294,11 +307,15 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	if token := cfg.Operator.Token; token != "" && len(token) < minOperatorTokenLength {
 		r.fail("OPERATOR_TOKEN", fmt.Sprintf("не короче %d символов", minOperatorTokenLength))
 	}
+	if len(cfg.Search.Token) < minOperatorTokenLength {
+		r.fail("SEARCH_MARKETPLACE_TOKEN", "не короче 32 символов")
+	}
+	if cfg.Search.Token != "" && (cfg.Search.Token == cfg.Operator.Token || cfg.Search.Token == cfg.Platform.Token) {
+		r.fail("SEARCH_MARKETPLACE_TOKEN", "отдельный токен поискового сервиса")
+	}
+
 	if (cfg.OpenSearch.Username == "") != (cfg.OpenSearch.Password == "") {
 		r.fail("OPENSEARCH_USERNAME", "задаётся вместе с OPENSEARCH_PASSWORD")
-	}
-	if strings.TrimSpace(cfg.OpenSearch.Index) == "" {
-		r.fail("OPENSEARCH_INDEX", "не может быть пустым")
 	}
 	if strings.TrimSpace(cfg.Kafka.GroupID) == "" {
 		r.fail("KAFKA_GROUP_ID", "не может быть пустым")

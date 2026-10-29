@@ -18,7 +18,7 @@ import (
 // PickupIndex — геоиндекс пунктов выдачи. Источник истины — таблица
 // справочника; индекс восстанавливается из неё.
 type PickupIndex struct {
-	index *Index
+	index *Client
 	name  string
 }
 
@@ -40,8 +40,13 @@ type geoPoint struct {
 }
 
 // NewPickupIndex — геоиндекс на том же кластере, что индекс предложений.
-func NewPickupIndex(index *Index, name string) *PickupIndex {
+func NewPickupIndex(index *Client, name string) *PickupIndex {
 	return &PickupIndex{index: index, name: name}
+}
+
+// Ping проверяет доступность геоиндекса независимо от общего поиска предложений.
+func (x *PickupIndex) Ping(ctx context.Context) error {
+	return x.index.Ping(ctx)
 }
 
 func pickupID(carrier delivery.Carrier, code string) string {

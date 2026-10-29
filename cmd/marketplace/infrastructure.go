@@ -15,6 +15,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/opensearch"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/smsru"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/yandex"
 )
@@ -31,7 +32,7 @@ const (
 // storage — база и индексы процесса.
 type storage struct {
 	pool    *pgxpool.Pool
-	index   *opensearch.Index
+	index   *searchapi.Index
 	pickups *opensearch.PickupIndex
 }
 
@@ -42,12 +43,11 @@ func openStorage(ctx context.Context, cfg config.Config) (*storage, error) {
 		return nil, err
 	}
 
-	index, err := opensearch.New(opensearch.Config{
+	geo, err := opensearch.New(opensearch.Config{
 		URLs:               cfg.OpenSearch.URLs,
 		Username:           cfg.OpenSearch.Username,
 		Password:           cfg.OpenSearch.Password,
 		InsecureSkipVerify: cfg.OpenSearch.InsecureSkipVerify,
-		Alias:              cfg.OpenSearch.Index,
 		Shards:             cfg.OpenSearch.Shards,
 		Replicas:           cfg.OpenSearch.Replicas,
 	})
@@ -57,10 +57,20 @@ func openStorage(ctx context.Context, cfg config.Config) (*storage, error) {
 		return nil, err
 	}
 
+	index, err := searchapi.New(searchapi.Config{
+		URL:     cfg.Search.URL,
+		Token:   cfg.Search.Token,
+		Timeout: cfg.Search.Timeout,
+	})
+	if err != nil {
+		pool.Close()
+		return nil, err
+	}
+
 	return &storage{
 		pool:    pool,
 		index:   index,
-		pickups: opensearch.NewPickupIndex(index, cfg.Delivery.PickupIndex),
+		pickups: opensearch.NewPickupIndex(geo, cfg.Delivery.PickupIndex),
 	}, nil
 }
 

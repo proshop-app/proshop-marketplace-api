@@ -29,7 +29,6 @@ type Card struct {
 	URL         string
 	SKU         string
 	Categories  []Category
-	Tags        []string
 	VariantsID  string
 	// Visible — товар включён в каталоге магазина.
 	Visible bool

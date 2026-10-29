@@ -84,35 +84,6 @@ func TestApplyProductInvalidRollsBack(t *testing.T) {
 	}
 }
 
-func TestApplyTag(t *testing.T) {
-	store := fake.NewStore()
-	projector := appcatalog.NewProjector(store, fake.NewClock(t1))
-	ctx := context.Background()
-
-	event := appcatalog.TagEvent{
-		EventID:  "e1",
-		Snapshot: catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "Новинка"},
-	}
-	if err := projector.ApplyTag(ctx, event); err != nil {
-		t.Fatal(err)
-	}
-
-	update := appcatalog.TagEvent{
-		EventID:  "e2",
-		Snapshot: catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 2, Value: "Хит"},
-	}
-	if err := projector.ApplyTag(ctx, update); err != nil {
-		t.Fatal(err)
-	}
-
-	if tag, _ := store.Tag("t1", "tag-1"); tag.Value != "Хит" || tag.Revision != 2 {
-		t.Fatalf("тег: %+v", tag)
-	}
-	if len(store.OutboxRows()) != 0 {
-		t.Fatal("теги подписываются при чтении, индекс не трогается")
-	}
-}
-
 func TestApplyStockAndPrice(t *testing.T) {
 	store := fake.NewStore()
 	clock := fake.NewClock(t1)

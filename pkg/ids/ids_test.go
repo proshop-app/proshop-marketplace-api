@@ -22,17 +22,11 @@ func TestParseTenantID(t *testing.T) {
 	}
 }
 
-func TestParseProductAndTag(t *testing.T) {
+func TestParseProduct(t *testing.T) {
 	if _, err := ids.ParseProductID("p-1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ids.ParseTagID("tag:1"); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := ids.ParseProductID("bad id"); err == nil {
-		t.Fatal("ожидалась ошибка")
-	}
-	if _, err := ids.ParseTagID(""); err == nil {
 		t.Fatal("ожидалась ошибка")
 	}
 }

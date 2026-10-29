@@ -537,7 +537,6 @@ paths:
         - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Строка поиска }
         - { name: tenant, in: query, schema: { type: string }, description: Магазин }
         - { name: category, in: query, schema: { type: string }, description: Категория площадки с потомками }
-        - { name: tag, in: query, schema: { type: string } }
         - { name: priceMin, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
         - { name: priceMax, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
         - { name: inStock, in: query, schema: { type: boolean } }
@@ -570,7 +569,7 @@ paths:
         - $ref: "#/components/parameters/OfferId"
       responses:
         "200":
-          description: Карточка с описанием и подписями тегов
+          description: Карточка с описанием
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Offer" }
@@ -1760,16 +1759,10 @@ components:
         id: { type: string }
         name: { type: string }
         url: { type: string }
-    Tag:
-      type: object
-      required: [id, label]
-      properties:
-        id: { type: string }
-        label: { type: string }
     Offer:
       description: При паре deliveryCarrier и deliveryRegion возвращает deliveryAvailable; вне зон товар виден, доставка недоступна.
       type: object
-      required: [id, tenantId, productId, seller, name, categoryId, attributes, categories, tags, price, basePrice, available, inStock, checkoutAvailable, updatedAt]
+      required: [id, tenantId, productId, seller, name, categoryId, attributes, categories, price, basePrice, available, inStock, checkoutAvailable, updatedAt]
       properties:
         deliveryAvailable: { type: boolean }
         categoryId: { type: string, description: Категория площадки }
@@ -1786,9 +1779,6 @@ components:
         categories:
           type: array
           items: { $ref: "#/components/schemas/Category" }
-        tags:
-          type: array
-          items: { $ref: "#/components/schemas/Tag" }
         price: { type: integer, format: int64, description: Цена продажи в копейках }
         basePrice: { type: integer, format: int64, description: Прайс магазина в копейках }
         available: { type: integer }

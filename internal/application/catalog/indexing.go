@@ -22,6 +22,7 @@ type Indexer struct {
 	index ports.OfferIndex
 	clock ports.Clock
 	batch int
+	lock  ports.IndexRebuildLock
 }
 
 // RebuildResult — итог перестроения.
@@ -32,8 +33,20 @@ type RebuildResult struct {
 }
 
 // NewIndexer — синхронизация индекса пачками по batch предложений.
-func NewIndexer(uow ports.UnitOfWork, index ports.OfferIndex, clock ports.Clock, batch int) *Indexer {
-	return &Indexer{uow: uow, index: index, clock: clock, batch: batch}
+func NewIndexer(
+	uow ports.UnitOfWork,
+	index ports.OfferIndex,
+	clock ports.Clock,
+	batch int,
+	lock ports.IndexRebuildLock,
+) *Indexer {
+	return &Indexer{
+		uow:   uow,
+		index: index,
+		clock: clock,
+		batch: batch,
+		lock:  lock,
+	}
 }
 
 // HandleTask — обработчик задач синхронизации из outbox.
@@ -57,6 +70,7 @@ func (i *Indexer) HandleTask(ctx context.Context, task ports.Task) error {
 // участвует в маркетплейсе, в индекс не попадает.
 func (i *Indexer) SyncOffer(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) error {
 	var state ports.OfferState
+
 	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
 		state, err = tx.Offers().Offer(ctx, tenantID, productID)
@@ -85,6 +99,7 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 
 	for {
 		var states []ports.OfferState
+
 		err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var err error
 			states, err = tx.Offers().TenantOffers(ctx, tenantID, after, i.batch)
@@ -110,16 +125,28 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 }
 
 // Rebuild собирает индекс заново из проекции: новое поколение, наполнение,
-// переключение и догоняющий проход по изменениям, случившимся за время
-// наполнения. Версии документов делают догоняющий проход безопасным.
+// догоняющий проход и переключение. Поисковый сервис сохраняет Building до
+// начала сканирования и направляет новые события в оба поколения.
 func (i *Indexer) Rebuild(ctx context.Context) (RebuildResult, error) {
+	var result RebuildResult
+	err := i.lock.WithLock(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = i.rebuild(ctx)
+		return err
+	})
+	return result, err
+}
+
+func (i *Indexer) rebuild(ctx context.Context) (RebuildResult, error) {
 	started := i.clock.Now()
 
 	generation, err := i.index.NewGeneration(ctx)
 	if err != nil {
 		return RebuildResult{}, err
 	}
+
 	result := RebuildResult{Generation: generation}
+
 	participantOffers := func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error) {
 		return tx.Offers().ParticipantOffers(ctx, after, i.batch)
 	}
@@ -133,9 +160,6 @@ func (i *Indexer) Rebuild(ctx context.Context) (RebuildResult, error) {
 		return result, err
 	}
 
-	if err := i.index.Activate(ctx, generation); err != nil {
-		return result, err
-	}
 	since := started.Add(-CatchUpMargin)
 	changedOffers := func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error) {
 		return tx.Offers().ChangedSince(ctx, since, after, i.batch)
@@ -143,10 +167,14 @@ func (i *Indexer) Rebuild(ctx context.Context) (RebuildResult, error) {
 	put := func(docs []ports.OfferDocument) error {
 		result.CaughtUp += len(docs)
 
-		return i.index.Put(ctx, docs)
+		return i.index.PutGeneration(ctx, generation, docs)
 	}
 
-	return result, i.pages(ctx, changedOffers, put)
+	if err := i.pages(ctx, changedOffers, put); err != nil {
+		return result, err
+	}
+
+	return result, i.index.Activate(ctx, generation)
 }
 
 // EnsureIndex собирает индекс, если рабочего индекса нет: первый запуск или потеря кластера.
@@ -170,6 +198,7 @@ func (i *Indexer) pages(
 
 	for {
 		var states []ports.OfferState
+
 		err := i.uow.Do(ctx, func(_ context.Context, tx ports.Tx) error {
 			var err error
 			states, err = read(tx, after)
@@ -188,6 +217,7 @@ func (i *Indexer) pages(
 				return err
 			}
 		}
+
 		last := states[len(states)-1].Product.State()
 		after = ports.OfferKey{TenantID: last.TenantID, ProductID: last.ProductID}
 
@@ -266,7 +296,6 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	doc.CategoryPath = publication.CategoryPath
 	doc.Attributes = publication.Attributes
 	doc.Categories = []catalog.Category{{ID: publication.CategoryID, Name: publication.CategoryName}}
-	doc.Tags = offer.Card.Tags
 	doc.VariantsID = offer.Card.VariantsID
 	doc.Price = offer.Price.Kopecks()
 	doc.BasePrice = offer.BasePrice.Kopecks()
@@ -277,4 +306,24 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	doc.CheckoutAvailable = offer.CheckoutAvailable
 
 	return doc, true
+}
+
+// Maintain возобновляет сборку или перераспределяет выросший каталог.
+func (i *Indexer) Maintain(ctx context.Context) (bool, error) {
+	needed, err := i.index.NeedsRebuild(ctx)
+	if err != nil || !needed {
+		return false, err
+	}
+	// Решение перечитывается под блокировкой: сосед мог уже завершить перенос.
+	rebuilt := false
+	err = i.lock.WithLock(ctx, func(ctx context.Context) error {
+		needed, err := i.index.NeedsRebuild(ctx)
+		if err != nil || !needed {
+			return err
+		}
+		_, err = i.rebuild(ctx)
+		rebuilt = err == nil
+		return err
+	})
+	return rebuilt, err
 }

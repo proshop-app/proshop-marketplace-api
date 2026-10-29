@@ -31,7 +31,6 @@ func snapshot(revision int64, at time.Time) catalog.Snapshot {
 		Card: catalog.Card{
 			Name:        " Товар ",
 			Visible:     true,
-			Tags:        []string{"tag-1"},
 			Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
 			Publication: taxonomy.Publication{Published: true, CategoryID: "c1"},
 		},
@@ -225,30 +224,5 @@ func TestComposeOfferVisibility(t *testing.T) {
 
 	if offer := catalog.ComposeOffer(nil, nil, visibleSeller); offer.Visible {
 		t.Fatal("без товара предложения нет")
-	}
-}
-
-func TestTags(t *testing.T) {
-	tag, err := catalog.NewTag(catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: " Новинка "}, t0)
-	if err != nil || tag.State().Value != "Новинка" {
-		t.Fatalf("%+v %v", tag, err)
-	}
-	tag.MarkSaved()
-	stale := catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "x"}
-	if changed, _ := tag.Apply(stale, t1); changed {
-		t.Fatal("та же ревизия не применяется")
-	}
-	deletion := catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 2, Deleted: true}
-	if changed, err := tag.Apply(deletion, t1); err != nil || !changed || tag.State().Value != "" {
-		t.Fatalf("удаление: changed=%v err=%v state=%+v", changed, err, tag.State())
-	}
-
-	_, err = catalog.NewTag(catalog.TagSnapshot{TenantID: "t1", TagID: "tag-2", Revision: 1}, t0)
-	if !errors.Is(err, catalog.ErrInvalidSnapshot) {
-		t.Fatalf("тег без значения: получено %v", err)
-	}
-	labels := catalog.LabelTags([]string{"tag-1", "free-text"}, map[string]string{"tag-1": "Новинка"})
-	if labels[0].Label != "Новинка" || labels[1].Label != "free-text" {
-		t.Fatalf("подписи: %+v", labels)
 	}
 }

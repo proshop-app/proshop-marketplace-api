@@ -20,7 +20,7 @@ var w3IndexingDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"
 var w3IndexingSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func indexer(store *fake.Store, index *fake.Index, clock *fake.Clock) *appcatalog.Indexer {
-	return appcatalog.NewIndexer(store, index, clock, 2)
+	return appcatalog.NewIndexer(store, index, clock, 2, &fake.IndexRebuildLock{})
 }
 
 func TestSyncOfferWritesParticipantOffers(t *testing.T) {
