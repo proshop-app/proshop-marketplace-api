@@ -1,10 +1,11 @@
 //go:build integration
 
-package opensearch_test
+package searchapi_test
 
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -30,22 +31,52 @@ var w3PipelineIntegrationDelivery = participant.DeliverySettings{
 	Regions:  []string{"RU-MOW"},
 	Carriers: []string{"cdek"},
 }
-var w3PipelineIntegrationSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
+var w3PipelineIntegrationSubsidy = participant.Subsidy{
+	Enabled: true,
+	Type:    participant.SubsidyFixed,
+}
 
 func TestProjectionToIndex(t *testing.T) {
 	pool := pgtest.Pool(t)
-	index := testIndex(t)
+	index := testSearchIndex(t)
 	ctx := context.Background()
 	now := clock.System{}
 	uow := postgres.NewUnitOfWork(pool)
+
 	if err := apptaxonomy.NewService(uow, now).Load(ctx, taxonomy.Definition{
-		Version:    1,
-		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория"}},
+		Version: 1,
+		Categories: []taxonomy.Category{
+			{
+				ID:   "c1",
+				Name: "Категория",
+				Attributes: []taxonomy.Attribute{
+					{
+						Code:     "a1",
+						Name:     "Атрибут 1",
+						Type:     "string",
+						Required: true,
+						Facet:    true,
+					},
+					{
+						Code:  "a2",
+						Name:  "Атрибут 2",
+						Type:  "number",
+						Facet: true,
+					},
+					{
+						Code:  "a3",
+						Name:  "Атрибут 3",
+						Type:  "boolean",
+						Facet: true,
+					},
+				},
+			},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	projector := appcatalog.NewProjector(uow, now)
-	indexer := appcatalog.NewIndexer(uow, index, now, 100)
+	indexer := appcatalog.NewIndexer(uow, index, now, 100, postgres.NewIndexRebuildLock(pool))
 	registry := appparticipant.NewRegistry(uow, now)
 	participants := appparticipant.NewService(uow, now)
 	platform := fake.NewPlatform()
@@ -54,7 +85,11 @@ func TestProjectionToIndex(t *testing.T) {
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(pool),
 		now,
-		messaging.DispatcherConfig{Batch: 50, PerTenant: 50, Lease: time.Minute},
+		messaging.DispatcherConfig{
+			Batch:     50,
+			PerTenant: 50,
+			Lease:     time.Minute,
+		},
 		map[string]messaging.Handler{
 			appcatalog.TaskSyncOffer:  indexer.HandleTask,
 			appcatalog.TaskSyncTenant: indexer.HandleTask,
@@ -69,22 +104,22 @@ func TestProjectionToIndex(t *testing.T) {
 
 		for {
 			outcomes, err := dispatcher.RunOnce(ctx)
+
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			for _, outcome := range outcomes {
 				if outcome.Err != nil {
 					t.Fatalf("задача %s: %v", outcome.Task.Kind, outcome.Err)
 				}
 			}
+
 			if len(outcomes) == 0 {
 				break
 			}
 		}
 
-		if err := index.Refresh(ctx); err != nil {
-			t.Fatal(err)
-		}
 	}
 	active := participant.RegistryEvent{
 		TenantID: "t1",
@@ -93,7 +128,11 @@ func TestProjectionToIndex(t *testing.T) {
 		Hosts:    json.RawMessage(`[]`),
 		At:       now.Now(),
 	}
-	err := registry.Apply(ctx, appparticipant.RegistryEvent{EventID: "e1", Event: active})
+	err := registry.Apply(ctx, appparticipant.RegistryEvent{
+		EventID: "e1",
+		Event:   active,
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,10 +150,21 @@ func TestProjectionToIndex(t *testing.T) {
 					Available: 3,
 					Price:     money.FromKopecks(int64(10000 * (i + 1))),
 					Card: catalog.Card{
-						Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
-						Name:        "Товар " + string(product),
-						Visible:     true,
-						Categories:  []catalog.Category{{ID: "c1", Name: "Категория"}},
+						Marketplace: &taxonomy.Card{
+							CategoryID: "c1",
+							Published:  true,
+							Attributes: map[string]json.RawMessage{
+								"a1": json.RawMessage(`"001"`),
+								"a2": json.RawMessage(`1.75`),
+								"a3": json.RawMessage(`false`),
+							},
+						},
+						Name:    "Товар " + string(product),
+						Visible: true,
+						Categories: []catalog.Category{{
+							ID:   "local",
+							Name: "Категория магазина",
+						}},
 					},
 					PriceProfiles: []catalog.PriceProfile{
 						{
@@ -122,23 +172,60 @@ func TestProjectionToIndex(t *testing.T) {
 							Price:          money.FromKopecks(int64(10000 * (i + 1))),
 							EffectivePrice: money.FromKopecks(int64(10000 * (i + 1))),
 						},
+						{
+							Key:            "marketplace:group",
+							Price:          money.FromKopecks(int64(8000 * i)),
+							EffectivePrice: money.FromKopecks(int64(8000 * i)),
+						},
 					},
 				},
 			},
 		)
+
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
+	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{
+		EventID: "product-invalid",
+		Snapshot: catalog.Snapshot{
+			TenantID:  "t1",
+			ProductID: "invalid",
+			Revision:  1,
+			At:        now.Now(),
+			Card: catalog.Card{
+				Marketplace: &taxonomy.Card{
+					CategoryID: "c1",
+					Published:  true,
+				},
+				Name:    "Неполная карточка",
+				Visible: true,
+			},
+			PriceProfiles: []catalog.PriceProfile{
+				{
+					Key: catalog.DefaultPriceProfile,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
 	drain()
+
 	if list, _ := queries.Search(ctx, ports.OfferQuery{}); list.Total != 0 {
 		t.Fatalf("магазин без участия не попадает в выдачу: %+v", list)
 	}
-	command := appparticipant.CreateCommand{TenantID: "t1", Name: "Первый магазин"}
+	command := appparticipant.CreateCommand{
+		TenantID: "t1",
+		Name:     "Первый магазин",
+	}
+
 	if _, err := participants.Create(ctx, command); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := participants.Enable(ctx, "t1"); err != nil {
 		t.Fatal(err)
 	}
@@ -153,19 +240,68 @@ func TestProjectionToIndex(t *testing.T) {
 		Subsidy:  w3PipelineIntegrationSubsidy,
 		Delivery: w3PipelineIntegrationDelivery,
 	})
+
 	if changed, err := settings.SyncOne(ctx, "t1"); err != nil || !changed {
 		t.Fatalf("настройки магазина: %v, %v", changed, err)
 	}
 	drain()
 
-	list, err := queries.Search(ctx, ports.OfferQuery{Text: "товари", Sort: ports.SortPriceDesc})
+	list, err := queries.Search(ctx, ports.OfferQuery{
+		Text: "товари",
+		Sort: ports.SortPriceDesc,
+	})
+
 	if err != nil || list.Total != 2 || list.Items[0].Offer.ID != "t1~p2" || !list.Items[0].Offer.CheckoutAvailable {
 		t.Fatalf("включённый участник в выдаче, с настройками доступен для оформления: %+v, %v", list, err)
 	}
 
-	card, err := queries.Offer(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, "")
+	card, err := queries.Offer(
+		ctx,
+		ids.OfferID{
+			Tenant:  "t1",
+			Product: "p1",
+		},
+		"",
+	)
+
 	if err != nil || !card.Offer.CheckoutAvailable || card.Offer.SellerName != "Первый магазин" {
 		t.Fatalf("карточка после настроек участия: %+v, %v", card, err)
+	}
+
+	if len(card.Offer.PriceProfiles) != 2 ||
+		!reflect.DeepEqual(card.Offer.Attributes["a3"], json.RawMessage(`false`)) ||
+		!reflect.DeepEqual(card.Offer.Delivery, w3PipelineIntegrationDelivery) ||
+		len(card.Offer.Categories) != 1 || card.Offer.Categories[0].ID != "c1" {
+		t.Fatalf("потеряны проверенные данные предложения: %+v", card)
+	}
+	buyer := ids.UUID("11111111-1111-4111-8111-111111111111")
+	platform.SetBuyerProfile(buyer, "t1", "marketplace:group")
+	personalized, err := queries.Search(ctx, ports.OfferQuery{
+		BuyerID: buyer,
+		Sort:    ports.SortPriceAsc,
+		Limit:   1,
+		Attributes: map[string]ports.AttributeFilter{
+			"a2": {
+				Min: "1.5",
+				Max: "2",
+			},
+		},
+	})
+
+	if err != nil || personalized.Total != 2 || len(personalized.Items) != 1 ||
+		personalized.Items[0].Offer.ID != "t1~p1" || personalized.Items[0].Offer.Price != 0 {
+		t.Fatalf("цена покупателя и фильтр до пагинации: %+v, %v", personalized, err)
+	}
+
+	if _, err := queries.Offer(
+		ctx,
+		ids.OfferID{
+			Tenant:  "t1",
+			Product: "invalid",
+		},
+		"",
+	); err == nil {
+		t.Fatal("карточка без обязательного атрибута стала публичной")
 	}
 	suspended := participant.RegistryEvent{
 		TenantID: "t1",
@@ -175,7 +311,11 @@ func TestProjectionToIndex(t *testing.T) {
 		At:       now.Now(),
 	}
 
-	err = registry.Apply(ctx, appparticipant.RegistryEvent{EventID: "e2", Event: suspended})
+	err = registry.Apply(ctx, appparticipant.RegistryEvent{
+		EventID: "e2",
+		Event:   suspended,
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,10 +326,19 @@ func TestProjectionToIndex(t *testing.T) {
 	}
 
 	result, err := indexer.Rebuild(ctx)
-	if err != nil || result.Indexed != 2 {
+
+	if err != nil || result.Indexed != 3 {
 		t.Fatalf("перестроение из проекции: %+v, %v", result, err)
 	}
-	if _, err := queries.Offer(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, ""); err == nil {
+
+	if _, err := queries.Offer(
+		ctx,
+		ids.OfferID{
+			Tenant:  "t1",
+			Product: "p1",
+		},
+		"",
+	); err == nil {
 		t.Fatal("после перестроения скрытое предложение по-прежнему скрыто")
 	}
 }

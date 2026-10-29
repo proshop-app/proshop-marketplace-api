@@ -59,7 +59,6 @@ type cardJSON struct {
 	URL         string               `json:"url,omitempty"`
 	SKU         string               `json:"sku,omitempty"`
 	Categories  []categoryJSON       `json:"categories,omitempty"`
-	Tags        []string             `json:"tags,omitempty"`
 	VariantsID  string               `json:"variantsId,omitempty"`
 	Visible     bool                 `json:"visible"`
 	OnlyVariant bool                 `json:"onlyVariant,omitempty"`
@@ -210,7 +209,6 @@ func encodeCard(card catalog.Card) ([]byte, error) {
 		Image:       card.Image,
 		URL:         card.URL,
 		SKU:         card.SKU,
-		Tags:        card.Tags,
 		VariantsID:  card.VariantsID,
 		Visible:     card.Visible,
 		OnlyVariant: card.OnlyVariant,
@@ -240,7 +238,6 @@ func decodeCard(raw []byte) (catalog.Card, error) {
 		Image:       doc.Image,
 		URL:         doc.URL,
 		SKU:         doc.SKU,
-		Tags:        doc.Tags,
 		VariantsID:  doc.VariantsID,
 		Visible:     doc.Visible,
 		OnlyVariant: doc.OnlyVariant,

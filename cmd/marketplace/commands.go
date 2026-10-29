@@ -33,7 +33,13 @@ func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 	}
 	defer store.close()
 
-	indexer := appcatalog.NewIndexer(postgres.NewUnitOfWork(store.pool), store.index, clock.System{}, indexBatch)
+	indexer := appcatalog.NewIndexer(
+		postgres.NewUnitOfWork(store.pool),
+		store.index,
+		clock.System{},
+		indexBatch,
+		postgres.NewIndexRebuildLock(store.pool),
+	)
 
 	result, err := indexer.Rebuild(ctx)
 	if err != nil {

@@ -11,8 +11,6 @@ var (
 	ErrProductNotFound = errs.New(errs.NotFound, "catalog.product_not_found", "товара нет в проекции")
 	// ErrSignalsNotFound — сигналов по товару ещё не было.
 	ErrSignalsNotFound = errs.New(errs.NotFound, "catalog.signals_not_found", "сигналов по товару нет")
-	// ErrTagNotFound — тега нет в проекции.
-	ErrTagNotFound = errs.New(errs.NotFound, "catalog.tag_not_found", "тега нет в проекции")
 	// ErrConflict — запись проекции изменена параллельно.
 	ErrConflict = errs.New(errs.Conflict, "catalog.version_conflict", "запись проекции изменена параллельно")
 	// ErrOfferNotFound — предложения нет или оно скрыто.

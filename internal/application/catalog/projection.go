@@ -15,12 +15,6 @@ type ProductEvent struct {
 	Snapshot catalog.Snapshot
 }
 
-// TagEvent — снимок тега из события catalog.tag.projected.
-type TagEvent struct {
-	EventID  string
-	Snapshot catalog.TagSnapshot
-}
-
 // StockEvent — позиция склада из события stock.item.updated: остаток и прайс.
 type StockEvent struct {
 	EventID   string
@@ -91,35 +85,6 @@ func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error 
 		}
 
 		return tx.Outbox().Enqueue(ctx, SyncOfferTask(snapshot.TenantID, snapshot.ProductID, now))
-	})
-}
-
-// ApplyTag применяет снимок тега. Индекс не трогается: подписи тегов
-// подставляются при чтении карточки.
-func (p *Projector) ApplyTag(ctx context.Context, event TagEvent) error {
-	now := p.clock.Now()
-	snapshot := event.Snapshot
-
-	return p.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		fresh, err := tx.Inbox().MarkProcessed(ctx, event.EventID, now)
-		if err != nil || !fresh {
-			return err
-		}
-
-		tag, err := tx.Tags().Get(ctx, snapshot.TenantID, snapshot.TagID)
-		changed := true
-
-		switch {
-		case errors.Is(err, catalog.ErrTagNotFound):
-			tag, err = catalog.NewTag(snapshot, now)
-		case err == nil:
-			changed, err = tag.Apply(snapshot, now)
-		}
-		if err != nil || !changed {
-			return err
-		}
-
-		return tx.Tags().Save(ctx, tag)
 	})
 }
 

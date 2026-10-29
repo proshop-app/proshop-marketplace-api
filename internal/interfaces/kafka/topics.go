@@ -7,7 +7,6 @@ package kafka
 // заводит в своём PR-08d.
 const (
 	TopicProductProjected    = "catalog.product.projected"
-	TopicTagProjected        = "catalog.tag.projected"
 	TopicStockItemUpdated    = "stock.item.updated"
 	TopicProductPriceUpdated = "catalog.product.price-updated"
 	TopicTenantCreated       = "platform.tenant.created"

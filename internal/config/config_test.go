@@ -26,6 +26,8 @@ func validEnv() map[string]string {
 		"IDENTITY_BACKEND_SECRET":     strings.Repeat("i", 32),
 		"IDENTITY_REFRESH_KEY":        base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", 32))),
 		"DATABASE_URL":                "postgres://marketplace:marketplace@localhost:5432/marketplace",
+		"SEARCH_URL":                  "http://localhost:5002",
+		"SEARCH_MARKETPLACE_TOKEN":    "local-search-marketplace-token-0123456789",
 		"OPENSEARCH_URLS":             "http://localhost:9200",
 		"KAFKA_BROKERS":               "localhost:9092, localhost:9093",
 		"OPERATOR_TOKEN":              strings.Repeat("x", 32),
@@ -43,7 +45,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if cfg.HTTP.Addr != ":8080" || cfg.Kafka.GroupID != "marketplace" || cfg.OpenSearch.Index != "marketplace-offers" {
+	if cfg.HTTP.Addr != ":8080" || cfg.Kafka.GroupID != "marketplace" || cfg.Search.URL != "http://localhost:5002" {
 		t.Fatalf("неожиданные умолчания: %+v", cfg)
 	}
 	if len(cfg.Kafka.Brokers) != 2 || cfg.Kafka.Brokers[1] != "localhost:9093" {

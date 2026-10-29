@@ -19,7 +19,6 @@ var published = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
 
 type recorder struct {
 	products []appcatalog.ProductEvent
-	tags     []appcatalog.TagEvent
 	stock    []appcatalog.StockEvent
 	prices   []appcatalog.PriceEvent
 	registry []appparticipant.RegistryEvent
@@ -35,12 +34,6 @@ const productBody = `{"version":1,"tenantId":"t1","productId":"p1","revision":7,
 
 func (r *recorder) ApplyProduct(_ context.Context, e appcatalog.ProductEvent) error {
 	r.products = append(r.products, e)
-
-	return r.err
-}
-
-func (r *recorder) ApplyTag(_ context.Context, e appcatalog.TagEvent) error {
-	r.tags = append(r.tags, e)
 
 	return r.err
 }
@@ -183,29 +176,6 @@ func TestProductProjectedRejects(t *testing.T) {
 	noTime.Time = time.Time{}
 	if _, err := handle(t, kafka.TopicProductProjected, noTime); !errors.Is(err, kafka.ErrInvalidPayload) {
 		t.Fatalf("без времени публикации: %v", err)
-	}
-}
-
-func TestTagProjected(t *testing.T) {
-	body := `{
-		"version": 1, "tenantId": "t1", "tagId": "tag-1", "revision": 2, "operation": "upsert",
-		"tag": {"id": "tag-1", "value": "Новинка"}
-	}`
-
-	rec, err := handle(t, kafka.TopicTagProjected, message(`["t1","tag-1"]`, body))
-	if err != nil || rec.tags[0].Snapshot.Value != "Новинка" || rec.tags[0].Snapshot.TenantID != "t1" {
-		t.Fatalf("тег: %+v, %v", rec.tags, err)
-	}
-
-	_, err = handle(t, kafka.TopicTagProjected, message(`["t2","tag-1"]`, body))
-	if !errors.Is(err, kafka.ErrTenantMismatch) {
-		t.Fatalf("ключ другого магазина: %v", err)
-	}
-
-	deleted := `{"version":1,"tenantId":"t1","tagId":"tag-1","revision":3,"operation":"delete"}`
-	rec, err = handle(t, kafka.TopicTagProjected, message(`["t1","tag-1"]`, deleted))
-	if err != nil || !rec.tags[0].Snapshot.Deleted {
-		t.Fatalf("удаление тега: %+v, %v", rec.tags, err)
 	}
 }
 

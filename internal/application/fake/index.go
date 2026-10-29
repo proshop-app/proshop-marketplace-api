@@ -152,9 +152,6 @@ func matches(doc ports.OfferDocument, query ports.OfferQuery) bool {
 	if query.PriceMax != nil && doc.Price > *query.PriceMax {
 		return false
 	}
-	if query.Tag != "" && !contains(doc.Tags, query.Tag) {
-		return false
-	}
 	for code, filter := range query.Attributes {
 		if !attributeMatches(doc.Attributes[code], filter) {
 			return false
@@ -222,4 +219,9 @@ func (x *Index) Active() string {
 	defer x.mu.Unlock()
 
 	return x.active
+}
+
+// NeedsRebuild не требует фонового переноса у индекса в памяти.
+func (x *Index) NeedsRebuild(context.Context) (bool, error) {
+	return false, nil
 }

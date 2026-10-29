@@ -58,7 +58,6 @@ type OfferDocument struct {
 	URL               string
 	SKU               string
 	Categories        []catalog.Category
-	Tags              []string
 	VariantsID        string
 	Price             int64
 	BasePrice         int64
@@ -97,7 +96,6 @@ type OfferQuery struct {
 	Text          string
 	TenantID      string
 	CategoryID    string
-	Tag           string
 	PriceMin      *int64
 	PriceMax      *int64
 	InStock       bool
@@ -115,6 +113,8 @@ type OfferPage struct {
 
 // OfferIndex — индекс предложений.
 type OfferIndex interface {
+	// NeedsRebuild сообщает о незавершённой сборке или росте каталога.
+	NeedsRebuild(ctx context.Context) (bool, error)
 	// Exists — рабочий индекс заведён.
 	Exists(ctx context.Context) (bool, error)
 	// Put пишет документы в рабочий индекс; документ с версией ниже записанной пропускается.

@@ -22,13 +22,3 @@ type SignalsRepository interface {
 	// Save заводит или условно по исходной версии обновляет сигналы; не совпала — ErrConflict.
 	Save(ctx context.Context, signals *Signals) error
 }
-
-// TagRepository — проекция справочников тегов.
-type TagRepository interface {
-	// Get — тег; нет — ErrTagNotFound.
-	Get(ctx context.Context, tenantID ids.TenantID, tagID ids.TagID) (*Tag, error)
-	// Save заводит или условно по исходной версии обновляет тег; не совпала — ErrConflict.
-	Save(ctx context.Context, tag *Tag) error
-	// Labels — значения неудалённых тегов магазина по идентификаторам.
-	Labels(ctx context.Context, tenantID ids.TenantID, tagIDs []string) (map[string]string, error)
-}

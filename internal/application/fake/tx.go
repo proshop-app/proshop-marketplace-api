@@ -28,8 +28,6 @@ type products struct{ d *data }
 
 type signals struct{ d *data }
 
-type tags struct{ d *data }
-
 type outbox struct{ d *data }
 
 type inbox struct{ d *data }
@@ -45,8 +43,6 @@ func (t *tx) Registry() participant.Registry { return registry{t.data} }
 func (t *tx) Products() catalog.ProductRepository { return products{t.data} }
 
 func (t *tx) Signals() catalog.SignalsRepository { return signals{t.data} }
-
-func (t *tx) Tags() catalog.TagRepository { return tags{t.data} }
 
 func (t *tx) Offers() ports.OfferStates { return offers{t.data} }
 
@@ -212,40 +208,6 @@ func (r signals) Save(_ context.Context, s *catalog.Signals) error {
 	s.MarkSaved()
 
 	return nil
-}
-
-func (r tags) Get(_ context.Context, tenant ids.TenantID, tag ids.TagID) (*catalog.Tag, error) {
-	state, ok := r.d.tags[tagKey{tenant, tag}]
-	if !ok {
-		return nil, catalog.ErrTagNotFound
-	}
-
-	return catalog.RestoreTag(state), nil
-}
-
-func (r tags) Save(_ context.Context, tag *catalog.Tag) error {
-	state := tag.State()
-	key := tagKey{state.TenantID, state.TagID}
-
-	if !versionMatches(r.d.tags, key, tag.OriginVersion(), func(s catalog.TagState) int64 { return s.Version }) {
-		return catalog.ErrConflict
-	}
-
-	r.d.tags[key] = state
-	tag.MarkSaved()
-
-	return nil
-}
-
-func (r tags) Labels(_ context.Context, tenant ids.TenantID, tagIDs []string) (map[string]string, error) {
-	labels := map[string]string{}
-	for _, id := range tagIDs {
-		if state, ok := r.d.tags[tagKey{tenant, ids.TagID(id)}]; ok && !state.Deleted {
-			labels[id] = state.Value
-		}
-	}
-
-	return labels, nil
 }
 
 func versionMatches[K comparable, V any](rows map[K]V, key K, origin int64, version func(V) int64) bool {

@@ -22,9 +22,9 @@ func indexed(t *testing.T) (*fake.Store, *appcatalog.Queries) {
 	seedProduct(store, "t1", "p1")
 	seedProduct(store, "t1", "p2")
 	seedProduct(store, "t2", "p1")
-	store.SeedTag(catalog.TagState{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "Новинка", Version: 1})
 
-	if _, err := appcatalog.NewIndexer(store, index, clock, 10).Rebuild(context.Background()); err != nil {
+	indexer := appcatalog.NewIndexer(store, index, clock, 10, &fake.IndexRebuildLock{})
+	if _, err := indexer.Rebuild(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -38,9 +38,6 @@ func TestSearchDefaultsAndFilters(t *testing.T) {
 	list, err := queries.Search(ctx, ports.OfferQuery{})
 	if err != nil || list.Total != 2 {
 		t.Fatalf("в выдаче только предложения видимых участников: %+v, %v", list, err)
-	}
-	if tags := list.Items[0].Tags; len(tags) != 2 || tags[0].Label != "Новинка" || tags[1].Label != "free" {
-		t.Fatalf("подписи тегов в выдаче — как в карточке: %+v", tags)
 	}
 
 	list, err = queries.Search(ctx, ports.OfferQuery{TenantID: "t1", Limit: 1})
@@ -84,8 +81,7 @@ func TestOfferCard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if card.Offer.Name != "Товар p1" || len(card.Tags) != 2 || card.Tags[0].Label != "Новинка" ||
-		card.Tags[1].Label != "free" {
+	if card.Offer.Name != "Товар p1" {
 		t.Fatalf("карточка: %+v", card)
 	}
 

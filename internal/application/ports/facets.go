@@ -4,9 +4,10 @@ import "encoding/json"
 
 // AttributeFilter — OR значений одного кода, AND кодов; границы включительные.
 type AttributeFilter struct {
-	Values []string
-	Min    string
-	Max    string
+	Type   string   `json:"type"`
+	Values []string `json:"values"`
+	Min    string   `json:"min"`
+	Max    string   `json:"max"`
 }
 
 // FacetBucket — каноническое значение и число предложений с ним.

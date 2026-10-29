@@ -90,8 +90,6 @@ func (s *scope) Products() catalog.ProductRepository { return &Products{q: s.q} 
 
 func (s *scope) Signals() catalog.SignalsRepository { return &Signals{q: s.q} }
 
-func (s *scope) Tags() catalog.TagRepository { return &Tags{q: s.q} }
-
 func (s *scope) Offers() ports.OfferStates { return &Offers{q: s.q} }
 
 func (s *scope) Outbox() ports.Outbox { return &Outbox{q: s.q} }

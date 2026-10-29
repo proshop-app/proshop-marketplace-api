@@ -23,11 +23,6 @@ type productKey struct {
 	product ids.ProductID
 }
 
-type tagKey struct {
-	tenant ids.TenantID
-	tag    ids.TagID
-}
-
 type parkedKey struct {
 	topic     string
 	partition int
@@ -56,7 +51,6 @@ type data struct {
 	tenants         map[ids.TenantID]participant.TenantState
 	products        map[productKey]catalog.ProductState
 	signals         map[productKey]catalog.SignalsState
-	tags            map[tagKey]catalog.TagState
 	outbox          []OutboxRow
 	nextTaskID      int64
 	nextParkedID    int64
@@ -98,7 +92,6 @@ func (d *data) clone() *data {
 		tenants:         maps.Clone(d.tenants),
 		products:        maps.Clone(d.products),
 		signals:         maps.Clone(d.signals),
-		tags:            maps.Clone(d.tags),
 		outbox:          append([]OutboxRow(nil), d.outbox...),
 		nextTaskID:      d.nextTaskID,
 		nextParkedID:    d.nextParkedID,
@@ -122,7 +115,6 @@ func NewStore() *Store {
 		tenants:      map[ids.TenantID]participant.TenantState{},
 		products:     map[productKey]catalog.ProductState{},
 		signals:      map[productKey]catalog.SignalsState{},
-		tags:         map[tagKey]catalog.TagState{},
 		processed:    map[string]time.Time{},
 		parked:       map[parkedKey]ports.ParkedEvent{},
 		buyers:       map[ids.UUID]buyer.Buyer{},
@@ -175,12 +167,7 @@ func (s *Store) SeedProduct(state catalog.ProductState) {
 	s.read(func(d *data) { d.products[productKey{state.TenantID, state.ProductID}] = state })
 }
 
-// SeedTag кладёт тег.
-func (s *Store) SeedTag(state catalog.TagState) {
-	s.read(func(d *data) { d.tags[tagKey{state.TenantID, state.TagID}] = state })
-}
-
-// Participant — участник, если есть.
+// Participant возвращает сохранённого участника.
 func (s *Store) Participant(id ids.TenantID) (participant.State, bool) {
 	var (
 		state participant.State
@@ -228,19 +215,7 @@ func (s *Store) Signals(tenant ids.TenantID, product ids.ProductID) (catalog.Sig
 	return state, ok
 }
 
-// Tag — тег, если есть.
-func (s *Store) Tag(tenant ids.TenantID, tag ids.TagID) (catalog.TagState, bool) {
-	var (
-		state catalog.TagState
-		ok    bool
-	)
-
-	s.read(func(d *data) { state, ok = d.tags[tagKey{tenant, tag}] })
-
-	return state, ok
-}
-
-// OutboxRows — копия outbox.
+// OutboxRows возвращает копию очереди для проверки сценариев.
 func (s *Store) OutboxRows() []OutboxRow {
 	var rows []OutboxRow
 

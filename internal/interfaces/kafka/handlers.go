@@ -39,7 +39,6 @@ type productSnapshot struct {
 	PromoPrice        *json.Number       `json:"promoPrice"`
 	AvailableQuantity *json.Number       `json:"availableQuantity"`
 	Categories        []snapshotGroup    `json:"categories"`
-	Tags              []string           `json:"tags"`
 	VariantsID        *string            `json:"variantsId"`
 	Conditions        *snapshotFlags     `json:"conditions"`
 }
@@ -54,18 +53,6 @@ type snapshotGroup struct {
 type snapshotFlags struct {
 	IsVisible     *bool `json:"isVisible"`
 	IsOnlyVariant *bool `json:"isOnlyVariant"`
-}
-
-type tagProjection struct {
-	Version   int    `json:"version"`
-	TenantID  string `json:"tenantId"`
-	TagID     string `json:"tagId"`
-	Revision  int64  `json:"revision"`
-	Operation string `json:"operation"`
-	Tag       *struct {
-		ID    string `json:"id"`
-		Value string `json:"value"`
-	} `json:"tag"`
 }
 
 type stockItem struct {
@@ -186,7 +173,6 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 		Description: product.Description,
 		URL:         product.URL,
 		SKU:         product.SKU,
-		Tags:        product.Tags,
 		Visible:     true,
 	}
 	if product.Image != nil {
@@ -216,53 +202,6 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 	snapshot.Card = card
 
 	return nil
-}
-
-// tagProjected — снимок тега: магазин в ключе и теле.
-func tagProjected(ctx context.Context, projections Projections, envelope Envelope) error {
-	var event tagProjection
-	if err := decode(envelope.Message, &event); err != nil {
-		return err
-	}
-
-	keyTenant, keyTag, err := projectionKey(envelope.Message)
-	if err != nil {
-		return err
-	}
-	if event.TenantID == "" || keyTenant == "" {
-		return ErrTenantMissing
-	}
-
-	tenant, err := resolveTenant(keyTenant, event.TenantID, tenantHeader(envelope.Message))
-	if err != nil {
-		return err
-	}
-	if event.Version != projectionVersion || keyTag != event.TagID {
-		return ErrInvalidPayload.WithMessage("версия контракта или тег ключа не совпадают с телом")
-	}
-
-	tag, err := ids.ParseTagID(event.TagID)
-	if err != nil {
-		return ErrInvalidPayload.Wrap(err)
-	}
-	snapshot := catalog.TagSnapshot{TenantID: tenant, TagID: tag, Revision: event.Revision}
-
-	switch event.Operation {
-	case "delete":
-		if event.Tag != nil {
-			return ErrInvalidPayload.WithMessage("удаление со снимком тега")
-		}
-		snapshot.Deleted = true
-	case "upsert":
-		if event.Tag == nil || event.Tag.ID != event.TagID {
-			return ErrInvalidPayload.WithMessage("снимок тега не совпадает с конвертом")
-		}
-		snapshot.Value = event.Tag.Value
-	default:
-		return ErrInvalidPayload.WithMessage("неизвестная операция проекции: " + event.Operation)
-	}
-
-	return projections.ApplyTag(ctx, appcatalog.TagEvent{EventID: envelope.EventID, Snapshot: snapshot})
 }
 
 // stockItemUpdated — позиция склада: магазин только в заголовке.

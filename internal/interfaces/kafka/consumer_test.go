@@ -256,11 +256,11 @@ func TestFullTopicsUsePrefix(t *testing.T) {
 	topics := kafka.FullTopics("shop", router)
 	sort.Strings(topics)
 
-	if len(topics) != 9 || topics[0] != "shop.catalog.product.price-updated" || topics[8] != "shop.stock.item.updated" {
+	if len(topics) != 8 || topics[0] != "shop.catalog.product.price-updated" || topics[7] != "shop.stock.item.updated" {
 		t.Fatalf("полные имена топиков: %v", topics)
 	}
 
-	if bare := kafka.FullTopics("", router); len(bare) != 9 || strings.HasPrefix(bare[0], ".") {
+	if bare := kafka.FullTopics("", router); len(bare) != 8 || strings.HasPrefix(bare[0], ".") {
 		t.Fatalf("без префикса установки: %v", bare)
 	}
 }

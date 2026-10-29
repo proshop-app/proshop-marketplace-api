@@ -237,7 +237,6 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, minute
 			URL:         "/p",
 			SKU:         "SKU-1",
 			Categories:  []catalog.Category{{ID: "c1", Name: "Категория", URL: "/c"}},
-			Tags:        []string{"tag-1"},
 			VariantsID:  "v1",
 			Visible:     true,
 		},
@@ -355,7 +354,7 @@ func TestProductRoundTrip(t *testing.T) {
 	})
 }
 
-func TestSignalsAndTags(t *testing.T) {
+func TestSignals(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	ctx := context.Background()
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -374,20 +373,7 @@ func TestSignalsAndTags(t *testing.T) {
 			return err
 		}
 
-		tag, _ := catalog.NewTag(
-			catalog.TagSnapshot{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "Новинка"},
-			at(0),
-		)
-		if err := tx.Tags().Save(ctx, tag); err != nil {
-			return err
-		}
-
-		gone, _ := catalog.NewTag(
-			catalog.TagSnapshot{TenantID: "t1", TagID: "tag-2", Revision: 1, Deleted: true},
-			at(0),
-		)
-
-		return tx.Tags().Save(ctx, gone)
+		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -402,19 +388,6 @@ func TestSignalsAndTags(t *testing.T) {
 		}
 		if _, err := tx.Signals().Get(ctx, "t1", "p2"); !errors.Is(err, catalog.ErrSignalsNotFound) {
 			t.Fatalf("ожидалось ErrSignalsNotFound, получено %v", err)
-		}
-
-		labels, err := tx.Tags().Labels(ctx, "t1", []string{"tag-1", "tag-2", "free"})
-		if err != nil || len(labels) != 1 || labels["tag-1"] != "Новинка" {
-			t.Fatalf("подписи: %+v, %v", labels, err)
-		}
-
-		tag, err := tx.Tags().Get(ctx, "t1", "tag-1")
-		if err != nil || tag.State().Value != "Новинка" {
-			t.Fatalf("тег: %+v, %v", tag, err)
-		}
-		if _, err := tx.Tags().Get(ctx, "t1", "tag-9"); !errors.Is(err, catalog.ErrTagNotFound) {
-			t.Fatalf("ожидалось ErrTagNotFound, получено %v", err)
 		}
 
 		return nil

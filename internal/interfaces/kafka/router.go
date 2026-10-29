@@ -26,7 +26,6 @@ type Envelope struct {
 // Projections — приём проекций каталога.
 type Projections interface {
 	ApplyProduct(ctx context.Context, event appcatalog.ProductEvent) error
-	ApplyTag(ctx context.Context, event appcatalog.TagEvent) error
 	ApplyStock(ctx context.Context, event appcatalog.StockEvent) error
 	ApplyPrice(ctx context.Context, event appcatalog.PriceEvent) error
 }
@@ -47,7 +46,6 @@ type Router struct {
 func NewRouter(projections Projections, registry Registry) *Router {
 	r := &Router{handlers: map[string]handler{
 		TopicProductProjected:    bind(projections, productProjected),
-		TopicTagProjected:        bind(projections, tagProjected),
 		TopicStockItemUpdated:    bind(projections, stockItemUpdated),
 		TopicProductPriceUpdated: bind(projections, priceUpdated),
 	}}

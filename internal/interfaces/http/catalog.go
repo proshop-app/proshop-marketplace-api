@@ -26,11 +26,6 @@ type categoryJSON struct {
 	URL  string `json:"url,omitempty"`
 }
 
-type tagJSON struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-}
-
 // offerJSON — предложение в ответе. Суммы — целые копейки.
 type offerJSON struct {
 	DeliveryAvailable *bool                      `json:"deliveryAvailable,omitempty"`
@@ -46,7 +41,6 @@ type offerJSON struct {
 	URL               string                     `json:"url,omitempty"`
 	SKU               string                     `json:"sku,omitempty"`
 	Categories        []categoryJSON             `json:"categories"`
-	Tags              []tagJSON                  `json:"tags"`
 	Price             int64                      `json:"price"`
 	BasePrice         int64                      `json:"basePrice"`
 	Available         int                        `json:"available"`
@@ -69,10 +63,6 @@ type catalogHandlers struct {
 
 func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	doc := card.Offer
-	tags := make([]tagJSON, 0, len(card.Tags))
-	for _, tag := range card.Tags {
-		tags = append(tags, tagJSON{ID: tag.ID, Label: tag.Label})
-	}
 	out := offerJSON{
 		CategoryID: doc.CategoryID,
 		Attributes: doc.Attributes,
@@ -90,7 +80,6 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 		URL:               doc.URL,
 		SKU:               doc.SKU,
 		Categories:        make([]categoryJSON, 0, len(doc.Categories)),
-		Tags:              tags,
 		Price:             doc.Price,
 		BasePrice:         doc.BasePrice,
 		Available:         doc.Available,
@@ -111,7 +100,7 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	return out
 }
 
-// list — выдача: GET /api/v1/catalog/offers?q=&tenant=&category=&tag=&priceMin=&priceMax=&inStock=&sort=&limit=&offset=
+// list — выдача: GET /api/v1/catalog/offers?q=&tenant=&category=&priceMin=&priceMax=&inStock=&sort=&limit=&offset=
 func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 	query, err := parseOfferQuery(r)
 	if err != nil {
@@ -180,7 +169,6 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 		Text:       values.Get("q"),
 		TenantID:   values.Get("tenant"),
 		CategoryID: values.Get("category"),
-		Tag:        values.Get("tag"),
 		Sort:       ports.OfferSort(values.Get("sort")),
 	}
 

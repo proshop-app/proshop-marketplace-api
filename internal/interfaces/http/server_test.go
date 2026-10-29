@@ -167,7 +167,7 @@ func (e *env) seedTenant(id ids.TenantID, slug string) {
 	})
 }
 
-func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID, price int64, tags ...string) {
+func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID, price int64) {
 	t.Helper()
 	snapshot := catalog.Snapshot{
 		TenantID:  tenant,
@@ -188,7 +188,6 @@ func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID
 			Name:        "Товар " + string(product),
 			Description: "Описание",
 			Visible:     true,
-			Tags:        tags,
 			Categories:  []catalog.Category{{ID: "c1", Name: "Категория"}},
 		},
 		PriceProfiles: []catalog.PriceProfile{
@@ -207,7 +206,8 @@ func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID
 
 	e.store.SeedProduct(p.State())
 
-	err = appcatalog.NewIndexer(e.store, e.index, e.clock, 100).SyncTenant(context.Background(), tenant)
+	indexer := appcatalog.NewIndexer(e.store, e.index, e.clock, 100, &fake.IndexRebuildLock{})
+	err = indexer.SyncTenant(context.Background(), tenant)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,8 +358,7 @@ func TestCatalog(t *testing.T) {
 		CreatedAt:   t0,
 		UpdatedAt:   t0,
 	})
-	e.store.SeedTag(catalog.TagState{TenantID: "t1", TagID: "tag-1", Revision: 1, Value: "Новинка", Version: 1})
-	e.seedOffer(t, "t1", "p1", 150000, "tag-1")
+	e.seedOffer(t, "t1", "p1", 150000)
 	e.seedOffer(t, "t1", "p2", 50000)
 	r := e.call(t, http.MethodGet, "/api/v1/catalog/offers?sort=price_asc&limit=1", "", false)
 	items, _ := r.body["items"].([]any)
@@ -393,10 +392,8 @@ func TestCatalog(t *testing.T) {
 	}
 
 	r = e.call(t, http.MethodGet, "/api/v1/catalog/offers/t1~p1", "", false)
-	tags, _ := r.body["tags"].([]any)
-	tag, _ := tags[0].(map[string]any)
-	if r.status != http.StatusOK || r.body["description"] != "Описание" || tag["label"] != "Новинка" {
-		t.Fatalf("карточка: %+v", r)
+	if _, exists := r.body["tags"]; exists {
+		t.Fatal("поисковые теги остались в публичной карточке")
 	}
 
 	r = e.call(t, http.MethodGet, "/api/v1/catalog/offers/t1~missing", "", false)

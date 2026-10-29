@@ -1,6 +1,4 @@
-// Package opensearch — индекс предложений маркетплейса. Рабочий индекс —
-// алиас над поколением; перестроение заводит новое поколение и переключает
-// алиас атомарно.
+// Package opensearch — географический индекс пунктов выдачи маркетплейса.
 package opensearch
 
 import (
@@ -11,18 +9,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
-	"time"
 
 	opensearchgo "github.com/opensearch-project/opensearch-go/v4"
 
-	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
 // ErrUnavailable — кластер недоступен или ответил ошибкой.
-var ErrUnavailable = errs.New(errs.Unavailable, "index.unavailable", "индекс предложений недоступен")
+var ErrUnavailable = errs.New(errs.Unavailable, "index.unavailable", "индекс пунктов выдачи недоступен")
 
 // Config — подключение и параметры поколений.
 type Config struct {
@@ -30,22 +25,19 @@ type Config struct {
 	Username           string
 	Password           string
 	InsecureSkipVerify bool
-	Alias              string
 	Shards             int
 	Replicas           int
 }
 
-// Index — индекс предложений в OpenSearch.
-type Index struct {
+// Client — подключение к геоиндексу пунктов выдачи.
+type Client struct {
 	client   *opensearchgo.Client
-	alias    string
 	shards   int
 	replicas int
-	now      func() time.Time
 }
 
 // New — клиент индекса.
-func New(cfg Config) (*Index, error) {
+func New(cfg Config) (*Client, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if cfg.InsecureSkipVerify {
 		// явно включается окружением для локального кластера с самоподписанным сертификатом
@@ -64,265 +56,21 @@ func New(cfg Config) (*Index, error) {
 		return nil, fmt.Errorf("клиент индекса: %w", err)
 	}
 
-	return &Index{client: client, alias: cfg.Alias, shards: cfg.Shards, replicas: cfg.Replicas, now: time.Now}, nil
+	return &Client{
+		client:   client,
+		shards:   cfg.Shards,
+		replicas: cfg.Replicas,
+	}, nil
 }
 
 // Ping — кластер отвечает.
-func (x *Index) Ping(ctx context.Context) error {
+func (x *Client) Ping(ctx context.Context) error {
 	_, err := x.do(ctx, http.MethodGet, "/_cluster/health", nil, nil)
 
 	return err
 }
 
-// Exists — алиас заведён и его схема совместима с текущей версией индексатора.
-func (x *Index) Exists(ctx context.Context) (bool, error) {
-	status, err := x.do(ctx, http.MethodHead, "/_alias/"+url.PathEscape(x.alias), nil, nil, http.StatusNotFound)
-	if err != nil {
-		return false, err
-	}
-
-	if status != http.StatusOK {
-		return false, nil
-	}
-	var mapping map[string]struct {
-		Mappings struct {
-			Meta struct {
-				Version int `json:"taxonomySchema"`
-			} `json:"_meta"`
-		} `json:"mappings"`
-	}
-	if _, err := x.do(ctx, http.MethodGet, "/"+url.PathEscape(x.alias)+"/_mapping", nil, &mapping); err != nil {
-		return false, err
-	}
-	if len(mapping) == 0 {
-		return false, nil
-	}
-	for _, index := range mapping {
-		if index.Mappings.Meta.Version != offerMappingVersion {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
-// NewGeneration заводит пустое поколение со схемой.
-func (x *Index) NewGeneration(ctx context.Context) (string, error) {
-	name := fmt.Sprintf("%s-%s", x.alias, x.now().UTC().Format("20060102t150405.000000000"))
-	name = strings.ReplaceAll(name, ".", "")
-
-	if _, err := x.do(ctx, http.MethodPut, "/"+url.PathEscape(name), indexBody(x.shards, x.replicas), nil); err != nil {
-		return "", err
-	}
-
-	return name, nil
-}
-
-// Activate переключает алиас на поколение одним действием и удаляет прежние
-// поколения, в том числе брошенные прерванным перестроением.
-func (x *Index) Activate(ctx context.Context, generation string) error {
-	aliased, err := x.aliased(ctx)
-	if err != nil {
-		return err
-	}
-
-	all, err := x.generations(ctx)
-	if err != nil {
-		return err
-	}
-	actions := []any{
-		map[string]any{"add": map[string]any{"index": generation, "alias": x.alias, "is_write_index": true}},
-	}
-	for _, name := range aliased {
-		if name != generation {
-			actions = append(actions, map[string]any{"remove": map[string]any{"index": name, "alias": x.alias}})
-		}
-	}
-
-	if _, err := x.do(ctx, http.MethodPost, "/_aliases", map[string]any{"actions": actions}, nil); err != nil {
-		return err
-	}
-
-	for _, name := range all {
-		if name == generation {
-			continue
-		}
-		if _, err := x.do(ctx, http.MethodDelete, "/"+url.PathEscape(name), nil, nil, http.StatusNotFound); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// aliased — поколения под алиасом.
-func (x *Index) aliased(ctx context.Context) ([]string, error) {
-	var aliases map[string]json.RawMessage
-
-	status, err := x.do(ctx, http.MethodGet, "/_alias/"+url.PathEscape(x.alias), nil, &aliases, http.StatusNotFound)
-	if err != nil || status == http.StatusNotFound {
-		return nil, err
-	}
-	names := make([]string, 0, len(aliases))
-	for name := range aliases {
-		names = append(names, name)
-	}
-
-	return names, nil
-}
-
-// generations — все поколения индекса по имени, с алиасом и без.
-func (x *Index) generations(ctx context.Context) ([]string, error) {
-	var rows []struct {
-		Index string `json:"index"`
-	}
-	path := "/_cat/indices/" + url.PathEscape(x.alias+"-*") + "?format=json&h=index"
-	if _, err := x.do(ctx, http.MethodGet, path, nil, &rows); err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(rows))
-	for _, row := range rows {
-		names = append(names, row.Index)
-	}
-
-	return names, nil
-}
-
-// Put пишет документы в рабочий индекс.
-func (x *Index) Put(ctx context.Context, docs []ports.OfferDocument) error {
-	return x.PutGeneration(ctx, x.alias, docs)
-}
-
-// PutGeneration пишет документы с внешней версией: документ с версией ниже
-// записанной кластер отклоняет, и это не ошибка — в индексе уже свежее.
-func (x *Index) PutGeneration(ctx context.Context, target string, docs []ports.OfferDocument) error {
-	if len(docs) == 0 {
-		return nil
-	}
-
-	var body bytes.Buffer
-	encoder := json.NewEncoder(&body)
-
-	for _, doc := range docs {
-		meta := map[string]any{"index": map[string]any{
-			"_index":       target,
-			"_id":          doc.ID,
-			"version":      doc.Version,
-			"version_type": "external_gte",
-		}}
-		if err := encoder.Encode(meta); err != nil {
-			return fmt.Errorf("пачка индекса: %w", err)
-		}
-		if err := encoder.Encode(toDocument(doc)); err != nil {
-			return fmt.Errorf("пачка индекса: %w", err)
-		}
-	}
-
-	var response struct {
-		Errors bool `json:"errors"`
-		Items  []map[string]struct {
-			ID     string `json:"_id"`
-			Status int    `json:"status"`
-			Error  *struct {
-				Type   string `json:"type"`
-				Reason string `json:"reason"`
-			} `json:"error"`
-		} `json:"items"`
-	}
-
-	if _, err := x.raw(ctx, http.MethodPost, "/_bulk", &body, "application/x-ndjson", &response); err != nil {
-		return err
-	}
-	if !response.Errors {
-		return nil
-	}
-
-	for _, item := range response.Items {
-		for _, result := range item {
-			if result.Error == nil || result.Status == http.StatusConflict {
-				continue
-			}
-			message := fmt.Sprintf("документ %s не записан: %s: %s", result.ID, result.Error.Type, result.Error.Reason)
-
-			return ErrUnavailable.WithMessage(message)
-		}
-	}
-
-	return nil
-}
-
-// Get — документ рабочего индекса.
-func (x *Index) Get(ctx context.Context, id string) (ports.OfferDocument, bool, error) {
-	var response struct {
-		Found   bool     `json:"found"`
-		Version int64    `json:"_version"`
-		Source  document `json:"_source"`
-	}
-
-	status, err := x.do(
-		ctx,
-		http.MethodGet,
-		"/"+url.PathEscape(x.alias)+"/_doc/"+url.PathEscape(id),
-		nil,
-		&response,
-		http.StatusNotFound,
-	)
-	if err != nil {
-		return ports.OfferDocument{}, false, err
-	}
-	if status == http.StatusNotFound || !response.Found {
-		return ports.OfferDocument{}, false, nil
-	}
-
-	return fromDocument(response.Source, response.Version), true, nil
-}
-
-// Search — выдача.
-func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.OfferPage, error) {
-	var response struct {
-		Aggregations map[string]json.RawMessage `json:"aggregations"`
-		Hits         struct {
-			Total struct {
-				Value int `json:"value"`
-			} `json:"total"`
-			Hits []struct {
-				Version int64    `json:"_version"`
-				Source  document `json:"_source"`
-			} `json:"hits"`
-		} `json:"hits"`
-	}
-	path := "/" + url.PathEscape(x.alias) + "/_search"
-	if _, err := x.do(ctx, http.MethodPost, path, searchBody(query), &response); err != nil {
-		return ports.OfferPage{}, err
-	}
-
-	facets, err := readFacets(response.Aggregations, query.FacetFields)
-	if err != nil {
-		return ports.OfferPage{}, err
-	}
-	page := ports.OfferPage{
-		Facets: facets,
-		Total:  response.Hits.Total.Value,
-		Items:  make([]ports.OfferDocument, 0, len(response.Hits.Hits)),
-	}
-	for _, hit := range response.Hits.Hits {
-		doc, found := selectProfile(fromDocument(hit.Source, hit.Version), query)
-		if !found {
-			return ports.OfferPage{}, fmt.Errorf("в индексе отсутствует выбранный ценовой профиль")
-		}
-		page.Items = append(page.Items, doc)
-	}
-
-	return page, nil
-}
-
-// Refresh делает записанное видимым поиску сразу; нужен проверкам, рабочий путь на него не опирается.
-func (x *Index) Refresh(ctx context.Context) error {
-	_, err := x.do(ctx, http.MethodPost, "/"+url.PathEscape(x.alias)+"/_refresh", nil, nil)
-
-	return err
-}
-
-func (x *Index) do(ctx context.Context, method, path string, payload any, out any, accepted ...int) (int, error) {
+func (x *Client) do(ctx context.Context, method, path string, payload any, out any, accepted ...int) (int, error) {
 	var body io.Reader
 
 	if payload != nil {
@@ -337,7 +85,7 @@ func (x *Index) do(ctx context.Context, method, path string, payload any, out an
 	return x.raw(ctx, method, path, body, "application/json", out, accepted...)
 }
 
-func (x *Index) raw(
+func (x *Client) raw(
 	ctx context.Context,
 	method, path string,
 	body io.Reader,
@@ -369,6 +117,7 @@ func (x *Index) raw(
 
 	if response.StatusCode >= http.StatusMultipleChoices {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
+
 		message := fmt.Sprintf("%s %s: %d %s", method, path, response.StatusCode, strings.TrimSpace(string(detail)))
 
 		return response.StatusCode, ErrUnavailable.WithMessage(message)
