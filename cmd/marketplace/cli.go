@@ -20,6 +20,7 @@ var commands = map[string]command{
 	"serve":                 serve,
 	"reindex":               reindex,
 	"refresh-pickup-points": refreshPickupPoints,
+	"reference":             referenceDelivery,
 }
 
 // run проверяет окружение и выполняет команду до сигнала остановки; результат — код выхода.
@@ -38,7 +39,7 @@ func run() int {
 
 	cmd, ok := commands[name]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "неизвестная команда %q: serve, reindex или refresh-pickup-points\n", name)
+		fmt.Fprintf(os.Stderr, "неизвестная команда %q: serve, reindex, refresh-pickup-points или reference\n", name)
 
 		return 2
 	}

@@ -143,8 +143,9 @@ func TestMergeMovesAliasesAndRepoints(t *testing.T) {
 }
 
 func TestMetadataDirectionsAreStrings(t *testing.T) {
-	if _, err := CleanMetadata(json.RawMessage(`{"directions":["d1","d2"]}`)); err != nil {
-		t.Fatal(err)
+	clean, err := CleanMetadata(json.RawMessage(`{"z": 12345678901234567890, "directions": ["d1", "d2"]}`))
+	if err != nil || string(clean) != `{"directions":["d1","d2"],"z":12345678901234567890}` {
+		t.Fatalf("канонический вид: %s %v", clean, err)
 	}
 	for _, raw := range []string{`[]`, `{"directions":"d1"}`, `{"directions":[1]}`, `null`} {
 		if _, err := CleanMetadata(json.RawMessage(raw)); err == nil {

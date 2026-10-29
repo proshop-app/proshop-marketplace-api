@@ -1,0 +1,14 @@
+[
+    {
+        "canonical": "Бренд",
+        "status": "confirmed",
+        "aliases": [
+            {"text": "Brend", "kind": "translit"}
+        ],
+        "metadata": {"directions": ["d1"]}
+    },
+    {
+        "canonical": "Бренд Два",
+        "status": "candidate"
+    }
+]

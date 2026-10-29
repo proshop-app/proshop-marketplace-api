@@ -23,6 +23,13 @@ tags:
   - name: delivery
   - name: checkout
   - name: operator
+  - name: reference
+    description: |
+      Реестр справочных сущностей для бэкендов платформы (сервер магазина, поиск).
+      Чтение — токен читателя REFERENCE_READ_TOKEN, мутации — OPERATOR_TOKEN или сессия
+      оператора; браузеру токены не выдаются.
+      Все ответы несут schemaVersion и revision, поля только добавляются.
+      Контракт — docs/reference.md.
 paths:
   /api/v1/operator/session/refresh:
     post:
@@ -1132,6 +1139,260 @@ paths:
                     default: 30
                     description: DELIVERY_SUBSIDY_MIN_PERCENT; действующая субсидия — max настройки с потолком и процента cost.
 
+  /internal/reference/{dict}/snapshot:
+    get:
+      tags: [reference]
+      summary: Снимок словаря — полный или дельта после since
+      operationId: referenceSnapshot
+      security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
+      description: |
+        Без since, со since старше горизонта журнала (30 дней) или впереди головы — полный
+        снимок (full: true). Иначе дельта: текущие записи, затронутые после since, и
+        удалённые id. Потребитель сверяет normalizer со своей копией правила ключа.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - name: since
+          in: query
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: scope
+          in: query
+          description: Только global; частный слой магазина — следующий этап
+          schema: { type: string, enum: [global] }
+      responses:
+        "200":
+          description: Снимок
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceSnapshot" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /internal/reference/{dict}/resolve:
+    post:
+      tags: [reference]
+      summary: Разрешить написание в запись словаря
+      operationId: referenceResolve
+      security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
+      description: |
+        Точное совпадение ключа варианта даёт match с confidence exact. Иначе до 10
+        кандидатов по префиксу и триграммам; нечёткое совпадение никогда не привязывается
+        само. Объединённая запись разрешается в выжившую, rejected и deprecated — не match.
+        Тело не больше 4 КиБ, text — до 200 символов. tenantId проверяется по формату и
+        пока не влияет на ответ.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              additionalProperties: false
+              properties:
+                text: { type: string, maxLength: 200 }
+                tenantId: { type: string }
+      responses:
+        "200":
+          description: Совпадение или кандидаты
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceResolution" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /internal/reference/{dict}/entries:
+    get:
+      tags: [reference]
+      summary: Страница записей; очередь кандидатов — status=candidate
+      operationId: referenceEntries
+      security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
+      description: Порядок — по частоте встреч, затем по ключу.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/ReferenceStatus" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Страница записей
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceEntryPage" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [reference]
+      summary: Завести запись — кандидата или подтверждённую
+      operationId: referenceCreateEntry
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      description: |
+        Каноническое имя становится первым вариантом. Кандидат с занятым ключом не
+        заводится второй раз: у владельца ключа растёт счётчик встреч, ответ 200 с
+        created: false. Подтверждённая запись с занятым ключом и кандидат с занятым
+        ключом, присланный с aliases или metadata, — 409 REFERENCE_KEY_TAKEN: варианты
+        не теряются молча, их добавляют к записи-владельцу.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [canonical]
+              additionalProperties: false
+              properties:
+                canonical: { type: string, maxLength: 120 }
+                status: { type: string, enum: [candidate, confirmed], default: candidate }
+                source: { type: string, enum: [operator, catalog], default: operator }
+                aliases:
+                  type: array
+                  maxItems: 49
+                  items: { $ref: "#/components/schemas/ReferenceAliasInput" }
+                metadata: { $ref: "#/components/schemas/ReferenceMetadata" }
+                reason: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/ReferenceEntry" }
+        "201": { $ref: "#/components/responses/ReferenceEntry" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /internal/reference/{dict}/entries/{id}:
+    get:
+      tags: [reference]
+      summary: Запись по id; объединённая отдаётся вместе с выжившей
+      operationId: referenceEntry
+      security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - { $ref: "#/components/parameters/ReferenceEntryId" }
+      responses:
+        "200": { $ref: "#/components/responses/ReferenceEntry" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [reference]
+      summary: Переименовать, сменить статус или свободные поля по ревизии
+      operationId: referenceUpdateEntry
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      description: |
+        Переходы статуса: candidate → confirmed | rejected, confirmed → deprecated.
+        Прежнее каноническое написание остаётся вариантом. Устаревший If-Match —
+        409 REFERENCE_ENTRY_CHANGED.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - { $ref: "#/components/parameters/ReferenceEntryId" }
+        - { $ref: "#/components/parameters/ReferenceIfMatch" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                canonical: { type: string, maxLength: 120 }
+                status: { type: string, enum: [confirmed, rejected, deprecated] }
+                metadata: { $ref: "#/components/schemas/ReferenceMetadata" }
+                reason: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/ReferenceEntry" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /internal/reference/{dict}/entries/{id}/merge:
+    post:
+      tags: [reference]
+      summary: Объединить запись в выжившую
+      operationId: referenceMergeEntry
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      description: |
+        Обе записи подтверждены. Варианты переходят к выжившей с теми же id, запись
+        получает merged и навсегда разрешается в выжившую. Записи, ранее объединённые в
+        эту, переносятся на выжившую той же ревизией. If-Match — ревизия записи {id}.
+        Ответ — выжившая запись.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - { $ref: "#/components/parameters/ReferenceEntryId" }
+        - { $ref: "#/components/parameters/ReferenceIfMatch" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [into]
+              additionalProperties: false
+              properties:
+                into: { type: string, format: uuid }
+                reason: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/ReferenceEntry" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /internal/reference/{dict}/entries/{id}/aliases:
+    post:
+      tags: [reference]
+      summary: Добавить вариант написания
+      operationId: referenceAddAlias
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      description: Тот же ключ у этой записи — 200 без новой ревизии; ключ другой записи — 409 REFERENCE_KEY_TAKEN.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - { $ref: "#/components/parameters/ReferenceEntryId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ReferenceAliasInput"
+                - type: object
+                  properties:
+                    reason: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/ReferenceEntry" }
+        "201": { $ref: "#/components/responses/ReferenceEntry" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /internal/reference/{dict}/aliases/{id}:
+    delete:
+      tags: [reference]
+      summary: Удалить вариант написания
+      operationId: referenceRemoveAlias
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      description: Вариант канонического имени удаляется только переименованием записи.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: reason
+          in: query
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/ReferenceEntry" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     operatorSession:
@@ -1151,6 +1412,12 @@ components:
       type: http
       scheme: bearer
       description: Машинный токен OPERATOR_TOKEN; панель использует operatorSession.
+    referenceReadToken:
+      type: http
+      scheme: bearer
+      description: >-
+        REFERENCE_READ_TOKEN — только чтение реестра (snapshot, resolve, entries);
+        прав оператора площадки не даёт.
   parameters:
     TaxonomyCache:
       name: If-None-Match
@@ -1173,7 +1440,31 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    ReferenceDictionary:
+      name: dict
+      in: path
+      required: true
+      description: Код словаря реестра
+      schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,31}$", examples: [brand] }
+    ReferenceEntryId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ReferenceIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: 'Ревизия записи из ETag: "12"'
+      schema: { type: string }
   responses:
+    ReferenceEntry:
+      description: Запись реестра; ETag — её ревизия для If-Match
+      headers:
+        ETag: { schema: { type: string } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ReferenceEntryResponse" }
     Taxonomy:
       description: Текущий снимок таксономии; версия 0 и пустое дерево до первой загрузки
       headers:
@@ -1742,3 +2033,156 @@ components:
         total: { type: integer }
         limit: { type: integer }
         offset: { type: integer }
+
+    ReferenceStatus:
+      type: string
+      enum: [candidate, confirmed, merged, deprecated, rejected]
+    ReferenceAliasKind:
+      type: string
+      enum: [spelling, translit, abbreviation, former, locale]
+    ReferenceMetadata:
+      type: object
+      description: Свободные поля записи до 4 КиБ; directions — подсказка направлений, только массив строк.
+      properties:
+        directions:
+          type: array
+          items: { type: string }
+    ReferenceAliasInput:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, maxLength: 120, description: Не больше 8 слов }
+        kind: { $ref: "#/components/schemas/ReferenceAliasKind" }
+        locale: { type: string, examples: [ru, en] }
+        weight: { type: integer, minimum: 0, maximum: 100 }
+    ReferenceAlias:
+      type: object
+      required: [id, text, key, kind, source, weight]
+      properties:
+        id: { type: string, format: uuid }
+        text: { type: string }
+        key: { type: string, description: Ключ нормализации; уникален в словаре }
+        kind: { $ref: "#/components/schemas/ReferenceAliasKind" }
+        locale: { type: string }
+        source: { type: string }
+        weight: { type: integer }
+    ReferenceEntry:
+      type: object
+      required: [id, dictionary, canonical, key, status, source, occurrences, revision, metadata, aliases, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        dictionary: { type: string }
+        canonical: { type: string }
+        key: { type: string }
+        status: { $ref: "#/components/schemas/ReferenceStatus" }
+        mergedInto: { type: string, format: uuid }
+        source: { type: string, enum: [seed, operator, catalog] }
+        occurrences: { type: integer, format: int64, description: Встречи ключа; ранжирует очередь кандидатов }
+        revision: { type: integer, format: int64, description: Ревизия, последней менявшая запись }
+        metadata: { $ref: "#/components/schemas/ReferenceMetadata" }
+        aliases:
+          type: array
+          items: { $ref: "#/components/schemas/ReferenceAlias" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ReferenceEntryResponse:
+      type: object
+      required: [schemaVersion, revision, entry]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        revision: { type: integer, format: int64, description: Голова журнала словаря }
+        created: { type: boolean }
+        changed: { type: boolean, description: false — повтор без новой ревизии }
+        entry: { $ref: "#/components/schemas/ReferenceEntry" }
+        resolved: { $ref: "#/components/schemas/ReferenceEntry" }
+        alias: { $ref: "#/components/schemas/ReferenceAlias" }
+    ReferenceEntryPage:
+      type: object
+      required: [schemaVersion, revision, total, entries]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        revision: { type: integer, format: int64 }
+        total: { type: integer }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/ReferenceEntry" }
+    ReferenceSnapshot:
+      type: object
+      required: [schemaVersion, dictionary, revision, normalizer, full, entries, removed]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        dictionary: { type: string }
+        revision: { type: integer, format: int64 }
+        normalizer: { type: string, examples: [v1] }
+        full: { type: boolean }
+        entries:
+          type: array
+          items:
+            type: object
+            required: [id, canonical, key, status, aliases]
+            properties:
+              id: { type: string, format: uuid }
+              canonical: { type: string }
+              key: { type: string }
+              status: { $ref: "#/components/schemas/ReferenceStatus" }
+              mergedInto: { type: string, format: uuid }
+              aliases:
+                type: array
+                items:
+                  type: object
+                  required: [text, key, kind]
+                  properties:
+                    text: { type: string }
+                    key: { type: string }
+                    kind: { $ref: "#/components/schemas/ReferenceAliasKind" }
+        removed:
+          type: array
+          items: { type: string, format: uuid }
+    ReferenceMatch:
+      type: object
+      required: [entryId, canonical, aliasKey, status, scope, weight]
+      properties:
+        entryId: { type: string, format: uuid }
+        canonical: { type: string }
+        aliasKey: { type: string }
+        status: { $ref: "#/components/schemas/ReferenceStatus" }
+        scope: { type: string, enum: [global] }
+        confidence: { type: string, enum: [exact] }
+        weight: { type: number, minimum: 0, maximum: 1 }
+    ReferenceResolution:
+      type: object
+      required: [schemaVersion, dictionary, revision, normalizer, key, candidates]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        dictionary: { type: string }
+        revision: { type: integer, format: int64 }
+        normalizer: { type: string }
+        key: { type: string }
+        match: { $ref: "#/components/schemas/ReferenceMatch" }
+        candidates:
+          type: array
+          maxItems: 10
+          items: { $ref: "#/components/schemas/ReferenceMatch" }
+    ReferenceChangedEvent:
+      type: object
+      description: |
+        Тело catalog.reference.changed (KAFKA_TOPIC_REFERENCE_CHANGED), ключ сообщения — код словаря.
+        Списки обрезаются на 1000; truncated — потребитель перечитывает дельту снимка.
+      required: [schemaVersion, dictionary, revisionFrom, revisionTo, entryIds, kinds, affectedKeys, truncated]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        dictionary: { type: string }
+        revisionFrom: { type: integer, format: int64 }
+        revisionTo: { type: integer, format: int64 }
+        entryIds:
+          type: array
+          maxItems: 1000
+          items: { type: string, format: uuid }
+        kinds:
+          type: array
+          items: { type: string, enum: [alias-added, alias-removed, renamed, merged, status-changed] }
+        affectedKeys:
+          type: array
+          maxItems: 1000
+          items: { type: string }
+        truncated: { type: boolean }

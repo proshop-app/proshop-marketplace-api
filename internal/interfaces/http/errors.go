@@ -83,6 +83,10 @@ func writeErrorWithState(
 		detail.Code = "DELIVERY_CHANGED"
 	case "checkout.payment_order":
 		detail.Code = "PAYMENT_ORDER"
+	case "reference.entry_changed":
+		detail.Code = "REFERENCE_ENTRY_CHANGED"
+	case "reference.key_taken":
+		detail.Code = "REFERENCE_KEY_TAKEN"
 	}
 	writeJSON(w, status, errorBody{Error: detail, Checkout: checkout, Event: event})
 }

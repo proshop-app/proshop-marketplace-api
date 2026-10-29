@@ -16,6 +16,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
@@ -24,6 +25,8 @@ type querier interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	// SendBatch шлёт пачку операторов за один круг до базы, порядок сохраняется.
+	SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults
 }
 
 // UnitOfWork — транзакция PostgreSQL на каждый вызов Do.
@@ -110,3 +113,5 @@ func (s *scope) PickupPoints() delivery.PickupPointRepository {
 }
 
 func (s *scope) Taxonomy() taxonomy.Repository { return &Taxonomy{q: s.q} }
+
+func (s *scope) Reference() reference.Repository { return &References{q: s.q} }

@@ -4,6 +4,8 @@ Backend федеративного маркетплейса платформы P
 `proshop-server/docs/marketplace-mvp.md` (§3 раскладка, §4 данные, §8 стыки,
 §10 проверка, §11 план), стыки с платформой — `docs/platform-ecosystem.md`
 §8–§11, требования надёжности — `docs/shared-platform-plan.md` §15.
+Реестр справочных сущностей (модуль `reference`: схема, контракты снимка,
+`resolve`, события и поставки) — `docs/reference.md`.
 
 ## Слои
 

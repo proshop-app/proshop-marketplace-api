@@ -12,6 +12,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
@@ -43,4 +44,5 @@ type Tx interface {
 	Carts() cart.Repository
 	Checkouts() checkout.Repository
 	PickupPoints() delivery.PickupPointRepository
+	Reference() reference.Repository
 }

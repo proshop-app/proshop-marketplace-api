@@ -175,9 +175,13 @@ func NewEntry(dict *Dictionary, input NewEntryInput, now time.Time) (*Entry, err
 	return e, nil
 }
 
-// RestoreEntry поднимает запись из хранилища.
+// RestoreEntry поднимает запись из хранилища. Свободные поля приводятся к
+// каноническому виду: jsonb переставляет ключи, а образ журнала сравнивается побайтно.
 func RestoreEntry(state EntryState) *Entry {
 	state = cloneState(state)
+	if metadata, err := canonicalJSON(state.Metadata); err == nil {
+		state.Metadata = metadata
+	}
 	return &Entry{state: state, origin: Origin{
 		Status:  state.Status,
 		Version: state.Version,
@@ -212,11 +216,7 @@ func CleanMetadata(raw json.RawMessage) (json.RawMessage, error) {
 			return nil, ErrInvalid.WithMessage("metadata.directions — массив строк")
 		}
 	}
-	var compact bytes.Buffer
-	if err := json.Compact(&compact, raw); err != nil {
-		return nil, ErrInvalid.WithMessage("metadata — JSON-объект")
-	}
-	return json.RawMessage(compact.Bytes()), nil
+	return canonicalJSON(raw)
 }
 
 // State — снимок записи; варианты упорядочены по ключу.
@@ -462,6 +462,21 @@ func SameContent(a, b *EntryState) bool {
 	}
 	left, right := content(*a), content(*b)
 	return bytes.Equal(left, right)
+}
+
+// canonicalJSON — JSON с ключами по алфавиту и без пробелов; числа не теряют точность.
+func canonicalJSON(raw json.RawMessage) (json.RawMessage, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, ErrInvalid.WithMessage("metadata — JSON-объект")
+	}
+	canonical, err := json.Marshal(value)
+	if err != nil {
+		return nil, ErrInvalid.WithMessage("metadata — JSON-объект")
+	}
+	return canonical, nil
 }
 
 func (e *Entry) editable() error {

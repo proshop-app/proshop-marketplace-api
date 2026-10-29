@@ -19,6 +19,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
+	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 )
 
@@ -32,17 +33,20 @@ type Check struct {
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
-	Taxonomy       *apptaxonomy.Service
-	Catalog        *appcatalog.Queries
-	Participants   *appparticipant.Service
-	Auth           *appbuyer.Auth
-	Carts          *appcart.Service
-	Directory      *appdelivery.Directory
-	Checkouts      *appcheckout.Service
-	OperatorToken  string
-	OperatorAuth   *appoperator.Auth
-	Events         *messaging.Events
-	OperatorOrigin string
+	Taxonomy      *apptaxonomy.Service
+	Catalog       *appcatalog.Queries
+	Participants  *appparticipant.Service
+	Auth          *appbuyer.Auth
+	Carts         *appcart.Service
+	Directory     *appdelivery.Directory
+	Checkouts     *appcheckout.Service
+	Reference     *appreference.Service
+	OperatorToken string
+	// ReferenceReadToken — токен читателя реестра: снимок, resolve и чтение записей без прав оператора.
+	ReferenceReadToken string
+	OperatorAuth       *appoperator.Auth
+	Events             *messaging.Events
+	OperatorOrigin     string
 	// TrustProxy — адрес покупателя брать из X-Forwarded-For: сервис за доверенным прокси.
 	TrustProxy bool
 	Checks     []Check
@@ -73,6 +77,7 @@ func routes(deps Deps) []route {
 	carts := &cartHandlers{carts: deps.Carts}
 	shipping := &deliveryHandlers{directory: deps.Directory}
 	checkouts := &checkoutHandlers{checkouts: deps.Checkouts}
+	registry := newReferenceHandlers(deps.Reference, deps.Registerer)
 	gateway := &operatorHandlers{
 		auth:       deps.OperatorAuth,
 		events:     deps.Events,
@@ -81,6 +86,9 @@ func routes(deps Deps) []route {
 	}
 	operator := func(next http.HandlerFunc) http.HandlerFunc { return gateway.only(deps.OperatorToken, next) }
 	signedIn := func(next http.HandlerFunc) http.HandlerFunc { return buyerOnly(deps.Auth, next) }
+	reader := func(next http.HandlerFunc) http.HandlerFunc {
+		return referenceReader(deps.ReferenceReadToken, operator(next), next)
+	}
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
@@ -138,6 +146,16 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/checkout/{checkoutId}/return", signedIn(checkouts.paymentReturn)},
 		{http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
 		{http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},
+
+		{http.MethodGet, "/internal/reference/{dict}/snapshot", reader(registry.snapshot)},
+		{http.MethodPost, "/internal/reference/{dict}/resolve", reader(registry.resolve)},
+		{http.MethodGet, "/internal/reference/{dict}/entries", reader(registry.list)},
+		{http.MethodPost, "/internal/reference/{dict}/entries", operator(registry.create)},
+		{http.MethodGet, "/internal/reference/{dict}/entries/{id}", reader(registry.get)},
+		{http.MethodPatch, "/internal/reference/{dict}/entries/{id}", operator(registry.update)},
+		{http.MethodPost, "/internal/reference/{dict}/entries/{id}/merge", operator(registry.merge)},
+		{http.MethodPost, "/internal/reference/{dict}/entries/{id}/aliases", operator(registry.addAlias)},
+		{http.MethodDelete, "/internal/reference/{dict}/aliases/{id}", operator(registry.removeAlias)},
 	}
 }
 
