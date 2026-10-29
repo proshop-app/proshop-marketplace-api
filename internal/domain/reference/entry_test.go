@@ -46,7 +46,8 @@ func TestStatusTransitions(t *testing.T) {
 	if changed, err := e.ChangeStatus(StatusDeprecated, testNow); !changed || err != nil {
 		t.Fatalf("confirmed → deprecated: %v %v", changed, err)
 	}
-	if _, _, err := e.AddAlias(testDictionary(), AliasInput{ID: "a9", Text: "Другое"}, SourceOperator, testNow); err == nil {
+	other := AliasInput{ID: "a9", Text: "Другое"}
+	if _, _, err := e.AddAlias(testDictionary(), other, SourceOperator, testNow); err == nil {
 		t.Fatal("выведенная запись приняла вариант")
 	}
 }
@@ -55,9 +56,16 @@ func TestAliasRepeatLimitAndCanonical(t *testing.T) {
 	dict := RestoreDictionary(DictionaryState{
 		Code:       "b1",
 		AliasKinds: []AliasKind{AliasSpelling},
-		Limits:     Limits{MaxEntries: 10, MaxAliases: 2, MaxAliasLength: 120, MaxAliasWords: 8, Normalizer: NormalizerVersion},
+		Limits: Limits{
+			MaxEntries:     10,
+			MaxAliases:     2,
+			MaxAliasLength: 120,
+			MaxAliasWords:  8,
+			Normalizer:     NormalizerVersion,
+		},
 	})
-	e, err := NewEntry(dict, NewEntryInput{ID: "e1", CanonicalAliasID: "a1", Name: "Бренд", Status: StatusConfirmed}, testNow)
+	input := NewEntryInput{ID: "e1", CanonicalAliasID: "a1", Name: "Бренд", Status: StatusConfirmed}
+	e, err := NewEntry(dict, input, testNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,13 +73,16 @@ func TestAliasRepeatLimitAndCanonical(t *testing.T) {
 	if err != nil || !added || alias.Key != "бренд 2" {
 		t.Fatalf("AddAlias: %+v %v %v", alias, added, err)
 	}
-	if _, added, err := e.AddAlias(dict, AliasInput{ID: "a3", Text: "бренд 2"}, SourceOperator, testNow); added || err != nil {
+	repeat := AliasInput{ID: "a3", Text: "бренд 2"}
+	if _, added, err := e.AddAlias(dict, repeat, SourceOperator, testNow); added || err != nil {
 		t.Fatalf("повтор ключа — не изменение: %v %v", added, err)
 	}
-	if _, _, err := e.AddAlias(dict, AliasInput{ID: "a4", Text: "Третий"}, SourceOperator, testNow); !errors.Is(err, ErrLimit) {
+	third := AliasInput{ID: "a4", Text: "Третий"}
+	if _, _, err := e.AddAlias(dict, third, SourceOperator, testNow); !errors.Is(err, ErrLimit) {
 		t.Fatalf("лимит вариантов: %v", err)
 	}
-	if _, _, err := e.AddAlias(dict, AliasInput{ID: "a5", Text: "x", Kind: AliasTranslit}, SourceOperator, testNow); !errors.Is(err, ErrInvalid) {
+	translit := AliasInput{ID: "a5", Text: "x", Kind: AliasTranslit}
+	if _, _, err := e.AddAlias(dict, translit, SourceOperator, testNow); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("вид не из словаря: %v", err)
 	}
 	if _, err := e.RemoveAlias("a1", testNow); !errors.Is(err, ErrCanonicalAlias) {

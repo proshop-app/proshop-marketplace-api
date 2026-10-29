@@ -9,7 +9,8 @@ import (
 
 func TestDraftRecordsOnlyChangedEntries(t *testing.T) {
 	dict := testDictionary()
-	source := RestoreEntry(savedState(t, newTestEntry(t, "Бренд", StatusConfirmed, AliasInput{ID: "a2", Text: "Brend"})))
+	brend := AliasInput{ID: "a2", Text: "Brend"}
+	source := RestoreEntry(savedState(t, newTestEntry(t, "Бренд", StatusConfirmed, brend)))
 	target := RestoreEntry(savedState(t, newEntryWithID(t, "e2", "b2", "Бренд Два", StatusConfirmed)))
 	idle := RestoreEntry(savedState(t, newEntryWithID(t, "e3", "b3", "Третий", StatusConfirmed)))
 
@@ -72,7 +73,11 @@ func TestDraftCreateAndDeleteDelta(t *testing.T) {
 
 func TestEffectsJoinDeduplicates(t *testing.T) {
 	a := Effects{Kinds: []EventKind{EventStatusChanged}, Entries: []ids.UUID{"e1"}, Keys: []string{"k2"}}
-	b := Effects{Kinds: []EventKind{EventAliasAdded, EventStatusChanged}, Entries: []ids.UUID{"e1", "e2"}, Keys: []string{"k1"}}
+	b := Effects{
+		Kinds:   []EventKind{EventAliasAdded, EventStatusChanged},
+		Entries: []ids.UUID{"e1", "e2"},
+		Keys:    []string{"k1"},
+	}
 	joined := a.Join(b)
 	if !reflect.DeepEqual(joined.Kinds, []EventKind{EventAliasAdded, EventStatusChanged}) ||
 		len(joined.Entries) != 2 || !reflect.DeepEqual(joined.Keys, []string{"k1", "k2"}) {

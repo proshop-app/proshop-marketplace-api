@@ -309,7 +309,8 @@ func (e *Entry) Rename(dict *Dictionary, name string, aliasID ids.UUID, now time
 		return false, nil
 	}
 	if _, ok := e.Alias(key); !ok {
-		if _, _, err := e.AddAlias(dict, AliasInput{ID: aliasID, Text: clean, Kind: AliasSpelling}, SourceOperator, now); err != nil {
+		spelling := AliasInput{ID: aliasID, Text: clean, Kind: AliasSpelling}
+		if _, _, err := e.AddAlias(dict, spelling, SourceOperator, now); err != nil {
 			return false, err
 		}
 	}

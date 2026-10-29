@@ -118,7 +118,8 @@ func ValidateDelivery(d Delivery) error {
 				return ErrInvalidDelivery.WithMessage(place + ": " + messageOf(err))
 			}
 			if owner, taken := owners[key]; taken && owner != i {
-				return ErrInvalidDelivery.WithMessage(place + ": ключ «" + key + "» уже есть у записи " + strconv.Itoa(owner+1))
+				message := place + ": ключ «" + key + "» уже есть у записи " + strconv.Itoa(owner+1)
+				return ErrInvalidDelivery.WithMessage(message)
 			}
 			owners[key] = i
 		}
@@ -126,7 +127,7 @@ func ValidateDelivery(d Delivery) error {
 	return nil
 }
 
-// PlanDelivery: повтор той же поставки ничего не меняет, понижение номера,
+// PlanDelivery решает, применять ли поставку: повтор той же ничего не меняет, понижение номера,
 // подмена данных и повтор откаченной поставки — конфликт.
 func PlanDelivery(latest *DeliveryRecord, d Delivery) (bool, error) {
 	if latest == nil || d.Version > latest.Version {

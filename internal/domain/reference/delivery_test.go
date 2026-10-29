@@ -14,7 +14,7 @@ func TestValidateDelivery(t *testing.T) {
 		Version:    1,
 		Checksum:   testChecksum,
 		Entries: []DeliveryEntry{
-			{Canonical: "Бренд", Status: StatusConfirmed, Aliases: []DeliveryAlias{{Text: "Brend", Kind: AliasTranslit}}},
+			{Canonical: "Бренд", Status: StatusConfirmed, Aliases: []DeliveryAlias{{Text: "Brend"}}},
 			{Canonical: "Бренд Два", Status: StatusCandidate},
 		},
 	}
