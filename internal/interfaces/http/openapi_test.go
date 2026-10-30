@@ -1,7 +1,9 @@
 package http
 
 import (
+	"encoding/json"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -9,9 +11,20 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const taxonomyData = "../../infrastructure/taxonomydata/data/"
+
 type spec struct {
 	Paths      map[string]map[string]any `yaml:"paths"`
 	Components map[string]map[string]any `yaml:"components"`
+}
+
+type bundledCategory struct {
+	ID       string            `json:"id"`
+	Children []bundledCategory `json:"children"`
+}
+
+type bundledAttribute struct {
+	Code string `json:"code"`
 }
 
 func loadSpec(t *testing.T) (spec, []byte) {
@@ -83,5 +96,64 @@ func TestOpenAPIRefsResolve(t *testing.T) {
 		if _, ok := doc.Components[kind][name]; !ok {
 			t.Errorf("ссылка на несуществующий компонент: %s/%s", kind, name)
 		}
+	}
+}
+
+// TestOpenAPITaxonomyPatternsAcceptBundle — шаблоны id категории и кода
+// атрибута в спецификации принимают настоящую поставку: клиент, собранный
+// по OpenAPI, не должен отклонять дерево, которое отдаёт сервер.
+func TestOpenAPITaxonomyPatternsAcceptBundle(t *testing.T) {
+	doc, _ := loadSpec(t)
+
+	idPattern := schemaPattern(t, doc, "TaxonomyCategory", "id")
+	codePattern := schemaPattern(t, doc, "TaxonomyAttribute", "code")
+
+	var categories []bundledCategory
+	readBundle(t, "categories.json", &categories)
+
+	var attributes []bundledAttribute
+	readBundle(t, "attributes.json", &attributes)
+
+	pending := categories
+	for len(pending) > 0 {
+		category := pending[0]
+		pending = append(pending[1:], category.Children...)
+
+		if !idPattern.MatchString(category.ID) {
+			t.Errorf("id категории поставки не проходит шаблон OpenAPI: %q", category.ID)
+		}
+	}
+
+	for _, attribute := range attributes {
+		if !codePattern.MatchString(attribute.Code) {
+			t.Errorf("код атрибута поставки не проходит шаблон OpenAPI: %q", attribute.Code)
+		}
+	}
+}
+
+func schemaPattern(t *testing.T, doc spec, schema, property string) *regexp.Regexp {
+	t.Helper()
+
+	properties, _ := doc.Components["schemas"][schema].(map[string]any)["properties"].(map[string]any)
+	field, _ := properties[property].(map[string]any)
+
+	pattern, ok := field["pattern"].(string)
+	if !ok {
+		t.Fatalf("у %s.%s нет pattern", schema, property)
+	}
+
+	return regexp.MustCompile(pattern)
+}
+
+func readBundle(t *testing.T, name string, target any) {
+	t.Helper()
+
+	raw, err := os.ReadFile(taxonomyData + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := json.Unmarshal(raw, target); err != nil {
+		t.Fatalf("%s не разбирается: %v", name, err)
 	}
 }
