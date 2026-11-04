@@ -25,7 +25,7 @@ tags:
   - name: operator
   - name: reference
     description: |
-      Реестр справочных сущностей для бэкендов платформы (сервер магазина, поиск).
+      Proxy общего реестра MongoDB platform; собственного владельца в PostgreSQL нет.
       Чтение — токен читателя REFERENCE_READ_TOKEN, мутации — OPERATOR_TOKEN или сессия
       оператора; браузеру токены не выдаются.
       Все ответы несут schemaVersion и revision, поля только добавляются.

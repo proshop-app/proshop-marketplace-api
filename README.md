@@ -62,7 +62,8 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `KAFKA_TOPIC_PREFIX` | | пусто | `KAFKA_TOPIC_PREFIX` сервера: топики `<prefix>.<имя>` |
 | `KAFKA_GROUP_ID` | | `marketplace` | своя группа консьюмера |
 | `KAFKA_MAX_ATTEMPTS` | | `5` | неудач до парковки сообщения |
-| `KAFKA_TOPIC_REFERENCE_CHANGED` | | `catalog.reference.changed` | топик событий реестра без префикса, см. `docs/reference.md` |
+| `REFERENCE_READ_TOKEN` | | | токен чтения общего реестра MongoDB platform; нужен для enum схем и разрешения бренда |
+| `REFERENCE_WRITE_TOKEN` | | | отдельный backend токен управления реестром; браузеру не выдаётся |
 | `REFERENCE_READ_TOKEN` | | пусто | токен чтения реестра для бэкендов: снимок, `resolve`, записи; без прав оператора |
 | `OPERATOR_TOKEN` | да | — | служебный токен операторских ручек, ≥ 32 символов |
 | `HTTP_ADDR` | | `:8080` | адрес HTTP |

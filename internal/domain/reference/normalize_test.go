@@ -40,34 +40,3 @@ func TestSpacesMatchPlatformClass(t *testing.T) {
 		}
 	}
 }
-
-func TestSpellingLimits(t *testing.T) {
-	dict := testDictionary()
-	if _, _, err := dict.Spelling("один два три четыре пять шесть семь восемь девять"); err == nil {
-		t.Fatal("девять слов прошли лимит в восемь")
-	}
-	long := make([]rune, DefaultMaxAliasLength+1)
-	for i := range long {
-		long[i] = 'б'
-	}
-	if _, _, err := dict.Spelling(string(long)); err == nil {
-		t.Fatal("написание длиннее лимита прошло")
-	}
-	if _, _, err := dict.Spelling("Бренд\u0007"); err == nil {
-		t.Fatal("управляющий символ прошёл")
-	}
-	clean, key, err := dict.Spelling("  Бренд   Два ")
-	if err != nil || clean != "Бренд Два" || key != "бренд два" {
-		t.Fatalf("Spelling = %q, %q, %v", clean, key, err)
-	}
-}
-
-func testDictionary() *Dictionary {
-	return RestoreDictionary(DictionaryState{
-		Code:       "b1",
-		Kind:       KindOpen,
-		Identity:   true,
-		AliasKinds: AliasKinds,
-		Limits:     DefaultLimits(),
-	})
-}

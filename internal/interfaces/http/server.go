@@ -19,7 +19,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
-	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 )
 
@@ -40,7 +40,7 @@ type Deps struct {
 	Carts         *appcart.Service
 	Directory     *appdelivery.Directory
 	Checkouts     *appcheckout.Service
-	Reference     *appreference.Service
+	Reference     ports.ReferenceAPI
 	OperatorToken string
 	// ReferenceReadToken — токен читателя реестра: снимок, resolve и чтение записей без прав оператора.
 	ReferenceReadToken string
@@ -77,7 +77,7 @@ func routes(deps Deps) []route {
 	carts := &cartHandlers{carts: deps.Carts}
 	shipping := &deliveryHandlers{directory: deps.Directory}
 	checkouts := &checkoutHandlers{checkouts: deps.Checkouts}
-	registry := newReferenceHandlers(deps.Reference, deps.Registerer)
+	registry := referenceHandlers{api: deps.Reference}
 	gateway := &operatorHandlers{
 		auth:       deps.OperatorAuth,
 		events:     deps.Events,
@@ -147,15 +147,27 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
 		{http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},
 
-		{http.MethodGet, "/internal/reference/{dict}/snapshot", reader(registry.snapshot)},
-		{http.MethodPost, "/internal/reference/{dict}/resolve", reader(registry.resolve)},
-		{http.MethodGet, "/internal/reference/{dict}/entries", reader(registry.list)},
-		{http.MethodPost, "/internal/reference/{dict}/entries", operator(registry.create)},
-		{http.MethodGet, "/internal/reference/{dict}/entries/{id}", reader(registry.get)},
-		{http.MethodPatch, "/internal/reference/{dict}/entries/{id}", operator(registry.update)},
-		{http.MethodPost, "/internal/reference/{dict}/entries/{id}/merge", operator(registry.merge)},
-		{http.MethodPost, "/internal/reference/{dict}/entries/{id}/aliases", operator(registry.addAlias)},
-		{http.MethodDelete, "/internal/reference/{dict}/aliases/{id}", operator(registry.removeAlias)},
+		{http.MethodGet, "/internal/reference/{dict}/snapshot", reader(registry.handler("snapshot", false))},
+		{http.MethodPost, "/internal/reference/{dict}/resolve", reader(registry.handler("resolve", false))},
+		{http.MethodGet, "/internal/reference/{dict}/entries", reader(registry.handler("entries", false))},
+		{http.MethodPost, "/internal/reference/{dict}/entries", operator(registry.handler("entries", true))},
+		{http.MethodGet, "/internal/reference/{dict}/entries/{id}", reader(registry.handler("entries/{id}", false))},
+		{http.MethodPatch, "/internal/reference/{dict}/entries/{id}", operator(registry.handler("entries/{id}", true))},
+		{
+			http.MethodPost,
+			"/internal/reference/{dict}/entries/{id}/merge",
+			operator(registry.handler("entries/{id}/merge", true)),
+		},
+		{
+			http.MethodPost,
+			"/internal/reference/{dict}/entries/{id}/aliases",
+			operator(registry.handler("entries/{id}/aliases", true)),
+		},
+		{
+			http.MethodDelete,
+			"/internal/reference/{dict}/aliases/{id}",
+			operator(registry.handler("aliases/{id}", true)),
+		},
 	}
 }
 

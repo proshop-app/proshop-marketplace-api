@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referenceapi"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/taxonomyfile"
 )
 
@@ -35,7 +36,17 @@ func loadFile(path string) error {
 		return err
 	}
 	defer pool.Close()
-	err = apptaxonomy.NewService(postgres.NewUnitOfWork(pool), clock.System{}).Load(ctx, definition)
+	reference, err := config.LoadReferenceReader(os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	values := referenceapi.New(referenceapi.Config{
+		BaseURL:   reference.Platform.URL,
+		ReadToken: reference.Reference.ReadToken,
+		Timeout:   reference.Platform.Timeout,
+	})
+	uow := apptaxonomy.WithReferenceValues(postgres.NewUnitOfWork(pool), values)
+	err = apptaxonomy.NewService(uow, clock.System{}).Load(ctx, definition)
 	if err == nil {
 		fmt.Printf("таксономия: версия %d загружена\n", definition.Version)
 	}
