@@ -43,6 +43,30 @@ func (c *Client) Resolve(ctx context.Context, text string) (string, bool, error)
 	return resolution.Match.EntryID, true, nil
 }
 
+// Revisions — общий список словарей владельца: копия сверяется одним
+// запросом и перечитывает только словари с новой ревизией.
+func (c *Client) Revisions(ctx context.Context) ([]ports.ReferenceRevision, error) {
+	response, err := c.send(ctx, ports.ReferenceRequest{Method: http.MethodGet}, "")
+	if err != nil || response.Status != http.StatusOK {
+		return nil, ErrUnavailable
+	}
+	var list struct {
+		SchemaVersion int                       `json:"schemaVersion"`
+		Dictionaries  []ports.ReferenceRevision `json:"dictionaries"`
+	}
+	if json.Unmarshal(response.Body, &list) != nil || list.SchemaVersion != 1 || list.Dictionaries == nil {
+		return nil, ErrUnavailable
+	}
+	seen := map[string]bool{}
+	for _, dictionary := range list.Dictionaries {
+		if !codePattern.MatchString(dictionary.Code) || seen[dictionary.Code] || dictionary.Revision < 0 {
+			return nil, ErrUnavailable
+		}
+		seen[dictionary.Code] = true
+	}
+	return list.Dictionaries, nil
+}
+
 // Values читает полный словарь со стабильными id и порядком.
 func (c *Client) Values(ctx context.Context, dictionary string) ([]ports.ReferenceValue, error) {
 	response, err := c.Do(ctx, ports.ReferenceRequest{

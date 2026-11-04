@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -68,6 +69,49 @@ func TestClientReadsCanonicalBrandAndClosedValuesFromOwner(t *testing.T) {
 	values, err := client.Values(context.Background(), "a1")
 	if err != nil || len(values) != 1 || values[0].ID != "e1" || values[0].Meta.Hex != "#ffffff" {
 		t.Fatalf("общие значения: %+v %v", values, err)
+	}
+}
+
+func TestClientReadsDictionaryRevisionsWithReaderRights(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/internal/reference" || r.Method != http.MethodGet ||
+			r.Header.Get("Authorization") != "Bearer reader" {
+			t.Errorf("сверка ревизий: %s %s %v", r.Method, r.URL, r.Header)
+		}
+		_, _ = io.WriteString(w, `{"schemaVersion":1,"dictionaries":[`+
+			`{"code":"a1","kind":"closed","revision":12},{"code":"brand","kind":"open","revision":40}]}`)
+	}))
+	defer server.Close()
+	client := referenceapi.New(referenceapi.Config{BaseURL: server.URL, ReadToken: "reader", WriteToken: "writer"})
+	revisions, err := client.Revisions(context.Background())
+	want := []ports.ReferenceRevision{
+		{Code: "a1", Kind: "closed", Revision: 12},
+		{Code: "brand", Kind: "open", Revision: 40},
+	}
+	if err != nil || !reflect.DeepEqual(revisions, want) {
+		t.Fatalf("ревизии словарей: %+v %v", revisions, err)
+	}
+}
+
+func TestClientRejectsMalformedRevisions(t *testing.T) {
+	bodies := []string{
+		`{"schemaVersion":2,"dictionaries":[]}`,
+		`{"schemaVersion":1}`,
+		`{"schemaVersion":1,"dictionaries":[{"code":"a1","revision":1},{"code":"a1","revision":2}]}`,
+		`{"schemaVersion":1,"dictionaries":[{"code":"A-1","revision":1}]}`,
+		`{"schemaVersion":1,"dictionaries":[{"code":"a1","revision":-1}]}`,
+	}
+	for _, body := range bodies {
+		t.Run(body, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = io.WriteString(w, body)
+			}))
+			defer server.Close()
+			client := referenceapi.New(referenceapi.Config{BaseURL: server.URL, ReadToken: "reader"})
+			if _, err := client.Revisions(context.Background()); err == nil {
+				t.Fatal("неверный список словарей принят")
+			}
+		})
 	}
 }
 

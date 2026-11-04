@@ -17,9 +17,14 @@ type ReferenceAPI struct {
 }
 
 // ReferenceValues — общий набор значений в тестах схем, вне fake.Store/транзакций PG.
+// Dictionaries — общий список владельца для сверки копии; счётчики — число обращений.
 type ReferenceValues struct {
-	Items map[string][]ports.ReferenceValue
-	Err   error
+	mu            sync.Mutex
+	Items         map[string][]ports.ReferenceValue
+	Dictionaries  []ports.ReferenceRevision
+	Err           error
+	ValueCalls    int
+	RevisionCalls int
 }
 
 // Do запоминает запрос к владельцу, не заводя локальные записи.
@@ -39,5 +44,22 @@ func (f *ReferenceAPI) Calls() []ports.ReferenceRequest {
 
 // Values возвращает независимую порцию: гидратация не меняет источник теста.
 func (f *ReferenceValues) Values(_ context.Context, dictionary string) ([]ports.ReferenceValue, error) {
-	return slices.Clone(f.Items[dictionary]), f.Err
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ValueCalls++
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	return slices.Clone(f.Items[dictionary]), nil
+}
+
+// Revisions — общий список словарей владельца; Err роняет и его.
+func (f *ReferenceValues) Revisions(context.Context) ([]ports.ReferenceRevision, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.RevisionCalls++
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	return slices.Clone(f.Dictionaries), nil
 }

@@ -17,7 +17,10 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
-const maxResponseBytes = 64 << 20
+const (
+	maxResponseBytes = 64 << 20
+	referencePath    = "/api/v1/internal/reference"
+)
 
 var (
 	codePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
@@ -65,6 +68,15 @@ func (c *Client) Do(ctx context.Context, input ports.ReferenceRequest) (ports.Re
 	if !codePattern.MatchString(input.Dictionary) || strings.Contains(input.Resource, "..") {
 		return ports.ReferenceResponse{}, ErrUnavailable
 	}
+	return c.send(ctx, input, "/"+url.PathEscape(input.Dictionary)+"/"+input.Resource)
+}
+
+// send выставляет права backend и отвергает ответ, не похожий на ответ владельца.
+func (c *Client) send(
+	ctx context.Context,
+	input ports.ReferenceRequest,
+	suffix string,
+) (ports.ReferenceResponse, error) {
 	token := c.readToken
 	if input.Write {
 		token = c.writeToken
@@ -72,7 +84,7 @@ func (c *Client) Do(ctx context.Context, input ports.ReferenceRequest) (ports.Re
 	if c.baseURL == "" || token == "" {
 		return ports.ReferenceResponse{}, ErrUnavailable
 	}
-	path := c.baseURL + "/api/v1/internal/reference/" + url.PathEscape(input.Dictionary) + "/" + input.Resource
+	path := c.baseURL + referencePath + suffix
 	if input.Query != "" {
 		path += "?" + input.Query
 	}

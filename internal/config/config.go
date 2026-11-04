@@ -186,6 +186,10 @@ type Reference struct {
 	ReadToken string
 	// WriteToken доступен только backend оператора; отличается от токена чтения.
 	WriteToken string
+	// RefreshInterval — сверка копии закрытых словарей с владельцем.
+	RefreshInterval time.Duration
+	// MaxStaleness — дольше без подтверждения копия не годится для проверки публикации.
+	MaxStaleness time.Duration
 }
 
 // Operator — машинный токен и отдельная учётная запись платформы для панели.
@@ -301,8 +305,10 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		},
 		Settings: Settings{SyncInterval: r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute)},
 		Reference: Reference{
-			ReadToken:  r.str("REFERENCE_READ_TOKEN", ""),
-			WriteToken: r.str("REFERENCE_WRITE_TOKEN", ""),
+			ReadToken:       r.str("REFERENCE_READ_TOKEN", ""),
+			WriteToken:      r.str("REFERENCE_WRITE_TOKEN", ""),
+			RefreshInterval: r.duration("REFERENCE_REFRESH_INTERVAL", 30*time.Second),
+			MaxStaleness:    r.duration("REFERENCE_MAX_STALENESS", 10*time.Minute),
 		},
 		ModelKeys: r.boolean("MARKETPLACE_MODEL_KEYS", false),
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
@@ -335,6 +341,10 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	}
 	if (cfg.Delivery.CDEK.ClientID == "") != (cfg.Delivery.CDEK.ClientSecret == "") {
 		r.fail("CDEK_CLIENT_ID", "задаётся вместе с CDEK_CLIENT_SECRET")
+	}
+	// одна пропущенная сверка не должна останавливать публикацию товаров
+	if cfg.Reference.MaxStaleness < 2*cfg.Reference.RefreshInterval {
+		r.fail("REFERENCE_MAX_STALENESS", "не меньше двух REFERENCE_REFRESH_INTERVAL")
 	}
 
 	r.validateReference(cfg)

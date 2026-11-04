@@ -44,3 +44,17 @@ type ReferenceValue struct {
 type ReferenceValues interface {
 	Values(context.Context, string) ([]ReferenceValue, error)
 }
+
+// ReferenceRevision — словарь из общего списка владельца с текущей ревизией.
+type ReferenceRevision struct {
+	Code     string `json:"code"`
+	Kind     string `json:"kind"`
+	Revision int64  `json:"revision"`
+}
+
+// ReferenceSource — владелец для производной копии: ревизии всех словарей
+// одним запросом и полный закрытый словарь по коду.
+type ReferenceSource interface {
+	ReferenceValues
+	Revisions(context.Context) ([]ReferenceRevision, error)
+}

@@ -264,6 +264,19 @@ func TestReferenceReadTokenIsSeparateSecret(t *testing.T) {
 	}
 }
 
+func TestReferenceCopyStalenessCoversMissedRefresh(t *testing.T) {
+	env := validEnv()
+	cfg, err := config.Load(envOf(env))
+	if err != nil || cfg.Reference.RefreshInterval != 30*time.Second || cfg.Reference.MaxStaleness != 10*time.Minute {
+		t.Fatalf("сверка копии словарей по умолчанию: %+v %v", cfg.Reference, err)
+	}
+	env["REFERENCE_REFRESH_INTERVAL"] = "1m"
+	env["REFERENCE_MAX_STALENESS"] = "90s"
+	if _, err := config.Load(envOf(env)); err == nil || !strings.Contains(err.Error(), "REFERENCE_MAX_STALENESS") {
+		t.Fatalf("срок копии короче двух сверок принят: %v", err)
+	}
+}
+
 func TestReferenceWriterIsSeparateAndCLIUsesOnlyOwnerAPI(t *testing.T) {
 	env := map[string]string{
 		"PLATFORM_API_URL":      "http://server:5001",

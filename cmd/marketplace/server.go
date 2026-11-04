@@ -58,6 +58,7 @@ type services struct {
 	janitor      *messaging.Janitor
 	parker       *messaging.Parker
 	reference    ports.ReferenceAPI
+	values       *apptaxonomy.ReferenceCache
 	// writer публикует события площадки; закрывается после остановки разбора outbox
 	writer *infrakafka.Writer
 }
@@ -124,7 +125,12 @@ func (s *server) services(ctx context.Context) (services, error) {
 		WriteToken: cfg.Reference.WriteToken,
 		Timeout:    cfg.Platform.Timeout,
 	})
-	uow := apptaxonomy.WithReferenceValues(postgres.NewUnitOfWork(s.store.pool), references)
+	// схема читается из копии общих словарей: проверка публикации — с ограниченной
+	// давностью, выдача покупателю — по последней копии, пока владелец недоступен
+	values := apptaxonomy.NewReferenceCache(references, now, cfg.Reference.MaxStaleness)
+	transactions := postgres.NewUnitOfWork(s.store.pool)
+	uow := apptaxonomy.WithReferenceValues(transactions, values)
+	reads := apptaxonomy.WithReferenceValues(transactions, values.Lasting())
 	platform := platformapi.New(platformapi.Config{
 		BaseURL: cfg.Platform.URL,
 		Token:   cfg.Platform.Token,
@@ -233,7 +239,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		taxonomy:     apptaxonomy.NewService(uow, now),
 		projector:    projector,
 		indexer:      indexer,
-		queries:      appcatalog.NewQueries(uow, s.store.index, resyncing),
+		queries:      appcatalog.NewQueries(reads, s.store.index, resyncing),
 		participants: appparticipant.NewService(uow, now),
 		registry:     registry,
 		settings:     settings,
@@ -245,6 +251,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		janitor:      janitor,
 		parker:       messaging.NewParker(uow),
 		reference:    references,
+		values:       values,
 		writer:       writer,
 	}, nil
 }
@@ -336,6 +343,7 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewPickupRefreshRunner(s.app.directory, cfg.Delivery.RefreshInterval, s.logger, s.metrics).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).Run,
 		jobs.NewModelKeyStatsRunner(postgres.NewModelKeyStats(s.store.pool), s.logger, s.metrics).Run,
+		jobs.NewReferenceRefreshRunner(s.app.values, cfg.Reference.RefreshInterval, s.logger, s.metrics).Run,
 	}
 }
 
