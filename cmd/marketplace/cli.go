@@ -26,7 +26,17 @@ var commands = map[string]command{
 
 // run проверяет окружение и выполняет команду до сигнала остановки; результат — код выхода.
 func run() int {
-	cfg, err := config.Load(os.LookupEnv)
+	var cfg config.Config
+	var err error
+	switch {
+	case len(os.Args) >= 3 && os.Args[1] == "reference" && os.Args[2] == "check":
+	case len(os.Args) >= 3 && os.Args[1] == "reference" && os.Args[2] == "archive-pending":
+		cfg.Database, err = config.LoadDatabase(os.LookupEnv)
+	case len(os.Args) >= 2 && os.Args[1] == "reference":
+		cfg, err = config.LoadReference(os.LookupEnv)
+	default:
+		cfg, err = config.Load(os.LookupEnv)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 

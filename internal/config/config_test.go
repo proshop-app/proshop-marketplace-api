@@ -51,13 +51,6 @@ func TestLoadDefaults(t *testing.T) {
 	if len(cfg.Kafka.Brokers) != 2 || cfg.Kafka.Brokers[1] != "localhost:9093" {
 		t.Fatalf("брокеры: %v", cfg.Kafka.Brokers)
 	}
-	if topic := cfg.Kafka.FullTopic(cfg.Kafka.ReferenceTopic); topic != "catalog.reference.changed" {
-		t.Fatalf("топик реестра: %s", topic)
-	}
-	prefixed := config.Kafka{TopicPrefix: "p1"}
-	if topic := prefixed.FullTopic("catalog.reference.changed"); topic != "p1.catalog.reference.changed" {
-		t.Fatalf("топик с префиксом: %s", topic)
-	}
 	if cfg.Retention.ProcessedEvents != 14*24*time.Hour || cfg.Outbox.Batch != 100 || cfg.Database.MaxConns != 10 {
 		t.Fatalf("неожиданные умолчания: %+v", cfg)
 	}
@@ -268,5 +261,40 @@ func TestReferenceReadTokenIsSeparateSecret(t *testing.T) {
 		if _, err := config.Load(envOf(env)); err == nil || !strings.Contains(err.Error(), "REFERENCE_READ_TOKEN") {
 			t.Fatalf("токен читателя %q принят: %v", bad, err)
 		}
+	}
+}
+
+func TestReferenceCopyStalenessCoversMissedRefresh(t *testing.T) {
+	env := validEnv()
+	cfg, err := config.Load(envOf(env))
+	if err != nil || cfg.Reference.RefreshInterval != 30*time.Second || cfg.Reference.MaxStaleness != 10*time.Minute {
+		t.Fatalf("сверка копии словарей по умолчанию: %+v %v", cfg.Reference, err)
+	}
+	env["REFERENCE_REFRESH_INTERVAL"] = "1m"
+	env["REFERENCE_MAX_STALENESS"] = "90s"
+	if _, err := config.Load(envOf(env)); err == nil || !strings.Contains(err.Error(), "REFERENCE_MAX_STALENESS") {
+		t.Fatalf("срок копии короче двух сверок принят: %v", err)
+	}
+}
+
+func TestReferenceWriterIsSeparateAndCLIUsesOnlyOwnerAPI(t *testing.T) {
+	env := map[string]string{
+		"PLATFORM_API_URL":      "http://server:5001",
+		"REFERENCE_READ_TOKEN":  strings.Repeat("r", 32),
+		"REFERENCE_WRITE_TOKEN": strings.Repeat("w", 32),
+	}
+	if _, err := config.LoadReference(envOf(env)); err != nil {
+		t.Fatalf("CLI потребовал сервисы marketplace: %v", err)
+	}
+	if _, err := config.LoadReferenceReader(envOf(env)); err != nil {
+		t.Fatalf("читатель: %v", err)
+	}
+	env["REFERENCE_WRITE_TOKEN"] = env["REFERENCE_READ_TOKEN"]
+	if _, err := config.LoadReference(envOf(env)); err == nil {
+		t.Fatal("писатель использует токен читателя")
+	}
+	env["REFERENCE_WRITE_TOKEN"] = "short"
+	if _, err := config.LoadReference(envOf(env)); err == nil {
+		t.Fatal("короткий токен писателя принят")
 	}
 }

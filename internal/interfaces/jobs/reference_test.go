@@ -4,56 +4,56 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
+	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
 )
 
-type referenceStats struct {
-	stats []appreference.Stats
-	err   error
+type referenceRefresher struct {
+	results []apptaxonomy.ReferenceRefresh
+	errs    []error
 }
 
-func (s referenceStats) Stats(context.Context) ([]appreference.Stats, error) {
-	return s.stats, s.err
+func (r *referenceRefresher) Refresh(context.Context) (apptaxonomy.ReferenceRefresh, error) {
+	result, err := r.results[0], r.errs[0]
+	r.results, r.errs = r.results[1:], r.errs[1:]
+
+	return result, err
 }
 
-func TestReferenceStatsRunnerSetsGauges(t *testing.T) {
+func TestReferenceRefreshRunnerRecordsResultAndAge(t *testing.T) {
 	registry := prometheus.NewRegistry()
-	stats := referenceStats{stats: []appreference.Stats{{Dictionary: "b1", Revision: 7, Entries: 3, Candidates: 2}}}
-	jobs.NewReferenceStatsRunner(stats, 0, quiet, registry).RunOnce(context.Background())
-	values := gauges(t, registry)
-	if values["marketplace_reference_revision"] != 7 || values["marketplace_reference_entries"] != 3 ||
-		values["marketplace_reference_candidates"] != 2 {
-		t.Fatalf("метрики реестра: %v", values)
+	refresher := &referenceRefresher{
+		results: []apptaxonomy.ReferenceRefresh{
+			{Checked: 1, Updated: []string{"a1"}, Age: 5 * time.Second},
+			{Checked: 2, Failed: map[string]error{"a2": errors.New("сбой")}},
+			{Age: 90 * time.Second},
+		},
+		errs: []error{nil, nil, errors.New("владелец недоступен")},
+	}
+	runner := jobs.NewReferenceRefreshRunner(refresher, time.Hour, quiet, registry)
+	for range 3 {
+		runner.RunOnce(context.Background())
 	}
 
-	failing := prometheus.NewRegistry()
-	jobs.NewReferenceStatsRunner(referenceStats{err: errors.New("база недоступна")}, 0, quiet, failing).
-		RunOnce(context.Background())
-	if gauges(t, failing)["marketplace_reference_stats_failures_total"] != 1 {
-		t.Fatal("сбой чтения не посчитан")
-	}
-}
-
-func gauges(t *testing.T, registry *prometheus.Registry) map[string]float64 {
-	t.Helper()
-	families, err := registry.Gather()
-	if err != nil {
-		t.Fatal(err)
-	}
-	values := map[string]float64{}
+	results := map[string]float64{}
+	age := 0.0
+	families, _ := registry.Gather()
 	for _, family := range families {
 		for _, metric := range family.GetMetric() {
-			switch {
-			case metric.GetGauge() != nil:
-				values[family.GetName()] = metric.GetGauge().GetValue()
-			case metric.GetCounter() != nil:
-				values[family.GetName()] = metric.GetCounter().GetValue()
+			switch family.GetName() {
+			case "marketplace_reference_refresh_total":
+				results[metric.GetLabel()[0].GetValue()] += metric.GetCounter().GetValue()
+			case "marketplace_reference_values_age_seconds":
+				age = metric.GetGauge().GetValue()
 			}
 		}
 	}
-	return values
+
+	if results["done"] != 1 || results["partial"] != 1 || results["failed"] != 1 || age != 90 {
+		t.Fatalf("метрики сверки: %+v %v", results, age)
+	}
 }

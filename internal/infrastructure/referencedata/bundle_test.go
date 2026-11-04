@@ -5,8 +5,6 @@ import (
 	"os"
 	"testing"
 	"testing/fstest"
-
-	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 )
 
 func TestLoadChecksBundle(t *testing.T) {
@@ -57,7 +55,7 @@ func TestLoadRejectsInvalidDelivery(t *testing.T) {
 		manifestFile: {Data: []byte(header)},
 		entriesFile:  {Data: entries},
 	}
-	if _, _, err := Load(source); !errors.Is(err, reference.ErrInvalidDelivery) {
+	if _, _, err := Load(source); !errors.Is(err, ErrInvalidBundle) {
 		t.Fatalf("статус merged в поставке: %v", err)
 	}
 }

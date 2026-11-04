@@ -8,19 +8,18 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
-	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referenceapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencedata"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
-	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
 // errReferenceUsage — команда поставки реестра вызвана без действия или каталога.
@@ -35,10 +34,10 @@ func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 	defer store.close()
 
 	uow := postgres.NewUnitOfWork(store.pool)
-	references := appreference.NewService(uow, clock.System{}, random.IDs{}, nil, appreference.Config{})
-	models := appcatalog.NewModelKeys(referencecatalog.New(references), nil, cfg.ModelKeys)
+	references := referenceapi.New(referenceConfig(cfg))
+	models := appcatalog.NewModelKeys(references, nil, cfg.ModelKeys)
 	indexer := appcatalog.NewIndexer(
-		postgres.NewUnitOfWork(store.pool),
+		uow,
 		store.index,
 		clock.System{},
 		indexBatch,
@@ -87,6 +86,9 @@ func referenceDelivery(ctx context.Context, cfg config.Config, _ *slog.Logger) e
 }
 
 func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string, output io.Writer) error {
+	if len(args) > 0 && args[0] == "archive-pending" {
+		return runReferenceArchive(ctx, cfg, args[1:], output)
+	}
 	if len(args) == 0 || (args[0] != "check" && args[0] != "apply" && args[0] != "rollback") {
 		return errReferenceUsage
 	}
@@ -103,32 +105,34 @@ func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string,
 	if args[0] == "check" {
 		return json.NewEncoder(output).Encode(summary)
 	}
-	pool, err := postgres.Open(ctx, cfg.Database.URL, 2)
+	api := referenceapi.New(referenceConfig(cfg))
+	body, err := json.Marshal(delivery)
 	if err != nil {
-		return errors.New("не удалось подключиться к PostgreSQL")
-	}
-	defer pool.Close()
-	// событие уходит через outbox: публикует его процесс serve
-	uow := postgres.NewUnitOfWork(pool)
-	service := appreference.NewService(uow, clock.System{}, random.IDs{}, nil, appreference.Config{})
-	operation := service.Apply
-	if args[0] == "rollback" {
-		operation = service.Rollback
-	}
-	result, err := operation(ctx, delivery)
-	if err != nil {
-		return deliveryFailure(err)
-	}
-	return json.NewEncoder(output).Encode(result)
-}
-
-// deliveryFailure — причина отказа без текста драйвера: он может содержать адрес базы.
-func deliveryFailure(err error) error {
-	if typed, ok := errs.As(err); ok && typed.Code() != errs.Internal && typed.Code() != errs.Unavailable {
-		return fmt.Errorf("поставка реестра не применена: %s", typed.Message())
-	}
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return err
 	}
-	return errors.New("поставка реестра не применена: проверьте миграции и доступность базы")
+	response, err := api.Do(ctx, ports.ReferenceRequest{
+		Method:     http.MethodPost,
+		Dictionary: delivery.Dictionary,
+		Resource:   "deliveries/" + args[0],
+		Body:       body,
+		Actor:      "cli",
+		Write:      true,
+	})
+	if err != nil {
+		return err
+	}
+	if response.Status != http.StatusOK {
+		return fmt.Errorf("поставка реестра не применена: HTTP %d", response.Status)
+	}
+	_, err = fmt.Fprintln(output, string(response.Body))
+	return err
+}
+
+func referenceConfig(cfg config.Config) referenceapi.Config {
+	return referenceapi.Config{
+		BaseURL:    cfg.Platform.URL,
+		ReadToken:  cfg.Reference.ReadToken,
+		WriteToken: cfg.Reference.WriteToken,
+		Timeout:    cfg.Platform.Timeout,
+	}
 }

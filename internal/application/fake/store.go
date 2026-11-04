@@ -62,7 +62,6 @@ type data struct {
 	checkouts       map[ids.UUID]checkout.State
 	points          map[pointKey]delivery.PickupPoint
 	leases          map[string]lease
-	reference       *referenceData
 }
 
 type pointKey struct {
@@ -103,7 +102,6 @@ func (d *data) clone() *data {
 		checkouts:       maps.Clone(d.checkouts),
 		points:          maps.Clone(d.points),
 		leases:          maps.Clone(d.leases),
-		reference:       d.reference.clone(),
 	}
 }
 
@@ -123,7 +121,6 @@ func NewStore() *Store {
 		checkouts:    map[ids.UUID]checkout.State{},
 		points:       map[pointKey]delivery.PickupPoint{},
 		leases:       map[string]lease{},
-		reference:    newReferenceData(),
 	}}
 }
 
