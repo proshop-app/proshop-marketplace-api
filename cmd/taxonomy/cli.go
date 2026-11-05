@@ -28,11 +28,8 @@ type bundleInfo struct {
 }
 
 func run(args []string, output, diagnostics io.Writer) int {
-	if len(args) == 2 && args[0] == "load" {
-		if err := loadFile(args[1]); err != nil {
-			return failure(diagnostics, err.Error(), 1)
-		}
-		return 0
+	if len(args) > 0 && args[0] == "manifest" {
+		return manifestCommand(args[1:], output, diagnostics)
 	}
 	if len(args) == 0 || (args[0] != "check" && args[0] != "apply" && args[0] != "rollback") {
 		return failure(diagnostics, "использование: taxonomy check|apply|rollback", 2)

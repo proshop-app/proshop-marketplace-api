@@ -101,16 +101,23 @@ func TestTaxonomyRollbackPlans(t *testing.T) {
 }
 
 func TestCategoryIDDoesNotRelaxAttributeCode(t *testing.T) {
-	definition := Definition{Version: 1, Categories: []Category{{
-		ID:         "group.product-type",
-		Slug:       "group-product-type",
-		Name:       "Категория",
+	definition := Definition{
 		Attributes: []Attribute{{Code: "model", Name: "Модель", Type: "string"}},
-	}}}
+		Schemas:    map[string]Schema{"s1": {Attributes: []string{"model"}, Optional: []string{"model"}}},
+		Version:    1,
+		Categories: []Category{
+			{
+				ID:     "group.product-type",
+				Slug:   "group-product-type",
+				Name:   "Категория",
+				Schema: "s1",
+			},
+		},
+	}
 	if err := definition.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	definition.Categories[0].Attributes[0].Code = "unsafe.path"
+	definition.Attributes[0].Code = "unsafe.path"
 	if err := definition.Validate(); err == nil {
 		t.Fatal("код атрибута допускает путь")
 	}

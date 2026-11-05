@@ -72,8 +72,10 @@ func newEnv(t *testing.T) *env {
 		pickups:  fake.NewPickupIndex(),
 	}
 	e.store.SeedTaxonomy(taxonomy.Definition{
+		Attributes: []taxonomy.Attribute{{Code: "a0", Name: "Поле", Type: "string"}},
+		Schemas:    map[string]taxonomy.Schema{"s1": {Attributes: []string{"a0"}, Optional: []string{"a0"}}},
 		Version:    1,
-		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория", Slug: "c1"}},
+		Categories: []taxonomy.Category{{Schema: "s1", ID: "c1", Name: "Категория", Slug: "c1"}},
 	})
 	registry := prometheus.NewRegistry()
 	identities := &fake.IDs{}
@@ -143,8 +145,13 @@ func newEnv(t *testing.T) *env {
 				SessionTTL:   time.Hour,
 			},
 		),
-		Events:     messaging.NewEvents(e.store, e.clock, &fake.Replay{}),
-		Checks:     []transport.Check{{Name: "postgres", Probe: func(context.Context) error { return e.healthy }}},
+		Events: messaging.NewEvents(e.store, e.clock, &fake.Replay{}),
+		Checks: []transport.Check{
+			{
+				Name:  "postgres",
+				Probe: func(context.Context) error { return e.healthy },
+			},
+		},
 		Metrics:    promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
 		Registerer: registry,
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),

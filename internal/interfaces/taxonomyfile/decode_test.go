@@ -1,38 +1,41 @@
 package taxonomyfile_test
 
 import (
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/taxonomyfile"
 )
 
-const valid = "version: 1\ncategories:\n  - id: c1\n    name: Категория\n    slug: c1\n"
+const valid = "- code: a1\n  name: Поле\n  type: enum\n  dictionary: d1\n"
 
 func TestStrictYAML(t *testing.T) {
-	if d, err := taxonomyfile.Decode(strings.NewReader(valid)); err != nil || d.Version != 1 {
+	d, err := taxonomyfile.DecodePart(strings.NewReader(valid), "attributes")
+	if err != nil || len(d.Attributes) != 1 {
 		t.Fatalf("%+v %v", d, err)
 	}
 	for _, raw := range []string{
-		valid + "extra: true\n",
+		valid + "  extra: true\n",
+		valid + "  values: [a]\n",
+		valid + "  required: true\n",
 		valid + "---\n" + valid,
-		strings.Replace(valid, "version: 1", "version: 1\nversion: 2", 1),
+		valid + "  code: a2\n",
+		"- &field {code: a1, name: Поле, type: string}\n",
+		"- &field {code: a1, name: Поле, type: string}\n- *field\n",
 		"",
 	} {
-		if _, err := taxonomyfile.Decode(strings.NewReader(raw)); err == nil {
+		if _, err := taxonomyfile.DecodePart(strings.NewReader(raw), "attributes"); err == nil {
 			t.Fatal("принят неверный YAML", raw)
 		}
 	}
-}
-
-func TestExampleFile(t *testing.T) {
-	file, err := os.Open("../../../taxonomy/example.yaml")
+	body, err := taxonomyfile.EncodePart(d, "attributes")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = file.Close() }()
-	if _, err := taxonomyfile.Decode(file); err != nil {
+	if _, err := taxonomyfile.DecodePart(strings.NewReader(string(body)), "attributes"); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := taxonomyfile.DecodePart(strings.NewReader(valid), "unknown"); err == nil {
+		t.Fatal("неизвестная часть")
 	}
 }

@@ -19,19 +19,41 @@ func TestCanonicalFiltersAndCoverage(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
 	index := fake.NewIndex()
-	store.SeedTaxonomy(taxonomy.Definition{Version: 1, Categories: []taxonomy.Category{{
-		ID:   "c1",
-		Slug: "c1",
-		Name: "Категория",
+	store.SeedTaxonomy(taxonomy.Definition{
 		Attributes: []taxonomy.Attribute{
-			{Code: "a1", Name: "Атрибут 1", Type: "enum", Values: []string{"v1", "v2"}, Facet: true},
+			{
+				Code:       "a1",
+				Name:       "Атрибут 1",
+				Type:       "enum",
+				Values:     []string{"v1", "v2"},
+				Facet:      true,
+				Dictionary: "a1",
+			},
 			{Code: "a2", Name: "Атрибут 2", Type: "number", Facet: true},
 			{Code: "a3", Name: "Атрибут 3", Type: "boolean", Facet: true},
 			{Code: "a4", Name: "Атрибут 4", Type: "string"},
 		},
-	}}})
+		Schemas: map[string]taxonomy.Schema{
+			"s1": {
+				Attributes: []string{"a1", "a2", "a3", "a4"},
+				Optional:   []string{"a1", "a2", "a3", "a4"},
+			},
+		},
+		Version: 1,
+		Categories: []taxonomy.Category{
+			{
+				ID:     "c1",
+				Slug:   "c1",
+				Name:   "Категория",
+				Schema: "s1",
+			},
+		},
+	})
 	for i := 0; i < 10; i++ {
-		attrs := map[string]json.RawMessage{"a2": json.RawMessage(fmt.Sprint(i)), "a4": json.RawMessage(`"Текст"`)}
+		attrs := map[string]json.RawMessage{
+			"a2": json.RawMessage(fmt.Sprint(i)),
+			"a4": json.RawMessage(`"Текст"`),
+		}
 		if i < 2 {
 			attrs["a1"] = json.RawMessage(`"v1"`)
 		}
@@ -77,16 +99,20 @@ func TestCanonicalFiltersAndCoverage(t *testing.T) {
 	if _, ok := found["attr.a4"]; ok {
 		t.Fatal("поле без facet показывается")
 	}
-	page, err = q.Search(ctx, ports.OfferQuery{Attributes: map[string]ports.AttributeFilter{
-		"a1": {Values: []string{"v1", "v2"}},
-		"a2": {Min: "1", Max: "1.5"},
-	}})
+	page, err = q.Search(ctx, ports.OfferQuery{
+		Attributes: map[string]ports.AttributeFilter{
+			"a1": {Values: []string{"v1", "v2"}},
+			"a2": {Min: "1", Max: "1.5"},
+		},
+	})
 	if err != nil || page.Total != 1 {
 		t.Fatalf("AND, OR, диапазон: %+v %v", page, err)
 	}
-	page, err = q.Search(ctx, ports.OfferQuery{Attributes: map[string]ports.AttributeFilter{
-		"a3": {Values: []string{"false"}},
-	}})
+	page, err = q.Search(ctx, ports.OfferQuery{
+		Attributes: map[string]ports.AttributeFilter{
+			"a3": {Values: []string{"false"}},
+		},
+	})
 	if err != nil || page.Total != 1 {
 		t.Fatalf("boolean false: %+v %v", page, err)
 	}

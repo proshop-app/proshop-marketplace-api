@@ -5,15 +5,19 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	app "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres/pgtest"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencedata"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
 )
 
@@ -23,6 +27,25 @@ func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
 	release, _, err := taxonomydata.Load()
 	if err != nil {
 		t.Fatal(err)
+	}
+	registry := appreference.NewService(
+		postgres.NewUnitOfWork(pool),
+		clock.System{},
+		&fake.IDs{},
+		&fake.Publisher{},
+		appreference.Config{Topic: "reference.changed"},
+	)
+	for _, attribute := range release.Attributes {
+		if attribute.Type != "enum" {
+			continue
+		}
+		delivery, _, err := referencedata.Load(os.DirFS("../../../deploy/reference/" + attribute.Dictionary))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := registry.Apply(ctx, delivery); err != nil {
+			t.Fatal(err)
+		}
 	}
 	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{})
 	results := make(chan taxonomy.ReleaseResult, 2)
@@ -112,7 +135,7 @@ func TestReleasePreservesOperatorChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	operator := testRelease(2, "b")
-	if err := repository.Load(ctx, taxonomy.Definition{Version: 2, Categories: operator.Categories}); err != nil {
+	if _, err := repository.LoadPart(ctx, "categories", operator.Definition(), 1); err != nil {
 		t.Fatal(err)
 	}
 	if result, err := service.Apply(ctx, release); err != nil || result.Changed || result.SnapshotVersion != 2 {
@@ -157,17 +180,17 @@ func TestReleaseFailureRollsBackSnapshot(t *testing.T) {
 
 func testRelease(version int64, suffix string) taxonomy.Release {
 	return taxonomy.Release{
-		Version:  version,
-		Checksum: strings.Repeat(suffix, 64),
-		Categories: []taxonomy.Category{{
-			ID:   "c" + suffix,
-			Slug: "c" + suffix,
-			Name: "Категория",
-			Attributes: []taxonomy.Attribute{{
-				Code: "a1",
-				Name: "Атрибут",
-				Type: "string",
-			}},
-		}},
+		Attributes: []taxonomy.Attribute{{Code: "a1", Name: "Атрибут", Type: "string"}},
+		Schemas:    map[string]taxonomy.Schema{"s1": {Attributes: []string{"a1"}, Optional: []string{"a1"}}},
+		Version:    version,
+		Checksum:   strings.Repeat(suffix, 64),
+		Categories: []taxonomy.Category{
+			{
+				ID:     "c" + suffix,
+				Slug:   "c" + suffix,
+				Name:   "Категория",
+				Schema: "s1",
+			},
+		},
 	}
 }
