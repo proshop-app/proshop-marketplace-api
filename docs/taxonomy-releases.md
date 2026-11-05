@@ -7,12 +7,13 @@ OpenSearch для загрузки не нужен. После установк�
 
 Покрытие начальной поставки — [29 направлений](taxonomy-coverage.md).
 Имена узлов, адреса категорий и целевой вид дерева — [taxonomy-structure.md](taxonomy-structure.md).
+Переход данных на YAML и одну версию набора — [taxonomy-data.md](taxonomy-data.md).
 Исходные файлы в `internal/infrastructure/taxonomydata/data/`:
 
-- `attributes.json` — общие определения атрибутов;
-- `schemas.json` — привязки и обязательность;
-- `categories.json` — дерево категорий;
-- `manifest.json` — номер поставки, SHA-256 файлов и счётчики покрытия.
+- `attributes.yaml` — общие определения атрибутов;
+- `schemas.yaml` — привязки и обязательность;
+- `categories.yaml` — дерево категорий;
+- `manifest.yaml` — номер поставки, SHA-256 файлов и счётчики покрытия.
 
 Это данные маркетплейса; в движке магазина товарных констант нет. API отдаёт
 полную схему каждой конечной категории без наследования полей от родителей.
@@ -23,9 +24,9 @@ OpenSearch для загрузки не нужен. После установк�
 
 ```bash
 make taxonomy-check
-python3 scripts/taxonomy-manifest.py
-make taxonomy-image TAXONOMY_IMAGE=proshop-marketplace-taxonomy:uno-1
-docker run --rm proshop-marketplace-taxonomy:uno-1 check
+go run ./cmd/taxonomy manifest
+make taxonomy-image TAXONOMY_IMAGE=proshop-marketplace-taxonomy:uno-4
+docker run --rm proshop-marketplace-taxonomy:uno-4 check
 ```
 
 Для загрузки оператор задаёт `DATABASE_URL` в своём окружении. Значение
@@ -33,13 +34,15 @@ docker run --rm proshop-marketplace-taxonomy:uno-1 check
 
 ```bash
 make migrate
-docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-1 apply
+make reference-apply
+docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-4 apply
 ```
 
 Адрес БД должен быть доступен из выбранной Docker-сети. Запуск из исходников
 после миграций — `make taxonomy-apply`. `make dev` выполняет оба шага
-последовательно перед запуском API. В Kubernetes Job `marketplace-taxonomy`
-запускается после `marketplace-migrate`. Локально и в production используется
+последовательно после миграций и `reference-apply`, перед запуском API. В Kubernetes Job `marketplace-taxonomy`
+запускается после `marketplace-migrate` и применения поставок словарей.
+Закрытые словари должны уже содержать confirmed-записи; иначе публикация отклоняется. Локально и в production используется
 один сохранённый образ; для production его можно закрепить по дайджесту.
 
 ## Повторы и обновление
@@ -60,18 +63,18 @@ docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-1 apply
 После проверки можно явно разрешить замену именно прочитанной версии:
 
 ```bash
-docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-2 apply --expected-version 5
+docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-4 apply --expected-version 5
 ```
 
 5 в примере — исходная версия из API. Если оператор успеет опубликовать
 другую версию, команда откажется её затирать. Это полная замена снимка,
 а не автоматическое слияние.
 
-Следующая поставка: изменить исходные JSON и перечень покрытия, создать
+Следующая поставка: изменить исходные YAML и перечень покрытия, создать
 новый манифест, проверить и выпустить новый образ:
 
 ```bash
-python3 scripts/taxonomy-manifest.py --release 3 --write
+go run ./cmd/taxonomy manifest --release 4 --write
 make taxonomy-check
 make test
 make lint
@@ -86,7 +89,7 @@ make lint
 отменяемой поставки:
 
 ```bash
-docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-2 rollback
+docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-4 rollback
 ```
 
 Откатывается только последняя поставка без последующих правок оператора.
@@ -115,3 +118,36 @@ docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-2 rollback
 существующего `id` нельзя менять или отдавать другому `id`. Откат поставки 3
 к снимку без адресов завершится конфликтом и потребует корректирующей поставки
 с сохранёнными адресами.
+
+## Поставка 4: нормализованный YAML-набор
+
+В образ встроены только attributes.yaml, schemas.yaml, categories.yaml и
+manifest.yaml. Манифест считает атрибуты со словарём (`dictionaries: 19`),
+а не дублирующиеся значения: 29 направлений, 1282 узла, 1085 листьев,
+142 схемы, 219 атрибутов. SHA-256 включает имена трёх файлов с нулевым
+разделителем и точные байты каждого файла в порядке attributes, schemas, categories.
+
+Команда `go run ./cmd/taxonomy manifest` проверяет исходные файлы на диске.
+`--release N --write` записывает новый манифест; изменение данных с прежним
+номером запрещено. Следующая после 4 поставка выпускается с `--release 5 --write`.
+Команда `check` проверяет встроенный комплект, обе проверки работают без БД.
+
+Снимки остаются в прежнем JSONB, миграций нет. Поставка 4 заменяет текущий
+снимок целиком, старые снимки не преобразуются. Откат к снимку старого
+развёрнутого формата (без глобальных атрибутов и схем) — конфликт.
+Откат к нормализованному снимку сохраняет именно его Values, не подставляет
+текущие значения реестра. Действуют ограничения эволюции: код нельзя удалить,
+type, unit и dictionary неизменны. Нужные исправления выпускаются новой поставкой.
+
+CLI `load` и `make taxonomy-load` удалены; оператор загружает отдельные части
+через API с If-Match. Старый PUT целого документа удалён.
+
+## Поставка 5: короткие имена направлений
+
+Имена десяти направлений длиннее 20 символов переносились на две строки в
+меню витрины. Поставка 5 даёт им короткое `name` для меню, а прежнее имя
+переносит в `title` для заголовка страницы: «Посуда и кухня» — «Посуда и
+товары для кухни». У направления «Оборудование» полное имя — «Оборудование
+и средства защиты»: рабочая одежда с поставки 3 живёт в «Одежде». Адреса
+`slug` не меняются. Атрибуты, схемы и остальное дерево — как в поставке 4.
+

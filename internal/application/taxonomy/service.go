@@ -2,9 +2,7 @@
 package taxonomy
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -41,39 +39,66 @@ func (s *Service) Current(ctx context.Context) (taxonomy.Definition, error) {
 	if d.Categories == nil {
 		d.Categories = []taxonomy.Category{}
 	}
+	if d.Attributes == nil {
+		d.Attributes = []taxonomy.Attribute{}
+	}
+	if d.Schemas == nil {
+		d.Schemas = map[string]taxonomy.Schema{}
+	}
 	return d, err
 }
 
-// Load — та же версия с теми же данными безопасна; версия назад или иные данные — конфликт.
-func (s *Service) Load(ctx context.Context, d taxonomy.Definition) error {
-	if err := d.Validate(); err != nil {
-		return err
-	}
-	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+// LoadPart соединяет часть с текущим снимком под той же блокировкой, что и публикация.
+func (s *Service) LoadPart(
+	ctx context.Context,
+	part string,
+	input taxonomy.Definition,
+	expected int64,
+) (int64, error) {
+	var version int64
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		r := tx.Taxonomy()
 		if err := r.Lock(ctx); err != nil {
 			return err
 		}
-		old, err := r.Current(ctx)
+		current, err := r.Current(ctx)
 		if err != nil {
 			return err
 		}
-		if d.Version <= old.Version {
-			a, _ := json.Marshal(d)
-			b, _ := json.Marshal(old)
-			if bytes.Equal(a, b) {
-				return nil
-			}
+		if expected != current.Version || current.Version >= taxonomy.MaxTaxonomyVersion {
 			return taxonomy.ErrConflict
 		}
-		if err := d.CheckEvolution(old); err != nil {
+		next := current
+		next.Version++
+		switch part {
+		case "attributes":
+			next.Attributes = input.Attributes
+		case "schemas":
+			next.Schemas = input.Schemas
+		case "categories":
+			next.Categories = input.Categories
+		default:
+			return taxonomy.ErrInvalid
+		}
+		if err := next.Validate(); err != nil {
 			return err
 		}
-		if err := r.Save(ctx, d, old.Version); err != nil {
+		if err := next.CheckEvolution(current); err != nil {
 			return err
 		}
-		return s.revalidate(ctx, tx, d)
+		if err := resolveDictionaries(ctx, tx.Reference(), &next); err != nil {
+			return err
+		}
+		if err := r.Save(ctx, next, current.Version); err != nil {
+			return err
+		}
+		if err := s.revalidate(ctx, tx, next); err != nil {
+			return err
+		}
+		version = next.Version
+		return nil
 	})
+	return version, err
 }
 
 func (s *Service) revalidate(ctx context.Context, tx ports.Tx, d taxonomy.Definition) error {

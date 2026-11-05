@@ -1,0 +1,1015 @@
+- code: brand
+  name: Бренд
+  type: string
+  facet: true
+  dictionary: brand
+- code: gtin
+  name: Штрихкод (GTIN)
+  type: string
+  facet: false
+- code: model
+  name: Модель
+  type: string
+  facet: true
+- code: country
+  name: Страна производства
+  type: string
+  facet: true
+  dictionary: country
+- code: material
+  name: Материал изделия
+  type: string
+  facet: true
+  dictionary: material
+- code: measurement_range
+  name: Диапазон измерения
+  type: string
+  facet: true
+- code: part_number
+  name: Код производителя
+  type: string
+  facet: true
+- code: compatibility
+  name: Совместимость
+  type: string
+  facet: true
+- code: purpose
+  name: Назначение
+  type: string
+  facet: true
+- code: size
+  name: Размер
+  type: string
+  facet: true
+- code: age
+  name: Возрастная группа
+  type: string
+  facet: true
+- code: equipment
+  name: Комплектация
+  type: string
+  facet: true
+- code: fragrance
+  name: Аромат
+  type: string
+  facet: true
+- code: ingredients
+  name: Состав продукта
+  type: string
+  facet: true
+- code: skin_type
+  name: Тип кожи
+  type: string
+  facet: true
+- code: hair_type
+  name: Тип волос
+  type: string
+  facet: true
+- code: skin_effect
+  name: Действие средства
+  type: string
+  facet: true
+- code: food_flavor
+  name: Вкус
+  type: string
+  facet: true
+- code: food_storage
+  name: Условия хранения
+  type: string
+  facet: true
+- code: pet_breed
+  name: Порода животного
+  type: string
+  facet: true
+- code: pet_age
+  name: Возраст животного
+  type: string
+  facet: true
+- code: target_species
+  name: Вид животного
+  type: string
+  facet: true
+- code: processor
+  name: Процессор
+  type: string
+  facet: true
+- code: gpu
+  name: Графический процессор
+  type: string
+  facet: true
+- code: chipset
+  name: Чипсет
+  type: string
+  facet: true
+- code: cpu_socket
+  name: Сокет процессора
+  type: string
+  facet: true
+- code: os
+  name: Операционная система
+  type: string
+  facet: true
+- code: interfaces
+  name: Интерфейсы подключения
+  type: string
+  facet: true
+- code: memory_type
+  name: Тип памяти
+  type: string
+  facet: true
+- code: resolution
+  name: Разрешение экрана
+  type: string
+  facet: true
+- code: camera_resolution
+  name: Разрешение камеры
+  type: string
+  facet: true
+- code: video_format
+  name: Формат видеозаписи
+  type: string
+  facet: true
+- code: lens_mount
+  name: Байонет объектива
+  type: string
+  facet: true
+- code: sensor_format
+  name: Формат матрицы
+  type: string
+  facet: true
+- code: focal_length
+  name: Фокусное расстояние
+  type: string
+  facet: true
+- code: connection
+  name: Способ подключения
+  type: string
+  facet: true
+- code: connector
+  name: Разъём
+  type: string
+  facet: true
+- code: network_standard
+  name: Стандарт связи
+  type: string
+  facet: true
+- code: supported_platform
+  name: Игровая платформа
+  type: string
+  facet: true
+- code: switch_type
+  name: Тип переключателей
+  type: string
+  facet: true
+- code: keyboard_layout
+  name: Раскладка клавиатуры
+  type: string
+  facet: true
+- code: drive_interface
+  name: Интерфейс накопителя
+  type: string
+  facet: true
+- code: drive_form_factor
+  name: Форм-фактор накопителя
+  type: string
+  facet: true
+- code: print_technology
+  name: Технология печати
+  type: string
+  facet: true
+- code: paper_format
+  name: Формат бумаги
+  type: string
+  facet: true
+- code: print_color
+  name: Цветность печати
+  type: string
+  facet: true
+- code: furniture_style
+  name: Стиль мебели
+  type: string
+  facet: true
+- code: upholstery
+  name: Материал обивки
+  type: string
+  facet: true
+- code: furniture_frame
+  name: Материал каркаса мебели
+  type: string
+  facet: true
+- code: mattress_filling
+  name: Наполнитель матраса
+  type: string
+  facet: true
+- code: fabric_composition
+  name: Состав ткани
+  type: string
+  facet: true
+- code: clothing_fit
+  name: Посадка одежды
+  type: string
+  facet: true
+- code: clothing_fastener
+  name: Застёжка одежды
+  type: string
+  facet: true
+- code: shoe_upper
+  name: Материал верха обуви
+  type: string
+  facet: true
+- code: shoe_lining
+  name: Материал подкладки обуви
+  type: string
+  facet: true
+- code: shoe_sole
+  name: Материал подошвы
+  type: string
+  facet: true
+- code: shoe_fastener
+  name: Застёжка обуви
+  type: string
+  facet: true
+- code: jewelry_insert
+  name: Вставка украшения
+  type: string
+  facet: true
+- code: jewelry_sample
+  name: Проба металла
+  type: string
+  facet: true
+- code: appliance_installation
+  name: Способ установки техники
+  type: string
+  facet: true
+- code: energy_class
+  name: Класс энергопотребления
+  type: string
+  facet: true
+- code: power_source
+  name: Источник питания
+  type: string
+  facet: true
+- code: tool_mount
+  name: Тип крепления оснастки
+  type: string
+  facet: true
+- code: fastener_standard
+  name: Стандарт крепежа
+  type: string
+  facet: true
+- code: thread_size
+  name: Размер резьбы
+  type: string
+  facet: true
+- code: paint_base
+  name: Основа лакокрасочного материала
+  type: string
+  facet: true
+- code: surface_type
+  name: Тип поверхности
+  type: string
+  facet: true
+- code: auto_make
+  name: Марка автомобиля
+  type: string
+  facet: true
+- code: auto_model
+  name: Модель автомобиля
+  type: string
+  facet: true
+- code: auto_engine
+  name: Тип двигателя
+  type: string
+  facet: true
+- code: auto_position
+  name: Место установки детали
+  type: string
+  facet: true
+- code: oil_viscosity
+  name: Вязкость масла
+  type: string
+  facet: true
+- code: oil_specification
+  name: Допуски масла
+  type: string
+  facet: true
+- code: tire_season
+  name: Сезонность шин
+  type: string
+  facet: true
+- code: tire_load_index
+  name: Индекс нагрузки шины
+  type: string
+  facet: true
+- code: tire_speed_index
+  name: Индекс скорости шины
+  type: string
+  facet: true
+- code: wheel_bolt_pattern
+  name: Разболтовка диска
+  type: string
+  facet: true
+- code: plant_variety
+  name: Сорт растения
+  type: string
+  facet: true
+- code: plant_species
+  name: Вид растения
+  type: string
+  facet: true
+- code: planting_period
+  name: Срок посадки
+  type: string
+  facet: true
+- code: flowering_period
+  name: Период цветения
+  type: string
+  facet: true
+- code: fertilizer_composition
+  name: Состав удобрения
+  type: string
+  facet: true
+- code: sport
+  name: Вид спорта
+  type: string
+  facet: true
+- code: bike_frame
+  name: Материал рамы велосипеда
+  type: string
+  facet: true
+- code: bike_brake
+  name: Тип тормозов велосипеда
+  type: string
+  facet: true
+- code: fishing_test
+  name: Тест удилища
+  type: string
+  facet: true
+- code: fishing_action
+  name: Строй удилища
+  type: string
+  facet: true
+- code: book_author
+  name: Автор книги
+  type: string
+  facet: true
+- code: book_publisher
+  name: Издательство
+  type: string
+  facet: true
+- code: book_isbn
+  name: ISBN
+  type: string
+  facet: true
+- code: book_language
+  name: Язык издания
+  type: string
+  facet: true
+- code: book_genre
+  name: Жанр издания
+  type: string
+  facet: true
+- code: book_series
+  name: Серия издания
+  type: string
+  facet: true
+- code: instrument_key
+  name: Тональность инструмента
+  type: string
+  facet: true
+- code: instrument_tuning
+  name: Строй инструмента
+  type: string
+  facet: true
+- code: art_technique
+  name: Художественная техника
+  type: string
+  facet: true
+- code: craft_theme
+  name: Тематика творчества
+  type: string
+  facet: true
+- code: industrial_standard
+  name: Стандарт изделия
+  type: string
+  facet: true
+- code: protection_class
+  name: Класс защиты
+  type: string
+  facet: true
+- code: filter_type
+  name: Тип фильтра
+  type: string
+  facet: true
+- code: food_category
+  name: Вид пищевого продукта
+  type: string
+  facet: true
+- code: food_diet
+  name: Особенности питания
+  type: string
+  facet: true
+- code: medical_application
+  name: Область применения изделия
+  type: string
+  facet: true
+- code: medical_size
+  name: Размер медицинского изделия
+  type: string
+  facet: true
+- code: color
+  name: Цвет
+  type: enum
+  facet: true
+  valuesMeta:
+    Белый:
+      hex: '#FFFFFF'
+    Чёрный:
+      hex: '#000000'
+    Серый:
+      hex: '#808080'
+    Серебристый:
+      hex: '#C0C0C0'
+    Бежевый:
+      hex: '#D8C5A3'
+    Коричневый:
+      hex: '#795548'
+    Красный:
+      hex: '#D32F2F'
+    Бордовый:
+      hex: '#800020'
+    Оранжевый:
+      hex: '#F57C00'
+    Жёлтый:
+      hex: '#FDD835'
+    Зелёный:
+      hex: '#388E3C'
+    Голубой:
+      hex: '#81D4FA'
+    Синий:
+      hex: '#1976D2'
+    Фиолетовый:
+      hex: '#7B1FA2'
+    Розовый:
+      hex: '#F48FB1'
+    Золотистый:
+      hex: '#D4AF37'
+    Прозрачный:
+      swatch: pattern
+    Разноцветный:
+      swatch: multicolor
+  dictionary: color
+- code: gender
+  name: Пол
+  type: enum
+  facet: true
+  dictionary: gender
+- code: season
+  name: Сезон
+  type: enum
+  facet: true
+  dictionary: season
+- code: body_material
+  name: Материал корпуса
+  type: enum
+  facet: true
+  dictionary: body_material
+- code: cookware_material
+  name: Материал посуды
+  type: enum
+  facet: true
+  dictionary: cookware_material
+- code: textile_material
+  name: Основной материал текстиля
+  type: enum
+  facet: true
+  dictionary: textile_material
+- code: jewelry_metal
+  name: Металл украшения
+  type: enum
+  facet: true
+  dictionary: jewelry_metal
+- code: book_binding
+  name: Переплёт
+  type: enum
+  facet: true
+  dictionary: book_binding
+- code: storage_type
+  name: Тип накопителя
+  type: enum
+  facet: true
+  dictionary: storage_type
+- code: screen_matrix
+  name: Тип матрицы экрана
+  type: enum
+  facet: true
+  dictionary: screen_matrix
+- code: battery_chemistry
+  name: Тип аккумулятора
+  type: enum
+  facet: true
+  dictionary: battery_chemistry
+- code: firmness
+  name: Жёсткость матраса
+  type: enum
+  facet: true
+  dictionary: firmness
+- code: length
+  name: Длина изделия
+  type: number
+  facet: true
+  unit: см
+- code: width
+  name: Ширина изделия
+  type: number
+  facet: true
+  unit: см
+- code: height
+  name: Высота изделия
+  type: number
+  facet: true
+  unit: см
+- code: diameter
+  name: Диаметр изделия
+  type: number
+  facet: true
+  unit: см
+- code: weight
+  name: Масса изделия
+  type: number
+  facet: true
+  unit: г
+- code: net_weight
+  name: Масса нетто
+  type: number
+  facet: true
+  unit: г
+- code: volume
+  name: Объём
+  type: number
+  facet: true
+  unit: мл
+- code: count
+  name: Количество в упаковке
+  type: number
+  facet: true
+  unit: шт.
+- code: power
+  name: Мощность
+  type: number
+  facet: true
+  unit: Вт
+- code: voltage
+  name: Напряжение питания
+  type: number
+  facet: true
+  unit: В
+- code: battery_capacity
+  name: Ёмкость аккумулятора
+  type: number
+  facet: true
+  unit: мА·ч
+- code: battery_energy
+  name: Энергоёмкость аккумулятора
+  type: number
+  facet: true
+  unit: Вт·ч
+- code: ram
+  name: Объём оперативной памяти
+  type: number
+  facet: true
+  unit: ГБ
+- code: storage_capacity
+  name: Ёмкость накопителя
+  type: number
+  facet: true
+  unit: ГБ
+- code: screen_diagonal
+  name: Диагональ экрана
+  type: number
+  facet: true
+  unit: дюйм
+- code: refresh_rate
+  name: Частота обновления экрана
+  type: number
+  facet: true
+  unit: Гц
+- code: cpu_cores
+  name: Количество ядер процессора
+  type: number
+  facet: true
+  unit: шт.
+- code: cpu_frequency
+  name: Частота процессора
+  type: number
+  facet: true
+  unit: ГГц
+- code: gpu_memory
+  name: Объём видеопамяти
+  type: number
+  facet: true
+  unit: ГБ
+- code: memory_frequency
+  name: Частота памяти
+  type: number
+  facet: true
+  unit: МГц
+- code: network_speed
+  name: Скорость передачи данных
+  type: number
+  facet: true
+  unit: Мбит/с
+- code: cable_length
+  name: Длина кабеля
+  type: number
+  facet: true
+  unit: м
+- code: capacity_l
+  name: Вместимость
+  type: number
+  facet: true
+  unit: л
+- code: load_kg
+  name: Допустимая нагрузка
+  type: number
+  facet: true
+  unit: кг
+- code: wash_load
+  name: Загрузка белья
+  type: number
+  facet: true
+  unit: кг
+- code: spin_speed
+  name: Скорость отжима
+  type: number
+  facet: true
+  unit: об/мин
+- code: noise_level
+  name: Уровень шума
+  type: number
+  facet: true
+  unit: дБ
+- code: room_area
+  name: Обслуживаемая площадь
+  type: number
+  facet: true
+  unit: м²
+- code: burner_count
+  name: Количество конфорок
+  type: number
+  facet: true
+  unit: шт.
+- code: place_settings
+  name: Количество комплектов посуды
+  type: number
+  facet: true
+  unit: шт.
+- code: fabric_density
+  name: Плотность ткани
+  type: number
+  facet: true
+  unit: г/м²
+- code: bed_width
+  name: Ширина спального места
+  type: number
+  facet: true
+  unit: см
+- code: bed_length
+  name: Длина спального места
+  type: number
+  facet: true
+  unit: см
+- code: heel_height
+  name: Высота каблука
+  type: number
+  facet: true
+  unit: см
+- code: jewelry_weight
+  name: Масса украшения
+  type: number
+  facet: true
+  unit: г
+- code: shelf_life
+  name: Срок годности
+  type: number
+  facet: true
+  unit: мес.
+- code: spf
+  name: Солнцезащитный фактор SPF
+  type: number
+  facet: true
+  unit: SPF
+- code: food_energy
+  name: Энергетическая ценность
+  type: number
+  facet: true
+  unit: ккал/100 г
+- code: food_protein
+  name: Белки
+  type: number
+  facet: true
+  unit: г/100 г
+- code: food_fat
+  name: Жиры
+  type: number
+  facet: true
+  unit: г/100 г
+- code: food_carbohydrate
+  name: Углеводы
+  type: number
+  facet: true
+  unit: г/100 г
+- code: min_age
+  name: Минимальный возраст
+  type: number
+  facet: true
+  unit: мес.
+- code: toy_parts
+  name: Количество деталей
+  type: number
+  facet: true
+  unit: шт.
+- code: puzzle_parts
+  name: Количество элементов пазла
+  type: number
+  facet: true
+  unit: шт.
+- code: players
+  name: Количество игроков
+  type: number
+  facet: true
+  unit: чел.
+- code: wheel_diameter
+  name: Диаметр колёс
+  type: number
+  facet: true
+  unit: дюйм
+- code: frame_size
+  name: Размер рамы
+  type: number
+  facet: true
+  unit: дюйм
+- code: bike_gears
+  name: Количество скоростей велосипеда
+  type: number
+  facet: true
+  unit: шт.
+- code: tent_places
+  name: Количество мест палатки
+  type: number
+  facet: true
+  unit: чел.
+- code: water_resistance
+  name: Водостойкость ткани
+  type: number
+  facet: true
+  unit: мм вод. ст.
+- code: comfort_temperature
+  name: Температура комфорта
+  type: number
+  facet: true
+  unit: °C
+- code: rod_length
+  name: Длина удилища
+  type: number
+  facet: true
+  unit: м
+- code: line_diameter
+  name: Диаметр лески
+  type: number
+  facet: true
+  unit: мм
+- code: tool_speed
+  name: Частота вращения
+  type: number
+  facet: true
+  unit: об/мин
+- code: torque
+  name: Крутящий момент
+  type: number
+  facet: true
+  unit: Н·м
+- code: tool_diameter
+  name: Рабочий диаметр оснастки
+  type: number
+  facet: true
+  unit: мм
+- code: thread_diameter
+  name: Диаметр резьбы
+  type: number
+  facet: true
+  unit: мм
+- code: fastener_length
+  name: Длина крепежа
+  type: number
+  facet: true
+  unit: мм
+- code: coverage_area
+  name: Площадь покрытия
+  type: number
+  facet: true
+  unit: м²
+- code: drying_time
+  name: Время высыхания
+  type: number
+  facet: true
+  unit: ч
+- code: temperature_max
+  name: Максимальная рабочая температура
+  type: number
+  facet: true
+  unit: °C
+- code: flow_rate
+  name: Производительность потока
+  type: number
+  facet: true
+  unit: л/мин
+- code: pressure
+  name: Рабочее давление
+  type: number
+  facet: true
+  unit: бар
+- code: tire_width
+  name: Ширина шины
+  type: number
+  facet: true
+  unit: мм
+- code: tire_profile
+  name: Профиль шины
+  type: number
+  facet: true
+  unit: '%'
+- code: rim_diameter
+  name: Посадочный диаметр
+  type: number
+  facet: true
+  unit: дюйм
+- code: rim_width
+  name: Ширина диска
+  type: number
+  facet: true
+  unit: дюйм
+- code: wheel_offset
+  name: Вылет диска
+  type: number
+  facet: true
+  unit: мм
+- code: car_battery_capacity
+  name: Ёмкость автомобильного аккумулятора
+  type: number
+  facet: true
+  unit: А·ч
+- code: starting_current
+  name: Пусковой ток
+  type: number
+  facet: true
+  unit: А
+- code: book_pages
+  name: Количество страниц
+  type: number
+  facet: true
+  unit: стр.
+- code: book_year
+  name: Год издания
+  type: number
+  facet: true
+  unit: год
+- code: paper_density
+  name: Плотность бумаги
+  type: number
+  facet: true
+  unit: г/м²
+- code: string_count
+  name: Количество струн
+  type: number
+  facet: true
+  unit: шт.
+- code: key_count
+  name: Количество клавиш
+  type: number
+  facet: true
+  unit: шт.
+- code: audio_channels
+  name: Количество аудиоканалов
+  type: number
+  facet: true
+  unit: шт.
+- code: plant_height
+  name: Высота растения
+  type: number
+  facet: true
+  unit: см
+- code: seed_count
+  name: Количество семян
+  type: number
+  facet: true
+  unit: шт.
+- code: wire_section
+  name: Сечение проводника
+  type: number
+  facet: true
+  unit: мм²
+- code: current
+  name: Номинальный ток
+  type: number
+  facet: true
+  unit: А
+- code: light_temperature
+  name: Цветовая температура
+  type: number
+  facet: true
+  unit: К
+- code: light_flux
+  name: Световой поток
+  type: number
+  facet: true
+  unit: лм
+- code: frequency
+  name: Рабочая частота
+  type: number
+  facet: true
+  unit: Гц
+- code: wireless
+  name: Беспроводное подключение
+  type: boolean
+  facet: true
+- code: nfc
+  name: Поддержка NFC
+  type: boolean
+  facet: true
+- code: waterproof
+  name: Защита от воды
+  type: boolean
+  facet: true
+- code: backlight
+  name: Подсветка
+  type: boolean
+  facet: true
+- code: touchscreen
+  name: Сенсорный экран
+  type: boolean
+  facet: true
+- code: induction
+  name: Совместимость с индукцией
+  type: boolean
+  facet: true
+- code: dishwasher_safe
+  name: Можно мыть в посудомоечной машине
+  type: boolean
+  facet: true
+- code: foldable
+  name: Складная конструкция
+  type: boolean
+  facet: true
+- code: orthopedic
+  name: Ортопедические свойства
+  type: boolean
+  facet: true
+- code: hood
+  name: Капюшон
+  type: boolean
+  facet: true
+- code: insulated
+  name: Утепление
+  type: boolean
+  facet: true
+- code: studded
+  name: Шипованная шина
+  type: boolean
+  facet: true
+- code: food_sugar_free
+  name: Без добавленного сахара
+  type: boolean
+  facet: true
+- code: food_gluten_free
+  name: Без глютена
+  type: boolean
+  facet: true
+- code: food_lactose_free
+  name: Без лактозы
+  type: boolean
+  facet: true
+- code: sterile
+  name: Стерильность
+  type: boolean
+  facet: true
+- code: size_clothing
+  name: Размер одежды
+  type: enum
+  facet: true
+  dictionary: size_clothing
+- code: size_shoes_eu
+  name: Размер обуви (EU)
+  type: enum
+  facet: true
+  dictionary: size_shoes_eu
+- code: size_kids_height
+  name: Размер по росту (см)
+  type: enum
+  facet: true
+  dictionary: size_kids_height
+- code: size_ring
+  name: Размер кольца
+  type: enum
+  facet: true
+  dictionary: size_ring

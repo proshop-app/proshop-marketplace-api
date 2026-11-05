@@ -2,6 +2,9 @@ package moderation_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -251,17 +254,30 @@ func TestTaxonomyAndMissingVerdict(t *testing.T) {
 	e.project(t, "p1", 1)
 	ctx := context.Background()
 	service := apptaxonomy.NewService(e.store, e.clock, e.service)
+	// Поставка проходит полную проверку набора: листу нужна схема, схеме — атрибут.
 	definition := taxonomy.Definition{
 		Version:    2,
-		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория", Slug: "c1", Moderation: "forbidden"}},
+		Attributes: []taxonomy.Attribute{{Code: "a1", Name: "Атрибут", Type: "string"}},
+		Schemas:    map[string]taxonomy.Schema{"s1": {Attributes: []string{"a1"}, Optional: []string{"a1"}}},
+		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория", Slug: "c1", Schema: "s1", Moderation: "forbidden"}},
 	}
-	if err := service.Load(ctx, definition); err != nil {
+	body, _ := json.Marshal(definition)
+	checksum := sha256.Sum256(body)
+	_, err := service.Apply(ctx, taxonomy.Release{
+		Version:         definition.Version,
+		Checksum:        hex.EncodeToString(checksum[:]),
+		Attributes:      definition.Attributes,
+		Schemas:         definition.Schemas,
+		Categories:      definition.Categories,
+		ExpectedVersion: 1,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if e.view(t, "p1").Verdict.Status != moderation.Rejected {
 		t.Fatal("политика не применена")
 	}
-	err := e.store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	err = e.store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		state, err := tx.Offers().Offer(ctx, "t1", "p1")
 		if err != nil {
 			return err

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,34 +45,28 @@ func TestProjectionToIndex(t *testing.T) {
 	now := clock.System{}
 	uow := postgres.NewUnitOfWork(pool)
 
-	if err := apptaxonomy.NewService(uow, now).Load(ctx, taxonomy.Definition{
+	if _, err := apptaxonomy.NewService(uow, now).Apply(ctx, taxonomy.Release{
+		Checksum: strings.Repeat("a", 64),
+		Attributes: []taxonomy.Attribute{
+			{
+				Code:  "a1",
+				Name:  "Атрибут 1",
+				Type:  "string",
+				Facet: true,
+			},
+			{Code: "a2", Name: "Атрибут 2", Type: "number", Facet: true},
+			{Code: "a3", Name: "Атрибут 3", Type: "boolean", Facet: true},
+		},
+		Schemas: map[string]taxonomy.Schema{
+			"s1": {Attributes: []string{"a1", "a2", "a3"}, Optional: []string{"a2", "a3"}},
+		},
 		Version: 1,
 		Categories: []taxonomy.Category{
 			{
-				ID:   "c1",
-				Slug: "c1",
-				Name: "Категория",
-				Attributes: []taxonomy.Attribute{
-					{
-						Code:     "a1",
-						Name:     "Атрибут 1",
-						Type:     "string",
-						Required: true,
-						Facet:    true,
-					},
-					{
-						Code:  "a2",
-						Name:  "Атрибут 2",
-						Type:  "number",
-						Facet: true,
-					},
-					{
-						Code:  "a3",
-						Name:  "Атрибут 3",
-						Type:  "boolean",
-						Facet: true,
-					},
-				},
+				ID:     "c1",
+				Slug:   "c1",
+				Name:   "Категория",
+				Schema: "s1",
 			},
 		},
 	}); err != nil {
@@ -165,10 +160,12 @@ func TestProjectionToIndex(t *testing.T) {
 						},
 						Name:    "Товар " + string(product),
 						Visible: true,
-						Categories: []catalog.Category{{
-							ID:   "local",
-							Name: "Категория магазина",
-						}},
+						Categories: []catalog.Category{
+							{
+								ID:   "local",
+								Name: "Категория магазина",
+							},
+						},
 					},
 					PriceProfiles: []catalog.PriceProfile{
 						{

@@ -4,8 +4,8 @@ package taxonomy
 import (
 	"encoding/json"
 	"math"
-	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -32,34 +32,54 @@ type ValueMeta struct {
 	Swatch string `json:"swatch,omitempty" yaml:"swatch,omitempty"`
 }
 
-// Attribute обслуживает наблюдение за ключами модели.
 // Attribute — скалярное поле; код имеет один тип и единицу во всей площадке.
 type Attribute struct {
 	ValuesMeta map[string]ValueMeta `json:"valuesMeta,omitempty" yaml:"valuesMeta,omitempty"`
 	Code       string               `json:"code" yaml:"code"`
 	Name       string               `json:"name" yaml:"name"`
 	Type       string               `json:"type" yaml:"type"`
-	Required   bool                 `json:"required" yaml:"required"`
-	Values     []string             `json:"values,omitempty" yaml:"values,omitempty"`
+	Dictionary string               `json:"dictionary,omitempty" yaml:"dictionary,omitempty"`
+	Values     []string             `json:"values,omitempty" yaml:"-"`
 	Unit       string               `json:"unit,omitempty" yaml:"unit,omitempty"`
 	Facet      bool                 `json:"facet" yaml:"facet"`
 }
 
-// Category — узел дерева; схема полная, наследования атрибутов нет.
+// Category ссылается на схему только в листе, чтобы дерево не дублировало атрибуты.
 type Category struct {
-	Moderation string      `json:"moderation,omitempty" yaml:"moderation,omitempty"`
-	ID         string      `json:"id" yaml:"id"`
-	Name       string      `json:"name" yaml:"name"`
-	Title      string      `json:"title,omitempty" yaml:"title,omitempty"`
-	Slug       string      `json:"slug" yaml:"slug"`
-	Attributes []Attribute `json:"attributes" yaml:"attributes"`
-	Children   []Category  `json:"children" yaml:"children"`
+	ID     string `json:"id" yaml:"id"`
+	Name   string `json:"name" yaml:"name"`
+	Title  string `json:"title,omitempty" yaml:"title,omitempty"`
+	Slug   string `json:"slug" yaml:"slug"`
+	Schema string `json:"schema,omitempty" yaml:"schema,omitempty"`
+	// Moderation — политика допуска узла: auto, manual или forbidden; пусто — наследуется.
+	Moderation string     `json:"moderation,omitempty" yaml:"moderation,omitempty"`
+	Children   []Category `json:"children,omitempty" yaml:"children,omitempty"`
+}
+
+// Schema хранит порядок полей и исключения из обязательности по умолчанию.
+type Schema struct {
+	Attributes []string `json:"attributes" yaml:"attributes"`
+	Optional   []string `json:"optional,omitempty" yaml:"optional,omitempty"`
+}
+
+// SchemaAttribute содержит обязательность только в контексте схемы.
+type SchemaAttribute struct {
+	Attribute
+	Required bool `json:"required"`
+}
+
+// CategorySchema собирается из одного снимка, без обращения к реестру.
+type CategorySchema struct {
+	Category
+	Attributes []SchemaAttribute `json:"attributes"`
 }
 
 // Definition — неизменяемый снимок версии таксономии.
 type Definition struct {
-	Version    int64      `json:"version" yaml:"version"`
-	Categories []Category `json:"categories" yaml:"categories"`
+	Version    int64             `json:"version" yaml:"version"`
+	Attributes []Attribute       `json:"attributes" yaml:"attributes"`
+	Schemas    map[string]Schema `json:"schemas" yaml:"schemas"`
+	Categories []Category        `json:"categories" yaml:"categories"`
 }
 
 // Card — отдельный блок площадки в проекции магазина.
@@ -100,13 +120,16 @@ func ValidCode(code string) bool { return codePattern.MatchString(code) }
 
 // Validate проверяет дерево и согласованность глобальных кодов.
 func (d Definition) Validate() error {
-	if d.Version < 1 || len(d.Categories) == 0 {
+	if d.Version < 1 || d.Version > MaxTaxonomyVersion || len(d.Categories) == 0 {
 		return ErrInvalid.WithMessage("нужны положительная версия и категории")
 	}
 	ids := map[string]bool{}
 	slugs := map[string]bool{}
 	fullNames := map[string]bool{}
-	codes := map[string]Attribute{}
+	codes, err := d.validateSchemas()
+	if err != nil {
+		return err
+	}
 	var walk func([]Category, int) error
 	walk = func(categories []Category, depth int) error {
 		if depth > MaxDepth && len(categories) > 0 {
@@ -138,19 +161,12 @@ func (d Definition) Validate() error {
 			slugs[c.Slug] = true
 			fullNames[c.FullName()] = true
 			ids[c.ID] = true
-			local := map[string]bool{}
-			for _, a := range c.Attributes {
-				if err := a.validate(); err != nil {
-					return err
+			if len(c.Children) > 0 {
+				if c.Schema != "" {
+					return ErrInvalid.WithMessage("у раздела не может быть схемы")
 				}
-				if local[a.Code] {
-					return ErrInvalid.WithMessage("повтор кода атрибута в категории")
-				}
-				local[a.Code] = true
-				if old, ok := codes[a.Code]; ok && !sameField(old, a) {
-					return ErrInvalid.WithMessage("код атрибута имеет разные определения")
-				}
-				codes[a.Code] = a
+			} else if _, exists := d.Schemas[c.Schema]; !exists {
+				return ErrInvalid.WithMessage("неизвестная схема листа: " + c.ID)
 			}
 			if err := walk(c.Children, depth+1); err != nil {
 				return err
@@ -171,12 +187,15 @@ func (a Attribute) validate() error {
 	if !ValidCode(a.Code) || strings.TrimSpace(a.Name) == "" || utf8.RuneCountInString(a.Name) > 256 {
 		return ErrInvalid.WithMessage("неверный код или имя атрибута")
 	}
+	if a.Dictionary != "" && (!ValidCode(a.Dictionary) || (a.Type != "enum" && a.Type != "string")) {
+		return ErrInvalid.WithMessage("словарь допустим только у enum и string")
+	}
 	if err := a.validateValuesMeta(); err != nil {
 		return err
 	}
 	switch a.Type {
 	case "enum":
-		if len(a.Values) == 0 || len(a.Values) > 256 || a.Unit != "" {
+		if a.Dictionary == "" || len(a.Values) > 256 || a.Unit != "" {
 			return ErrInvalid
 		}
 		seen := map[string]bool{}
@@ -196,29 +215,50 @@ func (a Attribute) validate() error {
 	return nil
 }
 
-func sameField(a, b Attribute) bool {
-	return a.Type == b.Type && a.Unit == b.Unit && a.Name == b.Name && a.Facet == b.Facet &&
-		reflect.DeepEqual(a.Values, b.Values) && reflect.DeepEqual(a.ValuesMeta, b.ValuesMeta)
-}
-
-// Fields — глобальные определения кодов, обязательность зависит от категории.
-func (d Definition) Fields() map[string]Attribute {
-	out := map[string]Attribute{}
-	var walk func([]Category)
-	walk = func(categories []Category) {
-		for _, c := range categories {
-			for _, a := range c.Attributes {
-				out[a.Code] = a
+func (d Definition) validateSchemas() (map[string]Attribute, error) {
+	fields := map[string]Attribute{}
+	for _, a := range d.Attributes {
+		if err := a.validate(); err != nil {
+			return nil, err
+		}
+		if _, exists := fields[a.Code]; exists {
+			return nil, ErrInvalid.WithMessage("повтор кода атрибута")
+		}
+		fields[a.Code] = a
+	}
+	for key, schema := range d.Schemas {
+		if !ValidCode(key) || len(schema.Attributes) == 0 {
+			return nil, ErrInvalid.WithMessage("пустая или неверная схема")
+		}
+		seen := map[string]bool{}
+		for _, code := range schema.Attributes {
+			if _, exists := fields[code]; !exists || seen[code] {
+				return nil, ErrInvalid.WithMessage("неверная ссылка схемы")
 			}
-			walk(c.Children)
+			seen[code] = true
+		}
+		optional := map[string]bool{}
+		for _, code := range schema.Optional {
+			if !seen[code] || optional[code] {
+				return nil, ErrInvalid.WithMessage("неверный optional")
+			}
+			optional[code] = true
 		}
 	}
-	walk(d.Categories)
+	return fields, nil
+}
+
+// Fields возвращает глобальные определения для поиска по нескольким категориям.
+func (d Definition) Fields() map[string]Attribute {
+	out := map[string]Attribute{}
+	for _, a := range d.Attributes {
+		out[a.Code] = a
+	}
 	return out
 }
 
 // CheckEvolution сохраняет адреса ссылок и типы существующих динамических полей.
-// Коды сохраняются хотя бы в одной схеме, чтобы удалённый код нельзя было переиспользовать.
+// Глобальные коды сохраняются даже вне схем, чтобы их нельзя было переиспользовать.
 func (d Definition) CheckEvolution(old Definition) error {
 	previousSlugs := old.categorySlugs()
 	nextSlugs := d.categorySlugs()
@@ -239,8 +279,9 @@ func (d Definition) CheckEvolution(old Definition) error {
 	fields := d.Fields()
 	for code, previous := range old.Fields() {
 		next, ok := fields[code]
-		if !ok || next.Type != previous.Type || next.Unit != previous.Unit {
-			return ErrConflict.WithMessage("нельзя удалить глобальный код, изменить его тип или единицу: " + code)
+		if !ok || next.Type != previous.Type || next.Unit != previous.Unit ||
+			next.Dictionary != previous.Dictionary {
+			return ErrConflict.WithMessage("нельзя удалить код или изменить тип, единицу, словарь: " + code)
 		}
 	}
 	return nil
@@ -260,7 +301,7 @@ func (d Definition) categorySlugs() map[string]string {
 }
 
 // Category возвращает полную схему и путь от корня до узла.
-func (d Definition) Category(id string) (Category, []string, bool) {
+func (d Definition) Category(id string) (CategorySchema, []string, bool) {
 	var find func([]Category, []string) (Category, []string, bool)
 	find = func(categories []Category, path []string) (Category, []string, bool) {
 		for _, c := range categories {
@@ -274,12 +315,26 @@ func (d Definition) Category(id string) (Category, []string, bool) {
 		}
 		return Category{}, nil, false
 	}
-	return find(d.Categories, nil)
+	category, path, ok := find(d.Categories, nil)
+	result := CategorySchema{Category: category, Attributes: []SchemaAttribute{}}
+	fields := d.Fields()
+	schema := d.Schemas[category.Schema]
+	for _, code := range schema.Attributes {
+		result.Attributes = append(result.Attributes, SchemaAttribute{
+			Attribute: fields[code],
+			Required:  !slices.Contains(schema.Optional, code),
+		})
+	}
+	return result, path, ok
 }
 
 // Check проверяет все поля, собирая ошибки в детерминированном порядке.
 func (d Definition) Check(card *Card) Publication {
-	p := Publication{Version: d.Version, Attributes: map[string]json.RawMessage{}, Issues: []Issue{}}
+	p := Publication{
+		Version:    d.Version,
+		Attributes: map[string]json.RawMessage{},
+		Issues:     []Issue{},
+	}
 	if card == nil {
 		p.Issues = append(p.Issues, Issue{Code: "taxonomy.card_missing"})
 		return p
@@ -292,7 +347,7 @@ func (d Definition) Check(card *Card) Publication {
 	}
 	p.CategoryPath = path
 	p.CategoryName = category.FullName()
-	fields := map[string]Attribute{}
+	fields := map[string]SchemaAttribute{}
 	for _, a := range category.Attributes {
 		fields[a.Code] = a
 		raw, exists := card.Attributes[a.Code]

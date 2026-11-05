@@ -1,4 +1,4 @@
-// Package taxonomydata компилирует собственные данные uno в полный контракт таксономии.
+// Package taxonomydata проверяет нормализованный комплект до подключения к БД.
 package taxonomydata
 
 import (
@@ -6,12 +6,12 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
@@ -19,169 +19,100 @@ import (
 const dataDirectory = "data/"
 
 var (
-	//go:embed data/*.json
+	//go:embed data/*.yaml
 	bundled   embed.FS
-	dataFiles = []string{"attributes.json", "schemas.json", "categories.json"}
-	// ErrInvalidBundle — данные расходятся с манифестом или нарушают ссылки схем.
+	dataFiles = []string{"attributes.yaml", "schemas.yaml", "categories.yaml"}
+	// ErrInvalidBundle отделяет ошибки файлов поставки от ошибок структуры домена.
 	ErrInvalidBundle = errors.New("некорректный комплект данных каталога")
 )
 
-// Coverage — проверяемый охват поставки, а не обещание перечислить все товары мира.
+// Coverage проверяет полноту привязок поставки.
 type Coverage struct {
-	Directions int `json:"directions"`
-	Categories int `json:"categories"`
-	Leaves     int `json:"leaves"`
-	Schemas    int `json:"schemas"`
-	Attributes int `json:"attributes"`
-	Values     int `json:"values"`
+	Directions   int `json:"directions" yaml:"directions"`
+	Categories   int `json:"categories" yaml:"categories"`
+	Leaves       int `json:"leaves" yaml:"leaves"`
+	Schemas      int `json:"schemas" yaml:"schemas"`
+	Attributes   int `json:"attributes" yaml:"attributes"`
+	Dictionaries int `json:"dictionaries" yaml:"dictionaries"`
 }
 
-type manifest struct {
-	Release  int64    `json:"release"`
-	Checksum string   `json:"checksum"`
-	Coverage Coverage `json:"coverage"`
-}
-
-type attributeSchema struct {
-	Attributes []string `json:"attributes"`
-	Required   []string `json:"required"`
-}
-
-type categorySource struct {
-	ID       string           `json:"id"`
-	Name     string           `json:"name"`
-	Title    string           `json:"title,omitempty"`
-	Slug     string           `json:"slug"`
-	Schema   string           `json:"schema,omitempty"`
-	Children []categorySource `json:"children,omitempty"`
-}
-
-type compiler struct {
-	definitions map[string]taxonomy.Attribute
-	schemas     map[string]attributeSchema
-	usedSchemas map[string]bool
-	usedFields  map[string]bool
-	coverage    Coverage
+// Manifest связывает номер поставки с точными байтами трёх файлов.
+type Manifest struct {
+	Release  int64    `json:"release" yaml:"release"`
+	Checksum string   `json:"checksum" yaml:"checksum"`
+	Coverage Coverage `json:"coverage" yaml:"coverage"`
 }
 
 // Load проверяет встроенный комплект до подключения к БД.
-func Load() (taxonomy.Release, Coverage, error) {
-	return load(bundled)
-}
+func Load() (taxonomy.Release, Coverage, error) { return load(bundled) }
 
 func load(source fs.FS) (taxonomy.Release, Coverage, error) {
-	var header manifest
-	var definitions []taxonomy.Attribute
-	var categories []categorySource
-	state := compiler{
-		definitions: make(map[string]taxonomy.Attribute),
-		usedSchemas: make(map[string]bool),
-		usedFields:  make(map[string]bool),
+	var header Manifest
+	if err := decodeFile(source, "manifest.yaml", &header); err != nil {
+		return taxonomy.Release{}, Coverage{}, err
 	}
+	release, coverage, err := describe(source)
+	if err != nil {
+		return release, coverage, err
+	}
+	release.Version = header.Release
+	if release.Checksum != header.Checksum || coverage != header.Coverage {
+		return taxonomy.Release{}, Coverage{}, ErrInvalidBundle
+	}
+	return release, coverage, taxonomy.ValidateRelease(release)
+}
+
+func describe(source fs.FS) (taxonomy.Release, Coverage, error) {
+	release := taxonomy.Release{Version: 1}
+	var coverage Coverage
 	for file, target := range map[string]any{
-		"manifest.json":   &header,
-		"attributes.json": &definitions,
-		"schemas.json":    &state.schemas,
-		"categories.json": &categories,
+		"attributes.yaml": &release.Attributes,
+		"schemas.yaml":    &release.Schemas,
+		"categories.yaml": &release.Categories,
 	} {
 		if err := decodeFile(source, file, target); err != nil {
-			return taxonomy.Release{}, Coverage{}, err
+			return release, coverage, err
 		}
 	}
 	checksum, err := bundleChecksum(source)
-	if err != nil || checksum != header.Checksum {
-		return taxonomy.Release{}, Coverage{}, ErrInvalidBundle
+	if err != nil {
+		return release, coverage, err
 	}
-	for _, definition := range definitions {
-		if _, exists := state.definitions[definition.Code]; exists || definition.Required {
-			return taxonomy.Release{}, Coverage{}, ErrInvalidBundle
-		}
-		state.definitions[definition.Code] = definition
-		state.coverage.Values += len(definition.Values)
-	}
-	state.coverage.Directions = len(categories)
-	state.coverage.Attributes = len(definitions)
-	state.coverage.Schemas = len(state.schemas)
-	tree, err := state.compile(categories)
-	if err != nil || state.coverage != header.Coverage || len(state.usedSchemas) != len(state.schemas) ||
-		len(state.usedFields) != len(definitions) {
-		return taxonomy.Release{}, Coverage{}, ErrInvalidBundle
-	}
-	release := taxonomy.Release{
-		Version:    header.Release,
-		Checksum:   header.Checksum,
-		Categories: tree,
-	}
+	release.Checksum = checksum
 	if err := taxonomy.ValidateRelease(release); err != nil {
-		return taxonomy.Release{}, Coverage{}, err
+		return release, coverage, err
 	}
-
-	return release, state.coverage, nil
-}
-
-func (c *compiler) compile(sources []categorySource) ([]taxonomy.Category, error) {
-	categories := make([]taxonomy.Category, 0, len(sources))
-	for _, source := range sources {
-		c.coverage.Categories++
-		category := taxonomy.Category{
-			ID:         source.ID,
-			Name:       source.Name,
-			Title:      source.Title,
-			Slug:       source.Slug,
-			Attributes: []taxonomy.Attribute{},
-			Children:   []taxonomy.Category{},
-		}
-		var err error
-		if len(source.Children) > 0 {
-			if source.Schema != "" {
-				return nil, ErrInvalidBundle
+	coverage.Directions = len(release.Categories)
+	coverage.Attributes = len(release.Attributes)
+	coverage.Schemas = len(release.Schemas)
+	usedSchemas := map[string]bool{}
+	usedFields := map[string]bool{}
+	var walk func([]taxonomy.Category)
+	walk = func(categories []taxonomy.Category) {
+		for _, category := range categories {
+			coverage.Categories++
+			if len(category.Children) == 0 {
+				coverage.Leaves++
+				usedSchemas[category.Schema] = true
 			}
-			category.Children, err = c.compile(source.Children)
-		} else {
-			c.coverage.Leaves++
-			category.Attributes, err = c.fields(source.Schema)
-		}
-		if err != nil {
-			return nil, err
-		}
-		categories = append(categories, category)
-	}
-
-	return categories, nil
-}
-
-func (c *compiler) fields(key string) ([]taxonomy.Attribute, error) {
-	schema, exists := c.schemas[key]
-	if !exists || len(schema.Attributes) == 0 {
-		return nil, ErrInvalidBundle
-	}
-	c.usedSchemas[key] = true
-	required := make(map[string]bool)
-	for _, code := range schema.Required {
-		if required[code] {
-			return nil, ErrInvalidBundle
-		}
-		required[code] = true
-	}
-	fields := make([]taxonomy.Attribute, 0, len(schema.Attributes))
-	seen := make(map[string]bool)
-	for _, code := range schema.Attributes {
-		field, exists := c.definitions[code]
-		if !exists || seen[code] {
-			return nil, ErrInvalidBundle
-		}
-		seen[code] = true
-		c.usedFields[code] = true
-		field.Required = required[code]
-		fields = append(fields, field)
-	}
-	for code := range required {
-		if !seen[code] {
-			return nil, ErrInvalidBundle
+			walk(category.Children)
 		}
 	}
-
-	return fields, nil
+	walk(release.Categories)
+	for _, schema := range release.Schemas {
+		for _, code := range schema.Attributes {
+			usedFields[code] = true
+		}
+	}
+	for _, a := range release.Attributes {
+		if a.Dictionary != "" {
+			coverage.Dictionaries++
+		}
+	}
+	if len(usedSchemas) != coverage.Schemas || len(usedFields) != coverage.Attributes {
+		return release, coverage, ErrInvalidBundle
+	}
+	return release, coverage, nil
 }
 
 func decodeFile(source fs.FS, name string, target any) error {
@@ -189,16 +120,34 @@ func decodeFile(source fs.FS, name string, target any) error {
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrInvalidBundle, name)
 	}
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
+	var node yaml.Node
+	if err := yaml.Unmarshal(body, &node); err != nil {
+		return fmt.Errorf("%w: %s: %w", ErrInvalidBundle, name, err)
+	}
+	if hasReferences(&node) {
+		return fmt.Errorf("%w: якоря и ссылки в %s", ErrInvalidBundle, name)
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(body))
+	decoder.KnownFields(true)
 	if err := decoder.Decode(target); err != nil {
 		return fmt.Errorf("%w: %s: %w", ErrInvalidBundle, name, err)
 	}
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return fmt.Errorf("%w: лишние данные в %s", ErrInvalidBundle, name)
 	}
-
 	return nil
+}
+
+func hasReferences(node *yaml.Node) bool {
+	if node.Anchor != "" || node.Kind == yaml.AliasNode {
+		return true
+	}
+	for _, child := range node.Content {
+		if hasReferences(child) {
+			return true
+		}
+	}
+	return false
 }
 
 func bundleChecksum(source fs.FS) (string, error) {
@@ -208,9 +157,31 @@ func bundleChecksum(source fs.FS) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		_, _ = io.Copy(hash, strings.NewReader(name+"\x00"))
+		_, _ = hash.Write([]byte(name + "\x00"))
 		_, _ = hash.Write(body)
 	}
-
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// PrepareManifest запрещает менять уже выпущенный номер при изменении данных.
+func PrepareManifest(source fs.FS, version int64, write bool) (Manifest, error) {
+	var current Manifest
+	if err := decodeFile(source, "manifest.yaml", &current); err != nil {
+		return Manifest{}, err
+	}
+	release, coverage, err := describe(source)
+	if err != nil {
+		return Manifest{}, err
+	}
+	if version == 0 {
+		version = current.Release
+	}
+	next := Manifest{Release: version, Checksum: release.Checksum, Coverage: coverage}
+	if version < 1 || version > taxonomy.MaxTaxonomyVersion {
+		return next, ErrInvalidBundle
+	}
+	if next != current && (!write || version <= current.Release) {
+		return next, ErrInvalidBundle
+	}
+	return next, nil
 }
