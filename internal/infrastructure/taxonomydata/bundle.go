@@ -50,6 +50,8 @@ type attributeSchema struct {
 type categorySource struct {
 	ID       string           `json:"id"`
 	Name     string           `json:"name"`
+	Title    string           `json:"title,omitempty"`
+	Slug     string           `json:"slug"`
 	Schema   string           `json:"schema,omitempty"`
 	Children []categorySource `json:"children,omitempty"`
 }
@@ -119,16 +121,13 @@ func load(source fs.FS) (taxonomy.Release, Coverage, error) {
 
 func (c *compiler) compile(sources []categorySource) ([]taxonomy.Category, error) {
 	categories := make([]taxonomy.Category, 0, len(sources))
-	names := make(map[string]bool)
 	for _, source := range sources {
-		if names[source.Name] {
-			return nil, ErrInvalidBundle
-		}
-		names[source.Name] = true
 		c.coverage.Categories++
 		category := taxonomy.Category{
 			ID:         source.ID,
 			Name:       source.Name,
+			Title:      source.Title,
+			Slug:       source.Slug,
 			Attributes: []taxonomy.Attribute{},
 			Children:   []taxonomy.Category{},
 		}

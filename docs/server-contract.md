@@ -435,6 +435,11 @@ seller_unreachable или delivery_unavailable, либо истечение ок
 Админка магазина получает дерево и схемы через:
 
 - `GET /api/v1/taxonomy/categories` — `{version, categories}`, вложенные `children`;
+  `name` — короткое имя в дереве, необязательный `title` — самостоятельное полное
+  имя (1–256 символов); без него используется `name`. Обязательный `slug` —
+  уникальный адрес узла, до 128 символов, формат `^[a-z0-9]+(-[a-z0-9]+)*$`.
+  Витрина строит `/category/<slug>` и находит `id` по `slug` в этом дереве;
+  поиск фильтруется по `id`. Изменение имени не меняет сохранённый адрес;
 - `GET /api/v1/taxonomy/categories/{id}/schema` — узел с полной схемой `attributes`;
 - `GET /api/v1/taxonomy/version` — `{version}`, 0 до первой загрузки.
 

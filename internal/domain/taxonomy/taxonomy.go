@@ -22,6 +22,7 @@ const (
 
 var (
 	codePattern       = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+	slugPattern       = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	categoryIDPattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,127}$`)
 )
 
@@ -48,6 +49,8 @@ type Attribute struct {
 type Category struct {
 	ID         string      `json:"id" yaml:"id"`
 	Name       string      `json:"name" yaml:"name"`
+	Title      string      `json:"title,omitempty" yaml:"title,omitempty"`
+	Slug       string      `json:"slug" yaml:"slug"`
 	Attributes []Attribute `json:"attributes" yaml:"attributes"`
 	Children   []Category  `json:"children" yaml:"children"`
 }
@@ -83,6 +86,14 @@ type Publication struct {
 	Published    bool                       `json:"published"`
 }
 
+// FullName сохраняет самостоятельное имя для публикации и поискового фасета.
+func (c Category) FullName() string {
+	if c.Title != "" {
+		return c.Title
+	}
+	return c.Name
+}
+
 // ValidCode исключает пути и служебные символы в именах динамических полей.
 func ValidCode(code string) bool { return codePattern.MatchString(code) }
 
@@ -92,17 +103,36 @@ func (d Definition) Validate() error {
 		return ErrInvalid.WithMessage("нужны положительная версия и категории")
 	}
 	ids := map[string]bool{}
+	slugs := map[string]bool{}
+	fullNames := map[string]bool{}
 	codes := map[string]Attribute{}
 	var walk func([]Category, int) error
 	walk = func(categories []Category, depth int) error {
 		if depth > MaxDepth && len(categories) > 0 {
 			return ErrInvalid.WithMessage("дерево слишком глубокое")
 		}
+		names := map[string]bool{}
 		for _, c := range categories {
 			invalidName := strings.TrimSpace(c.Name) == "" || utf8.RuneCountInString(c.Name) > 256
 			if !categoryIDPattern.MatchString(c.ID) || ids[c.ID] || invalidName {
 				return ErrInvalid.WithMessage("неверный или повторный id категории, пустое или длинное имя")
 			}
+			if !slugPattern.MatchString(c.Slug) || len(c.Slug) > 128 || slugs[c.Slug] {
+				return ErrInvalid.WithMessage("неверный или повторный slug категории: " + c.ID)
+			}
+			if names[c.Name] {
+				return ErrInvalid.WithMessage("повтор имени соседних категорий: " + c.ID)
+			}
+			if c.Title != "" && (strings.TrimSpace(c.Title) == "" ||
+				utf8.RuneCountInString(c.Title) > 256 || c.Title == c.Name) {
+				return ErrInvalid.WithMessage("неверное полное имя категории: " + c.ID)
+			}
+			if fullNames[c.FullName()] {
+				return ErrInvalid.WithMessage("повтор полного имени категории: " + c.ID)
+			}
+			names[c.Name] = true
+			slugs[c.Slug] = true
+			fullNames[c.FullName()] = true
 			ids[c.ID] = true
 			local := map[string]bool{}
 			for _, a := range c.Attributes {
@@ -183,9 +213,25 @@ func (d Definition) Fields() map[string]Attribute {
 	return out
 }
 
-// CheckEvolution защищает существующие динамические поля от смены типа и единицы.
+// CheckEvolution сохраняет адреса ссылок и типы существующих динамических полей.
 // Коды сохраняются хотя бы в одной схеме, чтобы удалённый код нельзя было переиспользовать.
 func (d Definition) CheckEvolution(old Definition) error {
+	previousSlugs := old.categorySlugs()
+	nextSlugs := d.categorySlugs()
+	owners := map[string]string{}
+	for id, slug := range previousSlugs {
+		if slug != "" {
+			owners[slug] = id
+		}
+	}
+	for id, slug := range nextSlugs {
+		if previous := previousSlugs[id]; previous != "" && previous != slug {
+			return ErrConflict.WithMessage("нельзя изменить slug категории: " + id)
+		}
+		if owner, exists := owners[slug]; exists && owner != id {
+			return ErrConflict.WithMessage("нельзя передать slug другой категории: " + id)
+		}
+	}
 	fields := d.Fields()
 	for code, previous := range old.Fields() {
 		next, ok := fields[code]
@@ -194,6 +240,19 @@ func (d Definition) CheckEvolution(old Definition) error {
 		}
 	}
 	return nil
+}
+
+func (d Definition) categorySlugs() map[string]string {
+	out := map[string]string{}
+	var walk func([]Category)
+	walk = func(categories []Category) {
+		for _, category := range categories {
+			out[category.ID] = category.Slug
+			walk(category.Children)
+		}
+	}
+	walk(d.Categories)
+	return out
 }
 
 // Category возвращает полную схему и путь от корня до узла.
@@ -228,7 +287,7 @@ func (d Definition) Check(card *Card) Publication {
 		return p
 	}
 	p.CategoryPath = path
-	p.CategoryName = category.Name
+	p.CategoryName = category.FullName()
 	fields := map[string]Attribute{}
 	for _, a := range category.Attributes {
 		fields[a.Code] = a

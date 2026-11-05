@@ -27,6 +27,7 @@ const countTaxonomyVersions = `SELECT count(*) FROM taxonomy_versions`
 func testTaxonomy(version int64) taxonomy.Definition {
 	return taxonomy.Definition{Version: version, Categories: []taxonomy.Category{{
 		ID:   "c1",
+		Slug: "c1",
 		Name: "Категория",
 		Attributes: []taxonomy.Attribute{{
 			Code:     "a1",

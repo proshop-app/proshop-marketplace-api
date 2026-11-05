@@ -48,6 +48,7 @@ func TestProjectionToIndex(t *testing.T) {
 		Categories: []taxonomy.Category{
 			{
 				ID:   "c1",
+				Slug: "c1",
 				Name: "Категория",
 				Attributes: []taxonomy.Attribute{
 					{

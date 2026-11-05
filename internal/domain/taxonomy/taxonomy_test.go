@@ -3,6 +3,7 @@ package taxonomy_test
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
@@ -11,6 +12,7 @@ import (
 func definition() taxonomy.Definition {
 	return taxonomy.Definition{Version: 1, Categories: []taxonomy.Category{{
 		ID:   "c1",
+		Slug: "c1",
 		Name: "Категория",
 		Attributes: []taxonomy.Attribute{
 			{
@@ -135,6 +137,7 @@ func TestInvalidDefinitions(t *testing.T) {
 		"глобальный тип": func(d *taxonomy.Definition) {
 			d.Categories = append(d.Categories, taxonomy.Category{
 				ID:         "c2",
+				Slug:       "c2",
 				Name:       "Категория 2",
 				Attributes: []taxonomy.Attribute{{Code: "a1", Name: "Атрибут", Type: "boolean"}},
 			})
@@ -155,7 +158,7 @@ func TestEvolutionAndTree(t *testing.T) {
 	old := definition()
 	next := definition()
 	next.Version++
-	next.Categories[0].Children = []taxonomy.Category{{ID: "c2", Name: "Категория 2"}}
+	next.Categories[0].Children = []taxonomy.Category{{ID: "c2", Slug: "c2", Name: "Категория 2"}}
 	if err := next.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -173,5 +176,91 @@ func TestEvolutionAndTree(t *testing.T) {
 	next.Categories[0].Attributes = next.Categories[0].Attributes[1:]
 	if err := next.CheckEvolution(old); !errors.Is(err, taxonomy.ErrConflict) {
 		t.Fatal(err)
+	}
+}
+
+func TestCategoryNamesAndSlugs(t *testing.T) {
+	cases := map[string]func(*taxonomy.Definition){
+		"пустой адрес":     func(d *taxonomy.Definition) { d.Categories[0].Slug = "" },
+		"формат адреса":    func(d *taxonomy.Definition) { d.Categories[0].Slug = "Bad_slug" },
+		"длинный адрес":    func(d *taxonomy.Definition) { d.Categories[0].Slug = strings.Repeat("a", 129) },
+		"пробельный title": func(d *taxonomy.Definition) { d.Categories[0].Title = " \t" },
+		"длинный title":    func(d *taxonomy.Definition) { d.Categories[0].Title = strings.Repeat("я", 257) },
+		"title равен name": func(d *taxonomy.Definition) { d.Categories[0].Title = d.Categories[0].Name },
+		"повтор адреса во вложенном узле": func(d *taxonomy.Definition) {
+			d.Categories[0].Children = []taxonomy.Category{{ID: "c2", Name: "Другая", Slug: "c1"}}
+		},
+		"имена соседей при разных title": func(d *taxonomy.Definition) {
+			d.Categories = append(d.Categories, taxonomy.Category{
+				ID:    "c2",
+				Name:  d.Categories[0].Name,
+				Title: "Самостоятельное имя",
+				Slug:  "c2",
+			})
+		},
+		"полное имя совпало с name другого узла": func(d *taxonomy.Definition) {
+			d.Categories[0].Children = []taxonomy.Category{{
+				ID:    "c2",
+				Name:  "Другая",
+				Title: d.Categories[0].Name,
+				Slug:  "c2",
+			}}
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			d := definition()
+			mutate(&d)
+			if err := d.Validate(); !errors.Is(err, taxonomy.ErrInvalid) {
+				t.Fatalf("%v", err)
+			}
+		})
+	}
+	d := definition()
+	if got := d.Check(card()).CategoryName; got != d.Categories[0].Name {
+		t.Fatal(got)
+	}
+	d.Categories[0].Title = strings.Repeat("я", 256)
+	d.Categories[0].Slug = strings.Repeat("a", 128)
+	d.Categories[0].Children = []taxonomy.Category{{ID: "c2", Name: d.Categories[0].Name, Slug: "c2"}}
+	if err := d.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Check(card()).CategoryName; got != d.Categories[0].Title {
+		t.Fatal(got)
+	}
+}
+
+func TestSlugEvolution(t *testing.T) {
+	cases := []struct {
+		name     string
+		mutate   func(*taxonomy.Definition, *taxonomy.Definition)
+		conflict bool
+	}{
+		{"первое присвоение", func(old, next *taxonomy.Definition) { old.Categories[0].Slug = "" }, false},
+		{"правка имени", func(old, next *taxonomy.Definition) { next.Categories[0].Title = "Новое имя" }, false},
+		{"смена адреса", func(old, next *taxonomy.Definition) { next.Categories[0].Slug = "new" }, true},
+		{"откат без адреса", func(old, next *taxonomy.Definition) { next.Categories[0].Slug = "" }, true},
+		{"передача адреса", func(old, next *taxonomy.Definition) { next.Categories[0].ID = "c2" }, true},
+		{
+			"удаление узла",
+			func(old, next *taxonomy.Definition) {
+				old.Categories[0].Children = []taxonomy.Category{{ID: "c2", Name: "Другая", Slug: "c2"}}
+			},
+			false,
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			old, next := definition(), definition()
+			test.mutate(&old, &next)
+			err := next.CheckEvolution(old)
+			if errors.Is(err, taxonomy.ErrConflict) != test.conflict || (!test.conflict && err != nil) {
+				t.Fatalf("%v", err)
+			}
+			if test.conflict && !strings.Contains(err.Error(), next.Categories[0].ID) {
+				t.Fatalf("нет id в конфликте: %v", err)
+			}
+		})
 	}
 }

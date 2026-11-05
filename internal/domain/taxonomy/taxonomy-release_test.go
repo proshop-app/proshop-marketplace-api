@@ -103,6 +103,7 @@ func TestTaxonomyRollbackPlans(t *testing.T) {
 func TestCategoryIDDoesNotRelaxAttributeCode(t *testing.T) {
 	definition := Definition{Version: 1, Categories: []Category{{
 		ID:         "group.product-type",
+		Slug:       "group-product-type",
 		Name:       "Категория",
 		Attributes: []Attribute{{Code: "model", Name: "Модель", Type: "string"}},
 	}}}

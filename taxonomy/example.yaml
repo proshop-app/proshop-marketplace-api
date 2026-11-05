@@ -2,6 +2,7 @@ version: 1
 categories:
   - id: home_textiles
     name: Текстиль для дома
+    slug: home-textiles
     attributes:
       - code: material
         name: Материал
@@ -18,6 +19,7 @@ categories:
     children: []
   - id: lighting
     name: Освещение
+    slug: lighting
     attributes:
       - code: power
         name: Мощность
@@ -33,6 +35,7 @@ categories:
     children: []
   - id: tableware
     name: Посуда
+    slug: tableware
     attributes:
       - code: capacity
         name: Объём

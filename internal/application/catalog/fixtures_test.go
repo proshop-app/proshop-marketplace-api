@@ -40,7 +40,7 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at tim
 				Published:    true,
 				Version:      1,
 				CategoryID:   "c1",
-				CategoryName: "Категория",
+				CategoryName: "Полное имя категории",
 				CategoryPath: []string{"c1"},
 			},
 			Name:       "Товар " + string(product),
@@ -54,8 +54,13 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at tim
 
 func seedSeller(store *fake.Store, tenant ids.TenantID, status participant.TenantStatus, enabled bool) {
 	store.SeedTaxonomy(taxonomy.Definition{
-		Version:    1,
-		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория"}},
+		Version: 1,
+		Categories: []taxonomy.Category{{
+			ID:    "c1",
+			Name:  "Категория",
+			Title: "Полное имя категории",
+			Slug:  "c1",
+		}},
 	})
 	store.SeedTenant(participant.TenantState{
 		TenantID:  tenant,
