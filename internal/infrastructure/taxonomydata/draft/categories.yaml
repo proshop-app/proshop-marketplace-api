@@ -1235,9 +1235,9 @@
               slug: plashchi-zhenskie
               schema: outerwear
         - id: clothing.women-underwear
-          name: Нижнее бельё
-          title: Нижнее бельё женское
-          slug: nizhnee-bele-zhenskoe
+          name: Бельё и купальники
+          title: Бельё и купальники женские
+          slug: bele-i-kupalniki-zhenskie
           children:
             - id: clothing.bras
               name: Бюстгальтеры
@@ -1263,6 +1263,11 @@
               title: Колготки женские
               slug: kolgotki-zhenskie
               schema: underwear
+            - id: clothing.women-swimsuits
+              name: Купальники
+              title: Купальники женские
+              slug: kupalniki-zhenskie
+              schema: swimwear
         - id: clothing.women-homewear-group
           name: Домашняя одежда
           title: Домашняя одежда женская
@@ -1283,10 +1288,10 @@
               title: Костюмы домашние женские
               slug: kostyumy-domashnie-zhenskie
               schema: clothing
-        - id: clothing.women-sports-beach
-          name: Спортивная и пляжная одежда
-          title: Спортивная и пляжная одежда женская
-          slug: sportivnaya-i-plyazhnaya-odezhda-zhenskaya
+        - id: clothing.women-sportswear
+          name: Спортивная одежда
+          title: Спортивная одежда женская
+          slug: sportivnaya-odezhda-zhenskaya
           children:
             - id: clothing.women-tracksuits
               name: Костюмы
@@ -1318,11 +1323,6 @@
               title: Куртки спортивные женские
               slug: kurtki-sportivnye-zhenskie
               schema: outerwear
-            - id: clothing.women-swimsuits
-              name: Купальники
-              title: Купальники женские
-              slug: kupalniki-zhenskie
-              schema: swimwear
         - id: clothing.women-suits-overalls
           name: Костюмы и комбинезоны
           title: Костюмы и комбинезоны женские
@@ -1458,9 +1458,9 @@
               slug: kostyumy-domashnie-muzhskie
               schema: clothing
         - id: clothing.men-underwear-group
-          name: Нижнее бельё
-          title: Нижнее бельё мужское
-          slug: nizhnee-bele-muzhskoe
+          name: Бельё и плавки
+          title: Бельё и плавки мужские
+          slug: bele-i-plavki-muzhskie
           children:
             - id: clothing.men-underpants
               name: Трусы
@@ -1477,10 +1477,15 @@
               title: Термобельё мужское
               slug: termobele-muzhskoe
               schema: underwear
-        - id: clothing.men-sports-beach
-          name: Спортивная и пляжная одежда
-          title: Спортивная и пляжная одежда мужская
-          slug: sportivnaya-i-plyazhnaya-odezhda-muzhskaya
+            - id: clothing.men-swim-trunks
+              name: Плавки
+              title: Плавки мужские
+              slug: plavki-muzhskie
+              schema: swimwear
+        - id: clothing.men-sportswear
+          name: Спортивная одежда
+          title: Спортивная одежда мужская
+          slug: sportivnaya-odezhda-muzhskaya
           children:
             - id: clothing.men-tracksuits
               name: Костюмы
@@ -1512,11 +1517,6 @@
               title: Куртки спортивные мужские
               slug: kurtki-sportivnye-muzhskie
               schema: outerwear
-            - id: clothing.men-swim-trunks
-              name: Плавки
-              title: Плавки мужские
-              slug: plavki-muzhskie
-              schema: swimwear
         - id: clothing.men-suits-blazers
           name: Костюмы и пиджаки
           title: Костюмы и пиджаки мужские
@@ -1624,6 +1624,11 @@
               title: Пальто детские
               slug: palto-detskie
               schema: outerwear_kids
+            - id: clothing.kids-overalls
+              name: Комбинезоны
+              title: Комбинезоны детские
+              slug: kombinezony-detskie
+              schema: outerwear_kids
         - id: clothing.kids-homewear-group
           name: Домашняя одежда
           title: Домашняя одежда детская
@@ -1645,9 +1650,9 @@
               slug: kostyumy-domashnie-detskie
               schema: clothing_kids
         - id: clothing.kids-underwear-group
-          name: Нижнее бельё
-          title: Нижнее бельё детское
-          slug: nizhnee-bele-detskoe
+          name: Бельё и купальники
+          title: Бельё и купальники детские
+          slug: bele-i-kupalniki-detskie
           children:
             - id: clothing.kids-underwear
               name: Бельё
@@ -1669,10 +1674,20 @@
               title: Колготки детские
               slug: kolgotki-detskie
               schema: underwear
-        - id: clothing.kids-sports-beach
-          name: Спортивная и пляжная одежда
-          title: Спортивная и пляжная одежда детская
-          slug: sportivnaya-i-plyazhnaya-odezhda-detskaya
+            - id: clothing.girls-swimsuits
+              name: Купальники
+              title: Купальники для девочек
+              slug: kupalniki-dlya-devochek
+              schema: swimwear
+            - id: clothing.kids-swim-trunks
+              name: Плавки
+              title: Плавки детские
+              slug: plavki-detskie
+              schema: swimwear
+        - id: clothing.kids-sportswear
+          name: Спортивная одежда
+          title: Спортивная одежда детская
+          slug: sportivnaya-odezhda-detskaya
           children:
             - id: clothing.kids-tracksuits
               name: Костюмы
@@ -1704,16 +1719,6 @@
               title: Куртки спортивные детские
               slug: kurtki-sportivnye-detskie
               schema: outerwear_kids
-            - id: clothing.girls-swimsuits
-              name: Купальники
-              title: Купальники для девочек
-              slug: kupalniki-dlya-devochek
-              schema: swimwear
-            - id: clothing.kids-swim-trunks
-              name: Плавки
-              title: Плавки детские
-              slug: plavki-detskie
-              schema: swimwear
         - id: clothing.kids-shirts-tshirts
           name: Рубашки и футболки
           title: Рубашки и футболки детские
@@ -1764,11 +1769,6 @@
               title: Толстовки детские
               slug: tolstovki-detskie
               schema: clothing_kids
-        - id: clothing.kids-overalls
-          name: Комбинезоны
-          title: Комбинезоны детские
-          slug: kombinezony-detskie
-          schema: outerwear_kids
 - id: shoes
   name: Обувь
   slug: obuv
@@ -1794,11 +1794,13 @@
           schema: shoe
         - id: shoes.women-tall-boots
           name: Сапоги
-          slug: sapogi
+          title: Сапоги женские
+          slug: sapogi-zhenskie
           schema: shoe
         - id: shoes.women-ankle-boots
           name: Ботильоны
-          slug: botilony
+          title: Ботильоны женские
+          slug: botilony-zhenskie
           schema: shoe
         - id: shoes.women-loafers
           name: Лоферы
@@ -1815,10 +1817,10 @@
           title: Резиновые сапоги женские
           slug: rezinovye-sapogi-zhenskie
           schema: shoe
-        - id: shoes.women-sports
-          name: Спортивная обувь
-          title: Спортивная обувь женская
-          slug: sportivnaya-obuv-zhenskaya
+        - id: shoes.women-sneakers-trainers
+          name: Кроссовки и кеды
+          title: Кроссовки и кеды женские
+          slug: krossovki-i-kedy-zhenskie
           children:
             - id: shoes.women-sneakers
               name: Кроссовки
@@ -1830,6 +1832,11 @@
               title: Кеды женские
               slug: kedy-zhenskie
               schema: shoe
+        - id: shoes.women-sports
+          name: Спортивная обувь
+          title: Спортивная обувь женская
+          slug: sportivnaya-obuv-zhenskaya
+          children:
             - id: shoes.women-running-shoes
               name: Беговые кроссовки
               title: Беговые кроссовки женские
@@ -1879,10 +1886,10 @@
           title: Резиновые сапоги мужские
           slug: rezinovye-sapogi-muzhskie
           schema: shoe
-        - id: shoes.men-sports
-          name: Спортивная обувь
-          title: Спортивная обувь мужская
-          slug: sportivnaya-obuv-muzhskaya
+        - id: shoes.men-sneakers-trainers
+          name: Кроссовки и кеды
+          title: Кроссовки и кеды мужские
+          slug: krossovki-i-kedy-muzhskie
           children:
             - id: shoes.men-sneakers
               name: Кроссовки
@@ -1894,6 +1901,11 @@
               title: Кеды мужские
               slug: kedy-muzhskie
               schema: shoe
+        - id: shoes.men-sports
+          name: Спортивная обувь
+          title: Спортивная обувь мужская
+          slug: sportivnaya-obuv-muzhskaya
+          children:
             - id: shoes.men-running-shoes
               name: Беговые кроссовки
               title: Беговые кроссовки мужские
@@ -1946,10 +1958,10 @@
           title: Резиновые сапоги детские
           slug: rezinovye-sapogi-detskie
           schema: shoe
-        - id: shoes.kids-sports
-          name: Спортивная обувь
-          title: Спортивная обувь детская
-          slug: sportivnaya-obuv-detskaya
+        - id: shoes.kids-sneakers-trainers
+          name: Кроссовки и кеды
+          title: Кроссовки и кеды детские
+          slug: krossovki-i-kedy-detskie
           children:
             - id: shoes.kids-sneakers
               name: Кроссовки
@@ -1961,6 +1973,11 @@
               title: Кеды детские
               slug: kedy-detskie
               schema: shoe
+        - id: shoes.kids-sports
+          name: Спортивная обувь
+          title: Спортивная обувь детская
+          slug: sportivnaya-obuv-detskaya
+          children:
             - id: shoes.kids-running-shoes
               name: Беговые кроссовки
               title: Беговые кроссовки детские
@@ -4206,6 +4223,10 @@
           name: Мясные консервы
           slug: myasnye-konservy
           schema: food
+        - id: food.diet-food
+          name: Диетические продукты
+          slug: dieticheskie-produkty
+          schema: food
     - id: food.sweets
       name: Сладости и снеки
       slug: sladosti-i-sneki
@@ -4371,16 +4392,18 @@
           slug: khleb
           schema: food
     - id: food.frozen
-      name: Замороженные продукты, готовые блюда и диетическое питание
-      slug: zamorozhennye-produkty-gotovye-blyuda-i-dieticheskoe-pitanie
+      name: Замороженные продукты и готовые блюда
+      slug: zamorozhennye-produkty-i-gotovye-blyuda
       children:
         - id: food.frozen-vegetables
-          name: Замороженные овощи
-          slug: zamorozhennye-ovoshchi
+          name: Овощи
+          title: Овощи замороженные
+          slug: ovoshchi-zamorozhennye
           schema: food
         - id: food.frozen-berries
-          name: Замороженные ягоды
-          slug: zamorozhennye-yagody
+          name: Ягоды
+          title: Ягоды замороженные
+          slug: yagody-zamorozhennye
           schema: food
         - id: food.dumplings
           name: Пельмени и вареники
@@ -4393,10 +4416,6 @@
         - id: food.ice-cream
           name: Мороженое
           slug: morozhenoe
-          schema: food
-        - id: food.diet-food
-          name: Диетические продукты
-          slug: dieticheskie-produkty
           schema: food
 - id: office
   name: Канцелярия и офис
