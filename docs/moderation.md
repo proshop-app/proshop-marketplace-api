@@ -187,7 +187,56 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
   ставит задачу переоценки каждому участнику; удерживает
   `IndexRebuildLock`, чтобы не гоняться с пересборкой индекса.
 
-События магазину — M3; контракт событий — §6d.
+## События магазину (M3)
+
+Решение владельца 2026-11-05: обратная связь магазину — события Kafka
+через outbox, тем же путём, что `catalog.reference.changed`
+(`docs/reference.md`). Сервер магазина читает их и показывает статус в
+админке; контракт для сервера — `docs/server-contract.md`, раздел
+«События маркетплейса магазину».
+
+| Событие | Имя без префикса | Ключ | Когда |
+|---|---|---|---|
+| статус предложения | `KAFKA_TOPIC_OFFER_STATUS`, по умолчанию `marketplace.offer.status` | JSON `["tenantId","productId"]`, как у проекций | изменилась карточка, её публикация или вердикт |
+| статус участника | `KAFKA_TOPIC_PARTICIPANT_STATUS`, по умолчанию `marketplace.participant.status` | `tenantId` | включение, выключение, смена доверия |
+
+Полное имя — `<KAFKA_TOPIC_PREFIX>.<имя>`; топики заводит сервер установки,
+издатель их не создаёт. Заголовок `x-tenant` — магазин. Обе переменные не
+могут быть пустыми, проверка на старте как у `KAFKA_TOPIC_REFERENCE_CHANGED`.
+
+Тела, `schemaVersion: 1`, `at` — RFC 3339 UTC:
+
+```json
+{"schemaVersion": 1, "tenantId": "t1", "productId": "p1", "revision": 12,
+ "status": "hidden", "visible": false,
+ "reasons": [{"source": "taxonomy", "key": "taxonomy.required", "message": "…"},
+             {"source": "moderation", "key": "moderation.stop_phrase", "message": "…"}],
+ "at": "2026-11-05T12:00:00Z"}
+{"schemaVersion": 1, "tenantId": "t1", "enabled": true, "trust": "trusted",
+ "reason": "probation_completed", "note": "", "at": "2026-11-05T12:00:00Z"}
+```
+
+- `status`: `published` — публикация по схеме прошла и вердикт `allowed`;
+  `pending` — вердикт `pending`; `hidden` — всё остальное (структурные
+  причины, `rejected`, вердикта нет). `visible` = `status == published`.
+  Видимость самого участника в событие не входит: его состояние — второе
+  событие.
+- `reasons` — причины обеих групп: `Publication.Issues` с `source:
+  taxonomy` и причины вердикта с `source: moderation`. Пустой список при
+  `published`.
+- Удалённый товар события не получает.
+- Задачи outbox `moderation.offer.status` (дедуп по предложению) и
+  `moderation.participant.status` (дедуп по участнику) ставятся в той же
+  транзакции, что и изменение: приём снимка (`ApplyProduct`), перепроверка
+  при смене таксономии, `Evaluate` при изменении вердикта, `OpenCase`,
+  `Allow`, `Reject`, переоценка; включение, выключение и смена доверия
+  участника. Обработчик читает текущее состояние на момент публикации и
+  шлёт его: склеенные задачи дают одно событие с последним состоянием,
+  повтор после сбоя безопасен. Для участника `reason` и `note` — из
+  последней записи журнала решений.
+- Публикация — порт `ports.Publisher`, реализация — `infrastructure/kafka`
+  `Writer`, регистрация обработчиков рядом с `reference.changed` в
+  `cmd/marketplace/server.go`.
 
 ## HTTP оператора (M2)
 
