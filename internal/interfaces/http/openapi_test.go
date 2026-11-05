@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"os"
 	"regexp"
 	"sort"
@@ -109,10 +108,10 @@ func TestOpenAPITaxonomyPatternsAcceptBundle(t *testing.T) {
 	codePattern := schemaPattern(t, doc, "TaxonomyAttribute", "code")
 
 	var categories []bundledCategory
-	readBundle(t, "categories.json", &categories)
+	readBundle(t, "categories.yaml", &categories)
 
 	var attributes []bundledAttribute
-	readBundle(t, "attributes.json", &attributes)
+	readBundle(t, "attributes.yaml", &attributes)
 
 	pending := categories
 	for len(pending) > 0 {
@@ -153,7 +152,7 @@ func readBundle(t *testing.T, name string, target any) {
 		t.Fatal(err)
 	}
 
-	if err := json.Unmarshal(raw, target); err != nil {
+	if err := yaml.Unmarshal(raw, target); err != nil {
 		t.Fatalf("%s не разбирается: %v", name, err)
 	}
 }

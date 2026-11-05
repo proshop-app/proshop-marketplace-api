@@ -29,7 +29,7 @@ Kafka `29094`, Redis `26379`; любой меняется переменной
 | `make test-integration` | интеграционные тесты на compose (поднимает его сам) |
 | `make lint` | golangci-lint v2.3.1 с `depguard` по слоям |
 | `make migrate` | миграции к `DATABASE_URL` (`go run ./cmd/migrate up`; ещё `down`, `status`) |
-| `make taxonomy-load FILE=…` | загрузить версию схем площадки из YAML |
+| `make taxonomy-check` / `make taxonomy-manifest` | проверить поставку и манифест YAML без БД |
 | `make reindex` | перестроить индекс предложений из проекции |
 | `make refresh-pickup-points` | обновить справочники пунктов выдачи подключённых перевозчиков |
 | `make build` | `bin/marketplace`, `bin/migrate`, `bin/taxonomy` |
@@ -266,57 +266,30 @@ PostgreSQL, миграции goose в `internal/infrastructure/postgres/migratio
 `product.marketplace` в `catalog.product.projected` и всех прежних условий
 видимости продавца/товара. Контракт и причины отказа —
 [«Карточка маркетплейса»](docs/server-contract.md#карточка-маркетплейса).
-Данные оператора задаются одним YAML-документом:
+Данные поставки 4 — три нормализованных YAML-файла и манифест:
+`attributes.yaml`, `schemas.yaml`, `categories.yaml`, `manifest.yaml`.
+Формат и пример частей — [taxonomy-data.md](docs/taxonomy-data.md),
+выпуск и откат — [taxonomy-releases.md](docs/taxonomy-releases.md).
 
-```yaml
-version: 1
-categories:
-  - id: c1
-    name: Категория
-    slug: c1
-    attributes:
-      - code: a1
-        name: Атрибут
-        type: enum
-        required: true
-        values: [v1, v2]
-        facet: true
-    children:
-      - id: c2
-        name: Подкатегория
-        slug: c2
-        attributes: []
-        children: []
-```
-
-- `id` категории — `[a-z][a-z0-9_.-]{0,127}` (точка и дефис нужны
-  иерархическим ID поставки вида `home.desk-lamps`), `code` атрибута —
-  `[a-z][a-z0-9_]{0,63}`; id уникален во всём дереве. Глубина ≤ 16, категорий ≤ 1000, глобальных кодов ≤ 128.
-- Каждая категория содержит полную схему, без наследования от родителей.
-  Можно выбирать любой узел. `attributes` и `children` можно опустить.
-- Типы — `enum`, `number`, `string`, `boolean`. Для `enum` обязателен
-  непустой словарь уникальных `values` (≤ 256); `unit` допускается только
-  у `number`. `required` и `facet` по умолчанию false. Значения скалярные;
-  строки непустые, до 1024 символов, числа конечные и представимые в double.
-- Код глобален: имя, тип, единица, словарь и признак фасета должны совпадать
-  во всех категориях одной версии; обязательность может различаться.
-- Версия — положительное целое int64. Повтор той же версии с теми же
-  данными безопасен; другая версия должна быть строго больше текущей.
-  Порядок элементов списков — часть данных. Неизвестные поля, дубли YAML
-  и дополнительные документы отклоняются.
-- Тип и единица существующего кода неизменны. Код нельзя удалить из всех
-  схем: это защищает от повторного использования поля с несовместимым типом
-  в OpenSearch. Смена типа — новый код. Имя, словарь, обязательность и
-  участие в фасетах можно менять новой версией.
-
-Нейтральный пример — [taxonomy/example.yaml](taxonomy/example.yaml):
-«Текстиль для дома», «Освещение», «Посуда». Пример не загружается автоматически.
+Глобальные атрибуты задаются один раз, схема хранит порядок кодов и optional,
+лист ссылается на схему. Все поля схемы обязательны, кроме optional.
+Enum ссылается на закрытый словарь; string может ссылаться на открытый.
+При публикации confirmed-значения закрытых словарей сохраняются в снимке;
+проверка карточек, фасеты и варианты используют этот снимок.
+Код нельзя удалить; type, unit и dictionary неизменны.
+Лимиты: 4096 категорий, 256 атрибутов, глубина 16.
 
 ```bash
 make migrate
-make taxonomy-load FILE=taxonomy/example.yaml
-# эквивалентно: DATABASE_URL=… go run ./cmd/taxonomy load taxonomy/example.yaml
+make reference-apply
+make taxonomy-check
+go run ./cmd/taxonomy manifest
+make taxonomy-apply
 ```
+
+Оператор правит части через API с If-Match. Команда `taxonomy load`,
+цель `taxonomy-load` и прежний развёрнутый пример удалены.
+Откат к старому формату снимка запрещён; миграции JSONB не нужны.
 
 В PostgreSQL миграция `00020_taxonomy.sql` добавляет `taxonomy_versions`
 (история снимков) и `taxonomy_head` (текущая версия). Карточка, исходный
@@ -331,12 +304,19 @@ make taxonomy-load FILE=taxonomy/example.yaml
 
 | Маршрут | Доступ | Ответ |
 |---|---|---|
-| `GET /api/v1/taxonomy/categories` | открыт | дерево с полной схемой каждой категории и версией |
+| `GET /api/v1/taxonomy/categories` | открыт | дерево со ссылками schema и версией |
 | `GET /api/v1/taxonomy/categories/{id}/schema` | открыт | схема узла |
 | `GET /api/v1/taxonomy/version` | открыт | текущая версия, до загрузки — 0 |
 | `GET /api/v1/operator/taxonomy` | оператор | текущий снимок |
-| `PUT /api/v1/operator/taxonomy` | оператор | загрузить один YAML, Content-Type: application/yaml, ≤ 2 MiB |
+| `GET /api/v1/taxonomy/attributes` | открыт | глобальные атрибуты с dictionary, values и valuesMeta |
+| `GET /api/v1/taxonomy/schemas` | открыт | словарь схем с attributes и optional |
+| `GET /api/v1/operator/taxonomy/{part}` | оператор | скачать YAML части без вычисляемых values |
+| `PUT /api/v1/operator/taxonomy/{part}` | оператор | YAML ≤ 2 МиБ; If-Match обязателен, версия +1 |
 | `GET /api/v1/operator/catalog/offers/{offerId}/publication` | оператор | версия проверки, причины отказа, канонические атрибуты |
+
+`part` — categories, attributes или schemas. Устаревший If-Match — 409,
+неверный YAML или отсутствующий If-Match — 400. Старые потребители дерева
+с attributes и старого PUT должны перейти на новые ручки отдельными задачами.
 
 Чтение таксономии поддерживает `ETag`, `If-None-Match` → 304 и
 `X-Taxonomy-Version`. Операторские ручки закрыты `Authorization: Bearer

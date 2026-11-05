@@ -10,15 +10,17 @@ import (
 
 func TestModerationInheritance(t *testing.T) {
 	d := taxonomy.Definition{
-		Version: 1,
+		Version:    1,
+		Attributes: []taxonomy.Attribute{{Code: "a1", Name: "Атрибут", Type: "string"}},
+		Schemas:    map[string]taxonomy.Schema{"s1": {Attributes: []string{"a1"}}},
 		Categories: []taxonomy.Category{{
 			ID:         "c1",
 			Name:       "Категория",
 			Slug:       "c1",
 			Moderation: "manual",
 			Children: []taxonomy.Category{
-				{ID: "c2", Name: "Категория 2", Slug: "c2"},
-				{ID: "c3", Name: "Категория 3", Slug: "c3", Moderation: "auto"},
+				{ID: "c2", Name: "Категория 2", Slug: "c2", Schema: "s1"},
+				{ID: "c3", Name: "Категория 3", Slug: "c3", Schema: "s1", Moderation: "auto"},
 			},
 		}},
 	}

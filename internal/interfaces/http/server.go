@@ -124,8 +124,11 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/taxonomy/categories", taxonomy.categories},
 		{http.MethodGet, "/api/v1/taxonomy/categories/{id}/schema", taxonomy.schema},
 		{http.MethodGet, "/api/v1/taxonomy/version", taxonomy.version},
-		{http.MethodGet, "/api/v1/operator/taxonomy", operator(taxonomy.categories)},
-		{http.MethodPut, "/api/v1/operator/taxonomy", operator(taxonomy.load)},
+		{http.MethodGet, "/api/v1/operator/taxonomy", operator(taxonomy.current)},
+		{http.MethodPut, "/api/v1/operator/taxonomy/{part}", operator(taxonomy.load)},
+		{http.MethodGet, "/api/v1/operator/taxonomy/{part}", operator(taxonomy.download)},
+		{http.MethodGet, "/api/v1/taxonomy/attributes", taxonomy.attributes},
+		{http.MethodGet, "/api/v1/taxonomy/schemas", taxonomy.schemas},
 		{http.MethodGet, "/api/v1/operator/catalog/offers/{offerId}/publication", operator(taxonomy.publication)},
 
 		{http.MethodGet, "/api/v1/catalog/offers", optionalBuyer(deps.Auth, catalog.list)},

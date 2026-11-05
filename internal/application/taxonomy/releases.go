@@ -56,12 +56,21 @@ func (s *Service) changeRelease(
 		if err != nil || !changed {
 			return err
 		}
-		next := taxonomy.Definition{
-			Version:    current.Version + 1,
-			Categories: release.Categories,
-		}
+		next := release.Definition()
 		if rollback {
-			next.Categories = latest.Previous.Categories
+			next = latest.Previous
+			if len(next.Schemas) == 0 {
+				return taxonomy.ErrConflict.WithMessage("откат к старому формату снимка запрещён")
+			}
+		}
+		next.Version = current.Version + 1
+		if err := next.Validate(); err != nil {
+			return err
+		}
+		if !rollback {
+			if err := resolveDictionaries(ctx, tx.Reference(), &next); err != nil {
+				return err
+			}
 		}
 		if err := next.CheckEvolution(current); err != nil {
 			return err

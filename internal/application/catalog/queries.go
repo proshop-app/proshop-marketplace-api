@@ -85,6 +85,9 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 			}
 		}
 		fields := d.Fields()
+		if query.CategoryID != "" {
+			fields = categoryFields(d, query.CategoryID)
+		}
 		if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
 			return err
 		}
@@ -226,4 +229,24 @@ func (q *Queries) Publication(ctx context.Context, id ids.OfferID) (PublicationV
 		return nil
 	})
 	return publication, err
+}
+
+// categoryFields объединяет собранные схемы потомков для фасетов раздела.
+func categoryFields(d taxonomy.Definition, id string) map[string]taxonomy.Attribute {
+	fields := map[string]taxonomy.Attribute{}
+	var collect func(string)
+	collect = func(id string) {
+		category, _, found := d.Category(id)
+		if !found {
+			return
+		}
+		for _, attribute := range category.Attributes {
+			fields[attribute.Code] = attribute.Attribute
+		}
+		for _, child := range category.Children {
+			collect(child.ID)
+		}
+	}
+	collect(id)
+	return fields
 }

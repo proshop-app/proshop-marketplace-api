@@ -18,26 +18,44 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	pricemoney "github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-const testTaxonomyYAML = `version: 1
-categories:
-  - id: c1
-    name: Категория
-    title: Полное имя категории
-    slug: c1
-    attributes:
-      - code: a1
-        name: Атрибут
-        type: enum
-        values: [v1, v2]
-        required: true
-        facet: true
+const testTaxonomyYAML = `- id: c1
+  name: Категория
+  title: Полное имя категории
+  slug: c1
+  schema: s1
 `
 
 func TestTaxonomyHTTP(t *testing.T) {
 	store := fake.NewStore()
+	store.SeedTaxonomy(taxonomy.Definition{
+		Version: 1,
+		Attributes: []taxonomy.Attribute{
+			{
+				Code:       "a1",
+				Name:       "Атрибут",
+				Type:       "enum",
+				Dictionary: "a1",
+				Values:     []string{"v1", "v2"},
+				Facet:      true,
+			},
+		},
+		Schemas: map[string]taxonomy.Schema{"s1": {Attributes: []string{"a1"}}},
+		Categories: []taxonomy.Category{
+			{
+				ID:     "c1",
+				Name:   "Категория",
+				Title:  "Полное имя категории",
+				Slug:   "c1",
+				Schema: "s1",
+			},
+		},
+	})
+	seedHTTPDictionary(t, store)
 	clock := fake.NewClock(time.Now())
 	index := fake.NewIndex()
 	handler := NewHandler(Deps{
@@ -53,22 +71,25 @@ func TestTaxonomyHTTP(t *testing.T) {
 			r.Header.Set("Authorization", "Bearer "+token)
 		}
 		if etag != "" {
-			r.Header.Set("If-None-Match", etag)
+			if method == http.MethodPut {
+				r.Header.Set("If-Match", etag)
+			} else {
+				r.Header.Set("If-None-Match", etag)
+			}
 		}
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, r)
 		return w
 	}
-	if w := call(http.MethodPut, "/api/v1/operator/taxonomy", testTaxonomyYAML, "", ""); w.Code != 401 {
+	if w := call(http.MethodPut, "/api/v1/operator/taxonomy/categories", testTaxonomyYAML, "", ""); w.Code != 401 {
 		t.Fatal(w.Code)
-	}
-	if w := call(http.MethodPut, "/api/v1/operator/taxonomy", testTaxonomyYAML, "token", ""); w.Code != 200 {
-		t.Fatal(w.Code, w.Body.String())
 	}
 	for _, path := range []string{
 		"/api/v1/taxonomy/categories",
 		"/api/v1/taxonomy/categories/c1/schema",
 		"/api/v1/taxonomy/version",
+		"/api/v1/taxonomy/attributes",
+		"/api/v1/taxonomy/schemas",
 	} {
 		w := call(http.MethodGet, path, "", "", "")
 		if w.Code != 200 || w.Header().Get("ETag") != `"taxonomy-1"` || w.Header().Get("X-Taxonomy-Version") != "1" {
@@ -93,17 +114,38 @@ func TestTaxonomyHTTP(t *testing.T) {
 	if w := call(http.MethodGet, "/api/v1/operator/taxonomy", "", "token", ""); w.Code != 200 {
 		t.Fatal(w.Code)
 	}
-	if w := call(http.MethodPut, "/api/v1/operator/taxonomy", testTaxonomyYAML, "token", ""); w.Code != 200 {
+	for _, part := range []string{"categories", "attributes", "schemas"} {
+		path := "/api/v1/operator/taxonomy/" + part
+		w := call(http.MethodGet, path, "", "token", "")
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		etag := w.Header().Get("ETag")
+		downloaded := w.Body.String()
+		w = call(http.MethodPut, path, downloaded, "token", etag)
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		if stale := call(http.MethodPut, path, downloaded, "token", etag); stale.Code != 409 {
+			t.Fatal(stale.Code, stale.Body.String())
+		}
+	}
+	w := call(http.MethodPut, "/api/v1/operator/taxonomy/categories", testTaxonomyYAML, "token", "")
+	if w.Code != 400 {
 		t.Fatal(w.Code)
 	}
-	changedYAML := strings.ReplaceAll(testTaxonomyYAML, "v2", "v3")
-	w := call(http.MethodPut, "/api/v1/operator/taxonomy", changedYAML, "token", "")
-	if w.Code != 409 {
-		t.Fatal(w.Code, w.Body.String())
-	}
-	w = call(http.MethodPut, "/api/v1/operator/taxonomy", testTaxonomyYAML+"unknown: true\n", "token", "")
+	w = call(
+		http.MethodPut,
+		"/api/v1/operator/taxonomy/categories",
+		testTaxonomyYAML+"  unknown: true\n",
+		"token",
+		`"taxonomy-4"`,
+	)
 	if w.Code != 400 {
 		t.Fatal(w.Code, w.Body.String())
+	}
+	if old := call(http.MethodPut, "/api/v1/operator/taxonomy", testTaxonomyYAML, "token", ""); old.Code != 404 {
+		t.Fatal(old.Code)
 	}
 	if err := appcatalog.NewProjector(store, clock, nil).ApplyProduct(context.Background(), appcatalog.ProductEvent{
 		EventID: "e1",
@@ -169,5 +211,41 @@ func TestAttributeQueryParsing(t *testing.T) {
 	q, err := parseOfferQuery(r)
 	if err != nil || len(q.Attributes["a1"].Values) != 2 || q.Attributes["a2"].Min != "1.5" {
 		t.Fatalf("%+v %v", q, err)
+	}
+}
+
+func seedHTTPDictionary(t *testing.T, store *fake.Store) {
+	t.Helper()
+	state := reference.DictionaryState{
+		Code:   "a1",
+		Kind:   reference.KindClosed,
+		Limits: reference.DefaultLimits(),
+	}
+	store.SeedReferenceDictionary(state)
+	err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
+		entries := []*reference.Entry{}
+		generator := &fake.IDs{}
+		for _, value := range []string{"v1", "v2"} {
+			entry, err := reference.NewEntry(
+				reference.RestoreDictionary(state),
+				reference.NewEntryInput{
+					ID:               generator.NewUUID(),
+					CanonicalAliasID: generator.NewUUID(),
+					Name:             value,
+					Status:           reference.StatusConfirmed,
+					Source:           reference.SourceSeed,
+				},
+				time.Now(),
+			)
+			if err != nil {
+				return err
+			}
+			entry.Bump(time.Now())
+			entries = append(entries, entry)
+		}
+		return tx.Reference().Save(ctx, entries, nil)
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
