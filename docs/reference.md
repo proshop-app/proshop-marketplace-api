@@ -297,8 +297,8 @@ go run ./cmd/marketplace reference rollback --dir path/to/delivery
 ## Поставка словарей и потребители (5 ноября 2026)
 
 Площадка владеет реестром и его пополнением; proshop-server и proshop-search —
-потребители снимков. Миграция `00028_reference_dictionaries.sql` добавляет
-18 словарей к `brand`; следующая свободная миграция — `00029`.
+потребители снимков. Миграция `00030_reference_dictionaries.sql` добавляет
+18 словарей к `brand`.
 Открытые словари: `brand`, `country`, `material`. Закрытые:
 `color`, `gender`, `season`, `body_material`, `cookware_material`,
 `textile_material`, `jewelry_metal`, `book_binding`, `storage_type`,
