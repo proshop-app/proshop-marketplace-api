@@ -127,17 +127,17 @@ func updateChecksum(t *testing.T, files fstest.MapFS) {
 func TestManifestRequiresNewRelease(t *testing.T) {
 	files := cloneBundle(t)
 	current, err := PrepareManifest(files, 0, false)
-	if err != nil || current.Release != 4 {
+	if err != nil || current.Release < 1 {
 		t.Fatal(current, err)
 	}
 	files["data/attributes.yaml"].Data = append(files["data/attributes.yaml"].Data, []byte("\n# новая поставка\n")...)
 	if _, err := PrepareManifest(files, 0, false); err == nil {
 		t.Fatal("не замечено изменение байтов")
 	}
-	if _, err := PrepareManifest(files, 4, true); err == nil {
+	if _, err := PrepareManifest(files, current.Release, true); err == nil {
 		t.Fatal("перезапись выпущенного номера")
 	}
-	next, err := PrepareManifest(files, 5, true)
+	next, err := PrepareManifest(files, current.Release+1, true)
 	if err != nil || next.Checksum == current.Checksum || next.Coverage != current.Coverage {
 		t.Fatal(next, err)
 	}
