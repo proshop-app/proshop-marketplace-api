@@ -235,7 +235,7 @@ func TestProjectorDoesNotResolveModelInsideTransaction(t *testing.T) {
 		"brand":       json.RawMessage(`"Unavailable brand"`),
 		"part_number": json.RawMessage(`"A1"`),
 	}
-	projector := appcatalog.NewProjector(uow, fake.NewClock(at(1)))
+	projector := appcatalog.NewProjector(uow, fake.NewClock(at(1)), nil)
 	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{
 		EventID:  "without-registry",
 		Snapshot: snap,

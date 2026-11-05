@@ -13,7 +13,7 @@ import (
 
 func TestApplyProduct(t *testing.T) {
 	store := fake.NewStore()
-	projector := appcatalog.NewProjector(store, fake.NewClock(t1))
+	projector := appcatalog.NewProjector(store, fake.NewClock(t1), nil)
 	ctx := context.Background()
 
 	if err := projector.ApplyProduct(ctx, productEvent("e1", snapshot("t1", "p1", 2, t0))); err != nil {
@@ -50,7 +50,7 @@ func TestApplyProduct(t *testing.T) {
 
 func TestApplyProductDeduplicates(t *testing.T) {
 	store := fake.NewStore()
-	projector := appcatalog.NewProjector(store, fake.NewClock(t1))
+	projector := appcatalog.NewProjector(store, fake.NewClock(t1), nil)
 	ctx := context.Background()
 
 	if err := projector.ApplyProduct(ctx, productEvent("e1", snapshot("t1", "p1", 1, t0))); err != nil {
@@ -70,7 +70,7 @@ func TestApplyProductDeduplicates(t *testing.T) {
 
 func TestApplyProductInvalidRollsBack(t *testing.T) {
 	store := fake.NewStore()
-	projector := appcatalog.NewProjector(store, fake.NewClock(t1))
+	projector := appcatalog.NewProjector(store, fake.NewClock(t1), nil)
 
 	bad := snapshot("t1", "p1", 1, t0)
 	bad.Card.Name = ""
@@ -87,7 +87,7 @@ func TestApplyProductInvalidRollsBack(t *testing.T) {
 func TestApplyStockAndPrice(t *testing.T) {
 	store := fake.NewStore()
 	clock := fake.NewClock(t1)
-	projector := appcatalog.NewProjector(store, clock)
+	projector := appcatalog.NewProjector(store, clock, nil)
 	ctx := context.Background()
 
 	price := catalog.PriceSignal{Price: money.FromKopecks(9900), At: t1}

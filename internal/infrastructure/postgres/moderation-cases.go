@@ -10,6 +10,8 @@ import (
 )
 
 const (
+	moderationOpenStats = `SELECT tenant_id, count(*), min(opened_at)
+ FROM moderation_cases WHERE status = 'open' GROUP BY tenant_id`
 	caseColumns = `id, tenant_id, product_id, revision,
  source, status, reasons, note,
  opened_at, decided_at, version`
@@ -157,4 +159,22 @@ func (r *ModerationCases) Open(
 	product ids.ProductID,
 ) (*moderation.Case, error) {
 	return scanModerationCase(r.q.QueryRow(ctx, openModerationCase, tenant, product))
+}
+
+// OpenStats не загружает сами дела для подсчёта очереди.
+func (r *ModerationCases) OpenStats(ctx context.Context) ([]moderation.OpenStat, error) {
+	rows, err := r.q.Query(ctx, moderationOpenStats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []moderation.OpenStat{}
+	for rows.Next() {
+		var stat moderation.OpenStat
+		if err := rows.Scan(&stat.TenantID, &stat.Count, &stat.Oldest); err != nil {
+			return nil, err
+		}
+		result = append(result, stat)
+	}
+	return result, rows.Err()
 }

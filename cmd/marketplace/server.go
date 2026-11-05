@@ -47,24 +47,26 @@ const referenceStatsInterval = time.Minute
 
 // services — сценарии приложения процесса.
 type services struct {
-	operatorAuth *appoperator.Auth
-	events       *messaging.Events
-	taxonomy     *apptaxonomy.Service
-	projector    *appcatalog.Projector
-	indexer      *appcatalog.Indexer
-	queries      *appcatalog.Queries
-	participants *appparticipant.Service
-	registry     *appparticipant.Registry
-	settings     *appparticipant.Settings
-	auth         *appbuyer.Auth
-	carts        *appcart.Service
-	directory    *appdelivery.Directory
-	checkouts    *appcheckout.Service
-	dispatcher   *messaging.Dispatcher
-	janitor      *messaging.Janitor
-	parker       *messaging.Parker
-	reference    *appreference.Service
-	candidates   ports.ReferenceCandidates
+	moderationMetrics *jobs.ModerationMetrics
+	moderation        *appmoderation.Service
+	operatorAuth      *appoperator.Auth
+	events            *messaging.Events
+	taxonomy          *apptaxonomy.Service
+	projector         *appcatalog.Projector
+	indexer           *appcatalog.Indexer
+	queries           *appcatalog.Queries
+	participants      *appparticipant.Service
+	registry          *appparticipant.Registry
+	settings          *appparticipant.Settings
+	auth              *appbuyer.Auth
+	carts             *appcart.Service
+	directory         *appdelivery.Directory
+	checkouts         *appcheckout.Service
+	dispatcher        *messaging.Dispatcher
+	janitor           *messaging.Janitor
+	parker            *messaging.Parker
+	reference         *appreference.Service
+	candidates        ports.ReferenceCandidates
 	// writer публикует события площадки; закрывается после остановки разбора outbox
 	writer *infrakafka.Writer
 }
@@ -185,7 +187,9 @@ func (s *server) services(ctx context.Context) (services, error) {
 		CartTTL:                   cfg.Cart.TTL,
 		QuoteTimeout:              cfg.Checkout.QuoteTimeout,
 	})
+	moderationMetrics := jobs.NewModerationMetrics(s.metrics)
 	moderation := appmoderation.NewService(uow, now, identities, appmoderation.Config{
+		Metrics:         moderationMetrics,
 		ProbationOffers: cfg.Moderation.ProbationOffers,
 		RequireImage:    cfg.Moderation.RequireImage,
 	})
@@ -249,25 +253,27 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 
 	return services{
-		operatorAuth: operatorAuth,
-		events:       events,
-		taxonomy:     apptaxonomy.NewService(uow, now, moderation),
-		projector:    projector,
-		indexer:      indexer,
-		queries:      appcatalog.NewQueries(uow, s.store.index, resyncing),
-		participants: appparticipant.NewService(uow, now, identities),
-		registry:     registry,
-		settings:     settings,
-		auth:         auth,
-		carts:        appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL),
-		directory:    pickups,
-		checkouts:    checkouts,
-		dispatcher:   dispatcher,
-		janitor:      janitor,
-		parker:       messaging.NewParker(uow),
-		reference:    references,
-		candidates:   candidates,
-		writer:       writer,
+		moderationMetrics: moderationMetrics,
+		moderation:        moderation,
+		operatorAuth:      operatorAuth,
+		events:            events,
+		taxonomy:          apptaxonomy.NewService(uow, now, moderation),
+		projector:         projector,
+		indexer:           indexer,
+		queries:           appcatalog.NewQueries(uow, s.store.index, resyncing),
+		participants:      appparticipant.NewService(uow, now, identities),
+		registry:          registry,
+		settings:          settings,
+		auth:              auth,
+		carts:             appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL),
+		directory:         pickups,
+		checkouts:         checkouts,
+		dispatcher:        dispatcher,
+		janitor:           janitor,
+		parker:            messaging.NewParker(uow),
+		reference:         references,
+		candidates:        candidates,
+		writer:            writer,
 	}, nil
 }
 
@@ -350,7 +356,11 @@ func (s *server) run(ctx context.Context) error {
 func (s *server) jobs() []func(context.Context) error {
 	cfg := s.cfg
 
-	runners := []func(context.Context) error{}
+	runners := []func(context.Context) error{
+		func(ctx context.Context) error {
+			return s.app.moderationMetrics.Run(ctx, s.app.moderation, cfg.Moderation.MetricsInterval, s.logger)
+		},
+	}
 	if s.app.candidates != nil {
 		runners = append(runners, jobs.NewReferenceCandidatesRunner(
 			s.app.reference,
@@ -389,6 +399,7 @@ func (s *server) httpServer() *http.Server {
 		{Name: "kafka", Probe: func(ctx context.Context) error { return infrakafka.Ping(ctx, cfg.Kafka.Brokers) }},
 	}
 	handler := transport.NewHandler(transport.Deps{
+		Moderation:    s.app.moderation,
 		Taxonomy:      s.app.taxonomy,
 		Catalog:       s.app.queries,
 		Participants:  s.app.participants,

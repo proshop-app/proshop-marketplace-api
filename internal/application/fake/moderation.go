@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -12,6 +13,7 @@ import (
 )
 
 type moderationData struct {
+	cached               map[string]moderation.CachedDecision
 	verdicts             map[productKey]moderation.VerdictState
 	cases                map[ids.UUID]moderation.CaseState
 	decisions            []moderation.Decision
@@ -29,6 +31,7 @@ type participantDecisions struct{ d *moderationData }
 
 func newModerationData() *moderationData {
 	return &moderationData{
+		cached:   map[string]moderation.CachedDecision{},
 		verdicts: map[productKey]moderation.VerdictState{},
 		cases:    map[ids.UUID]moderation.CaseState{},
 		phrases:  map[string]moderation.StopPhrase{},
@@ -39,6 +42,7 @@ func newModerationData() *moderationData {
 
 func (d *moderationData) clone() *moderationData {
 	return &moderationData{
+		cached:               maps.Clone(d.cached),
 		verdicts:             maps.Clone(d.verdicts),
 		cases:                maps.Clone(d.cases),
 		decisions:            slices.Clone(d.decisions),
@@ -89,6 +93,9 @@ func (r moderationVerdicts) List(_ context.Context, f moderation.Filter) ([]mode
 		}
 	}
 	sort.Slice(all, func(i, j int) bool {
+		if !all[i].UpdatedAt.Equal(all[j].UpdatedAt) {
+			return all[i].UpdatedAt.After(all[j].UpdatedAt)
+		}
 		if all[i].TenantID != all[j].TenantID {
 			return all[i].TenantID < all[j].TenantID
 		}
@@ -112,7 +119,7 @@ func (r moderationCases) Get(_ context.Context, id ids.UUID) (*moderation.Case, 
 
 func (r moderationCases) Open(_ context.Context, t ids.TenantID, p ids.ProductID) (*moderation.Case, error) {
 	for _, c := range r.d.cases {
-		if c.TenantID == t && c.ProductID == p && c.Status == "open" {
+		if c.TenantID == t && c.ProductID == p && c.Status == moderation.Open {
 			return moderation.RestoreCase(c), nil
 		}
 	}
@@ -127,7 +134,7 @@ func (r moderationCases) Save(_ context.Context, c *moderation.Case) error {
 	}
 	for id, other := range r.d.cases {
 		if id != state.ID && other.TenantID == state.TenantID && other.ProductID == state.ProductID &&
-			state.Status == "open" && other.Status == "open" {
+			state.Status == moderation.Open && other.Status == moderation.Open {
 			return &moderation.CaseConflict{Current: moderation.RestoreCase(other).State()}
 		}
 	}
@@ -175,7 +182,12 @@ func (r moderationRules) Current(_ context.Context) (moderation.Rules, error) {
 	for _, phrase := range r.d.phrases {
 		rules.Phrases = append(rules.Phrases, phrase)
 	}
-	sort.Slice(rules.Phrases, func(i, j int) bool { return rules.Phrases[i].Key < rules.Phrases[j].Key })
+	sort.Slice(rules.Phrases, func(i, j int) bool {
+		if !rules.Phrases[i].CreatedAt.Equal(rules.Phrases[j].CreatedAt) {
+			return rules.Phrases[i].CreatedAt.Before(rules.Phrases[j].CreatedAt)
+		}
+		return rules.Phrases[i].Key < rules.Phrases[j].Key
+	})
 	return rules, nil
 }
 
@@ -236,4 +248,45 @@ func (s *Store) SeedVerdict(state moderation.VerdictState) {
 	s.read(func(d *data) {
 		d.moderation.verdicts[productKey{state.TenantID, state.ProductID}] = moderation.RestoreVerdict(state).State()
 	})
+}
+
+func (r moderationDecisions) Cached(
+	_ context.Context,
+	key string,
+	now time.Time,
+) (moderation.CachedDecision, bool, error) {
+	value, ok := r.d.cached[key]
+	return value, ok && now.Before(value.ExpiresAt), nil
+}
+func (r moderationDecisions) Cache(_ context.Context, key string, value moderation.CachedDecision) error {
+	r.d.cached[key] = value
+	return nil
+}
+func (r moderationRules) RemoveReason(_ context.Context, code string) error {
+	if _, ok := r.d.reasons[code]; !ok {
+		return moderation.ErrNotFound
+	}
+	delete(r.d.reasons, code)
+	return nil
+}
+
+func (r moderationCases) OpenStats(_ context.Context) ([]moderation.OpenStat, error) {
+	tenants := map[ids.TenantID]moderation.OpenStat{}
+	for _, c := range r.d.cases {
+		if c.Status != moderation.Open {
+			continue
+		}
+		stat := tenants[c.TenantID]
+		stat.TenantID = c.TenantID
+		stat.Count++
+		if stat.Oldest.IsZero() || c.OpenedAt.Before(stat.Oldest) {
+			stat.Oldest = c.OpenedAt
+		}
+		tenants[c.TenantID] = stat
+	}
+	result := make([]moderation.OpenStat, 0, len(tenants))
+	for _, stat := range tenants {
+		result = append(result, stat)
+	}
+	return result, nil
 }

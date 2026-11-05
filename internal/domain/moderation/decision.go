@@ -13,34 +13,34 @@ var reasonCode = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 // Actor сохраняет идентичность оператора в неизменяемом журнале.
 type Actor struct {
-	ID   string
-	Name string
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // Decision хранит основание решения для последующего аудита.
 type Decision struct {
-	ID       ids.UUID
-	CaseID   ids.UUID
-	Operator Actor
-	Action   string
-	Reason   string
-	Note     string
-	Revision int64
-	At       time.Time
+	ID       ids.UUID  `json:"id"`
+	CaseID   ids.UUID  `json:"caseId"`
+	Operator Actor     `json:"operator"`
+	Action   Action    `json:"action"`
+	Reason   string    `json:"reason"`
+	Note     string    `json:"note"`
+	Revision int64     `json:"revision"`
+	At       time.Time `json:"at"`
 }
 
 // StopPhrase сохраняет исходный текст и единый ключ сопоставления.
 type StopPhrase struct {
-	Text      string
-	Key       string
-	Operator  Actor
-	CreatedAt time.Time
+	Text      string    `json:"text"`
+	Key       string    `json:"key"`
+	Operator  Actor     `json:"operator"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // ReasonCode отделяет стабильный код причины от отображаемого текста.
 type ReasonCode struct {
-	Code string
-	Text string
+	Code string `json:"code"`
+	Text string `json:"text"`
 }
 
 // NewStopPhrase нормализует пробелы до проверки ограничений длины.

@@ -119,32 +119,46 @@ func (s *Service) ListStopPhrases(ctx context.Context) ([]moderation.StopPhrase,
 	return rules.Phrases, err
 }
 
-// AddStopPhrase ставит переоценку участников в транзакции изменения правил.
+// AddStopPhrase сохраняет прежний интерфейс сценария для команд переоценки.
 func (s *Service) AddStopPhrase(ctx context.Context, text string, actor moderation.Actor) error {
+	_, err := s.CreateStopPhrase(ctx, text, actor)
+	return err
+}
+
+// CreateStopPhrase возвращает сохранённые данные с временем часов сценария.
+func (s *Service) CreateStopPhrase(
+	ctx context.Context,
+	text string,
+	actor moderation.Actor,
+) (moderation.StopPhrase, error) {
 	phrase, err := moderation.NewStopPhrase(text, actor, s.clock.Now())
 	if err != nil {
-		return err
+		return phrase, err
 	}
-	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		if err := tx.ModerationRules().AddPhrase(ctx, phrase); err != nil {
 			return err
 		}
 		return EnqueueAll(ctx, tx, s.clock.Now())
 	})
+	return phrase, err
 }
 
-// RemoveStopPhrase не ставит повторную переоценку при отсутствии фразы.
+// RemoveStopPhrase не ставит переоценку при отсутствии фразы.
 func (s *Service) RemoveStopPhrase(ctx context.Context, text string) error {
 	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		changed, err := tx.ModerationRules().RemovePhrase(ctx, moderation.Key(text))
-		if err != nil || !changed {
+		if err != nil {
 			return err
+		}
+		if !changed {
+			return moderation.ErrNotFound
 		}
 		return EnqueueAll(ctx, tx, s.clock.Now())
 	})
 }
 
-// ListReasons возвращает операторский словарь без встроенных тематик.
+// ListReasons возвращает словарь без встроенных тематик.
 func (s *Service) ListReasons(ctx context.Context) ([]moderation.ReasonCode, error) {
 	var result []moderation.ReasonCode
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -163,4 +177,22 @@ func (s *Service) PutReason(ctx context.Context, reason moderation.ReasonCode) e
 	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		return tx.ModerationRules().PutReason(ctx, reason)
 	})
+}
+
+// RemoveReason сохраняет основания прежних решений в журнале.
+func (s *Service) RemoveReason(ctx context.Context, code string) error {
+	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		return tx.ModerationRules().RemoveReason(ctx, code)
+	})
+}
+
+// OpenStats читает агрегированную очередь для фоновых метрик.
+func (s *Service) OpenStats(ctx context.Context) ([]moderation.OpenStat, error) {
+	var result []moderation.OpenStat
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		result, err = tx.ModerationCases().OpenStats(ctx)
+		return err
+	})
+	return result, err
 }

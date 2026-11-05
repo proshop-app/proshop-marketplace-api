@@ -15,6 +15,7 @@ servers:
   - url: http://localhost:8080
     description: make dev
 tags:
+  - name: moderation
   - name: service
   - name: taxonomy
   - name: catalog
@@ -31,6 +32,714 @@ tags:
       Все ответы несут schemaVersion и revision, поля только добавляются.
       Контракт — docs/reference.md.
 paths:
+  /api/v1/operator/moderation/cases:
+    get:
+      tags:
+      - moderation
+      summary: Очередь дел по времени открытия по убыванию
+      operationId: moderationGetApiVOperatorModerationCases
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - total
+                - limit
+                - offset
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModerationCase'
+                  total: &id001
+                    type: integer
+                    format: int64
+                  limit: *id001
+                  offset: *id001
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: moderation.case_conflict с текущим делом; moderation.case_stale; IDEMPOTENCY_KEY_REUSED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationConflict'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - &id005
+        name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 200
+      - &id006
+        name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          default: open
+          enum:
+          - open
+          - allowed
+          - rejected
+          - superseded
+          - all
+      - name: tenantId
+        in: query
+        required: false
+        schema: &id002
+          type: string
+      - name: source
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - rule
+          - operator
+    post:
+      tags:
+      - moderation
+      summary: Открыть дело вручную
+      operationId: moderationPostApiVOperatorModerationCases
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '201':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationCase'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: moderation.case_conflict с текущим делом; moderation.case_stale; IDEMPOTENCY_KEY_REUSED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationConflict'
+        '500':
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - offerId
+              - note
+              properties:
+                offerId: *id002
+                note: &id003
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+                  description: 1–2000 символов после TrimSpace
+  /api/v1/operator/moderation/cases/{caseId}:
+    get:
+      tags:
+      - moderation
+      summary: Дело, карточка покупателя и история
+      operationId: moderationGetApiVOperatorModerationCasesCaseid
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationCaseDetails'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: moderation.case_conflict с текущим делом; moderation.case_stale; IDEMPOTENCY_KEY_REUSED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationConflict'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema: *id002
+  /api/v1/operator/moderation/cases/{caseId}/allow:
+    post:
+      tags:
+      - moderation
+      summary: Решение по проверенной ревизии
+      operationId: moderationPostApiVOperatorModerationCasesCaseidAllow
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationCase'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: moderation.case_conflict с текущим делом; moderation.case_stale; IDEMPOTENCY_KEY_REUSED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationConflict'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema: *id002
+        description: Ключ ограничен оператором. Исходный ответ хранится 24 часа; изменение запроса — 409 IDEMPOTENCY_KEY_REUSED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: &id004
+              type: object
+              required:
+              - expectedVersion
+              - note
+              properties:
+                expectedVersion:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                reason: *id002
+                note: *id003
+  /api/v1/operator/moderation/cases/{caseId}/reject:
+    post:
+      tags:
+      - moderation
+      summary: Решение по проверенной ревизии
+      operationId: moderationPostApiVOperatorModerationCasesCaseidReject
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationCase'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: moderation.case_conflict с текущим делом; moderation.case_stale; IDEMPOTENCY_KEY_REUSED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationConflict'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema: *id002
+        description: Ключ ограничен оператором. Исходный ответ хранится 24 часа; изменение запроса — 409 IDEMPOTENCY_KEY_REUSED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: *id004
+  /api/v1/operator/moderation/offers/{offerId}:
+    get:
+      tags:
+      - moderation
+      summary: Вердикт, открытое дело и история
+      operationId: moderationGetApiVOperatorModerationOffersOfferid
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationOfferState'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: offerId
+        in: path
+        required: true
+        schema: *id002
+  /api/v1/operator/moderation/verdicts:
+    get:
+      tags:
+      - moderation
+      summary: Вердикты по времени обновления по убыванию
+      operationId: moderationGetApiVOperatorModerationVerdicts
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - total
+                - limit
+                - offset
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModerationVerdict'
+                  total: *id001
+                  limit: *id001
+                  offset: *id001
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - *id005
+      - *id006
+      - name: status
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - allowed
+          - pending
+          - rejected
+      - name: tenantId
+        in: query
+        required: false
+        schema: *id002
+  /api/v1/operator/moderation/stop-phrases:
+    get:
+      tags:
+      - moderation
+      summary: Стоп-фразы по времени добавления
+      operationId: moderationGetApiVOperatorModerationStopPhrases
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModerationStopPhrase'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - moderation
+      summary: Добавить стоп-фразу
+      operationId: moderationPostApiVOperatorModerationStopPhrases
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '201':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationStopPhrase'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - text
+              properties:
+                text:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+  /api/v1/operator/moderation/stop-phrases/{key}:
+    delete:
+      tags:
+      - moderation
+      summary: Удалить стоп-фразу
+      operationId: moderationDeleteApiVOperatorModerationStopPhrasesKey
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '204':
+          description: Успешно
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema: *id002
+  /api/v1/operator/moderation/reasons:
+    get:
+      tags:
+      - moderation
+      summary: Причины по коду
+      operationId: moderationGetApiVOperatorModerationReasons
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModerationReason'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/operator/moderation/reasons/{code}:
+    put:
+      tags:
+      - moderation
+      summary: Создать или изменить причину
+      operationId: moderationPutApiVOperatorModerationReasonsCode
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationReason'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema: *id002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - text
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+    delete:
+      tags:
+      - moderation
+      summary: Удалить причину
+      operationId: moderationDeleteApiVOperatorModerationReasonsCode
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '204':
+          description: Успешно
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema: *id002
+  /api/v1/operator/participants/{tenantId}/trust:
+    put:
+      tags:
+      - moderation
+      summary: Изменить доверие участника
+      operationId: moderationPutApiVOperatorParticipantsTenantidTrust
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - trust
+              - note
+              properties:
+                trust:
+                  type: string
+                  enum:
+                  - probation
+                  - trusted
+                reason: *id002
+                note: *id003
+  /api/v1/operator/participants/{tenantId}/decisions:
+    get:
+      tags:
+      - moderation
+      summary: История решений по участнику по времени по убыванию
+      operationId: moderationGetApiVOperatorParticipantsTenantidDecisions
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - total
+                - limit
+                - offset
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - operator
+                      - action
+                      - value
+                      - reason
+                      - note
+                      - at
+                      properties:
+                        operator:
+                          type: object
+                          required:
+                          - id
+                          - name
+                          properties:
+                            id: *id002
+                            name: *id002
+                        action:
+                          type: string
+                          enum:
+                          - enable
+                          - disable
+                          - trust
+                        value: *id002
+                        reason: *id002
+                        note: *id002
+                        at:
+                          type: string
+                          format: date-time
+                  total: *id001
+                  limit: *id001
+                  offset: *id001
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - *id005
+      - *id006
   /api/v1/operator/session/refresh:
     post:
       operationId: refreshOperatorAccess
@@ -572,7 +1281,7 @@ paths:
           description: Состояние проверки последней проекции
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Publication" }
+              schema: { $ref: "#/components/schemas/OperatorPublication" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
@@ -1074,6 +1783,15 @@ paths:
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+                note: { type: string }
       responses:
         "200": { $ref: "#/components/responses/Participant" }
         "400": { $ref: "#/components/responses/Error" }
@@ -1088,6 +1806,15 @@ paths:
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+                note: { type: string }
       responses:
         "200": { $ref: "#/components/responses/Participant" }
         "400": { $ref: "#/components/responses/Error" }
@@ -1675,6 +2402,264 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Participant" }
   schemas:
+    OperatorPublication:
+      allOf:
+      - $ref: '#/components/schemas/Publication'
+      - type: object
+        required:
+        - moderation
+        properties:
+          moderation:
+            type: object
+            required:
+            - status
+            - reasons
+            properties:
+              status:
+                type: string
+                enum:
+                - ''
+                - allowed
+                - pending
+                - rejected
+              reasons:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - key
+                  - message
+                  properties:
+                    key: &id001
+                      type: string
+                    message: *id001
+    ModerationCase:
+      type: object
+      required:
+      - id
+      - offerId
+      - tenantId
+      - productId
+      - revision
+      - source
+      - status
+      - reasons
+      - note
+      - openedAt
+      - decidedAt
+      - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        offerId: &id001
+          type: string
+        tenantId: *id001
+        productId: *id001
+        revision: &id002
+          type: integer
+          format: int64
+        source:
+          type: string
+          enum:
+          - rule
+          - operator
+        status:
+          type: string
+          enum:
+          - open
+          - allowed
+          - rejected
+          - superseded
+        reasons: &id003
+          type: array
+          items:
+            type: object
+            required:
+            - key
+            - message
+            properties:
+              key: *id001
+              message: *id001
+        note: *id001
+        openedAt:
+          type: string
+          format: date-time
+        decidedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        version: *id002
+    ModerationVerdict:
+      type: object
+      required:
+      - offerId
+      - tenantId
+      - productId
+      - revision
+      - status
+      - reasons
+      - decidedBy
+      - updatedAt
+      properties:
+        offerId: *id001
+        tenantId: *id001
+        productId: *id001
+        revision: *id002
+        status:
+          type: string
+          enum:
+          - allowed
+          - pending
+          - rejected
+        reasons: *id003
+        decidedBy:
+          type: string
+          enum:
+          - rule
+          - operator
+        updatedAt:
+          type: string
+          format: date-time
+    ModerationOffer:
+      type: object
+      required:
+      - name
+      - description
+      - image
+      - price
+      - basePrice
+      - categoryId
+      - categoryPath
+      - attributes
+      - seller
+      - publication
+      properties:
+        name: *id001
+        description: *id001
+        image: *id001
+        price: *id002
+        basePrice: *id002
+        categoryId: *id001
+        categoryPath:
+          type: array
+          items: *id001
+        attributes:
+          $ref: '#/components/schemas/CanonicalAttributes'
+        seller:
+          type: object
+          required:
+          - slug
+          - name
+          properties:
+            slug: *id001
+            name: *id001
+        publication:
+          $ref: '#/components/schemas/Publication'
+    ModerationHistory:
+      type: array
+      items:
+        type: object
+        required:
+        - operator
+        - action
+        - reason
+        - note
+        - revision
+        - at
+        properties:
+          operator: &id004
+            type: object
+            required:
+            - id
+            - name
+            properties:
+              id: *id001
+              name: *id001
+          action:
+            type: string
+            enum:
+            - allow
+            - reject
+          reason: *id001
+          note: *id001
+          revision: *id002
+          at:
+            type: string
+            format: date-time
+    ModerationStopPhrase:
+      type: object
+      required:
+      - key
+      - text
+      - operator
+      - createdAt
+      properties:
+        key: *id001
+        text: *id001
+        operator: *id004
+        createdAt:
+          type: string
+          format: date-time
+    ModerationReason:
+      type: object
+      required:
+      - code
+      - text
+      properties:
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]{0,63}$
+        text:
+          type: string
+          minLength: 1
+          maxLength: 200
+    ModerationCaseDetails:
+      type: object
+      required:
+      - case
+      - offer
+      - history
+      properties:
+        case:
+          $ref: '#/components/schemas/ModerationCase'
+        offer:
+          $ref: '#/components/schemas/ModerationOffer'
+        history:
+          $ref: '#/components/schemas/ModerationHistory'
+    ModerationOfferState:
+      type: object
+      required:
+      - verdict
+      - case
+      - history
+      properties:
+        verdict:
+          anyOf:
+          - $ref: '#/components/schemas/ModerationVerdict'
+          - type: 'null'
+        case:
+          anyOf:
+          - $ref: '#/components/schemas/ModerationCase'
+          - type: 'null'
+        history:
+          $ref: '#/components/schemas/ModerationHistory'
+    ModerationConflict:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          properties:
+            code: *id001
+            message: *id001
+        case:
+          $ref: '#/components/schemas/ModerationCase'
     Operator:
       type: object
       required:
@@ -2233,8 +3218,10 @@ components:
         maxAmount: { type: integer, format: int64, description: Потолок в копейках; 0 — без потолка }
     Participant:
       type: object
-      required: [tenantId, slug, name, status, enabled, freeDeliveryFrom, delivery, shopEnabled, subsidy, settingsSyncedAt, tenantStatus, visible, checkoutAvailable, version, createdAt, updatedAt]
+      required: [trust, approvedOffers, tenantId, slug, name, status, enabled, freeDeliveryFrom, delivery, shopEnabled, subsidy, settingsSyncedAt, tenantStatus, visible, checkoutAvailable, version, createdAt, updatedAt]
       properties:
+        trust: { type: string, enum: [probation, trusted] }
+        approvedOffers: { type: integer, minimum: 0 }
         tenantId: { type: string }
         slug: { type: string }
         name: { type: string }

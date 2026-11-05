@@ -15,6 +15,7 @@ import (
 
 // Config передаёт политику допуска без зависимости от окружения.
 type Config struct {
+	Metrics         ports.ModerationMetrics
 	ProbationOffers int
 	RequireImage    bool
 }
@@ -84,6 +85,7 @@ func (s *Service) Evaluate(
 	if err := tx.ModerationVerdicts().Save(ctx, verdict); err != nil {
 		return err
 	}
+	s.recordVerdict(tx, verdict.State())
 	c, err := tx.ModerationCases().Open(ctx, p.TenantID, p.ProductID)
 	if err != nil && !errors.Is(err, moderation.ErrNotFound) {
 		return err
@@ -101,4 +103,10 @@ func (s *Service) Evaluate(
 		}
 	}
 	return tx.Outbox().Enqueue(ctx, appcatalog.SyncOfferTask(p.TenantID, p.ProductID, now))
+}
+
+func (s *Service) recordVerdict(tx ports.Tx, state moderation.VerdictState) {
+	if s.config.Metrics != nil {
+		tx.AfterCommit(func() { s.config.Metrics.Verdict(state) })
+	}
 }

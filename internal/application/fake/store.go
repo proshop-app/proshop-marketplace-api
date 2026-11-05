@@ -136,7 +136,8 @@ func (s *Store) Do(ctx context.Context, fn func(ctx context.Context, tx ports.Tx
 	defer s.mu.Unlock()
 
 	working := s.data.clone()
-	if err := fn(ctx, &tx{data: working}); err != nil {
+	scope := &tx{data: working}
+	if err := fn(ctx, scope); err != nil {
 		return err
 	}
 	if s.FailCommit != nil {
@@ -144,6 +145,9 @@ func (s *Store) Do(ctx context.Context, fn func(ctx context.Context, tx ports.Tx
 	}
 
 	s.data = working
+	for _, observe := range scope.afterCommit {
+		observe()
+	}
 
 	return nil
 }

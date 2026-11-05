@@ -31,6 +31,8 @@ type UnitOfWork interface {
 
 // Tx — хранилища, привязанные к одной транзакции.
 type Tx interface {
+	// AfterCommit откладывает наблюдение до успешной фиксации данных.
+	AfterCommit(func())
 	ModerationVerdicts() moderation.VerdictRepository
 	ModerationCases() moderation.CaseRepository
 	ModerationDecisions() moderation.DecisionRepository

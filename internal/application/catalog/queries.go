@@ -2,9 +2,12 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
@@ -45,6 +48,18 @@ type Queries struct {
 	uow     ports.UnitOfWork
 	index   ports.OfferIndex
 	pricing ports.CatalogPricing
+}
+
+// PublicationView объединяет структурные и модерационные причины скрытия.
+type PublicationView struct {
+	taxonomy.Publication
+	Moderation ModerationView `json:"moderation"`
+}
+
+// ModerationView показывает отсутствие оценки без выдуманного вердикта.
+type ModerationView struct {
+	Status  moderation.Status   `json:"status"`
+	Reasons []moderation.Reason `json:"reasons"`
 }
 
 // NewQueries — запросы каталога.
@@ -194,14 +209,23 @@ func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 }
 
 // Publication — диагностика из проекции, включая скрытые предложения; транспорт закрыт токеном оператора.
-func (q *Queries) Publication(ctx context.Context, id ids.OfferID) (taxonomy.Publication, error) {
-	var publication taxonomy.Publication
+func (q *Queries) Publication(ctx context.Context, id ids.OfferID) (PublicationView, error) {
+	var publication PublicationView
 	err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		product, err := tx.Products().Get(ctx, id.Tenant, id.Product)
 		if err != nil {
 			return err
 		}
-		publication = product.State().Card.Publication
+		publication.Publication = product.State().Card.Publication
+		publication.Moderation.Reasons = []moderation.Reason{moderation.NotEvaluated()}
+		verdict, err := tx.ModerationVerdicts().Get(ctx, id.Tenant, id.Product)
+		if err != nil && !errors.Is(err, moderation.ErrNotFound) {
+			return err
+		}
+		if verdict != nil {
+			publication.Moderation.Status = verdict.State().Status
+			publication.Moderation.Reasons = verdict.State().Reasons
+		}
 		return nil
 	})
 	return publication, err

@@ -19,7 +19,8 @@ import (
 )
 
 type tx struct {
-	data *data
+	afterCommit []func()
+	data        *data
 }
 
 type participants struct{ d *data }
@@ -389,3 +390,5 @@ func (o offers) ChangedSince(
 }
 
 func (t *tx) Taxonomy() taxonomy.Repository { return taxonomies{t.data} }
+
+func (t *tx) AfterCommit(fn func()) { t.afterCommit = append(t.afterCommit, fn) }

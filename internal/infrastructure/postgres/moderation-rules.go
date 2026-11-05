@@ -11,7 +11,7 @@ const (
 	lockModerationRules   = `SELECT revision FROM moderation_rules WHERE id = 1 FOR UPDATE`
 	bumpModerationRules   = `UPDATE moderation_rules SET revision = revision + 1 WHERE id = 1`
 	listModerationPhrases = `SELECT key, text, operator_id, operator_name, created_at
- FROM moderation_stop_phrases ORDER BY key`
+ FROM moderation_stop_phrases ORDER BY created_at, key`
 )
 
 // ModerationRules сериализует правки словаря общей строкой ревизии.

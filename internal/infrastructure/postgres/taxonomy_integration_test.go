@@ -54,7 +54,7 @@ func TestTaxonomyVersionsAndProjection(t *testing.T) {
 	uow := postgres.NewUnitOfWork(pool)
 	ctx := context.Background()
 	now := clock.System{}
-	service := apptaxonomy.NewService(uow, now)
+	service := apptaxonomy.NewService(uow, now, nil)
 	for i := 0; i < 2; i++ {
 		if err := applyDefinition(ctx, service, testTaxonomy(1)); err != nil {
 			t.Fatal(err)
@@ -64,7 +64,7 @@ func TestTaxonomyVersionsAndProjection(t *testing.T) {
 	if err := pool.QueryRow(ctx, countTaxonomyVersions).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("%d %v", count, err)
 	}
-	projector := appcatalog.NewProjector(uow, now)
+	projector := appcatalog.NewProjector(uow, now, nil)
 	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{
 		EventID: "e1",
 		Snapshot: catalog.Snapshot{
@@ -92,7 +92,7 @@ func TestTaxonomyVersionsAndProjection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return p
+		return p.Publication
 	}
 	if p := read(); !p.Published || string(p.Attributes["a1"]) != "1.5" {
 		t.Fatalf("%+v", p)
@@ -160,7 +160,7 @@ func TestTaxonomySharedLockSerializesLoad(t *testing.T) {
 	}
 	limited, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
-	if err := applyDefinition(limited, apptaxonomy.NewService(uow, clock.System{}), testTaxonomy(1)); err == nil {
+	if err := applyDefinition(limited, apptaxonomy.NewService(uow, clock.System{}, nil), testTaxonomy(1)); err == nil {
 		t.Fatal("загрузка обошла разделяемую блокировку приёма карточки")
 	}
 }

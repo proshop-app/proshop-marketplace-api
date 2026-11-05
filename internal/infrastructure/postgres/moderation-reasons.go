@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	listModerationReasons = `SELECT code, text FROM moderation_reasons ORDER BY code`
-	putModerationReason   = `INSERT INTO moderation_reasons (code, text) VALUES ($1, $2)
+	deleteModerationReason = `DELETE FROM moderation_reasons WHERE code = $1`
+	listModerationReasons  = `SELECT code, text FROM moderation_reasons ORDER BY code`
+	putModerationReason    = `INSERT INTO moderation_reasons (code, text) VALUES ($1, $2)
  ON CONFLICT (code) DO UPDATE SET text = EXCLUDED.text`
 )
 
@@ -37,4 +38,16 @@ func (r *ModerationRules) PutReason(ctx context.Context, reason moderation.Reaso
 	}
 	_, err := r.q.Exec(ctx, putModerationReason, reason.Code, reason.Text)
 	return err
+}
+
+// RemoveReason отличает отсутствие записи от успешного удаления.
+func (r *ModerationRules) RemoveReason(ctx context.Context, code string) error {
+	tag, err := r.q.Exec(ctx, deleteModerationReason, code)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return moderation.ErrNotFound
+	}
+	return nil
 }

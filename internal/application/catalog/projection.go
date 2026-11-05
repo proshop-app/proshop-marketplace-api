@@ -42,11 +42,7 @@ type Projector struct {
 }
 
 // NewProjector — приём проекций.
-func NewProjector(uow ports.UnitOfWork, clock ports.Clock, evaluators ...ports.ModerationEvaluator) *Projector {
-	var evaluator ports.ModerationEvaluator
-	if len(evaluators) > 0 {
-		evaluator = evaluators[0]
-	}
+func NewProjector(uow ports.UnitOfWork, clock ports.Clock, evaluator ports.ModerationEvaluator) *Projector {
 	return &Projector{
 		evaluator: evaluator,
 		uow:       uow,

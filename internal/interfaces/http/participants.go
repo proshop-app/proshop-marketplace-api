@@ -12,6 +12,8 @@ import (
 
 // participantJSON — участник в операторском ответе.
 type participantJSON struct {
+	Trust             string                       `json:"trust"`
+	ApprovedOffers    int                          `json:"approvedOffers"`
 	TenantID          string                       `json:"tenantId"`
 	Slug              string                       `json:"slug"`
 	Name              string                       `json:"name"`
@@ -66,6 +68,8 @@ type participantDeliveryJSON struct {
 func toParticipantJSON(view appparticipant.View) participantJSON {
 	p := view.Participant
 	out := participantJSON{
+		Trust:             p.Trust,
+		ApprovedOffers:    p.ApprovedOffers,
 		TenantID:          string(p.TenantID),
 		FreeDeliveryFrom:  p.FreeDeliveryFrom.Kopecks(),
 		Delivery:          p.Delivery,
@@ -170,18 +174,6 @@ func (h *participantHandlers) rename(w http.ResponseWriter, r *http.Request) {
 
 	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
 		return h.service.Rename(r.Context(), tenantID, body.Name)
-	})
-}
-
-func (h *participantHandlers) enable(w http.ResponseWriter, r *http.Request) {
-	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
-		return h.service.Enable(r.Context(), tenantID, participant.Decision{Operator: principalFrom(r)})
-	})
-}
-
-func (h *participantHandlers) disable(w http.ResponseWriter, r *http.Request) {
-	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
-		return h.service.Disable(r.Context(), tenantID, participant.Decision{Operator: principalFrom(r)})
 	})
 }
 

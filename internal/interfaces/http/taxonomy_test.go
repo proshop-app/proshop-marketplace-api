@@ -60,7 +60,7 @@ func TestTaxonomyHTTP(t *testing.T) {
 	index := fake.NewIndex()
 	handler := NewHandler(Deps{
 		Registerer:    prometheus.NewRegistry(),
-		Taxonomy:      apptaxonomy.NewService(store, clock),
+		Taxonomy:      apptaxonomy.NewService(store, clock, nil),
 		Catalog:       appcatalog.NewQueries(store, index, fake.NewPlatform()),
 		OperatorToken: "token",
 		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -147,7 +147,7 @@ func TestTaxonomyHTTP(t *testing.T) {
 	if old := call(http.MethodPut, "/api/v1/operator/taxonomy", testTaxonomyYAML, "token", ""); old.Code != 404 {
 		t.Fatal(old.Code)
 	}
-	if err := appcatalog.NewProjector(store, clock).ApplyProduct(context.Background(), appcatalog.ProductEvent{
+	if err := appcatalog.NewProjector(store, clock, nil).ApplyProduct(context.Background(), appcatalog.ProductEvent{
 		EventID: "e1",
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",

@@ -37,7 +37,8 @@ type UnitOfWork struct {
 }
 
 type scope struct {
-	q querier
+	afterCommit []func()
+	q           querier
 }
 
 // NewUnitOfWork — UnitOfWork поверх пула.
@@ -65,7 +66,8 @@ func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx por
 		}
 	}()
 
-	if err = fn(ctx, &scope{q: tx}); err != nil {
+	scope := &scope{q: tx}
+	if err = fn(ctx, scope); err != nil {
 		return err
 	}
 
@@ -81,8 +83,13 @@ func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx por
 		}
 	}
 
+	for _, observe := range scope.afterCommit {
+		observe()
+	}
 	return nil
 }
+
+func (s *scope) AfterCommit(fn func()) { s.afterCommit = append(s.afterCommit, fn) }
 
 func (s *scope) Participants() participant.Repository { return &Participants{q: s.q} }
 

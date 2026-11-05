@@ -17,6 +17,7 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
+	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
@@ -33,6 +34,7 @@ type Check struct {
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
+	Moderation    *appmoderation.Service
 	Taxonomy      *apptaxonomy.Service
 	Catalog       *appcatalog.Queries
 	Participants  *appparticipant.Service
@@ -70,6 +72,7 @@ type healthJSON struct {
 // routes — все маршруты маркетплейса. Та же таблица сверяется с
 // api/openapi.yaml в тестах: маршрут без описания — красный тест.
 func routes(deps Deps) []route {
+	moderation := &moderationHandlers{service: deps.Moderation}
 	catalog := &catalogHandlers{queries: deps.Catalog}
 	taxonomy := &taxonomyHandlers{service: deps.Taxonomy, catalog: deps.Catalog}
 	participants := &participantHandlers{service: deps.Participants}
@@ -92,6 +95,21 @@ func routes(deps Deps) []route {
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
+		{http.MethodPut, "/api/v1/operator/participants/{tenantId}/trust", operator(participants.decision)},
+		{http.MethodGet, "/api/v1/operator/participants/{tenantId}/decisions", operator(participants.decisions)},
+		{http.MethodGet, "/api/v1/operator/moderation/cases", operator(moderation.cases)},
+		{http.MethodPost, "/api/v1/operator/moderation/cases", operator(moderation.open)},
+		{http.MethodGet, "/api/v1/operator/moderation/cases/{caseId}", operator(moderation.getCase)},
+		{http.MethodPost, "/api/v1/operator/moderation/cases/{caseId}/allow", operator(moderation.decide)},
+		{http.MethodPost, "/api/v1/operator/moderation/cases/{caseId}/reject", operator(moderation.decide)},
+		{http.MethodGet, "/api/v1/operator/moderation/offers/{offerId}", operator(moderation.offer)},
+		{http.MethodGet, "/api/v1/operator/moderation/verdicts", operator(moderation.verdicts)},
+		{http.MethodGet, "/api/v1/operator/moderation/stop-phrases", operator(moderation.phrases)},
+		{http.MethodPost, "/api/v1/operator/moderation/stop-phrases", operator(moderation.addPhrase)},
+		{http.MethodDelete, "/api/v1/operator/moderation/stop-phrases/{key}", operator(moderation.removePhrase)},
+		{http.MethodGet, "/api/v1/operator/moderation/reasons", operator(moderation.reasons)},
+		{http.MethodPut, "/api/v1/operator/moderation/reasons/{code}", operator(moderation.putReason)},
+		{http.MethodDelete, "/api/v1/operator/moderation/reasons/{code}", operator(moderation.removeReason)},
 		{http.MethodPost, "/api/v1/operator/session", gateway.login},
 		{http.MethodPost, "/api/v1/operator/session/refresh", gateway.refresh},
 		{http.MethodGet, "/api/v1/operator/session", gateway.session},
@@ -120,8 +138,8 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/operator/participants", operator(participants.create)},
 		{http.MethodGet, "/api/v1/operator/participants/{tenantId}", operator(participants.get)},
 		{http.MethodPatch, "/api/v1/operator/participants/{tenantId}", operator(participants.rename)},
-		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/enable", operator(participants.enable)},
-		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/disable", operator(participants.disable)},
+		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/enable", operator(participants.decision)},
+		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/disable", operator(participants.decision)},
 
 		{http.MethodPost, "/api/v1/auth/call", auth.start},
 		{http.MethodPost, "/api/v1/auth/call/check", auth.check},

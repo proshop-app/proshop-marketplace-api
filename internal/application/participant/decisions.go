@@ -94,6 +94,9 @@ func (s *Service) ListDecisions(ctx context.Context, tenant ids.TenantID, page p
 	}
 	result := DecisionPage{Limit: page.Limit, Offset: page.Offset}
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		if _, err := tx.Participants().Get(ctx, tenant); err != nil {
+			return err
+		}
 		var err error
 		result.Items, result.Total, err = tx.ParticipantDecisions().List(ctx, tenant, page)
 		return err
