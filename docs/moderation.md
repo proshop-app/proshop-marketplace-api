@@ -51,7 +51,8 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
 | `moderation.stop_phrase` | найдена стоп-фраза; `message` содержит фразу |
 | `moderation.image_missing` | у карточки нет изображения |
 | `moderation.probation` | участник на испытании |
-| `moderation.manual_review` | предыдущая ревизия отклонена оператором |
+| `moderation.rejected_revision` | предыдущая ревизия отклонена оператором, новая ждёт человека |
+| `moderation.manual_review` | оператор открыл дело вручную, «На ручной проверке» |
 | `moderation.rejected_by_operator` | отказ оператора; `message` — код причины или заметка |
 
 Правила применяются к снимку карточки по порядку; первый отказ
@@ -65,8 +66,8 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
    изображения — `rejected`.
 4. Испытание: участник `probation` — `pending` с `moderation.probation`.
 5. Ручной отказ прилипает: если последнее решение оператора по предложению
-   было `reject`, любая новая ревизия — `pending` с `moderation.manual_review`,
-   даже при чистых правилах. Ручное одобрение действует на одну ревизию:
+   было `reject`, любая новая ревизия — `pending` с
+   `moderation.rejected_revision`, даже при чистых правилах. Ручное одобрение действует на одну ревизию:
    следующая проходит правила заново.
 
 Ключ текста: обрезать края, схлопнуть последовательности пробелов (класс
@@ -365,6 +366,53 @@ Gauge обновляет фоновый цикл раз в `MODERATION_METRICS_I
    раздел «Статус предложения и участника» — источник истины для сервера.
 7. **Операторский API решения** возвращает в `history` и в `decision`
    причину как `{code, message}`.
+
+## Доработки API под макет UNO (M5)
+
+Спецификация фреймов 38–53 выявила, чего не хватает API для вёрстки
+раздела. Решения 2026-11-05, реализуются поверх M4; миграция одна —
+`00034_moderation_history.sql`.
+
+1. **Сводка предложения в списках.** Элементы `GET /cases` и
+   `GET /verdicts` получают `offer: {name, image, price}` и
+   `seller: {slug, name}`: у дела — из снимка карточки, у вердикта — из
+   проекции. Так колонка «Товар» не делает запрос на строку.
+2. **Порядок очереди.** `GET /cases?order=oldest|newest`, по умолчанию
+   `oldest`: первая строка — старейшее дело, баннер очереди берёт возраст
+   из неё.
+3. **Фильтр по причине.** `GET /cases?reason=<ключ>` — дела, у которых в
+   причинах есть этот ключ.
+4. **Отклонённые.** `GET /verdicts?decidedBy=rule|operator`; у вердикта с
+   `decidedBy: operator` — `operator: {id, name}` и
+   `decision: {action, reason: {code, message}|null, note, at}` (хранятся в
+   строке вердикта: колонки `operator_id`, `operator_name`,
+   `decision jsonb`). Причина отказа оператора в `reasons` —
+   `moderation.rejected_by_operator` с `message` из словаря, без причины —
+   заметка.
+5. **Два смысла одного ключа.** Прилипающий отказ получает свой ключ
+   `moderation.rejected_revision` («Предыдущая ревизия отклонена
+   оператором»); `moderation.manual_review` — только дело, открытое
+   вручную. Таблица ключей выше и `server-contract.md` обновлены.
+6. **Предложение без дела.** `GET /offers/{offerId}` отдаёт `offer` (как у
+   дела, из проекции), `participant: {tenantId, name, enabled, visible}`
+   для блока «Почему скрыто» и `verdicts` — историю вердиктов (п. 7).
+7. **История вердиктов.** Таблица только на добавление
+   `moderation_verdict_log`: `tenant_id`, `product_id`, `revision`,
+   `status`, `reasons jsonb`, `decided_by`, `operator_id`, `operator_name`,
+   `rules_revision`, `taxonomy_version`, `at`; запись при каждом сохранённом
+   изменении вердикта в той же транзакции. `GET /offers/{offerId}` отдаёт
+   до 50 последних записей, новые сверху.
+8. **Версия правил.** `rulesRevision` и `taxonomyVersion` в ответах
+   вердикта и в истории; `GET /operator/moderation/rules` →
+   `{revision, taxonomyVersion, requireImage, probationOffers}`.
+9. **Порог испытания.** `View` участника получает `probationOffers`
+   (порог из настроек), чтобы показать «{approved} из {required}».
+10. **Прежний уровень в журнале.** У записи журнала участника —
+    `previousValue` (колонка `previous_value`, для старых строк пусто).
+11. **Заметка обязательна** при выключении участника и смене доверия
+    (1–2000 символов, как у решения по делу); при включении — необязательна.
+12. Ключ и текст причин оператора в OpenAPI — `message`; плейсхолдер кода
+    во фронте — `reason_code` (фронт).
 
 ## Доводка M1 (вместе с M2)
 
