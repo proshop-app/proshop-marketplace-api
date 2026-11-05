@@ -25,6 +25,8 @@ const testTaxonomyYAML = `version: 1
 categories:
   - id: c1
     name: Категория
+    title: Полное имя категории
+    slug: c1
     attributes:
       - code: a1
         name: Атрибут
@@ -71,6 +73,11 @@ func TestTaxonomyHTTP(t *testing.T) {
 		w := call(http.MethodGet, path, "", "", "")
 		if w.Code != 200 || w.Header().Get("ETag") != `"taxonomy-1"` || w.Header().Get("X-Taxonomy-Version") != "1" {
 			t.Fatal(w.Code, w.Header(), w.Body.String())
+		}
+		if strings.Contains(path, "/categories") &&
+			(!strings.Contains(w.Body.String(), `"slug":"c1"`) ||
+				!strings.Contains(w.Body.String(), `"title":"Полное имя категории"`)) {
+			t.Fatalf("нет адреса или полного имени в API: %s", w.Body.String())
 		}
 		w = call(http.MethodGet, path, "", "", `"other", W/"taxonomy-1"`)
 		if w.Code != 304 || w.Body.Len() != 0 {

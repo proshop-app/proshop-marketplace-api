@@ -8,7 +8,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/taxonomyfile"
 )
 
-const valid = "version: 1\ncategories:\n  - id: c1\n    name: Категория\n"
+const valid = "version: 1\ncategories:\n  - id: c1\n    name: Категория\n    slug: c1\n"
 
 func TestStrictYAML(t *testing.T) {
 	if d, err := taxonomyfile.Decode(strings.NewReader(valid)); err != nil || d.Version != 1 {

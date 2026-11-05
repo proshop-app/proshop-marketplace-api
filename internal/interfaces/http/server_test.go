@@ -73,7 +73,7 @@ func newEnv(t *testing.T) *env {
 	}
 	e.store.SeedTaxonomy(taxonomy.Definition{
 		Version:    1,
-		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория"}},
+		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория", Slug: "c1"}},
 	})
 	registry := prometheus.NewRegistry()
 	identities := &fake.IDs{}

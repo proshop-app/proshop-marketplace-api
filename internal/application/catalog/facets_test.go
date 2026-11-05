@@ -21,6 +21,7 @@ func TestCanonicalFiltersAndCoverage(t *testing.T) {
 	index := fake.NewIndex()
 	store.SeedTaxonomy(taxonomy.Definition{Version: 1, Categories: []taxonomy.Category{{
 		ID:   "c1",
+		Slug: "c1",
 		Name: "Категория",
 		Attributes: []taxonomy.Attribute{
 			{Code: "a1", Name: "Атрибут 1", Type: "enum", Values: []string{"v1", "v2"}, Facet: true},

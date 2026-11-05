@@ -1716,10 +1716,12 @@ components:
     TaxonomyCategory:
       type: object
       additionalProperties: false
-      required: [id, name]
+      required: [id, name, slug]
       properties:
         id: { type: string, pattern: '^[a-z][a-z0-9_.-]{0,127}$' }
         name: { type: string, minLength: 1, maxLength: 256 }
+        title: { type: string, minLength: 1, maxLength: 256 }
+        slug: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 128 }
         attributes:
           type: [array, "null"]
           items: { $ref: "#/components/schemas/TaxonomyAttribute" }

@@ -71,7 +71,7 @@ docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-2 apply --ex
 новый манифест, проверить и выпустить новый образ:
 
 ```bash
-python3 scripts/taxonomy-manifest.py --release 2 --write
+python3 scripts/taxonomy-manifest.py --release 3 --write
 make taxonomy-check
 make test
 make lint
@@ -101,3 +101,17 @@ docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-2 rollback
 Миграция `00026_taxonomy_releases.sql` добавляет отдельную таблицу истории.
 Её снятие не является откатом каталога и удаляет историю поставок. CLI не
 печатает `DATABASE_URL` или необработанные сообщения драйвера.
+
+## Поставка 3: полные имена и адреса
+
+Поставка 3 вводит необязательный `title` и обязательный `slug`, короткие имена
+и новое дерево из принятого владельцем черновика. Выбыли 23 прежних листа
+и разделы `clothing.underwear`, `clothing.sports`; правила деления и переноса —
+в [решениях по устройству дерева](taxonomy-structure.md#целевой-вид-дерева--как-у-озона).
+Карточки в выбывших категориях получат `taxonomy.category_unknown` и скроются,
+пока магазин не выберет новую категорию.
+
+Первое присвоение адресов снимку поставки 2 разрешено. После этого адрес
+существующего `id` нельзя менять или отдавать другому `id`. Откат поставки 3
+к снимку без адресов завершится конфликтом и потребует корректирующей поставки
+с сохранёнными адресами.

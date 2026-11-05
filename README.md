@@ -273,6 +273,7 @@ version: 1
 categories:
   - id: c1
     name: Категория
+    slug: c1
     attributes:
       - code: a1
         name: Атрибут
@@ -283,6 +284,7 @@ categories:
     children:
       - id: c2
         name: Подкатегория
+        slug: c2
         attributes: []
         children: []
 ```

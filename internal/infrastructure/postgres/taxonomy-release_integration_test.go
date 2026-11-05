@@ -161,6 +161,7 @@ func testRelease(version int64, suffix string) taxonomy.Release {
 		Checksum: strings.Repeat(suffix, 64),
 		Categories: []taxonomy.Category{{
 			ID:   "c" + suffix,
+			Slug: "c" + suffix,
 			Name: "Категория",
 			Attributes: []taxonomy.Attribute{{
 				Code: "a1",

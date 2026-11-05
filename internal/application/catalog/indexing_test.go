@@ -46,6 +46,9 @@ func TestSyncOfferWritesParticipantOffers(t *testing.T) {
 	}
 
 	doc, ok := index.Doc("t1~p1")
+	if len(doc.Categories) != 1 || doc.Categories[0].Name != "Полное имя категории" {
+		t.Fatalf("полное имя категории не попало в индекс: %+v", doc.Categories)
+	}
 	if !ok || !doc.Visible || !doc.Listed || !doc.CheckoutAvailable || doc.Price != 10000 ||
 		doc.SellerSlug != "slug-t1" {
 		t.Fatalf("документ: %+v", doc)
