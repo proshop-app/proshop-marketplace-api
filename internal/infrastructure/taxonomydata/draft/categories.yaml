@@ -407,27 +407,24 @@
           slug: marshrutizatory
           schema: network
         - id: computers.switches
-          name: Коммутаторы
-          title: Коммутаторы сетевые
-          slug: kommutatory-setevye
+          name: Сетевые коммутаторы
+          slug: setevye-kommutatory
           schema: network
         - id: computers.access-points
           name: Точки доступа
           slug: tochki-dostupa
           schema: network
         - id: computers.network-adapters
-          name: Адаптеры
-          title: Адаптеры сетевые
-          slug: adaptery-setevye
+          name: Сетевые адаптеры
+          slug: setevye-adaptery
           schema: network
         - id: computers.modems
           name: Модемы
           slug: modemy
           schema: network
         - id: computers.nas
-          name: Хранилища
-          title: Хранилища сетевые
-          slug: khranilishcha-setevye
+          name: Сетевые хранилища
+          slug: setevye-khranilishcha
           schema: network
         - id: computers.network-cables
           name: Сетевые кабели
@@ -774,8 +771,9 @@
       slug: kukhonnye-prinadlezhnosti
       children:
         - id: kitchen.knives
-          name: Кухонные ножи
-          slug: kukhonnye-nozhi
+          name: Ножи
+          title: Ножи кухонные
+          slug: nozhi-kukhonnye
           schema: kitchen_tool
         - id: kitchen.cutting-boards
           name: Разделочные доски
@@ -806,8 +804,9 @@
           slug: konditerskie-instrumenty
           schema: kitchen_tool
         - id: kitchen.kitchen-scissors
-          name: Кухонные ножницы
-          slug: kukhonnye-nozhnitsy
+          name: Ножницы
+          title: Ножницы кухонные
+          slug: nozhnitsy-kukhonnye
           schema: kitchen_tool
     - id: kitchen.storage
       name: Хранение на кухне
@@ -1191,9 +1190,9 @@
           slug: yubki
           schema: clothing
         - id: clothing.women-knitwear
-          name: Свитеры и кардиганы
-          title: Свитеры и кардиганы женские
-          slug: svitery-i-kardigany-zhenskie
+          name: Свитеры, кардиганы и худи
+          title: Свитеры, кардиганы и худи женские
+          slug: svitery-kardigany-i-khudi-zhenskie
           children:
             - id: clothing.women-sweaters
               name: Свитеры
@@ -1205,21 +1204,11 @@
               title: Кардиганы женские
               slug: kardigany-zhenskie
               schema: clothing
-        - id: clothing.women-hoodies
-          name: Худи
-          title: Худи женские
-          slug: khudi-zhenskie
-          schema: clothing
-        - id: clothing.women-suits
-          name: Костюмы
-          title: Костюмы женские
-          slug: kostyumy-zhenskie
-          schema: clothing
-        - id: clothing.women-jumpsuits
-          name: Комбинезоны
-          title: Комбинезоны женские
-          slug: kombinezony-zhenskie
-          schema: clothing
+            - id: clothing.women-hoodies
+              name: Худи
+              title: Худи женские
+              slug: khudi-zhenskie
+              schema: clothing
         - id: clothing.women-outerwear
           name: Верхняя одежда
           title: Верхняя одежда женская
@@ -1259,6 +1248,126 @@
               title: Трусы женские
               slug: trusy-zhenskie
               schema: underwear
+            - id: clothing.women-socks
+              name: Носки
+              title: Носки женские
+              slug: noski-zhenskie
+              schema: underwear
+            - id: clothing.women-thermal-underwear
+              name: Термобельё
+              title: Термобельё женское
+              slug: termobele-zhenskoe
+              schema: underwear
+            - id: clothing.women-tights
+              name: Колготки
+              title: Колготки женские
+              slug: kolgotki-zhenskie
+              schema: underwear
+        - id: clothing.women-homewear-group
+          name: Домашняя одежда
+          title: Домашняя одежда женская
+          slug: domashnyaya-odezhda-zhenskaya
+          children:
+            - id: clothing.women-pajamas
+              name: Пижамы
+              title: Пижамы женские
+              slug: pizhamy-zhenskie
+              schema: clothing
+            - id: clothing.women-bathrobes
+              name: Халаты
+              title: Халаты женские
+              slug: khalaty-zhenskie
+              schema: clothing
+            - id: clothing.women-homewear
+              name: Костюмы
+              title: Костюмы домашние женские
+              slug: kostyumy-domashnie-zhenskie
+              schema: clothing
+        - id: clothing.women-sports-beach
+          name: Спортивная и пляжная одежда
+          title: Спортивная и пляжная одежда женская
+          slug: sportivnaya-i-plyazhnaya-odezhda-zhenskaya
+          children:
+            - id: clothing.women-tracksuits
+              name: Костюмы
+              title: Костюмы спортивные женские
+              slug: kostyumy-sportivnye-zhenskie
+              schema: clothing
+            - id: clothing.women-leggings
+              name: Легинсы
+              title: Легинсы женские
+              slug: leginsy-zhenskie
+              schema: clothing
+            - id: clothing.women-sports-tshirts
+              name: Футболки
+              title: Футболки спортивные женские
+              slug: futbolki-sportivnye-zhenskie
+              schema: clothing
+            - id: clothing.women-sports-shorts
+              name: Шорты
+              title: Шорты спортивные женские
+              slug: shorty-sportivnye-zhenskie
+              schema: clothing
+            - id: clothing.women-ski-clothing
+              name: Горнолыжная одежда
+              title: Горнолыжная одежда женская
+              slug: gornolyzhnaya-odezhda-zhenskaya
+              schema: outerwear
+            - id: clothing.women-sports-jackets
+              name: Куртки
+              title: Куртки спортивные женские
+              slug: kurtki-sportivnye-zhenskie
+              schema: outerwear
+            - id: clothing.women-swimsuits
+              name: Купальники
+              title: Купальники женские
+              slug: kupalniki-zhenskie
+              schema: swimwear
+        - id: clothing.women-suits-overalls
+          name: Костюмы и комбинезоны
+          title: Костюмы и комбинезоны женские
+          slug: kostyumy-i-kombinezony-zhenskie
+          children:
+            - id: clothing.women-suits
+              name: Костюмы
+              title: Костюмы женские
+              slug: kostyumy-zhenskie
+              schema: clothing
+            - id: clothing.women-jumpsuits
+              name: Комбинезоны
+              title: Комбинезоны женские
+              slug: kombinezony-zhenskie
+              schema: clothing
+        - id: clothing.women-workwear
+          name: Рабочая одежда
+          title: Рабочая одежда женская
+          slug: rabochaya-odezhda-zhenskaya
+          children:
+            - id: clothing.women-work-jackets
+              name: Куртки
+              title: Куртки рабочие женские
+              slug: kurtki-rabochie-zhenskie
+              schema: workwear
+            - id: clothing.women-work-trousers
+              name: Брюки
+              title: Брюки рабочие женские
+              slug: bryuki-rabochie-zhenskie
+              schema: workwear
+            - id: clothing.women-work-overalls
+              name: Комбинезоны
+              title: Комбинезоны рабочие женские
+              slug: kombinezony-rabochie-zhenskie
+              schema: workwear
+            - id: clothing.women-work-gowns
+              name: Халаты
+              title: Халаты рабочие женские
+              slug: khalaty-rabochie-zhenskie
+              schema: workwear
+            - id: clothing.women-high-visibility
+              name: Сигнальная одежда
+              title: Сигнальная одежда женская
+              slug: signalnaya-odezhda-zhenskaya
+              schema: workwear
     - id: clothing.men
       name: Мужская одежда
       slug: muzhskaya-odezhda
@@ -1283,25 +1392,10 @@
               title: Рубашки поло мужские
               slug: rubashki-polo-muzhskie
               schema: clothing
-        - id: clothing.men-jeans
-          name: Джинсы
-          title: Джинсы мужские
-          slug: dzhinsy-muzhskie
-          schema: clothing
-        - id: clothing.men-trousers
-          name: Брюки
-          title: Брюки мужские
-          slug: bryuki-muzhskie
-          schema: clothing
-        - id: clothing.men-shorts
-          name: Шорты
-          title: Шорты мужские
-          slug: shorty-muzhskie
-          schema: clothing
         - id: clothing.men-knitwear
-          name: Свитеры и кардиганы
-          title: Свитеры и кардиганы мужские
-          slug: svitery-i-kardigany-muzhskie
+          name: Свитеры, кардиганы и худи
+          title: Свитеры, кардиганы и худи мужские
+          slug: svitery-kardigany-i-khudi-muzhskie
           children:
             - id: clothing.men-sweaters
               name: Свитеры
@@ -1313,21 +1407,11 @@
               title: Кардиганы мужские
               slug: kardigany-muzhskie
               schema: clothing
-        - id: clothing.men-hoodies
-          name: Худи
-          title: Худи мужские
-          slug: khudi-muzhskie
-          schema: clothing
-        - id: clothing.men-suits
-          name: Костюмы
-          title: Костюмы мужские
-          slug: kostyumy-muzhskie
-          schema: clothing
-        - id: clothing.men-blazers
-          name: Пиджаки
-          title: Пиджаки мужские
-          slug: pidzhaki-muzhskie
-          schema: clothing
+            - id: clothing.men-hoodies
+              name: Худи
+              title: Худи мужские
+              slug: khudi-muzhskie
+              schema: clothing
         - id: clothing.men-outerwear
           name: Верхняя одежда
           title: Верхняя одежда мужская
@@ -1353,11 +1437,151 @@
               title: Плащи мужские
               slug: plashchi-muzhskie
               schema: outerwear
-        - id: clothing.men-underpants
-          name: Трусы
-          title: Трусы мужские
-          slug: trusy-muzhskie
-          schema: underwear
+        - id: clothing.men-homewear-group
+          name: Домашняя одежда
+          title: Домашняя одежда мужская
+          slug: domashnyaya-odezhda-muzhskaya
+          children:
+            - id: clothing.men-pajamas
+              name: Пижамы
+              title: Пижамы мужские
+              slug: pizhamy-muzhskie
+              schema: clothing
+            - id: clothing.men-bathrobes
+              name: Халаты
+              title: Халаты мужские
+              slug: khalaty-muzhskie
+              schema: clothing
+            - id: clothing.men-homewear
+              name: Костюмы
+              title: Костюмы домашние мужские
+              slug: kostyumy-domashnie-muzhskie
+              schema: clothing
+        - id: clothing.men-underwear-group
+          name: Нижнее бельё
+          title: Нижнее бельё мужское
+          slug: nizhnee-bele-muzhskoe
+          children:
+            - id: clothing.men-underpants
+              name: Трусы
+              title: Трусы мужские
+              slug: trusy-muzhskie
+              schema: underwear
+            - id: clothing.men-socks
+              name: Носки
+              title: Носки мужские
+              slug: noski-muzhskie
+              schema: underwear
+            - id: clothing.men-thermal-underwear
+              name: Термобельё
+              title: Термобельё мужское
+              slug: termobele-muzhskoe
+              schema: underwear
+        - id: clothing.men-sports-beach
+          name: Спортивная и пляжная одежда
+          title: Спортивная и пляжная одежда мужская
+          slug: sportivnaya-i-plyazhnaya-odezhda-muzhskaya
+          children:
+            - id: clothing.men-tracksuits
+              name: Костюмы
+              title: Костюмы спортивные мужские
+              slug: kostyumy-sportivnye-muzhskie
+              schema: clothing
+            - id: clothing.men-leggings
+              name: Легинсы
+              title: Легинсы мужские
+              slug: leginsy-muzhskie
+              schema: clothing
+            - id: clothing.men-sports-tshirts
+              name: Футболки
+              title: Футболки спортивные мужские
+              slug: futbolki-sportivnye-muzhskie
+              schema: clothing
+            - id: clothing.men-sports-shorts
+              name: Шорты
+              title: Шорты спортивные мужские
+              slug: shorty-sportivnye-muzhskie
+              schema: clothing
+            - id: clothing.men-ski-clothing
+              name: Горнолыжная одежда
+              title: Горнолыжная одежда мужская
+              slug: gornolyzhnaya-odezhda-muzhskaya
+              schema: outerwear
+            - id: clothing.men-sports-jackets
+              name: Куртки
+              title: Куртки спортивные мужские
+              slug: kurtki-sportivnye-muzhskie
+              schema: outerwear
+            - id: clothing.men-swim-trunks
+              name: Плавки
+              title: Плавки мужские
+              slug: plavki-muzhskie
+              schema: swimwear
+        - id: clothing.men-suits-blazers
+          name: Костюмы и пиджаки
+          title: Костюмы и пиджаки мужские
+          slug: kostyumy-i-pidzhaki-muzhskie
+          children:
+            - id: clothing.men-suits
+              name: Костюмы
+              title: Костюмы мужские
+              slug: kostyumy-muzhskie
+              schema: clothing
+            - id: clothing.men-blazers
+              name: Пиджаки
+              title: Пиджаки мужские
+              slug: pidzhaki-muzhskie
+              schema: clothing
+        - id: clothing.men-bottoms
+          name: Брюки, джинсы и шорты
+          title: Брюки, джинсы и шорты мужские
+          slug: bryuki-dzhinsy-i-shorty-muzhskie
+          children:
+            - id: clothing.men-trousers
+              name: Брюки
+              title: Брюки мужские
+              slug: bryuki-muzhskie
+              schema: clothing
+            - id: clothing.men-jeans
+              name: Джинсы
+              title: Джинсы мужские
+              slug: dzhinsy-muzhskie
+              schema: clothing
+            - id: clothing.men-shorts
+              name: Шорты
+              title: Шорты мужские
+              slug: shorty-muzhskie
+              schema: clothing
+        - id: clothing.men-workwear
+          name: Рабочая одежда
+          title: Рабочая одежда мужская
+          slug: rabochaya-odezhda-muzhskaya
+          children:
+            - id: clothing.men-work-jackets
+              name: Куртки
+              title: Куртки рабочие мужские
+              slug: kurtki-rabochie-muzhskie
+              schema: workwear
+            - id: clothing.men-work-trousers
+              name: Брюки
+              title: Брюки рабочие мужские
+              slug: bryuki-rabochie-muzhskie
+              schema: workwear
+            - id: clothing.men-work-overalls
+              name: Комбинезоны
+              title: Комбинезоны рабочие мужские
+              slug: kombinezony-rabochie-muzhskie
+              schema: workwear
+            - id: clothing.men-work-gowns
+              name: Халаты
+              title: Халаты рабочие мужские
+              slug: khalaty-rabochie-muzhskie
+              schema: workwear
+            - id: clothing.men-high-visibility
+              name: Сигнальная одежда
+              title: Сигнальная одежда мужская
+              slug: signalnaya-odezhda-muzhskaya
+              schema: workwear
     - id: clothing.children
       name: Детская одежда
       slug: detskaya-odezhda
@@ -1366,41 +1590,6 @@
           name: Платья
           title: Платья для девочек
           slug: platya-dlya-devochek
-          schema: clothing_kids
-        - id: clothing.kids-shirts
-          name: Рубашки
-          title: Рубашки детские
-          slug: rubashki-detskie
-          schema: clothing_kids
-        - id: clothing.kids-tshirts
-          name: Футболки
-          title: Футболки детские
-          slug: futbolki-detskie
-          schema: clothing_kids
-        - id: clothing.kids-trousers
-          name: Брюки
-          title: Брюки детские
-          slug: bryuki-detskie
-          schema: clothing_kids
-        - id: clothing.kids-jeans
-          name: Джинсы
-          title: Джинсы детские
-          slug: dzhinsy-detskie
-          schema: clothing_kids
-        - id: clothing.kids-shorts
-          name: Шорты
-          title: Шорты детские
-          slug: shorty-detskie
-          schema: clothing_kids
-        - id: clothing.kids-sweaters
-          name: Свитеры
-          title: Свитеры детские
-          slug: svitery-detskie
-          schema: clothing_kids
-        - id: clothing.kids-hoodies
-          name: Толстовки
-          title: Толстовки детские
-          slug: tolstovki-detskie
           schema: clothing_kids
         - id: clothing.school-uniform
           name: Школьная форма
@@ -1430,89 +1619,156 @@
               title: Куртки детские
               slug: kurtki-detskie
               schema: outerwear_kids
-            - id: clothing.kids-overalls
-              name: Комбинезоны
-              title: Комбинезоны детские
-              slug: kombinezony-detskie
-              schema: outerwear_kids
             - id: clothing.kids-coats
               name: Пальто
               title: Пальто детские
               slug: palto-detskie
               schema: outerwear_kids
-        - id: clothing.kids-underwear
-          name: Бельё
-          title: Бельё детское
-          slug: bele-detskoe
-          schema: underwear
-    - id: clothing.underwear
-      name: Бельё, домашняя одежда и купальные костюмы
-      slug: bele-domashnyaya-odezhda-i-kupalnye-kostyumy
-      children:
-        - id: clothing.socks
-          name: Носки
-          slug: noski
-          schema: underwear
-        - id: clothing.tights
-          name: Колготки
-          slug: kolgotki
-          schema: underwear
-        - id: clothing.thermal-underwear
-          name: Термобельё
-          slug: termobele
-          schema: underwear
-        - id: clothing.pajamas
-          name: Пижамы
-          slug: pizhamy
-          schema: clothing
-        - id: clothing.bathrobes
-          name: Халаты
-          slug: khalaty
-          schema: clothing
-        - id: clothing.homewear
-          name: Домашние костюмы
-          slug: domashnie-kostyumy
-          schema: clothing
-        - id: clothing.swimsuits
-          name: Купальники
-          slug: kupalniki
-          schema: swimwear
-        - id: clothing.swim-trunks
-          name: Плавки
-          slug: plavki
-          schema: swimwear
-    - id: clothing.sports
-      name: Спортивная одежда
-      slug: sportivnaya-odezhda
-      children:
-        - id: clothing.tracksuits
-          name: Костюмы
-          title: Костюмы спортивные
-          slug: kostyumy-sportivnye
-          schema: clothing
-        - id: clothing.leggings
-          name: Легинсы
-          slug: leginsy
-          schema: clothing
-        - id: clothing.sports-tshirts
-          name: Футболки
-          title: Футболки спортивные
-          slug: futbolki-sportivnye
-          schema: clothing
-        - id: clothing.sports-shorts
-          name: Шорты
-          title: Шорты спортивные
-          slug: shorty-sportivnye
-          schema: clothing
-        - id: clothing.ski-clothing
-          name: Горнолыжная одежда
-          slug: gornolyzhnaya-odezhda
-          schema: outerwear
-        - id: clothing.sports-jackets
-          name: Куртки
-          title: Куртки спортивные
-          slug: kurtki-sportivnye
-          schema: outerwear
+        - id: clothing.kids-homewear-group
+          name: Домашняя одежда
+          title: Домашняя одежда детская
+          slug: domashnyaya-odezhda-detskaya
+          children:
+            - id: clothing.kids-pajamas
+              name: Пижамы
+              title: Пижамы детские
+              slug: pizhamy-detskie
+              schema: clothing_kids
+            - id: clothing.kids-bathrobes
+              name: Халаты
+              title: Халаты детские
+              slug: khalaty-detskie
+              schema: clothing_kids
+            - id: clothing.kids-homewear
+              name: Костюмы
+              title: Костюмы домашние детские
+              slug: kostyumy-domashnie-detskie
+              schema: clothing_kids
+        - id: clothing.kids-underwear-group
+          name: Нижнее бельё
+          title: Нижнее бельё детское
+          slug: nizhnee-bele-detskoe
+          children:
+            - id: clothing.kids-underwear
+              name: Бельё
+              title: Бельё детское
+              slug: bele-detskoe
+              schema: underwear
+            - id: clothing.kids-socks
+              name: Носки
+              title: Носки детские
+              slug: noski-detskie
+              schema: underwear
+            - id: clothing.kids-thermal-underwear
+              name: Термобельё
+              title: Термобельё детское
+              slug: termobele-detskoe
+              schema: underwear
+            - id: clothing.kids-tights
+              name: Колготки
+              title: Колготки детские
+              slug: kolgotki-detskie
+              schema: underwear
+        - id: clothing.kids-sports-beach
+          name: Спортивная и пляжная одежда
+          title: Спортивная и пляжная одежда детская
+          slug: sportivnaya-i-plyazhnaya-odezhda-detskaya
+          children:
+            - id: clothing.kids-tracksuits
+              name: Костюмы
+              title: Костюмы спортивные детские
+              slug: kostyumy-sportivnye-detskie
+              schema: clothing_kids
+            - id: clothing.kids-leggings
+              name: Легинсы
+              title: Легинсы детские
+              slug: leginsy-detskie
+              schema: clothing_kids
+            - id: clothing.kids-sports-tshirts
+              name: Футболки
+              title: Футболки спортивные детские
+              slug: futbolki-sportivnye-detskie
+              schema: clothing_kids
+            - id: clothing.kids-sports-shorts
+              name: Шорты
+              title: Шорты спортивные детские
+              slug: shorty-sportivnye-detskie
+              schema: clothing_kids
+            - id: clothing.kids-ski-clothing
+              name: Горнолыжная одежда
+              title: Горнолыжная одежда детская
+              slug: gornolyzhnaya-odezhda-detskaya
+              schema: outerwear_kids
+            - id: clothing.kids-sports-jackets
+              name: Куртки
+              title: Куртки спортивные детские
+              slug: kurtki-sportivnye-detskie
+              schema: outerwear_kids
+            - id: clothing.girls-swimsuits
+              name: Купальники
+              title: Купальники для девочек
+              slug: kupalniki-dlya-devochek
+              schema: swimwear
+            - id: clothing.kids-swim-trunks
+              name: Плавки
+              title: Плавки детские
+              slug: plavki-detskie
+              schema: swimwear
+        - id: clothing.kids-shirts-tshirts
+          name: Рубашки и футболки
+          title: Рубашки и футболки детские
+          slug: rubashki-i-futbolki-detskie
+          children:
+            - id: clothing.kids-shirts
+              name: Рубашки
+              title: Рубашки детские
+              slug: rubashki-detskie
+              schema: clothing_kids
+            - id: clothing.kids-tshirts
+              name: Футболки
+              title: Футболки детские
+              slug: futbolki-detskie
+              schema: clothing_kids
+        - id: clothing.kids-bottoms
+          name: Брюки, джинсы и шорты
+          title: Брюки, джинсы и шорты детские
+          slug: bryuki-dzhinsy-i-shorty-detskie
+          children:
+            - id: clothing.kids-trousers
+              name: Брюки
+              title: Брюки детские
+              slug: bryuki-detskie
+              schema: clothing_kids
+            - id: clothing.kids-jeans
+              name: Джинсы
+              title: Джинсы детские
+              slug: dzhinsy-detskie
+              schema: clothing_kids
+            - id: clothing.kids-shorts
+              name: Шорты
+              title: Шорты детские
+              slug: shorty-detskie
+              schema: clothing_kids
+        - id: clothing.kids-knitwear
+          name: Свитеры и толстовки
+          title: Свитеры и толстовки детские
+          slug: svitery-i-tolstovki-detskie
+          children:
+            - id: clothing.kids-sweaters
+              name: Свитеры
+              title: Свитеры детские
+              slug: svitery-detskie
+              schema: clothing_kids
+            - id: clothing.kids-hoodies
+              name: Толстовки
+              title: Толстовки детские
+              slug: tolstovki-detskie
+              schema: clothing_kids
+        - id: clothing.kids-overalls
+          name: Комбинезоны
+          title: Комбинезоны детские
+          slug: kombinezony-detskie
+          schema: outerwear_kids
 - id: shoes
   name: Обувь
   slug: obuv
@@ -1521,16 +1777,6 @@
       name: Женская обувь
       slug: zhenskaya-obuv
       children:
-        - id: shoes.women-sneakers
-          name: Кроссовки
-          title: Кроссовки женские
-          slug: krossovki-zhenskie
-          schema: shoe
-        - id: shoes.women-trainers
-          name: Кеды
-          title: Кеды женские
-          slug: kedy-zhenskie
-          schema: shoe
         - id: shoes.women-pumps
           name: Туфли
           title: Туфли женские
@@ -1564,20 +1810,45 @@
           title: Тапочки женские
           slug: tapochki-zhenskie
           schema: shoe
+        - id: shoes.women-rubber-boots
+          name: Резиновые сапоги
+          title: Резиновые сапоги женские
+          slug: rezinovye-sapogi-zhenskie
+          schema: shoe
+        - id: shoes.women-sports
+          name: Спортивная обувь
+          title: Спортивная обувь женская
+          slug: sportivnaya-obuv-zhenskaya
+          children:
+            - id: shoes.women-sneakers
+              name: Кроссовки
+              title: Кроссовки женские
+              slug: krossovki-zhenskie
+              schema: shoe
+            - id: shoes.women-trainers
+              name: Кеды
+              title: Кеды женские
+              slug: kedy-zhenskie
+              schema: shoe
+            - id: shoes.women-running-shoes
+              name: Беговые кроссовки
+              title: Беговые кроссовки женские
+              slug: begovye-krossovki-zhenskie
+              schema: shoe
+            - id: shoes.women-football-boots
+              name: Футбольные бутсы
+              title: Футбольные бутсы женские
+              slug: futbolnye-butsy-zhenskie
+              schema: shoe
+            - id: shoes.women-hiking-boots
+              name: Треккинговая обувь
+              title: Треккинговая обувь женская
+              slug: trekkingovaya-obuv-zhenskaya
+              schema: shoe
     - id: shoes.men
       name: Мужская обувь
       slug: muzhskaya-obuv
       children:
-        - id: shoes.men-sneakers
-          name: Кроссовки
-          title: Кроссовки мужские
-          slug: krossovki-muzhskie
-          schema: shoe
-        - id: shoes.men-trainers
-          name: Кеды
-          title: Кеды мужские
-          slug: kedy-muzhskie
-          schema: shoe
         - id: shoes.men-dress-shoes
           name: Туфли
           title: Туфли мужские
@@ -1603,20 +1874,45 @@
           title: Тапочки мужские
           slug: tapochki-muzhskie
           schema: shoe
+        - id: shoes.men-rubber-boots
+          name: Резиновые сапоги
+          title: Резиновые сапоги мужские
+          slug: rezinovye-sapogi-muzhskie
+          schema: shoe
+        - id: shoes.men-sports
+          name: Спортивная обувь
+          title: Спортивная обувь мужская
+          slug: sportivnaya-obuv-muzhskaya
+          children:
+            - id: shoes.men-sneakers
+              name: Кроссовки
+              title: Кроссовки мужские
+              slug: krossovki-muzhskie
+              schema: shoe
+            - id: shoes.men-trainers
+              name: Кеды
+              title: Кеды мужские
+              slug: kedy-muzhskie
+              schema: shoe
+            - id: shoes.men-running-shoes
+              name: Беговые кроссовки
+              title: Беговые кроссовки мужские
+              slug: begovye-krossovki-muzhskie
+              schema: shoe
+            - id: shoes.men-football-boots
+              name: Футбольные бутсы
+              title: Футбольные бутсы мужские
+              slug: futbolnye-butsy-muzhskie
+              schema: shoe
+            - id: shoes.men-hiking-boots
+              name: Треккинговая обувь
+              title: Треккинговая обувь мужская
+              slug: trekkingovaya-obuv-muzhskaya
+              schema: shoe
     - id: shoes.children
       name: Детская обувь
       slug: detskaya-obuv
       children:
-        - id: shoes.kids-sneakers
-          name: Кроссовки
-          title: Кроссовки детские
-          slug: krossovki-detskie
-          schema: shoe
-        - id: shoes.kids-trainers
-          name: Кеды
-          title: Кеды детские
-          slug: kedy-detskie
-          schema: shoe
         - id: shoes.kids-sandals
           name: Сандалии
           title: Сандалии детские
@@ -1645,51 +1941,63 @@
           title: Тапочки детские
           slug: tapochki-detskie
           schema: shoe
-    - id: shoes.special
-      name: Спортивная обувь, резиновые сапоги и уход
-      slug: sportivnaya-obuv-rezinovye-sapogi-i-ukhod
-      children:
-        - id: shoes.athletic-footwear
-          name: Спортивная обувь
-          slug: sportivnaya-obuv
-          children:
-            - id: shoes.running-shoes
-              name: Беговые кроссовки
-              slug: begovye-krossovki
-              schema: shoe
-            - id: shoes.football-boots
-              name: Футбольные бутсы
-              slug: futbolnye-butsy
-              schema: shoe
-            - id: shoes.hiking-boots
-              name: Треккинговая обувь
-              slug: trekkingovaya-obuv
-              schema: shoe
-        - id: shoes.rubber-boots
+        - id: shoes.kids-rubber-boots
           name: Резиновые сапоги
-          slug: rezinovye-sapogi
+          title: Резиновые сапоги детские
+          slug: rezinovye-sapogi-detskie
           schema: shoe
-        - id: shoes.care-accessories
-          name: Уход и принадлежности
-          title: Уход за обувью и принадлежности
-          slug: ukhod-za-obuvyu-i-prinadlezhnosti
+        - id: shoes.kids-sports
+          name: Спортивная обувь
+          title: Спортивная обувь детская
+          slug: sportivnaya-obuv-detskaya
           children:
-            - id: shoes.insoles
-              name: Стельки
-              slug: stelki
-              schema: accessory
-            - id: shoes.laces
-              name: Шнурки
-              slug: shnurki
-              schema: accessory
-            - id: shoes.shoe-accessories
-              name: Аксессуары для обуви
-              slug: aksessuary-dlya-obuvi
-              schema: accessory
-            - id: shoes.shoe-care
-              name: Средства для ухода за обувью
-              slug: sredstva-dlya-ukhoda-za-obuvyu
-              schema: household_chemical
+            - id: shoes.kids-sneakers
+              name: Кроссовки
+              title: Кроссовки детские
+              slug: krossovki-detskie
+              schema: shoe
+            - id: shoes.kids-trainers
+              name: Кеды
+              title: Кеды детские
+              slug: kedy-detskie
+              schema: shoe
+            - id: shoes.kids-running-shoes
+              name: Беговые кроссовки
+              title: Беговые кроссовки детские
+              slug: begovye-krossovki-detskie
+              schema: shoe
+            - id: shoes.kids-football-boots
+              name: Футбольные бутсы
+              title: Футбольные бутсы детские
+              slug: futbolnye-butsy-detskie
+              schema: shoe
+            - id: shoes.kids-hiking-boots
+              name: Треккинговая обувь
+              title: Треккинговая обувь детская
+              slug: trekkingovaya-obuv-detskaya
+              schema: shoe
+    - id: shoes.special
+      name: Уход и аксессуары для обуви
+      slug: ukhod-i-aksessuary-dlya-obuvi
+      children:
+        - id: shoes.insoles
+          name: Стельки
+          slug: stelki
+          schema: accessory
+        - id: shoes.laces
+          name: Шнурки
+          slug: shnurki
+          schema: accessory
+        - id: shoes.shoe-accessories
+          name: Аксессуары
+          title: Аксессуары для обуви
+          slug: aksessuary-dlya-obuvi
+          schema: accessory
+        - id: shoes.shoe-care
+          name: Средства ухода
+          title: Средства для ухода за обувью
+          slug: sredstva-dlya-ukhoda-za-obuvyu
+          schema: household_chemical
 - id: accessories
   name: Сумки, часы и аксессуары
   slug: sumki-chasy-i-aksessuary
@@ -2148,12 +2456,14 @@
           slug: plastyri
           schema: medical_supply
         - id: health.medical-masks
-          name: Медицинские маски
-          slug: meditsinskie-maski
+          name: Маски
+          title: Маски медицинские
+          slug: maski-meditsinskie
           schema: medical_supply
         - id: health.medical-gloves
-          name: Медицинские перчатки
-          slug: meditsinskie-perchatki
+          name: Перчатки
+          title: Перчатки медицинские
+          slug: perchatki-meditsinskie
           schema: medical_supply
         - id: health.syringes
           name: Шприцы
@@ -2295,6 +2605,10 @@
           name: Молокоотсосы
           slug: molokootsosy
           schema: baby_feeding
+        - id: food.baby-food
+          name: Детское питание
+          slug: detskoe-pitanie
+          schema: food
     - id: baby.care
       name: Уход и гигиена малышей
       slug: ukhod-i-gigiena-malyshey
@@ -2440,12 +2754,14 @@
       slug: igrushechnyy-transport
       children:
         - id: toys.toy-cars
-          name: Игрушечные машинки
-          slug: igrushechnye-mashinki
+          name: Машинки
+          title: Машинки игрушечные
+          slug: mashinki-igrushechnye
           schema: toy
         - id: toys.toy-railways
-          name: Игрушечные железные дороги
-          slug: igrushechnye-zheleznye-dorogi
+          name: Железные дороги
+          title: Железные дороги игрушечные
+          slug: zheleznye-dorogi-igrushechnye
           schema: toy
         - id: toys.toy-tracks
           name: Автотреки
@@ -2460,8 +2776,9 @@
           slug: radioupravlyaemye-letatelnye-modeli
           schema: rc_toy
         - id: toys.toy-robots
-          name: Игрушечные роботы
-          slug: igrushechnye-roboty
+          name: Роботы
+          title: Роботы игрушечные
+          slug: roboty-igrushechnye
           schema: rc_toy
     - id: toys.games
       name: Настольные и активные игры
@@ -2537,8 +2854,7 @@
           schema: fitness
         - id: sports.free-weights
           name: Свободные веса
-          title: Свободные веса для тренировок
-          slug: svobodnye-vesa-dlya-trenirovok
+          slug: svobodnye-vesa
           children:
             - id: sports.dumbbells
               name: Гантели
@@ -2572,6 +2888,10 @@
           name: Скакалки
           slug: skakalki
           schema: sport_equipment
+        - id: food.sports-nutrition
+          name: Спортивное питание
+          slug: sportivnoe-pitanie
+          schema: food
     - id: sports.team
       name: Командные виды спорта
       slug: komandnye-vidy-sporta
@@ -3585,8 +3905,9 @@
           slug: gazonokosilki
           schema: garden_tool
         - id: garden.grass-trimmers
-          name: Садовые триммеры
-          slug: sadovye-trimmery
+          name: Триммеры
+          title: Триммеры садовые
+          slug: trimmery-sadovye
           schema: garden_tool
         - id: garden.chainsaws
           name: Цепные пилы
@@ -3601,24 +3922,27 @@
           slug: snegouborshchiki
           schema: garden_tool
         - id: garden.garden-shredders
-          name: Садовые измельчители
-          slug: sadovye-izmelchiteli
+          name: Измельчители
+          title: Измельчители садовые
+          slug: izmelchiteli-sadovye
           schema: garden_tool
         - id: garden.pruners
           name: Секаторы
           slug: sekatory
           schema: garden_tool
         - id: garden.garden-shovels
-          name: Садовые лопаты
-          slug: sadovye-lopaty
+          name: Лопаты
+          title: Лопаты садовые
+          slug: lopaty-sadovye
           schema: garden_tool
         - id: garden.rakes
           name: Грабли
           slug: grabli
           schema: garden_tool
         - id: garden.garden-forks
-          name: Садовые вилы
-          slug: sadovye-vily
+          name: Вилы
+          title: Вилы садовые
+          slug: vily-sadovye
           schema: garden_tool
     - id: garden.watering
       name: Полив и водоснабжение
@@ -4047,8 +4371,8 @@
           slug: khleb
           schema: food
     - id: food.frozen
-      name: Замороженные и специальные продукты
-      slug: zamorozhennye-i-spetsialnye-produkty
+      name: Замороженные продукты, готовые блюда и диетическое питание
+      slug: zamorozhennye-produkty-gotovye-blyuda-i-dieticheskoe-pitanie
       children:
         - id: food.frozen-vegetables
           name: Замороженные овощи
@@ -4069,14 +4393,6 @@
         - id: food.ice-cream
           name: Мороженое
           slug: morozhenoe
-          schema: food
-        - id: food.baby-food
-          name: Детское питание
-          slug: detskoe-pitanie
-          schema: food
-        - id: food.sports-nutrition
-          name: Спортивное питание
-          slug: sportivnoe-pitanie
           schema: food
         - id: food.diet-food
           name: Диетические продукты
@@ -4285,8 +4601,7 @@
           schema: book
         - id: books.biography
           name: Биографии
-          title: Книги с биографиями
-          slug: knigi-s-biografiyami
+          slug: biografii
           schema: book
         - id: books.psychology
           name: Психология
@@ -4318,34 +4633,35 @@
           slug: knigi-ob-iskusstve
           schema: book
         - id: books.practical-books
-          name: Книги для повседневной жизни
-          slug: knigi-dlya-povsednevnoy-zhizni
+          name: Здоровье и спорт
+          title: Книги о здоровье и спорте
+          slug: knigi-o-zdorove-i-sporte
           children:
-            - id: books.cooking
-              name: Кулинария
-              title: Книги по кулинарии
-              slug: knigi-po-kulinarii
-              schema: book
-            - id: books.travel
-              name: Путешествия
-              title: Книги о путешествиях
-              slug: knigi-o-puteshestviyakh
-              schema: book
             - id: books.health-books
               name: Здоровье
               title: Книги о здоровье
               slug: knigi-o-zdorove
-              schema: book
-            - id: books.home-garden
-              name: Дом и сад
-              title: Книги о доме и саде
-              slug: knigi-o-dome-i-sade
               schema: book
             - id: books.sports-books
               name: Спорт
               title: Книги о спорте
               slug: knigi-o-sporte
               schema: book
+        - id: books.cooking
+          name: Кулинария
+          title: Книги по кулинарии
+          slug: knigi-po-kulinarii
+          schema: book
+        - id: books.travel
+          name: Путешествия
+          title: Книги о путешествиях
+          slug: knigi-o-puteshestviyakh
+          schema: book
+        - id: books.home-garden
+          name: Дом и сад
+          title: Книги о доме и саде
+          slug: knigi-o-dome-i-sade
+          schema: book
     - id: books.education
       name: Учебная и профессиональная литература
       slug: uchebnaya-i-professionalnaya-literatura
@@ -5006,29 +5322,9 @@
           slug: kliningovoe-oborudovanie
           schema: industrial
     - id: industry.protection
-      name: Спецодежда и средства защиты
-      slug: spetsodezhda-i-sredstva-zashchity
+      name: Средства индивидуальной защиты
+      slug: sredstva-individualnoy-zashchity
       children:
-        - id: industry.work-jackets
-          name: Рабочие куртки
-          slug: rabochie-kurtki
-          schema: workwear
-        - id: industry.work-trousers
-          name: Рабочие брюки
-          slug: rabochie-bryuki
-          schema: workwear
-        - id: industry.work-overalls
-          name: Рабочие комбинезоны
-          slug: rabochie-kombinezony
-          schema: workwear
-        - id: industry.work-gowns
-          name: Рабочие халаты
-          slug: rabochie-khalaty
-          schema: workwear
-        - id: industry.high-visibility
-          name: Сигнальная одежда
-          slug: signalnaya-odezhda
-          schema: workwear
         - id: industry.respirators
           name: Респираторы
           slug: respiratory
