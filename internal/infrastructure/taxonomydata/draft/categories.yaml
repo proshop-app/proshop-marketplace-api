@@ -1,0 +1,5055 @@
+- id: electronics
+  name: Электроника
+  slug: elektronika
+  children:
+    - id: electronics.mobile
+      name: Телефоны и носимая электроника
+      slug: telefony-i-nosimaya-elektronika
+      children:
+        - id: electronics.smartphones
+          name: Смартфоны
+          slug: smartfony
+          schema: phone
+        - id: electronics.feature-phones
+          name: Кнопочные телефоны
+          slug: knopochnye-telefony
+          schema: phone
+        - id: electronics.tablets
+          name: Планшеты
+          slug: planshety
+          schema: tablet
+        - id: electronics.ereaders
+          name: Электронные книги
+          slug: elektronnye-knigi
+          schema: tablet
+        - id: electronics.smartwatches
+          name: Смарт-часы
+          slug: smart-chasy
+          schema: wearable
+        - id: electronics.fitness-trackers
+          name: Фитнес-браслеты
+          slug: fitnes-braslety
+          schema: wearable
+    - id: electronics.mobile-accessories
+      name: Аксессуары для телефонов
+      slug: aksessuary-dlya-telefonov
+      children:
+        - id: electronics.phone-cases
+          name: Чехлы
+          title: Чехлы для телефонов
+          slug: chekhly-dlya-telefonov
+          schema: phone_accessory
+        - id: electronics.screen-protectors
+          name: Защитные стёкла и плёнки
+          title: Защитные стёкла и плёнки для телефонов
+          slug: zashchitnye-stekla-i-plenki-dlya-telefonov
+          schema: phone_accessory
+        - id: electronics.chargers
+          name: Зарядные устройства
+          title: Зарядные устройства для телефонов
+          slug: zaryadnye-ustroystva-dlya-telefonov
+          schema: phone_accessory
+        - id: electronics.powerbanks
+          name: Внешние аккумуляторы
+          slug: vneshnie-akkumulyatory
+          schema: phone_accessory
+        - id: electronics.phone-holders
+          name: Держатели
+          title: Держатели для телефонов
+          slug: derzhateli-dlya-telefonov
+          schema: phone_accessory
+        - id: electronics.styluses
+          name: Стилусы
+          slug: stilusy
+          schema: phone_accessory
+    - id: electronics.audio
+      name: Аудиотехника
+      slug: audiotekhnika
+      children:
+        - id: electronics.headphones
+          name: Наушники
+          slug: naushniki
+          schema: headphone
+        - id: electronics.headsets
+          name: Гарнитуры
+          slug: garnitury
+          schema: headphone
+        - id: electronics.portable-speakers
+          name: Портативные колонки
+          slug: portativnye-kolonki
+          schema: speaker
+        - id: electronics.speakers
+          name: Акустические системы
+          slug: akusticheskie-sistemy
+          schema: speaker
+        - id: electronics.soundbars
+          name: Саундбары
+          slug: saundbary
+          schema: speaker
+        - id: electronics.audio-players
+          name: Аудиоплееры
+          slug: audiopleery
+          schema: audio_pro
+        - id: electronics.amplifiers
+          name: Усилители и ресиверы
+          slug: usiliteli-i-resivery
+          schema: audio_pro
+        - id: electronics.record-players
+          name: Проигрыватели винила
+          slug: proigryvateli-vinila
+          schema: audio_pro
+    - id: electronics.tv-video
+      name: Телевизоры и видеотехника
+      slug: televizory-i-videotekhnika
+      children:
+        - id: electronics.televisions
+          name: Телевизоры
+          slug: televizory
+          schema: tv
+        - id: electronics.projectors
+          name: Проекторы
+          slug: proektory
+          schema: video
+        - id: electronics.tv-boxes
+          name: ТВ-приставки
+          slug: tv-pristavki
+          schema: video
+        - id: electronics.media-players
+          name: Медиаплееры
+          slug: mediapleery
+          schema: video
+        - id: electronics.video-recorders
+          name: Видеорегистраторы наблюдения
+          slug: videoregistratory-nablyudeniya
+          schema: video
+    - id: electronics.photo
+      name: Фото, видео и оптика
+      slug: foto-video-i-optika
+      children:
+        - id: electronics.digital-cameras
+          name: Фотоаппараты
+          slug: fotoapparaty
+          schema: camera
+        - id: electronics.video-cameras
+          name: Видеокамеры
+          slug: videokamery
+          schema: camera
+        - id: electronics.action-cameras
+          name: Экшн-камеры
+          slug: ekshn-kamery
+          schema: camera
+        - id: electronics.lenses
+          name: Объективы
+          slug: obektivy
+          schema: lens
+        - id: electronics.binoculars
+          name: Бинокли
+          slug: binokli
+          schema: optics
+        - id: electronics.telescopes
+          name: Телескопы
+          slug: teleskopy
+          schema: optics
+        - id: electronics.microscopes
+          name: Микроскопы
+          slug: mikroskopy
+          schema: optics
+        - id: electronics.camera-flashes
+          name: Фотовспышки
+          slug: fotovspyshki
+          schema: electronic_accessory
+        - id: electronics.camera-tripods
+          name: Штативы
+          slug: shtativy
+          schema: electronic_accessory
+        - id: electronics.camera-batteries
+          name: Аккумуляторы для камер
+          slug: akkumulyatory-dlya-kamer
+          schema: electronic_accessory
+        - id: electronics.photo-bags
+          name: Сумки для фототехники
+          slug: sumki-dlya-fototekhniki
+          schema: electronic_accessory
+    - id: electronics.games
+      name: Игровая электроника
+      slug: igrovaya-elektronika
+      children:
+        - id: electronics.consoles
+          name: Игровые консоли
+          slug: igrovye-konsoli
+          schema: gaming
+        - id: electronics.controllers
+          name: Геймпады
+          slug: geympady
+          schema: gaming
+        - id: electronics.vr-headsets
+          name: Шлемы виртуальной реальности
+          slug: shlemy-virtualnoy-realnosti
+          schema: gaming
+        - id: electronics.console-accessories
+          name: Аксессуары для консолей
+          slug: aksessuary-dlya-konsoley
+          schema: gaming
+        - id: electronics.drones
+          name: Квадрокоптеры
+          slug: kvadrokoptery
+          schema: drone
+    - id: electronics.smart-home
+      name: Умный дом и безопасность
+      slug: umnyy-dom-i-bezopasnost
+      children:
+        - id: electronics.smart-home-hubs
+          name: Центры умного дома
+          slug: tsentry-umnogo-doma
+          schema: network
+        - id: electronics.security-cameras
+          name: Камеры видеонаблюдения
+          slug: kamery-videonablyudeniya
+          schema: video
+        - id: electronics.video-doorbells
+          name: Видеодомофоны
+          slug: videodomofony
+          schema: video
+        - id: electronics.smart-sockets
+          name: Умные розетки
+          slug: umnye-rozetki
+          schema: electrical
+        - id: electronics.smart-switches
+          name: Умные выключатели
+          slug: umnye-vyklyuchateli
+          schema: electrical
+        - id: electronics.smart-sensors
+          name: Датчики умного дома
+          slug: datchiki-umnogo-doma
+          schema: electronic_accessory
+- id: computers
+  name: Компьютеры и комплектующие
+  slug: kompyutery-i-komplektuyushchie
+  children:
+    - id: computers.devices
+      name: Компьютеры
+      slug: kompyutery
+      children:
+        - id: computers.laptops
+          name: Ноутбуки
+          slug: noutbuki
+          schema: laptop
+        - id: computers.desktops
+          name: Настольные компьютеры
+          slug: nastolnye-kompyutery
+          schema: computer
+        - id: computers.all-in-ones
+          name: Моноблоки
+          slug: monobloki
+          schema: computer
+        - id: computers.mini-pc
+          name: Мини-ПК
+          slug: mini-pk
+          schema: computer
+        - id: computers.servers
+          name: Серверы
+          slug: servery
+          schema: computer
+        - id: computers.monitors
+          name: Мониторы
+          slug: monitory
+          schema: monitor
+    - id: computers.components
+      name: Комплектующие
+      slug: komplektuyushchie
+      children:
+        - id: computers.processors
+          name: Процессоры
+          slug: protsessory
+          schema: cpu
+        - id: computers.motherboards
+          name: Материнские платы
+          slug: materinskie-platy
+          schema: motherboard
+        - id: computers.memory
+          name: Оперативная память
+          slug: operativnaya-pamyat
+          schema: ram_module
+        - id: computers.graphics-cards
+          name: Видеокарты
+          slug: videokarty
+          schema: gpu
+        - id: computers.data-storage
+          name: Накопители и карты памяти
+          slug: nakopiteli-i-karty-pamyati
+          children:
+            - id: computers.ssd
+              name: SSD-накопители
+              slug: ssd-nakopiteli
+              schema: drive
+            - id: computers.hdd
+              name: Жёсткие диски
+              slug: zhestkie-diski
+              schema: drive
+            - id: computers.external-drives
+              name: Внешние накопители
+              slug: vneshnie-nakopiteli
+              schema: drive
+            - id: computers.memory-cards
+              name: Карты памяти
+              slug: karty-pamyati
+              schema: drive
+            - id: computers.usb-flash
+              name: USB-флеш-накопители
+              slug: usb-flesh-nakopiteli
+              schema: drive
+        - id: computers.cases
+          name: Корпуса компьютеров
+          slug: korpusa-kompyuterov
+          schema: pc_case
+        - id: computers.power-supplies
+          name: Блоки питания
+          slug: bloki-pitaniya
+          schema: pc_power
+        - id: computers.cooling
+          name: Охлаждение компьютера
+          slug: okhlazhdenie-kompyutera
+          children:
+            - id: computers.coolers
+              name: Процессорные кулеры
+              slug: protsessornye-kulery
+              schema: pc_cooling
+            - id: computers.case-fans
+              name: Корпусные вентиляторы
+              slug: korpusnye-ventilyatory
+              schema: pc_cooling
+            - id: computers.liquid-cooling
+              name: Системы жидкостного охлаждения
+              slug: sistemy-zhidkostnogo-okhlazhdeniya
+              schema: pc_cooling
+    - id: computers.peripherals
+      name: Периферия
+      slug: periferiya
+      children:
+        - id: computers.keyboards
+          name: Клавиатуры
+          slug: klaviatury
+          schema: keyboard
+        - id: computers.mice
+          name: Компьютерные мыши
+          slug: kompyuternye-myshi
+          schema: mouse
+        - id: computers.webcams
+          name: Веб-камеры
+          slug: veb-kamery
+          schema: video
+        - id: computers.mousepads
+          name: Коврики для мыши
+          slug: kovriki-dlya-myshi
+          schema: electronic_accessory
+        - id: computers.docks
+          name: Док-станции
+          slug: dok-stantsii
+          schema: electronic_accessory
+        - id: computers.usb-hubs
+          name: USB-концентраторы
+          slug: usb-kontsentratory
+          schema: electronic_accessory
+        - id: computers.laptop-stands
+          name: Подставки для ноутбуков
+          slug: podstavki-dlya-noutbukov
+          schema: electronic_accessory
+        - id: computers.card-readers
+          name: Картридеры
+          slug: kartridery
+          schema: electronic_accessory
+        - id: computers.ups
+          name: Источники бесперебойного питания
+          slug: istochniki-bespereboynogo-pitaniya
+          schema: ups
+    - id: computers.printing
+      name: Печать и сканирование
+      slug: pechat-i-skanirovanie
+      children:
+        - id: computers.printers
+          name: Принтеры
+          slug: printery
+          schema: printer
+        - id: computers.mfp
+          name: Многофункциональные устройства
+          slug: mnogofunktsionalnye-ustroystva
+          schema: printer
+        - id: computers.scanners
+          name: Сканеры
+          slug: skanery
+          schema: printer
+        - id: computers.plotters
+          name: Плоттеры
+          slug: plottery
+          schema: printer
+        - id: computers.cartridges
+          name: Картриджи
+          slug: kartridzhi
+          schema: printer_supply
+        - id: computers.toner
+          name: Тонер
+          slug: toner
+          schema: printer_supply
+        - id: computers.ink
+          name: Чернила
+          slug: chernila
+          schema: printer_supply
+        - id: computers.printer-parts
+          name: Запчасти для печатной техники
+          slug: zapchasti-dlya-pechatnoy-tekhniki
+          schema: printer_supply
+    - id: computers.network
+      name: Сетевое оборудование
+      slug: setevoe-oborudovanie
+      children:
+        - id: computers.routers
+          name: Маршрутизаторы
+          slug: marshrutizatory
+          schema: network
+        - id: computers.switches
+          name: Коммутаторы
+          title: Коммутаторы сетевые
+          slug: kommutatory-setevye
+          schema: network
+        - id: computers.access-points
+          name: Точки доступа
+          slug: tochki-dostupa
+          schema: network
+        - id: computers.network-adapters
+          name: Адаптеры
+          title: Адаптеры сетевые
+          slug: adaptery-setevye
+          schema: network
+        - id: computers.modems
+          name: Модемы
+          slug: modemy
+          schema: network
+        - id: computers.nas
+          name: Хранилища
+          title: Хранилища сетевые
+          slug: khranilishcha-setevye
+          schema: network
+        - id: computers.network-cables
+          name: Сетевые кабели
+          slug: setevye-kabeli
+          schema: cable
+        - id: computers.computer-cables
+          name: Компьютерные кабели и переходники
+          slug: kompyuternye-kabeli-i-perekhodniki
+          schema: cable
+- id: appliances
+  name: Бытовая техника
+  slug: bytovaya-tekhnika
+  children:
+    - id: appliances.large
+      name: Крупная бытовая техника
+      slug: krupnaya-bytovaya-tekhnika
+      children:
+        - id: appliances.refrigerators
+          name: Холодильники
+          slug: kholodilniki
+          schema: fridge
+        - id: appliances.freezers
+          name: Морозильные камеры
+          slug: morozilnye-kamery
+          schema: fridge
+        - id: appliances.wine-coolers
+          name: Винные шкафы
+          slug: vinnye-shkafy
+          schema: fridge
+        - id: appliances.washing-machines
+          name: Стиральные машины
+          slug: stiralnye-mashiny
+          schema: washer
+        - id: appliances.dryers
+          name: Сушильные машины
+          slug: sushilnye-mashiny
+          schema: washer
+        - id: appliances.dishwashers
+          name: Посудомоечные машины
+          slug: posudomoechnye-mashiny
+          schema: dishwasher
+        - id: appliances.cookers
+          name: Кухонные плиты
+          slug: kukhonnye-plity
+          schema: cooker
+        - id: appliances.hobs
+          name: Варочные панели
+          slug: varochnye-paneli
+          schema: cooker
+        - id: appliances.ovens
+          name: Духовые шкафы
+          slug: dukhovye-shkafy
+          schema: cooker
+        - id: appliances.hoods
+          name: Кухонные вытяжки
+          slug: kukhonnye-vytyazhki
+          schema: cooker
+    - id: appliances.cooking
+      name: Приготовление еды
+      slug: prigotovlenie-edy
+      children:
+        - id: appliances.microwaves
+          name: Микроволновые печи
+          slug: mikrovolnovye-pechi
+          schema: kitchen_appliance
+        - id: appliances.multicookers
+          name: Мультиварки
+          slug: multivarki
+          schema: kitchen_appliance
+        - id: appliances.air-fryers
+          name: Аэрогрили
+          slug: aerogrili
+          schema: kitchen_appliance
+        - id: appliances.electric-grills
+          name: Электрогрили
+          slug: elektrogrili
+          schema: kitchen_appliance
+        - id: appliances.breadmakers
+          name: Хлебопечи
+          slug: khlebopechi
+          schema: kitchen_appliance
+        - id: appliances.steamers
+          name: Пароварки
+          slug: parovarki
+          schema: kitchen_appliance
+        - id: appliances.food-dryers
+          name: Сушилки для овощей и фруктов
+          slug: sushilki-dlya-ovoshchey-i-fruktov
+          schema: kitchen_appliance
+        - id: appliances.mini-ovens
+          name: Мини-печи
+          slug: mini-pechi
+          schema: kitchen_appliance
+        - id: appliances.toasters
+          name: Тостеры
+          slug: tostery
+          schema: kitchen_appliance
+        - id: appliances.waffle-makers
+          name: Вафельницы
+          slug: vafelnitsy
+          schema: kitchen_appliance
+    - id: appliances.food-preparation
+      name: Подготовка продуктов и напитков
+      slug: podgotovka-produktov-i-napitkov
+      children:
+        - id: appliances.blenders
+          name: Блендеры
+          slug: blendery
+          schema: kitchen_appliance
+        - id: appliances.mixers
+          name: Миксеры
+          slug: miksery
+          schema: kitchen_appliance
+        - id: appliances.food-processors
+          name: Кухонные комбайны
+          slug: kukhonnye-kombayny
+          schema: kitchen_appliance
+        - id: appliances.meat-grinders
+          name: Мясорубки
+          slug: myasorubki
+          schema: kitchen_appliance
+        - id: appliances.juicers
+          name: Соковыжималки
+          slug: sokovyzhimalki
+          schema: kitchen_appliance
+        - id: appliances.coffee-machines
+          name: Кофемашины
+          slug: kofemashiny
+          schema: kitchen_appliance
+        - id: appliances.coffee-makers
+          name: Кофеварки
+          slug: kofevarki
+          schema: kitchen_appliance
+        - id: appliances.coffee-grinders
+          name: Кофемолки
+          slug: kofemolki
+          schema: kitchen_appliance
+        - id: appliances.kettles
+          name: Электрочайники
+          slug: elektrochayniki
+          schema: kitchen_appliance
+        - id: appliances.thermopots
+          name: Термопоты
+          slug: termopoty
+          schema: kitchen_appliance
+        - id: appliances.kitchen-scales
+          name: Кухонные весы
+          slug: kukhonnye-vesy
+          schema: kitchen_appliance
+    - id: appliances.cleaning
+      name: Уход за домом
+      slug: ukhod-za-domom
+      children:
+        - id: appliances.vacuum-cleaners
+          name: Пылесосы
+          slug: pylesosy
+          schema: cleaning_appliance
+        - id: appliances.robot-vacuums
+          name: Роботы-пылесосы
+          slug: roboty-pylesosy
+          schema: cleaning_appliance
+        - id: appliances.steam-cleaners
+          name: Пароочистители
+          slug: paroochistiteli
+          schema: cleaning_appliance
+        - id: appliances.window-cleaners
+          name: Роботы для мытья окон
+          slug: roboty-dlya-mytya-okon
+          schema: cleaning_appliance
+        - id: appliances.irons
+          name: Утюги
+          slug: utyugi
+          schema: personal_appliance
+        - id: appliances.steam-generators
+          name: Парогенераторы
+          slug: parogeneratory
+          schema: personal_appliance
+        - id: appliances.garment-steamers
+          name: Отпариватели
+          slug: otparivateli
+          schema: personal_appliance
+        - id: appliances.sewing-machines
+          name: Швейные машины
+          slug: shveynye-mashiny
+          schema: sewing_machine
+        - id: appliances.overlockers
+          name: Оверлоки
+          slug: overloki
+          schema: sewing_machine
+    - id: appliances.climate
+      name: Климатическая техника
+      slug: klimaticheskaya-tekhnika
+      children:
+        - id: appliances.air-conditioners
+          name: Кондиционеры
+          slug: konditsionery
+          schema: climate
+        - id: appliances.heaters
+          name: Обогреватели
+          slug: obogrevateli
+          schema: climate
+        - id: appliances.fans
+          name: Вентиляторы
+          slug: ventilyatory
+          schema: climate
+        - id: appliances.humidifiers
+          name: Увлажнители воздуха
+          slug: uvlazhniteli-vozdukha
+          schema: climate
+        - id: appliances.air-purifiers
+          name: Очистители воздуха
+          slug: ochistiteli-vozdukha
+          schema: climate
+        - id: appliances.dehumidifiers
+          name: Осушители воздуха
+          slug: osushiteli-vozdukha
+          schema: climate
+        - id: appliances.water-heaters
+          name: Водонагреватели
+          slug: vodonagrevateli
+          schema: climate
+    - id: appliances.personal
+      name: Техника для красоты и здоровья
+      slug: tekhnika-dlya-krasoty-i-zdorovya
+      children:
+        - id: appliances.hairdryers
+          name: Фены
+          slug: feny
+          schema: personal_appliance
+        - id: appliances.hair-stylers
+          name: Стайлеры и плойки
+          slug: staylery-i-ployki
+          schema: personal_appliance
+        - id: appliances.hair-straighteners
+          name: Выпрямители волос
+          slug: vypryamiteli-volos
+          schema: personal_appliance
+        - id: appliances.shavers
+          name: Электробритвы
+          slug: elektrobritvy
+          schema: personal_appliance
+        - id: appliances.trimmers
+          name: Триммеры и машинки для стрижки
+          slug: trimmery-i-mashinki-dlya-strizhki
+          schema: personal_appliance
+        - id: appliances.epilators
+          name: Эпиляторы
+          slug: epilyatory
+          schema: personal_appliance
+        - id: appliances.electric-toothbrushes
+          name: Электрические зубные щётки
+          slug: elektricheskie-zubnye-shchetki
+          schema: personal_appliance
+        - id: appliances.irrigators
+          name: Ирригаторы
+          slug: irrigatory
+          schema: personal_appliance
+        - id: appliances.body-scales
+          name: Напольные весы
+          slug: napolnye-vesy
+          schema: personal_appliance
+        - id: appliances.massagers
+          name: Массажёры
+          slug: massazhery
+          schema: personal_appliance
+- id: kitchen
+  name: Посуда и товары для кухни
+  slug: posuda-i-tovary-dlya-kukhni
+  children:
+    - id: kitchen.cookware
+      name: Посуда для приготовления
+      slug: posuda-dlya-prigotovleniya
+      children:
+        - id: kitchen.pots
+          name: Кастрюли
+          slug: kastryuli
+          schema: cookware
+        - id: kitchen.pans
+          name: Сковороды
+          slug: skovorody
+          schema: cookware
+        - id: kitchen.saute-pans
+          name: Сотейники
+          slug: soteyniki
+          schema: cookware
+        - id: kitchen.cauldrons
+          name: Казаны
+          slug: kazany
+          schema: cookware
+        - id: kitchen.baking-dishes
+          name: Формы для выпечки
+          slug: formy-dlya-vypechki
+          schema: cookware
+        - id: kitchen.baking-trays
+          name: Противни
+          slug: protivni
+          schema: cookware
+        - id: kitchen.kettles
+          name: Чайники для плиты
+          slug: chayniki-dlya-plity
+          schema: cookware
+        - id: kitchen.pressure-cookers
+          name: Скороварки
+          slug: skorovarki
+          schema: cookware
+    - id: kitchen.serving
+      name: Столовая посуда
+      slug: stolovaya-posuda
+      children:
+        - id: kitchen.plates
+          name: Тарелки
+          slug: tarelki
+          schema: tableware
+        - id: kitchen.bowls
+          name: Миски и салатники
+          slug: miski-i-salatniki
+          schema: tableware
+        - id: kitchen.cups
+          name: Кружки и чашки
+          slug: kruzhki-i-chashki
+          schema: tableware
+        - id: kitchen.glasses
+          name: Стаканы и бокалы
+          slug: stakany-i-bokaly
+          schema: tableware
+        - id: kitchen.tableware-sets
+          name: Столовые сервизы
+          slug: stolovye-servizy
+          schema: tableware
+        - id: kitchen.cutlery
+          name: Столовые приборы
+          slug: stolovye-pribory
+          schema: tableware
+        - id: kitchen.teapots
+          name: Заварочные чайники
+          slug: zavarochnye-chayniki
+          schema: tableware
+        - id: kitchen.serving-dishes
+          name: Блюда для подачи
+          slug: blyuda-dlya-podachi
+          schema: tableware
+    - id: kitchen.tools
+      name: Кухонные принадлежности
+      slug: kukhonnye-prinadlezhnosti
+      children:
+        - id: kitchen.knives
+          name: Кухонные ножи
+          slug: kukhonnye-nozhi
+          schema: kitchen_tool
+        - id: kitchen.cutting-boards
+          name: Разделочные доски
+          slug: razdelochnye-doski
+          schema: kitchen_tool
+        - id: kitchen.graters
+          name: Тёрки
+          slug: terki
+          schema: kitchen_tool
+        - id: kitchen.peelers
+          name: Овощечистки
+          slug: ovoshchechistki
+          schema: kitchen_tool
+        - id: kitchen.spatulas
+          name: Лопатки и половники
+          slug: lopatki-i-polovniki
+          schema: kitchen_tool
+        - id: kitchen.colanders
+          name: Дуршлаги и сита
+          slug: durshlagi-i-sita
+          schema: kitchen_tool
+        - id: kitchen.can-openers
+          name: Открывалки
+          slug: otkryvalki
+          schema: kitchen_tool
+        - id: kitchen.baking-tools
+          name: Кондитерские инструменты
+          slug: konditerskie-instrumenty
+          schema: kitchen_tool
+        - id: kitchen.kitchen-scissors
+          name: Кухонные ножницы
+          slug: kukhonnye-nozhnitsy
+          schema: kitchen_tool
+    - id: kitchen.storage
+      name: Хранение на кухне
+      slug: khranenie-na-kukhne
+      children:
+        - id: kitchen.food-containers
+          name: Контейнеры для продуктов
+          slug: konteynery-dlya-produktov
+          schema: storage
+        - id: kitchen.jars
+          name: Банки для хранения
+          slug: banki-dlya-khraneniya
+          schema: storage
+        - id: kitchen.lunch-boxes
+          name: Ланч-боксы
+          slug: lanch-boksy
+          schema: storage
+        - id: kitchen.bread-bins
+          name: Хлебницы
+          slug: khlebnitsy
+          schema: storage
+        - id: kitchen.spice-racks
+          name: Ёмкости для специй
+          slug: emkosti-dlya-spetsiy
+          schema: storage
+        - id: kitchen.kitchen-organizers
+          name: Кухонные органайзеры
+          slug: kukhonnye-organayzery
+          schema: storage
+        - id: kitchen.thermoses
+          name: Термосы
+          slug: termosy
+          schema: storage
+        - id: kitchen.thermal-mugs
+          name: Термокружки
+          slug: termokruzhki
+          schema: storage
+        - id: kitchen.water-bottles
+          name: Бутылки для воды
+          slug: butylki-dlya-vody
+          schema: storage
+- id: furniture
+  name: Мебель
+  slug: mebel
+  children:
+    - id: furniture.bedroom
+      name: Мебель для спальни
+      slug: mebel-dlya-spalni
+      children:
+        - id: furniture.beds
+          name: Кровати
+          slug: krovati
+          schema: bed
+        - id: furniture.bed-bases
+          name: Основания кроватей
+          slug: osnovaniya-krovatey
+          schema: bed
+        - id: furniture.mattresses
+          name: Матрасы
+          slug: matrasy
+          schema: mattress
+        - id: furniture.mattress-toppers
+          name: Топперы
+          slug: toppery
+          schema: mattress
+        - id: furniture.bedside-tables
+          name: Прикроватные тумбы
+          slug: prikrovatnye-tumby
+          schema: cabinet
+        - id: furniture.wardrobes
+          name: Шкафы для одежды
+          slug: shkafy-dlya-odezhdy
+          schema: cabinet
+        - id: furniture.dressers
+          name: Комоды
+          slug: komody
+          schema: cabinet
+    - id: furniture.living-room
+      name: Мебель для гостиной
+      slug: mebel-dlya-gostinoy
+      children:
+        - id: furniture.sofas
+          name: Диваны
+          slug: divany
+          schema: sofa
+        - id: furniture.armchairs
+          name: Кресла
+          slug: kresla
+          schema: sofa
+        - id: furniture.ottomans
+          name: Пуфы
+          slug: pufy
+          schema: sofa
+        - id: furniture.coffee-tables
+          name: Журнальные столы
+          slug: zhurnalnye-stoly
+          schema: table
+        - id: furniture.tv-stands
+          name: Тумбы под телевизор
+          slug: tumby-pod-televizor
+          schema: cabinet
+        - id: furniture.bookcases
+          name: Книжные шкафы
+          slug: knizhnye-shkafy
+          schema: cabinet
+        - id: furniture.shelving
+          name: Стеллажи
+          slug: stellazhi
+          schema: cabinet
+        - id: furniture.wall-units
+          name: Мебельные стенки
+          slug: mebelnye-stenki
+          schema: cabinet
+    - id: furniture.kitchen
+      name: Мебель для кухни
+      slug: mebel-dlya-kukhni
+      children:
+        - id: furniture.dining-tables
+          name: Обеденные столы
+          slug: obedennye-stoly
+          schema: table
+        - id: furniture.bar-tables
+          name: Барные столы
+          slug: barnye-stoly
+          schema: table
+        - id: furniture.dining-chairs
+          name: Обеденные стулья
+          slug: obedennye-stulya
+          schema: chair
+        - id: furniture.bar-stools
+          name: Барные стулья
+          slug: barnye-stulya
+          schema: chair
+        - id: furniture.stools
+          name: Табуреты
+          slug: taburety
+          schema: chair
+        - id: furniture.kitchen-cabinets
+          name: Кухонные шкафы
+          slug: kukhonnye-shkafy
+          schema: cabinet
+        - id: furniture.kitchen-sets
+          name: Кухонные гарнитуры
+          slug: kukhonnye-garnitury
+          schema: cabinet
+    - id: furniture.office
+      name: Мебель для работы
+      slug: mebel-dlya-raboty
+      children:
+        - id: furniture.desks
+          name: Письменные столы
+          slug: pismennye-stoly
+          schema: table
+        - id: furniture.computer-desks
+          name: Компьютерные столы
+          slug: kompyuternye-stoly
+          schema: table
+        - id: furniture.standing-desks
+          name: Столы с регулировкой высоты
+          slug: stoly-s-regulirovkoy-vysoty
+          schema: table
+        - id: furniture.office-chairs
+          name: Офисные кресла
+          slug: ofisnye-kresla
+          schema: chair
+        - id: furniture.gaming-chairs
+          name: Игровые кресла
+          slug: igrovye-kresla
+          schema: chair
+        - id: furniture.office-cabinets
+          name: Офисные шкафы
+          slug: ofisnye-shkafy
+          schema: cabinet
+    - id: furniture.other
+      name: Прихожая, ванная и комплектующие
+      slug: prikhozhaya-vannaya-i-komplektuyushchie
+      children:
+        - id: furniture.hallway-sets
+          name: Прихожие
+          slug: prikhozhie
+          schema: cabinet
+        - id: furniture.shoe-cabinets
+          name: Обувницы
+          slug: obuvnitsy
+          schema: cabinet
+        - id: furniture.bathroom-cabinets
+          name: Мебель для ванной
+          slug: mebel-dlya-vannoy
+          schema: cabinet
+        - id: furniture.furniture-fittings
+          name: Мебельная фурнитура
+          slug: mebelnaya-furnitura
+          schema: furniture_part
+        - id: furniture.furniture-legs
+          name: Мебельные опоры
+          slug: mebelnye-opory
+          schema: furniture_part
+        - id: furniture.furniture-covers
+          name: Чехлы для мебели
+          slug: chekhly-dlya-mebeli
+          schema: furniture_part
+- id: textiles
+  name: Домашний текстиль
+  slug: domashniy-tekstil
+  children:
+    - id: textiles.bedding
+      name: Постельные принадлежности
+      slug: postelnye-prinadlezhnosti
+      children:
+        - id: textiles.bed-linen
+          name: Комплекты постельного белья
+          slug: komplekty-postelnogo-belya
+          schema: bed_linen
+        - id: textiles.sheets
+          name: Простыни
+          slug: prostyni
+          schema: bed_linen
+        - id: textiles.duvet-covers
+          name: Пододеяльники
+          slug: pododeyalniki
+          schema: bed_linen
+        - id: textiles.pillowcases
+          name: Наволочки
+          slug: navolochki
+          schema: bed_linen
+        - id: textiles.mattress-protectors
+          name: Наматрасники
+          slug: namatrasniki
+          schema: bed_linen
+        - id: textiles.duvets
+          name: Одеяла
+          slug: odeyala
+          schema: blanket
+        - id: textiles.throws
+          name: Пледы
+          slug: pledy
+          schema: blanket
+        - id: textiles.bedspreads
+          name: Покрывала
+          slug: pokryvala
+          schema: blanket
+        - id: textiles.pillows
+          name: Подушки
+          slug: podushki
+          schema: pillow
+    - id: textiles.bath
+      name: Текстиль для ванной
+      slug: tekstil-dlya-vannoy
+      children:
+        - id: textiles.bath-towels
+          name: Банные полотенца
+          slug: bannye-polotentsa
+          schema: towel
+        - id: textiles.hand-towels
+          name: Полотенца для рук
+          slug: polotentsa-dlya-ruk
+          schema: towel
+        - id: textiles.beach-towels
+          name: Пляжные полотенца
+          slug: plyazhnye-polotentsa
+          schema: towel
+        - id: textiles.bath-mats
+          name: Коврики для ванной
+          slug: kovriki-dlya-vannoy
+          schema: towel
+    - id: textiles.window
+      name: Оформление окон
+      slug: oformlenie-okon
+      children:
+        - id: textiles.curtains
+          name: Шторы
+          slug: shtory
+          schema: curtain
+        - id: textiles.tulle
+          name: Тюль
+          slug: tyul
+          schema: curtain
+        - id: textiles.roller-blinds
+          name: Рулонные шторы
+          slug: rulonnye-shtory
+          schema: curtain
+        - id: textiles.blinds
+          name: Жалюзи
+          slug: zhalyuzi
+          schema: curtain
+    - id: textiles.decor
+      name: Ковры и декоративный текстиль
+      slug: kovry-i-dekorativnyy-tekstil
+      children:
+        - id: textiles.carpets
+          name: Ковры
+          slug: kovry
+          schema: carpet
+        - id: textiles.rugs
+          name: Коврики
+          slug: kovriki
+          schema: carpet
+        - id: textiles.carpet-runners
+          name: Ковровые дорожки
+          slug: kovrovye-dorozhki
+          schema: carpet
+        - id: textiles.decorative-pillows
+          name: Декоративные подушки
+          slug: dekorativnye-podushki
+          schema: pillow
+        - id: textiles.tablecloths
+          name: Скатерти
+          slug: skaterti
+          schema: bed_linen
+        - id: textiles.table-runners
+          name: Дорожки на стол
+          slug: dorozhki-na-stol
+          schema: bed_linen
+        - id: textiles.kitchen-towels
+          name: Кухонные полотенца
+          slug: kukhonnye-polotentsa
+          schema: towel
+- id: clothing
+  name: Одежда
+  slug: odezhda
+  children:
+    - id: clothing.women
+      name: Женская одежда
+      slug: zhenskaya-odezhda
+      children:
+        - id: clothing.women-dresses
+          name: Платья
+          title: Платья женские
+          slug: platya-zhenskie
+          schema: clothing
+        - id: clothing.women-blouses-shirts
+          name: Блузки и рубашки
+          title: Блузки и рубашки женские
+          slug: bluzki-i-rubashki-zhenskie
+          children:
+            - id: clothing.women-blouses
+              name: Блузки
+              slug: bluzki
+              schema: clothing
+            - id: clothing.women-shirts
+              name: Рубашки
+              title: Рубашки женские
+              slug: rubashki-zhenskie
+              schema: clothing
+        - id: clothing.women-tshirts-tops
+          name: Футболки и топы
+          title: Футболки и топы женские
+          slug: futbolki-i-topy-zhenskie
+          children:
+            - id: clothing.women-tshirts
+              name: Футболки
+              title: Футболки женские
+              slug: futbolki-zhenskie
+              schema: clothing
+            - id: clothing.women-tops
+              name: Топы
+              slug: topy
+              schema: clothing
+        - id: clothing.women-bottoms
+          name: Брюки, джинсы и шорты
+          title: Брюки, джинсы и шорты женские
+          slug: bryuki-dzhinsy-i-shorty-zhenskie
+          children:
+            - id: clothing.women-trousers
+              name: Брюки
+              title: Брюки женские
+              slug: bryuki-zhenskie
+              schema: clothing
+            - id: clothing.women-jeans
+              name: Джинсы
+              title: Джинсы женские
+              slug: dzhinsy-zhenskie
+              schema: clothing
+            - id: clothing.women-shorts
+              name: Шорты
+              title: Шорты женские
+              slug: shorty-zhenskie
+              schema: clothing
+        - id: clothing.women-skirts
+          name: Юбки
+          slug: yubki
+          schema: clothing
+        - id: clothing.women-knitwear
+          name: Свитеры и кардиганы
+          title: Свитеры и кардиганы женские
+          slug: svitery-i-kardigany-zhenskie
+          children:
+            - id: clothing.women-sweaters
+              name: Свитеры
+              title: Свитеры женские
+              slug: svitery-zhenskie
+              schema: clothing
+            - id: clothing.women-cardigans
+              name: Кардиганы
+              title: Кардиганы женские
+              slug: kardigany-zhenskie
+              schema: clothing
+        - id: clothing.women-hoodies
+          name: Худи
+          title: Худи женские
+          slug: khudi-zhenskie
+          schema: clothing
+        - id: clothing.women-suits
+          name: Костюмы
+          title: Костюмы женские
+          slug: kostyumy-zhenskie
+          schema: clothing
+        - id: clothing.women-jumpsuits
+          name: Комбинезоны
+          title: Комбинезоны женские
+          slug: kombinezony-zhenskie
+          schema: clothing
+        - id: clothing.women-outerwear
+          name: Верхняя одежда
+          title: Верхняя одежда женская
+          slug: verkhnyaya-odezhda-zhenskaya
+          children:
+            - id: clothing.women-jackets
+              name: Куртки
+              title: Куртки женские
+              slug: kurtki-zhenskie
+              schema: outerwear
+            - id: clothing.women-coats
+              name: Пальто
+              title: Пальто женские
+              slug: palto-zhenskie
+              schema: outerwear
+            - id: clothing.women-down-jackets
+              name: Пуховики
+              title: Пуховики женские
+              slug: pukhoviki-zhenskie
+              schema: outerwear
+            - id: clothing.women-raincoats
+              name: Плащи
+              title: Плащи женские
+              slug: plashchi-zhenskie
+              schema: outerwear
+        - id: clothing.women-underwear
+          name: Нижнее бельё
+          title: Нижнее бельё женское
+          slug: nizhnee-bele-zhenskoe
+          children:
+            - id: clothing.bras
+              name: Бюстгальтеры
+              slug: byustgaltery
+              schema: underwear
+            - id: clothing.women-underpants
+              name: Трусы
+              title: Трусы женские
+              slug: trusy-zhenskie
+              schema: underwear
+    - id: clothing.men
+      name: Мужская одежда
+      slug: muzhskaya-odezhda
+      children:
+        - id: clothing.men-shirts
+          name: Рубашки
+          title: Рубашки мужские
+          slug: rubashki-muzhskie
+          schema: clothing
+        - id: clothing.men-tshirts-polo
+          name: Футболки и поло
+          title: Футболки и поло мужские
+          slug: futbolki-i-polo-muzhskie
+          children:
+            - id: clothing.men-tshirts
+              name: Футболки
+              title: Футболки мужские
+              slug: futbolki-muzhskie
+              schema: clothing
+            - id: clothing.men-polo
+              name: Рубашки поло
+              title: Рубашки поло мужские
+              slug: rubashki-polo-muzhskie
+              schema: clothing
+        - id: clothing.men-jeans
+          name: Джинсы
+          title: Джинсы мужские
+          slug: dzhinsy-muzhskie
+          schema: clothing
+        - id: clothing.men-trousers
+          name: Брюки
+          title: Брюки мужские
+          slug: bryuki-muzhskie
+          schema: clothing
+        - id: clothing.men-shorts
+          name: Шорты
+          title: Шорты мужские
+          slug: shorty-muzhskie
+          schema: clothing
+        - id: clothing.men-knitwear
+          name: Свитеры и кардиганы
+          title: Свитеры и кардиганы мужские
+          slug: svitery-i-kardigany-muzhskie
+          children:
+            - id: clothing.men-sweaters
+              name: Свитеры
+              title: Свитеры мужские
+              slug: svitery-muzhskie
+              schema: clothing
+            - id: clothing.men-cardigans
+              name: Кардиганы
+              title: Кардиганы мужские
+              slug: kardigany-muzhskie
+              schema: clothing
+        - id: clothing.men-hoodies
+          name: Худи
+          title: Худи мужские
+          slug: khudi-muzhskie
+          schema: clothing
+        - id: clothing.men-suits
+          name: Костюмы
+          title: Костюмы мужские
+          slug: kostyumy-muzhskie
+          schema: clothing
+        - id: clothing.men-blazers
+          name: Пиджаки
+          title: Пиджаки мужские
+          slug: pidzhaki-muzhskie
+          schema: clothing
+        - id: clothing.men-outerwear
+          name: Верхняя одежда
+          title: Верхняя одежда мужская
+          slug: verkhnyaya-odezhda-muzhskaya
+          children:
+            - id: clothing.men-jackets
+              name: Куртки
+              title: Куртки мужские
+              slug: kurtki-muzhskie
+              schema: outerwear
+            - id: clothing.men-coats
+              name: Пальто
+              title: Пальто мужские
+              slug: palto-muzhskie
+              schema: outerwear
+            - id: clothing.men-down-jackets
+              name: Пуховики
+              title: Пуховики мужские
+              slug: pukhoviki-muzhskie
+              schema: outerwear
+            - id: clothing.men-raincoats
+              name: Плащи
+              title: Плащи мужские
+              slug: plashchi-muzhskie
+              schema: outerwear
+        - id: clothing.men-underpants
+          name: Трусы
+          title: Трусы мужские
+          slug: trusy-muzhskie
+          schema: underwear
+    - id: clothing.children
+      name: Детская одежда
+      slug: detskaya-odezhda
+      children:
+        - id: clothing.girls-dresses
+          name: Платья
+          title: Платья для девочек
+          slug: platya-dlya-devochek
+          schema: clothing_kids
+        - id: clothing.kids-shirts
+          name: Рубашки
+          title: Рубашки детские
+          slug: rubashki-detskie
+          schema: clothing_kids
+        - id: clothing.kids-tshirts
+          name: Футболки
+          title: Футболки детские
+          slug: futbolki-detskie
+          schema: clothing_kids
+        - id: clothing.kids-trousers
+          name: Брюки
+          title: Брюки детские
+          slug: bryuki-detskie
+          schema: clothing_kids
+        - id: clothing.kids-jeans
+          name: Джинсы
+          title: Джинсы детские
+          slug: dzhinsy-detskie
+          schema: clothing_kids
+        - id: clothing.kids-shorts
+          name: Шорты
+          title: Шорты детские
+          slug: shorty-detskie
+          schema: clothing_kids
+        - id: clothing.kids-sweaters
+          name: Свитеры
+          title: Свитеры детские
+          slug: svitery-detskie
+          schema: clothing_kids
+        - id: clothing.kids-hoodies
+          name: Толстовки
+          title: Толстовки детские
+          slug: tolstovki-detskie
+          schema: clothing_kids
+        - id: clothing.school-uniform
+          name: Школьная форма
+          slug: shkolnaya-forma
+          schema: clothing_kids
+        - id: clothing.baby-clothing
+          name: Одежда для малышей
+          slug: odezhda-dlya-malyshey
+          children:
+            - id: clothing.baby-bodysuits
+              name: Боди
+              title: Боди для малышей
+              slug: bodi-dlya-malyshey
+              schema: clothing_kids
+            - id: clothing.baby-rompers
+              name: Ползунки и слипы
+              title: Ползунки и слипы для малышей
+              slug: polzunki-i-slipy-dlya-malyshey
+              schema: clothing_kids
+        - id: clothing.kids-outerwear
+          name: Верхняя одежда
+          title: Верхняя одежда детская
+          slug: verkhnyaya-odezhda-detskaya
+          children:
+            - id: clothing.kids-jackets
+              name: Куртки
+              title: Куртки детские
+              slug: kurtki-detskie
+              schema: outerwear_kids
+            - id: clothing.kids-overalls
+              name: Комбинезоны
+              title: Комбинезоны детские
+              slug: kombinezony-detskie
+              schema: outerwear_kids
+            - id: clothing.kids-coats
+              name: Пальто
+              title: Пальто детские
+              slug: palto-detskie
+              schema: outerwear_kids
+        - id: clothing.kids-underwear
+          name: Бельё
+          title: Бельё детское
+          slug: bele-detskoe
+          schema: underwear
+    - id: clothing.underwear
+      name: Бельё, домашняя одежда и купальные костюмы
+      slug: bele-domashnyaya-odezhda-i-kupalnye-kostyumy
+      children:
+        - id: clothing.socks
+          name: Носки
+          slug: noski
+          schema: underwear
+        - id: clothing.tights
+          name: Колготки
+          slug: kolgotki
+          schema: underwear
+        - id: clothing.thermal-underwear
+          name: Термобельё
+          slug: termobele
+          schema: underwear
+        - id: clothing.pajamas
+          name: Пижамы
+          slug: pizhamy
+          schema: clothing
+        - id: clothing.bathrobes
+          name: Халаты
+          slug: khalaty
+          schema: clothing
+        - id: clothing.homewear
+          name: Домашние костюмы
+          slug: domashnie-kostyumy
+          schema: clothing
+        - id: clothing.swimsuits
+          name: Купальники
+          slug: kupalniki
+          schema: swimwear
+        - id: clothing.swim-trunks
+          name: Плавки
+          slug: plavki
+          schema: swimwear
+    - id: clothing.sports
+      name: Спортивная одежда
+      slug: sportivnaya-odezhda
+      children:
+        - id: clothing.tracksuits
+          name: Костюмы
+          title: Костюмы спортивные
+          slug: kostyumy-sportivnye
+          schema: clothing
+        - id: clothing.leggings
+          name: Легинсы
+          slug: leginsy
+          schema: clothing
+        - id: clothing.sports-tshirts
+          name: Футболки
+          title: Футболки спортивные
+          slug: futbolki-sportivnye
+          schema: clothing
+        - id: clothing.sports-shorts
+          name: Шорты
+          title: Шорты спортивные
+          slug: shorty-sportivnye
+          schema: clothing
+        - id: clothing.ski-clothing
+          name: Горнолыжная одежда
+          slug: gornolyzhnaya-odezhda
+          schema: outerwear
+        - id: clothing.sports-jackets
+          name: Куртки
+          title: Куртки спортивные
+          slug: kurtki-sportivnye
+          schema: outerwear
+- id: shoes
+  name: Обувь
+  slug: obuv
+  children:
+    - id: shoes.women
+      name: Женская обувь
+      slug: zhenskaya-obuv
+      children:
+        - id: shoes.women-sneakers
+          name: Кроссовки
+          title: Кроссовки женские
+          slug: krossovki-zhenskie
+          schema: shoe
+        - id: shoes.women-trainers
+          name: Кеды
+          title: Кеды женские
+          slug: kedy-zhenskie
+          schema: shoe
+        - id: shoes.women-pumps
+          name: Туфли
+          title: Туфли женские
+          slug: tufli-zhenskie
+          schema: shoe
+        - id: shoes.women-sandals
+          name: Сандалии
+          title: Сандалии женские
+          slug: sandalii-zhenskie
+          schema: shoe
+        - id: shoes.women-boots
+          name: Ботинки
+          title: Ботинки женские
+          slug: botinki-zhenskie
+          schema: shoe
+        - id: shoes.women-tall-boots
+          name: Сапоги
+          slug: sapogi
+          schema: shoe
+        - id: shoes.women-ankle-boots
+          name: Ботильоны
+          slug: botilony
+          schema: shoe
+        - id: shoes.women-loafers
+          name: Лоферы
+          title: Лоферы женские
+          slug: lofery-zhenskie
+          schema: shoe
+        - id: shoes.women-slippers
+          name: Тапочки
+          title: Тапочки женские
+          slug: tapochki-zhenskie
+          schema: shoe
+    - id: shoes.men
+      name: Мужская обувь
+      slug: muzhskaya-obuv
+      children:
+        - id: shoes.men-sneakers
+          name: Кроссовки
+          title: Кроссовки мужские
+          slug: krossovki-muzhskie
+          schema: shoe
+        - id: shoes.men-trainers
+          name: Кеды
+          title: Кеды мужские
+          slug: kedy-muzhskie
+          schema: shoe
+        - id: shoes.men-dress-shoes
+          name: Туфли
+          title: Туфли мужские
+          slug: tufli-muzhskie
+          schema: shoe
+        - id: shoes.men-sandals
+          name: Сандалии
+          title: Сандалии мужские
+          slug: sandalii-muzhskie
+          schema: shoe
+        - id: shoes.men-boots
+          name: Ботинки
+          title: Ботинки мужские
+          slug: botinki-muzhskie
+          schema: shoe
+        - id: shoes.men-loafers
+          name: Лоферы
+          title: Лоферы мужские
+          slug: lofery-muzhskie
+          schema: shoe
+        - id: shoes.men-slippers
+          name: Тапочки
+          title: Тапочки мужские
+          slug: tapochki-muzhskie
+          schema: shoe
+    - id: shoes.children
+      name: Детская обувь
+      slug: detskaya-obuv
+      children:
+        - id: shoes.kids-sneakers
+          name: Кроссовки
+          title: Кроссовки детские
+          slug: krossovki-detskie
+          schema: shoe
+        - id: shoes.kids-trainers
+          name: Кеды
+          title: Кеды детские
+          slug: kedy-detskie
+          schema: shoe
+        - id: shoes.kids-sandals
+          name: Сандалии
+          title: Сандалии детские
+          slug: sandalii-detskie
+          schema: shoe
+        - id: shoes.kids-boots
+          name: Ботинки
+          title: Ботинки детские
+          slug: botinki-detskie
+          schema: shoe
+        - id: shoes.kids-winter-boots
+          name: Зимние сапоги
+          title: Зимние сапоги детские
+          slug: zimnie-sapogi-detskie
+          schema: shoe
+        - id: shoes.kids-school-shoes
+          name: Школьная обувь
+          slug: shkolnaya-obuv
+          schema: shoe
+        - id: shoes.baby-shoes
+          name: Пинетки
+          slug: pinetki
+          schema: shoe
+        - id: shoes.kids-slippers
+          name: Тапочки
+          title: Тапочки детские
+          slug: tapochki-detskie
+          schema: shoe
+    - id: shoes.special
+      name: Спортивная обувь, резиновые сапоги и уход
+      slug: sportivnaya-obuv-rezinovye-sapogi-i-ukhod
+      children:
+        - id: shoes.athletic-footwear
+          name: Спортивная обувь
+          slug: sportivnaya-obuv
+          children:
+            - id: shoes.running-shoes
+              name: Беговые кроссовки
+              slug: begovye-krossovki
+              schema: shoe
+            - id: shoes.football-boots
+              name: Футбольные бутсы
+              slug: futbolnye-butsy
+              schema: shoe
+            - id: shoes.hiking-boots
+              name: Треккинговая обувь
+              slug: trekkingovaya-obuv
+              schema: shoe
+        - id: shoes.rubber-boots
+          name: Резиновые сапоги
+          slug: rezinovye-sapogi
+          schema: shoe
+        - id: shoes.care-accessories
+          name: Уход и принадлежности
+          title: Уход за обувью и принадлежности
+          slug: ukhod-za-obuvyu-i-prinadlezhnosti
+          children:
+            - id: shoes.insoles
+              name: Стельки
+              slug: stelki
+              schema: accessory
+            - id: shoes.laces
+              name: Шнурки
+              slug: shnurki
+              schema: accessory
+            - id: shoes.shoe-accessories
+              name: Аксессуары для обуви
+              slug: aksessuary-dlya-obuvi
+              schema: accessory
+            - id: shoes.shoe-care
+              name: Средства для ухода за обувью
+              slug: sredstva-dlya-ukhoda-za-obuvyu
+              schema: household_chemical
+- id: accessories
+  name: Сумки, часы и аксессуары
+  slug: sumki-chasy-i-aksessuary
+  children:
+    - id: accessories.bags
+      name: Сумки и багаж
+      slug: sumki-i-bagazh
+      children:
+        - id: accessories.handbags
+          name: Женские сумки
+          slug: zhenskie-sumki
+          schema: bag
+        - id: accessories.men-bags
+          name: Мужские сумки
+          slug: muzhskie-sumki
+          schema: bag
+        - id: accessories.city-backpacks
+          name: Городские рюкзаки
+          slug: gorodskie-ryukzaki
+          schema: bag
+        - id: accessories.briefcases
+          name: Портфели
+          slug: portfeli
+          schema: bag
+        - id: accessories.travel-bags
+          name: Дорожные сумки
+          slug: dorozhnye-sumki
+          schema: bag
+        - id: accessories.suitcases
+          name: Чемоданы
+          slug: chemodany
+          schema: bag
+        - id: accessories.cosmetic-bags
+          name: Косметички
+          slug: kosmetichki
+          schema: bag
+        - id: accessories.waist-bags
+          name: Поясные сумки
+          slug: poyasnye-sumki
+          schema: bag
+        - id: accessories.shoppers
+          name: Сумки-шопперы
+          slug: sumki-shoppery
+          schema: bag
+    - id: accessories.clothing-accessories
+      name: Аксессуары для одежды
+      slug: aksessuary-dlya-odezhdy
+      children:
+        - id: accessories.belts
+          name: Ремни
+          slug: remni
+          schema: accessory
+        - id: accessories.wallets
+          name: Кошельки
+          slug: koshelki
+          schema: accessory
+        - id: accessories.card-holders
+          name: Визитницы
+          slug: vizitnitsy
+          schema: accessory
+        - id: accessories.gloves
+          name: Перчатки
+          slug: perchatki
+          schema: accessory
+        - id: accessories.scarves
+          name: Шарфы
+          slug: sharfy
+          schema: accessory
+        - id: accessories.hats
+          name: Шапки
+          slug: shapki
+          schema: accessory
+        - id: accessories.caps
+          name: Кепки
+          slug: kepki
+          schema: accessory
+        - id: accessories.ties
+          name: Галстуки
+          slug: galstuki
+          schema: accessory
+        - id: accessories.umbrellas
+          name: Зонты
+          slug: zonty
+          schema: accessory
+        - id: accessories.sunglasses
+          name: Солнцезащитные очки
+          slug: solntsezashchitnye-ochki
+          schema: accessory
+        - id: accessories.hair-accessories
+          name: Аксессуары для волос
+          slug: aksessuary-dlya-volos
+          schema: accessory
+    - id: accessories.watches
+      name: Часы и принадлежности
+      slug: chasy-i-prinadlezhnosti
+      children:
+        - id: accessories.wristwatches
+          name: Наручные часы
+          slug: naruchnye-chasy
+          schema: watch
+        - id: accessories.pocket-watches
+          name: Карманные часы
+          slug: karmannye-chasy
+          schema: watch
+        - id: accessories.watch-straps
+          name: Ремешки для часов
+          slug: remeshki-dlya-chasov
+          schema: phone_accessory
+        - id: accessories.watch-cases
+          name: Футляры для часов
+          slug: futlyary-dlya-chasov
+          schema: phone_accessory
+- id: jewelry
+  name: Украшения
+  slug: ukrasheniya
+  children:
+    - id: jewelry.precious
+      name: Ювелирные изделия
+      slug: yuvelirnye-izdeliya
+      children:
+        - id: jewelry.rings
+          name: Кольца
+          title: Кольца ювелирные
+          slug: koltsa-yuvelirnye
+          schema: ring
+        - id: jewelry.earrings
+          name: Серьги
+          title: Серьги ювелирные
+          slug: sergi-yuvelirnye
+          schema: jewelry
+        - id: jewelry.chains
+          name: Цепи
+          title: Цепи ювелирные
+          slug: tsepi-yuvelirnye
+          schema: jewelry
+        - id: jewelry.bracelets
+          name: Браслеты
+          title: Браслеты ювелирные
+          slug: braslety-yuvelirnye
+          schema: jewelry
+        - id: jewelry.pendants
+          name: Подвески
+          title: Подвески ювелирные
+          slug: podveski-yuvelirnye
+          schema: jewelry
+        - id: jewelry.brooches
+          name: Броши
+          title: Броши ювелирные
+          slug: broshi-yuvelirnye
+          schema: jewelry
+        - id: jewelry.jewelry-sets
+          name: Комплекты
+          title: Комплекты ювелирные
+          slug: komplekty-yuvelirnye
+          schema: jewelry
+    - id: jewelry.fashion
+      name: Бижутерия
+      slug: bizhuteriya
+      children:
+        - id: jewelry.fashion-rings
+          name: Кольца
+          title: Кольца бижутерные
+          slug: koltsa-bizhuternye
+          schema: jewelry
+        - id: jewelry.fashion-earrings
+          name: Серьги
+          title: Серьги бижутерные
+          slug: sergi-bizhuternye
+          schema: jewelry
+        - id: jewelry.fashion-necklaces
+          name: Колье и бусы
+          slug: kole-i-busy
+          schema: jewelry
+        - id: jewelry.fashion-bracelets
+          name: Браслеты
+          title: Браслеты бижутерные
+          slug: braslety-bizhuternye
+          schema: jewelry
+        - id: jewelry.fashion-brooches
+          name: Броши
+          title: Броши бижутерные
+          slug: broshi-bizhuternye
+          schema: jewelry
+        - id: jewelry.charms
+          name: Шармы
+          slug: sharmy
+          schema: jewelry
+        - id: jewelry.jewelry-boxes
+          name: Шкатулки для украшений
+          slug: shkatulki-dlya-ukrasheniy
+          schema: storage
+        - id: jewelry.jewelry-stands
+          name: Подставки для украшений
+          slug: podstavki-dlya-ukrasheniy
+          schema: storage
+- id: beauty
+  name: Красота и парфюмерия
+  slug: krasota-i-parfyumeriya
+  children:
+    - id: beauty.face
+      name: Уход за лицом
+      slug: ukhod-za-litsom
+      children:
+        - id: beauty.face-creams
+          name: Кремы
+          title: Кремы для лица
+          slug: kremy-dlya-litsa
+          schema: cosmetic
+        - id: beauty.face-serums
+          name: Сыворотки
+          title: Сыворотки для лица
+          slug: syvorotki-dlya-litsa
+          schema: cosmetic
+        - id: beauty.face-cleansers
+          name: Средства для умывания
+          slug: sredstva-dlya-umyvaniya
+          schema: cosmetic
+        - id: beauty.toners
+          name: Тоники
+          title: Тоники для лица
+          slug: toniki-dlya-litsa
+          schema: cosmetic
+        - id: beauty.face-masks
+          name: Маски
+          title: Маски для лица
+          slug: maski-dlya-litsa
+          schema: cosmetic
+        - id: beauty.face-peels
+          name: Пилинги
+          title: Пилинги для лица
+          slug: pilingi-dlya-litsa
+          schema: cosmetic
+        - id: beauty.eye-care
+          name: Уход за кожей вокруг глаз
+          slug: ukhod-za-kozhey-vokrug-glaz
+          schema: cosmetic
+        - id: beauty.sunscreens
+          name: Солнцезащитные средства
+          slug: solntsezashchitnye-sredstva
+          schema: cosmetic
+    - id: beauty.body
+      name: Уход за телом
+      slug: ukhod-za-telom
+      children:
+        - id: beauty.body-creams
+          name: Кремы
+          title: Кремы для тела
+          slug: kremy-dlya-tela
+          schema: cosmetic
+        - id: beauty.body-scrubs
+          name: Скрабы
+          title: Скрабы для тела
+          slug: skraby-dlya-tela
+          schema: cosmetic
+        - id: beauty.hand-creams
+          name: Кремы для рук
+          slug: kremy-dlya-ruk
+          schema: cosmetic
+        - id: beauty.foot-care
+          name: Уход за ногами
+          slug: ukhod-za-nogami
+          schema: cosmetic
+        - id: beauty.shower-gels
+          name: Гели для душа
+          slug: geli-dlya-dusha
+          schema: hygiene
+        - id: beauty.soap
+          name: Мыло
+          slug: mylo
+          schema: hygiene
+        - id: beauty.deodorants
+          name: Дезодоранты
+          slug: dezodoranty
+          schema: hygiene
+        - id: beauty.bath-products
+          name: Средства для ванны
+          slug: sredstva-dlya-vanny
+          schema: hygiene
+    - id: beauty.hair
+      name: Уход за волосами
+      slug: ukhod-za-volosami
+      children:
+        - id: beauty.shampoos
+          name: Шампуни
+          slug: shampuni
+          schema: haircare
+        - id: beauty.conditioners
+          name: Бальзамы и кондиционеры
+          title: Бальзамы и кондиционеры для волос
+          slug: balzamy-i-konditsionery-dlya-volos
+          schema: haircare
+        - id: beauty.hair-masks
+          name: Маски
+          title: Маски для волос
+          slug: maski-dlya-volos
+          schema: haircare
+        - id: beauty.hair-oils
+          name: Масла
+          title: Масла для волос
+          slug: masla-dlya-volos
+          schema: haircare
+        - id: beauty.hair-styling
+          name: Средства для укладки
+          title: Средства для укладки волос
+          slug: sredstva-dlya-ukladki-volos
+          schema: haircare
+        - id: beauty.hair-dyes
+          name: Краски
+          title: Краски для волос
+          slug: kraski-dlya-volos
+          schema: haircare
+    - id: beauty.makeup
+      name: Макияж
+      slug: makiyazh
+      children:
+        - id: beauty.foundation
+          name: Тональные средства
+          slug: tonalnye-sredstva
+          schema: makeup
+        - id: beauty.concealers
+          name: Консилеры
+          slug: konsilery
+          schema: makeup
+        - id: beauty.powders
+          name: Пудры
+          slug: pudry
+          schema: makeup
+        - id: beauty.blush
+          name: Румяна
+          slug: rumyana
+          schema: makeup
+        - id: beauty.eyeshadows
+          name: Тени
+          title: Тени для век
+          slug: teni-dlya-vek
+          schema: makeup
+        - id: beauty.mascaras
+          name: Тушь для ресниц
+          slug: tush-dlya-resnits
+          schema: makeup
+        - id: beauty.eyeliners
+          name: Подводки
+          title: Подводки для глаз
+          slug: podvodki-dlya-glaz
+          schema: makeup
+        - id: beauty.lipsticks
+          name: Помады
+          slug: pomady
+          schema: makeup
+        - id: beauty.lip-gloss
+          name: Блески для губ
+          slug: bleski-dlya-gub
+          schema: makeup
+        - id: beauty.nail-polish
+          name: Лаки для ногтей
+          slug: laki-dlya-nogtey
+          schema: makeup
+    - id: beauty.perfume
+      name: Парфюмерия
+      slug: parfyumeriya
+      children:
+        - id: beauty.perfumes
+          name: Духи
+          slug: dukhi
+          schema: perfume
+        - id: beauty.eau-de-parfum
+          name: Парфюмерная вода
+          slug: parfyumernaya-voda
+          schema: perfume
+        - id: beauty.eau-de-toilette
+          name: Туалетная вода
+          slug: tualetnaya-voda
+          schema: perfume
+        - id: beauty.cologne
+          name: Одеколоны
+          slug: odekolony
+          schema: perfume
+    - id: beauty.tools
+      name: Инструменты и принадлежности
+      slug: instrumenty-i-prinadlezhnosti
+      children:
+        - id: beauty.makeup-brushes
+          name: Кисти для макияжа
+          slug: kisti-dlya-makiyazha
+          schema: beauty_tool
+        - id: beauty.sponges
+          name: Спонжи
+          slug: sponzhi
+          schema: beauty_tool
+        - id: beauty.manicure-tools
+          name: Маникюрные инструменты
+          slug: manikyurnye-instrumenty
+          schema: beauty_tool
+        - id: beauty.hair-brushes
+          name: Расчёски
+          slug: rascheski
+          schema: beauty_tool
+        - id: beauty.cosmetic-mirrors
+          name: Косметические зеркала
+          slug: kosmeticheskie-zerkala
+          schema: beauty_tool
+        - id: beauty.tweezers
+          name: Пинцеты
+          slug: pintsety
+          schema: beauty_tool
+        - id: beauty.beauty-organizers
+          name: Органайзеры для косметики
+          slug: organayzery-dlya-kosmetiki
+          schema: beauty_tool
+- id: health
+  name: Здоровье и гигиена
+  slug: zdorove-i-gigiena
+  children:
+    - id: health.devices
+      name: Приборы для здоровья
+      slug: pribory-dlya-zdorovya
+      children:
+        - id: health.blood-pressure-monitors
+          name: Тонометры
+          slug: tonometry
+          schema: medical_device
+        - id: health.thermometers
+          name: Термометры
+          slug: termometry
+          schema: medical_device
+        - id: health.pulse-oximeters
+          name: Пульсоксиметры
+          slug: pulsoksimetry
+          schema: medical_device
+        - id: health.nebulizers
+          name: Небулайзеры
+          slug: nebulayzery
+          schema: medical_device
+        - id: health.glucose-meters
+          name: Глюкометры
+          slug: glyukometry
+          schema: medical_device
+        - id: health.hearing-aids
+          name: Слуховые аппараты
+          slug: slukhovye-apparaty
+          schema: medical_device
+    - id: health.supplies
+      name: Медицинские изделия
+      slug: meditsinskie-izdeliya
+      children:
+        - id: health.bandages
+          name: Бинты
+          slug: binty
+          schema: medical_supply
+        - id: health.dressings
+          name: Перевязочные материалы
+          slug: perevyazochnye-materialy
+          schema: medical_supply
+        - id: health.plasters
+          name: Пластыри
+          slug: plastyri
+          schema: medical_supply
+        - id: health.medical-masks
+          name: Медицинские маски
+          slug: meditsinskie-maski
+          schema: medical_supply
+        - id: health.medical-gloves
+          name: Медицинские перчатки
+          slug: meditsinskie-perchatki
+          schema: medical_supply
+        - id: health.syringes
+          name: Шприцы
+          slug: shpritsy
+          schema: medical_supply
+        - id: health.test-strips
+          name: Тест-полоски
+          slug: test-poloski
+          schema: medical_supply
+    - id: health.orthopedics
+      name: Ортопедия и реабилитация
+      slug: ortopediya-i-reabilitatsiya
+      children:
+        - id: health.braces
+          name: Бандажи
+          slug: bandazhi
+          schema: orthopedic
+        - id: health.orthoses
+          name: Ортезы
+          slug: ortezy
+          schema: orthopedic
+        - id: health.compression-hosiery
+          name: Компрессионный трикотаж
+          slug: kompressionnyy-trikotazh
+          schema: orthopedic
+        - id: health.orthopedic-insoles
+          name: Ортопедические стельки
+          slug: ortopedicheskie-stelki
+          schema: orthopedic
+        - id: health.walking-sticks
+          name: Трости
+          slug: trosti
+          schema: orthopedic
+        - id: health.crutches
+          name: Костыли
+          slug: kostyli
+          schema: orthopedic
+        - id: health.walkers
+          name: Ходунки
+          slug: khodunki
+          schema: orthopedic
+    - id: health.hygiene
+      name: Личная гигиена
+      slug: lichnaya-gigiena
+      children:
+        - id: health.toothpaste
+          name: Зубные пасты
+          slug: zubnye-pasty
+          schema: hygiene
+        - id: health.toothbrushes
+          name: Зубные щётки
+          slug: zubnye-shchetki
+          schema: hygiene
+        - id: health.mouthwash
+          name: Ополаскиватели для рта
+          slug: opolaskivateli-dlya-rta
+          schema: hygiene
+        - id: health.dental-floss
+          name: Зубная нить
+          slug: zubnaya-nit
+          schema: hygiene
+        - id: health.feminine-hygiene
+          name: Женская гигиена
+          slug: zhenskaya-gigiena
+          schema: hygiene
+        - id: health.cotton-products
+          name: Ватные диски и палочки
+          slug: vatnye-diski-i-palochki
+          schema: hygiene
+        - id: health.shaving-products
+          name: Средства для бритья
+          slug: sredstva-dlya-britya
+          schema: hygiene
+        - id: health.adult-hygiene
+          name: Впитывающие изделия для взрослых
+          slug: vpityvayushchie-izdeliya-dlya-vzroslykh
+          schema: hygiene
+- id: baby
+  name: Товары для малышей
+  slug: tovary-dlya-malyshey
+  children:
+    - id: baby.transport
+      name: Прогулки и поездки
+      slug: progulki-i-poezdki
+      children:
+        - id: baby.strollers
+          name: Детские коляски
+          slug: detskie-kolyaski
+          schema: baby_transport
+        - id: baby.stroller-accessories
+          name: Аксессуары для колясок
+          slug: aksessuary-dlya-kolyasok
+          schema: baby_transport
+        - id: baby.baby-carriers
+          name: Переноски для детей
+          slug: perenoski-dlya-detey
+          schema: baby_transport
+        - id: baby.slings
+          name: Слинги
+          slug: slingi
+          schema: baby_transport
+        - id: baby.car-seats
+          name: Детские автокресла
+          slug: detskie-avtokresla
+          schema: car_seat
+        - id: baby.boosters
+          name: Бустеры
+          slug: bustery
+          schema: car_seat
+    - id: baby.feeding
+      name: Кормление
+      slug: kormlenie
+      children:
+        - id: baby.baby-bottles
+          name: Бутылочки для кормления
+          slug: butylochki-dlya-kormleniya
+          schema: baby_feeding
+        - id: baby.pacifiers
+          name: Пустышки
+          slug: pustyshki
+          schema: baby_feeding
+        - id: baby.bottle-teats
+          name: Соски для бутылочек
+          slug: soski-dlya-butylochek
+          schema: baby_feeding
+        - id: baby.sippy-cups
+          name: Поильники
+          slug: poilniki
+          schema: baby_feeding
+        - id: baby.baby-tableware
+          name: Детская посуда
+          slug: detskaya-posuda
+          schema: baby_feeding
+        - id: baby.teethers
+          name: Прорезыватели
+          slug: prorezyvateli
+          schema: baby_feeding
+        - id: baby.breast-pumps
+          name: Молокоотсосы
+          slug: molokootsosy
+          schema: baby_feeding
+    - id: baby.care
+      name: Уход и гигиена малышей
+      slug: ukhod-i-gigiena-malyshey
+      children:
+        - id: baby.diapers
+          name: Подгузники
+          slug: podguzniki
+          schema: baby_hygiene
+        - id: baby.baby-wipes
+          name: Детские влажные салфетки
+          slug: detskie-vlazhnye-salfetki
+          schema: baby_hygiene
+        - id: baby.baby-cosmetics
+          name: Детская косметика
+          slug: detskaya-kosmetika
+          schema: baby_hygiene
+        - id: baby.disposable-underpads
+          name: Одноразовые пелёнки
+          slug: odnorazovye-pelenki
+          schema: baby_hygiene
+        - id: baby.baby-baths
+          name: Ванночки для малышей
+          slug: vannochki-dlya-malyshey
+          schema: baby_feeding
+    - id: baby.room
+      name: Детская комната и безопасность
+      slug: detskaya-komnata-i-bezopasnost
+      children:
+        - id: baby.cribs
+          name: Детские кроватки
+          slug: detskie-krovatki
+          schema: baby_furniture
+        - id: baby.changing-tables
+          name: Пеленальные столики
+          slug: pelenalnye-stoliki
+          schema: baby_furniture
+        - id: baby.high-chairs
+          name: Стульчики для кормления
+          slug: stulchiki-dlya-kormleniya
+          schema: baby_furniture
+        - id: baby.playpens
+          name: Манежи
+          slug: manezhi
+          schema: baby_furniture
+        - id: baby.baby-swings
+          name: Детские шезлонги и качели
+          slug: detskie-shezlongi-i-kacheli
+          schema: baby_furniture
+        - id: baby.baby-safety
+          name: Товары для безопасности детей
+          slug: tovary-dlya-bezopasnosti-detey
+          schema: baby_hygiene
+- id: toys
+  name: Игрушки и игры
+  slug: igrushki-i-igry
+  children:
+    - id: toys.development
+      name: Развивающие игрушки
+      slug: razvivayushchie-igrushki
+      children:
+        - id: toys.baby-rattles
+          name: Погремушки
+          slug: pogremushki
+          schema: toy
+        - id: toys.sorters
+          name: Сортеры
+          slug: sortery
+          schema: toy
+        - id: toys.activity-boards
+          name: Бизиборды
+          slug: bizibordy
+          schema: toy
+        - id: toys.learning-toys
+          name: Обучающие игрушки
+          slug: obuchayushchie-igrushki
+          schema: toy
+        - id: toys.musical-toys
+          name: Музыкальные игрушки
+          slug: muzykalnye-igrushki
+          schema: toy
+        - id: toys.wooden-toys
+          name: Деревянные игрушки
+          slug: derevyannye-igrushki
+          schema: toy
+    - id: toys.construction
+      name: Конструкторы и головоломки
+      slug: konstruktory-i-golovolomki
+      children:
+        - id: toys.building-blocks
+          name: Блочные конструкторы
+          slug: blochnye-konstruktory
+          schema: construction_toy
+        - id: toys.magnetic-sets
+          name: Магнитные конструкторы
+          slug: magnitnye-konstruktory
+          schema: construction_toy
+        - id: toys.metal-sets
+          name: Металлические конструкторы
+          slug: metallicheskie-konstruktory
+          schema: construction_toy
+        - id: toys.puzzles
+          name: Пазлы
+          slug: pazly
+          schema: puzzle
+        - id: toys.3d-puzzles
+          name: Объёмные пазлы
+          slug: obemnye-pazly
+          schema: puzzle
+        - id: toys.brain-teasers
+          name: Головоломки
+          slug: golovolomki
+          schema: toy
+    - id: toys.role-play
+      name: Сюжетные игрушки
+      slug: syuzhetnye-igrushki
+      children:
+        - id: toys.dolls
+          name: Куклы
+          slug: kukly
+          schema: toy
+        - id: toys.doll-accessories
+          name: Аксессуары для кукол
+          slug: aksessuary-dlya-kukol
+          schema: toy
+        - id: toys.toy-kitchens
+          name: Игрушечные кухни
+          slug: igrushechnye-kukhni
+          schema: toy
+        - id: toys.play-sets
+          name: Игровые наборы
+          slug: igrovye-nabory
+          schema: toy
+        - id: toys.action-figures
+          name: Игровые фигурки
+          slug: igrovye-figurki
+          schema: toy
+        - id: toys.plush-toys
+          name: Мягкие игрушки
+          slug: myagkie-igrushki
+          schema: toy
+    - id: toys.transport
+      name: Игрушечный транспорт
+      slug: igrushechnyy-transport
+      children:
+        - id: toys.toy-cars
+          name: Игрушечные машинки
+          slug: igrushechnye-mashinki
+          schema: toy
+        - id: toys.toy-railways
+          name: Игрушечные железные дороги
+          slug: igrushechnye-zheleznye-dorogi
+          schema: toy
+        - id: toys.toy-tracks
+          name: Автотреки
+          slug: avtotreki
+          schema: toy
+        - id: toys.rc-cars
+          name: Радиоуправляемые машинки
+          slug: radioupravlyaemye-mashinki
+          schema: rc_toy
+        - id: toys.rc-aircraft
+          name: Радиоуправляемые летательные модели
+          slug: radioupravlyaemye-letatelnye-modeli
+          schema: rc_toy
+        - id: toys.toy-robots
+          name: Игрушечные роботы
+          slug: igrushechnye-roboty
+          schema: rc_toy
+    - id: toys.games
+      name: Настольные и активные игры
+      slug: nastolnye-i-aktivnye-igry
+      children:
+        - id: toys.board-games
+          name: Настольные игры
+          slug: nastolnye-igry
+          schema: board_game
+        - id: toys.card-games
+          name: Карточные игры
+          slug: kartochnye-igry
+          schema: board_game
+        - id: toys.chess
+          name: Шахматы
+          slug: shakhmaty
+          schema: board_game
+        - id: toys.checkers
+          name: Шашки
+          slug: shashki
+          schema: board_game
+        - id: toys.dominoes
+          name: Домино
+          slug: domino
+          schema: board_game
+        - id: toys.outdoor-toys
+          name: Игрушки для улицы
+          slug: igrushki-dlya-ulitsy
+          schema: toy
+        - id: toys.sand-toys
+          name: Игрушки для песочницы
+          slug: igrushki-dlya-pesochnitsy
+          schema: toy
+        - id: toys.water-toys
+          name: Игрушки для воды
+          slug: igrushki-dlya-vody
+          schema: toy
+        - id: toys.play-tents
+          name: Детские игровые палатки
+          slug: detskie-igrovye-palatki
+          schema: toy
+- id: sports
+  name: Спорт и фитнес
+  slug: sport-i-fitnes
+  children:
+    - id: sports.fitness
+      name: Фитнес и тренажёры
+      slug: fitnes-i-trenazhery
+      children:
+        - id: sports.cardio-machines
+          name: Кардиотренажёры
+          slug: kardiotrenazhery
+          children:
+            - id: sports.treadmills
+              name: Беговые дорожки
+              slug: begovye-dorozhki
+              schema: fitness
+            - id: sports.exercise-bikes
+              name: Велотренажёры
+              slug: velotrenazhery
+              schema: fitness
+            - id: sports.ellipticals
+              name: Эллиптические тренажёры
+              slug: ellipticheskie-trenazhery
+              schema: fitness
+            - id: sports.rowing-machines
+              name: Гребные тренажёры
+              slug: grebnye-trenazhery
+              schema: fitness
+        - id: sports.strength-machines
+          name: Силовые тренажёры
+          slug: silovye-trenazhery
+          schema: fitness
+        - id: sports.free-weights
+          name: Свободные веса
+          title: Свободные веса для тренировок
+          slug: svobodnye-vesa-dlya-trenirovok
+          children:
+            - id: sports.dumbbells
+              name: Гантели
+              slug: ganteli
+              schema: sport_equipment
+            - id: sports.kettlebells
+              name: Гири
+              slug: giri
+              schema: sport_equipment
+            - id: sports.barbells
+              name: Штанги
+              slug: shtangi
+              schema: sport_equipment
+            - id: sports.weight-plates
+              name: Диски для штанги
+              slug: diski-dlya-shtangi
+              schema: sport_equipment
+        - id: sports.resistance-bands
+          name: Эспандеры
+          slug: espandery
+          schema: sport_equipment
+        - id: sports.yoga-mats
+          name: Коврики для йоги
+          slug: kovriki-dlya-yogi
+          schema: sport_equipment
+        - id: sports.fitness-balls
+          name: Фитболы
+          slug: fitboly
+          schema: sport_equipment
+        - id: sports.jump-ropes
+          name: Скакалки
+          slug: skakalki
+          schema: sport_equipment
+    - id: sports.team
+      name: Командные виды спорта
+      slug: komandnye-vidy-sporta
+      children:
+        - id: sports.football-balls
+          name: Футбольные мячи
+          slug: futbolnye-myachi
+          schema: sport_equipment
+        - id: sports.basketballs
+          name: Баскетбольные мячи
+          slug: basketbolnye-myachi
+          schema: sport_equipment
+        - id: sports.volleyballs
+          name: Волейбольные мячи
+          slug: voleybolnye-myachi
+          schema: sport_equipment
+        - id: sports.goals
+          name: Спортивные ворота
+          slug: sportivnye-vorota
+          schema: sport_equipment
+        - id: sports.nets
+          name: Спортивные сетки
+          slug: sportivnye-setki
+          schema: sport_equipment
+        - id: sports.hockey-sticks
+          name: Хоккейные клюшки
+          slug: khokkeynye-klyushki
+          schema: sport_equipment
+    - id: sports.racket
+      name: Ракеточные виды спорта
+      slug: raketochnye-vidy-sporta
+      children:
+        - id: sports.tennis-rackets
+          name: Теннисные ракетки
+          slug: tennisnye-raketki
+          schema: sport_equipment
+        - id: sports.table-tennis
+          name: Инвентарь для настольного тенниса
+          slug: inventar-dlya-nastolnogo-tennisa
+          schema: sport_equipment
+        - id: sports.badminton
+          name: Инвентарь для бадминтона
+          slug: inventar-dlya-badmintona
+          schema: sport_equipment
+        - id: sports.squash
+          name: Инвентарь для сквоша
+          slug: inventar-dlya-skvosha
+          schema: sport_equipment
+    - id: sports.water
+      name: Плавание и водный спорт
+      slug: plavanie-i-vodnyy-sport
+      children:
+        - id: sports.swim-goggles
+          name: Очки для плавания
+          slug: ochki-dlya-plavaniya
+          schema: sport_equipment
+        - id: sports.swim-caps
+          name: Шапочки для плавания
+          slug: shapochki-dlya-plavaniya
+          schema: sport_equipment
+        - id: sports.fins
+          name: Ласты
+          slug: lasty
+          schema: sport_equipment
+        - id: sports.snorkeling
+          name: Маски и трубки
+          slug: maski-i-trubki
+          schema: sport_equipment
+        - id: sports.sup-boards
+          name: SUP-доски
+          slug: sup-doski
+          schema: sport_equipment
+        - id: sports.life-jackets
+          name: Спасательные жилеты
+          slug: spasatelnye-zhilety
+          schema: sport_equipment
+    - id: sports.winter
+      name: Зимний спорт
+      slug: zimniy-sport
+      children:
+        - id: sports.skis
+          name: Лыжи
+          slug: lyzhi
+          schema: sport_equipment
+        - id: sports.ski-poles
+          name: Лыжные палки
+          slug: lyzhnye-palki
+          schema: sport_equipment
+        - id: sports.snowboards
+          name: Сноуборды
+          slug: snoubordy
+          schema: sport_equipment
+        - id: sports.skates
+          name: Коньки
+          slug: konki
+          schema: sport_equipment
+        - id: sports.sleds
+          name: Санки
+          slug: sanki
+          schema: sport_equipment
+        - id: sports.snow-tubes
+          name: Тюбинги
+          slug: tyubingi
+          schema: sport_equipment
+    - id: sports.protection
+      name: Единоборства и защита
+      slug: edinoborstva-i-zashchita
+      children:
+        - id: sports.boxing-gloves
+          name: Боксёрские перчатки
+          slug: bokserskie-perchatki
+          schema: sport_equipment
+        - id: sports.punching-bags
+          name: Боксёрские мешки
+          slug: bokserskie-meshki
+          schema: sport_equipment
+        - id: sports.martial-arts
+          name: Инвентарь для единоборств
+          slug: inventar-dlya-edinoborstv
+          schema: sport_equipment
+        - id: sports.sports-helmets
+          name: Спортивные шлемы
+          slug: sportivnye-shlemy
+          schema: sport_equipment
+        - id: sports.sports-protection
+          name: Спортивная защита
+          slug: sportivnaya-zashchita
+          schema: sport_equipment
+- id: outdoors
+  name: Туризм и активный отдых
+  slug: turizm-i-aktivnyy-otdykh
+  children:
+    - id: outdoors.camping
+      name: Туризм и кемпинг
+      slug: turizm-i-kemping
+      children:
+        - id: outdoors.tents
+          name: Палатки
+          slug: palatki
+          schema: tent
+        - id: outdoors.camping-awnings
+          name: Туристические тенты
+          slug: turisticheskie-tenty
+          schema: tent
+        - id: outdoors.sleeping-bags
+          name: Спальные мешки
+          slug: spalnye-meshki
+          schema: sleeping_bag
+        - id: outdoors.hiking-backpacks
+          name: Туристические рюкзаки
+          slug: turisticheskie-ryukzaki
+          schema: backpack
+        - id: outdoors.camping-mats
+          name: Туристические коврики
+          slug: turisticheskie-kovriki
+          schema: outdoor
+        - id: outdoors.camping-cookware
+          name: Туристическая посуда
+          slug: turisticheskaya-posuda
+          schema: outdoor
+        - id: outdoors.camping-stoves
+          name: Туристические горелки
+          slug: turisticheskie-gorelki
+          schema: outdoor
+        - id: outdoors.camping-lights
+          name: Туристические фонари
+          slug: turisticheskie-fonari
+          schema: outdoor
+        - id: outdoors.cooler-bags
+          name: Термосумки
+          slug: termosumki
+          schema: outdoor
+        - id: outdoors.hammocks
+          name: Гамаки
+          slug: gamaki
+          schema: outdoor
+        - id: outdoors.trekking-poles
+          name: Треккинговые палки
+          slug: trekkingovye-palki
+          schema: outdoor
+    - id: outdoors.bikes
+      name: Велосипеды и транспорт
+      slug: velosipedy-i-transport
+      children:
+        - id: outdoors.adult-bikes
+          name: Взрослые велосипеды
+          slug: vzroslye-velosipedy
+          schema: bicycle
+        - id: outdoors.kids-bikes
+          name: Детские велосипеды
+          slug: detskie-velosipedy
+          schema: bicycle
+        - id: outdoors.electric-bikes
+          name: Электровелосипеды
+          slug: elektrovelosipedy
+          schema: bicycle
+        - id: outdoors.scooters
+          name: Самокаты
+          slug: samokaty
+          schema: ride
+        - id: outdoors.electric-scooters
+          name: Электросамокаты
+          slug: elektrosamokaty
+          schema: ride
+        - id: outdoors.skateboards
+          name: Скейтборды
+          slug: skeytbordy
+          schema: ride
+        - id: outdoors.roller-skates
+          name: Роликовые коньки
+          slug: rolikovye-konki
+          schema: ride
+        - id: outdoors.balance-bikes
+          name: Беговелы
+          slug: begovely
+          schema: ride
+        - id: outdoors.bike-parts
+          name: Велосипедные запчасти
+          slug: velosipednye-zapchasti
+          schema: outdoor
+        - id: outdoors.bike-accessories
+          name: Велосипедные аксессуары
+          slug: velosipednye-aksessuary
+          schema: outdoor
+    - id: outdoors.fishing
+      name: Рыбалка
+      slug: rybalka
+      children:
+        - id: outdoors.fishing-rods
+          name: Удилища
+          slug: udilishcha
+          schema: rod
+        - id: outdoors.spinning-rods
+          name: Спиннинги
+          slug: spinningi
+          schema: rod
+        - id: outdoors.fishing-reels
+          name: Рыболовные катушки
+          slug: rybolovnye-katushki
+          schema: fishing
+        - id: outdoors.fishing-line
+          name: Леска и шнуры
+          slug: leska-i-shnury
+          schema: fishing
+        - id: outdoors.fishing-hooks
+          name: Рыболовные крючки
+          slug: rybolovnye-kryuchki
+          schema: fishing
+        - id: outdoors.fishing-lures
+          name: Приманки
+          slug: primanki
+          schema: fishing
+        - id: outdoors.fishing-floats
+          name: Поплавки
+          slug: poplavki
+          schema: fishing
+        - id: outdoors.fishing-nets
+          name: Подсачеки
+          slug: podsacheki
+          schema: fishing
+        - id: outdoors.fishing-accessories
+          name: Рыболовные принадлежности
+          slug: rybolovnye-prinadlezhnosti
+          schema: fishing
+    - id: outdoors.picnic
+      name: Пикник и отдых на воде
+      slug: piknik-i-otdykh-na-vode
+      children:
+        - id: outdoors.barbecues
+          name: Мангалы
+          slug: mangaly
+          schema: outdoor
+        - id: outdoors.grills
+          name: Грили для улицы
+          slug: grili-dlya-ulitsy
+          schema: outdoor
+        - id: outdoors.picnic-sets
+          name: Наборы для пикника
+          slug: nabory-dlya-piknika
+          schema: outdoor
+        - id: outdoors.inflatable-boats
+          name: Надувные лодки
+          slug: naduvnye-lodki
+          schema: outdoor
+        - id: outdoors.inflatable-mattresses
+          name: Надувные матрасы
+          slug: naduvnye-matrasy
+          schema: outdoor
+        - id: outdoors.beach-accessories
+          name: Пляжные принадлежности
+          slug: plyazhnye-prinadlezhnosti
+          schema: outdoor
+- id: auto
+  name: Автотовары
+  slug: avtotovary
+  children:
+    - id: auto.parts
+      name: Автомобильные запчасти
+      slug: avtomobilnye-zapchasti
+      children:
+        - id: auto.brake-pads
+          name: Тормозные колодки
+          slug: tormoznye-kolodki
+          schema: auto_part
+        - id: auto.brake-discs
+          name: Тормозные диски
+          slug: tormoznye-diski
+          schema: auto_part
+        - id: auto.auto-filters
+          name: Фильтры
+          title: Фильтры автомобильные
+          slug: filtry-avtomobilnye
+          schema: auto_part
+        - id: auto.spark-plugs
+          name: Свечи зажигания
+          slug: svechi-zazhiganiya
+          schema: auto_part
+        - id: auto.shock-absorbers
+          name: Амортизаторы
+          slug: amortizatory
+          schema: auto_part
+        - id: auto.suspension-parts
+          name: Детали подвески
+          slug: detali-podveski
+          schema: auto_part
+        - id: auto.engine-parts
+          name: Детали двигателя
+          slug: detali-dvigatelya
+          schema: auto_part
+        - id: auto.transmission-parts
+          name: Детали трансмиссии
+          slug: detali-transmissii
+          schema: auto_part
+        - id: auto.belts
+          name: Приводные ремни
+          slug: privodnye-remni
+          schema: auto_part
+        - id: auto.body-parts
+          name: Кузовные детали
+          slug: kuzovnye-detali
+          schema: auto_part
+        - id: auto.auto-lights
+          name: Фары
+          title: Фары автомобильные
+          slug: fary-avtomobilnye
+          schema: auto_part
+        - id: auto.wiper-blades
+          name: Щётки стеклоочистителя
+          slug: shchetki-stekloochistitelya
+          schema: auto_part
+    - id: auto.wheels
+      name: Шины, диски и аккумуляторы
+      slug: shiny-diski-i-akkumulyatory
+      children:
+        - id: auto.car-tires
+          name: Легковые шины
+          slug: legkovye-shiny
+          schema: tire
+        - id: auto.suv-tires
+          name: Шины для внедорожников
+          slug: shiny-dlya-vnedorozhnikov
+          schema: tire
+        - id: auto.commercial-tires
+          name: Шины для коммерческого транспорта
+          slug: shiny-dlya-kommercheskogo-transporta
+          schema: tire
+        - id: auto.alloy-wheels
+          name: Литые диски
+          slug: litye-diski
+          schema: wheel
+        - id: auto.steel-wheels
+          name: Штампованные диски
+          slug: shtampovannye-diski
+          schema: wheel
+        - id: auto.car-batteries
+          name: Аккумуляторы
+          title: Аккумуляторы автомобильные
+          slug: akkumulyatory-avtomobilnye
+          schema: auto_battery
+    - id: auto.fluids
+      name: Масла и автохимия
+      slug: masla-i-avtokhimiya
+      children:
+        - id: auto.engine-oils
+          name: Моторные масла
+          slug: motornye-masla
+          schema: oil
+        - id: auto.transmission-oils
+          name: Трансмиссионные масла
+          slug: transmissionnye-masla
+          schema: oil
+        - id: auto.coolants
+          name: Охлаждающие жидкости
+          slug: okhlazhdayushchie-zhidkosti
+          schema: auto_chemical
+        - id: auto.brake-fluids
+          name: Тормозные жидкости
+          slug: tormoznye-zhidkosti
+          schema: auto_chemical
+        - id: auto.washer-fluids
+          name: Стеклоомывающие жидкости
+          slug: stekloomyvayushchie-zhidkosti
+          schema: auto_chemical
+        - id: auto.auto-shampoos
+          name: Автошампуни
+          slug: avtoshampuni
+          schema: auto_chemical
+        - id: auto.auto-polishes
+          name: Полироли
+          title: Полироли автомобильные
+          slug: poliroli-avtomobilnye
+          schema: auto_chemical
+        - id: auto.auto-cleaners
+          name: Очистители для автомобиля
+          slug: ochistiteli-dlya-avtomobilya
+          schema: auto_chemical
+    - id: auto.accessories
+      name: Автомобильные аксессуары
+      slug: avtomobilnye-aksessuary
+      children:
+        - id: auto.car-mats
+          name: Коврики
+          title: Коврики автомобильные
+          slug: kovriki-avtomobilnye
+          schema: auto_accessory
+        - id: auto.seat-covers
+          name: Чехлы
+          title: Чехлы автомобильные
+          slug: chekhly-avtomobilnye
+          schema: auto_accessory
+        - id: auto.car-organizers
+          name: Органайзеры
+          title: Органайзеры автомобильные
+          slug: organayzery-avtomobilnye
+          schema: auto_accessory
+        - id: auto.roof-racks
+          name: Багажники на крышу
+          slug: bagazhniki-na-kryshu
+          schema: auto_accessory
+        - id: auto.car-compressors
+          name: Компрессоры
+          title: Компрессоры автомобильные
+          slug: kompressory-avtomobilnye
+          schema: auto_accessory
+        - id: auto.car-jacks
+          name: Домкраты
+          slug: domkraty
+          schema: auto_accessory
+        - id: auto.car-tools
+          name: Инструмент
+          title: Инструмент автомобильный
+          slug: instrument-avtomobilnyy
+          schema: auto_accessory
+        - id: auto.tow-ropes
+          name: Буксировочные тросы
+          slug: buksirovochnye-trosy
+          schema: auto_accessory
+        - id: auto.car-chargers
+          name: Зарядные устройства
+          title: Зарядные устройства автомобильные
+          slug: zaryadnye-ustroystva-avtomobilnye
+          schema: auto_accessory
+        - id: auto.dashcams
+          name: Видеорегистраторы
+          title: Видеорегистраторы автомобильные
+          slug: videoregistratory-avtomobilnye
+          schema: video
+        - id: auto.car-audio
+          name: Аудиотехника
+          title: Аудиотехника автомобильная
+          slug: audiotekhnika-avtomobilnaya
+          schema: audio_pro
+    - id: auto.motorcycles
+      name: Мототовары
+      slug: mototovary
+      children:
+        - id: auto.motorcycle-parts
+          name: Мотозапчасти
+          slug: motozapchasti
+          schema: auto_part
+        - id: auto.motorcycle-clothing
+          name: Мотоэкипировка
+          slug: motoekipirovka
+          schema: workwear
+        - id: auto.motorcycle-helmets
+          name: Мотошлемы
+          slug: motoshlemy
+          schema: sport_equipment
+        - id: auto.motorcycle-tires
+          name: Мотошины
+          slug: motoshiny
+          schema: tire
+- id: tools
+  name: Инструменты
+  slug: instrumenty
+  children:
+    - id: tools.power
+      name: Электроинструменты
+      slug: elektroinstrumenty
+      children:
+        - id: tools.drills
+          name: Дрели
+          slug: dreli
+          schema: power_tool
+        - id: tools.drivers
+          name: Шуруповёрты
+          slug: shurupoverty
+          schema: power_tool
+        - id: tools.rotary-hammers
+          name: Перфораторы
+          slug: perforatory
+          schema: power_tool
+        - id: tools.angle-grinders
+          name: Угловые шлифовальные машины
+          slug: uglovye-shlifovalnye-mashiny
+          schema: power_tool
+        - id: tools.sanders
+          name: Шлифовальные машины
+          slug: shlifovalnye-mashiny
+          schema: power_tool
+        - id: tools.jigsaws
+          name: Электролобзики
+          slug: elektrolobziki
+          schema: power_tool
+        - id: tools.circular-saws
+          name: Дисковые пилы
+          slug: diskovye-pily
+          schema: power_tool
+        - id: tools.mitre-saws
+          name: Торцовочные пилы
+          slug: tortsovochnye-pily
+          schema: power_tool
+        - id: tools.routers
+          name: Фрезеры
+          slug: frezery
+          schema: power_tool
+        - id: tools.electric-planers
+          name: Электрорубанки
+          slug: elektrorubanki
+          schema: power_tool
+        - id: tools.heat-guns
+          name: Строительные фены
+          slug: stroitelnye-feny
+          schema: power_tool
+        - id: tools.welders
+          name: Сварочные аппараты
+          slug: svarochnye-apparaty
+          schema: power_tool
+    - id: tools.hand
+      name: Ручной инструмент
+      slug: ruchnoy-instrument
+      children:
+        - id: tools.screwdrivers
+          name: Отвёртки
+          slug: otvertki
+          schema: hand_tool
+        - id: tools.wrenches
+          name: Гаечные ключи
+          slug: gaechnye-klyuchi
+          schema: hand_tool
+        - id: tools.pliers
+          name: Плоскогубцы
+          slug: ploskogubtsy
+          schema: hand_tool
+        - id: tools.cutters
+          name: Кусачки
+          slug: kusachki
+          schema: hand_tool
+        - id: tools.hammers
+          name: Молотки
+          slug: molotki
+          schema: hand_tool
+        - id: tools.hand-saws
+          name: Ручные пилы
+          slug: ruchnye-pily
+          schema: hand_tool
+        - id: tools.files
+          name: Напильники
+          slug: napilniki
+          schema: hand_tool
+        - id: tools.clamps
+          name: Струбцины
+          slug: strubtsiny
+          schema: hand_tool
+        - id: tools.tool-sets
+          name: Наборы инструментов
+          slug: nabory-instrumentov
+          schema: hand_tool
+        - id: tools.staplers
+          name: Строительные степлеры
+          slug: stroitelnye-steplery
+          schema: hand_tool
+    - id: tools.measurement
+      name: Измерительные инструменты
+      slug: izmeritelnye-instrumenty
+      children:
+        - id: tools.laser-levels
+          name: Лазерные уровни
+          slug: lazernye-urovni
+          schema: measuring
+        - id: tools.levels
+          name: Строительные уровни
+          slug: stroitelnye-urovni
+          schema: measuring
+        - id: tools.tape-measures
+          name: Рулетки
+          slug: ruletki
+          schema: measuring
+        - id: tools.calipers
+          name: Штангенциркули
+          slug: shtangentsirkuli
+          schema: measuring
+        - id: tools.multimeters
+          name: Мультиметры
+          slug: multimetry
+          schema: measuring
+        - id: tools.rangefinders
+          name: Дальномеры
+          slug: dalnomery
+          schema: measuring
+    - id: tools.consumables
+      name: Оснастка и расходные материалы
+      slug: osnastka-i-raskhodnye-materialy
+      children:
+        - id: tools.drill-bits
+          name: Свёрла
+          slug: sverla
+          schema: tool_accessory
+        - id: tools.driver-bits
+          name: Биты
+          slug: bity
+          schema: tool_accessory
+        - id: tools.cutting-discs
+          name: Отрезные диски
+          slug: otreznye-diski
+          schema: tool_accessory
+        - id: tools.grinding-discs
+          name: Шлифовальные диски
+          slug: shlifovalnye-diski
+          schema: tool_accessory
+        - id: tools.saw-blades
+          name: Пильные полотна
+          slug: pilnye-polotna
+          schema: tool_accessory
+        - id: tools.router-bits
+          name: Фрезы
+          slug: frezy
+          schema: tool_accessory
+        - id: tools.tool-batteries
+          name: Аккумуляторы для инструмента
+          slug: akkumulyatory-dlya-instrumenta
+          schema: tool_accessory
+        - id: tools.tool-chargers
+          name: Зарядные устройства для инструмента
+          slug: zaryadnye-ustroystva-dlya-instrumenta
+          schema: tool_accessory
+        - id: tools.tool-storage
+          name: Хранение инструмента
+          slug: khranenie-instrumenta
+          schema: storage
+- id: renovation
+  name: Строительство и ремонт
+  slug: stroitelstvo-i-remont
+  children:
+    - id: renovation.materials
+      name: Строительные материалы
+      slug: stroitelnye-materialy
+      children:
+        - id: renovation.cement
+          name: Цемент
+          slug: tsement
+          schema: building_mix
+        - id: renovation.plaster
+          name: Штукатурки
+          slug: shtukaturki
+          schema: building_mix
+        - id: renovation.putty
+          name: Шпатлёвки
+          slug: shpatlevki
+          schema: building_mix
+        - id: renovation.tile-adhesive
+          name: Плиточный клей
+          slug: plitochnyy-kley
+          schema: building_mix
+        - id: renovation.grout
+          name: Затирки
+          slug: zatirki
+          schema: building_mix
+        - id: renovation.floor-mix
+          name: Смеси для пола
+          slug: smesi-dlya-pola
+          schema: building_mix
+        - id: renovation.waterproofing
+          name: Гидроизоляция
+          slug: gidroizolyatsiya
+          schema: building_mix
+        - id: renovation.drywall
+          name: Гипсокартон
+          slug: gipsokarton
+          schema: building_panel
+        - id: renovation.insulation
+          name: Утеплители
+          slug: utepliteli
+          schema: building_panel
+        - id: renovation.plywood
+          name: Фанера
+          slug: fanera
+          schema: building_panel
+        - id: renovation.boards
+          name: Доски
+          slug: doski
+          schema: building_panel
+        - id: renovation.building-blocks
+          name: Строительные блоки
+          slug: stroitelnye-bloki
+          schema: building_panel
+    - id: renovation.finishing
+      name: Отделочные материалы
+      slug: otdelochnye-materialy
+      children:
+        - id: renovation.paints
+          name: Краски
+          slug: kraski
+          schema: paint
+        - id: renovation.varnishes
+          name: Лаки
+          slug: laki
+          schema: paint
+        - id: renovation.primers
+          name: Грунтовки
+          slug: gruntovki
+          schema: paint
+        - id: renovation.wood-stains
+          name: Морилки
+          slug: morilki
+          schema: paint
+        - id: renovation.wallpaper
+          name: Обои
+          slug: oboi
+          schema: building_panel
+        - id: renovation.tiles
+          name: Плитка
+          slug: plitka
+          schema: building_panel
+        - id: renovation.laminate
+          name: Ламинат
+          slug: laminat
+          schema: building_panel
+        - id: renovation.linoleum
+          name: Линолеум
+          slug: linoleum
+          schema: building_panel
+        - id: renovation.wall-panels
+          name: Стеновые панели
+          slug: stenovye-paneli
+          schema: building_panel
+        - id: renovation.skirting
+          name: Плинтусы
+          slug: plintusy
+          schema: building_panel
+        - id: renovation.sealants
+          name: Герметики
+          slug: germetiki
+          schema: building_mix
+        - id: renovation.construction-foam
+          name: Монтажная пена
+          slug: montazhnaya-pena
+          schema: building_mix
+    - id: renovation.fasteners
+      name: Крепёж
+      slug: krepezh
+      children:
+        - id: renovation.screws
+          name: Саморезы
+          slug: samorezy
+          schema: fastener
+        - id: renovation.bolts
+          name: Болты
+          slug: bolty
+          schema: fastener
+        - id: renovation.nuts
+          name: Гайки
+          slug: gayki
+          schema: fastener
+        - id: renovation.washers
+          name: Шайбы
+          slug: shayby
+          schema: fastener
+        - id: renovation.anchors
+          name: Анкеры
+          slug: ankery
+          schema: fastener
+        - id: renovation.dowels
+          name: Дюбели
+          slug: dyubeli
+          schema: fastener
+        - id: renovation.nails
+          name: Гвозди
+          slug: gvozdi
+          schema: fastener
+        - id: renovation.rivets
+          name: Заклёпки
+          slug: zaklepki
+          schema: fastener
+    - id: renovation.plumbing
+      name: Сантехника
+      slug: santekhnika
+      children:
+        - id: renovation.mixers
+          name: Смесители
+          slug: smesiteli
+          schema: plumbing
+        - id: renovation.sinks
+          name: Раковины
+          slug: rakoviny
+          schema: plumbing
+        - id: renovation.toilets
+          name: Унитазы
+          slug: unitazy
+          schema: plumbing
+        - id: renovation.baths
+          name: Ванны
+          slug: vanny
+          schema: plumbing
+        - id: renovation.shower-enclosures
+          name: Душевые кабины
+          slug: dushevye-kabiny
+          schema: plumbing
+        - id: renovation.shower-systems
+          name: Душевые системы
+          slug: dushevye-sistemy
+          schema: plumbing
+        - id: renovation.pipes
+          name: Трубы
+          slug: truby
+          schema: plumbing
+        - id: renovation.pipe-fittings
+          name: Фитинги
+          slug: fitingi
+          schema: plumbing
+        - id: renovation.valves
+          name: Запорная арматура
+          slug: zapornaya-armatura
+          schema: plumbing
+        - id: renovation.water-filters
+          name: Фильтры для воды
+          slug: filtry-dlya-vody
+          schema: plumbing
+        - id: renovation.radiators
+          name: Радиаторы отопления
+          slug: radiatory-otopleniya
+          schema: plumbing
+    - id: renovation.electrical
+      name: Электрика
+      slug: elektrika
+      children:
+        - id: renovation.sockets
+          name: Розетки
+          slug: rozetki
+          schema: electrical
+        - id: renovation.switches
+          name: Выключатели
+          slug: vyklyuchateli
+          schema: electrical
+        - id: renovation.circuit-breakers
+          name: Автоматические выключатели
+          slug: avtomaticheskie-vyklyuchateli
+          schema: electrical
+        - id: renovation.distribution-boards
+          name: Электрощиты
+          slug: elektroshchity
+          schema: electrical
+        - id: renovation.extension-leads
+          name: Удлинители
+          slug: udliniteli
+          schema: electrical
+        - id: renovation.voltage-regulators
+          name: Стабилизаторы напряжения
+          slug: stabilizatory-napryazheniya
+          schema: electrical
+        - id: renovation.electrical-cables
+          name: Электрические кабели
+          slug: elektricheskie-kabeli
+          schema: wire
+        - id: renovation.wires
+          name: Провода
+          slug: provoda
+          schema: wire
+        - id: renovation.light-bulbs
+          name: Лампочки
+          slug: lampochki
+          schema: lighting
+        - id: renovation.led-strips
+          name: Светодиодные ленты
+          slug: svetodiodnye-lenty
+          schema: lighting
+    - id: renovation.doors
+      name: Двери и окна
+      slug: dveri-i-okna
+      children:
+        - id: renovation.interior-doors
+          name: Межкомнатные двери
+          slug: mezhkomnatnye-dveri
+          schema: door
+        - id: renovation.entrance-doors
+          name: Входные двери
+          slug: vkhodnye-dveri
+          schema: door
+        - id: renovation.windows
+          name: Окна
+          slug: okna
+          schema: door
+        - id: renovation.window-sills
+          name: Подоконники
+          slug: podokonniki
+          schema: door
+        - id: renovation.door-hardware
+          name: Дверная фурнитура
+          slug: dvernaya-furnitura
+          schema: furniture_part
+        - id: renovation.window-hardware
+          name: Оконная фурнитура
+          slug: okonnaya-furnitura
+          schema: furniture_part
+- id: garden
+  name: Дача и сад
+  slug: dacha-i-sad
+  children:
+    - id: garden.plants
+      name: Растения и семена
+      slug: rasteniya-i-semena
+      children:
+        - id: garden.vegetable-seeds
+          name: Семена овощей
+          slug: semena-ovoshchey
+          schema: seed
+        - id: garden.flower-seeds
+          name: Семена цветов
+          slug: semena-tsvetov
+          schema: seed
+        - id: garden.lawn-seeds
+          name: Газонные семена
+          slug: gazonnye-semena
+          schema: seed
+        - id: garden.seedlings
+          name: Рассада
+          slug: rassada
+          schema: plant
+        - id: garden.tree-saplings
+          name: Саженцы деревьев
+          slug: sazhentsy-derevev
+          schema: plant
+        - id: garden.shrub-saplings
+          name: Саженцы кустарников
+          slug: sazhentsy-kustarnikov
+          schema: plant
+        - id: garden.indoor-plants
+          name: Комнатные растения
+          slug: komnatnye-rasteniya
+          schema: plant
+        - id: garden.flower-bulbs
+          name: Луковицы цветов
+          slug: lukovitsy-tsvetov
+          schema: plant
+    - id: garden.growing
+      name: Выращивание растений
+      slug: vyrashchivanie-rasteniy
+      children:
+        - id: garden.soil
+          name: Грунты
+          slug: grunty
+          schema: garden_soil
+        - id: garden.fertilizers
+          name: Удобрения
+          slug: udobreniya
+          schema: garden_soil
+        - id: garden.mulch
+          name: Мульча
+          slug: mulcha
+          schema: garden_soil
+        - id: garden.plant-protection
+          name: Средства защиты растений
+          slug: sredstva-zashchity-rasteniy
+          schema: garden_soil
+        - id: garden.plant-pots
+          name: Горшки для растений
+          slug: gorshki-dlya-rasteniy
+          schema: storage
+        - id: garden.seedling-trays
+          name: Кассеты для рассады
+          slug: kassety-dlya-rassady
+          schema: storage
+        - id: garden.greenhouses
+          name: Теплицы
+          slug: teplitsy
+          schema: building_panel
+        - id: garden.cold-frames
+          name: Парники
+          slug: parniki
+          schema: building_panel
+        - id: garden.garden-beds
+          name: Грядки
+          slug: gryadki
+          schema: building_panel
+    - id: garden.equipment
+      name: Садовая техника и инструмент
+      slug: sadovaya-tekhnika-i-instrument
+      children:
+        - id: garden.lawn-mowers
+          name: Газонокосилки
+          slug: gazonokosilki
+          schema: garden_tool
+        - id: garden.grass-trimmers
+          name: Садовые триммеры
+          slug: sadovye-trimmery
+          schema: garden_tool
+        - id: garden.chainsaws
+          name: Цепные пилы
+          slug: tsepnye-pily
+          schema: garden_tool
+        - id: garden.cultivators
+          name: Культиваторы
+          slug: kultivatory
+          schema: garden_tool
+        - id: garden.snow-blowers
+          name: Снегоуборщики
+          slug: snegouborshchiki
+          schema: garden_tool
+        - id: garden.garden-shredders
+          name: Садовые измельчители
+          slug: sadovye-izmelchiteli
+          schema: garden_tool
+        - id: garden.pruners
+          name: Секаторы
+          slug: sekatory
+          schema: garden_tool
+        - id: garden.garden-shovels
+          name: Садовые лопаты
+          slug: sadovye-lopaty
+          schema: garden_tool
+        - id: garden.rakes
+          name: Грабли
+          slug: grabli
+          schema: garden_tool
+        - id: garden.garden-forks
+          name: Садовые вилы
+          slug: sadovye-vily
+          schema: garden_tool
+    - id: garden.watering
+      name: Полив и водоснабжение
+      slug: poliv-i-vodosnabzhenie
+      children:
+        - id: garden.garden-hoses
+          name: Садовые шланги
+          slug: sadovye-shlangi
+          schema: garden_watering
+        - id: garden.sprinklers
+          name: Дождеватели
+          slug: dozhdevateli
+          schema: garden_watering
+        - id: garden.watering-cans
+          name: Лейки
+          slug: leyki
+          schema: garden_watering
+        - id: garden.garden-pumps
+          name: Садовые насосы
+          slug: sadovye-nasosy
+          schema: garden_watering
+        - id: garden.drip-irrigation
+          name: Капельный полив
+          slug: kapelnyy-poliv
+          schema: garden_watering
+    - id: garden.outdoor-living
+      name: Обустройство участка
+      slug: obustroystvo-uchastka
+      children:
+        - id: garden.garden-tables
+          name: Садовые столы
+          slug: sadovye-stoly
+          schema: garden_furniture
+        - id: garden.garden-chairs
+          name: Садовые стулья
+          slug: sadovye-stulya
+          schema: garden_furniture
+        - id: garden.garden-benches
+          name: Садовые скамейки
+          slug: sadovye-skameyki
+          schema: garden_furniture
+        - id: garden.garden-swings
+          name: Садовые качели
+          slug: sadovye-kacheli
+          schema: garden_furniture
+        - id: garden.sun-loungers
+          name: Шезлонги
+          slug: shezlongi
+          schema: garden_furniture
+        - id: garden.garden-pools
+          name: Садовые бассейны
+          slug: sadovye-basseyny
+          schema: outdoor
+        - id: garden.gazebos
+          name: Беседки
+          slug: besedki
+          schema: outdoor
+        - id: garden.garden-lights
+          name: Садовое освещение
+          slug: sadovoe-osveshchenie
+          schema: lighting
+- id: pets
+  name: Зоотовары
+  slug: zootovary
+  children:
+    - id: pets.food
+      name: Корма и лакомства
+      slug: korma-i-lakomstva
+      children:
+        - id: pets.dog-food
+          name: Корм для собак
+          slug: korm-dlya-sobak
+          schema: pet_food
+        - id: pets.cat-food
+          name: Корм для кошек
+          slug: korm-dlya-koshek
+          schema: pet_food
+        - id: pets.bird-food
+          name: Корм для птиц
+          slug: korm-dlya-ptits
+          schema: pet_food
+        - id: pets.rodent-food
+          name: Корм для грызунов
+          slug: korm-dlya-gryzunov
+          schema: pet_food
+        - id: pets.fish-food
+          name: Корм для рыб
+          slug: korm-dlya-ryb
+          schema: pet_food
+        - id: pets.reptile-food
+          name: Корм для рептилий
+          slug: korm-dlya-reptiliy
+          schema: pet_food
+        - id: pets.pet-treats
+          name: Лакомства для животных
+          slug: lakomstva-dlya-zhivotnykh
+          schema: pet_food
+    - id: pets.care
+      name: Уход за животными
+      slug: ukhod-za-zhivotnymi
+      children:
+        - id: pets.cat-litter
+          name: Наполнители для туалетов
+          title: Наполнители для туалетов животных
+          slug: napolniteli-dlya-tualetov-zhivotnykh
+          schema: pet_supply
+        - id: pets.pet-toilets
+          name: Туалеты
+          title: Туалеты для животных
+          slug: tualety-dlya-zhivotnykh
+          schema: pet_supply
+        - id: pets.pet-shampoos
+          name: Шампуни
+          title: Шампуни для животных
+          slug: shampuni-dlya-zhivotnykh
+          schema: pet_supply
+        - id: pets.pet-grooming
+          name: Инструменты для груминга
+          slug: instrumenty-dlya-gruminga
+          schema: pet_supply
+        - id: pets.pet-hygiene
+          name: Гигиена животных
+          slug: gigiena-zhivotnykh
+          schema: pet_supply
+        - id: pets.pet-health
+          name: Средства ухода за здоровьем животных
+          slug: sredstva-ukhoda-za-zdorovem-zhivotnykh
+          schema: pet_supply
+    - id: pets.accessories
+      name: Аксессуары для животных
+      slug: aksessuary-dlya-zhivotnykh
+      children:
+        - id: pets.pet-beds
+          name: Лежанки
+          title: Лежанки для животных
+          slug: lezhanki-dlya-zhivotnykh
+          schema: pet_supply
+        - id: pets.pet-houses
+          name: Домики
+          title: Домики для животных
+          slug: domiki-dlya-zhivotnykh
+          schema: pet_supply
+        - id: pets.pet-carriers
+          name: Переноски
+          title: Переноски для животных
+          slug: perenoski-dlya-zhivotnykh
+          schema: pet_supply
+        - id: pets.pet-bowls
+          name: Миски
+          title: Миски для животных
+          slug: miski-dlya-zhivotnykh
+          schema: pet_supply
+        - id: pets.pet-feeders
+          name: Кормушки и поилки
+          title: Кормушки и поилки для животных
+          slug: kormushki-i-poilki-dlya-zhivotnykh
+          schema: pet_supply
+        - id: pets.collars
+          name: Ошейники
+          slug: osheyniki
+          schema: pet_supply
+        - id: pets.leashes
+          name: Поводки
+          slug: povodki
+          schema: pet_supply
+        - id: pets.harnesses
+          name: Шлейки
+          slug: shleyki
+          schema: pet_supply
+        - id: pets.pet-clothing
+          name: Одежда
+          title: Одежда для животных
+          slug: odezhda-dlya-zhivotnykh
+          schema: pet_supply
+        - id: pets.pet-toys
+          name: Игрушки
+          title: Игрушки для животных
+          slug: igrushki-dlya-zhivotnykh
+          schema: pet_supply
+        - id: pets.scratching-posts
+          name: Когтеточки
+          slug: kogtetochki
+          schema: pet_supply
+    - id: pets.habitats
+      name: Аквариумы, клетки и террариумы
+      slug: akvariumy-kletki-i-terrariumy
+      children:
+        - id: pets.aquariums
+          name: Аквариумы
+          slug: akvariumy
+          schema: pet_aquarium
+        - id: pets.terrariums
+          name: Террариумы
+          slug: terrariumy
+          schema: pet_aquarium
+        - id: pets.bird-cages
+          name: Клетки для птиц
+          slug: kletki-dlya-ptits
+          schema: pet_supply
+        - id: pets.rodent-cages
+          name: Клетки для грызунов
+          slug: kletki-dlya-gryzunov
+          schema: pet_supply
+        - id: pets.aquarium-equipment
+          name: Аквариумное оборудование
+          slug: akvariumnoe-oborudovanie
+          schema: pet_supply
+        - id: pets.aquarium-decor
+          name: Декор для аквариумов
+          slug: dekor-dlya-akvariumov
+          schema: pet_supply
+- id: food
+  name: Продукты питания
+  slug: produkty-pitaniya
+  children:
+    - id: food.grocery
+      name: Бакалея
+      slug: bakaleya
+      children:
+        - id: food.grains
+          name: Крупы
+          slug: krupy
+          schema: food
+        - id: food.pasta
+          name: Макаронные изделия
+          slug: makaronnye-izdeliya
+          schema: food
+        - id: food.flour
+          name: Мука
+          slug: muka
+          schema: food
+        - id: food.sugar
+          name: Сахар
+          slug: sakhar
+          schema: food
+        - id: food.salt
+          name: Соль
+          slug: sol
+          schema: food
+        - id: food.spices
+          name: Специи
+          slug: spetsii
+          schema: food
+        - id: food.vegetable-oil
+          name: Растительные масла
+          slug: rastitelnye-masla
+          schema: food
+        - id: food.sauces
+          name: Соусы
+          slug: sousy
+          schema: food
+        - id: food.canned-vegetables
+          name: Овощные консервы
+          slug: ovoshchnye-konservy
+          schema: food
+        - id: food.canned-fish
+          name: Рыбные консервы
+          slug: rybnye-konservy
+          schema: food
+        - id: food.canned-meat
+          name: Мясные консервы
+          slug: myasnye-konservy
+          schema: food
+    - id: food.sweets
+      name: Сладости и снеки
+      slug: sladosti-i-sneki
+      children:
+        - id: food.chocolate
+          name: Шоколад
+          slug: shokolad
+          schema: food
+        - id: food.candies
+          name: Конфеты
+          slug: konfety
+          schema: food
+        - id: food.biscuits
+          name: Печенье
+          slug: pechene
+          schema: food
+        - id: food.waffles
+          name: Вафли
+          slug: vafli
+          schema: food
+        - id: food.marshmallows
+          name: Зефир и пастила
+          slug: zefir-i-pastila
+          schema: food
+        - id: food.honey
+          name: Мёд
+          slug: med
+          schema: food
+        - id: food.jam
+          name: Варенье и джемы
+          slug: varene-i-dzhemy
+          schema: food
+        - id: food.nuts
+          name: Орехи
+          slug: orekhi
+          schema: food
+        - id: food.dried-fruits
+          name: Сухофрукты
+          slug: sukhofrukty
+          schema: food
+        - id: food.crisps
+          name: Чипсы
+          slug: chipsy
+          schema: food
+        - id: food.crackers
+          name: Сухарики
+          slug: sukhariki
+          schema: food
+        - id: food.protein-bars
+          name: Протеиновые батончики
+          slug: proteinovye-batonchiki
+          schema: food
+    - id: food.drinks
+      name: Напитки
+      slug: napitki
+      children:
+        - id: food.water
+          name: Питьевая вода
+          slug: pitevaya-voda
+          schema: drink
+        - id: food.juices
+          name: Соки
+          slug: soki
+          schema: drink
+        - id: food.soft-drinks
+          name: Газированные напитки
+          slug: gazirovannye-napitki
+          schema: drink
+        - id: food.plant-milk
+          name: Растительные напитки
+          slug: rastitelnye-napitki
+          schema: drink
+        - id: food.tea
+          name: Чай
+          slug: chay
+          schema: food
+        - id: food.coffee
+          name: Кофе
+          slug: kofe
+          schema: food
+        - id: food.cocoa
+          name: Какао
+          slug: kakao
+          schema: food
+    - id: food.fresh
+      name: Свежие продукты
+      slug: svezhie-produkty
+      children:
+        - id: food.produce
+          name: Овощи, фрукты и зелень
+          slug: ovoshchi-frukty-i-zelen
+          children:
+            - id: food.vegetables
+              name: Овощи
+              slug: ovoshchi
+              schema: food
+            - id: food.fruits
+              name: Фрукты
+              slug: frukty
+              schema: food
+            - id: food.berries
+              name: Ягоды
+              slug: yagody
+              schema: food
+            - id: food.greens
+              name: Зелень
+              slug: zelen
+              schema: food
+        - id: food.dairy-eggs
+          name: Молочные продукты и яйца
+          slug: molochnye-produkty-i-yaytsa
+          children:
+            - id: food.milk
+              name: Молоко
+              slug: moloko
+              schema: food
+            - id: food.dairy
+              name: Кисломолочные продукты
+              slug: kislomolochnye-produkty
+              schema: food
+            - id: food.cheese
+              name: Сыры
+              slug: syry
+              schema: food
+            - id: food.butter
+              name: Сливочное масло
+              slug: slivochnoe-maslo
+              schema: food
+            - id: food.eggs
+              name: Яйца
+              slug: yaytsa
+              schema: food
+        - id: food.meat-poultry
+          name: Мясо, птица и колбасные изделия
+          slug: myaso-ptitsa-i-kolbasnye-izdeliya
+          children:
+            - id: food.meat
+              name: Мясо
+              slug: myaso
+              schema: food
+            - id: food.poultry
+              name: Птица
+              slug: ptitsa
+              schema: food
+            - id: food.sausages
+              name: Колбасные изделия
+              slug: kolbasnye-izdeliya
+              schema: food
+        - id: food.fish-seafood
+          name: Рыба и морепродукты
+          slug: ryba-i-moreprodukty
+          children:
+            - id: food.fish
+              name: Рыба
+              slug: ryba
+              schema: food
+            - id: food.seafood
+              name: Морепродукты
+              slug: moreprodukty
+              schema: food
+        - id: food.bread
+          name: Хлеб
+          slug: khleb
+          schema: food
+    - id: food.frozen
+      name: Замороженные и специальные продукты
+      slug: zamorozhennye-i-spetsialnye-produkty
+      children:
+        - id: food.frozen-vegetables
+          name: Замороженные овощи
+          slug: zamorozhennye-ovoshchi
+          schema: food
+        - id: food.frozen-berries
+          name: Замороженные ягоды
+          slug: zamorozhennye-yagody
+          schema: food
+        - id: food.dumplings
+          name: Пельмени и вареники
+          slug: pelmeni-i-vareniki
+          schema: food
+        - id: food.ready-meals
+          name: Готовые блюда
+          slug: gotovye-blyuda
+          schema: food
+        - id: food.ice-cream
+          name: Мороженое
+          slug: morozhenoe
+          schema: food
+        - id: food.baby-food
+          name: Детское питание
+          slug: detskoe-pitanie
+          schema: food
+        - id: food.sports-nutrition
+          name: Спортивное питание
+          slug: sportivnoe-pitanie
+          schema: food
+        - id: food.diet-food
+          name: Диетические продукты
+          slug: dieticheskie-produkty
+          schema: food
+- id: office
+  name: Канцелярия и офис
+  slug: kantselyariya-i-ofis
+  children:
+    - id: office.writing
+      name: Письменные принадлежности
+      slug: pismennye-prinadlezhnosti
+      children:
+        - id: office.pens
+          name: Ручки
+          slug: ruchki
+          schema: stationery
+        - id: office.pencils
+          name: Карандаши
+          slug: karandashi
+          schema: stationery
+        - id: office.markers
+          name: Маркеры
+          slug: markery
+          schema: stationery
+        - id: office.highlighters
+          name: Текстовыделители
+          slug: tekstovydeliteli
+          schema: stationery
+        - id: office.erasers
+          name: Ластики
+          slug: lastiki
+          schema: stationery
+        - id: office.sharpeners
+          name: Точилки
+          slug: tochilki
+          schema: stationery
+        - id: office.pen-refills
+          name: Стержни для ручек
+          slug: sterzhni-dlya-ruchek
+          schema: stationery
+    - id: office.paper
+      name: Бумажная продукция
+      slug: bumazhnaya-produktsiya
+      children:
+        - id: office.office-paper
+          name: Офисная бумага
+          slug: ofisnaya-bumaga
+          schema: paper
+        - id: office.notebooks
+          name: Тетради
+          slug: tetradi
+          schema: paper
+        - id: office.notepads
+          name: Блокноты
+          slug: bloknoty
+          schema: paper
+        - id: office.diaries
+          name: Ежедневники
+          slug: ezhednevniki
+          schema: paper
+        - id: office.drawing-albums
+          name: Альбомы для рисования
+          slug: albomy-dlya-risovaniya
+          schema: paper
+        - id: office.cardboard
+          name: Картон
+          slug: karton
+          schema: paper
+        - id: office.colored-paper
+          name: Цветная бумага
+          slug: tsvetnaya-bumaga
+          schema: paper
+        - id: office.envelopes
+          name: Конверты
+          slug: konverty
+          schema: paper
+        - id: office.labels
+          name: Этикетки
+          slug: etiketki
+          schema: paper
+    - id: office.organization
+      name: Организация офиса
+      slug: organizatsiya-ofisa
+      children:
+        - id: office.folders
+          name: Папки
+          slug: papki
+          schema: stationery
+        - id: office.binders
+          name: Скоросшиватели
+          slug: skorosshivateli
+          schema: stationery
+        - id: office.document-files
+          name: Файлы для документов
+          slug: fayly-dlya-dokumentov
+          schema: stationery
+        - id: office.desk-organizers
+          name: Настольные органайзеры
+          slug: nastolnye-organayzery
+          schema: stationery
+        - id: office.staplers
+          name: Канцелярские степлеры
+          slug: kantselyarskie-steplery
+          schema: stationery
+        - id: office.hole-punches
+          name: Дыроколы
+          slug: dyrokoly
+          schema: stationery
+        - id: office.paper-clips
+          name: Скрепки и зажимы
+          slug: skrepki-i-zazhimy
+          schema: stationery
+        - id: office.scissors
+          name: Канцелярские ножницы
+          slug: kantselyarskie-nozhnitsy
+          schema: stationery
+        - id: office.glue
+          name: Канцелярский клей
+          slug: kantselyarskiy-kley
+          schema: stationery
+        - id: office.adhesive-tape
+          name: Клейкая лента
+          slug: kleykaya-lenta
+          schema: stationery
+    - id: office.equipment
+      name: Офисное оборудование
+      slug: ofisnoe-oborudovanie
+      children:
+        - id: office.shredders
+          name: Уничтожители документов
+          slug: unichtozhiteli-dokumentov
+          schema: electrical
+        - id: office.laminators
+          name: Ламинаторы
+          slug: laminatory
+          schema: electrical
+        - id: office.binding-machines
+          name: Брошюровщики
+          slug: broshyurovshchiki
+          schema: electrical
+        - id: office.boards
+          name: Офисные доски
+          slug: ofisnye-doski
+          schema: stationery
+        - id: office.calculators
+          name: Калькуляторы
+          slug: kalkulyatory
+          schema: stationery
+        - id: office.stamps
+          name: Печати и штампы
+          slug: pechati-i-shtampy
+          schema: stationery
+- id: books
+  name: Книги и печатные издания
+  slug: knigi-i-pechatnye-izdaniya
+  children:
+    - id: books.fiction
+      name: Художественная литература
+      slug: khudozhestvennaya-literatura
+      children:
+        - id: books.classics
+          name: Классическая литература
+          slug: klassicheskaya-literatura
+          schema: book
+        - id: books.modern-fiction
+          name: Современная проза
+          slug: sovremennaya-proza
+          schema: book
+        - id: books.detective
+          name: Детективы
+          slug: detektivy
+          schema: book
+        - id: books.thrillers
+          name: Триллеры
+          slug: trillery
+          schema: book
+        - id: books.fantasy
+          name: Фэнтези
+          slug: fentezi
+          schema: book
+        - id: books.science-fiction
+          name: Научная фантастика
+          slug: nauchnaya-fantastika
+          schema: book
+        - id: books.romance
+          name: Любовные романы
+          slug: lyubovnye-romany
+          schema: book
+        - id: books.poetry
+          name: Поэзия
+          slug: poeziya
+          schema: book
+        - id: books.comics
+          name: Комиксы и манга
+          slug: komiksy-i-manga
+          schema: book
+    - id: books.nonfiction
+      name: Нехудожественная литература
+      slug: nekhudozhestvennaya-literatura
+      children:
+        - id: books.history
+          name: История
+          title: Книги по истории
+          slug: knigi-po-istorii
+          schema: book
+        - id: books.biography
+          name: Биографии
+          title: Книги с биографиями
+          slug: knigi-s-biografiyami
+          schema: book
+        - id: books.psychology
+          name: Психология
+          title: Книги по психологии
+          slug: knigi-po-psikhologii
+          schema: book
+        - id: books.business
+          name: Бизнес и экономика
+          title: Книги по бизнесу и экономике
+          slug: knigi-po-biznesu-i-ekonomike
+          schema: book
+        - id: books.popular-science
+          name: Научно-популярная литература
+          slug: nauchno-populyarnaya-literatura
+          schema: book
+        - id: books.philosophy
+          name: Философия
+          title: Книги по философии
+          slug: knigi-po-filosofii
+          schema: book
+        - id: books.religion
+          name: Религия
+          title: Книги о религии
+          slug: knigi-o-religii
+          schema: book
+        - id: books.art-books
+          name: Искусство
+          title: Книги об искусстве
+          slug: knigi-ob-iskusstve
+          schema: book
+        - id: books.practical-books
+          name: Книги для повседневной жизни
+          slug: knigi-dlya-povsednevnoy-zhizni
+          children:
+            - id: books.cooking
+              name: Кулинария
+              title: Книги по кулинарии
+              slug: knigi-po-kulinarii
+              schema: book
+            - id: books.travel
+              name: Путешествия
+              title: Книги о путешествиях
+              slug: knigi-o-puteshestviyakh
+              schema: book
+            - id: books.health-books
+              name: Здоровье
+              title: Книги о здоровье
+              slug: knigi-o-zdorove
+              schema: book
+            - id: books.home-garden
+              name: Дом и сад
+              title: Книги о доме и саде
+              slug: knigi-o-dome-i-sade
+              schema: book
+            - id: books.sports-books
+              name: Спорт
+              title: Книги о спорте
+              slug: knigi-o-sporte
+              schema: book
+    - id: books.education
+      name: Учебная и профессиональная литература
+      slug: uchebnaya-i-professionalnaya-literatura
+      children:
+        - id: books.school-textbooks
+          name: Школьные учебники
+          slug: shkolnye-uchebniki
+          schema: book
+        - id: books.workbooks
+          name: Рабочие тетради
+          slug: rabochie-tetradi
+          schema: book
+        - id: books.exam-preparation
+          name: Пособия для подготовки к экзаменам
+          slug: posobiya-dlya-podgotovki-k-ekzamenam
+          schema: book
+        - id: books.university
+          name: Учебники для вузов
+          slug: uchebniki-dlya-vuzov
+          schema: book
+        - id: books.foreign-languages
+          name: Пособия по изучению языков
+          slug: posobiya-po-izucheniyu-yazykov
+          schema: book
+        - id: books.computer-science
+          name: Компьютерная литература
+          slug: kompyuternaya-literatura
+          schema: book
+        - id: books.engineering
+          name: Техническая литература
+          slug: tekhnicheskaya-literatura
+          schema: book
+        - id: books.medicine
+          name: Медицинская литература
+          slug: meditsinskaya-literatura
+          schema: book
+        - id: books.law
+          name: Юридическая литература
+          slug: yuridicheskaya-literatura
+          schema: book
+        - id: books.dictionaries
+          name: Словари и справочники
+          slug: slovari-i-spravochniki
+          schema: book
+    - id: books.children
+      name: Детские издания
+      slug: detskie-izdaniya
+      children:
+        - id: books.fairy-tales
+          name: Сказки
+          slug: skazki
+          schema: book
+        - id: books.children-stories
+          name: Рассказы
+          title: Рассказы для детей
+          slug: rasskazy-dlya-detey
+          schema: book
+        - id: books.children-encyclopedias
+          name: Энциклопедии
+          title: Энциклопедии для детей
+          slug: entsiklopedii-dlya-detey
+          schema: book
+        - id: books.learning-to-read
+          name: Пособия по обучению чтению
+          slug: posobiya-po-obucheniyu-chteniyu
+          schema: book
+        - id: books.activity-books
+          name: Книги с заданиями
+          title: Книги с заданиями для детей
+          slug: knigi-s-zadaniyami-dlya-detey
+          schema: book
+        - id: books.coloring-books
+          name: Раскраски
+          slug: raskraski
+          schema: book
+        - id: books.picture-books
+          name: Книги-картинки
+          slug: knigi-kartinki
+          schema: book
+- id: hobby
+  name: Хобби и творчество
+  slug: khobbi-i-tvorchestvo
+  children:
+    - id: hobby.art
+      name: Рисование и живопись
+      slug: risovanie-i-zhivopis
+      children:
+        - id: hobby.art-paints
+          name: Художественные краски
+          slug: khudozhestvennye-kraski
+          schema: art
+        - id: hobby.art-brushes
+          name: Художественные кисти
+          slug: khudozhestvennye-kisti
+          schema: art
+        - id: hobby.art-pencils
+          name: Художественные карандаши
+          slug: khudozhestvennye-karandashi
+          schema: art
+        - id: hobby.pastels
+          name: Пастель
+          slug: pastel
+          schema: art
+        - id: hobby.canvases
+          name: Холсты
+          slug: kholsty
+          schema: art
+        - id: hobby.easels
+          name: Мольберты
+          slug: molberty
+          schema: art
+        - id: hobby.art-paper
+          name: Бумага для художников
+          slug: bumaga-dlya-khudozhnikov
+          schema: art
+        - id: hobby.painting-sets
+          name: Наборы для рисования
+          slug: nabory-dlya-risovaniya
+          schema: art
+    - id: hobby.needlework
+      name: Рукоделие
+      slug: rukodelie
+      children:
+        - id: hobby.yarn
+          name: Пряжа
+          slug: pryazha
+          schema: craft
+        - id: hobby.knitting-tools
+          name: Спицы и крючки
+          slug: spitsy-i-kryuchki
+          schema: craft
+        - id: hobby.embroidery-sets
+          name: Наборы для вышивания
+          slug: nabory-dlya-vyshivaniya
+          schema: craft
+        - id: hobby.sewing-fabric
+          name: Ткани для шитья
+          slug: tkani-dlya-shitya
+          schema: craft
+        - id: hobby.sewing-notions
+          name: Швейная фурнитура
+          slug: shveynaya-furnitura
+          schema: craft
+        - id: hobby.beads
+          name: Бисер
+          slug: biser
+          schema: craft
+        - id: hobby.beadwork
+          name: Материалы для бисероплетения
+          slug: materialy-dlya-biseropleteniya
+          schema: craft
+        - id: hobby.scrapbooking
+          name: Скрапбукинг
+          slug: skrapbuking
+          schema: craft
+        - id: hobby.felting
+          name: Валяние
+          slug: valyanie
+          schema: craft
+    - id: hobby.creative-sets
+      name: Наборы для творчества
+      slug: nabory-dlya-tvorchestva
+      children:
+        - id: hobby.paint-by-number
+          name: Картины по номерам
+          slug: kartiny-po-nomeram
+          schema: craft
+        - id: hobby.diamond-painting
+          name: Алмазная мозаика
+          slug: almaznaya-mozaika
+          schema: craft
+        - id: hobby.modeling-clay
+          name: Материалы для лепки
+          slug: materialy-dlya-lepki
+          schema: craft
+        - id: hobby.resin-craft
+          name: Эпоксидная смола для творчества
+          slug: epoksidnaya-smola-dlya-tvorchestva
+          schema: craft
+        - id: hobby.candle-making
+          name: Свечеварение
+          slug: svechevarenie
+          schema: craft
+        - id: hobby.soap-making
+          name: Мыловарение
+          slug: mylovarenie
+          schema: craft
+        - id: hobby.model-kits
+          name: Сборные модели
+          slug: sbornye-modeli
+          schema: craft
+        - id: hobby.science-kits
+          name: Наборы для опытов
+          slug: nabory-dlya-opytov
+          schema: craft
+    - id: hobby.celebration
+      name: Праздники и коллекционирование
+      slug: prazdniki-i-kollektsionirovanie
+      children:
+        - id: hobby.party-decor
+          name: Праздничный декор
+          slug: prazdnichnyy-dekor
+          schema: craft
+        - id: hobby.balloons
+          name: Воздушные шары
+          slug: vozdushnye-shary
+          schema: craft
+        - id: hobby.gift-wrap
+          name: Подарочная упаковка
+          slug: podarochnaya-upakovka
+          schema: craft
+        - id: hobby.postcards
+          name: Открытки
+          slug: otkrytki
+          schema: craft
+        - id: hobby.souvenirs
+          name: Сувениры
+          slug: suveniry
+          schema: craft
+        - id: hobby.collectibles
+          name: Коллекционные предметы
+          slug: kollektsionnye-predmety
+          schema: craft
+- id: music
+  name: Музыкальные инструменты и оборудование
+  slug: muzykalnye-instrumenty-i-oborudovanie
+  children:
+    - id: music.instruments
+      name: Музыкальные инструменты
+      slug: muzykalnye-instrumenty
+      children:
+        - id: music.acoustic-guitars
+          name: Акустические гитары
+          slug: akusticheskie-gitary
+          schema: musical
+        - id: music.electric-guitars
+          name: Электрогитары
+          slug: elektrogitary
+          schema: musical
+        - id: music.bass-guitars
+          name: Бас-гитары
+          slug: bas-gitary
+          schema: musical
+        - id: music.ukuleles
+          name: Укулеле
+          slug: ukulele
+          schema: musical
+        - id: music.digital-pianos
+          name: Цифровые пианино
+          slug: tsifrovye-pianino
+          schema: musical
+        - id: music.synthesizers
+          name: Синтезаторы
+          slug: sintezatory
+          schema: musical
+        - id: music.violins
+          name: Скрипки
+          slug: skripki
+          schema: musical
+        - id: music.wind-instruments
+          name: Духовые инструменты
+          slug: dukhovye-instrumenty
+          schema: musical
+        - id: music.drums
+          name: Ударные инструменты
+          slug: udarnye-instrumenty
+          schema: musical
+        - id: music.harmonicas
+          name: Губные гармоники
+          slug: gubnye-garmoniki
+          schema: musical
+    - id: music.equipment
+      name: Звуковое оборудование
+      slug: zvukovoe-oborudovanie
+      children:
+        - id: music.microphones
+          name: Микрофоны
+          slug: mikrofony
+          schema: audio_pro
+        - id: music.audio-interfaces
+          name: Аудиоинтерфейсы
+          slug: audiointerfeysy
+          schema: audio_pro
+        - id: music.mixers
+          name: Микшерные пульты
+          slug: mikshernye-pulty
+          schema: audio_pro
+        - id: music.studio-monitors
+          name: Студийные мониторы
+          slug: studiynye-monitory
+          schema: audio_pro
+        - id: music.dj-equipment
+          name: DJ-оборудование
+          slug: dj-oborudovanie
+          schema: audio_pro
+        - id: music.guitar-amplifiers
+          name: Гитарные усилители
+          slug: gitarnye-usiliteli
+          schema: audio_pro
+    - id: music.accessories
+      name: Аксессуары для музыкантов
+      slug: aksessuary-dlya-muzykantov
+      children:
+        - id: music.strings
+          name: Струны
+          slug: struny
+          schema: musical
+        - id: music.picks
+          name: Медиаторы
+          slug: mediatory
+          schema: musical
+        - id: music.instrument-cases
+          name: Чехлы для инструментов
+          slug: chekhly-dlya-instrumentov
+          schema: musical
+        - id: music.music-stands
+          name: Пюпитры
+          slug: pyupitry
+          schema: musical
+        - id: music.tuners
+          name: Тюнеры
+          slug: tyunery
+          schema: musical
+        - id: music.metronomes
+          name: Метрономы
+          slug: metronomy
+          schema: musical
+        - id: music.instrument-stands
+          name: Стойки для инструментов
+          slug: stoyki-dlya-instrumentov
+          schema: musical
+        - id: music.audio-cables
+          name: Аудиокабели
+          slug: audiokabeli
+          schema: cable
+- id: home
+  name: Декор и обустройство дома
+  slug: dekor-i-obustroystvo-doma
+  children:
+    - id: home.decor
+      name: Декор интерьера
+      slug: dekor-interera
+      children:
+        - id: home.vases
+          name: Вазы
+          slug: vazy
+          schema: home_decor
+        - id: home.figurines
+          name: Статуэтки
+          slug: statuetki
+          schema: home_decor
+        - id: home.photo-frames
+          name: Фоторамки
+          slug: fotoramki
+          schema: home_decor
+        - id: home.wall-art
+          name: Картины и постеры
+          slug: kartiny-i-postery
+          schema: home_decor
+        - id: home.mirrors
+          name: Зеркала
+          slug: zerkala
+          schema: home_decor
+        - id: home.clocks
+          name: Интерьерные часы
+          slug: interernye-chasy
+          schema: home_decor
+        - id: home.candles
+          name: Декоративные свечи
+          slug: dekorativnye-svechi
+          schema: home_decor
+        - id: home.home-fragrances
+          name: Ароматы для дома
+          slug: aromaty-dlya-doma
+          schema: home_decor
+        - id: home.artificial-plants
+          name: Искусственные растения
+          slug: iskusstvennye-rasteniya
+          schema: home_decor
+    - id: home.lighting
+      name: Освещение
+      slug: osveshchenie
+      children:
+        - id: home.chandeliers
+          name: Люстры
+          slug: lyustry
+          schema: lighting
+        - id: home.pendant-lights
+          name: Подвесные светильники
+          slug: podvesnye-svetilniki
+          schema: lighting
+        - id: home.wall-lights
+          name: Бра
+          slug: bra
+          schema: lighting
+        - id: home.floor-lamps
+          name: Торшеры
+          slug: torshery
+          schema: lighting
+        - id: home.desk-lamps
+          name: Настольные лампы
+          slug: nastolnye-lampy
+          schema: lighting
+        - id: home.ceiling-lights
+          name: Потолочные светильники
+          slug: potolochnye-svetilniki
+          schema: lighting
+        - id: home.night-lights
+          name: Ночники
+          slug: nochniki
+          schema: lighting
+    - id: home.storage
+      name: Хранение вещей
+      slug: khranenie-veshchey
+      children:
+        - id: home.storage-boxes
+          name: Коробки для хранения
+          slug: korobki-dlya-khraneniya
+          schema: storage
+        - id: home.storage-baskets
+          name: Корзины для хранения
+          slug: korziny-dlya-khraneniya
+          schema: storage
+        - id: home.clothing-organizers
+          name: Органайзеры для одежды
+          slug: organayzery-dlya-odezhdy
+          schema: storage
+        - id: home.vacuum-bags
+          name: Вакуумные пакеты
+          slug: vakuumnye-pakety
+          schema: storage
+        - id: home.hangers
+          name: Плечики
+          slug: plechiki
+          schema: storage
+        - id: home.laundry-baskets
+          name: Корзины для белья
+          slug: korziny-dlya-belya
+          schema: storage
+        - id: home.shoe-storage
+          name: Органайзеры для обуви
+          slug: organayzery-dlya-obuvi
+          schema: storage
+    - id: home.bathroom
+      name: Аксессуары для ванной
+      slug: aksessuary-dlya-vannoy
+      children:
+        - id: home.soap-dispensers
+          name: Дозаторы для мыла
+          slug: dozatory-dlya-myla
+          schema: home_decor
+        - id: home.soap-dishes
+          name: Мыльницы
+          slug: mylnitsy
+          schema: home_decor
+        - id: home.toothbrush-holders
+          name: Стаканы для щёток
+          slug: stakany-dlya-shchetok
+          schema: home_decor
+        - id: home.bathroom-shelves
+          name: Полки для ванной
+          slug: polki-dlya-vannoy
+          schema: home_decor
+        - id: home.shower-curtains
+          name: Шторки для ванной
+          slug: shtorki-dlya-vannoy
+          schema: home_decor
+        - id: home.toilet-brushes
+          name: Ёршики для унитаза
+          slug: ershiki-dlya-unitaza
+          schema: home_decor
+- id: household
+  name: Бытовая химия и хозяйственные товары
+  slug: bytovaya-khimiya-i-khozyaystvennye-tovary
+  children:
+    - id: household.cleaning
+      name: Бытовая химия
+      slug: bytovaya-khimiya
+      children:
+        - id: household.laundry-detergent
+          name: Средства для стирки
+          slug: sredstva-dlya-stirki
+          schema: household_chemical
+        - id: household.fabric-softener
+          name: Кондиционеры для белья
+          slug: konditsionery-dlya-belya
+          schema: household_chemical
+        - id: household.stain-removers
+          name: Пятновыводители
+          slug: pyatnovyvoditeli
+          schema: household_chemical
+        - id: household.dishwashing
+          name: Средства для мытья посуды
+          slug: sredstva-dlya-mytya-posudy
+          schema: household_chemical
+        - id: household.dishwasher-products
+          name: Средства для посудомоечных машин
+          slug: sredstva-dlya-posudomoechnykh-mashin
+          schema: household_chemical
+        - id: household.floor-cleaners
+          name: Средства для мытья полов
+          slug: sredstva-dlya-mytya-polov
+          schema: household_chemical
+        - id: household.bathroom-cleaners
+          name: Средства для ванной
+          slug: sredstva-dlya-vannoy
+          schema: household_chemical
+        - id: household.glass-cleaners
+          name: Средства для стёкол
+          slug: sredstva-dlya-stekol
+          schema: household_chemical
+        - id: household.kitchen-cleaners
+          name: Средства для кухни
+          slug: sredstva-dlya-kukhni
+          schema: household_chemical
+        - id: household.air-fresheners
+          name: Освежители воздуха
+          slug: osvezhiteli-vozdukha
+          schema: household_chemical
+        - id: household.insect-control
+          name: Средства от насекомых
+          slug: sredstva-ot-nasekomykh
+          schema: household_chemical
+    - id: household.supplies
+      name: Принадлежности для уборки
+      slug: prinadlezhnosti-dlya-uborki
+      children:
+        - id: household.sponges
+          name: Губки
+          slug: gubki
+          schema: household_supply
+        - id: household.cleaning-cloths
+          name: Салфетки для уборки
+          slug: salfetki-dlya-uborki
+          schema: household_supply
+        - id: household.mops
+          name: Швабры
+          slug: shvabry
+          schema: household_supply
+        - id: household.brooms
+          name: Веники и мётлы
+          slug: veniki-i-metly
+          schema: household_supply
+        - id: household.cleaning-brushes
+          name: Щётки для уборки
+          slug: shchetki-dlya-uborki
+          schema: household_supply
+        - id: household.garbage-bags
+          name: Мешки для мусора
+          slug: meshki-dlya-musora
+          schema: household_supply
+        - id: household.household-gloves
+          name: Хозяйственные перчатки
+          slug: khozyaystvennye-perchatki
+          schema: household_supply
+        - id: household.toilet-paper
+          name: Туалетная бумага
+          slug: tualetnaya-bumaga
+          schema: household_supply
+        - id: household.paper-towels
+          name: Бумажные полотенца
+          slug: bumazhnye-polotentsa
+          schema: household_supply
+        - id: household.paper-napkins
+          name: Бумажные салфетки
+          slug: bumazhnye-salfetki
+          schema: household_supply
+    - id: household.equipment
+      name: Хозяйственный инвентарь
+      slug: khozyaystvennyy-inventar
+      children:
+        - id: household.buckets
+          name: Вёдра
+          slug: vedra
+          schema: storage
+        - id: household.basins
+          name: Тазы
+          slug: tazy
+          schema: storage
+        - id: household.trash-bins
+          name: Мусорные вёдра
+          slug: musornye-vedra
+          schema: storage
+        - id: household.drying-racks
+          name: Сушилки для белья
+          slug: sushilki-dlya-belya
+          schema: household_supply
+        - id: household.ironing-boards
+          name: Гладильные доски
+          slug: gladilnye-doski
+          schema: household_supply
+        - id: household.clothes-pegs
+          name: Прищепки
+          slug: prishchepki
+          schema: household_supply
+        - id: household.packing-materials
+          name: Упаковочные материалы
+          slug: upakovochnye-materialy
+          schema: household_supply
+- id: industry
+  name: Оборудование и спецодежда
+  slug: oborudovanie-i-spetsodezhda
+  children:
+    - id: industry.equipment
+      name: Производственное оборудование
+      slug: proizvodstvennoe-oborudovanie
+      children:
+        - id: industry.air-compressors
+          name: Воздушные компрессоры
+          slug: vozdushnye-kompressory
+          schema: industrial
+        - id: industry.generators
+          name: Генераторы
+          slug: generatory
+          schema: industrial
+        - id: industry.pumps
+          name: Промышленные насосы
+          slug: promyshlennye-nasosy
+          schema: industrial
+        - id: industry.machine-tools
+          name: Станки
+          slug: stanki
+          schema: industrial
+        - id: industry.lifting
+          name: Подъёмное оборудование
+          slug: podemnoe-oborudovanie
+          schema: industrial
+        - id: industry.ventilation
+          name: Вентиляционное оборудование
+          slug: ventilyatsionnoe-oborudovanie
+          schema: industrial
+        - id: industry.industrial-heating
+          name: Промышленные нагреватели
+          slug: promyshlennye-nagrevateli
+          schema: industrial
+    - id: industry.business
+      name: Оборудование для бизнеса
+      slug: oborudovanie-dlya-biznesa
+      children:
+        - id: industry.trade-equipment
+          name: Торговое оборудование
+          slug: torgovoe-oborudovanie
+          schema: industrial
+        - id: industry.catering-equipment
+          name: Оборудование для общепита
+          slug: oborudovanie-dlya-obshchepita
+          schema: industrial
+        - id: industry.warehouse-equipment
+          name: Складское оборудование
+          slug: skladskoe-oborudovanie
+          schema: industrial
+        - id: industry.packing-equipment
+          name: Упаковочное оборудование
+          slug: upakovochnoe-oborudovanie
+          schema: industrial
+        - id: industry.cleaning-equipment
+          name: Клининговое оборудование
+          slug: kliningovoe-oborudovanie
+          schema: industrial
+    - id: industry.protection
+      name: Спецодежда и средства защиты
+      slug: spetsodezhda-i-sredstva-zashchity
+      children:
+        - id: industry.work-jackets
+          name: Рабочие куртки
+          slug: rabochie-kurtki
+          schema: workwear
+        - id: industry.work-trousers
+          name: Рабочие брюки
+          slug: rabochie-bryuki
+          schema: workwear
+        - id: industry.work-overalls
+          name: Рабочие комбинезоны
+          slug: rabochie-kombinezony
+          schema: workwear
+        - id: industry.work-gowns
+          name: Рабочие халаты
+          slug: rabochie-khalaty
+          schema: workwear
+        - id: industry.high-visibility
+          name: Сигнальная одежда
+          slug: signalnaya-odezhda
+          schema: workwear
+        - id: industry.respirators
+          name: Респираторы
+          slug: respiratory
+          schema: medical_supply
+        - id: industry.protective-goggles
+          name: Защитные очки
+          slug: zashchitnye-ochki
+          schema: medical_supply
+        - id: industry.ear-protection
+          name: Защита органов слуха
+          slug: zashchita-organov-slukha
+          schema: medical_supply
+        - id: industry.work-gloves
+          name: Рабочие перчатки
+          slug: rabochie-perchatki
+          schema: medical_supply
+        - id: industry.hard-hats
+          name: Защитные каски
+          slug: zashchitnye-kaski
+          schema: sport_equipment
+        - id: industry.safety-shoes
+          name: Рабочая обувь
+          slug: rabochaya-obuv
+          schema: shoe
