@@ -12,17 +12,17 @@ import (
 
 // CaseState снимок дела для хранения и проверки версии решения.
 type CaseState struct {
-	ID        ids.UUID
-	TenantID  ids.TenantID
-	ProductID ids.ProductID
-	Revision  int64
-	Source    string
-	Status    string
-	Reasons   []Reason
-	Note      string
-	OpenedAt  time.Time
-	DecidedAt *time.Time
-	Version   int64
+	ID        ids.UUID      `json:"id"`
+	TenantID  ids.TenantID  `json:"tenantId"`
+	ProductID ids.ProductID `json:"productId"`
+	Revision  int64         `json:"revision"`
+	Source    string        `json:"source"`
+	Status    Status        `json:"status"`
+	Reasons   []Reason      `json:"reasons"`
+	Note      string        `json:"note"`
+	OpenedAt  time.Time     `json:"openedAt"`
+	DecidedAt *time.Time    `json:"decidedAt"`
+	Version   int64         `json:"version"`
 }
 
 // Case сохраняет ревизию проверки, чтобы оператор не одобрил изменённую карточку.
@@ -48,7 +48,7 @@ func NewCase(id ids.UUID, verdict VerdictState, source, note string, now time.Ti
 		ProductID: verdict.ProductID,
 		Revision:  verdict.Revision,
 		Source:    source,
-		Status:    "open",
+		Status:    Open,
 		Reasons:   slices.Clone(verdict.Reasons),
 		Note:      strings.TrimSpace(note),
 		OpenedAt:  now,
@@ -85,11 +85,11 @@ func (c *Case) MarkSaved() { c.origin = c.State() }
 
 // Refresh обновляет открытое дело или закрывает его при исчезновении оснований.
 func (c *Case) Refresh(v VerdictState, now time.Time) bool {
-	if c.state.Status != "open" {
+	if c.state.Status != Open {
 		return false
 	}
 	if v.Status != Pending {
-		c.state.Status = "superseded"
+		c.state.Status = Superseded
 		c.state.DecidedAt = &now
 	} else if c.state.Revision == v.Revision && reflect.DeepEqual(c.state.Reasons, v.Reasons) {
 		return false
@@ -101,14 +101,14 @@ func (c *Case) Refresh(v VerdictState, now time.Time) bool {
 }
 
 // Decide фиксирует решение для текущей ревизии.
-func (c *Case) Decide(expected, revision int64, action, note string, now time.Time) (bool, error) {
-	if expected < 1 || expected != c.state.Version || c.state.Status != "open" {
+func (c *Case) Decide(expected, revision int64, action Action, note string, now time.Time) (bool, error) {
+	if expected < 1 || expected != c.state.Version || c.state.Status != Open {
 		return false, &CaseConflict{Current: c.State()}
 	}
 	if revision != c.state.Revision {
 		return false, ErrCaseStale
 	}
-	if action != "allow" && action != "reject" {
+	if action != Allow && action != Reject {
 		return false, ErrInvalid
 	}
 	note = strings.TrimSpace(note)
@@ -116,7 +116,7 @@ func (c *Case) Decide(expected, revision int64, action, note string, now time.Ti
 		return false, ErrInvalid
 	}
 	c.state.Status = Allowed
-	if action == "reject" {
+	if action == Reject {
 		c.state.Status = Rejected
 	}
 	c.state.Note = note

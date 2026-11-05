@@ -35,8 +35,8 @@ func TestLoadAndRevalidate(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
 	clock := fake.NewClock(time.Now())
-	service := apptaxonomy.NewService(store, clock)
-	projector := appcatalog.NewProjector(store, clock)
+	service := apptaxonomy.NewService(store, clock, nil)
+	projector := appcatalog.NewProjector(store, clock, nil)
 	if err := service.Load(ctx, schema(1)); err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestInvalidCardIsStoredAndNotParked(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
 	clock := fake.NewClock(time.Now())
-	projector := appcatalog.NewProjector(store, clock)
+	projector := appcatalog.NewProjector(store, clock, nil)
 	for i, card := range []*taxonomy.Card{nil, {CategoryID: "missing", Published: true}} {
 		event := appcatalog.ProductEvent{EventID: string(rune('a' + i)), Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
@@ -151,7 +151,7 @@ func TestRevalidationPagesIncludeNonParticipants(t *testing.T) {
 			Card:      catalog.Card{Name: "Товар", Visible: true},
 		})
 	}
-	if err := apptaxonomy.NewService(store, clock).Load(context.Background(), schema(1)); err != nil {
+	if err := apptaxonomy.NewService(store, clock, nil).Load(context.Background(), schema(1)); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 205; i++ {

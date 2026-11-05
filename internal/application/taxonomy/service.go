@@ -22,11 +22,7 @@ type Service struct {
 }
 
 // NewService собирает сценарии поверх транзакций и часов.
-func NewService(uow ports.UnitOfWork, clock ports.Clock, evaluators ...ports.ModerationEvaluator) *Service {
-	var evaluator ports.ModerationEvaluator
-	if len(evaluators) > 0 {
-		evaluator = evaluators[0]
-	}
+func NewService(uow ports.UnitOfWork, clock ports.Clock, evaluator ports.ModerationEvaluator) *Service {
 	return &Service{uow: uow, clock: clock, evaluator: evaluator}
 }
 

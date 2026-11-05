@@ -2,13 +2,14 @@ package moderation
 
 import (
 	"context"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // Filter ограничивает выборку очереди для постраничного чтения.
 type Filter struct {
-	Status   string
+	Status   Status
 	TenantID ids.TenantID
 	Source   string
 	Limit    int
@@ -24,6 +25,7 @@ type VerdictRepository interface {
 
 // CaseRepository гарантирует единственность открытого дела и условное обновление.
 type CaseRepository interface {
+	OpenStats(context.Context) ([]OpenStat, error)
 	Get(context.Context, ids.UUID) (*Case, error)
 	Open(context.Context, ids.TenantID, ids.ProductID) (*Case, error)
 	Save(context.Context, *Case) error
@@ -33,6 +35,8 @@ type CaseRepository interface {
 // DecisionRepository разрешает только добавление и чтение журнала.
 type DecisionRepository interface {
 	Add(context.Context, Decision) error
+	Cached(context.Context, string, time.Time) (CachedDecision, bool, error)
+	Cache(context.Context, string, CachedDecision) error
 	List(context.Context, ids.TenantID, ids.ProductID) ([]Decision, error)
 }
 
@@ -43,4 +47,19 @@ type RulesRepository interface {
 	RemovePhrase(context.Context, string) (bool, error)
 	ListReasons(context.Context) ([]ReasonCode, error)
 	PutReason(context.Context, ReasonCode) error
+	RemoveReason(context.Context, string) error
+}
+
+// CachedDecision хранит исходный ответ независимо от дальнейшего состояния дела.
+type CachedDecision struct {
+	Fingerprint string
+	Result      CaseState
+	ExpiresAt   time.Time
+}
+
+// OpenStat агрегирует очередь одним запросом независимо от числа страниц.
+type OpenStat struct {
+	TenantID ids.TenantID
+	Count    int
+	Oldest   time.Time
 }

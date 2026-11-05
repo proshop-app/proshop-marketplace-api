@@ -340,3 +340,39 @@ func TestOperatorCaseRejectAndNewRevision(t *testing.T) {
 		t.Fatal(pending)
 	}
 }
+
+func TestConcurrentIdempotentDecisions(t *testing.T) {
+	e := setup()
+	e.project(t, "p1", 1)
+	c := e.view(t, "p1").Case
+	cmd := appmoderation.DecisionCommand{
+		CaseID:          c.ID,
+		ExpectedVersion: c.Version,
+		Operator:        moderation.Actor{ID: "o1", Name: "Оператор"},
+		Note:            "Проверено",
+		IdempotencyKey:  "k1",
+	}
+	results := make(chan error, 8)
+	for range 8 {
+		go func() {
+			_, err := e.service.Allow(context.Background(), cmd)
+			results <- err
+		}()
+	}
+	for range 8 {
+		if err := <-results; err != nil {
+			t.Fatal(err)
+		}
+	}
+	view := e.view(t, "p1")
+	if len(view.History) != 1 {
+		t.Fatal("повтор создал запись журнала", view.History)
+	}
+	if _, err := e.service.Reject(context.Background(), cmd); !errors.Is(err, moderation.ErrKeyReused) {
+		t.Fatal(err)
+	}
+	cmd.Operator.ID = "o2"
+	if _, err := e.service.Allow(context.Background(), cmd); !errors.Is(err, moderation.ErrCaseConflict) {
+		t.Fatal("ключ другого оператора должен проверить версию дела", err)
+	}
+}

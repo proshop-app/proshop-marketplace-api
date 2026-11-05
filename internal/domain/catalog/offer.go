@@ -43,7 +43,7 @@ func ComposeOffer(product *Product, signals *Signals, seller Seller, verdict *mo
 	offer := Offer{ID: ids.OfferID{Tenant: state.TenantID, Product: state.ProductID}, Seller: seller}
 
 	if verdict == nil {
-		offer.Reasons = []moderation.Reason{{Key: "moderation.not_evaluated", Message: "предложение ещё не оценено"}}
+		offer.Reasons = []moderation.Reason{moderation.NotEvaluated()}
 	} else {
 		offer.Reasons = verdict.State().Reasons
 	}

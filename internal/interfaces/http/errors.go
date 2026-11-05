@@ -1,8 +1,11 @@
 package http
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
+
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
@@ -34,9 +37,10 @@ var statusByCode = map[errs.Code]int{
 }
 
 type errorBody struct {
-	Error    errorDetail      `json:"error"`
-	Checkout *checkoutJSON    `json:"checkout,omitempty"`
-	Event    *parkedEventJSON `json:"event,omitempty"`
+	Case     *moderationCaseJSON `json:"case,omitempty"`
+	Error    errorDetail         `json:"error"`
+	Checkout *checkoutJSON       `json:"checkout,omitempty"`
+	Event    *parkedEventJSON    `json:"event,omitempty"`
 }
 
 type errorDetail struct {
@@ -77,7 +81,7 @@ func writeErrorWithState(
 	}
 
 	switch detail.Code {
-	case "event.idempotency_key_reused":
+	case "event.idempotency_key_reused", "moderation.idempotency_key_reused":
 		detail.Code = "IDEMPOTENCY_KEY_REUSED"
 	case "checkout.delivery_changed":
 		detail.Code = "DELIVERY_CHANGED"
@@ -88,5 +92,11 @@ func writeErrorWithState(
 	case "reference.key_taken":
 		detail.Code = "REFERENCE_KEY_TAKEN"
 	}
-	writeJSON(w, status, errorBody{Error: detail, Checkout: checkout, Event: event})
+	body := errorBody{Error: detail, Checkout: checkout, Event: event}
+	var conflict *moderation.CaseConflict
+	if errors.As(err, &conflict) {
+		current := caseJSON(conflict.Current)
+		body.Case = &current
+	}
+	writeJSON(w, status, body)
 }

@@ -35,7 +35,8 @@ const (
 	countModerationVerdicts = `SELECT count(*) FROM moderation_verdicts
  WHERE ($1 = '' OR status = $1) AND ($2 = '' OR tenant_id = $2)`
 	listModerationVerdicts = `SELECT ` + verdictColumns + ` FROM moderation_verdicts
- WHERE ($1 = '' OR status = $1) AND ($2 = '' OR tenant_id = $2) ORDER BY tenant_id, product_id LIMIT $3 OFFSET $4`
+ WHERE ($1 = '' OR status = $1) AND ($2 = '' OR tenant_id = $2) 
+ ORDER BY updated_at DESC, tenant_id, product_id LIMIT $3 OFFSET $4`
 )
 
 // ModerationVerdicts сохраняет вердикты условно по исходной версии.

@@ -336,7 +336,7 @@ func TestProjectionContinuesWhileBrandRegistryIsUnavailable(t *testing.T) {
 	projectionCtx, stop := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer stop()
 	snap.Revision = 2
-	projector := appcatalog.NewProjector(store, clock)
+	projector := appcatalog.NewProjector(store, clock, nil)
 	if err := projector.ApplyProduct(projectionCtx, productEvent("next", snap)); err != nil {
 		t.Fatal(err)
 	}

@@ -15,7 +15,7 @@ type VerdictState struct {
 	Revision        int64         `json:"revision"`
 	RulesRevision   int64         `json:"rules_revision"`
 	TaxonomyVersion int64         `json:"taxonomy_version"`
-	Status          string        `json:"status"`
+	Status          Status        `json:"status"`
 	Reasons         []Reason      `json:"reasons"`
 	DecidedBy       string        `json:"decided_by"`
 	ManualReject    bool          `json:"manual_reject"`
@@ -93,13 +93,13 @@ func (v *Verdict) Review(revision int64, now time.Time) bool {
 }
 
 // Decide фиксирует решение для текущей ревизии.
-func (v *Verdict) Decide(action, message string, now time.Time) bool {
-	if action != "allow" && action != "reject" {
+func (v *Verdict) Decide(action Action, message string, now time.Time) bool {
+	if action != Allow && action != Reject {
 		return false
 	}
 	next := Allowed
 	reasons := []Reason{}
-	if action == "reject" {
+	if action == Reject {
 		next = Rejected
 		reasons = []Reason{{Key: "moderation.rejected_by_operator", Message: message}}
 	}
@@ -107,7 +107,7 @@ func (v *Verdict) Decide(action, message string, now time.Time) bool {
 		return false
 	}
 	v.state.DecidedBy = Operator
-	v.state.ManualReject = action == "reject"
+	v.state.ManualReject = action == Reject
 	v.state.Status = next
 	v.state.Reasons = reasons
 	v.touch(now)

@@ -310,6 +310,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			CandidatesInterval: r.optionalInterval("REFERENCE_CANDIDATES_INTERVAL", time.Hour),
 		},
 		Moderation: Moderation{
+			MetricsInterval: r.duration("MODERATION_METRICS_INTERVAL", time.Minute),
 			ProbationOffers: r.positive("MODERATION_PROBATION_OFFERS", 50),
 			RequireImage:    r.boolean("MODERATION_REQUIRE_IMAGE", true),
 		},

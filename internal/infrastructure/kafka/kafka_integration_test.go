@@ -280,7 +280,7 @@ func newPipeline(t *testing.T, pool *pgxpool.Pool, prefix, group string) *pipeli
 
 	uow := postgres.NewUnitOfWork(pool)
 	router := kafka.NewRouter(
-		appcatalog.NewProjector(uow, clock.System{}),
+		appcatalog.NewProjector(uow, clock.System{}, nil),
 		appparticipant.NewRegistry(uow, clock.System{}),
 	)
 	reader := infrakafka.NewReader(infrakafka.Config{

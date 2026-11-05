@@ -244,3 +244,64 @@ func TestParticipantModerationJournal(t *testing.T) {
 		}
 	}
 }
+
+func TestModerationCachedDecisionAndStats(t *testing.T) {
+	pool := pgtest.Pool(t)
+	uow := postgres.NewUnitOfWork(pool)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	identities := random.IDs{}
+	v := moderation.NewVerdict("t1", "p1")
+	v.Evaluate(1, 1, moderation.Rules{Revision: 1}, moderation.Input{Probation: true}, now)
+	c := moderation.NewCase(identities.NewUUID(), v.State(), moderation.Rule, "", now)
+	cached := moderation.CachedDecision{Fingerprint: "f1", Result: c.State(), ExpiresAt: now.Add(time.Hour)}
+	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		if err := tx.ModerationVerdicts().Save(ctx, v); err != nil {
+			return err
+		}
+		if err := tx.ModerationCases().Save(ctx, c); err != nil {
+			return err
+		}
+		_, found, err := tx.ModerationDecisions().Cached(ctx, "k1", now)
+		if err != nil {
+			return err
+		}
+		if found {
+			t.Fatal("неожиданный кеш")
+		}
+		return tx.ModerationDecisions().Cache(ctx, "k1", cached)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		value, found, err := tx.ModerationDecisions().Cached(ctx, "k1", now)
+		if err != nil {
+			return err
+		}
+		if !found || value.Result.ID != c.State().ID || value.Fingerprint != "f1" {
+			t.Fatal(value, found)
+		}
+		_, found, err = tx.ModerationDecisions().Cached(ctx, "k1", cached.ExpiresAt)
+		if err != nil {
+			return err
+		}
+		if found {
+			t.Fatal("просроченный ответ возвращён")
+		}
+		stats, err := tx.ModerationCases().OpenStats(ctx)
+		if err != nil {
+			return err
+		}
+		if len(stats) != 1 || stats[0].TenantID != "t1" || stats[0].Count != 1 {
+			t.Fatal(stats)
+		}
+		if err := tx.ModerationRules().PutReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Причина"}); err != nil {
+			return err
+		}
+		return tx.ModerationRules().RemoveReason(ctx, "r1")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

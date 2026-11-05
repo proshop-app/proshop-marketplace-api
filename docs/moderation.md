@@ -292,6 +292,7 @@ Gauge обновляет фоновый цикл раз в `MODERATION_METRICS_I
 |---|---|
 | `MODERATION_PROBATION_OFFERS` | положительное число, по умолчанию 50 |
 | `MODERATION_REQUIRE_IMAGE` | `true`/`false`, по умолчанию `true` |
+| `MODERATION_METRICS_INTERVAL` | положительный интервал, по умолчанию `60s` |
 
 ## Проверка
 

@@ -25,7 +25,7 @@ func TestRules(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   moderation.Input
-		status  string
+		status  moderation.Status
 		reasons []string
 	}{
 		{"чистая карточка", moderation.Input{Image: "image"}, moderation.Allowed, []string{}},

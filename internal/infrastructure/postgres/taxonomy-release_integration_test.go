@@ -24,7 +24,7 @@ func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{})
+	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{}, nil)
 	results := make(chan taxonomy.ReleaseResult, 2)
 	failures := make(chan error, 2)
 	var group sync.WaitGroup
@@ -54,7 +54,7 @@ func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
 			t.Fatalf("неожиданная версия: %+v", result)
 		}
 	}
-	snapshot, err := app.NewService(postgres.NewUnitOfWork(pool), clock.System{}).Current(ctx)
+	snapshot, err := app.NewService(postgres.NewUnitOfWork(pool), clock.System{}, nil).Current(ctx)
 	if err != nil || changed != 1 || len(snapshot.Categories) != len(release.Categories) {
 		t.Fatalf("повтор/перезапуск: changed=%d, version=%d, err=%v", changed, snapshot.Version, err)
 	}
@@ -70,7 +70,7 @@ func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
 func TestReleaseUpdateAndRollback(t *testing.T) {
 	pool := pgtest.Pool(t)
 	ctx := context.Background()
-	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{})
+	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{}, nil)
 	repository := service
 	first := testRelease(1, "a")
 	second := testRelease(2, "b")
@@ -105,7 +105,7 @@ func TestReleaseUpdateAndRollback(t *testing.T) {
 func TestReleasePreservesOperatorChanges(t *testing.T) {
 	pool := pgtest.Pool(t)
 	ctx := context.Background()
-	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{})
+	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{}, nil)
 	repository := service
 	release := testRelease(1, "a")
 	if _, err := service.Apply(ctx, release); err != nil {
@@ -145,7 +145,7 @@ func TestReleaseFailureRollsBackSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{})
+	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{}, nil)
 	if _, err := service.Apply(ctx, testRelease(2, "a")); err == nil {
 		t.Fatal("ошибка записи истории не возвращена")
 	}

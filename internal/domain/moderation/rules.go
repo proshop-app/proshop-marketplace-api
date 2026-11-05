@@ -8,12 +8,23 @@ import (
 
 // Значения статусов сохраняются в БД и проверяются ограничениями схемы.
 const (
-	Allowed  = "allowed"
-	Pending  = "pending"
-	Rejected = "rejected"
-	Rule     = "rule"
-	Operator = "operator"
+	Open       Status = "open"
+	Superseded Status = "superseded"
+	Allow      Action = "allow"
+	Reject     Action = "reject"
+
+	Allowed  Status = "allowed"
+	Pending  Status = "pending"
+	Rejected Status = "rejected"
+	Rule            = "rule"
+	Operator        = "operator"
 )
+
+// Status объединяет состояния допуска и жизненного цикла дела.
+type Status string
+
+// Action ограничивает решения оператора над делом.
+type Action string
 
 // Reason сохраняет стабильный ключ и объяснение ограничения видимости.
 type Reason struct {
@@ -44,7 +55,7 @@ func Key(text string) string {
 }
 
 // Evaluate останавливает оценку на первом отказе и накапливает причины ручной проверки.
-func (r Rules) Evaluate(in Input) (string, []Reason) {
+func (r Rules) Evaluate(in Input) (Status, []Reason) {
 	reasons := []Reason{}
 	add := func(key, message string) {
 		reasons = append(reasons, Reason{Key: "moderation." + key, Message: message})
@@ -75,4 +86,9 @@ func (r Rules) Evaluate(in Input) (string, []Reason) {
 		return Pending, reasons
 	}
 	return Allowed, reasons
+}
+
+// NotEvaluated централизует причину скрытия старых проекций.
+func NotEvaluated() Reason {
+	return Reason{Key: "moderation.not_evaluated", Message: "предложение ещё не оценено"}
 }
