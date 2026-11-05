@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -53,7 +55,7 @@ func TestSyncOfferWritesParticipantOffers(t *testing.T) {
 		doc.SellerSlug != "slug-t1" {
 		t.Fatalf("документ: %+v", doc)
 	}
-	if doc.Version != 3 {
+	if doc.Version != 4 {
 		t.Fatalf("версия — сумма версий товара, участника и реестра: %d", doc.Version)
 	}
 
@@ -151,6 +153,7 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := ports.OfferState{
+		Verdict:     moderation.RestoreVerdict(moderation.VerdictState{Status: moderation.Allowed, Version: 1}),
 		Product:     product,
 		Signals:     signals,
 		Participant: owner,
@@ -158,7 +161,7 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 	}
 
 	doc, ok := appcatalog.Document(state)
-	if !ok || doc.Version != 4 || doc.Price != 10000 || doc.InStock || !doc.Visible || !doc.CheckoutAvailable {
+	if !ok || doc.Version != 5 || doc.Price != 10000 || doc.InStock || !doc.Visible || !doc.CheckoutAvailable {
 		t.Fatalf("документ: %+v", doc)
 	}
 	if !doc.UpdatedAt.Equal(t1) {

@@ -13,6 +13,7 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
+	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
@@ -71,10 +72,11 @@ func TestProjectionToIndex(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	projector := appcatalog.NewProjector(uow, now)
+	moderationService := appmoderation.NewService(uow, now, &fake.IDs{}, appmoderation.Config{ProbationOffers: 50})
+	projector := appcatalog.NewProjector(uow, now, moderationService)
 	indexer := appcatalog.NewIndexer(uow, index, now, 100, postgres.NewIndexRebuildLock(pool), nil)
 	registry := appparticipant.NewRegistry(uow, now)
-	participants := appparticipant.NewService(uow, now)
+	participants := appparticipant.NewService(uow, now, &fake.IDs{})
 	platform := fake.NewPlatform()
 	settings := appparticipant.NewSettings(uow, platform, now)
 	queries := appcatalog.NewQueries(uow, index, platform)
@@ -87,8 +89,9 @@ func TestProjectionToIndex(t *testing.T) {
 			Lease:     time.Minute,
 		},
 		map[string]messaging.Handler{
-			appcatalog.TaskSyncOffer:  indexer.HandleTask,
-			appcatalog.TaskSyncTenant: indexer.HandleTask,
+			appmoderation.TaskReevaluate: moderationService.HandleTask,
+			appcatalog.TaskSyncOffer:     indexer.HandleTask,
+			appcatalog.TaskSyncTenant:    indexer.HandleTask,
 		},
 	)
 
@@ -224,7 +227,10 @@ func TestProjectionToIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := participants.Enable(ctx, "t1"); err != nil {
+	if _, err := participants.SetTrust(ctx, "t1", participant.Trusted, participant.Decision{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := participants.Enable(ctx, "t1", participant.Decision{}); err != nil {
 		t.Fatal(err)
 	}
 	drain()

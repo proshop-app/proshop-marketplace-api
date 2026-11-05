@@ -25,6 +25,8 @@ type Origin struct {
 
 // State — плоский снимок агрегата для хранения.
 type State struct {
+	Trust            string
+	ApprovedOffers   int
 	TenantID         ids.TenantID
 	Slug             string
 	Name             string
@@ -62,6 +64,7 @@ func New(tenant *Tenant, name string, now time.Time) (*Participant, error) {
 	}
 
 	return &Participant{state: State{
+		Trust:     Probation,
 		TenantID:  tenant.ID(),
 		Slug:      tenant.Slug(),
 		Name:      clean,
@@ -74,6 +77,9 @@ func New(tenant *Tenant, name string, now time.Time) (*Participant, error) {
 
 // Restore поднимает агрегат из хранилища.
 func Restore(state State) *Participant {
+	if state.Trust == "" {
+		state.Trust = Probation
+	}
 	state.Delivery = state.Delivery.Clone()
 	return &Participant{state: state, origin: Origin{Status: state.Status, Version: state.Version}}
 }

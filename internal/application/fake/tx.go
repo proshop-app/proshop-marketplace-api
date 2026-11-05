@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
@@ -268,6 +270,9 @@ func (p parked) Park(_ context.Context, event ports.ParkedEvent) error {
 
 func (o offers) state(key productKey) ports.OfferState {
 	state := ports.OfferState{Product: catalog.RestoreProduct(o.d.products[key])}
+	if v, ok := o.d.moderation.verdicts[key]; ok {
+		state.Verdict = moderation.RestoreVerdict(v)
+	}
 
 	if signals, ok := o.d.signals[key]; ok {
 		state.Signals = catalog.RestoreSignals(signals)
@@ -367,6 +372,9 @@ func (o offers) ChangedSince(
 		}
 
 		changed := !o.d.products[key].UpdatedAt.Before(since) || !p.UpdatedAt.Before(since)
+		if v, ok := o.d.moderation.verdicts[key]; ok && !v.UpdatedAt.Before(since) {
+			changed = true
+		}
 		if s, ok := o.d.signals[key]; ok && !s.UpdatedAt.Before(since) {
 			changed = true
 		}

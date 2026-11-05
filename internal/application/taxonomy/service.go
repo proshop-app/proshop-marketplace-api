@@ -14,13 +14,18 @@ const revalidationBatch = 200
 
 // Service атомарно меняет схему и перепроверяет проекции; индекс догоняет через outbox.
 type Service struct {
-	uow   ports.UnitOfWork
-	clock ports.Clock
+	evaluator ports.ModerationEvaluator
+	uow       ports.UnitOfWork
+	clock     ports.Clock
 }
 
 // NewService собирает сценарии поверх транзакций и часов.
-func NewService(uow ports.UnitOfWork, clock ports.Clock) *Service {
-	return &Service{uow: uow, clock: clock}
+func NewService(uow ports.UnitOfWork, clock ports.Clock, evaluators ...ports.ModerationEvaluator) *Service {
+	var evaluator ports.ModerationEvaluator
+	if len(evaluators) > 0 {
+		evaluator = evaluators[0]
+	}
+	return &Service{uow: uow, clock: clock, evaluator: evaluator}
 }
 
 // Current возвращает согласованный снимок текущей версии.
@@ -107,11 +112,15 @@ func (s *Service) revalidate(ctx context.Context, tx ports.Tx, d taxonomy.Defini
 		for _, p := range items {
 			state := p.State()
 			tenant, product = state.TenantID, state.ProductID
-			if !p.Revalidate(d, s.clock.Now()) {
-				continue
+			if p.Revalidate(d, s.clock.Now()) {
+				if err := tx.Products().Save(ctx, p); err != nil {
+					return err
+				}
 			}
-			if err := tx.Products().Save(ctx, p); err != nil {
-				return err
+			if s.evaluator != nil {
+				if err := s.evaluator.Evaluate(ctx, tx, p, nil, s.clock.Now()); err != nil {
+					return err
+				}
 			}
 			task := appcatalog.SyncOfferTask(tenant, product, s.clock.Now())
 			if err := tx.Outbox().Enqueue(ctx, task); err != nil {

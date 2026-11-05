@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -22,12 +24,14 @@ const (
 		SELECT ` + productColumns + `, ` + signalsColumns + `,
 			pa.tenant_id, pa.slug, pa.name, pa.status, pa.enabled,
 			pa.shop_enabled, pa.subsidy, pa.settings_synced_at, pa.version, pa.created_at, pa.updated_at,
-   pa.free_delivery_from, pa.delivery_settings,
-			t.tenant_id, t.slug, t.status, t.cell, t.plan, t.hosts, t.event_at, t.version, t.updated_at
+			pa.free_delivery_from, pa.delivery_settings, pa.trust, pa.approved_offers,
+			t.tenant_id, t.slug, t.status, t.cell, t.plan, t.hosts, t.event_at, t.version, t.updated_at,
+			to_jsonb(mv)
 		FROM catalog_products p
 		LEFT JOIN offers o ON o.tenant_id = p.tenant_id AND o.product_id = p.product_id
 		LEFT JOIN participants pa ON pa.tenant_id = p.tenant_id
-		LEFT JOIN tenants t ON t.tenant_id = p.tenant_id`
+		LEFT JOIN tenants t ON t.tenant_id = p.tenant_id
+		LEFT JOIN moderation_verdicts mv ON mv.tenant_id = p.tenant_id AND mv.product_id = p.product_id`
 
 	selectOffer = offerSelect + `
 		WHERE p.tenant_id = $1 AND p.product_id = $2`
@@ -45,7 +49,8 @@ const (
 	selectChangedOffers = offerSelect + `
 		WHERE pa.tenant_id IS NOT NULL
 			AND (p.tenant_id, p.product_id) > ($1, $2)
-			AND (p.updated_at >= $3 OR o.updated_at >= $3 OR pa.updated_at >= $3 OR t.updated_at >= $3)
+			AND (p.updated_at >= $3 OR o.updated_at >= $3 OR pa.updated_at >= $3
+				OR t.updated_at >= $3 OR mv.updated_at >= $3)
 		ORDER BY p.tenant_id, p.product_id
 		LIMIT $4`
 )
@@ -57,6 +62,7 @@ type Offers struct {
 
 // offerRow — строка предложения: товар и всё, что к нему присоединено.
 type offerRow struct {
+	verdict     []byte
 	product     productRow
 	signals     signalsRow
 	participant participantRow
@@ -65,6 +71,8 @@ type offerRow struct {
 
 // participantRow — участник из LEFT JOIN: у товара без участника все поля пусты.
 type participantRow struct {
+	trust                        *string
+	approvedOffers               *int
 	tenantID, slug, name, status *string
 	enabled                      *bool
 	freeDeliveryFrom             *int64
@@ -164,7 +172,8 @@ func (r *offerRow) targets() []any {
 	targets = append(targets, r.signals.targets()...)
 	targets = append(targets, r.participant.targets()...)
 
-	return append(targets, r.tenant.targets()...)
+	targets = append(targets, r.tenant.targets()...)
+	return append(targets, &r.verdict)
 }
 
 func (r *offerRow) state() (ports.OfferState, error) {
@@ -185,6 +194,13 @@ func (r *offerRow) state() (ports.OfferState, error) {
 		Tenant:      r.tenant.tenant(),
 	}
 
+	if len(r.verdict) > 0 {
+		var v moderation.VerdictState
+		if err := json.Unmarshal(r.verdict, &v); err != nil {
+			return ports.OfferState{}, err
+		}
+		state.Verdict = moderation.RestoreVerdict(v)
+	}
 	return state, nil
 }
 
@@ -203,6 +219,8 @@ func (r *participantRow) targets() []any {
 		&r.updatedAt,
 		&r.freeDeliveryFrom,
 		&r.deliverySettings,
+		&r.trust,
+		&r.approvedOffers,
 	}
 }
 
@@ -218,16 +236,18 @@ func (r *participantRow) participant() (*participant.Participant, error) {
 	}
 
 	state := participant.State{
-		TenantID:    ids.TenantID(*r.tenantID),
-		Slug:        *r.slug,
-		Name:        *r.name,
-		Status:      participant.Status(*r.status),
-		Enabled:     *r.enabled,
-		ShopEnabled: *r.shopEnabled,
-		Subsidy:     subsidy,
-		Version:     *r.version,
-		CreatedAt:   *r.createdAt,
-		UpdatedAt:   *r.updatedAt,
+		Trust:          *r.trust,
+		ApprovedOffers: *r.approvedOffers,
+		TenantID:       ids.TenantID(*r.tenantID),
+		Slug:           *r.slug,
+		Name:           *r.name,
+		Status:         participant.Status(*r.status),
+		Enabled:        *r.enabled,
+		ShopEnabled:    *r.shopEnabled,
+		Subsidy:        subsidy,
+		Version:        *r.version,
+		CreatedAt:      *r.createdAt,
+		UpdatedAt:      *r.updatedAt,
 	}
 
 	state.FreeDeliveryFrom = money.FromKopecks(*r.freeDeliveryFrom)

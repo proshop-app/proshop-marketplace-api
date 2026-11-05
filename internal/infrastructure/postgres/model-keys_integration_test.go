@@ -13,6 +13,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -167,6 +168,12 @@ func TestModelKeyConflictDoesNotAbortRebuild(t *testing.T) {
 				return err
 			}
 			if err := tx.Products().Save(ctx, product); err != nil {
+				return err
+			}
+			// Без вердикта модерации предложение скрыто: пересборке нужен допуск.
+			verdict := moderation.NewVerdict(snap.TenantID, snap.ProductID)
+			verdict.Evaluate(snap.Revision, 0, moderation.Rules{}, moderation.Input{}, at(0))
+			if err := tx.ModerationVerdicts().Save(ctx, verdict); err != nil {
 				return err
 			}
 		}

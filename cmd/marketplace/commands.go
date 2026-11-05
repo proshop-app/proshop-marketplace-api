@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
+	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
@@ -150,4 +151,25 @@ func deliveryFailure(err error) error {
 		return err
 	}
 	return errors.New("поставка реестра не применена: проверьте миграции и доступность базы")
+}
+
+func moderationReevaluate(ctx context.Context, cfg config.Config, _ *slog.Logger) error {
+	if len(os.Args) != 3 || os.Args[2] != "reevaluate" {
+		return errors.New("использование: marketplace moderation reevaluate")
+	}
+	store, err := openStorage(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer store.close()
+	service := appmoderation.NewService(
+		postgres.NewUnitOfWork(store.pool),
+		clock.System{},
+		random.IDs{},
+		appmoderation.Config{
+			ProbationOffers: cfg.Moderation.ProbationOffers,
+			RequireImage:    cfg.Moderation.RequireImage,
+		},
+	)
+	return postgres.NewIndexRebuildLock(store.pool).WithLock(ctx, service.EnqueueAll)
 }

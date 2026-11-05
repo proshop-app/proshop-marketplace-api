@@ -21,6 +21,7 @@ const (
 
 // Config — настройки процесса маркетплейса.
 type Config struct {
+	Moderation Moderation
 	ModelKeys  bool
 	Identity   Identity
 	HTTP       HTTP
@@ -307,6 +308,10 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		Reference: Reference{
 			ReadToken:          r.str("REFERENCE_READ_TOKEN", ""),
 			CandidatesInterval: r.optionalInterval("REFERENCE_CANDIDATES_INTERVAL", time.Hour),
+		},
+		Moderation: Moderation{
+			ProbationOffers: r.positive("MODERATION_PROBATION_OFFERS", 50),
+			RequireImage:    r.boolean("MODERATION_REQUIRE_IMAGE", true),
 		},
 		ModelKeys: r.boolean("MARKETPLACE_MODEL_KEYS", false),
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),

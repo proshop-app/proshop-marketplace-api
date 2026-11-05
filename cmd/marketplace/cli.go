@@ -17,6 +17,7 @@ type command func(ctx context.Context, cfg config.Config, logger *slog.Logger) e
 
 // commands — команды по имени; без имени — serve.
 var commands = map[string]command{
+	"moderation":            moderationReevaluate,
 	"serve":                 serve,
 	"reindex":               reindex,
 	"refresh-pickup-points": refreshPickupPoints,

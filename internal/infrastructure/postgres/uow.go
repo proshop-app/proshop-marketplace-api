@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -113,3 +115,17 @@ func (s *scope) PickupPoints() delivery.PickupPointRepository {
 func (s *scope) Taxonomy() taxonomy.Repository { return &Taxonomy{q: s.q} }
 
 func (s *scope) Reference() reference.Repository { return &References{q: s.q} }
+
+func (s *scope) ModerationVerdicts() moderation.VerdictRepository { return &ModerationVerdicts{q: s.q} }
+
+func (s *scope) ModerationCases() moderation.CaseRepository { return &ModerationCases{q: s.q} }
+
+func (s *scope) ModerationDecisions() moderation.DecisionRepository {
+	return &ModerationDecisions{q: s.q}
+}
+
+func (s *scope) ModerationRules() moderation.RulesRepository { return &ModerationRules{q: s.q} }
+
+func (s *scope) ParticipantDecisions() participant.DecisionRepository {
+	return &ParticipantDecisions{q: s.q}
+}

@@ -77,7 +77,7 @@ func TestRegistrySyncsParticipant(t *testing.T) {
 	store := fake.NewStore()
 	clock := fake.NewClock(t0)
 	registry := appparticipant.NewRegistry(store, clock)
-	service := appparticipant.NewService(store, clock)
+	service := appparticipant.NewService(store, clock, &fake.IDs{})
 	ctx := context.Background()
 
 	if err := registry.Apply(ctx, registryEvent("e1", "shop-nine", participant.TenantActive, t0)); err != nil {

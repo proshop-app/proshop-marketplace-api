@@ -36,15 +36,21 @@ type PriceEvent struct {
 // транзакция: отметка в inbox, изменение проекции и задача синхронизации
 // индекса фиксируются вместе.
 type Projector struct {
-	uow   ports.UnitOfWork
-	clock ports.Clock
+	evaluator ports.ModerationEvaluator
+	uow       ports.UnitOfWork
+	clock     ports.Clock
 }
 
 // NewProjector — приём проекций.
-func NewProjector(uow ports.UnitOfWork, clock ports.Clock) *Projector {
+func NewProjector(uow ports.UnitOfWork, clock ports.Clock, evaluators ...ports.ModerationEvaluator) *Projector {
+	var evaluator ports.ModerationEvaluator
+	if len(evaluators) > 0 {
+		evaluator = evaluators[0]
+	}
 	return &Projector{
-		uow:   uow,
-		clock: clock,
+		evaluator: evaluator,
+		uow:       uow,
+		clock:     clock,
 	}
 }
 
@@ -87,6 +93,11 @@ func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error 
 			return err
 		}
 
+		if p.evaluator != nil {
+			if err := p.evaluator.Evaluate(ctx, tx, product, nil, now); err != nil {
+				return err
+			}
+		}
 		return tx.Outbox().Enqueue(ctx, SyncOfferTask(snapshot.TenantID, snapshot.ProductID, now))
 	})
 }

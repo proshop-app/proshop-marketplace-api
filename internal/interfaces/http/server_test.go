@@ -28,6 +28,7 @@ import (
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
@@ -91,7 +92,7 @@ func newEnv(t *testing.T) *env {
 	handler := transport.NewHandler(transport.Deps{
 		Taxonomy:     apptaxonomy.NewService(e.store, e.clock),
 		Catalog:      appcatalog.NewQueries(e.store, e.index, e.platform),
-		Participants: appparticipant.NewService(e.store, e.clock),
+		Participants: appparticipant.NewService(e.store, e.clock, &fake.IDs{}),
 		Auth: appbuyer.NewAuth(
 			e.store,
 			e.calls,
@@ -212,6 +213,12 @@ func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID
 	}
 
 	e.store.SeedProduct(p.State())
+	e.store.SeedVerdict(moderation.VerdictState{
+		TenantID:  tenant,
+		ProductID: product,
+		Status:    moderation.Allowed,
+		Version:   1,
+	})
 
 	indexer := appcatalog.NewIndexer(e.store, e.index, e.clock, 100, &fake.IndexRebuildLock{}, nil)
 	err = indexer.SyncTenant(context.Background(), tenant)

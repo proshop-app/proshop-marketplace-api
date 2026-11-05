@@ -14,7 +14,8 @@ import (
 const (
 	participantColumns = `
 		tenant_id, slug, name, status, enabled, shop_enabled, subsidy,
-		settings_synced_at, version, created_at, updated_at, free_delivery_from, delivery_settings`
+		settings_synced_at, version, created_at, updated_at, free_delivery_from,
+		delivery_settings, trust, approved_offers`
 
 	selectParticipant = `
 		SELECT ` + participantColumns + `
@@ -32,9 +33,10 @@ const (
 	insertParticipant = `
 		INSERT INTO participants (
 			tenant_id, slug, name, status, enabled, shop_enabled, subsidy,
-			settings_synced_at, version, created_at, updated_at, free_delivery_from, delivery_settings
+			settings_synced_at, version, created_at, updated_at, free_delivery_from,
+		delivery_settings, trust, approved_offers
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
 
 	updateParticipant = `
 		UPDATE participants
@@ -48,7 +50,9 @@ const (
 			version = $11,
 			updated_at = $12,
 			free_delivery_from = $13,
-			delivery_settings = $14
+			delivery_settings = $14,
+			trust = $15,
+			approved_offers = $16
 		WHERE tenant_id = $1 AND status = $2 AND version = $3`
 )
 
@@ -139,6 +143,8 @@ func (r *Participants) Add(ctx context.Context, p *participant.Participant) erro
 		s.UpdatedAt,
 		s.FreeDeliveryFrom.Kopecks(),
 		encodeDelivery(s.Delivery),
+		s.Trust,
+		s.ApprovedOffers,
 	)
 
 	switch {
@@ -185,6 +191,8 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 		s.UpdatedAt,
 		s.FreeDeliveryFrom.Kopecks(),
 		encodeDelivery(s.Delivery),
+		s.Trust,
+		s.ApprovedOffers,
 	)
 
 	switch {
@@ -226,6 +234,8 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 		&state.UpdatedAt,
 		&free,
 		&delivery,
+		&state.Trust,
+		&state.ApprovedOffers,
 	)
 	if err != nil {
 		return nil, err

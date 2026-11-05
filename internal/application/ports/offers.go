@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
@@ -14,6 +16,7 @@ import (
 // OfferState — согласованный снимок всего, из чего собирается предложение:
 // товар, сигналы, участник и запись реестра. Читается одним запросом.
 type OfferState struct {
+	Verdict     *moderation.Verdict
 	Product     *catalog.Product
 	Signals     *catalog.Signals
 	Participant *participant.Participant

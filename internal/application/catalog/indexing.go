@@ -267,15 +267,23 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 		return ports.OfferDocument{}, false
 	}
 	visibility := participant.VisibilityOf(state.Participant, state.Tenant)
-	offer := catalog.ComposeOffer(state.Product, state.Signals, catalog.Seller{
+	seller := catalog.Seller{
 		Slug:              state.Participant.Slug(),
 		Name:              state.Participant.Name(),
 		Visible:           visibility.Visible,
 		CheckoutAvailable: visibility.CheckoutAvailable,
-	})
+	}
+	offer := catalog.ComposeOffer(state.Product, state.Signals, seller, state.Verdict)
 	product := state.Product.State()
 	version := state.Product.Version() + state.Participant.Version()
 	updatedAt := product.UpdatedAt
+	if state.Verdict != nil {
+		verdict := state.Verdict.State()
+		version += verdict.Version
+		if verdict.UpdatedAt.After(updatedAt) {
+			updatedAt = verdict.UpdatedAt
+		}
+	}
 
 	if state.Signals != nil {
 		version += state.Signals.Version()

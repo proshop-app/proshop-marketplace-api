@@ -46,12 +46,14 @@ type Attribute struct {
 
 // Category ссылается на схему только в листе, чтобы дерево не дублировало атрибуты.
 type Category struct {
-	ID       string     `json:"id" yaml:"id"`
-	Name     string     `json:"name" yaml:"name"`
-	Title    string     `json:"title,omitempty" yaml:"title,omitempty"`
-	Slug     string     `json:"slug" yaml:"slug"`
-	Schema   string     `json:"schema,omitempty" yaml:"schema,omitempty"`
-	Children []Category `json:"children,omitempty" yaml:"children,omitempty"`
+	ID     string `json:"id" yaml:"id"`
+	Name   string `json:"name" yaml:"name"`
+	Title  string `json:"title,omitempty" yaml:"title,omitempty"`
+	Slug   string `json:"slug" yaml:"slug"`
+	Schema string `json:"schema,omitempty" yaml:"schema,omitempty"`
+	// Moderation — политика допуска узла: auto, manual или forbidden; пусто — наследуется.
+	Moderation string     `json:"moderation,omitempty" yaml:"moderation,omitempty"`
+	Children   []Category `json:"children,omitempty" yaml:"children,omitempty"`
 }
 
 // Schema хранит порядок полей и исключения из обязательности по умолчанию.
@@ -135,6 +137,9 @@ func (d Definition) Validate() error {
 		}
 		names := map[string]bool{}
 		for _, c := range categories {
+			if c.Moderation != "" && c.Moderation != "auto" && c.Moderation != "manual" && c.Moderation != "forbidden" {
+				return ErrInvalid.WithMessage("неизвестная политика модерации")
+			}
 			invalidName := strings.TrimSpace(c.Name) == "" || utf8.RuneCountInString(c.Name) > 256
 			if !categoryIDPattern.MatchString(c.ID) || ids[c.ID] || invalidName {
 				return ErrInvalid.WithMessage("неверный или повторный id категории, пустое или длинное имя")

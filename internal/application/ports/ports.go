@@ -6,6 +6,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
@@ -29,6 +31,11 @@ type UnitOfWork interface {
 
 // Tx — хранилища, привязанные к одной транзакции.
 type Tx interface {
+	ModerationVerdicts() moderation.VerdictRepository
+	ModerationCases() moderation.CaseRepository
+	ModerationDecisions() moderation.DecisionRepository
+	ModerationRules() moderation.RulesRepository
+	ParticipantDecisions() participant.DecisionRepository
 	Taxonomy() taxonomy.Repository
 	Participants() participant.Repository
 	Registry() participant.Registry
