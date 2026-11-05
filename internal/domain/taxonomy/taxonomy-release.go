@@ -29,6 +29,8 @@ type Release struct {
 	Version    int64
 	Checksum   string
 	Categories []Category
+	Attributes []Attribute
+	Schemas    map[string]Schema
 	// ExpectedVersion разрешает явное обновление проверенного операторского снимка.
 	ExpectedVersion int64
 }
@@ -64,7 +66,7 @@ func ValidateRelease(release Release) error {
 		return ErrInvalidRelease
 	}
 
-	return (Definition{Version: release.Version, Categories: release.Categories}).Validate()
+	return release.Definition().Validate()
 }
 
 // PlanRelease защищает операторские правки и не позволяет понизить поставку.
@@ -120,4 +122,14 @@ func PlanTaxonomyRollback(
 	}
 
 	return true, nil
+}
+
+// Definition отделяет номер поставки от номера опубликованного снимка.
+func (r Release) Definition() Definition {
+	return Definition{
+		Version:    r.Version,
+		Attributes: r.Attributes,
+		Schemas:    r.Schemas,
+		Categories: r.Categories,
+	}
 }

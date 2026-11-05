@@ -35,15 +35,7 @@ func taxonomyCached(w http.ResponseWriter, r *http.Request, version int64) bool 
 }
 
 func (h *taxonomyHandlers) categories(w http.ResponseWriter, r *http.Request) {
-	d, err := h.service.Current(r.Context())
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
-	if taxonomyCached(w, r, d.Version) {
-		return
-	}
-	writeJSON(w, http.StatusOK, d)
+	h.readPart(w, r, "categories", false)
 }
 
 func (h *taxonomyHandlers) schema(w http.ResponseWriter, r *http.Request) {
@@ -76,16 +68,84 @@ func (h *taxonomyHandlers) version(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *taxonomyHandlers) load(w http.ResponseWriter, r *http.Request) {
-	d, err := taxonomyfile.Decode(http.MaxBytesReader(w, r.Body, maxTaxonomyBody))
+	match := r.Header.Get("If-Match")
+	expected, err := strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(match, `"taxonomy-`), `"`), 10, 64)
+	if err != nil || expected < 0 || match != `"taxonomy-`+strconv.FormatInt(expected, 10)+`"` {
+		writeError(w, r, taxonomy.ErrInvalid.WithMessage("нужен If-Match текущей версии"))
+		return
+	}
+	d, err := taxonomyfile.DecodePart(http.MaxBytesReader(w, r.Body, maxTaxonomyBody), r.PathValue("part"))
+	var version int64
 	if err == nil {
-		err = h.service.Load(r.Context(), d)
+		version, err = h.service.LoadPart(r.Context(), r.PathValue("part"), d, expected)
 	}
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	w.Header().Set("X-Taxonomy-Version", strconv.FormatInt(d.Version, 10))
-	writeJSON(w, http.StatusOK, map[string]int64{"version": d.Version})
+	w.Header().Set("ETag", `"taxonomy-`+strconv.FormatInt(version, 10)+`"`)
+	w.Header().Set("X-Taxonomy-Version", strconv.FormatInt(version, 10))
+	writeJSON(w, http.StatusOK, map[string]int64{"version": version})
+}
+
+func (h *taxonomyHandlers) current(w http.ResponseWriter, r *http.Request) {
+	d, err := h.service.Current(r.Context())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if taxonomyCached(w, r, d.Version) {
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
+}
+
+func (h *taxonomyHandlers) attributes(w http.ResponseWriter, r *http.Request) {
+	h.readPart(w, r, "attributes", false)
+}
+
+func (h *taxonomyHandlers) schemas(w http.ResponseWriter, r *http.Request) {
+	h.readPart(w, r, "schemas", false)
+}
+
+func (h *taxonomyHandlers) download(w http.ResponseWriter, r *http.Request) {
+	h.readPart(w, r, r.PathValue("part"), true)
+}
+
+func (h *taxonomyHandlers) readPart(w http.ResponseWriter, r *http.Request, part string, asYAML bool) {
+	if part != "attributes" && part != "schemas" && part != "categories" {
+		writeError(w, r, taxonomy.ErrInvalid.WithMessage("неизвестная часть таксономии"))
+		return
+	}
+	d, err := h.service.Current(r.Context())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if taxonomyCached(w, r, d.Version) {
+		return
+	}
+	if asYAML {
+		body, err := taxonomyfile.EncodePart(d, part)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/yaml")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+part+`.yaml"`)
+		_, _ = w.Write(body)
+		return
+	}
+	var value any
+	switch part {
+	case "attributes":
+		value = d.Attributes
+	case "schemas":
+		value = d.Schemas
+	case "categories":
+		value = d.Categories
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"version": d.Version, part: value})
 }
 
 func (h *taxonomyHandlers) publication(w http.ResponseWriter, r *http.Request) {

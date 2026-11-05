@@ -39,6 +39,7 @@ TAXONOMY_IMAGE ?= proshop-marketplace-taxonomy:dev
 ## dev: инфраструктура в compose, миграции и сервис с перезапуском при правках
 dev: infra-up
 	$(MAKE) migrate
+	$(MAKE) reference-apply
 	$(MAKE) taxonomy-apply
 	$(AIR) -c .air.toml
 
@@ -84,10 +85,10 @@ build:
 image:
 	docker build -t $(IMAGE) .
 
-.PHONY: taxonomy-load
-## taxonomy-load: загрузить версию схем площадки из YAML
-taxonomy-load:
-	go run ./cmd/taxonomy load "$(FILE)"
+.PHONY: taxonomy-manifest
+## taxonomy-manifest: проверить манифест исходных YAML
+taxonomy-manifest:
+	go run ./cmd/taxonomy manifest
 
 ## taxonomy-check: проверить встроенную поставку без базы и внешних сервисов
 taxonomy-check:
