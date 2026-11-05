@@ -20,6 +20,7 @@ import (
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -148,6 +149,13 @@ func (s *server) services(ctx context.Context) (services, error) {
 		}
 	}
 	writer := infrakafka.NewWriter(cfg.Kafka.Brokers)
+	statuses := moderationstatus.NewService(
+		uow,
+		now,
+		writer,
+		cfg.Kafka.FullTopic(cfg.Kafka.OfferStatusTopic),
+		cfg.Kafka.FullTopic(cfg.Kafka.ParticipantStatusTopic),
+	)
 	references := appreference.NewService(uow, now, identities, writer, appreference.Config{
 		Topic: cfg.Kafka.FullTopic(cfg.Kafka.ReferenceTopic),
 	})
@@ -236,12 +244,14 @@ func (s *server) services(ctx context.Context) (services, error) {
 			Lease:     cfg.Outbox.Lease,
 		},
 		map[string]messaging.Handler{
-			appmoderation.TaskReevaluate:    moderation.HandleTask,
-			messaging.TaskReplay:            events.HandleTask,
-			appcatalog.TaskSyncOffer:        indexer.HandleTask,
-			appcatalog.TaskSyncTenant:       indexer.HandleTask,
-			appparticipant.TaskSyncSettings: settings.HandleTask,
-			appreference.TaskChanged:        references.HandleTask,
+			appmoderation.TaskReevaluate:     moderation.HandleTask,
+			messaging.TaskReplay:             events.HandleTask,
+			appcatalog.TaskSyncOffer:         indexer.HandleTask,
+			appcatalog.TaskSyncTenant:        indexer.HandleTask,
+			appparticipant.TaskSyncSettings:  settings.HandleTask,
+			appreference.TaskChanged:         references.HandleTask,
+			moderationstatus.TaskOffer:       statuses.HandleTask,
+			moderationstatus.TaskParticipant: statuses.HandleTask,
 		},
 	)
 	janitor := messaging.NewJanitor(postgres.NewRetention(s.store.pool), now, messaging.RetentionPolicy{

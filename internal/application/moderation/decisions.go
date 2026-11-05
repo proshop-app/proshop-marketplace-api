@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
@@ -76,6 +77,9 @@ func (s *Service) OpenCase(
 			return err
 		}
 		result = c.State()
+		if err := tx.Outbox().Enqueue(ctx, moderationstatus.OfferTask(offer.Tenant, offer.Product, now)); err != nil {
+			return err
+		}
 		return tx.Outbox().Enqueue(ctx, appcatalog.SyncOfferTask(offer.Tenant, offer.Product, now))
 	})
 	if errors.Is(err, moderation.ErrCaseConflict) || errors.Is(err, moderation.ErrConflict) {
@@ -190,6 +194,10 @@ func (s *Service) decide(
 		if err := tx.Outbox().Enqueue(ctx, appcatalog.SyncOfferTask(state.TenantID, state.ProductID, now)); err != nil {
 			return err
 		}
+		statusTask := moderationstatus.OfferTask(state.TenantID, state.ProductID, now)
+		if err := tx.Outbox().Enqueue(ctx, statusTask); err != nil {
+			return err
+		}
 		if cmd.IdempotencyKey != "" {
 			return tx.ModerationDecisions().Cache(ctx, key, moderation.CachedDecision{
 				Fingerprint: fingerprint,
@@ -254,6 +262,9 @@ func (s *Service) approve(
 			At:     now,
 		}
 		if err := tx.ParticipantDecisions().Add(ctx, record); err != nil {
+			return err
+		}
+		if err := tx.Outbox().Enqueue(ctx, moderationstatus.ParticipantTask(tenant, now)); err != nil {
 			return err
 		}
 		return tx.Outbox().Enqueue(ctx, ReevaluateTask(tenant, now))

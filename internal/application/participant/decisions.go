@@ -5,6 +5,7 @@ import (
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -70,6 +71,9 @@ func (s *Service) decide(
 				return err
 			}
 			if err := tx.Outbox().Enqueue(ctx, appcatalog.SyncTenantTask(tenant, now)); err != nil {
+				return err
+			}
+			if err := tx.Outbox().Enqueue(ctx, moderationstatus.ParticipantTask(tenant, now)); err != nil {
 				return err
 			}
 			if action == "trust" {
