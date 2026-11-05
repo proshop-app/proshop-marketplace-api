@@ -376,3 +376,6 @@ API таксономии, её PostgreSQL-таблицы и поставка д�
 Сбор кандидатов требует отдельного `SEARCH_CANDIDATES_TOKEN` для поиска;
 `REFERENCE_CANDIDATES_INTERVAL=1h` задаёт период, `0` выключает сбор.
 При пустом токене сборщик не запускается.
+
+Образ содержит справочники в `/reference` (только чтение); `reference apply-all` использует этот каталог по умолчанию, `--dir` переопределяет его.
+Порядок выката: `/migrate up` → `/marketplace reference apply-all` (только `DATABASE_URL`) → `/taxonomy apply`.

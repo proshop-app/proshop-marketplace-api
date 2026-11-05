@@ -27,16 +27,14 @@ var commands = map[string]command{
 
 // run проверяет окружение и выполняет команду до сигнала остановки; результат — код выхода.
 func run() int {
-	cfg, err := config.Load(os.LookupEnv)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-
-		return 2
-	}
-
 	name := "serve"
 	if len(os.Args) > 1 {
 		name = os.Args[1]
+	}
+	cfg, err := commandConfig(name, os.LookupEnv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 
 	cmd, ok := commands[name]
@@ -58,4 +56,13 @@ func run() int {
 	}
 
 	return 0
+}
+
+// Поставка справочников работает только с PostgreSQL; секреты HTTP и Kafka ей не нужны.
+func commandConfig(name string, env func(string) (string, bool)) (config.Config, error) {
+	if name == "reference" {
+		database, err := config.LoadDatabase(env)
+		return config.Config{Database: database, LogLevel: "info"}, err
+	}
+	return config.Load(env)
 }

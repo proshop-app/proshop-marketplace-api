@@ -94,14 +94,12 @@ func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string,
 	if len(args) == 0 || (args[0] != "check" && args[0] != "apply" && args[0] != "rollback" && args[0] != "apply-all") {
 		return errReferenceUsage
 	}
-	options := flag.NewFlagSet("reference", flag.ContinueOnError)
-	options.SetOutput(io.Discard)
-	dir := options.String("dir", "", "каталог с manifest.json и entries.json")
-	if err := options.Parse(args[1:]); err != nil || options.NArg() != 0 || *dir == "" {
-		return errReferenceUsage
+	dir, err := referenceDirectory(args)
+	if err != nil {
+		return err
 	}
 	if args[0] == "apply-all" {
-		directories, err := os.ReadDir(*dir)
+		directories, err := os.ReadDir(dir)
 		if err != nil {
 			return err
 		}
@@ -109,14 +107,14 @@ func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string,
 			if !directory.IsDir() {
 				continue
 			}
-			child := []string{"apply", "--dir", filepath.Join(*dir, directory.Name())}
+			child := []string{"apply", "--dir", filepath.Join(dir, directory.Name())}
 			if err := runReferenceDelivery(ctx, cfg, child, output); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
-	delivery, summary, err := referencedata.Load(os.DirFS(*dir))
+	delivery, summary, err := referencedata.Load(os.DirFS(dir))
 	if err != nil {
 		return err
 	}
@@ -172,4 +170,18 @@ func moderationReevaluate(ctx context.Context, cfg config.Config, _ *slog.Logger
 		},
 	)
 	return postgres.NewIndexRebuildLock(store.pool).WithLock(ctx, service.EnqueueAll)
+}
+
+func referenceDirectory(args []string) (string, error) {
+	options := flag.NewFlagSet("reference", flag.ContinueOnError)
+	options.SetOutput(io.Discard)
+	defaultDir := ""
+	if args[0] == "apply-all" {
+		defaultDir = "/reference"
+	}
+	dir := options.String("dir", defaultDir, "каталог с manifest.json и entries.json")
+	if err := options.Parse(args[1:]); err != nil || options.NArg() != 0 || *dir == "" {
+		return "", errReferenceUsage
+	}
+	return *dir, nil
 }

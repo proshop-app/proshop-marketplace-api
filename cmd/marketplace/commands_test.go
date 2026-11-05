@@ -42,3 +42,39 @@ func TestReferenceCommandRejectsUsageAndHidesCredentials(t *testing.T) {
 		t.Fatalf("ошибка базы: %v", err)
 	}
 }
+
+func TestReferenceDirectory(t *testing.T) {
+	for _, action := range []string{"apply-all", "apply", "check", "rollback"} {
+		dir, err := referenceDirectory([]string{action, "--dir", "/explicit"})
+		if err != nil || dir != "/explicit" {
+			t.Fatalf("%s: %q, %v", action, dir, err)
+		}
+	}
+	dir, err := referenceDirectory([]string{"apply-all"})
+	if err != nil || dir != "/reference" {
+		t.Fatalf("каталог по умолчанию: %q, %v", dir, err)
+	}
+	if _, err := referenceDirectory([]string{"apply-all", "--dir", ""}); err == nil {
+		t.Fatal("пустой явный каталог принят")
+	}
+}
+
+func TestReferenceConfigNeedsOnlyDatabase(t *testing.T) {
+	env := func(key string) (string, bool) {
+		if key == "DATABASE_MAX_CONNS" {
+			return "", false
+		}
+		if key != "DATABASE_URL" {
+			t.Fatalf("лишняя переменная: %s", key)
+		}
+		return "postgres://user:password@database/db", true
+	}
+	cfg, err := commandConfig("reference", env)
+	if err != nil || cfg.Database.URL == "" {
+		t.Fatalf("конфигурация поставки: %v", err)
+	}
+	_, err = commandConfig("reference", func(string) (string, bool) { return "", false })
+	if err == nil {
+		t.Fatal("принята конфигурация без базы")
+	}
+}
