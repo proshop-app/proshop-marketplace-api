@@ -187,8 +187,96 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
   ставит задачу переоценки каждому участнику; удерживает
   `IndexRebuildLock`, чтобы не гоняться с пересборкой индекса.
 
-HTTP оператора, метрики и события магазину — M2 и M3; контракт событий —
-§6d.
+События магазину — M3; контракт событий — §6d.
+
+## HTTP оператора (M2)
+
+Префикс `/api/v1/operator/moderation`, та же проверка сессии оператора и
+`OPERATOR_TOKEN`, что у остальных операторских ручек; роль `operator`.
+Ошибки — `{error:{code,message}}`, коды стабильны; классы `pkg/errs`
+переводятся общей таблицей `statusByCode`. Списки — `{items,total,limit,offset}`,
+`limit` по умолчанию 50, не больше 200, `offset ≥ 0`.
+
+| Ручка | Тело и ответ |
+|---|---|
+| `GET /cases?status&tenantId&source&limit&offset` | дела, `opened_at DESC`; `status` — `open` (по умолчанию), `allowed`, `rejected`, `superseded`, `all`; `source` — `rule`, `operator` |
+| `GET /cases/{caseId}` | `{case, offer, history}` |
+| `POST /cases` | `{offerId, note}` → 201 `case`; открытое дело уже есть — 409 `moderation.case_conflict` с `{error, case}` |
+| `POST /cases/{caseId}/allow`, `POST /cases/{caseId}/reject` | `{expectedVersion, reason?, note}` → 200 `case`; версия не совпала или дело закрыто — 409 `moderation.case_conflict` с текущим делом; ревизия снимка ушла вперёд — 409 `moderation.case_stale`; пустая или длинная заметка, неизвестный код причины — 400 |
+| `GET /offers/{offerId}` | `{verdict, case, history}`; нет проекции — 404 |
+| `GET /verdicts?status&tenantId&limit&offset` | вердикты, `updated_at DESC`; `status` обязателен |
+| `GET /stop-phrases` | `{items}` по времени добавления |
+| `POST /stop-phrases` | `{text}` → 201 `stopPhrase`; занятый ключ — 409 `moderation.stop_phrase_exists` |
+| `DELETE /stop-phrases/{key}` | 204; нет — 404 |
+| `GET /reasons` | `{items}` по коду |
+| `PUT /reasons/{code}` | `{text}` → 200 `reason`, заводит или меняет |
+| `DELETE /reasons/{code}` | 204; нет — 404 |
+
+Формы:
+
+```json
+{"case": {"id": "…", "offerId": "t1~p1", "tenantId": "t1", "productId": "p1", "revision": 12,
+  "source": "rule", "status": "open", "reasons": [{"key": "moderation.stop_phrase", "message": "…"}],
+  "note": "", "openedAt": "…", "decidedAt": null, "version": 1}}
+{"offer": {"name": "…", "description": "…", "image": "…", "price": 19999, "basePrice": 24999,
+  "categoryId": "c1", "categoryPath": ["…"], "attributes": {"a1": "v1"},
+  "seller": {"slug": "…", "name": "…"}, "publication": {"published": true, "issues": []}}}
+{"history": [{"operator": {"id": "…", "name": "…"}, "action": "allow", "reason": "", "note": "…",
+  "revision": 12, "at": "…"}]}
+{"verdict": {"offerId": "t1~p1", "tenantId": "t1", "productId": "p1", "revision": 12, "status": "pending",
+  "reasons": [], "decidedBy": "rule", "updatedAt": "…"}}
+{"stopPhrase": {"key": "…", "text": "…", "operator": {"id": "…", "name": "…"}, "createdAt": "…"}}
+{"reason": {"code": "counterfeit", "text": "…"}}
+```
+
+`offer` — карточка так, как её увидел бы покупатель: цены в копейках,
+категория площадки путём имён, канонические атрибуты из `Publication`.
+`Idempotency-Key` для `allow` и `reject` — по образцу решений по
+отравленным событиям: ключ ограничен оператором, запрос (дело, действие,
+`expectedVersion`, `reason`, `note`) сверяется отпечатком, повтор отдаёт
+первоначальный ответ 24 часа, другой запрос с тем же ключом — 409
+`IDEMPOTENCY_KEY_REUSED`. Механизм обобщается с `operator_event_idempotency`
+или получает свою таблицу в миграции `00032`.
+
+Участники:
+
+| Ручка | Тело и ответ |
+|---|---|
+| `POST /operator/participants/{tenantId}/enable`, `/disable` | необязательное тело `{reason, note}`; записывается в журнал |
+| `PUT /operator/participants/{tenantId}/trust` | `{trust, reason?, note}`, `trust` — `probation` или `trusted` → `View`; журнал и переоценка |
+| `GET /operator/participants/{tenantId}/decisions?limit&offset` | `{items:[{operator, action, value, reason, note, at}], total, limit, offset}`, `at DESC` |
+
+`View` участника получает `trust` и `approvedOffers`.
+`GET /operator/catalog/offers/{offerId}/publication` дополняется блоком
+`moderation: {status, reasons}` — так раздел «Каталог» админки показывает обе
+группы причин.
+
+OpenAPI: `api/openapi.yaml`, тег `moderation`; `openapi_test.go` сверяет
+маршруты со схемой. Снимок для админки `docs/api/marketplace.openapi.yaml`
+обновляется тем же изменением.
+
+## Метрики
+
+Prometheus, регистрация как у outbox:
+
+| Метрика | Вид | Метки |
+|---|---|---|
+| `marketplace_moderation_verdicts_total` | счётчик изменений вердикта | `tenant`, `status`, `decided_by` |
+| `marketplace_moderation_decisions_total` | счётчик решений оператора | `action` |
+| `marketplace_moderation_cases_open` | gauge открытых дел | `tenant` |
+| `marketplace_moderation_case_oldest_age_seconds` | gauge возраста старейшего открытого дела | — |
+
+Gauge обновляет фоновый цикл раз в `MODERATION_METRICS_INTERVAL`
+(по умолчанию 60s) одним запросом по открытым делам.
+
+## Доводка M1 (вместе с M2)
+
+- Действия и статусы дела и вердикта — типизированные константы домена
+  вместо строк `"allow"`, `"reject"`, `"open"`, `"superseded"`.
+- Оценщик модерации — явный параметр `NewProjector` и
+  `taxonomy.NewService`, не вариативный; тесты передают `nil`.
+- Ключ `moderation.not_evaluated` и его сообщение — функция или константа
+  модуля `moderation`, каталог строку не знает.
 
 ## Таксономия
 
