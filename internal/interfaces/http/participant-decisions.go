@@ -67,7 +67,8 @@ func (h *participantHandlers) decisions(w http.ResponseWriter, r *http.Request) 
 			"operator": moderation.Actor{ID: d.Operator.ID, Name: d.Operator.Name},
 			"action":   d.Action,
 			"value":    d.Value,
-			"reason":   d.Reason,
+			"reason":   moderation.DecisionReason(d.Reason, d.ReasonMessage),
+			"by":       d.Actor,
 			"note":     d.Note,
 			"at":       d.At,
 		})

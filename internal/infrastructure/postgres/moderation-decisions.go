@@ -9,10 +9,10 @@ import (
 
 const (
 	insertModerationDecision = `INSERT INTO moderation_decisions
- (id, case_id, operator_id, operator_name, action, reason, note, revision, at)
- VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+ (id, case_id, operator_id, operator_name, action, reason, note, revision, at, reason_message)
+ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 	listModerationDecisions = `SELECT d.id, d.case_id, d.operator_id, d.operator_name,
- d.action, d.reason, d.note, d.revision, d.at
+ d.action, d.reason, d.note, d.revision, d.at, d.reason_message
  FROM moderation_decisions d JOIN moderation_cases c ON c.id = d.case_id
  WHERE c.tenant_id = $1 AND c.product_id = $2 ORDER BY d.at DESC, d.id DESC`
 )
@@ -34,6 +34,7 @@ func (r *ModerationDecisions) Add(ctx context.Context, d moderation.Decision) er
 		d.Note,
 		d.Revision,
 		d.At,
+		d.ReasonMessage,
 	)
 	return err
 }
@@ -62,6 +63,7 @@ func (r *ModerationDecisions) List(
 			&d.Note,
 			&d.Revision,
 			&d.At,
+			&d.ReasonMessage,
 		)
 		if err != nil {
 			return nil, err

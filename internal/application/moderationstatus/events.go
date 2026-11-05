@@ -28,27 +28,37 @@ type Reason struct {
 	Message string `json:"message"`
 }
 
+// OfferDecision передаёт только сведения, предназначенные магазину.
+type OfferDecision struct {
+	Action moderation.Action      `json:"action"`
+	Reason *moderation.ReasonCode `json:"reason"`
+	Note   string                 `json:"note"`
+	At     string                 `json:"at"`
+}
+
 // OfferEvent содержит ревизию проекции, чтобы магазин мог отбрасывать старые сообщения.
 type OfferEvent struct {
-	SchemaVersion int           `json:"schemaVersion"`
-	TenantID      ids.TenantID  `json:"tenantId"`
-	ProductID     ids.ProductID `json:"productId"`
-	Revision      int64         `json:"revision"`
-	Status        string        `json:"status"`
-	Visible       bool          `json:"visible"`
-	Reasons       []Reason      `json:"reasons"`
-	At            string        `json:"at"`
+	SchemaVersion int            `json:"schemaVersion"`
+	TenantID      ids.TenantID   `json:"tenantId"`
+	ProductID     ids.ProductID  `json:"productId"`
+	Revision      int64          `json:"revision"`
+	Status        string         `json:"status"`
+	Visible       bool           `json:"visible"`
+	Reasons       []Reason       `json:"reasons"`
+	Decision      *OfferDecision `json:"decision"`
+	At            string         `json:"at"`
 }
 
 // ParticipantEvent отделяет доступность магазина от допуска отдельных карточек.
 type ParticipantEvent struct {
-	SchemaVersion int          `json:"schemaVersion"`
-	TenantID      ids.TenantID `json:"tenantId"`
-	Enabled       bool         `json:"enabled"`
-	Trust         string       `json:"trust"`
-	Reason        string       `json:"reason"`
-	Note          string       `json:"note"`
-	At            string       `json:"at"`
+	SchemaVersion int                    `json:"schemaVersion"`
+	TenantID      ids.TenantID           `json:"tenantId"`
+	Enabled       bool                   `json:"enabled"`
+	Trust         string                 `json:"trust"`
+	Reason        *moderation.ReasonCode `json:"reason"`
+	By            string                 `json:"by"`
+	Note          string                 `json:"note"`
+	At            string                 `json:"at"`
 }
 
 type payload struct {
@@ -166,7 +176,15 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 				return nil
 			}
 			status, reasons := Status(product.Card.Publication, state.Verdict)
+			decision, rejectedReasons, err := currentDecision(ctx, tx, p, state.Verdict, product.Revision)
+			if err != nil {
+				return err
+			}
+			if decision != nil && decision.Action == moderation.Reject {
+				reasons = rejectionReasons(reasons, rejectedReasons)
+			}
 			body = OfferEvent{
+				Decision:      decision,
 				SchemaVersion: 1,
 				TenantID:      p.TenantID,
 				ProductID:     p.ProductID,
@@ -189,6 +207,7 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 			}
 			state := member.State()
 			event := ParticipantEvent{
+				By:            "operator",
 				SchemaVersion: 1,
 				TenantID:      p.TenantID,
 				Enabled:       state.Enabled,
@@ -196,7 +215,9 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 				At:            at,
 			}
 			if len(history) > 0 {
-				event.Reason, event.Note = history[0].Reason, history[0].Note
+				d := history[0]
+				event.Reason = moderation.DecisionReason(d.Reason, d.ReasonMessage)
+				event.Note, event.By = d.Note, d.Actor
 			}
 			body = event
 			message.Topic, message.Key = s.participantTopic, []byte(p.TenantID)
@@ -211,4 +232,56 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 		return err
 	}
 	return s.publisher.Publish(ctx, message)
+}
+
+func currentDecision(
+	ctx context.Context,
+	tx ports.Tx,
+	p payload,
+	verdict *moderation.Verdict,
+	revision int64,
+) (*OfferDecision, []moderation.Reason, error) {
+	if verdict == nil {
+		return nil, nil, nil
+	}
+	v := verdict.State()
+	if v.DecidedBy != moderation.Operator || v.Status == moderation.Pending || v.Revision != revision {
+		return nil, nil, nil
+	}
+	history, err := tx.ModerationDecisions().List(ctx, p.TenantID, p.ProductID)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, d := range history {
+		if d.Revision == revision && d.At.Equal(v.UpdatedAt) {
+			var reasons []moderation.Reason
+			if d.Action == moderation.Reject {
+				c, err := tx.ModerationCases().Get(ctx, d.CaseID)
+				if err != nil {
+					return nil, nil, err
+				}
+				reasons = c.State().Reasons
+			}
+			return &OfferDecision{
+				Action: d.Action,
+				Reason: moderation.DecisionReason(d.Reason, d.ReasonMessage),
+				Note:   d.Note,
+				At:     d.At.UTC().Format(time.RFC3339),
+			}, reasons, nil
+		}
+	}
+	return nil, nil, nil
+}
+
+func rejectionReasons(current []Reason, reasons []moderation.Reason) []Reason {
+	result := make([]Reason, 0, len(current)+len(reasons))
+	for _, reason := range current {
+		if reason.Source == "taxonomy" {
+			result = append(result, reason)
+		}
+	}
+	for _, reason := range reasons {
+		result = append(result, Reason{Source: "moderation", Key: reason.Key, Message: reason.Message})
+	}
+	return result
 }

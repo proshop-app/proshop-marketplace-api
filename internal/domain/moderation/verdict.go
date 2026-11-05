@@ -87,7 +87,7 @@ func (v *Verdict) Review(revision int64, now time.Time) bool {
 	v.state.Revision = revision
 	v.state.Status = Pending
 	v.state.DecidedBy = Operator
-	v.state.Reasons = []Reason{{Key: "moderation.manual_review", Message: "проверка оператором"}}
+	v.state.Reasons = []Reason{{Key: "moderation.manual_review", Message: "На ручной проверке"}}
 	v.touch(now)
 	return true
 }

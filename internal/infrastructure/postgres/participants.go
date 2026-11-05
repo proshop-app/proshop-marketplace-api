@@ -22,11 +22,11 @@ const (
 		FROM participants
 		WHERE tenant_id = $1`
 
-	countParticipants = `SELECT count(*) FROM participants`
+	countParticipants = `SELECT count(*) FROM participants WHERE ($1 = '' OR trust = $1)`
 
 	listParticipants = `
 		SELECT ` + participantColumns + `
-		FROM participants
+		FROM participants WHERE ($3 = '' OR trust = $3)
 		ORDER BY created_at, tenant_id
 		LIMIT $1 OFFSET $2`
 
@@ -90,11 +90,11 @@ func (r *Participants) Get(ctx context.Context, tenantID ids.TenantID) (*partici
 // List — участники по времени создания.
 func (r *Participants) List(ctx context.Context, page participant.Page) ([]*participant.Participant, int, error) {
 	var total int
-	if err := r.q.QueryRow(ctx, countParticipants).Scan(&total); err != nil {
+	if err := r.q.QueryRow(ctx, countParticipants, page.Trust).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("число участников: %w", err)
 	}
 
-	rows, err := r.q.Query(ctx, listParticipants, page.Limit, page.Offset)
+	rows, err := r.q.Query(ctx, listParticipants, page.Limit, page.Offset, page.Trust)
 	if err != nil {
 		return nil, 0, fmt.Errorf("список участников: %w", err)
 	}

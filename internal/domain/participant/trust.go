@@ -2,6 +2,7 @@ package participant
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
@@ -16,9 +17,10 @@ const (
 
 // Decision хранит основание решения для последующего аудита.
 type Decision struct {
-	Operator operator.Principal
-	Reason   string
-	Note     string
+	Operator      operator.Principal
+	ReasonMessage string
+	Reason        string
+	Note          string
 }
 
 // DecisionRecord фиксирует действие и значение независимо от будущего состояния участника.
@@ -26,6 +28,7 @@ type DecisionRecord struct {
 	ID       ids.UUID
 	TenantID ids.TenantID
 	Decision
+	Actor  string
 	Action string
 	Value  string
 	At     time.Time
@@ -46,6 +49,9 @@ func (p *Participant) SetTrust(trust string, now time.Time) (bool, error) {
 		return false, nil
 	}
 	p.state.Trust = trust
+	if trust == Probation {
+		p.state.ApprovedOffers = 0
+	}
 	p.touch(now)
 	return true, nil
 }
@@ -58,4 +64,17 @@ func (p *Participant) ApproveOffer(threshold int, now time.Time) bool {
 	}
 	p.touch(now)
 	return true
+}
+
+// PromotionDecision не приписывает автоматическое повышение последнему оператору.
+func (p *Participant) PromotionDecision(id ids.UUID, now time.Time) DecisionRecord {
+	return DecisionRecord{
+		ID:       id,
+		TenantID: p.state.TenantID,
+		Actor:    "system",
+		Action:   "trust",
+		Value:    Trusted,
+		Decision: Decision{Note: fmt.Sprintf("Одобрено %d предложений", p.state.ApprovedOffers)},
+		At:       now,
+	}
 }

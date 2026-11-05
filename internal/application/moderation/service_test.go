@@ -184,8 +184,21 @@ func TestFiftiethApprovalAndReevaluation(t *testing.T) {
 	}
 	members := appparticipant.NewService(e.store, e.clock, &fake.IDs{})
 	journal, err := members.ListDecisions(ctx, "t1", participant.Page{Limit: 10})
-	if err != nil || journal.Total != 1 || journal.Items[0].Reason != "probation_completed" {
+	if err != nil || journal.Total != 1 || journal.Items[0].Reason != "" ||
+		journal.Items[0].Actor != "system" || journal.Items[0].Note != "Одобрено 50 предложений" {
 		t.Fatal(journal, err)
+	}
+	publisher := &fake.Publisher{}
+	status := moderationstatus.NewService(e.store, e.clock, publisher, "offer", "participant")
+	if err := status.HandleTask(ctx, statusTask(t, e, moderationstatus.TaskParticipant)); err != nil {
+		t.Fatal(err)
+	}
+	var event moderationstatus.ParticipantEvent
+	if err := json.Unmarshal(publisher.Messages()[0].Value, &event); err != nil {
+		t.Fatal(err)
+	}
+	if event.By != "system" || event.Reason != nil || event.Note != "Одобрено 50 предложений" {
+		t.Fatal(event)
 	}
 	if err := e.service.Reevaluate(ctx, "t1"); err != nil {
 		t.Fatal(err)

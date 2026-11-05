@@ -173,7 +173,12 @@ func (r moderationDecisions) List(_ context.Context, t ids.TenantID, p ids.Produ
 			result = append(result, d)
 		}
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].At.After(result[j].At) })
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].At.Equal(result[j].At) {
+			return result[i].ID > result[j].ID
+		}
+		return result[i].At.After(result[j].At)
+	})
 	return result, nil
 }
 
@@ -219,11 +224,17 @@ func (r moderationRules) ListReasons(_ context.Context) ([]moderation.ReasonCode
 }
 
 func (r moderationRules) PutReason(_ context.Context, reason moderation.ReasonCode) error {
+	if _, ok := r.d.reasons[reason.Code]; !ok {
+		return moderation.ErrNotFound
+	}
 	r.d.reasons[reason.Code] = reason
 	return nil
 }
 
 func (r participantDecisions) Add(_ context.Context, d participant.DecisionRecord) error {
+	if d.Actor == "" {
+		d.Actor = "operator"
+	}
 	r.d.participantDecisions = append(r.d.participantDecisions, d)
 	return nil
 }
@@ -239,7 +250,12 @@ func (r participantDecisions) List(
 			result = append(result, d)
 		}
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].At.After(result[j].At) })
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].At.Equal(result[j].At) {
+			return result[i].ID > result[j].ID
+		}
+		return result[i].At.After(result[j].At)
+	})
 	return window(result, page.Limit, page.Offset), len(result), nil
 }
 
@@ -262,11 +278,11 @@ func (r moderationDecisions) Cache(_ context.Context, key string, value moderati
 	r.d.cached[key] = value
 	return nil
 }
-func (r moderationRules) RemoveReason(_ context.Context, code string) error {
-	if _, ok := r.d.reasons[code]; !ok {
-		return moderation.ErrNotFound
+func (r moderationRules) AddReason(_ context.Context, reason moderation.ReasonCode) error {
+	if _, ok := r.d.reasons[reason.Code]; ok {
+		return moderation.ErrReasonExists
 	}
-	delete(r.d.reasons, code)
+	r.d.reasons[reason.Code] = reason
 	return nil
 }
 

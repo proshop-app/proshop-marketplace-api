@@ -12,6 +12,7 @@ import (
 
 // CaseState снимок дела для хранения и проверки версии решения.
 type CaseState struct {
+	Card      *ReviewCard   `json:"card,omitempty"`
 	ID        ids.UUID      `json:"id"`
 	TenantID  ids.TenantID  `json:"tenantId"`
 	ProductID ids.ProductID `json:"productId"`
@@ -41,8 +42,9 @@ func (e *CaseConflict) Error() string { return ErrCaseConflict.Error() }
 func (e *CaseConflict) Unwrap() error { return ErrCaseConflict }
 
 // NewCase фиксирует причины на момент открытия, независимо от будущих правил.
-func NewCase(id ids.UUID, verdict VerdictState, source, note string, now time.Time) *Case {
+func NewCase(id ids.UUID, verdict VerdictState, source, note string, now time.Time, card *ReviewCard) *Case {
 	return &Case{state: CaseState{
+		Card:      cloneCard(card),
 		ID:        id,
 		TenantID:  verdict.TenantID,
 		ProductID: verdict.ProductID,
@@ -58,6 +60,7 @@ func NewCase(id ids.UUID, verdict VerdictState, source, note string, now time.Ti
 
 // RestoreCase восстанавливает исходную версию для условного обновления.
 func RestoreCase(s CaseState) *Case {
+	s.Card = cloneCard(s.Card)
 	s.Reasons = slices.Clone(s.Reasons)
 	if s.DecidedAt != nil {
 		at := *s.DecidedAt
@@ -69,6 +72,7 @@ func RestoreCase(s CaseState) *Case {
 // State отделяет снимок от изменяемого состояния агрегата.
 func (c *Case) State() CaseState {
 	s := c.state
+	s.Card = cloneCard(s.Card)
 	s.Reasons = slices.Clone(s.Reasons)
 	if s.DecidedAt != nil {
 		t := *s.DecidedAt
@@ -84,7 +88,7 @@ func (c *Case) Origin() CaseState { return RestoreCase(c.origin).State() }
 func (c *Case) MarkSaved() { c.origin = c.State() }
 
 // Refresh обновляет открытое дело или закрывает его при исчезновении оснований.
-func (c *Case) Refresh(v VerdictState, now time.Time) bool {
+func (c *Case) Refresh(v VerdictState, now time.Time, card *ReviewCard) bool {
 	if c.state.Status != Open {
 		return false
 	}
@@ -93,6 +97,9 @@ func (c *Case) Refresh(v VerdictState, now time.Time) bool {
 		c.state.DecidedAt = &now
 	} else if c.state.Revision == v.Revision && reflect.DeepEqual(c.state.Reasons, v.Reasons) {
 		return false
+	}
+	if c.state.Revision != v.Revision {
+		c.state.Card = cloneCard(card)
 	}
 	c.state.Revision = v.Revision
 	c.state.Reasons = slices.Clone(v.Reasons)

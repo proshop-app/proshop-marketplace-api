@@ -14,14 +14,14 @@ const (
  FROM moderation_cases WHERE status = 'open' GROUP BY tenant_id`
 	caseColumns = `id, tenant_id, product_id, revision,
  source, status, reasons, note,
- opened_at, decided_at, version`
+ opened_at, decided_at, version, card`
 	selectModerationCase = `SELECT ` + caseColumns + ` FROM moderation_cases WHERE id = $1`
 	insertModerationCase = `INSERT INTO moderation_cases (
  id, tenant_id, product_id, revision,
  source, status, reasons, note,
- opened_at, decided_at, version
+ opened_at, decided_at, version, card
  ) VALUES (
- $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+ $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
  ) ON CONFLICT DO NOTHING`
 	updateModerationCase = `UPDATE moderation_cases SET
  tenant_id = $2,
@@ -33,8 +33,9 @@ const (
  note = $8,
  opened_at = $9,
  decided_at = $10,
- version = $11
- WHERE id = $1 AND version = $12 AND status = $13`
+ version = $11,
+ card = $12
+ WHERE id = $1 AND version = $13 AND status = $14`
 	countModerationCases = `SELECT count(*) FROM moderation_cases
  WHERE ($1 = '' OR status = $1) AND ($2 = '' OR tenant_id = $2) AND ($3 = '' OR source = $3)`
 	listModerationCases = `SELECT ` + caseColumns + ` FROM moderation_cases
@@ -55,7 +56,7 @@ func (r *ModerationCases) Get(ctx context.Context, id ids.UUID) (*moderation.Cas
 
 func scanModerationCase(row rowScanner) (*moderation.Case, error) {
 	var s moderation.CaseState
-	var reasons []byte
+	var reasons, card []byte
 	err := row.Scan(
 		&s.ID,
 		&s.TenantID,
@@ -68,6 +69,7 @@ func scanModerationCase(row rowScanner) (*moderation.Case, error) {
 		&s.OpenedAt,
 		&s.DecidedAt,
 		&s.Version,
+		&card,
 	)
 	if notFound(err) {
 		return nil, moderation.ErrNotFound
@@ -78,6 +80,11 @@ func scanModerationCase(row rowScanner) (*moderation.Case, error) {
 	if err := json.Unmarshal(reasons, &s.Reasons); err != nil {
 		return nil, err
 	}
+	if len(card) > 0 {
+		if err := json.Unmarshal(card, &s.Card); err != nil {
+			return nil, err
+		}
+	}
 	return moderation.RestoreCase(s), nil
 }
 
@@ -87,6 +94,13 @@ func (r *ModerationCases) Save(ctx context.Context, value *moderation.Case) erro
 	reasons, err := json.Marshal(s.Reasons)
 	if err != nil {
 		return err
+	}
+	var card []byte
+	if s.Card != nil {
+		card, err = json.Marshal(s.Card)
+		if err != nil {
+			return err
+		}
 	}
 	args := []any{
 		s.ID,
@@ -100,6 +114,7 @@ func (r *ModerationCases) Save(ctx context.Context, value *moderation.Case) erro
 		s.OpenedAt,
 		s.DecidedAt,
 		s.Version,
+		card,
 	}
 	query := insertModerationCase
 	if value.Origin().Version > 0 {

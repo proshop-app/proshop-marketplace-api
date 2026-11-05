@@ -124,7 +124,7 @@ func TestCase(t *testing.T) {
 	now := time.Now()
 	v := moderation.NewVerdict("t1", "p1")
 	v.Evaluate(1, 1, moderation.Rules{}, moderation.Input{Probation: true}, now)
-	c := moderation.NewCase("00000000-0000-4000-8000-000000000001", v.State(), moderation.Rule, "", now)
+	c := moderation.NewCase("00000000-0000-4000-8000-000000000001", v.State(), moderation.Rule, "", now, nil)
 	c.MarkSaved()
 	if _, err := c.Decide(0, 1, "allow", "заметка", now); !errors.Is(err, moderation.ErrCaseConflict) {
 		t.Fatal(err)

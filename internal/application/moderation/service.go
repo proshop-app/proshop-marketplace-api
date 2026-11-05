@@ -91,14 +91,18 @@ func (s *Service) Evaluate(
 	if err != nil && !errors.Is(err, moderation.ErrNotFound) {
 		return err
 	}
+	card, err := reviewCard(ctx, tx, p.TenantID, p.ProductID)
+	if err != nil {
+		return err
+	}
 	if c != nil {
-		if c.Refresh(verdict.State(), now) {
+		if c.Refresh(verdict.State(), now, &card) {
 			if err := tx.ModerationCases().Save(ctx, c); err != nil {
 				return err
 			}
 		}
 	} else if verdict.State().Status == moderation.Pending {
-		c = moderation.NewCase(s.ids.NewUUID(), verdict.State(), moderation.Rule, "", now)
+		c = moderation.NewCase(s.ids.NewUUID(), verdict.State(), moderation.Rule, "", now, &card)
 		if err := tx.ModerationCases().Save(ctx, c); err != nil {
 			return err
 		}

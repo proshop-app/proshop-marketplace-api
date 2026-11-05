@@ -31,7 +31,7 @@ func TestModerationRepositories(t *testing.T) {
 	identities := random.IDs{}
 	v := moderation.NewVerdict("t1", "p1")
 	v.Evaluate(1, 1, moderation.Rules{Revision: 1}, moderation.Input{Probation: true}, now)
-	c := moderation.NewCase(identities.NewUUID(), v.State(), moderation.Rule, "", now)
+	c := moderation.NewCase(identities.NewUUID(), v.State(), moderation.Rule, "", now, nil)
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		if err := tx.ModerationVerdicts().Save(ctx, v); err != nil {
 			return err
@@ -67,7 +67,7 @@ func TestModerationRepositories(t *testing.T) {
 	if !errors.Is(err, moderation.ErrConflict) {
 		t.Fatalf("конфликт вердикта: %v", err)
 	}
-	duplicate := moderation.NewCase(identities.NewUUID(), v.State(), moderation.Rule, "", now)
+	duplicate := moderation.NewCase(identities.NewUUID(), v.State(), moderation.Rule, "", now, nil)
 	err = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error { return tx.ModerationCases().Save(ctx, duplicate) })
 	if !errors.Is(err, moderation.ErrCaseConflict) {
 		t.Fatalf("уникальность открытого дела: %v", err)
@@ -177,7 +177,7 @@ func TestModerationRulesRepository(t *testing.T) {
 		if final.Revision != before.Revision+2 {
 			t.Fatal(final)
 		}
-		if err := repo.PutReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Причина"}); err != nil {
+		if err := repo.AddReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Причина"}); err != nil {
 			return err
 		}
 		reasons, err := repo.ListReasons(ctx)
@@ -253,7 +253,7 @@ func TestModerationCachedDecisionAndStats(t *testing.T) {
 	identities := random.IDs{}
 	v := moderation.NewVerdict("t1", "p1")
 	v.Evaluate(1, 1, moderation.Rules{Revision: 1}, moderation.Input{Probation: true}, now)
-	c := moderation.NewCase(identities.NewUUID(), v.State(), moderation.Rule, "", now)
+	c := moderation.NewCase(identities.NewUUID(), v.State(), moderation.Rule, "", now, nil)
 	cached := moderation.CachedDecision{Fingerprint: "f1", Result: c.State(), ExpiresAt: now.Add(time.Hour)}
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		if err := tx.ModerationVerdicts().Save(ctx, v); err != nil {
@@ -296,10 +296,10 @@ func TestModerationCachedDecisionAndStats(t *testing.T) {
 		if len(stats) != 1 || stats[0].TenantID != "t1" || stats[0].Count != 1 {
 			t.Fatal(stats)
 		}
-		if err := tx.ModerationRules().PutReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Причина"}); err != nil {
+		if err := tx.ModerationRules().AddReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Причина"}); err != nil {
 			return err
 		}
-		return tx.ModerationRules().RemoveReason(ctx, "r1")
+		return tx.ModerationRules().PutReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Текст"})
 	})
 	if err != nil {
 		t.Fatal(err)

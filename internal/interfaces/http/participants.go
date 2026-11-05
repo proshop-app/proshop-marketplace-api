@@ -100,7 +100,7 @@ func toParticipantJSON(view appparticipant.View) participantJSON {
 }
 
 func (h *participantHandlers) list(w http.ResponseWriter, r *http.Request) {
-	page := participant.Page{Limit: appparticipant.MaxPageLimit}
+	page := participant.Page{Limit: appparticipant.MaxPageLimit, Trust: r.URL.Query().Get("trust")}
 
 	for name, target := range map[string]*int{"limit": &page.Limit, "offset": &page.Offset} {
 		if raw := r.URL.Query().Get(name); raw != "" {
