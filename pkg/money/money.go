@@ -56,6 +56,7 @@ func ParseRubles(value string) (Money, error) {
 	}
 
 	rubles, err := strconv.ParseInt(whole, 10, 64)
+
 	if err != nil || rubles > (math.MaxInt64-cents)/100 {
 		return Money{}, ErrOverflow.WithMessage("сумма вне допустимого диапазона: " + value)
 	}

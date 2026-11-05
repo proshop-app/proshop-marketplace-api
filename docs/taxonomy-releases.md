@@ -6,6 +6,7 @@ OpenSearch для загрузки не нужен. После установк�
 постоянная PostgreSQL маркетплейса. Магазины получают данные через API.
 
 Покрытие начальной поставки — [29 направлений](taxonomy-coverage.md).
+Имена узлов, адреса категорий и целевой вид дерева — [taxonomy-structure.md](taxonomy-structure.md).
 Исходные файлы в `internal/infrastructure/taxonomydata/data/`:
 
 - `attributes.json` — общие определения атрибутов;
