@@ -387,3 +387,10 @@ make taxonomy-load FILE=taxonomy/example.yaml
 `make dev` требует запущенный `proshop-search` с тем же `SEARCH_MARKETPLACE_TOKEN`;
 одного compose этого репозитория для поиска предложений недостаточно.
 API таксономии, её PostgreSQL-таблицы и поставка данных используют реализацию master.
+
+Реестр справочных сущностей принадлежит площадке: 19 поставок в
+`deploy/reference`, применение после миграций — `make reference-apply`.
+Контракт потребителей и пополнение описаны в [docs/reference.md](docs/reference.md).
+Сбор кандидатов требует отдельного `SEARCH_CANDIDATES_TOKEN` для поиска;
+`REFERENCE_CANDIDATES_INTERVAL=1h` задаёт период, `0` выключает сбор.
+При пустом токене сборщик не запускается.

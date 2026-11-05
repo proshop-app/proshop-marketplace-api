@@ -1,0 +1,46 @@
+{
+    "dictionary": "country",
+    "release": 1,
+    "entriesSha256": "6d9d548dbeb2457f2fa67adf5327e6dfa9f3ada884a35c6a75caf299b01e9062",
+    "verifiedOn": "2026-11-04",
+    "statusMeaning": "confirmed means an entry derived from the pinned Unicode CLDR source. This country/territory label does not establish a product’s origin.",
+    "derivation": "CLDR 48.0.0; canonical = ru territory display name; aliases = en display name, alpha-2 and alpha-3 codes, and CLDR ru/en alt names; aliases equivalent under normalizer v1 are removed.",
+    "selection": "Two-letter mappings with numeric codes 001–899 and display names present in both ru and en. This produces 249 ISO 3166-1 countries and territories. Historical codes without current display names, reserved/special 9xx codes, macroregions and CLDR-only territories are excluded.",
+    "directionsMeaning": "Empty list: country/territory is universal across retail directions.",
+    "coverage": {
+        "entries": 249,
+        "includesTerritories": true,
+        "locales": [
+            "ru",
+            "en"
+        ],
+        "version": "48.0.0"
+    },
+    "sources": [
+        {
+            "id": "cldr-ru",
+            "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/48.0.0/cldr-json/cldr-localenames-full/main/ru/territories.json",
+            "sha256": "305ba1f9eecb1b0151ab081a111aaa8a5898d38c9d57bfbfa125734e508a2389"
+        },
+        {
+            "id": "cldr-en",
+            "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/48.0.0/cldr-json/cldr-localenames-full/main/en/territories.json",
+            "sha256": "158c1d575308f7e46912edbeda435c8fe2ef5dad280798231f3a432e406b1807"
+        },
+        {
+            "id": "cldr-codes",
+            "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/48.0.0/cldr-json/cldr-core/supplemental/codeMappings.json",
+            "sha256": "0d1ef50b92c1140e5847d22d96faf1a9c35543b0dedf8e9a2fcb87e4c51b9ed6"
+        },
+        {
+            "id": "unicode-license",
+            "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/48.0.0/LICENSE",
+            "sha256": "220ba0e1c43b99530d2d5bdb892a99dca0989414f51ab695ecd90163eaa1ec3b"
+        }
+    ],
+    "license": {
+        "spdx": "Unicode-3.0",
+        "file": "LICENSE",
+        "notice": "Copyright © 2015-2024 Unicode, Inc. The complete upstream license notice accompanies this derived dataset."
+    }
+}

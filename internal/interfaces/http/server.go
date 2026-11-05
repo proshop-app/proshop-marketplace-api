@@ -147,6 +147,10 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
 		{http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},
 
+		{http.MethodGet, "/internal/reference", reader(registry.discovery)},
+		{http.MethodGet, "/api/v1/internal/reference", reader(registry.discovery)},
+		{http.MethodGet, "/api/v1/internal/reference/{dict}/snapshot", reader(registry.snapshot)},
+		{http.MethodGet, "/api/v1/internal/reference/{dict}/entries/{id}", reader(registry.get)},
 		{http.MethodGet, "/internal/reference/{dict}/snapshot", reader(registry.snapshot)},
 		{http.MethodPost, "/internal/reference/{dict}/resolve", reader(registry.resolve)},
 		{http.MethodGet, "/internal/reference/{dict}/entries", reader(registry.list)},

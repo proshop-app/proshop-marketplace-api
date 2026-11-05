@@ -471,3 +471,13 @@ seller_unreachable или delivery_unavailable, либо истечение ок
 блок магазин отправляет новой ревизией проекции. Прямая доставка причин в
 админку магазина потребует отдельного авторизованного стыка: операторский
 токен не передаётся магазинам.
+
+## Реестр справочных сущностей
+
+Владелец реестра и его пополнения — proshop-marketplace. proshop-server
+и proshop-search потребляют снимки площадки, а не ведут собственный реестр.
+Discovery: `GET /api/v1/internal/reference`; снимок:
+`GET /api/v1/internal/reference/{code}/snapshot?since=`; запись:
+`GET /api/v1/internal/reference/{code}/entries/{id}` (200/404).
+Все три маршрута принимают `Authorization: Bearer <REFERENCE_READ_TOKEN>`.
+Поля и семантика дельт описаны в [reference.md](reference.md).

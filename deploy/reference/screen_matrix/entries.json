@@ -1,0 +1,83 @@
+[
+  {
+    "canonical": "IPS",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 0,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "TN",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 1,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "VA",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 2,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "OLED",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 3,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "AMOLED",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 4,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "TFT",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 5,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "E-Ink",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 6,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Mini LED",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 7,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Micro LED",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 8,
+      "directions": []
+    }
+  }
+]

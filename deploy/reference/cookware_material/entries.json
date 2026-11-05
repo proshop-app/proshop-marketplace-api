@@ -1,0 +1,92 @@
+[
+  {
+    "canonical": "Нержавеющая сталь",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 0,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Алюминий",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 1,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Чугун",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 2,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Стекло",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 3,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Керамика",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 4,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Фарфор",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 5,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Пластик",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 6,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Силикон",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 7,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Дерево",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 8,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Комбинированный",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 9,
+      "directions": []
+    }
+  }
+]

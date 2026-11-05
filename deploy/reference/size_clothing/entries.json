@@ -1,0 +1,74 @@
+[
+  {
+    "canonical": "XS",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 0,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "S",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 1,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "M",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 2,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "L",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 3,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "XL",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 4,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "XXL",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 5,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "3XL",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 6,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "4XL",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 7,
+      "directions": []
+    }
+  }
+]

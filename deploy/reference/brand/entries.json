@@ -1,0 +1,629 @@
+[
+  {
+    "canonical": "Apple",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 0,
+      "directions": [
+        "electronics",
+        "computers"
+      ]
+    }
+  },
+  {
+    "canonical": "Samsung",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Самсунг",
+        "kind": "locale",
+        "locale": "ru"
+      }
+    ],
+    "metadata": {
+      "order": 1,
+      "directions": [
+        "electronics",
+        "computers",
+        "appliances"
+      ]
+    }
+  },
+  {
+    "canonical": "Xiaomi",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Сяоми",
+        "kind": "locale",
+        "locale": "ru"
+      }
+    ],
+    "metadata": {
+      "order": 2,
+      "directions": [
+        "electronics",
+        "computers",
+        "appliances"
+      ]
+    }
+  },
+  {
+    "canonical": "Lenovo",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Леново",
+        "kind": "locale",
+        "locale": "ru"
+      }
+    ],
+    "metadata": {
+      "order": 3,
+      "directions": [
+        "computers",
+        "electronics"
+      ]
+    }
+  },
+  {
+    "canonical": "Sony",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 4,
+      "directions": [
+        "electronics",
+        "computers"
+      ]
+    }
+  },
+  {
+    "canonical": "Bosch",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Бош",
+        "kind": "locale",
+        "locale": "ru"
+      }
+    ],
+    "metadata": {
+      "order": 5,
+      "directions": [
+        "appliances"
+      ]
+    }
+  },
+  {
+    "canonical": "Siemens",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 6,
+      "directions": [
+        "appliances"
+      ]
+    }
+  },
+  {
+    "canonical": "Gaggenau",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 7,
+      "directions": [
+        "appliances"
+      ]
+    }
+  },
+  {
+    "canonical": "NEFF",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 8,
+      "directions": [
+        "appliances"
+      ]
+    }
+  },
+  {
+    "canonical": "Electrolux",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 9,
+      "directions": [
+        "appliances"
+      ]
+    }
+  },
+  {
+    "canonical": "AEG",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 10,
+      "directions": [
+        "appliances"
+      ]
+    }
+  },
+  {
+    "canonical": "Zanussi",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 11,
+      "directions": [
+        "appliances"
+      ]
+    }
+  },
+  {
+    "canonical": "Tefal",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Тефаль",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "T-fal",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "order": 12,
+      "directions": [
+        "appliances",
+        "kitchen"
+      ]
+    }
+  },
+  {
+    "canonical": "Moulinex",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 13,
+      "directions": [
+        "appliances",
+        "kitchen"
+      ]
+    }
+  },
+  {
+    "canonical": "Nike",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 14,
+      "directions": [
+        "clothing",
+        "shoes",
+        "sports",
+        "accessories"
+      ]
+    }
+  },
+  {
+    "canonical": "Jordan",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 15,
+      "directions": [
+        "clothing",
+        "shoes",
+        "sports",
+        "accessories"
+      ]
+    }
+  },
+  {
+    "canonical": "Converse",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 16,
+      "directions": [
+        "clothing",
+        "shoes",
+        "sports",
+        "accessories"
+      ]
+    }
+  },
+  {
+    "canonical": "adidas",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 17,
+      "directions": [
+        "clothing",
+        "shoes",
+        "sports",
+        "accessories"
+      ]
+    }
+  },
+  {
+    "canonical": "PUMA",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 18,
+      "directions": [
+        "clothing",
+        "shoes",
+        "sports",
+        "accessories"
+      ]
+    }
+  },
+  {
+    "canonical": "Vans",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 19,
+      "directions": [
+        "clothing",
+        "shoes",
+        "accessories",
+        "outdoors"
+      ]
+    }
+  },
+  {
+    "canonical": "The North Face",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 20,
+      "directions": [
+        "clothing",
+        "shoes",
+        "accessories",
+        "outdoors"
+      ]
+    }
+  },
+  {
+    "canonical": "Timberland",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 21,
+      "directions": [
+        "clothing",
+        "shoes",
+        "accessories",
+        "outdoors"
+      ]
+    }
+  },
+  {
+    "canonical": "L’Oréal Paris",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "L'Oréal Paris",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "order": 22,
+      "directions": [
+        "beauty"
+      ]
+    }
+  },
+  {
+    "canonical": "Garnier",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Гарньер",
+        "kind": "locale",
+        "locale": "ru"
+      }
+    ],
+    "metadata": {
+      "order": 23,
+      "directions": [
+        "beauty"
+      ]
+    }
+  },
+  {
+    "canonical": "Maybelline New York",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Maybelline",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "order": 24,
+      "directions": [
+        "beauty"
+      ]
+    }
+  },
+  {
+    "canonical": "NYX Professional Makeup",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "NYX Professional Make Up",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "order": 25,
+      "directions": [
+        "beauty"
+      ]
+    }
+  },
+  {
+    "canonical": "CeraVe",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 26,
+      "directions": [
+        "beauty"
+      ]
+    }
+  },
+  {
+    "canonical": "La Roche-Posay",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 27,
+      "directions": [
+        "beauty"
+      ]
+    }
+  },
+  {
+    "canonical": "Vichy",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 28,
+      "directions": [
+        "beauty"
+      ]
+    }
+  },
+  {
+    "canonical": "Lancôme",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 29,
+      "directions": [
+        "beauty"
+      ]
+    }
+  },
+  {
+    "canonical": "Kérastase",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 30,
+      "directions": [
+        "beauty"
+      ]
+    }
+  },
+  {
+    "canonical": "DEWALT",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 31,
+      "directions": [
+        "tools",
+        "renovation",
+        "garden"
+      ]
+    }
+  },
+  {
+    "canonical": "CRAFTSMAN",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 32,
+      "directions": [
+        "tools",
+        "renovation",
+        "garden"
+      ]
+    }
+  },
+  {
+    "canonical": "STANLEY",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 33,
+      "directions": [
+        "tools",
+        "renovation",
+        "garden"
+      ]
+    }
+  },
+  {
+    "canonical": "BLACK+DECKER",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 34,
+      "directions": [
+        "tools",
+        "renovation",
+        "garden"
+      ]
+    }
+  },
+  {
+    "canonical": "Husqvarna",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 35,
+      "directions": [
+        "garden",
+        "tools"
+      ]
+    }
+  },
+  {
+    "canonical": "Gardena",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 36,
+      "directions": [
+        "garden",
+        "tools"
+      ]
+    }
+  },
+  {
+    "canonical": "Makita",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 37,
+      "directions": [
+        "tools",
+        "garden",
+        "renovation"
+      ]
+    }
+  },
+  {
+    "canonical": "Kärcher",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Керхер",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Kaercher",
+        "kind": "translit",
+        "locale": "de"
+      }
+    ],
+    "metadata": {
+      "order": 38,
+      "directions": [
+        "appliances",
+        "garden",
+        "tools"
+      ]
+    }
+  },
+  {
+    "canonical": "LEGO",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 39,
+      "directions": [
+        "toys",
+        "hobby"
+      ]
+    }
+  },
+  {
+    "canonical": "Mattel",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 40,
+      "directions": [
+        "toys"
+      ]
+    }
+  },
+  {
+    "canonical": "Barbie",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 41,
+      "directions": [
+        "toys"
+      ]
+    }
+  },
+  {
+    "canonical": "Fisher-Price",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 42,
+      "directions": [
+        "toys"
+      ]
+    }
+  },
+  {
+    "canonical": "Hot Wheels",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Hot-Wheels",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "order": 43,
+      "directions": [
+        "toys"
+      ]
+    }
+  },
+  {
+    "canonical": "Chicco",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 44,
+      "directions": [
+        "baby",
+        "toys"
+      ]
+    }
+  },
+  {
+    "canonical": "Philips Avent",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 45,
+      "directions": [
+        "baby"
+      ]
+    }
+  }
+]

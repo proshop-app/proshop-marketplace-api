@@ -124,6 +124,7 @@ func (s *Service) Snapshot(ctx context.Context, code string, since *int64) (Snap
 	var snapshot Snapshot
 	err := s.read(ctx, code, func(ctx context.Context, repo reference.Repository, dict *reference.Dictionary) error {
 		snapshot = Snapshot{
+			Kind:       dict.State().Kind,
 			Dictionary: code,
 			Revision:   dict.Revision(),
 			Normalizer: dict.Normalizer(),

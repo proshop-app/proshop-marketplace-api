@@ -293,3 +293,55 @@ go run ./cmd/marketplace reference rollback --dir path/to/delivery
 - Операторского отката произвольной ревизии через API. Механизм обратных
   образов есть и используется откатом поставки.
 - Закрытых словарей: перечисления таксономии переносятся отдельным этапом.
+
+## Поставка словарей и потребители (5 ноября 2026)
+
+Площадка владеет реестром и его пополнением; proshop-server и proshop-search —
+потребители снимков. Миграция `00028_reference_dictionaries.sql` добавляет
+18 словарей к `brand`; следующая свободная миграция — `00029`.
+Открытые словари: `brand`, `country`, `material`. Закрытые:
+`color`, `gender`, `season`, `body_material`, `cookware_material`,
+`textile_material`, `jewelry_metal`, `book_binding`, `storage_type`,
+`screen_matrix`, `battery_chemistry`, `firmness`, `size_clothing`,
+`size_shoes_eu`, `size_kids_height`, `size_ring`. Только `brand` имеет `identity`.
+
+Поставки находятся в `deploy/reference/<code>`; воспроизводимая генерация:
+`python3 scripts/reference-bundles.py "$REFERENCE_DATA" deploy/reference`.
+SHA-256 считается по байтам `entries.json`. Метаданные сохраняют label, order,
+directions и поля meta без null; provenance и имеющаяся лицензия копируются
+без изменений. `normalizer-v1.json` сохранён в корне поставок.
+После миграций: `marketplace reference apply-all --dir deploy/reference`
+или `make reference-apply`. Подкаталоги обходятся по имени; повтор уже
+применённого релиза ничего не меняет. При ошибке команда останавливается;
+после устранения причины её можно повторить.
+
+`GET /api/v1/internal/reference` возвращает
+`{"schemaVersion":1,"dictionaries":[{"code":"brand","kind":"open","revision":12}]}`.
+`GET /api/v1/internal/reference/{code}/snapshot?since=` возвращает прежний
+снимок/дельту с дополнительным `kind`. В каждой записи есть `directions`
+(по умолчанию `[]`), `order` (по умолчанию 0) и `label`, если он задан.
+Эти поля берутся из metadata. Чтение записи по id доступно по
+`GET /api/v1/internal/reference/{code}/entries/{id}` (200/404).
+Авторизация всех этих запросов: `Authorization: Bearer <REFERENCE_READ_TOKEN>`.
+Прежние девять маршрутов `/internal/reference/{dict}/...` сохранены;
+discovery также доступен по `/internal/reference`.
+
+## Сбор кандидатов из каталога
+
+`REFERENCE_CANDIDATES_INTERVAL` — интервал (по умолчанию `1h`, `0` выключает).
+`SEARCH_CANDIDATES_TOKEN` — отдельный секрет для `X-Admin-Id` ручки поиска
+`GET /api/v1/internal/catalog/attribute-values?key=<code>&size=500&after=<cursor>`.
+На стороне поиска это `SEARCH_ATTRIBUTE_CANDIDATES_TOKEN`;
+`SEARCH_MARKETPLACE_TOKEN` для этой ручки не используется. При пустом токене
+сборщик не запускается, чтобы существующие установки могли обновиться до
+выдачи нового секрета. При включении первый обход выполняется сразу.
+
+Сборщик обходит только open-словари, проверяет владельцев нормализованных
+ключей пачкой на страницу и создаёт только свободные записи: candidate,
+source=catalog, occurrences=documents (0 означает прежнее значение 1).
+В metadata.catalog записываются documents, sellers и observedAt в RFC3339 UTC.
+Существующие записи любого статуса остаются без изменений. Ошибка страницы
+(включая 400, 429 и 503) записывается в журнал; обход продолжается со следующего
+словаря. Немедленных повторов нет, следующая попытка — в очередном обходе.
+Метрики: `marketplace_reference_candidates_created_total{dictionary}` и
+`marketplace_reference_candidates_failures_total`.

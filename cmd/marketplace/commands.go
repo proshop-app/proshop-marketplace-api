@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
@@ -24,7 +25,9 @@ import (
 )
 
 // errReferenceUsage — команда поставки реестра вызвана без действия или каталога.
-var errReferenceUsage = errors.New("использование: marketplace reference check|apply|rollback --dir <каталог поставки>")
+var errReferenceUsage = errors.New(
+	"использование: marketplace reference check|apply|apply-all|rollback --dir <каталог>",
+)
 
 // reindex перестраивает индекс предложений из проекции.
 func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
@@ -87,7 +90,7 @@ func referenceDelivery(ctx context.Context, cfg config.Config, _ *slog.Logger) e
 }
 
 func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string, output io.Writer) error {
-	if len(args) == 0 || (args[0] != "check" && args[0] != "apply" && args[0] != "rollback") {
+	if len(args) == 0 || (args[0] != "check" && args[0] != "apply" && args[0] != "rollback" && args[0] != "apply-all") {
 		return errReferenceUsage
 	}
 	options := flag.NewFlagSet("reference", flag.ContinueOnError)
@@ -95,6 +98,22 @@ func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string,
 	dir := options.String("dir", "", "каталог с manifest.json и entries.json")
 	if err := options.Parse(args[1:]); err != nil || options.NArg() != 0 || *dir == "" {
 		return errReferenceUsage
+	}
+	if args[0] == "apply-all" {
+		directories, err := os.ReadDir(*dir)
+		if err != nil {
+			return err
+		}
+		for _, directory := range directories {
+			if !directory.IsDir() {
+				continue
+			}
+			child := []string{"apply", "--dir", filepath.Join(*dir, directory.Name())}
+			if err := runReferenceDelivery(ctx, cfg, child, output); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	delivery, summary, err := referencedata.Load(os.DirFS(*dir))
 	if err != nil {

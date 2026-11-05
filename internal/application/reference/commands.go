@@ -36,6 +36,7 @@ func (s *Service) Create(ctx context.Context, cmd CreateCommand) (EntryResult, e
 			return s.meet(ctx, m, owner, &result)
 		}
 		input := reference.NewEntryInput{
+			Occurrences:      cmd.Occurrences,
 			ID:               s.ids.NewUUID(),
 			CanonicalAliasID: s.ids.NewUUID(),
 			Name:             cmd.Name,

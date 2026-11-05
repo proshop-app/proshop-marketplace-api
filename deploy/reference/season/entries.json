@@ -1,0 +1,38 @@
+[
+  {
+    "canonical": "Лето",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 0,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Зима",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 1,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Демисезон",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 2,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Всесезонный",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 3,
+      "directions": []
+    }
+  }
+]

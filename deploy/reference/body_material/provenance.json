@@ -1,0 +1,84 @@
+{
+    "version": 1,
+    "verifiedOn": "2026-11-04",
+    "dataSha256": "588f4fdfae78c4ad58644fe42ef3a82805124d6be1649d9379bb28567dba5cbf",
+    "dictionaries": 16,
+    "entries": 167,
+    "source": {
+        "url": "https://github.com/proshop-app/proshop-server/blob/46479ffbd634c51509eda17c82cba96814e67772/src/modules/attribute/data/store-attributes.v1.json",
+        "path": "src/modules/attribute/data/store-attributes.v1.json",
+        "repositoryCommit": "46479ffbd634c51509eda17c82cba96814e67772",
+        "sha256": "21962a2dd19531a5c98e592090a70eddf8d233d4db58bdcdd339835daaef7b52",
+        "bundleVersion": 3
+    },
+    "derivation": "Every enum definition becomes one closed dictionary; every original value is retained in its original order with order equal to its zero-based index. No values, aliases, swatches or inferred metadata are added.",
+    "coverage": [
+        {
+            "code": "color",
+            "entries": 18
+        },
+        {
+            "code": "gender",
+            "entries": 5
+        },
+        {
+            "code": "season",
+            "entries": 4
+        },
+        {
+            "code": "body_material",
+            "entries": 7
+        },
+        {
+            "code": "cookware_material",
+            "entries": 10
+        },
+        {
+            "code": "textile_material",
+            "entries": 11
+        },
+        {
+            "code": "jewelry_metal",
+            "entries": 8
+        },
+        {
+            "code": "book_binding",
+            "entries": 5
+        },
+        {
+            "code": "storage_type",
+            "entries": 3
+        },
+        {
+            "code": "screen_matrix",
+            "entries": 9
+        },
+        {
+            "code": "battery_chemistry",
+            "entries": 6
+        },
+        {
+            "code": "firmness",
+            "entries": 4
+        },
+        {
+            "code": "size_clothing",
+            "entries": 8
+        },
+        {
+            "code": "size_shoes_eu",
+            "entries": 27
+        },
+        {
+            "code": "size_kids_height",
+            "entries": 21
+        },
+        {
+            "code": "size_ring",
+            "entries": 21
+        }
+    ],
+    "statusMeaning": "The core import confirms these values as the existing platform closed lists. This does not verify the properties of individual merchandise.",
+    "license": null,
+    "rightsNote": "Own existing platform enumeration; no third-party open-data license or legal certification is claimed."
+}

@@ -34,6 +34,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
@@ -62,6 +63,7 @@ type services struct {
 	janitor      *messaging.Janitor
 	parker       *messaging.Parker
 	reference    *appreference.Service
+	candidates   ports.ReferenceCandidates
 	// writer публикует события площадки; закрывается после остановки разбора outbox
 	writer *infrakafka.Writer
 }
@@ -131,6 +133,17 @@ func (s *server) services(ctx context.Context) (services, error) {
 	// корзина и покупка узнают об отказе участия первыми — по нему сверка настроек внеочередная
 	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
 	settings := appparticipant.NewSettings(uow, platform, now)
+	var candidates ports.ReferenceCandidates
+	if cfg.Reference.CandidatesInterval > 0 && cfg.Search.CandidatesToken != "" {
+		candidates, err = searchapi.NewCandidates(searchapi.Config{
+			URL:     cfg.Search.URL,
+			Token:   cfg.Search.CandidatesToken,
+			Timeout: cfg.Search.Timeout,
+		})
+		if err != nil {
+			return services{}, err
+		}
+	}
 	writer := infrakafka.NewWriter(cfg.Kafka.Brokers)
 	references := appreference.NewService(uow, now, identities, writer, appreference.Config{
 		Topic: cfg.Kafka.FullTopic(cfg.Kafka.ReferenceTopic),
@@ -247,6 +260,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		janitor:      janitor,
 		parker:       messaging.NewParker(uow),
 		reference:    references,
+		candidates:   candidates,
 		writer:       writer,
 	}, nil
 }
@@ -330,7 +344,17 @@ func (s *server) run(ctx context.Context) error {
 func (s *server) jobs() []func(context.Context) error {
 	cfg := s.cfg
 
-	return []func(context.Context) error{
+	runners := []func(context.Context) error{}
+	if s.app.candidates != nil {
+		runners = append(runners, jobs.NewReferenceCandidatesRunner(
+			s.app.reference,
+			s.app.candidates,
+			cfg.Reference.CandidatesInterval,
+			s.logger,
+			s.metrics,
+		).Run)
+	}
+	return append(runners, []func(context.Context) error{
 		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
 		jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, cfg.Outbox.Batch, s.logger, s.metrics).Run,
@@ -339,7 +363,7 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).Run,
 		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).Run,
 		jobs.NewModelKeyStatsRunner(postgres.NewModelKeyStats(s.store.pool), s.logger, s.metrics).Run,
-	}
+	}...)
 }
 
 // httpServer — HTTP с маршрутами маркетплейса и проверками зависимостей.

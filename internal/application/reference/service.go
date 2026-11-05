@@ -56,12 +56,13 @@ type AliasSpec struct {
 
 // CreateCommand — новая запись: оператор заводит подтверждённую, каталог — кандидата.
 type CreateCommand struct {
-	Dictionary string
-	Name       string
-	Status     reference.Status
-	Aliases    []AliasSpec
-	Metadata   json.RawMessage
-	Meta       reference.Meta
+	Occurrences int64
+	Dictionary  string
+	Name        string
+	Status      reference.Status
+	Aliases     []AliasSpec
+	Metadata    json.RawMessage
+	Meta        reference.Meta
 }
 
 // UpdateCommand — правка записи по ревизии If-Match; nil-поля не меняются.
@@ -145,6 +146,7 @@ type Resolution struct {
 
 // Snapshot — словарь для потребителя: полный или дельта после since.
 type Snapshot struct {
+	Kind       reference.Kind
 	Dictionary string
 	Revision   int64
 	Normalizer string

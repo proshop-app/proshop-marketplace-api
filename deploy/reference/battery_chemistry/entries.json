@@ -1,0 +1,56 @@
+[
+  {
+    "canonical": "Li-Ion",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 0,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Li-Pol",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 1,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ni-MH",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 2,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ni-Cd",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 3,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Свинцово-кислотный",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 4,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "LiFePO4",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 5,
+      "directions": []
+    }
+  }
+]

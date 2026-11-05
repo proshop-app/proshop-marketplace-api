@@ -1139,6 +1139,73 @@ paths:
                     default: 30
                     description: DELIVERY_SUBSIDY_MIN_PERCENT; действующая субсидия — max настройки с потолком и процента cost.
 
+  /internal/reference:
+    get:
+      tags: [reference]
+      summary: Доступные словари и их ревизии
+      operationId: referenceDiscovery
+      security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
+      responses:
+        "200":
+          description: Список словарей
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceDiscovery" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/internal/reference:
+    get:
+      tags: [reference]
+      summary: Доступные словари и их ревизии
+      operationId: referenceDiscoveryV1
+      security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
+      responses:
+        "200":
+          description: Список словарей
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceDiscovery" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/internal/reference/{dict}/snapshot:
+    get:
+      tags: [reference]
+      summary: Снимок словаря — полный или дельта после since
+      operationId: referenceSnapshotV1
+      security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
+      description: |
+        Без since, со since старше горизонта журнала (30 дней) или впереди головы — полный
+        снимок (full: true). Иначе дельта: текущие записи, затронутые после since, и
+        удалённые id. Потребитель сверяет normalizer со своей копией правила ключа.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - name: since
+          in: query
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: scope
+          in: query
+          description: Только global; частный слой магазина — следующий этап
+          schema: { type: string, enum: [global] }
+      responses:
+        "200":
+          description: Снимок
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceSnapshot" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/internal/reference/{dict}/entries/{id}:
+    get:
+      tags: [reference]
+      summary: Запись по id; объединённая отдаётся вместе с выжившей
+      operationId: referenceEntryV1
+      security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - { $ref: "#/components/parameters/ReferenceEntryId" }
+      responses:
+        "200": { $ref: "#/components/responses/ReferenceEntry" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /internal/reference/{dict}/snapshot:
     get:
       tags: [reference]
@@ -2135,12 +2202,27 @@ components:
         entries:
           type: array
           items: { $ref: "#/components/schemas/ReferenceEntry" }
+    ReferenceDiscovery:
+      type: object
+      required: [schemaVersion, dictionaries]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        dictionaries:
+          type: array
+          items:
+            type: object
+            required: [code, kind, revision]
+            properties:
+              code: { type: string }
+              kind: { type: string, enum: [open, closed] }
+              revision: { type: integer, format: int64 }
     ReferenceSnapshot:
       type: object
-      required: [schemaVersion, dictionary, revision, normalizer, full, entries, removed]
+      required: [schemaVersion, dictionary, kind, revision, normalizer, full, entries, removed]
       properties:
         schemaVersion: { type: integer, const: 1 }
         dictionary: { type: string }
+        kind: { type: string, enum: [open, closed] }
         revision: { type: integer, format: int64 }
         normalizer: { type: string, examples: [v1] }
         full: { type: boolean }
@@ -2148,10 +2230,15 @@ components:
           type: array
           items:
             type: object
-            required: [id, canonical, key, status, aliases]
+            required: [id, canonical, key, status, aliases, directions, order]
             properties:
               id: { type: string, format: uuid }
               canonical: { type: string }
+              directions:
+                type: array
+                items: { type: string }
+              order: { type: integer, default: 0 }
+              label: { type: string }
               key: { type: string }
               status: { $ref: "#/components/schemas/ReferenceStatus" }
               mergedInto: { type: string, format: uuid }

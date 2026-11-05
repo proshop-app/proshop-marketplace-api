@@ -1,0 +1,104 @@
+{
+    "dictionary": "material",
+    "release": 1,
+    "entriesSha256": "5d282e41f13d1fcb0ea1f170f1c6454a265114a1468d20e52996244a203fd5ec",
+    "verifiedOn": "2026-11-04",
+    "statusMeaning": "confirmed means that this exact material value already exists in the platform attribute bundle; it does not verify a product’s composition.",
+    "derivation": "Deduplicated union of existing body_material, cookware_material and textile_material enum values from the server attribute bundle. The generic option Комбинированный was excluded because it does not name a material; Смесовая ткань was retained as the existing textile material type.",
+    "directionsMeaning": "Editorial ranking hints derived from the source enum context using current taxonomy top-level IDs; not validation restrictions.",
+    "coverage": {
+        "entries": 21,
+        "isExhaustive": false,
+        "sourceAttributes": [
+            "body_material",
+            "cookware_material",
+            "textile_material"
+        ]
+    },
+    "sources": [
+        {
+            "id": "uno-server-attributes",
+            "url": "https://github.com/proshop-app/proshop-server/blob/46479ffbd634c51509eda17c82cba96814e67772/src/modules/attribute/data/store-attributes.v1.json",
+            "path": "src/modules/attribute/data/store-attributes.v1.json",
+            "repositoryCommit": "46479ffbd634c51509eda17c82cba96814e67772",
+            "sha256": "21962a2dd19531a5c98e592090a70eddf8d233d4db58bdcdd339835daaef7b52",
+            "type": "existing-platform-bundle"
+        }
+    ],
+    "license": null,
+    "rightsNote": "Reuses the platform’s own existing enumeration. No third-party open-data license or external verification of material composition is claimed.",
+    "sourceValues": {
+        "Акрил": [
+            "textile_material"
+        ],
+        "Алюминий": [
+            "cookware_material"
+        ],
+        "Бамбук": [
+            "textile_material"
+        ],
+        "Вискоза": [
+            "textile_material"
+        ],
+        "Дерево": [
+            "body_material",
+            "cookware_material"
+        ],
+        "Керамика": [
+            "body_material",
+            "cookware_material"
+        ],
+        "Комбинированный": [
+            "body_material",
+            "cookware_material"
+        ],
+        "Лён": [
+            "textile_material"
+        ],
+        "Металл": [
+            "body_material"
+        ],
+        "Микрофибра": [
+            "textile_material"
+        ],
+        "Нержавеющая сталь": [
+            "cookware_material"
+        ],
+        "Пластик": [
+            "body_material",
+            "cookware_material"
+        ],
+        "Полиамид": [
+            "textile_material"
+        ],
+        "Полиэстер": [
+            "textile_material"
+        ],
+        "Силикон": [
+            "body_material",
+            "cookware_material"
+        ],
+        "Смесовая ткань": [
+            "textile_material"
+        ],
+        "Стекло": [
+            "body_material",
+            "cookware_material"
+        ],
+        "Фарфор": [
+            "cookware_material"
+        ],
+        "Хлопок": [
+            "textile_material"
+        ],
+        "Чугун": [
+            "cookware_material"
+        ],
+        "Шерсть": [
+            "textile_material"
+        ],
+        "Шёлк": [
+            "textile_material"
+        ]
+    }
+}

@@ -1,0 +1,245 @@
+[
+  {
+    "canonical": "35",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 0,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "35.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 1,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "36",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 2,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "36.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 3,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "37",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 4,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "37.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 5,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "38",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 6,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "38.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 7,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "39",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 8,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "39.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 9,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "40",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 10,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "40.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 11,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "41",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 12,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "41.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 13,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "42",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 14,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "42.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 15,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "43",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 16,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "43.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 17,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "44",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 18,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "44.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 19,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "45",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 20,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "45.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 21,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "46",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 22,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "46.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 23,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "47",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 24,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "47.5",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 25,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "48",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 26,
+      "directions": []
+    }
+  }
+]

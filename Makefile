@@ -104,3 +104,7 @@ taxonomy-rollback:
 ## taxonomy-image: собрать готовый образ с данными каталога
 taxonomy-image:
 	docker build --target taxonomy -t $(TAXONOMY_IMAGE) .
+
+.PHONY: reference-apply
+reference-apply:
+	go run ./cmd/marketplace reference apply-all --dir deploy/reference

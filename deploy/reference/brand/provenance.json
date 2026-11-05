@@ -1,0 +1,447 @@
+{
+    "dictionary": "brand",
+    "release": 1,
+    "entriesSha256": "82f2cb2f5dd9ed9eb849122e7b4a05f3581dce2f51a0382378d82c750bbd9585",
+    "verifiedOn": "2026-11-04",
+    "statusMeaning": "confirmed means that the canonical brand name exists and was checked against an official source; it does not certify merchandise, licensing, availability or affiliation with uno.",
+    "derivation": "Editorial starter selection across six retail groups. Only brand names and explicitly evidenced aliases are stored; no logos, descriptions, models or product listings are copied.",
+    "directionsMeaning": "Editorial ranking hints using existing taxonomy top-level IDs; not restrictions on a brand or proof that every product fits these directions.",
+    "coverage": {
+        "groups": [
+            "electronics-and-computers",
+            "home-and-appliances",
+            "clothing-shoes-and-sports",
+            "beauty",
+            "tools-and-garden",
+            "baby-and-toys"
+        ],
+        "isExhaustive": false,
+        "includesModels": false,
+        "aliasesPolicy": "Only observed official variants and the explicitly identified standard German transliteration; no unverified popular misspellings."
+    },
+    "sources": [
+        {
+            "id": "apple",
+            "url": "https://www.apple.com/",
+            "title": "Apple",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Apple"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "samsung",
+            "url": "https://www.samsung.com/us/about-us/brand-identity/",
+            "title": "Samsung Brand Identity",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Samsung"
+            ],
+            "license": null,
+            "rightsNote": "Copyright 1995–2026 Samsung; names and marks remain with their owners."
+        },
+        {
+            "id": "xiaomi",
+            "url": "https://www.mi.com/global/about/",
+            "title": "About Xiaomi",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Xiaomi"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "lenovo",
+            "url": "https://www.lenovo.com/us/en/about/",
+            "title": "About Lenovo",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Lenovo"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "sony",
+            "url": "https://www.sony.com/en/",
+            "title": "Sony Group Portal",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Sony"
+            ],
+            "license": null,
+            "rightsNote": "Copyright 2026 Sony Group Corporation."
+        },
+        {
+            "id": "bsh",
+            "url": "https://www.bsh-group.com/products-brands/appliance-brands",
+            "title": "BSH Appliance Brands",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Bosch",
+                "Siemens",
+                "Gaggenau",
+                "NEFF"
+            ],
+            "license": null,
+            "rightsNote": "BSH names Bosch and Siemens as licensed trademarks; no rights in any mark are transferred."
+        },
+        {
+            "id": "electrolux",
+            "url": "https://www.electrolux.co.th/about-us/our-brands/",
+            "title": "Brands under Electrolux Group",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Electrolux",
+                "AEG",
+                "Zanussi"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "seb",
+            "url": "https://www.groupeseb.com/fr/nos-marques",
+            "title": "Groupe SEB: Nos marques",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Tefal",
+                "Moulinex"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only.",
+            "termsUrl": "https://legal.groupeseb.com/Core/FR/fr/DU.html"
+        },
+        {
+            "id": "nike",
+            "url": "https://about.nike.com/en/company",
+            "title": "NIKE, Inc. company; Nike, Jordan Brand and Converse",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Nike",
+                "Jordan",
+                "Converse"
+            ],
+            "license": null,
+            "rightsNote": "Copyright 2026 NIKE, Inc. All rights reserved."
+        },
+        {
+            "id": "adidas",
+            "url": "https://www.adidas-group.com/en/about/profile",
+            "title": "adidas Group Profile",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "adidas"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "puma",
+            "url": "https://about.puma.com/en",
+            "title": "PUMA company profile",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "PUMA"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "vf",
+            "url": "https://www.vfc.com/brands",
+            "title": "VF Corporation Brands",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Vans",
+                "The North Face",
+                "Timberland"
+            ],
+            "license": null,
+            "rightsNote": "The terms reserve copyright and trademark rights; this is not an open-data license.",
+            "termsUrl": "https://www.vfc.com/terms-of-use"
+        },
+        {
+            "id": "loreal-consumer",
+            "url": "https://www.loreal.com/en/consumer-products-division/",
+            "title": "L’Oréal Consumer Products Division",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "L’Oréal Paris",
+                "Garnier",
+                "Maybelline New York",
+                "NYX Professional Makeup"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "loreal-other",
+            "url": "https://www.loreal.com/uk-ua/ukraine/",
+            "title": "L’Oréal Groupe Україна: listed brand portfolio",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "CeraVe",
+                "La Roche-Posay",
+                "Vichy",
+                "Lancôme",
+                "Kérastase"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "sbd",
+            "url": "https://www.stanleyblackanddecker.com/brands",
+            "title": "Stanley Black & Decker: Our Brands",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "DEWALT",
+                "CRAFTSMAN",
+                "STANLEY",
+                "BLACK+DECKER"
+            ],
+            "license": null,
+            "rightsNote": "The terms reserve copyright and trademark rights and do not grant a license in the marks.",
+            "termsUrl": "https://www.stanleyblackanddecker.com/terms-use"
+        },
+        {
+            "id": "husqvarna",
+            "url": "https://www.husqvarnagroup.com/en/our-brands",
+            "title": "Husqvarna Group: Our Brands",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Husqvarna",
+                "Gardena"
+            ],
+            "license": null,
+            "rightsNote": "Husqvarna Group: all rights reserved."
+        },
+        {
+            "id": "makita",
+            "url": "https://makitatools.com/",
+            "title": "Makita U.S.A. Tools and Outdoor Power Equipment",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Makita"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "kaercher",
+            "url": "https://www.kaercher.com/int/",
+            "title": "Kärcher International",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Kärcher"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "lego",
+            "url": "https://www.lego.com/en-us/aboutus/lego-group/the-lego-brand",
+            "title": "The LEGO Brand",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "LEGO"
+            ],
+            "license": null,
+            "rightsNote": "LEGO and related marks are trademarks of the LEGO Group; all rights reserved.",
+            "termsUrl": "https://www.lego.com/en-us/legal/notices-and-policies/terms-and-code-of-conduct"
+        },
+        {
+            "id": "mattel",
+            "url": "https://shop.mattel.com/pages/all-brands",
+            "title": "Mattel: All Brands and Products",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Mattel",
+                "Barbie",
+                "Fisher-Price",
+                "Hot Wheels"
+            ],
+            "license": null,
+            "rightsNote": "Copyright 2026 Mattel."
+        },
+        {
+            "id": "chicco",
+            "url": "https://www.chicco.com/",
+            "title": "Official Corporate Chicco website",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Chicco"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "philips-avent",
+            "url": "https://www.usa.philips.com/c-m-mo/baby-bottles-nipples/latest",
+            "title": "Philips Avent products and baby bottles",
+            "type": "official-brand-or-brand-owner",
+            "canonicals": [
+                "Philips Avent"
+            ],
+            "license": null,
+            "rightsNote": "An open-data license was not identified; source used to verify brand names only."
+        },
+        {
+            "id": "samsung-ru",
+            "url": "https://www.samsung.com/ru/about-us/company-info/",
+            "title": "Samsung Россия: Информация о компании",
+            "type": "official-brand-or-brand-owner",
+            "license": null,
+            "rightsNote": "An open-data license was not identified; used to verify this name variant only."
+        },
+        {
+            "id": "xiaomi-ru",
+            "url": "https://www.mi.com/ru/universal/aftersales-repair-content/",
+            "title": "Xiaomi Россия: Условия оказания услуг",
+            "type": "official-brand-or-brand-owner",
+            "license": null,
+            "rightsNote": "An open-data license was not identified; used to verify this name variant only."
+        },
+        {
+            "id": "lenovo-ru",
+            "url": "https://www.lenovo.com/ru/ru/services-cts/",
+            "title": "Lenovo Россия: сервисные центры",
+            "type": "official-brand-or-brand-owner",
+            "license": null,
+            "rightsNote": "An open-data license was not identified; used to verify this name variant only."
+        },
+        {
+            "id": "bosch-ru",
+            "url": "https://bosch-group.ru/",
+            "title": "Bosch в России; Роберт Бош ООО",
+            "type": "official-brand-or-brand-owner",
+            "license": null,
+            "rightsNote": "An open-data license was not identified; used to verify this name variant only."
+        },
+        {
+            "id": "garnier-ru",
+            "url": "https://www.garnier.ru/withingarnier/about-garnier",
+            "title": "О Гарньер",
+            "type": "official-brand-or-brand-owner",
+            "license": null,
+            "rightsNote": "An open-data license was not identified; used to verify this name variant only."
+        },
+        {
+            "id": "tefal-ru",
+            "url": "https://tefal.ru/actions",
+            "title": "Акции Tefal — Скидки и распродажи Тефаль",
+            "type": "official-brand-or-brand-owner",
+            "license": null,
+            "rightsNote": "An open-data license was not identified; used to verify this name variant only."
+        },
+        {
+            "id": "loreal-paris",
+            "url": "https://www.lorealparisusa.com/",
+            "title": "L’Oréal Paris USA",
+            "type": "official-brand-or-brand-owner",
+            "license": null,
+            "rightsNote": "An open-data license was not identified; used to verify this name variant only."
+        },
+        {
+            "id": "maybelline",
+            "url": "https://www.maybelline.com/",
+            "title": "Maybelline New York",
+            "type": "official-brand-or-brand-owner",
+            "license": null,
+            "rightsNote": "An open-data license was not identified; used to verify this name variant only."
+        },
+        {
+            "id": "kaercher-ru",
+            "url": "https://karcher.ru/page/kontakty",
+            "title": "Контакты Компании Керхер",
+            "type": "official-brand-or-brand-owner",
+            "license": null,
+            "rightsNote": "An open-data license was not identified; used to verify this name variant only."
+        }
+    ],
+    "aliasEvidence": [
+        {
+            "canonical": "Samsung",
+            "text": "Самсунг",
+            "sourceId": "samsung-ru",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "Xiaomi",
+            "text": "Сяоми",
+            "sourceId": "xiaomi-ru",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "Lenovo",
+            "text": "Леново",
+            "sourceId": "lenovo-ru",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "Bosch",
+            "text": "Бош",
+            "sourceId": "bosch-ru",
+            "derivation": "Russian name component observed in official legal entity name; not a claim that the Latin mark was renamed."
+        },
+        {
+            "canonical": "Garnier",
+            "text": "Гарньер",
+            "sourceId": "garnier-ru",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "Tefal",
+            "text": "Тефаль",
+            "sourceId": "tefal-ru",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "Tefal",
+            "text": "T-fal",
+            "sourceId": "seb",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "L’Oréal Paris",
+            "text": "L'Oréal Paris",
+            "sourceId": "loreal-paris",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "Maybelline New York",
+            "text": "Maybelline",
+            "sourceId": "maybelline",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "NYX Professional Makeup",
+            "text": "NYX Professional Make Up",
+            "sourceId": "loreal-consumer",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "Hot Wheels",
+            "text": "Hot-Wheels",
+            "sourceId": "mattel",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "Kärcher",
+            "text": "Керхер",
+            "sourceId": "kaercher-ru",
+            "derivation": "Exact name variant observed on official page."
+        },
+        {
+            "canonical": "Kärcher",
+            "text": "Kaercher",
+            "sourceId": "kaercher",
+            "derivation": "Standard German transliteration ä → ae; the official kaercher.com domain corroborates it. Karcher is already equivalent to Kärcher under normalizer v1 and is not duplicated."
+        }
+    ],
+    "rightsNote": "Names remain trademarks of their respective holders. Source URLs and any observed terms are evidence, not an open-data or trademark license. No legal certification or rights clearance is claimed."
+}

@@ -109,6 +109,7 @@ type EntryState struct {
 
 // NewEntryInput — новая запись: каноническое имя становится её первым вариантом.
 type NewEntryInput struct {
+	Occurrences      int64
 	ID               ids.UUID
 	CanonicalAliasID ids.UUID
 	Name             string
@@ -147,6 +148,12 @@ func NewEntry(dict *Dictionary, input NewEntryInput, now time.Time) (*Entry, err
 	if err != nil {
 		return nil, err
 	}
+	if input.Occurrences < 0 {
+		return nil, ErrInvalid
+	}
+	if input.Occurrences == 0 {
+		input.Occurrences = 1
+	}
 	now = moment(now)
 	e := &Entry{state: EntryState{
 		ID:            input.ID,
@@ -165,7 +172,7 @@ func NewEntry(dict *Dictionary, input NewEntryInput, now time.Time) (*Entry, err
 		}},
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		Occurrences: 1,
+		Occurrences: input.Occurrences,
 	}}
 	for _, alias := range input.Aliases {
 		if _, _, err := e.AddAlias(dict, alias, input.Source, now); err != nil {

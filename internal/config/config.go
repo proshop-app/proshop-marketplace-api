@@ -138,6 +138,7 @@ type Database struct {
 
 // Search — общий движок каталога площадки.
 type Search struct {
+	CandidatesToken     string
 	MaintenanceInterval time.Duration
 	URL                 string
 	Token               string
@@ -183,6 +184,7 @@ type Retention struct {
 
 // Reference — доступ потребителей к чтению реестра справочных сущностей.
 type Reference struct {
+	CandidatesInterval time.Duration
 	// ReadToken открывает только снимок, resolve и чтение записей: бэкенды
 	// поиска и сервера не получают прав оператора площадки. Пусто — читает только оператор.
 	ReadToken string
@@ -215,6 +217,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		},
 		Database: r.database(),
 		Search: Search{
+			CandidatesToken:     r.str("SEARCH_CANDIDATES_TOKEN", ""),
 			MaintenanceInterval: r.duration("SEARCH_MAINTENANCE_INTERVAL", time.Minute),
 			URL:                 r.httpURL("SEARCH_URL"),
 			Token:               r.required("SEARCH_MARKETPLACE_TOKEN"),
@@ -300,8 +303,11 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			RefreshInterval: r.duration("PICKUP_REFRESH_INTERVAL", 24*time.Hour),
 			PickupIndex:     r.str("OPENSEARCH_PICKUP_INDEX", "marketplace-pickup-points"),
 		},
-		Settings:  Settings{SyncInterval: r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute)},
-		Reference: Reference{ReadToken: r.str("REFERENCE_READ_TOKEN", "")},
+		Settings: Settings{SyncInterval: r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute)},
+		Reference: Reference{
+			ReadToken:          r.str("REFERENCE_READ_TOKEN", ""),
+			CandidatesInterval: r.optionalInterval("REFERENCE_CANDIDATES_INTERVAL", time.Hour),
+		},
 		ModelKeys: r.boolean("MARKETPLACE_MODEL_KEYS", false),
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
 	}

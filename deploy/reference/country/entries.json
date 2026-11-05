@@ -1,0 +1,6636 @@
+[
+  {
+    "canonical": "Андорра",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Andorra",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AD",
+        "kind": "spelling"
+      },
+      {
+        "text": "AND",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AD",
+      "iso3166Alpha3": "AND",
+      "iso3166Numeric": "020",
+      "order": 0,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "ОАЭ",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "United Arab Emirates",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AE",
+        "kind": "spelling"
+      },
+      {
+        "text": "ARE",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AE",
+      "iso3166Alpha3": "ARE",
+      "iso3166Numeric": "784",
+      "order": 1,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Афганистан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Afghanistan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AF",
+        "kind": "spelling"
+      },
+      {
+        "text": "AFG",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AF",
+      "iso3166Alpha3": "AFG",
+      "iso3166Numeric": "004",
+      "order": 2,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Антигуа и Барбуда",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Antigua & Barbuda",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AG",
+        "kind": "spelling"
+      },
+      {
+        "text": "ATG",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AG",
+      "iso3166Alpha3": "ATG",
+      "iso3166Numeric": "028",
+      "order": 3,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ангилья",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Anguilla",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AI",
+        "kind": "spelling"
+      },
+      {
+        "text": "AIA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AI",
+      "iso3166Alpha3": "AIA",
+      "iso3166Numeric": "660",
+      "order": 4,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Албания",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Albania",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AL",
+        "kind": "spelling"
+      },
+      {
+        "text": "ALB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AL",
+      "iso3166Alpha3": "ALB",
+      "iso3166Numeric": "008",
+      "order": 5,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Армения",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Armenia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AM",
+        "kind": "spelling"
+      },
+      {
+        "text": "ARM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AM",
+      "iso3166Alpha3": "ARM",
+      "iso3166Numeric": "051",
+      "order": 6,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ангола",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Angola",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AO",
+        "kind": "spelling"
+      },
+      {
+        "text": "AGO",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AO",
+      "iso3166Alpha3": "AGO",
+      "iso3166Numeric": "024",
+      "order": 7,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Антарктида",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Antarctica",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AQ",
+        "kind": "spelling"
+      },
+      {
+        "text": "ATA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AQ",
+      "iso3166Alpha3": "ATA",
+      "iso3166Numeric": "010",
+      "order": 8,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Аргентина",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Argentina",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AR",
+        "kind": "spelling"
+      },
+      {
+        "text": "ARG",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AR",
+      "iso3166Alpha3": "ARG",
+      "iso3166Numeric": "032",
+      "order": 9,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Американское Самоа",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "American Samoa",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AS",
+        "kind": "spelling"
+      },
+      {
+        "text": "ASM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AS",
+      "iso3166Alpha3": "ASM",
+      "iso3166Numeric": "016",
+      "order": 10,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Австрия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Austria",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AT",
+        "kind": "spelling"
+      },
+      {
+        "text": "AUT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AT",
+      "iso3166Alpha3": "AUT",
+      "iso3166Numeric": "040",
+      "order": 11,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Австралия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Australia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AU",
+        "kind": "spelling"
+      },
+      {
+        "text": "AUS",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AU",
+      "iso3166Alpha3": "AUS",
+      "iso3166Numeric": "036",
+      "order": 12,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Аруба",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Aruba",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AW",
+        "kind": "spelling"
+      },
+      {
+        "text": "ABW",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AW",
+      "iso3166Alpha3": "ABW",
+      "iso3166Numeric": "533",
+      "order": 13,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Аландские о-ва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Åland Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AX",
+        "kind": "spelling"
+      },
+      {
+        "text": "ALA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AX",
+      "iso3166Alpha3": "ALA",
+      "iso3166Numeric": "248",
+      "order": 14,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Азербайджан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Azerbaijan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "AZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "AZE",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "AZ",
+      "iso3166Alpha3": "AZE",
+      "iso3166Numeric": "031",
+      "order": 15,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Босния и Герцеговина",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Bosnia & Herzegovina",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BA",
+        "kind": "spelling"
+      },
+      {
+        "text": "BIH",
+        "kind": "spelling"
+      },
+      {
+        "text": "Bosnia",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BA",
+      "iso3166Alpha3": "BIH",
+      "iso3166Numeric": "070",
+      "order": 16,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Барбадос",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Barbados",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BB",
+        "kind": "spelling"
+      },
+      {
+        "text": "BRB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BB",
+      "iso3166Alpha3": "BRB",
+      "iso3166Numeric": "052",
+      "order": 17,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Бангладеш",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Bangladesh",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BD",
+        "kind": "spelling"
+      },
+      {
+        "text": "BGD",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BD",
+      "iso3166Alpha3": "BGD",
+      "iso3166Numeric": "050",
+      "order": 18,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Бельгия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Belgium",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BE",
+        "kind": "spelling"
+      },
+      {
+        "text": "BEL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BE",
+      "iso3166Alpha3": "BEL",
+      "iso3166Numeric": "056",
+      "order": 19,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Буркина-Фасо",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Burkina Faso",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BF",
+        "kind": "spelling"
+      },
+      {
+        "text": "BFA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BF",
+      "iso3166Alpha3": "BFA",
+      "iso3166Numeric": "854",
+      "order": 20,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Болгария",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Bulgaria",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BG",
+        "kind": "spelling"
+      },
+      {
+        "text": "BGR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BG",
+      "iso3166Alpha3": "BGR",
+      "iso3166Numeric": "100",
+      "order": 21,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Бахрейн",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Bahrain",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BH",
+        "kind": "spelling"
+      },
+      {
+        "text": "BHR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BH",
+      "iso3166Alpha3": "BHR",
+      "iso3166Numeric": "048",
+      "order": 22,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Бурунди",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Burundi",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BI",
+        "kind": "spelling"
+      },
+      {
+        "text": "BDI",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BI",
+      "iso3166Alpha3": "BDI",
+      "iso3166Numeric": "108",
+      "order": 23,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Бенин",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Benin",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BJ",
+        "kind": "spelling"
+      },
+      {
+        "text": "BEN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BJ",
+      "iso3166Alpha3": "BEN",
+      "iso3166Numeric": "204",
+      "order": 24,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сен-Бартелеми",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "St. Barthélemy",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BL",
+        "kind": "spelling"
+      },
+      {
+        "text": "BLM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BL",
+      "iso3166Alpha3": "BLM",
+      "iso3166Numeric": "652",
+      "order": 25,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Бермудские о-ва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Bermuda",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BM",
+        "kind": "spelling"
+      },
+      {
+        "text": "BMU",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BM",
+      "iso3166Alpha3": "BMU",
+      "iso3166Numeric": "060",
+      "order": 26,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Бруней",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Brunei",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BN",
+        "kind": "spelling"
+      },
+      {
+        "text": "BRN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BN",
+      "iso3166Alpha3": "BRN",
+      "iso3166Numeric": "096",
+      "order": 27,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Боливия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Bolivia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BO",
+        "kind": "spelling"
+      },
+      {
+        "text": "BOL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BO",
+      "iso3166Alpha3": "BOL",
+      "iso3166Numeric": "068",
+      "order": 28,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Бонэйр, Синт-Эстатиус и Саба",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Caribbean Netherlands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BQ",
+        "kind": "spelling"
+      },
+      {
+        "text": "BES",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BQ",
+      "iso3166Alpha3": "BES",
+      "iso3166Numeric": "535",
+      "order": 29,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Бразилия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Brazil",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BR",
+        "kind": "spelling"
+      },
+      {
+        "text": "BRA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BR",
+      "iso3166Alpha3": "BRA",
+      "iso3166Numeric": "076",
+      "order": 30,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Багамы",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Bahamas",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BS",
+        "kind": "spelling"
+      },
+      {
+        "text": "BHS",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BS",
+      "iso3166Alpha3": "BHS",
+      "iso3166Numeric": "044",
+      "order": 31,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Бутан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Bhutan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BT",
+        "kind": "spelling"
+      },
+      {
+        "text": "BTN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BT",
+      "iso3166Alpha3": "BTN",
+      "iso3166Numeric": "064",
+      "order": 32,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "о-в Буве",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Bouvet Island",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BV",
+        "kind": "spelling"
+      },
+      {
+        "text": "BVT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BV",
+      "iso3166Alpha3": "BVT",
+      "iso3166Numeric": "074",
+      "order": 33,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ботсвана",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Botswana",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BW",
+        "kind": "spelling"
+      },
+      {
+        "text": "BWA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BW",
+      "iso3166Alpha3": "BWA",
+      "iso3166Numeric": "072",
+      "order": 34,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Беларусь",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Belarus",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BY",
+        "kind": "spelling"
+      },
+      {
+        "text": "BLR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BY",
+      "iso3166Alpha3": "BLR",
+      "iso3166Numeric": "112",
+      "order": 35,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Белиз",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Belize",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "BZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "BLZ",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "BZ",
+      "iso3166Alpha3": "BLZ",
+      "iso3166Numeric": "084",
+      "order": 36,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Канада",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Canada",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CA",
+        "kind": "spelling"
+      },
+      {
+        "text": "CAN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CA",
+      "iso3166Alpha3": "CAN",
+      "iso3166Numeric": "124",
+      "order": 37,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Кокосовые о-ва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Cocos (Keeling) Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CC",
+        "kind": "spelling"
+      },
+      {
+        "text": "CCK",
+        "kind": "spelling"
+      },
+      {
+        "text": "Cocos Islands",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CC",
+      "iso3166Alpha3": "CCK",
+      "iso3166Numeric": "166",
+      "order": 38,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Конго - Киншаса",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Congo - Kinshasa",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CD",
+        "kind": "spelling"
+      },
+      {
+        "text": "COD",
+        "kind": "spelling"
+      },
+      {
+        "text": "Конго (ДРК)",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Congo (DRC)",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CD",
+      "iso3166Alpha3": "COD",
+      "iso3166Numeric": "180",
+      "order": 39,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Центрально-Африканская Республика",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Central African Republic",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CF",
+        "kind": "spelling"
+      },
+      {
+        "text": "CAF",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CF",
+      "iso3166Alpha3": "CAF",
+      "iso3166Numeric": "140",
+      "order": 40,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Конго - Браззавиль",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Congo - Brazzaville",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CG",
+        "kind": "spelling"
+      },
+      {
+        "text": "COG",
+        "kind": "spelling"
+      },
+      {
+        "text": "Республика Конго",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Congo (Republic)",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CG",
+      "iso3166Alpha3": "COG",
+      "iso3166Numeric": "178",
+      "order": 41,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Швейцария",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Switzerland",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CH",
+        "kind": "spelling"
+      },
+      {
+        "text": "CHE",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CH",
+      "iso3166Alpha3": "CHE",
+      "iso3166Numeric": "756",
+      "order": 42,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Кот-д’Ивуар",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Côte d’Ivoire",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CI",
+        "kind": "spelling"
+      },
+      {
+        "text": "CIV",
+        "kind": "spelling"
+      },
+      {
+        "text": "Ivory Coast",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CI",
+      "iso3166Alpha3": "CIV",
+      "iso3166Numeric": "384",
+      "order": 43,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "о-ва Кука",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Cook Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CK",
+        "kind": "spelling"
+      },
+      {
+        "text": "COK",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CK",
+      "iso3166Alpha3": "COK",
+      "iso3166Numeric": "184",
+      "order": 44,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Чили",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Chile",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CL",
+        "kind": "spelling"
+      },
+      {
+        "text": "CHL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CL",
+      "iso3166Alpha3": "CHL",
+      "iso3166Numeric": "152",
+      "order": 45,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Камерун",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Cameroon",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CM",
+        "kind": "spelling"
+      },
+      {
+        "text": "CMR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CM",
+      "iso3166Alpha3": "CMR",
+      "iso3166Numeric": "120",
+      "order": 46,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Китай",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "China",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CN",
+        "kind": "spelling"
+      },
+      {
+        "text": "CHN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CN",
+      "iso3166Alpha3": "CHN",
+      "iso3166Numeric": "156",
+      "order": 47,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Колумбия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Colombia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CO",
+        "kind": "spelling"
+      },
+      {
+        "text": "COL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CO",
+      "iso3166Alpha3": "COL",
+      "iso3166Numeric": "170",
+      "order": 48,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Коста-Рика",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Costa Rica",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CR",
+        "kind": "spelling"
+      },
+      {
+        "text": "CRI",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CR",
+      "iso3166Alpha3": "CRI",
+      "iso3166Numeric": "188",
+      "order": 49,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Куба",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Cuba",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CU",
+        "kind": "spelling"
+      },
+      {
+        "text": "CUB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CU",
+      "iso3166Alpha3": "CUB",
+      "iso3166Numeric": "192",
+      "order": 50,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Кабо-Верде",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Cape Verde",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CV",
+        "kind": "spelling"
+      },
+      {
+        "text": "CPV",
+        "kind": "spelling"
+      },
+      {
+        "text": "Cabo Verde",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CV",
+      "iso3166Alpha3": "CPV",
+      "iso3166Numeric": "132",
+      "order": 51,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Кюрасао",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Curaçao",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CW",
+        "kind": "spelling"
+      },
+      {
+        "text": "CUW",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CW",
+      "iso3166Alpha3": "CUW",
+      "iso3166Numeric": "531",
+      "order": 52,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "о-в Рождества",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Christmas Island",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CX",
+        "kind": "spelling"
+      },
+      {
+        "text": "CXR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CX",
+      "iso3166Alpha3": "CXR",
+      "iso3166Numeric": "162",
+      "order": 53,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Кипр",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Cyprus",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CY",
+        "kind": "spelling"
+      },
+      {
+        "text": "CYP",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CY",
+      "iso3166Alpha3": "CYP",
+      "iso3166Numeric": "196",
+      "order": 54,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Чехия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Czechia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "CZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "CZE",
+        "kind": "spelling"
+      },
+      {
+        "text": "Чешская Республика",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Czech Republic",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "CZ",
+      "iso3166Alpha3": "CZE",
+      "iso3166Numeric": "203",
+      "order": 55,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Германия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Germany",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "DE",
+        "kind": "spelling"
+      },
+      {
+        "text": "DEU",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "DE",
+      "iso3166Alpha3": "DEU",
+      "iso3166Numeric": "276",
+      "order": 56,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Джибути",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Djibouti",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "DJ",
+        "kind": "spelling"
+      },
+      {
+        "text": "DJI",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "DJ",
+      "iso3166Alpha3": "DJI",
+      "iso3166Numeric": "262",
+      "order": 57,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Дания",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Denmark",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "DK",
+        "kind": "spelling"
+      },
+      {
+        "text": "DNK",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "DK",
+      "iso3166Alpha3": "DNK",
+      "iso3166Numeric": "208",
+      "order": 58,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Доминика",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Dominica",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "DM",
+        "kind": "spelling"
+      },
+      {
+        "text": "DMA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "DM",
+      "iso3166Alpha3": "DMA",
+      "iso3166Numeric": "212",
+      "order": 59,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Доминиканская Республика",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Dominican Republic",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "DO",
+        "kind": "spelling"
+      },
+      {
+        "text": "DOM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "DO",
+      "iso3166Alpha3": "DOM",
+      "iso3166Numeric": "214",
+      "order": 60,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Алжир",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Algeria",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "DZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "DZA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "DZ",
+      "iso3166Alpha3": "DZA",
+      "iso3166Numeric": "012",
+      "order": 61,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Эквадор",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Ecuador",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "EC",
+        "kind": "spelling"
+      },
+      {
+        "text": "ECU",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "EC",
+      "iso3166Alpha3": "ECU",
+      "iso3166Numeric": "218",
+      "order": 62,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Эстония",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Estonia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "EE",
+        "kind": "spelling"
+      },
+      {
+        "text": "EST",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "EE",
+      "iso3166Alpha3": "EST",
+      "iso3166Numeric": "233",
+      "order": 63,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Египет",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Egypt",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "EG",
+        "kind": "spelling"
+      },
+      {
+        "text": "EGY",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "EG",
+      "iso3166Alpha3": "EGY",
+      "iso3166Numeric": "818",
+      "order": 64,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Западная Сахара",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Western Sahara",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "EH",
+        "kind": "spelling"
+      },
+      {
+        "text": "ESH",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "EH",
+      "iso3166Alpha3": "ESH",
+      "iso3166Numeric": "732",
+      "order": 65,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Эритрея",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Eritrea",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "ER",
+        "kind": "spelling"
+      },
+      {
+        "text": "ERI",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "ER",
+      "iso3166Alpha3": "ERI",
+      "iso3166Numeric": "232",
+      "order": 66,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Испания",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Spain",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "ES",
+        "kind": "spelling"
+      },
+      {
+        "text": "ESP",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "ES",
+      "iso3166Alpha3": "ESP",
+      "iso3166Numeric": "724",
+      "order": 67,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Эфиопия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Ethiopia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "ET",
+        "kind": "spelling"
+      },
+      {
+        "text": "ETH",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "ET",
+      "iso3166Alpha3": "ETH",
+      "iso3166Numeric": "231",
+      "order": 68,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Финляндия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Finland",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "FI",
+        "kind": "spelling"
+      },
+      {
+        "text": "FIN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "FI",
+      "iso3166Alpha3": "FIN",
+      "iso3166Numeric": "246",
+      "order": 69,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Фиджи",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Fiji",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "FJ",
+        "kind": "spelling"
+      },
+      {
+        "text": "FJI",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "FJ",
+      "iso3166Alpha3": "FJI",
+      "iso3166Numeric": "242",
+      "order": 70,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Фолклендские о-ва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Falkland Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "FK",
+        "kind": "spelling"
+      },
+      {
+        "text": "FLK",
+        "kind": "spelling"
+      },
+      {
+        "text": "Фолклендские (Мальвинские) о-ва",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Falkland Islands (Islas Malvinas)",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "FK",
+      "iso3166Alpha3": "FLK",
+      "iso3166Numeric": "238",
+      "order": 71,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Федеративные Штаты Микронезии",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Micronesia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "FM",
+        "kind": "spelling"
+      },
+      {
+        "text": "FSM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "FM",
+      "iso3166Alpha3": "FSM",
+      "iso3166Numeric": "583",
+      "order": 72,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Фарерские о-ва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Faroe Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "FO",
+        "kind": "spelling"
+      },
+      {
+        "text": "FRO",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "FO",
+      "iso3166Alpha3": "FRO",
+      "iso3166Numeric": "234",
+      "order": 73,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Франция",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "France",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "FR",
+        "kind": "spelling"
+      },
+      {
+        "text": "FRA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "FR",
+      "iso3166Alpha3": "FRA",
+      "iso3166Numeric": "250",
+      "order": 74,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Габон",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Gabon",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GA",
+        "kind": "spelling"
+      },
+      {
+        "text": "GAB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GA",
+      "iso3166Alpha3": "GAB",
+      "iso3166Numeric": "266",
+      "order": 75,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Великобритания",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "United Kingdom",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GB",
+        "kind": "spelling"
+      },
+      {
+        "text": "GBR",
+        "kind": "spelling"
+      },
+      {
+        "text": "Британия",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "UK",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GB",
+      "iso3166Alpha3": "GBR",
+      "iso3166Numeric": "826",
+      "order": 76,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гренада",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Grenada",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GD",
+        "kind": "spelling"
+      },
+      {
+        "text": "GRD",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GD",
+      "iso3166Alpha3": "GRD",
+      "iso3166Numeric": "308",
+      "order": 77,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Грузия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Georgia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GE",
+        "kind": "spelling"
+      },
+      {
+        "text": "GEO",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GE",
+      "iso3166Alpha3": "GEO",
+      "iso3166Numeric": "268",
+      "order": 78,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Французская Гвиана",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "French Guiana",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GF",
+        "kind": "spelling"
+      },
+      {
+        "text": "GUF",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GF",
+      "iso3166Alpha3": "GUF",
+      "iso3166Numeric": "254",
+      "order": 79,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гернси",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Guernsey",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GG",
+        "kind": "spelling"
+      },
+      {
+        "text": "GGY",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GG",
+      "iso3166Alpha3": "GGY",
+      "iso3166Numeric": "831",
+      "order": 80,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гана",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Ghana",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GH",
+        "kind": "spelling"
+      },
+      {
+        "text": "GHA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GH",
+      "iso3166Alpha3": "GHA",
+      "iso3166Numeric": "288",
+      "order": 81,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гибралтар",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Gibraltar",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GI",
+        "kind": "spelling"
+      },
+      {
+        "text": "GIB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GI",
+      "iso3166Alpha3": "GIB",
+      "iso3166Numeric": "292",
+      "order": 82,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гренландия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Greenland",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GL",
+        "kind": "spelling"
+      },
+      {
+        "text": "GRL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GL",
+      "iso3166Alpha3": "GRL",
+      "iso3166Numeric": "304",
+      "order": 83,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гамбия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Gambia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GM",
+        "kind": "spelling"
+      },
+      {
+        "text": "GMB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GM",
+      "iso3166Alpha3": "GMB",
+      "iso3166Numeric": "270",
+      "order": 84,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гвинея",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Guinea",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GN",
+        "kind": "spelling"
+      },
+      {
+        "text": "GIN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GN",
+      "iso3166Alpha3": "GIN",
+      "iso3166Numeric": "324",
+      "order": 85,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гваделупа",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Guadeloupe",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GP",
+        "kind": "spelling"
+      },
+      {
+        "text": "GLP",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GP",
+      "iso3166Alpha3": "GLP",
+      "iso3166Numeric": "312",
+      "order": 86,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Экваториальная Гвинея",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Equatorial Guinea",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GQ",
+        "kind": "spelling"
+      },
+      {
+        "text": "GNQ",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GQ",
+      "iso3166Alpha3": "GNQ",
+      "iso3166Numeric": "226",
+      "order": 87,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Греция",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Greece",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GR",
+        "kind": "spelling"
+      },
+      {
+        "text": "GRC",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GR",
+      "iso3166Alpha3": "GRC",
+      "iso3166Numeric": "300",
+      "order": 88,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Южная Георгия и Южные Сандвичевы о-ва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "South Georgia & South Sandwich Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GS",
+        "kind": "spelling"
+      },
+      {
+        "text": "SGS",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GS",
+      "iso3166Alpha3": "SGS",
+      "iso3166Numeric": "239",
+      "order": 89,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гватемала",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Guatemala",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GT",
+        "kind": "spelling"
+      },
+      {
+        "text": "GTM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GT",
+      "iso3166Alpha3": "GTM",
+      "iso3166Numeric": "320",
+      "order": 90,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гуам",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Guam",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GU",
+        "kind": "spelling"
+      },
+      {
+        "text": "GUM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GU",
+      "iso3166Alpha3": "GUM",
+      "iso3166Numeric": "316",
+      "order": 91,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гвинея-Бисау",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Guinea-Bissau",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GW",
+        "kind": "spelling"
+      },
+      {
+        "text": "GNB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GW",
+      "iso3166Alpha3": "GNB",
+      "iso3166Numeric": "624",
+      "order": 92,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гайана",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Guyana",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "GY",
+        "kind": "spelling"
+      },
+      {
+        "text": "GUY",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "GY",
+      "iso3166Alpha3": "GUY",
+      "iso3166Numeric": "328",
+      "order": 93,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гонконг (САР)",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Hong Kong SAR China",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "HK",
+        "kind": "spelling"
+      },
+      {
+        "text": "HKG",
+        "kind": "spelling"
+      },
+      {
+        "text": "Гонконг",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Hong Kong",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "HK",
+      "iso3166Alpha3": "HKG",
+      "iso3166Numeric": "344",
+      "order": 94,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "о-ва Херд и Макдональд",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Heard & McDonald Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "HM",
+        "kind": "spelling"
+      },
+      {
+        "text": "HMD",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "HM",
+      "iso3166Alpha3": "HMD",
+      "iso3166Numeric": "334",
+      "order": 95,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гондурас",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Honduras",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "HN",
+        "kind": "spelling"
+      },
+      {
+        "text": "HND",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "HN",
+      "iso3166Alpha3": "HND",
+      "iso3166Numeric": "340",
+      "order": 96,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Хорватия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Croatia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "HR",
+        "kind": "spelling"
+      },
+      {
+        "text": "HRV",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "HR",
+      "iso3166Alpha3": "HRV",
+      "iso3166Numeric": "191",
+      "order": 97,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Гаити",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Haiti",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "HT",
+        "kind": "spelling"
+      },
+      {
+        "text": "HTI",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "HT",
+      "iso3166Alpha3": "HTI",
+      "iso3166Numeric": "332",
+      "order": 98,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Венгрия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Hungary",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "HU",
+        "kind": "spelling"
+      },
+      {
+        "text": "HUN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "HU",
+      "iso3166Alpha3": "HUN",
+      "iso3166Numeric": "348",
+      "order": 99,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Индонезия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Indonesia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "ID",
+        "kind": "spelling"
+      },
+      {
+        "text": "IDN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "ID",
+      "iso3166Alpha3": "IDN",
+      "iso3166Numeric": "360",
+      "order": 100,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ирландия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Ireland",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "IE",
+        "kind": "spelling"
+      },
+      {
+        "text": "IRL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "IE",
+      "iso3166Alpha3": "IRL",
+      "iso3166Numeric": "372",
+      "order": 101,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Израиль",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Israel",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "IL",
+        "kind": "spelling"
+      },
+      {
+        "text": "ISR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "IL",
+      "iso3166Alpha3": "ISR",
+      "iso3166Numeric": "376",
+      "order": 102,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "о-в Мэн",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Isle of Man",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "IM",
+        "kind": "spelling"
+      },
+      {
+        "text": "IMN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "IM",
+      "iso3166Alpha3": "IMN",
+      "iso3166Numeric": "833",
+      "order": 103,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Индия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "India",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "IN",
+        "kind": "spelling"
+      },
+      {
+        "text": "IND",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "IN",
+      "iso3166Alpha3": "IND",
+      "iso3166Numeric": "356",
+      "order": 104,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Британская территория в Индийском океане",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "British Indian Ocean Territory",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "IO",
+        "kind": "spelling"
+      },
+      {
+        "text": "IOT",
+        "kind": "spelling"
+      },
+      {
+        "text": "архипелаг Чагос",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Chagos Archipelago",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "IO",
+      "iso3166Alpha3": "IOT",
+      "iso3166Numeric": "086",
+      "order": 105,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ирак",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Iraq",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "IQ",
+        "kind": "spelling"
+      },
+      {
+        "text": "IRQ",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "IQ",
+      "iso3166Alpha3": "IRQ",
+      "iso3166Numeric": "368",
+      "order": 106,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Иран",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Iran",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "IR",
+        "kind": "spelling"
+      },
+      {
+        "text": "IRN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "IR",
+      "iso3166Alpha3": "IRN",
+      "iso3166Numeric": "364",
+      "order": 107,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Исландия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Iceland",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "IS",
+        "kind": "spelling"
+      },
+      {
+        "text": "ISL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "IS",
+      "iso3166Alpha3": "ISL",
+      "iso3166Numeric": "352",
+      "order": 108,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Италия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Italy",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "IT",
+        "kind": "spelling"
+      },
+      {
+        "text": "ITA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "IT",
+      "iso3166Alpha3": "ITA",
+      "iso3166Numeric": "380",
+      "order": 109,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Джерси",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Jersey",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "JE",
+        "kind": "spelling"
+      },
+      {
+        "text": "JEY",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "JE",
+      "iso3166Alpha3": "JEY",
+      "iso3166Numeric": "832",
+      "order": 110,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ямайка",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Jamaica",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "JM",
+        "kind": "spelling"
+      },
+      {
+        "text": "JAM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "JM",
+      "iso3166Alpha3": "JAM",
+      "iso3166Numeric": "388",
+      "order": 111,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Иордания",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Jordan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "JO",
+        "kind": "spelling"
+      },
+      {
+        "text": "JOR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "JO",
+      "iso3166Alpha3": "JOR",
+      "iso3166Numeric": "400",
+      "order": 112,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Япония",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Japan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "JP",
+        "kind": "spelling"
+      },
+      {
+        "text": "JPN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "JP",
+      "iso3166Alpha3": "JPN",
+      "iso3166Numeric": "392",
+      "order": 113,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Кения",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Kenya",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KE",
+        "kind": "spelling"
+      },
+      {
+        "text": "KEN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KE",
+      "iso3166Alpha3": "KEN",
+      "iso3166Numeric": "404",
+      "order": 114,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Киргизия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Kyrgyzstan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KG",
+        "kind": "spelling"
+      },
+      {
+        "text": "KGZ",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KG",
+      "iso3166Alpha3": "KGZ",
+      "iso3166Numeric": "417",
+      "order": 115,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Камбоджа",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Cambodia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KH",
+        "kind": "spelling"
+      },
+      {
+        "text": "KHM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KH",
+      "iso3166Alpha3": "KHM",
+      "iso3166Numeric": "116",
+      "order": 116,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Кирибати",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Kiribati",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KI",
+        "kind": "spelling"
+      },
+      {
+        "text": "KIR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KI",
+      "iso3166Alpha3": "KIR",
+      "iso3166Numeric": "296",
+      "order": 117,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Коморы",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Comoros",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KM",
+        "kind": "spelling"
+      },
+      {
+        "text": "COM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KM",
+      "iso3166Alpha3": "COM",
+      "iso3166Numeric": "174",
+      "order": 118,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сент-Китс и Невис",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "St. Kitts & Nevis",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KN",
+        "kind": "spelling"
+      },
+      {
+        "text": "KNA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KN",
+      "iso3166Alpha3": "KNA",
+      "iso3166Numeric": "659",
+      "order": 119,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "КНДР",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "North Korea",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KP",
+        "kind": "spelling"
+      },
+      {
+        "text": "PRK",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KP",
+      "iso3166Alpha3": "PRK",
+      "iso3166Numeric": "408",
+      "order": 120,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Республика Корея",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "South Korea",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KR",
+        "kind": "spelling"
+      },
+      {
+        "text": "KOR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KR",
+      "iso3166Alpha3": "KOR",
+      "iso3166Numeric": "410",
+      "order": 121,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Кувейт",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Kuwait",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KW",
+        "kind": "spelling"
+      },
+      {
+        "text": "KWT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KW",
+      "iso3166Alpha3": "KWT",
+      "iso3166Numeric": "414",
+      "order": 122,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "о-ва Кайман",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Cayman Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KY",
+        "kind": "spelling"
+      },
+      {
+        "text": "CYM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KY",
+      "iso3166Alpha3": "CYM",
+      "iso3166Numeric": "136",
+      "order": 123,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Казахстан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Kazakhstan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "KZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "KAZ",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "KZ",
+      "iso3166Alpha3": "KAZ",
+      "iso3166Numeric": "398",
+      "order": 124,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Лаос",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Laos",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LA",
+        "kind": "spelling"
+      },
+      {
+        "text": "LAO",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LA",
+      "iso3166Alpha3": "LAO",
+      "iso3166Numeric": "418",
+      "order": 125,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ливан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Lebanon",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LB",
+        "kind": "spelling"
+      },
+      {
+        "text": "LBN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LB",
+      "iso3166Alpha3": "LBN",
+      "iso3166Numeric": "422",
+      "order": 126,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сент-Люсия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "St. Lucia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LC",
+        "kind": "spelling"
+      },
+      {
+        "text": "LCA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LC",
+      "iso3166Alpha3": "LCA",
+      "iso3166Numeric": "662",
+      "order": 127,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Лихтенштейн",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Liechtenstein",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LI",
+        "kind": "spelling"
+      },
+      {
+        "text": "LIE",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LI",
+      "iso3166Alpha3": "LIE",
+      "iso3166Numeric": "438",
+      "order": 128,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Шри-Ланка",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Sri Lanka",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LK",
+        "kind": "spelling"
+      },
+      {
+        "text": "LKA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LK",
+      "iso3166Alpha3": "LKA",
+      "iso3166Numeric": "144",
+      "order": 129,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Либерия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Liberia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LR",
+        "kind": "spelling"
+      },
+      {
+        "text": "LBR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LR",
+      "iso3166Alpha3": "LBR",
+      "iso3166Numeric": "430",
+      "order": 130,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Лесото",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Lesotho",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LS",
+        "kind": "spelling"
+      },
+      {
+        "text": "LSO",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LS",
+      "iso3166Alpha3": "LSO",
+      "iso3166Numeric": "426",
+      "order": 131,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Литва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Lithuania",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LT",
+        "kind": "spelling"
+      },
+      {
+        "text": "LTU",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LT",
+      "iso3166Alpha3": "LTU",
+      "iso3166Numeric": "440",
+      "order": 132,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Люксембург",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Luxembourg",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LU",
+        "kind": "spelling"
+      },
+      {
+        "text": "LUX",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LU",
+      "iso3166Alpha3": "LUX",
+      "iso3166Numeric": "442",
+      "order": 133,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Латвия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Latvia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LV",
+        "kind": "spelling"
+      },
+      {
+        "text": "LVA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LV",
+      "iso3166Alpha3": "LVA",
+      "iso3166Numeric": "428",
+      "order": 134,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ливия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Libya",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "LY",
+        "kind": "spelling"
+      },
+      {
+        "text": "LBY",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "LY",
+      "iso3166Alpha3": "LBY",
+      "iso3166Numeric": "434",
+      "order": 135,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Марокко",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Morocco",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MA",
+        "kind": "spelling"
+      },
+      {
+        "text": "MAR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MA",
+      "iso3166Alpha3": "MAR",
+      "iso3166Numeric": "504",
+      "order": 136,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Монако",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Monaco",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MC",
+        "kind": "spelling"
+      },
+      {
+        "text": "MCO",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MC",
+      "iso3166Alpha3": "MCO",
+      "iso3166Numeric": "492",
+      "order": 137,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Молдова",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Moldova",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MD",
+        "kind": "spelling"
+      },
+      {
+        "text": "MDA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MD",
+      "iso3166Alpha3": "MDA",
+      "iso3166Numeric": "498",
+      "order": 138,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Черногория",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Montenegro",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "ME",
+        "kind": "spelling"
+      },
+      {
+        "text": "MNE",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "ME",
+      "iso3166Alpha3": "MNE",
+      "iso3166Numeric": "499",
+      "order": 139,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сен-Мартен",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "St. Martin",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MF",
+        "kind": "spelling"
+      },
+      {
+        "text": "MAF",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MF",
+      "iso3166Alpha3": "MAF",
+      "iso3166Numeric": "663",
+      "order": 140,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Мадагаскар",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Madagascar",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MG",
+        "kind": "spelling"
+      },
+      {
+        "text": "MDG",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MG",
+      "iso3166Alpha3": "MDG",
+      "iso3166Numeric": "450",
+      "order": 141,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Маршалловы о-ва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Marshall Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MH",
+        "kind": "spelling"
+      },
+      {
+        "text": "MHL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MH",
+      "iso3166Alpha3": "MHL",
+      "iso3166Numeric": "584",
+      "order": 142,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Северная Македония",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "North Macedonia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MK",
+        "kind": "spelling"
+      },
+      {
+        "text": "MKD",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MK",
+      "iso3166Alpha3": "MKD",
+      "iso3166Numeric": "807",
+      "order": 143,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Мали",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Mali",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "ML",
+        "kind": "spelling"
+      },
+      {
+        "text": "MLI",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "ML",
+      "iso3166Alpha3": "MLI",
+      "iso3166Numeric": "466",
+      "order": 144,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Мьянма (Бирма)",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Myanmar (Burma)",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MM",
+        "kind": "spelling"
+      },
+      {
+        "text": "MMR",
+        "kind": "spelling"
+      },
+      {
+        "text": "Myanmar",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MM",
+      "iso3166Alpha3": "MMR",
+      "iso3166Numeric": "104",
+      "order": 145,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Монголия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Mongolia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MN",
+        "kind": "spelling"
+      },
+      {
+        "text": "MNG",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MN",
+      "iso3166Alpha3": "MNG",
+      "iso3166Numeric": "496",
+      "order": 146,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Макао (САР)",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Macao SAR China",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MO",
+        "kind": "spelling"
+      },
+      {
+        "text": "MAC",
+        "kind": "spelling"
+      },
+      {
+        "text": "Макао",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Macao",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MO",
+      "iso3166Alpha3": "MAC",
+      "iso3166Numeric": "446",
+      "order": 147,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Северные Марианские о-ва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Northern Mariana Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MP",
+        "kind": "spelling"
+      },
+      {
+        "text": "MNP",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MP",
+      "iso3166Alpha3": "MNP",
+      "iso3166Numeric": "580",
+      "order": 148,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Мартиника",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Martinique",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MQ",
+        "kind": "spelling"
+      },
+      {
+        "text": "MTQ",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MQ",
+      "iso3166Alpha3": "MTQ",
+      "iso3166Numeric": "474",
+      "order": 149,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Мавритания",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Mauritania",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MR",
+        "kind": "spelling"
+      },
+      {
+        "text": "MRT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MR",
+      "iso3166Alpha3": "MRT",
+      "iso3166Numeric": "478",
+      "order": 150,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Монтсеррат",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Montserrat",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MS",
+        "kind": "spelling"
+      },
+      {
+        "text": "MSR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MS",
+      "iso3166Alpha3": "MSR",
+      "iso3166Numeric": "500",
+      "order": 151,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Мальта",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Malta",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MT",
+        "kind": "spelling"
+      },
+      {
+        "text": "MLT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MT",
+      "iso3166Alpha3": "MLT",
+      "iso3166Numeric": "470",
+      "order": 152,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Маврикий",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Mauritius",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MU",
+        "kind": "spelling"
+      },
+      {
+        "text": "MUS",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MU",
+      "iso3166Alpha3": "MUS",
+      "iso3166Numeric": "480",
+      "order": 153,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Мальдивы",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Maldives",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MV",
+        "kind": "spelling"
+      },
+      {
+        "text": "MDV",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MV",
+      "iso3166Alpha3": "MDV",
+      "iso3166Numeric": "462",
+      "order": 154,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Малави",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Malawi",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MW",
+        "kind": "spelling"
+      },
+      {
+        "text": "MWI",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MW",
+      "iso3166Alpha3": "MWI",
+      "iso3166Numeric": "454",
+      "order": 155,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Мексика",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Mexico",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MX",
+        "kind": "spelling"
+      },
+      {
+        "text": "MEX",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MX",
+      "iso3166Alpha3": "MEX",
+      "iso3166Numeric": "484",
+      "order": 156,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Малайзия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Malaysia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MY",
+        "kind": "spelling"
+      },
+      {
+        "text": "MYS",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MY",
+      "iso3166Alpha3": "MYS",
+      "iso3166Numeric": "458",
+      "order": 157,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Мозамбик",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Mozambique",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "MZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "MOZ",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "MZ",
+      "iso3166Alpha3": "MOZ",
+      "iso3166Numeric": "508",
+      "order": 158,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Намибия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Namibia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NA",
+        "kind": "spelling"
+      },
+      {
+        "text": "NAM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NA",
+      "iso3166Alpha3": "NAM",
+      "iso3166Numeric": "516",
+      "order": 159,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Новая Каледония",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "New Caledonia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NC",
+        "kind": "spelling"
+      },
+      {
+        "text": "NCL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NC",
+      "iso3166Alpha3": "NCL",
+      "iso3166Numeric": "540",
+      "order": 160,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Нигер",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Niger",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NE",
+        "kind": "spelling"
+      },
+      {
+        "text": "NER",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NE",
+      "iso3166Alpha3": "NER",
+      "iso3166Numeric": "562",
+      "order": 161,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "о-в Норфолк",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Norfolk Island",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NF",
+        "kind": "spelling"
+      },
+      {
+        "text": "NFK",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NF",
+      "iso3166Alpha3": "NFK",
+      "iso3166Numeric": "574",
+      "order": 162,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Нигерия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Nigeria",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NG",
+        "kind": "spelling"
+      },
+      {
+        "text": "NGA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NG",
+      "iso3166Alpha3": "NGA",
+      "iso3166Numeric": "566",
+      "order": 163,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Никарагуа",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Nicaragua",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NI",
+        "kind": "spelling"
+      },
+      {
+        "text": "NIC",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NI",
+      "iso3166Alpha3": "NIC",
+      "iso3166Numeric": "558",
+      "order": 164,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Нидерланды",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Netherlands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NL",
+        "kind": "spelling"
+      },
+      {
+        "text": "NLD",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NL",
+      "iso3166Alpha3": "NLD",
+      "iso3166Numeric": "528",
+      "order": 165,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Норвегия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Norway",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NO",
+        "kind": "spelling"
+      },
+      {
+        "text": "NOR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NO",
+      "iso3166Alpha3": "NOR",
+      "iso3166Numeric": "578",
+      "order": 166,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Непал",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Nepal",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NP",
+        "kind": "spelling"
+      },
+      {
+        "text": "NPL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NP",
+      "iso3166Alpha3": "NPL",
+      "iso3166Numeric": "524",
+      "order": 167,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Науру",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Nauru",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NR",
+        "kind": "spelling"
+      },
+      {
+        "text": "NRU",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NR",
+      "iso3166Alpha3": "NRU",
+      "iso3166Numeric": "520",
+      "order": 168,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ниуэ",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Niue",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NU",
+        "kind": "spelling"
+      },
+      {
+        "text": "NIU",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NU",
+      "iso3166Alpha3": "NIU",
+      "iso3166Numeric": "570",
+      "order": 169,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Новая Зеландия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "New Zealand",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "NZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "NZL",
+        "kind": "spelling"
+      },
+      {
+        "text": "Аотеароа (Новая Зеландия)",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Aotearoa New Zealand",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "NZ",
+      "iso3166Alpha3": "NZL",
+      "iso3166Numeric": "554",
+      "order": 170,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Оман",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Oman",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "OM",
+        "kind": "spelling"
+      },
+      {
+        "text": "OMN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "OM",
+      "iso3166Alpha3": "OMN",
+      "iso3166Numeric": "512",
+      "order": 171,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Панама",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Panama",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PA",
+        "kind": "spelling"
+      },
+      {
+        "text": "PAN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PA",
+      "iso3166Alpha3": "PAN",
+      "iso3166Numeric": "591",
+      "order": 172,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Перу",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Peru",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PE",
+        "kind": "spelling"
+      },
+      {
+        "text": "PER",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PE",
+      "iso3166Alpha3": "PER",
+      "iso3166Numeric": "604",
+      "order": 173,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Французская Полинезия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "French Polynesia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PF",
+        "kind": "spelling"
+      },
+      {
+        "text": "PYF",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PF",
+      "iso3166Alpha3": "PYF",
+      "iso3166Numeric": "258",
+      "order": 174,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Папуа — Новая Гвинея",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Papua New Guinea",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PG",
+        "kind": "spelling"
+      },
+      {
+        "text": "PNG",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PG",
+      "iso3166Alpha3": "PNG",
+      "iso3166Numeric": "598",
+      "order": 175,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Филиппины",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Philippines",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PH",
+        "kind": "spelling"
+      },
+      {
+        "text": "PHL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PH",
+      "iso3166Alpha3": "PHL",
+      "iso3166Numeric": "608",
+      "order": 176,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Пакистан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Pakistan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PK",
+        "kind": "spelling"
+      },
+      {
+        "text": "PAK",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PK",
+      "iso3166Alpha3": "PAK",
+      "iso3166Numeric": "586",
+      "order": 177,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Польша",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Poland",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PL",
+        "kind": "spelling"
+      },
+      {
+        "text": "POL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PL",
+      "iso3166Alpha3": "POL",
+      "iso3166Numeric": "616",
+      "order": 178,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сен-Пьер и Микелон",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "St. Pierre & Miquelon",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PM",
+        "kind": "spelling"
+      },
+      {
+        "text": "SPM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PM",
+      "iso3166Alpha3": "SPM",
+      "iso3166Numeric": "666",
+      "order": 179,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "о-ва Питкэрн",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Pitcairn Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PN",
+        "kind": "spelling"
+      },
+      {
+        "text": "PCN",
+        "kind": "spelling"
+      },
+      {
+        "text": "Pitcairn",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PN",
+      "iso3166Alpha3": "PCN",
+      "iso3166Numeric": "612",
+      "order": 180,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Пуэрто-Рико",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Puerto Rico",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PR",
+        "kind": "spelling"
+      },
+      {
+        "text": "PRI",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PR",
+      "iso3166Alpha3": "PRI",
+      "iso3166Numeric": "630",
+      "order": 181,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Палестинские территории",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Palestinian Territories",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PS",
+        "kind": "spelling"
+      },
+      {
+        "text": "PSE",
+        "kind": "spelling"
+      },
+      {
+        "text": "Палестина",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Palestine",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PS",
+      "iso3166Alpha3": "PSE",
+      "iso3166Numeric": "275",
+      "order": 182,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Португалия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Portugal",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PT",
+        "kind": "spelling"
+      },
+      {
+        "text": "PRT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PT",
+      "iso3166Alpha3": "PRT",
+      "iso3166Numeric": "620",
+      "order": 183,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Палау",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Palau",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PW",
+        "kind": "spelling"
+      },
+      {
+        "text": "PLW",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PW",
+      "iso3166Alpha3": "PLW",
+      "iso3166Numeric": "585",
+      "order": 184,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Парагвай",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Paraguay",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "PY",
+        "kind": "spelling"
+      },
+      {
+        "text": "PRY",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "PY",
+      "iso3166Alpha3": "PRY",
+      "iso3166Numeric": "600",
+      "order": 185,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Катар",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Qatar",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "QA",
+        "kind": "spelling"
+      },
+      {
+        "text": "QAT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "QA",
+      "iso3166Alpha3": "QAT",
+      "iso3166Numeric": "634",
+      "order": 186,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Реюньон",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Réunion",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "RE",
+        "kind": "spelling"
+      },
+      {
+        "text": "REU",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "RE",
+      "iso3166Alpha3": "REU",
+      "iso3166Numeric": "638",
+      "order": 187,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Румыния",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Romania",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "RO",
+        "kind": "spelling"
+      },
+      {
+        "text": "ROU",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "RO",
+      "iso3166Alpha3": "ROU",
+      "iso3166Numeric": "642",
+      "order": 188,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сербия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Serbia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "RS",
+        "kind": "spelling"
+      },
+      {
+        "text": "SRB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "RS",
+      "iso3166Alpha3": "SRB",
+      "iso3166Numeric": "688",
+      "order": 189,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Россия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Russia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "RU",
+        "kind": "spelling"
+      },
+      {
+        "text": "RUS",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "RU",
+      "iso3166Alpha3": "RUS",
+      "iso3166Numeric": "643",
+      "order": 190,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Руанда",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Rwanda",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "RW",
+        "kind": "spelling"
+      },
+      {
+        "text": "RWA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "RW",
+      "iso3166Alpha3": "RWA",
+      "iso3166Numeric": "646",
+      "order": 191,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Саудовская Аравия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Saudi Arabia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SA",
+        "kind": "spelling"
+      },
+      {
+        "text": "SAU",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SA",
+      "iso3166Alpha3": "SAU",
+      "iso3166Numeric": "682",
+      "order": 192,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Соломоновы о-ва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Solomon Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SB",
+        "kind": "spelling"
+      },
+      {
+        "text": "SLB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SB",
+      "iso3166Alpha3": "SLB",
+      "iso3166Numeric": "090",
+      "order": 193,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сейшельские о-ва",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Seychelles",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SC",
+        "kind": "spelling"
+      },
+      {
+        "text": "SYC",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SC",
+      "iso3166Alpha3": "SYC",
+      "iso3166Numeric": "690",
+      "order": 194,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Судан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Sudan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SD",
+        "kind": "spelling"
+      },
+      {
+        "text": "SDN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SD",
+      "iso3166Alpha3": "SDN",
+      "iso3166Numeric": "729",
+      "order": 195,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Швеция",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Sweden",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SE",
+        "kind": "spelling"
+      },
+      {
+        "text": "SWE",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SE",
+      "iso3166Alpha3": "SWE",
+      "iso3166Numeric": "752",
+      "order": 196,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сингапур",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Singapore",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SG",
+        "kind": "spelling"
+      },
+      {
+        "text": "SGP",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SG",
+      "iso3166Alpha3": "SGP",
+      "iso3166Numeric": "702",
+      "order": 197,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "о-в Св. Елены",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "St. Helena",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SH",
+        "kind": "spelling"
+      },
+      {
+        "text": "SHN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SH",
+      "iso3166Alpha3": "SHN",
+      "iso3166Numeric": "654",
+      "order": 198,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Словения",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Slovenia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SI",
+        "kind": "spelling"
+      },
+      {
+        "text": "SVN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SI",
+      "iso3166Alpha3": "SVN",
+      "iso3166Numeric": "705",
+      "order": 199,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Шпицберген и Ян-Майен",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Svalbard & Jan Mayen",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SJ",
+        "kind": "spelling"
+      },
+      {
+        "text": "SJM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SJ",
+      "iso3166Alpha3": "SJM",
+      "iso3166Numeric": "744",
+      "order": 200,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Словакия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Slovakia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SK",
+        "kind": "spelling"
+      },
+      {
+        "text": "SVK",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SK",
+      "iso3166Alpha3": "SVK",
+      "iso3166Numeric": "703",
+      "order": 201,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сьерра-Леоне",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Sierra Leone",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SL",
+        "kind": "spelling"
+      },
+      {
+        "text": "SLE",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SL",
+      "iso3166Alpha3": "SLE",
+      "iso3166Numeric": "694",
+      "order": 202,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сан-Марино",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "San Marino",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SM",
+        "kind": "spelling"
+      },
+      {
+        "text": "SMR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SM",
+      "iso3166Alpha3": "SMR",
+      "iso3166Numeric": "674",
+      "order": 203,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сенегал",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Senegal",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SN",
+        "kind": "spelling"
+      },
+      {
+        "text": "SEN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SN",
+      "iso3166Alpha3": "SEN",
+      "iso3166Numeric": "686",
+      "order": 204,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сомали",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Somalia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SO",
+        "kind": "spelling"
+      },
+      {
+        "text": "SOM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SO",
+      "iso3166Alpha3": "SOM",
+      "iso3166Numeric": "706",
+      "order": 205,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Суринам",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Suriname",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SR",
+        "kind": "spelling"
+      },
+      {
+        "text": "SUR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SR",
+      "iso3166Alpha3": "SUR",
+      "iso3166Numeric": "740",
+      "order": 206,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Южный Судан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "South Sudan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SS",
+        "kind": "spelling"
+      },
+      {
+        "text": "SSD",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SS",
+      "iso3166Alpha3": "SSD",
+      "iso3166Numeric": "728",
+      "order": 207,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сан-Томе и Принсипи",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "São Tomé & Príncipe",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "ST",
+        "kind": "spelling"
+      },
+      {
+        "text": "STP",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "ST",
+      "iso3166Alpha3": "STP",
+      "iso3166Numeric": "678",
+      "order": 208,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сальвадор",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "El Salvador",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SV",
+        "kind": "spelling"
+      },
+      {
+        "text": "SLV",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SV",
+      "iso3166Alpha3": "SLV",
+      "iso3166Numeric": "222",
+      "order": 209,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Синт-Мартен",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Sint Maarten",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SX",
+        "kind": "spelling"
+      },
+      {
+        "text": "SXM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SX",
+      "iso3166Alpha3": "SXM",
+      "iso3166Numeric": "534",
+      "order": 210,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сирия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Syria",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SY",
+        "kind": "spelling"
+      },
+      {
+        "text": "SYR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SY",
+      "iso3166Alpha3": "SYR",
+      "iso3166Numeric": "760",
+      "order": 211,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Эсватини",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Eswatini",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "SZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "SWZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "Свазиленд",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "Swaziland",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "SZ",
+      "iso3166Alpha3": "SWZ",
+      "iso3166Numeric": "748",
+      "order": 212,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Тёркс и Кайкос",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Turks & Caicos Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TC",
+        "kind": "spelling"
+      },
+      {
+        "text": "TCA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TC",
+      "iso3166Alpha3": "TCA",
+      "iso3166Numeric": "796",
+      "order": 213,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Чад",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Chad",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TD",
+        "kind": "spelling"
+      },
+      {
+        "text": "TCD",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TD",
+      "iso3166Alpha3": "TCD",
+      "iso3166Numeric": "148",
+      "order": 214,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Французские Южные территории",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "French Southern Territories",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TF",
+        "kind": "spelling"
+      },
+      {
+        "text": "ATF",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TF",
+      "iso3166Alpha3": "ATF",
+      "iso3166Numeric": "260",
+      "order": 215,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Того",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Togo",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TG",
+        "kind": "spelling"
+      },
+      {
+        "text": "TGO",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TG",
+      "iso3166Alpha3": "TGO",
+      "iso3166Numeric": "768",
+      "order": 216,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Таиланд",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Thailand",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TH",
+        "kind": "spelling"
+      },
+      {
+        "text": "THA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TH",
+      "iso3166Alpha3": "THA",
+      "iso3166Numeric": "764",
+      "order": 217,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Таджикистан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Tajikistan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TJ",
+        "kind": "spelling"
+      },
+      {
+        "text": "TJK",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TJ",
+      "iso3166Alpha3": "TJK",
+      "iso3166Numeric": "762",
+      "order": 218,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Токелау",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Tokelau",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TK",
+        "kind": "spelling"
+      },
+      {
+        "text": "TKL",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TK",
+      "iso3166Alpha3": "TKL",
+      "iso3166Numeric": "772",
+      "order": 219,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Восточный Тимор",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Timor-Leste",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TL",
+        "kind": "spelling"
+      },
+      {
+        "text": "TLS",
+        "kind": "spelling"
+      },
+      {
+        "text": "Тимор-Лесте",
+        "kind": "locale",
+        "locale": "ru"
+      },
+      {
+        "text": "East Timor",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TL",
+      "iso3166Alpha3": "TLS",
+      "iso3166Numeric": "626",
+      "order": 220,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Туркменистан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Turkmenistan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TM",
+        "kind": "spelling"
+      },
+      {
+        "text": "TKM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TM",
+      "iso3166Alpha3": "TKM",
+      "iso3166Numeric": "795",
+      "order": 221,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Тунис",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Tunisia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TN",
+        "kind": "spelling"
+      },
+      {
+        "text": "TUN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TN",
+      "iso3166Alpha3": "TUN",
+      "iso3166Numeric": "788",
+      "order": 222,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Тонга",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Tonga",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TO",
+        "kind": "spelling"
+      },
+      {
+        "text": "TON",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TO",
+      "iso3166Alpha3": "TON",
+      "iso3166Numeric": "776",
+      "order": 223,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Турция",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Türkiye",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TR",
+        "kind": "spelling"
+      },
+      {
+        "text": "TUR",
+        "kind": "spelling"
+      },
+      {
+        "text": "Turkey",
+        "kind": "locale",
+        "locale": "en"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TR",
+      "iso3166Alpha3": "TUR",
+      "iso3166Numeric": "792",
+      "order": 224,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Тринидад и Тобаго",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Trinidad & Tobago",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TT",
+        "kind": "spelling"
+      },
+      {
+        "text": "TTO",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TT",
+      "iso3166Alpha3": "TTO",
+      "iso3166Numeric": "780",
+      "order": 225,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Тувалу",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Tuvalu",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TV",
+        "kind": "spelling"
+      },
+      {
+        "text": "TUV",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TV",
+      "iso3166Alpha3": "TUV",
+      "iso3166Numeric": "798",
+      "order": 226,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Тайвань",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Taiwan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TW",
+        "kind": "spelling"
+      },
+      {
+        "text": "TWN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TW",
+      "iso3166Alpha3": "TWN",
+      "iso3166Numeric": "158",
+      "order": 227,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Танзания",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Tanzania",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "TZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "TZA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "TZ",
+      "iso3166Alpha3": "TZA",
+      "iso3166Numeric": "834",
+      "order": 228,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Украина",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Ukraine",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "UA",
+        "kind": "spelling"
+      },
+      {
+        "text": "UKR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "UA",
+      "iso3166Alpha3": "UKR",
+      "iso3166Numeric": "804",
+      "order": 229,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Уганда",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Uganda",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "UG",
+        "kind": "spelling"
+      },
+      {
+        "text": "UGA",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "UG",
+      "iso3166Alpha3": "UGA",
+      "iso3166Numeric": "800",
+      "order": 230,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Внешние малые о-ва (США)",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "U.S. Outlying Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "UM",
+        "kind": "spelling"
+      },
+      {
+        "text": "UMI",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "UM",
+      "iso3166Alpha3": "UMI",
+      "iso3166Numeric": "581",
+      "order": 231,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Соединенные Штаты",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "United States",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "US",
+        "kind": "spelling"
+      },
+      {
+        "text": "USA",
+        "kind": "spelling"
+      },
+      {
+        "text": "США",
+        "kind": "locale",
+        "locale": "ru"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "US",
+      "iso3166Alpha3": "USA",
+      "iso3166Numeric": "840",
+      "order": 232,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Уругвай",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Uruguay",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "UY",
+        "kind": "spelling"
+      },
+      {
+        "text": "URY",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "UY",
+      "iso3166Alpha3": "URY",
+      "iso3166Numeric": "858",
+      "order": 233,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Узбекистан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Uzbekistan",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "UZ",
+        "kind": "spelling"
+      },
+      {
+        "text": "UZB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "UZ",
+      "iso3166Alpha3": "UZB",
+      "iso3166Numeric": "860",
+      "order": 234,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Ватикан",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Vatican City",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "VA",
+        "kind": "spelling"
+      },
+      {
+        "text": "VAT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "VA",
+      "iso3166Alpha3": "VAT",
+      "iso3166Numeric": "336",
+      "order": 235,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Сент-Винсент и Гренадины",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "St. Vincent & Grenadines",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "VC",
+        "kind": "spelling"
+      },
+      {
+        "text": "VCT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "VC",
+      "iso3166Alpha3": "VCT",
+      "iso3166Numeric": "670",
+      "order": 236,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Венесуэла",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Venezuela",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "VE",
+        "kind": "spelling"
+      },
+      {
+        "text": "VEN",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "VE",
+      "iso3166Alpha3": "VEN",
+      "iso3166Numeric": "862",
+      "order": 237,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Виргинские о-ва (Великобритания)",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "British Virgin Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "VG",
+        "kind": "spelling"
+      },
+      {
+        "text": "VGB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "VG",
+      "iso3166Alpha3": "VGB",
+      "iso3166Numeric": "092",
+      "order": 238,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Виргинские о-ва (США)",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "U.S. Virgin Islands",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "VI",
+        "kind": "spelling"
+      },
+      {
+        "text": "VIR",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "VI",
+      "iso3166Alpha3": "VIR",
+      "iso3166Numeric": "850",
+      "order": 239,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Вьетнам",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Vietnam",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "VN",
+        "kind": "spelling"
+      },
+      {
+        "text": "VNM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "VN",
+      "iso3166Alpha3": "VNM",
+      "iso3166Numeric": "704",
+      "order": 240,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Вануату",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Vanuatu",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "VU",
+        "kind": "spelling"
+      },
+      {
+        "text": "VUT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "VU",
+      "iso3166Alpha3": "VUT",
+      "iso3166Numeric": "548",
+      "order": 241,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Уоллис и Футуна",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Wallis & Futuna",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "WF",
+        "kind": "spelling"
+      },
+      {
+        "text": "WLF",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "WF",
+      "iso3166Alpha3": "WLF",
+      "iso3166Numeric": "876",
+      "order": 242,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Самоа",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Samoa",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "WS",
+        "kind": "spelling"
+      },
+      {
+        "text": "WSM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "WS",
+      "iso3166Alpha3": "WSM",
+      "iso3166Numeric": "882",
+      "order": 243,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Йемен",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Yemen",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "YE",
+        "kind": "spelling"
+      },
+      {
+        "text": "YEM",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "YE",
+      "iso3166Alpha3": "YEM",
+      "iso3166Numeric": "887",
+      "order": 244,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Майотта",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Mayotte",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "YT",
+        "kind": "spelling"
+      },
+      {
+        "text": "MYT",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "YT",
+      "iso3166Alpha3": "MYT",
+      "iso3166Numeric": "175",
+      "order": 245,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Южно-Африканская Республика",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "South Africa",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "ZA",
+        "kind": "spelling"
+      },
+      {
+        "text": "ZAF",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "ZA",
+      "iso3166Alpha3": "ZAF",
+      "iso3166Numeric": "710",
+      "order": 246,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Замбия",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Zambia",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "ZM",
+        "kind": "spelling"
+      },
+      {
+        "text": "ZMB",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "ZM",
+      "iso3166Alpha3": "ZMB",
+      "iso3166Numeric": "894",
+      "order": 247,
+      "directions": []
+    }
+  },
+  {
+    "canonical": "Зимбабве",
+    "status": "confirmed",
+    "aliases": [
+      {
+        "text": "Zimbabwe",
+        "kind": "locale",
+        "locale": "en"
+      },
+      {
+        "text": "ZW",
+        "kind": "spelling"
+      },
+      {
+        "text": "ZWE",
+        "kind": "spelling"
+      }
+    ],
+    "metadata": {
+      "iso3166Alpha2": "ZW",
+      "iso3166Alpha3": "ZWE",
+      "iso3166Numeric": "716",
+      "order": 248,
+      "directions": []
+    }
+  }
+]

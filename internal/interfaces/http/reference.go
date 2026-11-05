@@ -81,6 +81,9 @@ type snapshotAliasJSON struct {
 }
 
 type snapshotEntryJSON struct {
+	Directions []string            `json:"directions"`
+	Order      int                 `json:"order"`
+	Label      string              `json:"label,omitempty"`
 	ID         ids.UUID            `json:"id"`
 	Canonical  string              `json:"canonical"`
 	Key        string              `json:"key"`
@@ -89,7 +92,19 @@ type snapshotEntryJSON struct {
 	Aliases    []snapshotAliasJSON `json:"aliases"`
 }
 
+type snapshotMetadata struct {
+	Directions []string `json:"directions"`
+	Order      int      `json:"order"`
+	Label      string   `json:"label"`
+}
+
+type discoveryJSON struct {
+	SchemaVersion int                           `json:"schemaVersion"`
+	Dictionaries  []appreference.DictionaryView `json:"dictionaries"`
+}
+
 type snapshotJSON struct {
+	Kind          reference.Kind      `json:"kind"`
 	SchemaVersion int                 `json:"schemaVersion"`
 	Dictionary    string              `json:"dictionary"`
 	Revision      int64               `json:"revision"`
@@ -231,6 +246,7 @@ func (h *referenceHandlers) snapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := snapshotJSON{
+		Kind:          snapshot.Kind,
 		SchemaVersion: appreference.SchemaVersion,
 		Dictionary:    snapshot.Dictionary,
 		Revision:      snapshot.Revision,
@@ -247,6 +263,12 @@ func (h *referenceHandlers) snapshot(w http.ResponseWriter, r *http.Request) {
 			Status:     entry.Status,
 			MergedInto: entry.MergedInto,
 			Aliases:    make([]snapshotAliasJSON, 0, len(entry.Aliases)),
+		}
+		var metadata snapshotMetadata
+		_ = json.Unmarshal(entry.Metadata, &metadata)
+		item.Directions, item.Order, item.Label = metadata.Directions, metadata.Order, metadata.Label
+		if item.Directions == nil {
+			item.Directions = []string{}
 		}
 		for _, alias := range entry.Aliases {
 			item.Aliases = append(item.Aliases, snapshotAliasJSON{Text: alias.Text, Key: alias.Key, Kind: alias.Kind})
