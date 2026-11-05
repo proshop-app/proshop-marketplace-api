@@ -471,16 +471,3 @@ seller_unreachable или delivery_unavailable, либо истечение ок
 блок магазин отправляет новой ревизией проекции. Прямая доставка причин в
 админку магазина потребует отдельного авторизованного стыка: операторский
 токен не передаётся магазинам.
-
-## Общий reference platform
-
-Владелец общего справочника — MongoDB `platform` сервера. Marketplace читает
-`/api/v1/internal/reference/{dict}/{snapshot|resolve|entries|values}` и список
-словарей с ревизиями `GET /api/v1/internal/reference` (сверка копии enum)
-токеном `REFERENCE_READ_TOKEN`; операторские мутации и поставки передаёт отдельным
-`REFERENCE_WRITE_TOKEN` и доверенным `X-Reference-Actor`. Пути и JSON старого
-marketplace reference API сохранены; `ETag`/`If-Match` проходят через backend.
-Поставка: `POST .../{dict}/deliveries/{apply|rollback}` с
-`{release,checksum,entriesJson}`, где `entriesJson` — точный UTF-8 текст файла
-для проверки его исходного SHA-256. Контракт, ошибки, гидратация enum и
-безопасный cutover старого outbox — [reference.md](reference.md).

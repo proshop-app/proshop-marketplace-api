@@ -160,6 +160,8 @@ type Kafka struct {
 	TopicPrefix string
 	GroupID     string
 	MaxAttempts int
+	// ReferenceTopic — имя топика catalog.reference.changed без префикса; топик заводит сервер установки.
+	ReferenceTopic string
 }
 
 // Outbox — разбор очереди задач.
@@ -184,12 +186,6 @@ type Reference struct {
 	// ReadToken открывает только снимок, resolve и чтение записей: бэкенды
 	// поиска и сервера не получают прав оператора площадки. Пусто — читает только оператор.
 	ReadToken string
-	// WriteToken доступен только backend оператора; отличается от токена чтения.
-	WriteToken string
-	// RefreshInterval — сверка копии закрытых словарей с владельцем.
-	RefreshInterval time.Duration
-	// MaxStaleness — дольше без подтверждения копия не годится для проверки публикации.
-	MaxStaleness time.Duration
 }
 
 // Operator — машинный токен и отдельная учётная запись платформы для панели.
@@ -233,10 +229,11 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			Replicas:           r.nonNegative("OPENSEARCH_REPLICAS", 1),
 		},
 		Kafka: Kafka{
-			Brokers:     r.list("KAFKA_BROKERS"),
-			TopicPrefix: r.str("KAFKA_TOPIC_PREFIX", ""),
-			GroupID:     r.str("KAFKA_GROUP_ID", "marketplace"),
-			MaxAttempts: r.positive("KAFKA_MAX_ATTEMPTS", 5),
+			Brokers:        r.list("KAFKA_BROKERS"),
+			TopicPrefix:    r.str("KAFKA_TOPIC_PREFIX", ""),
+			GroupID:        r.str("KAFKA_GROUP_ID", "marketplace"),
+			MaxAttempts:    r.positive("KAFKA_MAX_ATTEMPTS", 5),
+			ReferenceTopic: r.str("KAFKA_TOPIC_REFERENCE_CHANGED", "catalog.reference.changed"),
 		},
 		Outbox: Outbox{
 			PollInterval: r.duration("OUTBOX_POLL_INTERVAL", time.Second),
@@ -303,13 +300,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			RefreshInterval: r.duration("PICKUP_REFRESH_INTERVAL", 24*time.Hour),
 			PickupIndex:     r.str("OPENSEARCH_PICKUP_INDEX", "marketplace-pickup-points"),
 		},
-		Settings: Settings{SyncInterval: r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute)},
-		Reference: Reference{
-			ReadToken:       r.str("REFERENCE_READ_TOKEN", ""),
-			WriteToken:      r.str("REFERENCE_WRITE_TOKEN", ""),
-			RefreshInterval: r.duration("REFERENCE_REFRESH_INTERVAL", 30*time.Second),
-			MaxStaleness:    r.duration("REFERENCE_MAX_STALENESS", 10*time.Minute),
-		},
+		Settings:  Settings{SyncInterval: r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute)},
+		Reference: Reference{ReadToken: r.str("REFERENCE_READ_TOKEN", "")},
 		ModelKeys: r.boolean("MARKETPLACE_MODEL_KEYS", false),
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
 	}
@@ -330,6 +322,9 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	if strings.TrimSpace(cfg.Kafka.GroupID) == "" {
 		r.fail("KAFKA_GROUP_ID", "не может быть пустым")
 	}
+	if strings.TrimSpace(cfg.Kafka.ReferenceTopic) == "" {
+		r.fail("KAFKA_TOPIC_REFERENCE_CHANGED", "не может быть пустым")
+	}
 	if cfg.Outbox.PerTenant > cfg.Outbox.Batch {
 		r.fail("OUTBOX_PER_TENANT", "не больше OUTBOX_BATCH")
 	}
@@ -342,39 +337,10 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	if (cfg.Delivery.CDEK.ClientID == "") != (cfg.Delivery.CDEK.ClientSecret == "") {
 		r.fail("CDEK_CLIENT_ID", "задаётся вместе с CDEK_CLIENT_SECRET")
 	}
-	// одна пропущенная сверка не должна останавливать публикацию товаров
-	if cfg.Reference.MaxStaleness < 2*cfg.Reference.RefreshInterval {
-		r.fail("REFERENCE_MAX_STALENESS", "не меньше двух REFERENCE_REFRESH_INTERVAL")
-	}
 
 	r.validateReference(cfg)
 	r.validateOperator(cfg.Operator)
 	r.validateIdentityOperator(cfg)
-	return cfg, r.err()
-}
-
-// LoadReference читает только зависимости CLI-потребителя реестра.
-func LoadReference(env func(string) (string, bool)) (Config, error) {
-	r := reader{env: env}
-	cfg := Config{
-		Platform: Platform{URL: r.httpURL("PLATFORM_API_URL"), Timeout: 5 * time.Second},
-		Reference: Reference{
-			ReadToken:  r.str("REFERENCE_READ_TOKEN", ""),
-			WriteToken: r.required("REFERENCE_WRITE_TOKEN"),
-		},
-	}
-	r.validateReference(cfg)
-	return cfg, r.err()
-}
-
-// LoadReferenceReader — чтение общих значений схемы, без прав записи.
-func LoadReferenceReader(env func(string) (string, bool)) (Config, error) {
-	r := reader{env: env}
-	cfg := Config{
-		Platform:  Platform{URL: r.httpURL("PLATFORM_API_URL"), Timeout: 5 * time.Second},
-		Reference: Reference{ReadToken: r.required("REFERENCE_READ_TOKEN")},
-	}
-	r.validateReference(cfg)
 	return cfg, r.err()
 }
 
@@ -615,14 +581,16 @@ func (r *reader) subsidyPercent() int {
 	return value
 }
 
+// FullTopic — имя топика установки: <prefix>.<имя>, без префикса — само имя.
+func (k Kafka) FullTopic(name string) string {
+	if k.TopicPrefix == "" {
+		return name
+	}
+	return k.TopicPrefix + "." + name
+}
+
 // validateReference: токен читателя не совпадает с секретами, дающими больше прав.
 func (r *reader) validateReference(cfg Config) {
-	write := cfg.Reference.WriteToken
-	if write != "" && (len(write) < minOperatorTokenLength || write == cfg.Reference.ReadToken ||
-		write == cfg.Operator.Token || write == cfg.Platform.Token || write == cfg.Identity.Secret ||
-		write == cfg.Identity.OperatorSecret) {
-		r.fail("REFERENCE_WRITE_TOKEN", "отдельный секрет не короче 32 символов")
-	}
 	token := cfg.Reference.ReadToken
 	if token == "" {
 		return

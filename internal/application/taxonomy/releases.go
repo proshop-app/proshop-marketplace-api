@@ -63,10 +63,6 @@ func (s *Service) changeRelease(
 		if rollback {
 			next.Categories = latest.Previous.Categories
 		}
-		next, err = s.hydrated(ctx, next)
-		if err != nil {
-			return err
-		}
 		if err := next.CheckEvolution(current); err != nil {
 			return err
 		}

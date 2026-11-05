@@ -7,94 +7,87 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
+	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 )
 
-// ReferenceRefresher — сверка копии общих словарей с владельцем platform.
-type ReferenceRefresher interface {
-	Refresh(ctx context.Context) (apptaxonomy.ReferenceRefresh, error)
+// ReferenceStats — состояние словарей реестра для метрик.
+type ReferenceStats interface {
+	Stats(ctx context.Context) ([]appreference.Stats, error)
 }
 
-// ReferenceRefreshRunner сверяет копию закрытых словарей раз в интервал.
-type ReferenceRefreshRunner struct {
-	refresher ReferenceRefresher
-	interval  time.Duration
-	logger    *slog.Logger
-	runs      *prometheus.CounterVec
-	age       prometheus.Gauge
+// ReferenceStatsRunner раз в интервал выставляет ревизию реестра, число
+// записей и длину очереди кандидатов: по ним видно, что поставка прошла и
+// что очередь оператора растёт.
+type ReferenceStatsRunner struct {
+	stats      ReferenceStats
+	interval   time.Duration
+	logger     *slog.Logger
+	revision   *prometheus.GaugeVec
+	entries    *prometheus.GaugeVec
+	candidates *prometheus.GaugeVec
+	failures   prometheus.Counter
 }
 
-// NewReferenceRefreshRunner — сверка с метриками итога и давности копии.
-func NewReferenceRefreshRunner(
-	refresher ReferenceRefresher,
+// NewReferenceStatsRunner — метрики реестра с меткой словаря.
+func NewReferenceStatsRunner(
+	stats ReferenceStats,
 	interval time.Duration,
 	logger *slog.Logger,
 	registerer prometheus.Registerer,
-) *ReferenceRefreshRunner {
-	r := &ReferenceRefreshRunner{
-		refresher: refresher,
-		interval:  interval,
-		logger:    logger,
-		runs: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "marketplace_reference_refresh_total",
-				Help: "Сверки копии общих словарей: done, partial (часть словарей не перечитана), failed.",
+) *ReferenceStatsRunner {
+	r := &ReferenceStatsRunner{
+		stats:    stats,
+		interval: interval,
+		logger:   logger,
+		revision: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "marketplace_reference_revision",
+				Help: "Голова журнала словаря реестра.",
 			},
-			[]string{"result"},
+			[]string{"dictionary"},
 		),
-		age: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "marketplace_reference_values_age_seconds",
-			Help: "Сколько не подтверждался владельцем самый давний словарь копии.",
+		entries: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "marketplace_reference_entries",
+				Help: "Записей в словаре реестра.",
+			},
+			[]string{"dictionary"},
+		),
+		candidates: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "marketplace_reference_candidates",
+				Help: "Длина очереди кандидатов словаря реестра.",
+			},
+			[]string{"dictionary"},
+		),
+		failures: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "marketplace_reference_stats_failures_total",
+			Help: "Неудачные чтения состояния реестра для метрик.",
 		}),
 	}
-	registerer.MustRegister(r.runs, r.age)
-
+	registerer.MustRegister(r.revision, r.entries, r.candidates, r.failures)
 	return r
 }
 
-// RunOnce сверяет копию и записывает итог. Об изменениях пишет журнал,
-// о спокойной сверке — только метрика.
-func (r *ReferenceRefreshRunner) RunOnce(ctx context.Context) {
-	result, err := r.refresher.Refresh(ctx)
-	r.age.Set(result.Age.Seconds())
-
-	switch {
-	case err != nil && ctx.Err() == nil:
-		r.runs.WithLabelValues("failed").Inc()
-		r.logger.Warn(
-			"общие словари: владелец не ответил, копия прежняя",
-			slog.Duration("age", result.Age),
-			slog.Any("error", err),
-		)
-	case err != nil:
+// RunOnce читает состояние словарей и выставляет метрики.
+func (r *ReferenceStatsRunner) RunOnce(ctx context.Context) {
+	stats, err := r.stats.Stats(ctx)
+	if err != nil {
+		r.failures.Inc()
+		r.logger.Warn("реестр: метрики не обновлены", slog.Any("error", err))
 		return
-	case len(result.Failed) > 0:
-		r.runs.WithLabelValues("partial").Inc()
-		for code, cause := range result.Failed {
-			r.logger.Warn(
-				"общий словарь: не перечитан",
-				slog.String("dictionary", code),
-				slog.Any("error", cause),
-			)
-		}
-	default:
-		r.runs.WithLabelValues("done").Inc()
 	}
-
-	if len(result.Updated) > 0 || len(result.Dropped) > 0 {
-		r.logger.Info(
-			"общие словари: копия обновлена",
-			slog.Any("updated", result.Updated),
-			slog.Any("dropped", result.Dropped),
-		)
+	for _, s := range stats {
+		r.revision.WithLabelValues(s.Dictionary).Set(float64(s.Revision))
+		r.entries.WithLabelValues(s.Dictionary).Set(float64(s.Entries))
+		r.candidates.WithLabelValues(s.Dictionary).Set(float64(s.Candidates))
 	}
 }
 
-// Run сверяет сразу и далее раз в интервал до отмены контекста.
-func (r *ReferenceRefreshRunner) Run(ctx context.Context) error {
+// Run выставляет метрики сразу и далее раз в интервал до отмены контекста.
+func (r *ReferenceStatsRunner) Run(ctx context.Context) error {
 	for {
 		r.RunOnce(ctx)
-
 		if !wait(ctx, r.interval) {
 			return nil
 		}

@@ -22,6 +22,7 @@ import (
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
@@ -32,12 +33,15 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referenceapi"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
 )
+
+// referenceStatsInterval — как часто обновлять метрики ревизии и очереди кандидатов реестра.
+const referenceStatsInterval = time.Minute
 
 // services — сценарии приложения процесса.
 type services struct {
@@ -57,8 +61,7 @@ type services struct {
 	dispatcher   *messaging.Dispatcher
 	janitor      *messaging.Janitor
 	parker       *messaging.Parker
-	reference    ports.ReferenceAPI
-	values       *apptaxonomy.ReferenceCache
+	reference    *appreference.Service
 	// writer публикует события площадки; закрывается после остановки разбора outbox
 	writer *infrakafka.Writer
 }
@@ -119,18 +122,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	cfg := s.cfg
 	now := clock.System{}
 	identities := random.IDs{}
-	references := referenceapi.New(referenceapi.Config{
-		BaseURL:    cfg.Platform.URL,
-		ReadToken:  cfg.Reference.ReadToken,
-		WriteToken: cfg.Reference.WriteToken,
-		Timeout:    cfg.Platform.Timeout,
-	})
-	// схема читается из копии общих словарей: проверка публикации — с ограниченной
-	// давностью, выдача покупателю — по последней копии, пока владелец недоступен
-	values := apptaxonomy.NewReferenceCache(references, now, cfg.Reference.MaxStaleness)
-	transactions := postgres.NewUnitOfWork(s.store.pool)
-	uow := apptaxonomy.WithReferenceValues(transactions, values)
-	reads := apptaxonomy.WithReferenceValues(transactions, values.Lasting())
+	uow := postgres.NewUnitOfWork(s.store.pool)
 	platform := platformapi.New(platformapi.Config{
 		BaseURL: cfg.Platform.URL,
 		Token:   cfg.Platform.Token,
@@ -140,8 +132,11 @@ func (s *server) services(ctx context.Context) (services, error) {
 	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
 	settings := appparticipant.NewSettings(uow, platform, now)
 	writer := infrakafka.NewWriter(cfg.Kafka.Brokers)
+	references := appreference.NewService(uow, now, identities, writer, appreference.Config{
+		Topic: cfg.Kafka.FullTopic(cfg.Kafka.ReferenceTopic),
+	})
 	models := appcatalog.NewModelKeys(
-		references,
+		referencecatalog.New(references),
 		telemetry.NewModelKeys(s.metrics),
 		cfg.ModelKeys,
 	)
@@ -223,6 +218,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			appcatalog.TaskSyncOffer:        indexer.HandleTask,
 			appcatalog.TaskSyncTenant:       indexer.HandleTask,
 			appparticipant.TaskSyncSettings: settings.HandleTask,
+			appreference.TaskChanged:        references.HandleTask,
 		},
 	)
 	janitor := messaging.NewJanitor(postgres.NewRetention(s.store.pool), now, messaging.RetentionPolicy{
@@ -239,7 +235,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		taxonomy:     apptaxonomy.NewService(uow, now),
 		projector:    projector,
 		indexer:      indexer,
-		queries:      appcatalog.NewQueries(reads, s.store.index, resyncing),
+		queries:      appcatalog.NewQueries(uow, s.store.index, resyncing),
 		participants: appparticipant.NewService(uow, now),
 		registry:     registry,
 		settings:     settings,
@@ -251,7 +247,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 		janitor:      janitor,
 		parker:       messaging.NewParker(uow),
 		reference:    references,
-		values:       values,
 		writer:       writer,
 	}, nil
 }
@@ -342,8 +337,8 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
 		jobs.NewPickupRefreshRunner(s.app.directory, cfg.Delivery.RefreshInterval, s.logger, s.metrics).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).Run,
+		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).Run,
 		jobs.NewModelKeyStatsRunner(postgres.NewModelKeyStats(s.store.pool), s.logger, s.metrics).Run,
-		jobs.NewReferenceRefreshRunner(s.app.values, cfg.Reference.RefreshInterval, s.logger, s.metrics).Run,
 	}
 }
 

@@ -1,5 +1,3 @@
-// Package reference содержит совместимый нормализатор ключей потребителя.
-// Владение справочниками и изменение их данных принадлежит MongoDB platform.
 package reference
 
 import (

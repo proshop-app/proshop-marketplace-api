@@ -41,11 +41,6 @@ func (s *Service) Current(ctx context.Context) (taxonomy.Definition, error) {
 
 // Load — та же версия с теми же данными безопасна; версия назад или иные данные — конфликт.
 func (s *Service) Load(ctx context.Context, d taxonomy.Definition) error {
-	var err error
-	d, err = s.hydrated(ctx, d)
-	if err != nil {
-		return err
-	}
 	if err := d.Validate(); err != nil {
 		return err
 	}

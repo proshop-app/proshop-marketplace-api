@@ -19,20 +19,18 @@ const (
 		ON CONFLICT (dedup_key) WHERE done_at IS NULL AND attempts = 0 DO NOTHING`
 
 	// claimTasks берёт созревшие задачи с квотой на магазин и пропуском занятых строк.
-	// Старый reference.changed исключён: владелец переехал в platform; payload
-	// сохраняет явная команда reference archive-pending, без ложного complete.
 	claimTasks = `
 		WITH due_tenants AS (
 			SELECT DISTINCT tenant_id
 			FROM outbox
-			WHERE done_at IS NULL AND next_at <= $1 AND kind <> 'reference.changed'
+			WHERE done_at IS NULL AND next_at <= $1
 		), candidates AS (
 			SELECT c.id, c.next_at
 			FROM due_tenants t
 			CROSS JOIN LATERAL (
 				SELECT id, next_at
 				FROM outbox
-				WHERE tenant_id = t.tenant_id AND done_at IS NULL AND next_at <= $1 AND kind <> 'reference.changed'
+				WHERE tenant_id = t.tenant_id AND done_at IS NULL AND next_at <= $1
 				ORDER BY next_at, id
 				LIMIT $3
 			) c

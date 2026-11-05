@@ -16,7 +16,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referenceapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
 )
 
@@ -75,16 +74,7 @@ func run(args []string, output, diagnostics io.Writer) int {
 		return failure(diagnostics, "не удалось подключиться к PostgreSQL", 1)
 	}
 	defer pool.Close()
-	reference, err := config.LoadReferenceReader(os.LookupEnv)
-	if err != nil {
-		return failure(diagnostics, "нужны PLATFORM_API_URL и REFERENCE_READ_TOKEN владельца реестра", 2)
-	}
-	values := referenceapi.New(referenceapi.Config{
-		BaseURL:   reference.Platform.URL,
-		ReadToken: reference.Reference.ReadToken,
-		Timeout:   reference.Platform.Timeout,
-	})
-	service := app.NewService(app.WithReferenceValues(postgres.NewUnitOfWork(pool), values), clock.System{})
+	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{})
 	operation := service.Apply
 	if args[0] == "rollback" {
 		operation = service.Rollback
