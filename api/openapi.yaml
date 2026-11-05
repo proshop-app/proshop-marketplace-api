@@ -540,11 +540,44 @@ paths:
           $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - moderation
+      summary: Создать причину; занятый код — moderation.reason_exists
+      operationId: moderationPostApiVOperatorModerationReasons
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '201':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationReason'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationReason'
   /api/v1/operator/moderation/reasons/{code}:
     put:
       tags:
       - moderation
-      summary: Создать или изменить причину
+      summary: Изменить текст существующей причины
       operationId: moderationPutApiVOperatorModerationReasonsCode
       security:
       - operatorToken: []
@@ -580,40 +613,12 @@ paths:
             schema:
               type: object
               required:
-              - text
+              - message
               properties:
-                text:
+                message:
                   type: string
                   minLength: 1
                   maxLength: 200
-    delete:
-      tags:
-      - moderation
-      summary: Удалить причину
-      operationId: moderationDeleteApiVOperatorModerationReasonsCode
-      security:
-      - operatorToken: []
-      - operatorSession: []
-      responses:
-        '204':
-          description: Успешно
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-        '409':
-          $ref: '#/components/responses/Error'
-        '500':
-          $ref: '#/components/responses/Error'
-      parameters:
-      - name: code
-        in: path
-        required: true
-        schema: *id002
   /api/v1/operator/participants/{tenantId}/trust:
     put:
       tags:
@@ -694,6 +699,7 @@ paths:
                       - operator
                       - action
                       - value
+                      - by
                       - reason
                       - note
                       - at
@@ -713,7 +719,13 @@ paths:
                           - disable
                           - trust
                         value: *id002
-                        reason: *id002
+                        reason:
+                          anyOf:
+                          - $ref: '#/components/schemas/ModerationReason'
+                          - type: 'null'
+                        by:
+                          type: string
+                          enum: [operator, system]
                         note: *id002
                         at:
                           type: string
@@ -1707,6 +1719,7 @@ paths:
       operationId: listParticipants
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
+        - { name: trust, in: query, schema: { type: string, enum: [probation, trusted] } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 200 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
@@ -2560,34 +2573,39 @@ components:
     ModerationHistory:
       type: array
       items:
-        type: object
-        required:
-        - operator
-        - action
-        - reason
-        - note
-        - revision
-        - at
-        properties:
-          operator: &id004
-            type: object
-            required:
-            - id
-            - name
-            properties:
-              id: *id001
-              name: *id001
-          action:
-            type: string
-            enum:
-            - allow
-            - reject
-          reason: *id001
-          note: *id001
-          revision: *id002
-          at:
-            type: string
-            format: date-time
+        $ref: '#/components/schemas/ModerationDecision'
+    ModerationDecision:
+      type: object
+      required:
+      - operator
+      - action
+      - reason
+      - note
+      - revision
+      - at
+      properties:
+        operator: &id004
+          type: object
+          required:
+          - id
+          - name
+          properties:
+            id: *id001
+            name: *id001
+        action:
+          type: string
+          enum:
+          - allow
+          - reject
+        reason:
+          anyOf:
+          - $ref: '#/components/schemas/ModerationReason'
+          - type: 'null'
+        note: *id001
+        revision: *id002
+        at:
+          type: string
+          format: date-time
     ModerationStopPhrase:
       type: object
       required:
@@ -2606,12 +2624,12 @@ components:
       type: object
       required:
       - code
-      - text
+      - message
       properties:
         code:
           type: string
           pattern: ^[a-z][a-z0-9_]{0,63}$
-        text:
+        message:
           type: string
           minLength: 1
           maxLength: 200
@@ -2621,7 +2639,12 @@ components:
       - case
       - offer
       - history
+      - decision
       properties:
+        decision:
+          anyOf:
+          - $ref: '#/components/schemas/ModerationDecision'
+          - type: 'null'
         case:
           $ref: '#/components/schemas/ModerationCase'
         offer:

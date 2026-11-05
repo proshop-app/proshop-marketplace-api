@@ -109,7 +109,7 @@ func routes(deps Deps) []route {
 		{http.MethodDelete, "/api/v1/operator/moderation/stop-phrases/{key}", operator(moderation.removePhrase)},
 		{http.MethodGet, "/api/v1/operator/moderation/reasons", operator(moderation.reasons)},
 		{http.MethodPut, "/api/v1/operator/moderation/reasons/{code}", operator(moderation.putReason)},
-		{http.MethodDelete, "/api/v1/operator/moderation/reasons/{code}", operator(moderation.removeReason)},
+		{http.MethodPost, "/api/v1/operator/moderation/reasons", operator(moderation.addReason)},
 		{http.MethodPost, "/api/v1/operator/session", gateway.login},
 		{http.MethodPost, "/api/v1/operator/session/refresh", gateway.refresh},
 		{http.MethodGet, "/api/v1/operator/session", gateway.session},

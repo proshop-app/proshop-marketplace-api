@@ -10,9 +10,10 @@ import (
 // Значения статусов сохраняются в БД и проверяются ограничениями схемы.
 const (
 	insertParticipantDecision = `INSERT INTO participant_decisions
- (id, tenant_id, operator_id, operator_name, action, value, reason, note, at)
- VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
-	listParticipantDecisions = `SELECT id, tenant_id, operator_id, operator_name, action, value, reason, note, at
+ (id, tenant_id, operator_id, operator_name, action, value, reason, note, at, reason_message, actor)
+ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+	listParticipantDecisions = `SELECT id, tenant_id, operator_id, operator_name,
+ action, value, reason, note, at, reason_message, actor
  FROM participant_decisions WHERE tenant_id = $1 ORDER BY at DESC, id DESC LIMIT $2 OFFSET $3`
 	countParticipantDecisions = `SELECT count(*) FROM participant_decisions WHERE tenant_id = $1`
 )
@@ -22,6 +23,9 @@ type ParticipantDecisions struct{ q querier }
 
 // Add добавляет решение без изменения прежних записей.
 func (r *ParticipantDecisions) Add(ctx context.Context, d participant.DecisionRecord) error {
+	if d.Actor == "" {
+		d.Actor = "operator"
+	}
 	_, err := r.q.Exec(
 		ctx,
 		insertParticipantDecision,
@@ -34,6 +38,8 @@ func (r *ParticipantDecisions) Add(ctx context.Context, d participant.DecisionRe
 		d.Reason,
 		d.Note,
 		d.At,
+		d.ReasonMessage,
+		d.Actor,
 	)
 	return err
 }
@@ -66,6 +72,8 @@ func (r *ParticipantDecisions) List(
 			&d.Reason,
 			&d.Note,
 			&d.At,
+			&d.ReasonMessage,
+			&d.Actor,
 		)
 		if err != nil {
 			return nil, 0, err

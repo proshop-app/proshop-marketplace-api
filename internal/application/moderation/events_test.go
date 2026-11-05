@@ -13,6 +13,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 )
 
@@ -75,7 +76,9 @@ func TestStatusEvents(t *testing.T) {
 	if err := json.Unmarshal(publisher.Messages()[1].Value, &allowed); err != nil {
 		t.Fatal(err)
 	}
-	if allowed.Status != "published" || !allowed.Visible || allowed.Reasons == nil || len(allowed.Reasons) != 0 {
+	if allowed.Decision == nil || allowed.Decision.Action != moderation.Allow ||
+		allowed.Status != "published" || !allowed.Visible || allowed.Reasons == nil ||
+		len(allowed.Reasons) != 0 {
 		t.Fatal(allowed)
 	}
 	before := e.store.OutboxRows()
@@ -101,8 +104,14 @@ func TestStatusEvents(t *testing.T) {
 		t.Fatal("повтор публикации изменил состояние")
 	}
 	members := appparticipant.NewService(e.store, e.clock, &fake.IDs{})
-	decision := participant.Decision{Reason: "probation_completed", Note: "Проверено"}
+	if err := e.service.AddReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Текст"}); err != nil {
+		t.Fatal(err)
+	}
+	decision := participant.Decision{Reason: "r1", Note: "Проверено"}
 	if _, err := members.SetTrust(ctx, "t1", participant.Trusted, decision); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.service.PutReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Изменено"}); err != nil {
 		t.Fatal(err)
 	}
 	task = statusTask(t, e, moderationstatus.TaskParticipant)
@@ -118,7 +127,8 @@ func TestStatusEvents(t *testing.T) {
 		t.Fatal(message)
 	}
 	if member.SchemaVersion != 1 || !member.Enabled || member.Trust != participant.Trusted ||
-		member.Reason != decision.Reason || member.Note != decision.Note || member.At != pending.At {
+		member.Reason == nil || member.Reason.Code != decision.Reason || member.By != "operator" ||
+		member.Note != decision.Note || member.At != pending.At || member.Reason.Text != "Текст" {
 		t.Fatal(member)
 	}
 	before = e.store.OutboxRows()
@@ -159,7 +169,10 @@ func TestParticipantStatusLatestDecisionAndRollback(t *testing.T) {
 	publisher := &fake.Publisher{}
 	service := moderationstatus.NewService(e.store, e.clock, publisher, "offer", "participant")
 	members := appparticipant.NewService(e.store, e.clock, &fake.IDs{})
-	decision := participant.Decision{Reason: "review", Note: "Проверка"}
+	if err := e.service.AddReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Текст"}); err != nil {
+		t.Fatal(err)
+	}
+	decision := participant.Decision{Reason: "r1", Note: "Проверка"}
 	e.store.FailCommit = errors.New("сбой фиксации")
 	if _, err := members.Disable(ctx, "t1", decision); err == nil {
 		t.Fatal("ожидался откат")
@@ -180,7 +193,7 @@ func TestParticipantStatusLatestDecisionAndRollback(t *testing.T) {
 		t.Fatal(disabled, err)
 	}
 	e.clock.Advance(time.Second)
-	decision = participant.Decision{Reason: "review_completed", Note: "Проверено"}
+	decision = participant.Decision{Reason: "r1", Note: "Проверено"}
 	if _, err := members.Enable(ctx, "t1", decision); err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +205,8 @@ func TestParticipantStatusLatestDecisionAndRollback(t *testing.T) {
 	if err := json.Unmarshal(publisher.Messages()[1].Value, &enabled); err != nil {
 		t.Fatal(err)
 	}
-	if !enabled.Enabled || enabled.Reason != decision.Reason || enabled.Note != decision.Note {
+	if !enabled.Enabled || enabled.Reason == nil || enabled.Reason.Code != decision.Reason ||
+		enabled.By != "operator" || enabled.Note != decision.Note {
 		t.Fatal("не получено последнее решение", enabled)
 	}
 }

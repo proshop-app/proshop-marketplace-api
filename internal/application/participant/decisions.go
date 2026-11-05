@@ -7,6 +7,7 @@ import (
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -42,6 +43,11 @@ func (s *Service) decide(
 		if err != nil {
 			return err
 		}
+		message, err := moderation.ResolveReason(ctx, tx.ModerationRules(), decision.Reason)
+		if err != nil {
+			return err
+		}
+		decision.ReasonMessage = message
 		now := s.clock.Now()
 		changed := false
 		switch action {
@@ -63,6 +69,7 @@ func (s *Service) decide(
 				ID:       s.ids.NewUUID(),
 				TenantID: tenant,
 				Decision: decision,
+				Actor:    "operator",
 				Action:   action,
 				Value:    value,
 				At:       now,

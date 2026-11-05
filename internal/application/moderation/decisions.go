@@ -14,8 +14,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -67,7 +65,11 @@ func (s *Service) OpenCase(
 		}
 		now := s.clock.Now()
 		verdict.Review(p.Revision, now)
-		c := moderation.NewCase(s.ids.NewUUID(), verdict.State(), moderation.Operator, note, now)
+		card, err := reviewCard(ctx, tx, offer.Tenant, offer.Product)
+		if err != nil {
+			return err
+		}
+		c := moderation.NewCase(s.ids.NewUUID(), verdict.State(), moderation.Operator, note, now, &card)
 		// Одинаковый порядок с Evaluate исключает взаимную блокировку дела и вердикта.
 		if err := tx.ModerationVerdicts().Save(ctx, verdict); err != nil {
 			return err
@@ -149,7 +151,8 @@ func (s *Service) decide(
 		if p.State().Deleted || p.State().Card.Marketplace == nil {
 			return moderation.ErrCaseStale
 		}
-		if err := checkReason(ctx, tx, cmd.Reason); err != nil {
+		reasonMessage, err := moderation.ResolveReason(ctx, tx.ModerationRules(), cmd.Reason)
+		if err != nil {
 			return err
 		}
 		verdict, err := tx.ModerationVerdicts().Get(ctx, state.TenantID, state.ProductID)
@@ -170,20 +173,21 @@ func (s *Service) decide(
 			return err
 		}
 		decision := moderation.Decision{
-			ID:       s.ids.NewUUID(),
-			CaseID:   state.ID,
-			Operator: cmd.Operator,
-			Action:   action,
-			Reason:   cmd.Reason,
-			Note:     strings.TrimSpace(cmd.Note),
-			Revision: state.Revision,
-			At:       now,
+			ID:            s.ids.NewUUID(),
+			CaseID:        state.ID,
+			Operator:      cmd.Operator,
+			Action:        action,
+			Reason:        cmd.Reason,
+			ReasonMessage: reasonMessage,
+			Note:          strings.TrimSpace(cmd.Note),
+			Revision:      state.Revision,
+			At:            now,
 		}
 		if err := tx.ModerationDecisions().Add(ctx, decision); err != nil {
 			return err
 		}
 		if action == moderation.Allow {
-			if err := s.approve(ctx, tx, state.TenantID, cmd.Operator, now); err != nil {
+			if err := s.approve(ctx, tx, state.TenantID, now); err != nil {
 				return err
 			}
 		}
@@ -217,27 +221,10 @@ func (s *Service) decide(
 	return result, err
 }
 
-func checkReason(ctx context.Context, tx ports.Tx, code string) error {
-	if code == "" {
-		return nil
-	}
-	reasons, err := tx.ModerationRules().ListReasons(ctx)
-	if err != nil {
-		return err
-	}
-	for _, reason := range reasons {
-		if reason.Code == code {
-			return nil
-		}
-	}
-	return moderation.ErrInvalid.WithMessage("неизвестный код причины")
-}
-
 func (s *Service) approve(
 	ctx context.Context,
 	tx ports.Tx,
 	tenant ids.TenantID,
-	actor moderation.Actor,
 	now time.Time,
 ) error {
 	p, err := tx.Participants().Get(ctx, tenant)
@@ -250,17 +237,7 @@ func (s *Service) approve(
 		return err
 	}
 	if p.State().Trust != trust {
-		record := participant.DecisionRecord{
-			ID:       s.ids.NewUUID(),
-			TenantID: tenant,
-			Decision: participant.Decision{
-				Operator: operator.Principal{ID: actor.ID, Name: actor.Name},
-				Reason:   "probation_completed",
-			},
-			Action: "trust",
-			Value:  participant.Trusted,
-			At:     now,
-		}
+		record := p.PromotionDecision(s.ids.NewUUID(), now)
 		if err := tx.ParticipantDecisions().Add(ctx, record); err != nil {
 			return err
 		}

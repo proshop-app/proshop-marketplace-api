@@ -22,9 +22,12 @@ type moderationRequest struct {
 	Reason          string `json:"reason"`
 	Note            string `json:"note"`
 	Text            string `json:"text"`
+	Code            string `json:"code"`
+	Message         string `json:"message"`
 }
 
 func caseJSON(c moderation.CaseState) moderationCaseJSON {
+	c.Card = nil
 	if c.Reasons == nil {
 		c.Reasons = []moderation.Reason{}
 	}
@@ -148,9 +151,10 @@ func (h *moderationHandlers) getCase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"case":    caseJSON(view.Case),
-		"offer":   view.Offer,
-		"history": view.History,
+		"case":     caseJSON(view.Case),
+		"offer":    view.Offer,
+		"decision": decisionJSON(view.Decision),
+		"history":  decisionHistory(view.History),
 	})
 }
 
@@ -228,7 +232,7 @@ func (h *moderationHandlers) offer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"verdict": verdictJSON(view.Verdict),
 		"case":    c,
-		"history": view.History,
+		"history": decisionHistory(view.History),
 	})
 }
 
@@ -286,7 +290,7 @@ func (h *moderationHandlers) putReason(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	reason := moderation.ReasonCode{Code: r.PathValue("code"), Text: body.Text}
+	reason := moderation.ReasonCode{Code: r.PathValue("code"), Text: body.Message}
 	if err := h.service.PutReason(r.Context(), reason); err != nil {
 		writeError(w, r, err)
 		return
@@ -294,10 +298,40 @@ func (h *moderationHandlers) putReason(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, reason)
 }
 
-func (h *moderationHandlers) removeReason(w http.ResponseWriter, r *http.Request) {
-	if err := h.service.RemoveReason(r.Context(), r.PathValue("code")); err != nil {
+func (h *moderationHandlers) addReason(w http.ResponseWriter, r *http.Request) {
+	var body moderationRequest
+	if err := readJSON(w, r, &body); err != nil {
 		writeError(w, r, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	reason := moderation.ReasonCode{Code: body.Code, Text: body.Message}
+	if err := h.service.AddReason(r.Context(), reason); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, reason)
+}
+
+func decisionHistory(history []moderation.Decision) []any {
+	result := make([]any, 0, len(history))
+	for _, d := range history {
+		result = append(result, decisionJSON(&d))
+	}
+	return result
+}
+
+func decisionJSON(d *moderation.Decision) any {
+	if d == nil {
+		return nil
+	}
+	return map[string]any{
+		"id":       d.ID,
+		"caseId":   d.CaseID,
+		"operator": d.Operator,
+		"action":   d.Action,
+		"reason":   moderation.DecisionReason(d.Reason, d.ReasonMessage),
+		"note":     d.Note,
+		"revision": d.Revision,
+		"at":       d.At,
+	}
 }

@@ -47,7 +47,7 @@ type RulesRepository interface {
 	RemovePhrase(context.Context, string) (bool, error)
 	ListReasons(context.Context) ([]ReasonCode, error)
 	PutReason(context.Context, ReasonCode) error
-	RemoveReason(context.Context, string) error
+	AddReason(context.Context, ReasonCode) error
 }
 
 // CachedDecision хранит исходный ответ независимо от дальнейшего состояния дела.
@@ -62,4 +62,29 @@ type OpenStat struct {
 	TenantID ids.TenantID
 	Count    int
 	Oldest   time.Time
+}
+
+// ResolveReason фиксирует текст из общего словаря до записи решения.
+func ResolveReason(ctx context.Context, repo RulesRepository, code string) (string, error) {
+	if code == "" {
+		return "", nil
+	}
+	reasons, err := repo.ListReasons(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, reason := range reasons {
+		if reason.Code == code {
+			return reason.Text, nil
+		}
+	}
+	return "", ErrReasonUnknown
+}
+
+// DecisionReason возвращает отсутствие причины явно, сохраняя исторический текст.
+func DecisionReason(code, message string) *ReasonCode {
+	if code == "" {
+		return nil
+	}
+	return &ReasonCode{Code: code, Text: message}
 }

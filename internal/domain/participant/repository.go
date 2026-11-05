@@ -8,6 +8,7 @@ import (
 
 // Page — окно списка.
 type Page struct {
+	Trust  string
 	Limit  int
 	Offset int
 }

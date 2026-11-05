@@ -19,14 +19,15 @@ type Actor struct {
 
 // Decision хранит основание решения для последующего аудита.
 type Decision struct {
-	ID       ids.UUID  `json:"id"`
-	CaseID   ids.UUID  `json:"caseId"`
-	Operator Actor     `json:"operator"`
-	Action   Action    `json:"action"`
-	Reason   string    `json:"reason"`
-	Note     string    `json:"note"`
-	Revision int64     `json:"revision"`
-	At       time.Time `json:"at"`
+	ID            ids.UUID  `json:"id"`
+	CaseID        ids.UUID  `json:"caseId"`
+	Operator      Actor     `json:"operator"`
+	Action        Action    `json:"action"`
+	Reason        string    `json:"reason"`
+	ReasonMessage string    `json:"reasonMessage"`
+	Note          string    `json:"note"`
+	Revision      int64     `json:"revision"`
+	At            time.Time `json:"at"`
 }
 
 // StopPhrase сохраняет исходный текст и единый ключ сопоставления.
@@ -40,7 +41,7 @@ type StopPhrase struct {
 // ReasonCode отделяет стабильный код причины от отображаемого текста.
 type ReasonCode struct {
 	Code string `json:"code"`
-	Text string `json:"text"`
+	Text string `json:"message"`
 }
 
 // NewStopPhrase нормализует пробелы до проверки ограничений длины.

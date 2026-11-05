@@ -7,10 +7,9 @@ import (
 )
 
 const (
-	deleteModerationReason = `DELETE FROM moderation_reasons WHERE code = $1`
-	listModerationReasons  = `SELECT code, text FROM moderation_reasons ORDER BY code`
-	putModerationReason    = `INSERT INTO moderation_reasons (code, text) VALUES ($1, $2)
- ON CONFLICT (code) DO UPDATE SET text = EXCLUDED.text`
+	addModerationReason   = `INSERT INTO moderation_reasons (code, text) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+	listModerationReasons = `SELECT code, text FROM moderation_reasons ORDER BY code`
+	putModerationReason   = `UPDATE moderation_reasons SET text = $2 WHERE code = $1`
 )
 
 // ListReasons возвращает операторский словарь без встроенных тематик.
@@ -36,18 +35,27 @@ func (r *ModerationRules) PutReason(ctx context.Context, reason moderation.Reaso
 	if err := reason.Validate(); err != nil {
 		return err
 	}
-	_, err := r.q.Exec(ctx, putModerationReason, reason.Code, reason.Text)
-	return err
-}
-
-// RemoveReason отличает отсутствие записи от успешного удаления.
-func (r *ModerationRules) RemoveReason(ctx context.Context, code string) error {
-	tag, err := r.q.Exec(ctx, deleteModerationReason, code)
+	tag, err := r.q.Exec(ctx, putModerationReason, reason.Code, reason.Text)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return moderation.ErrNotFound
+	}
+	return nil
+}
+
+// AddReason не перезаписывает занятый код при одновременном создании.
+func (r *ModerationRules) AddReason(ctx context.Context, reason moderation.ReasonCode) error {
+	if err := reason.Validate(); err != nil {
+		return err
+	}
+	tag, err := r.q.Exec(ctx, addModerationReason, reason.Code, reason.Text)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return moderation.ErrReasonExists
 	}
 	return nil
 }

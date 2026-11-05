@@ -79,7 +79,9 @@ func (r participants) Get(_ context.Context, id ids.TenantID) (*participant.Part
 func (r participants) List(_ context.Context, page participant.Page) ([]*participant.Participant, int, error) {
 	states := make([]participant.State, 0, len(r.d.participants))
 	for _, state := range r.d.participants {
-		states = append(states, state)
+		if page.Trust == "" || state.Trust == page.Trust {
+			states = append(states, state)
+		}
 	}
 
 	sort.Slice(states, func(i, j int) bool {

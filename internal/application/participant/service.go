@@ -130,6 +130,9 @@ func (s *Service) Get(ctx context.Context, tenantID ids.TenantID) (View, error) 
 
 // List — участники по времени создания.
 func (s *Service) List(ctx context.Context, page participant.Page) (List, error) {
+	if page.Trust != "" && page.Trust != participant.Probation && page.Trust != participant.Trusted {
+		return List{}, participant.ErrInvalidTrust
+	}
 	if page.Limit <= 0 || page.Limit > MaxPageLimit {
 		page.Limit = MaxPageLimit
 	}

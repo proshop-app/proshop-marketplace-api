@@ -217,14 +217,15 @@ func TestModerationDictionariesHTTP(t *testing.T) {
 	e.request(t, "DELETE", moderationURL+"/stop-phrases/товар", "", "", 204)
 	e.request(t, "DELETE", moderationURL+"/stop-phrases/товар", "", "", 404)
 	e.request(t, "GET", moderationURL+"/reasons", "", "", 200)
-	e.request(t, "PUT", moderationURL+"/reasons/r1", `{"text":"Причина"}`, "", 200)
-	e.request(t, "PUT", moderationURL+"/reasons/r1", `{"text":"Другая причина"}`, "", 200)
-	e.request(t, "DELETE", moderationURL+"/reasons/r1", "", "", 204)
-	e.request(t, "DELETE", moderationURL+"/reasons/r1", "", "", 404)
+	e.request(t, "POST", moderationURL+"/reasons", `{"code":"r1","message":"Причина"}`, "", 201)
+	e.request(t, "PUT", moderationURL+"/reasons/r1", `{"message":"Текст"}`, "", 200)
+	e.request(t, "POST", moderationURL+"/reasons", `{"code":"r1","message":"Текст"}`, "", 409)
+	e.request(t, "PUT", moderationURL+"/reasons/r2", `{"message":"Текст"}`, "", 404)
 }
 
 func TestModerationParticipantHTTP(t *testing.T) {
 	e := newModerationEnv(t)
+	e.request(t, "POST", moderationURL+"/reasons", `{"code":"r1","message":"Текст"}`, "", 201)
 	prefix := "/api/v1/operator/participants/t1"
 	e.request(t, "POST", prefix+"/enable", `{"reason":"r1","note":"Заметка"}`, "", 200)
 	e.request(t, "POST", prefix+"/disable", `{"reason":"r1","note":"Заметка"}`, "", 200)
@@ -238,5 +239,63 @@ func TestModerationParticipantHTTP(t *testing.T) {
 	history := e.request(t, "GET", prefix+"/decisions?limit=2&offset=0", "", "", 200)
 	if !strings.Contains(history.Body.String(), `"total":4`) {
 		t.Fatal(history.Body.String())
+	}
+}
+
+func TestModerationM4Responses(t *testing.T) {
+	e := newModerationEnv(t)
+	e.request(t, "POST", moderationURL+"/reasons", `{"code":"r1","message":"Текст"}`, "", 201)
+	duplicate := e.request(t, "POST", moderationURL+"/reasons", `{"code":"r1","message":"Текст"}`, "", 409)
+	if !strings.Contains(duplicate.Body.String(), "moderation.reason_exists") {
+		t.Fatal(duplicate.Body.String())
+	}
+	prefix := "/api/v1/operator/participants/t1"
+	for _, action := range []string{"enable", "disable"} {
+		response := e.request(t, "POST", prefix+"/"+action, `{"reason":"r2"}`, "", 400)
+		if !strings.Contains(response.Body.String(), "moderation.reason_unknown") {
+			t.Fatal(response.Body.String())
+		}
+	}
+	e.request(t, "PUT", prefix+"/trust", `{"trust":"trusted","reason":"r2","note":"Заметка"}`, "", 400)
+	e.request(t, "PUT", prefix+"/trust", `{"trust":"trusted","reason":"r1","note":"Заметка"}`, "", 200)
+	e.request(t, "PUT", moderationURL+"/reasons/r1", `{"message":"Изменено"}`, "", 200)
+	history := e.request(t, "GET", prefix+"/decisions", "", "", 200)
+	if !strings.Contains(history.Body.String(), `"message":"Текст"`) ||
+		!strings.Contains(history.Body.String(), `"by":"operator"`) {
+		t.Fatal(history.Body.String())
+	}
+	for _, trust := range []string{"trusted", "probation"} {
+		response := e.request(t, "GET", "/api/v1/operator/participants?trust="+trust, "", "", 200)
+		want := `"total":0`
+		if trust == "trusted" {
+			want = `"total":1`
+		}
+		if !strings.Contains(response.Body.String(), want) {
+			t.Fatal(response.Body.String())
+		}
+	}
+	e.request(t, "GET", "/api/v1/operator/participants?trust=unknown", "", "", 400)
+}
+
+func TestModerationM4CaseDecision(t *testing.T) {
+	e := newModerationEnv(t)
+	e.request(t, "POST", moderationURL+"/reasons", `{"code":"r1","message":"Текст"}`, "", 201)
+	path := moderationURL + "/cases/" + e.caseID
+	e.request(t, "POST", path+"/reject", `{"expectedVersion":1,"reason":"r1","note":"Заметка"}`, "", 200)
+	e.request(t, "PUT", moderationURL+"/reasons/r1", `{"message":"Изменено"}`, "", 200)
+	details := e.request(t, "GET", path, "", "", 200)
+	var body struct {
+		History []struct {
+			Reason moderation.ReasonCode `json:"reason"`
+		} `json:"history"`
+		Decision struct {
+			Reason moderation.ReasonCode `json:"reason"`
+		} `json:"decision"`
+	}
+	if err := json.Unmarshal(details.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.History) != 1 || body.History[0].Reason.Text != "Текст" || body.Decision.Reason.Text != "Текст" {
+		t.Fatal(details.Body.String())
 	}
 }

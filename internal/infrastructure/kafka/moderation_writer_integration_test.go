@@ -44,7 +44,7 @@ func TestWriterModerationStatuses(t *testing.T) {
 				TenantID:      "t1",
 				Enabled:       true,
 				Trust:         "trusted",
-				Reason:        "probation_completed",
+				By:            "system",
 				At:            at,
 			},
 		},

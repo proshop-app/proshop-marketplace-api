@@ -179,10 +179,13 @@ func (s *Service) PutReason(ctx context.Context, reason moderation.ReasonCode) e
 	})
 }
 
-// RemoveReason сохраняет основания прежних решений в журнале.
-func (s *Service) RemoveReason(ctx context.Context, code string) error {
+// AddReason сохраняет новый код, чтобы прежние решения не меняли смысл.
+func (s *Service) AddReason(ctx context.Context, reason moderation.ReasonCode) error {
+	if err := reason.Validate(); err != nil {
+		return err
+	}
 	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		return tx.ModerationRules().RemoveReason(ctx, code)
+		return tx.ModerationRules().AddReason(ctx, reason)
 	})
 }
 
