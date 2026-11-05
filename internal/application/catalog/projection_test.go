@@ -26,8 +26,12 @@ func TestApplyProduct(t *testing.T) {
 	}
 
 	rows := store.OutboxRows()
-	if len(rows) != 1 || rows[0].Kind != appcatalog.TaskSyncOffer || rows[0].DedupKey != "catalog.offer.sync:t1~p1" {
+	if len(rows) != 2 || rows[1].Kind != appcatalog.TaskSyncOffer || rows[1].DedupKey != "catalog.offer.sync:t1~p1" {
 		t.Fatalf("задача синхронизации предложения: %+v", rows)
+	}
+
+	if rows[0].Kind != "moderation.offer.status" || rows[0].DedupKey != "moderation.offer.status:t1~p1" {
+		t.Fatal("нет задачи статуса", rows)
 	}
 
 	if err := projector.ApplyProduct(ctx, productEvent("e2", snapshot("t1", "p1", 1, t1))); err != nil {
@@ -43,7 +47,7 @@ func TestApplyProduct(t *testing.T) {
 	if err := projector.ApplyProduct(ctx, productEvent("e3", snapshot("t1", "p1", 3, t1))); err != nil {
 		t.Fatal(err)
 	}
-	if rows := store.OutboxRows(); len(rows) != 1 {
+	if rows := store.OutboxRows(); len(rows) != 2 {
 		t.Fatalf("невзятая задача по тому же товару склеивается: %+v", rows)
 	}
 }

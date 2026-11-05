@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -93,6 +94,10 @@ func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error 
 			if err := p.evaluator.Evaluate(ctx, tx, product, nil, now); err != nil {
 				return err
 			}
+		}
+		statusTask := moderationstatus.OfferTask(snapshot.TenantID, snapshot.ProductID, now)
+		if err := tx.Outbox().Enqueue(ctx, statusTask); err != nil {
+			return err
 		}
 		return tx.Outbox().Enqueue(ctx, SyncOfferTask(snapshot.TenantID, snapshot.ProductID, now))
 	})

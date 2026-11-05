@@ -106,7 +106,7 @@ func TestLoadAndRevalidate(t *testing.T) {
 	if p.Card.Publication.Published || p.Card.Publication.Issues[0].Code != "taxonomy.enum_value" {
 		t.Fatalf("ошибка должна скрыть карточку: %+v", p)
 	}
-	if len(store.OutboxRows()) != 1 || !store.Processed("e1") {
+	if len(store.OutboxRows()) != 2 || !store.Processed("e1") {
 		t.Fatal("нет атомарных outbox/inbox")
 	}
 	if err := applyDefinition(ctx, service, schema(1)); !errors.Is(err, taxonomy.ErrReleaseConflict) {
@@ -189,7 +189,7 @@ func TestRevalidationPagesIncludeNonParticipants(t *testing.T) {
 			t.Fatalf("товар пропущен при перепроверке: %+v", p)
 		}
 	}
-	if len(store.OutboxRows()) != 205 {
+	if len(store.OutboxRows()) != 410 {
 		t.Fatal(len(store.OutboxRows()))
 	}
 }

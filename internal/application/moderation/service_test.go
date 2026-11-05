@@ -13,6 +13,7 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
@@ -168,6 +169,7 @@ func TestFiftiethApprovalAndReevaluation(t *testing.T) {
 		}
 	}
 	p, _ := e.store.Participant("t1")
+	statusTask(t, e, moderationstatus.TaskParticipant)
 	if p.Trust != participant.Trusted || p.ApprovedOffers != 50 {
 		t.Fatal(p)
 	}
@@ -332,8 +334,16 @@ func TestOperatorCaseRejectAndNewRevision(t *testing.T) {
 	if !e.document(t).Visible {
 		t.Fatal("чистая карточка скрыта")
 	}
+	initial := statusTask(t, e, moderationstatus.TaskOffer)
+	if err := e.store.Complete(ctx, initial.ID, e.clock.Now()); err != nil {
+		t.Fatal(err)
+	}
 	c, err := e.service.OpenCase(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, "Проверка")
 	if err != nil {
+		t.Fatal(err)
+	}
+	task := statusTask(t, e, moderationstatus.TaskOffer)
+	if err := e.store.Complete(ctx, task.ID, e.clock.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if e.document(t).Visible || c.Source != moderation.Operator {
@@ -347,6 +357,7 @@ func TestOperatorCaseRejectAndNewRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	statusTask(t, e, moderationstatus.TaskOffer)
 	rejected := e.view(t, "p1")
 	if rejected.Verdict.Status != moderation.Rejected || len(rejected.History) != 1 {
 		t.Fatal(rejected)

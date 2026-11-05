@@ -5,6 +5,7 @@ import (
 	"context"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -110,6 +111,10 @@ func (s *Service) revalidate(ctx context.Context, tx ports.Tx, d taxonomy.Defini
 			tenant, product = state.TenantID, state.ProductID
 			if p.Revalidate(d, s.clock.Now()) {
 				if err := tx.Products().Save(ctx, p); err != nil {
+					return err
+				}
+				statusTask := moderationstatus.OfferTask(tenant, product, s.clock.Now())
+				if err := tx.Outbox().Enqueue(ctx, statusTask); err != nil {
 					return err
 				}
 			}

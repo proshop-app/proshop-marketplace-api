@@ -270,3 +270,33 @@ func TestReferenceReadTokenIsSeparateSecret(t *testing.T) {
 		}
 	}
 }
+
+func TestModerationTopics(t *testing.T) {
+	values := validEnv()
+	values["KAFKA_TOPIC_PREFIX"] = "p1"
+	cfg, err := config.Load(envOf(values))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Kafka.FullTopic(cfg.Kafka.OfferStatusTopic) != "p1.marketplace.offer.status" ||
+		cfg.Kafka.FullTopic(cfg.Kafka.ParticipantStatusTopic) != "p1.marketplace.participant.status" {
+		t.Fatal(cfg.Kafka)
+	}
+	for _, key := range []string{"KAFKA_TOPIC_OFFER_STATUS", "KAFKA_TOPIC_PARTICIPANT_STATUS"} {
+		t.Run(key, func(t *testing.T) {
+			values := validEnv()
+			values[key] = " "
+			if _, err := config.Load(envOf(values)); err == nil || !strings.Contains(err.Error(), key) {
+				t.Fatal("пустой топик не отклонён", err)
+			}
+			values[key] = "custom"
+			cfg, err := config.Load(envOf(values))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Kafka.OfferStatusTopic != "custom" && cfg.Kafka.ParticipantStatusTopic != "custom" {
+				t.Fatal("имя топика не применено")
+			}
+		})
+	}
+}

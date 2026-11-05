@@ -163,7 +163,9 @@ type Kafka struct {
 	GroupID     string
 	MaxAttempts int
 	// ReferenceTopic — имя топика catalog.reference.changed без префикса; топик заводит сервер установки.
-	ReferenceTopic string
+	ReferenceTopic         string
+	OfferStatusTopic       string
+	ParticipantStatusTopic string
 }
 
 // Outbox — разбор очереди задач.
@@ -233,11 +235,13 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			Replicas:           r.nonNegative("OPENSEARCH_REPLICAS", 1),
 		},
 		Kafka: Kafka{
-			Brokers:        r.list("KAFKA_BROKERS"),
-			TopicPrefix:    r.str("KAFKA_TOPIC_PREFIX", ""),
-			GroupID:        r.str("KAFKA_GROUP_ID", "marketplace"),
-			MaxAttempts:    r.positive("KAFKA_MAX_ATTEMPTS", 5),
-			ReferenceTopic: r.str("KAFKA_TOPIC_REFERENCE_CHANGED", "catalog.reference.changed"),
+			Brokers:                r.list("KAFKA_BROKERS"),
+			TopicPrefix:            r.str("KAFKA_TOPIC_PREFIX", ""),
+			GroupID:                r.str("KAFKA_GROUP_ID", "marketplace"),
+			MaxAttempts:            r.positive("KAFKA_MAX_ATTEMPTS", 5),
+			ReferenceTopic:         r.str("KAFKA_TOPIC_REFERENCE_CHANGED", "catalog.reference.changed"),
+			OfferStatusTopic:       r.topic("KAFKA_TOPIC_OFFER_STATUS", "marketplace.offer.status"),
+			ParticipantStatusTopic: r.topic("KAFKA_TOPIC_PARTICIPANT_STATUS", "marketplace.participant.status"),
 		},
 		Outbox: Outbox{
 			PollInterval: r.duration("OUTBOX_POLL_INTERVAL", time.Second),
@@ -336,6 +340,12 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	}
 	if strings.TrimSpace(cfg.Kafka.ReferenceTopic) == "" {
 		r.fail("KAFKA_TOPIC_REFERENCE_CHANGED", "не может быть пустым")
+	}
+	if strings.TrimSpace(cfg.Kafka.OfferStatusTopic) == "" {
+		r.fail("KAFKA_TOPIC_OFFER_STATUS", "не может быть пустым")
+	}
+	if strings.TrimSpace(cfg.Kafka.ParticipantStatusTopic) == "" {
+		r.fail("KAFKA_TOPIC_PARTICIPANT_STATUS", "не может быть пустым")
 	}
 	if cfg.Outbox.PerTenant > cfg.Outbox.Batch {
 		r.fail("OUTBOX_PER_TENANT", "не больше OUTBOX_BATCH")
@@ -615,4 +625,13 @@ func (r *reader) validateReference(cfg Config) {
 		reason := "отличается от OPERATOR_TOKEN, SERVICE_TOKEN_MARKETPLACE и секретов identity-hub"
 		r.fail("REFERENCE_READ_TOKEN", reason)
 	}
+}
+
+// topic отличает отсутствие настройки от явно заданного пустого имени.
+func (r *reader) topic(name, fallback string) string {
+	value, ok := r.env(name)
+	if !ok {
+		return fallback
+	}
+	return strings.TrimSpace(value)
 }
