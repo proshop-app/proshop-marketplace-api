@@ -7,6 +7,7 @@ OpenSearch для загрузки не нужен. После установк�
 
 Покрытие начальной поставки — [29 направлений](taxonomy-coverage.md).
 Имена узлов, адреса категорий и целевой вид дерева — [taxonomy-structure.md](taxonomy-structure.md).
+Переход данных на YAML и одну версию набора — [taxonomy-data.md](taxonomy-data.md).
 Исходные файлы в `internal/infrastructure/taxonomydata/data/`:
 
 - `attributes.json` — общие определения атрибутов;

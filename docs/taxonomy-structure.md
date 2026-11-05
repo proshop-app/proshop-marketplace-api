@@ -3,7 +3,8 @@
 Решение владельца 2026-11-04. Документ фиксирует, как называются узлы дерева
 категорий, как строится адрес страницы категории на витрине и к какому виду
 приводится само дерево. Формат и выпуск поставок — [taxonomy-releases.md](taxonomy-releases.md),
-охват — [taxonomy-coverage.md](taxonomy-coverage.md).
+охват — [taxonomy-coverage.md](taxonomy-coverage.md), хранение данных в YAML и
+потребители — [taxonomy-data.md](taxonomy-data.md).
 
 ## Почему меняем
 
