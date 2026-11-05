@@ -211,10 +211,20 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
  "status": "hidden", "visible": false,
  "reasons": [{"source": "taxonomy", "key": "taxonomy.required", "message": "…"},
              {"source": "moderation", "key": "moderation.stop_phrase", "message": "…"}],
+ "decision": {"action": "reject", "reason": {"code": "wrong_category", "message": "…"},
+              "note": "…", "at": "2026-11-05T11:59:00Z"},
  "at": "2026-11-05T12:00:00Z"}
 {"schemaVersion": 1, "tenantId": "t1", "enabled": true, "trust": "trusted",
- "reason": "probation_completed", "note": "", "at": "2026-11-05T12:00:00Z"}
+ "reason": null, "note": "Одобрено 50 предложений", "by": "system",
+ "at": "2026-11-05T12:00:00Z"}
 ```
+
+- `decision` — решение оператора, которым установлен текущий статус:
+  `action` (`allow`, `reject`), `reason` из словаря `{code, message}` или
+  `null`, `note`, `at`; статус от правил — `decision: null`. Текст причины —
+  на момент решения (решение владельца 2026-11-05).
+- У участника `reason` — объект из того же словаря или `null`, `by` —
+  `operator` или `system` (автоматическое повышение).
 
 - `status`: `published` — публикация по схеме прошла и вердикт `allowed`;
   `pending` — вердикт `pending`; `hidden` — всё остальное (структурные
@@ -223,7 +233,8 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
   событие.
 - `reasons` — причины обеих групп: `Publication.Issues` с `source:
   taxonomy` и причины вердикта с `source: moderation`. Пустой список при
-  `published`.
+  `published`. Одно событие на изменение `visible`, `status`, причин или
+  решения.
 - Удалённый товар события не получает.
 - Задачи outbox `moderation.offer.status` (дедуп по предложению) и
   `moderation.participant.status` (дедуп по участнику) ставятся в той же
@@ -317,6 +328,43 @@ Prometheus, регистрация как у outbox:
 
 Gauge обновляет фоновый цикл раз в `MODERATION_METRICS_INTERVAL`
 (по умолчанию 60s) одним запросом по открытым делам.
+
+## Решения владельца с макета UNO (M4)
+
+Согласованы 2026-11-05 при проработке макета (фреймы 38–53), записаны в
+§6d. Реализуются поверх M1–M3:
+
+1. **Дело вручную** (`POST /cases`) сразу переводит вердикт в `pending` с
+   причиной `moderation.manual_review` и текстом «На ручной проверке»;
+   предложение скрыто до решения.
+2. **Снимок карточки у дела.** Дело хранит карточку своей ревизии (имя,
+   описание, изображение, цена, категория путём, атрибуты, продавец) в
+   момент открытия и при смене ревизии; `GET /cases/{caseId}` отдаёт
+   карточку из снимка, в том числе у закрытого (`superseded`, `allowed`,
+   `rejected`) дела. Миграция `00033`: колонка `card jsonb` у
+   `moderation_cases`, старые строки — `NULL`, тогда карточка читается из
+   проекции.
+3. **Один словарь причин** для решений по делам и по участникам
+   (выключение, смена доверия). Причину нельзя удалить, код после создания
+   не меняется: `GET /reasons`, `POST /reasons` `{code, message}` (занятый
+   код — 409 `moderation.reason_exists`), `PUT /reasons/{code}` `{message}`;
+   `DELETE /reasons/{code}` убирается из API и OpenAPI. Поле текста причины
+   в API — `message`. Код причины в решениях и у участника проверяется по
+   словарю (неизвестный — 400); пустой код допустим.
+4. **Доверие.** `PUT /operator/participants/{tenantId}/trust`
+   `{trust, reason?, note}`; ручное понижение до `probation` обнуляет
+   `approvedOffers`. Автоматическое повышение пишется в
+   `participant_decisions` с исполнителем `system` (колонка `actor`:
+   `operator` или `system`, миграция `00033`), без причины, заметка —
+   служебный текст с числом одобренных.
+5. **Участники в API.** `GET /operator/participants?trust=probation|trusted`
+   фильтрует список; у `View` участника уже есть `trust` и
+   `approvedOffers`.
+6. **События магазину** по обновлённому контракту выше: `decision` у
+   предложения, `reason` объектом и `by` у участника; `server-contract.md`
+   раздел «Статус предложения и участника» — источник истины для сервера.
+7. **Операторский API решения** возвращает в `history` и в `decision`
+   причину как `{code, message}`.
 
 ## Доводка M1 (вместе с M2)
 
