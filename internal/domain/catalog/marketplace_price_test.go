@@ -21,7 +21,7 @@ func TestMarketplacePriceSurvivesShopPriceSignals(t *testing.T) {
 	}
 	signals := catalog.NewSignals("t1", "p1")
 	_, _ = signals.ApplyPrice(catalog.PriceSignal{Price: rub(5000), At: t1}, t1)
-	offer := catalog.ComposeOffer(product, signals, visibleSeller)
+	offer := catalog.ComposeOffer(product, signals, visibleSeller, allowedVerdict())
 	if offer.Price.Kopecks() != 25000 {
 		t.Fatalf("цена канала Pricing: %v", offer.Price)
 	}
@@ -29,7 +29,7 @@ func TestMarketplacePriceSurvivesShopPriceSignals(t *testing.T) {
 	if _, err := product.Apply(next, t2); err != nil {
 		t.Fatal(err)
 	}
-	offer = catalog.ComposeOffer(product, signals, visibleSeller)
+	offer = catalog.ComposeOffer(product, signals, visibleSeller, allowedVerdict())
 	if offer.Price.Kopecks() != 10000 {
 		t.Fatalf("новая проекция Pricing: %v", offer.Price)
 	}

@@ -3,6 +3,8 @@ package participant
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrInvalidTrust запрещает неизвестный уровень доверия.
+	ErrInvalidTrust = errs.New(errs.Invalid, "participant.invalid_trust", "неизвестный уровень доверия")
 	// ErrNotFound — участника нет.
 	ErrNotFound = errs.New(errs.NotFound, "participant.not_found", "участник не найден")
 	// ErrAlreadyExists — магазин уже участвует.

@@ -7,6 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
+
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
@@ -35,7 +38,16 @@ func loadFile(path string) error {
 		return err
 	}
 	defer pool.Close()
-	err = apptaxonomy.NewService(postgres.NewUnitOfWork(pool), clock.System{}).Load(ctx, definition)
+	moderationConfig, err := config.LoadModeration(os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	uow := postgres.NewUnitOfWork(pool)
+	evaluator := appmoderation.NewService(uow, clock.System{}, random.IDs{}, appmoderation.Config{
+		ProbationOffers: moderationConfig.ProbationOffers,
+		RequireImage:    moderationConfig.RequireImage,
+	})
+	err = apptaxonomy.NewService(uow, clock.System{}, evaluator).Load(ctx, definition)
 	if err == nil {
 		fmt.Printf("таксономия: версия %d загружена\n", definition.Version)
 	}

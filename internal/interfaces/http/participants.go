@@ -175,13 +175,13 @@ func (h *participantHandlers) rename(w http.ResponseWriter, r *http.Request) {
 
 func (h *participantHandlers) enable(w http.ResponseWriter, r *http.Request) {
 	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
-		return h.service.Enable(r.Context(), tenantID)
+		return h.service.Enable(r.Context(), tenantID, participant.Decision{Operator: principalFrom(r)})
 	})
 }
 
 func (h *participantHandlers) disable(w http.ResponseWriter, r *http.Request) {
 	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
-		return h.service.Disable(r.Context(), tenantID)
+		return h.service.Disable(r.Context(), tenantID, participant.Decision{Operator: principalFrom(r)})
 	})
 }
 

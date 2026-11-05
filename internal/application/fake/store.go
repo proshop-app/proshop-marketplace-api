@@ -44,6 +44,7 @@ type OutboxRow struct {
 }
 
 type data struct {
+	moderation      *moderationData
 	decisions       map[string]ports.EventDecision
 	taxonomy        taxonomy.Definition
 	taxonomyRelease *taxonomy.ReleaseRecord
@@ -85,6 +86,7 @@ type Store struct {
 
 func (d *data) clone() *data {
 	return &data{
+		moderation:      d.moderation.clone(),
 		taxonomy:        d.taxonomy,
 		taxonomyRelease: cloneRelease(d.taxonomyRelease),
 		decisions:       maps.Clone(d.decisions),
@@ -110,6 +112,7 @@ func (d *data) clone() *data {
 // NewStore — пустое хранилище.
 func NewStore() *Store {
 	return &Store{data: &data{
+		moderation:   newModerationData(),
 		decisions:    map[string]ports.EventDecision{},
 		participants: map[ids.TenantID]participant.State{},
 		tenants:      map[ids.TenantID]participant.TenantState{},

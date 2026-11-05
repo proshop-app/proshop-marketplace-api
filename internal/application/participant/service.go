@@ -7,6 +7,7 @@ import (
 	"errors"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
+	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -37,13 +38,14 @@ const MaxPageLimit = 200
 // Service — операторские сценарии участников. Любое изменение участника
 // ставит задачу синхронизации индекса в той же транзакции.
 type Service struct {
+	ids   ports.IDs
 	uow   ports.UnitOfWork
 	clock ports.Clock
 }
 
 // NewService — сценарии участников.
-func NewService(uow ports.UnitOfWork, clock ports.Clock) *Service {
-	return &Service{uow: uow, clock: clock}
+func NewService(uow ports.UnitOfWork, clock ports.Clock, identities ports.IDs) *Service {
+	return &Service{uow: uow, clock: clock, ids: identities}
 }
 
 // Create заводит участника для магазина из реестра платформы.
@@ -77,6 +79,11 @@ func (s *Service) Create(ctx context.Context, cmd CreateCommand) (View, error) {
 		if err := tx.Outbox().Enqueue(ctx, appcatalog.SyncTenantTask(cmd.TenantID, now)); err != nil {
 			return err
 		}
+		// Снимки товаров могли прийти раньше участника и остаться без вердикта:
+		// переоценка даёт им допуск, иначе они скрыты до следующей ревизии.
+		if err := tx.Outbox().Enqueue(ctx, appmoderation.ReevaluateTask(cmd.TenantID, now)); err != nil {
+			return err
+		}
 
 		view = viewOf(p, tenant)
 
@@ -94,17 +101,13 @@ func (s *Service) Rename(ctx context.Context, tenantID ids.TenantID, name string
 }
 
 // Enable включает участника в каталог.
-func (s *Service) Enable(ctx context.Context, tenantID ids.TenantID) (View, error) {
-	return s.change(ctx, tenantID, func(p *participant.Participant) (bool, error) {
-		return p.Enable(s.clock.Now()), nil
-	})
+func (s *Service) Enable(ctx context.Context, tenantID ids.TenantID, decision participant.Decision) (View, error) {
+	return s.decide(ctx, tenantID, "enable", "", decision)
 }
 
-// Disable скрывает участника из каталога.
-func (s *Service) Disable(ctx context.Context, tenantID ids.TenantID) (View, error) {
-	return s.change(ctx, tenantID, func(p *participant.Participant) (bool, error) {
-		return p.Disable(s.clock.Now()), nil
-	})
+// Disable сохраняет решение вместе с отключением и задачей индекса.
+func (s *Service) Disable(ctx context.Context, tenantID ids.TenantID, decision participant.Decision) (View, error) {
+	return s.decide(ctx, tenantID, "disable", "", decision)
 }
 
 // Get — участник.

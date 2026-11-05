@@ -3,6 +3,8 @@ package catalog_test
 import (
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
@@ -92,6 +94,12 @@ func seedProduct(store *fake.Store, tenant ids.TenantID, product ids.ProductID) 
 	}
 
 	store.SeedProduct(p.State())
+	store.SeedVerdict(moderation.VerdictState{
+		TenantID:  tenant,
+		ProductID: product,
+		Status:    moderation.Allowed,
+		Version:   1,
+	})
 }
 
 func productEvent(eventID string, snapshot catalog.Snapshot) appcatalog.ProductEvent {

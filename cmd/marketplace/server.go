@@ -19,6 +19,7 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
+	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -184,7 +185,11 @@ func (s *server) services(ctx context.Context) (services, error) {
 		CartTTL:                   cfg.Cart.TTL,
 		QuoteTimeout:              cfg.Checkout.QuoteTimeout,
 	})
-	projector := appcatalog.NewProjector(uow, now)
+	moderation := appmoderation.NewService(uow, now, identities, appmoderation.Config{
+		ProbationOffers: cfg.Moderation.ProbationOffers,
+		RequireImage:    cfg.Moderation.RequireImage,
+	})
+	projector := appcatalog.NewProjector(uow, now, moderation)
 	registry := appparticipant.NewRegistry(uow, now)
 	replay := kafka.NewReplay(kafka.NewRouter(projector, registry), cfg.Kafka.TopicPrefix)
 	events := messaging.NewEvents(uow, now, replay)
@@ -227,6 +232,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			Lease:     cfg.Outbox.Lease,
 		},
 		map[string]messaging.Handler{
+			appmoderation.TaskReevaluate:    moderation.HandleTask,
 			messaging.TaskReplay:            events.HandleTask,
 			appcatalog.TaskSyncOffer:        indexer.HandleTask,
 			appcatalog.TaskSyncTenant:       indexer.HandleTask,
@@ -245,11 +251,11 @@ func (s *server) services(ctx context.Context) (services, error) {
 	return services{
 		operatorAuth: operatorAuth,
 		events:       events,
-		taxonomy:     apptaxonomy.NewService(uow, now),
+		taxonomy:     apptaxonomy.NewService(uow, now, moderation),
 		projector:    projector,
 		indexer:      indexer,
 		queries:      appcatalog.NewQueries(uow, s.store.index, resyncing),
-		participants: appparticipant.NewService(uow, now),
+		participants: appparticipant.NewService(uow, now, identities),
 		registry:     registry,
 		settings:     settings,
 		auth:         auth,

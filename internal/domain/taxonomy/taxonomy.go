@@ -47,6 +47,7 @@ type Attribute struct {
 
 // Category — узел дерева; схема полная, наследования атрибутов нет.
 type Category struct {
+	Moderation string      `json:"moderation,omitempty" yaml:"moderation,omitempty"`
 	ID         string      `json:"id" yaml:"id"`
 	Name       string      `json:"name" yaml:"name"`
 	Title      string      `json:"title,omitempty" yaml:"title,omitempty"`
@@ -113,6 +114,9 @@ func (d Definition) Validate() error {
 		}
 		names := map[string]bool{}
 		for _, c := range categories {
+			if c.Moderation != "" && c.Moderation != "auto" && c.Moderation != "manual" && c.Moderation != "forbidden" {
+				return ErrInvalid.WithMessage("неизвестная политика модерации")
+			}
 			invalidName := strings.TrimSpace(c.Name) == "" || utf8.RuneCountInString(c.Name) > 256
 			if !categoryIDPattern.MatchString(c.ID) || ids[c.ID] || invalidName {
 				return ErrInvalid.WithMessage("неверный или повторный id категории, пустое или длинное имя")

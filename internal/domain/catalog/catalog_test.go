@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -154,13 +156,13 @@ func TestComposeOfferPrices(t *testing.T) {
 	s := snapshot(1, t1)
 	s.PriceProfiles[0].EffectivePrice = rub(8000)
 	product, _ := catalog.NewProduct(s, t1)
-	offer := catalog.ComposeOffer(product, nil, visibleSeller)
+	offer := catalog.ComposeOffer(product, nil, visibleSeller, allowedVerdict())
 	if offer.Price.Kopecks() != 8000 || offer.BasePrice.Kopecks() != 10000 {
 		t.Fatalf("промо после разрешения типа цены: %+v", offer)
 	}
 	signals := catalog.NewSignals("t1", "p1")
 	_, _ = signals.ApplyPrice(catalog.PriceSignal{Price: rub(12000), At: t2}, t2)
-	if got := catalog.ComposeOffer(product, signals, visibleSeller); got.Price.Kopecks() != 8000 {
+	if got := catalog.ComposeOffer(product, signals, visibleSeller, allowedVerdict()); got.Price.Kopecks() != 8000 {
 		t.Fatalf("цены из событий каталога/склада не заменяют Pricing: %+v", got)
 	}
 
@@ -169,7 +171,7 @@ func TestComposeOfferPrices(t *testing.T) {
 	if _, err := product.Apply(s, t2); err != nil {
 		t.Fatal(err)
 	}
-	if got := catalog.ComposeOffer(product, nil, visibleSeller); !got.Price.IsZero() {
+	if got := catalog.ComposeOffer(product, nil, visibleSeller, allowedVerdict()); !got.Price.IsZero() {
 		t.Fatalf("ноль — действительная цена: %+v", got)
 	}
 }
@@ -177,40 +179,48 @@ func TestComposeOfferPrices(t *testing.T) {
 func TestComposeOfferStock(t *testing.T) {
 	product, _ := catalog.NewProduct(snapshot(1, t1), t1)
 
-	if offer := catalog.ComposeOffer(product, nil, visibleSeller); offer.Available != 5 || !offer.InStock {
+	offer := catalog.ComposeOffer(product, nil, visibleSeller, allowedVerdict())
+	if offer.Available != 5 || !offer.InStock {
 		t.Fatalf("остаток снимка: %+v", offer)
 	}
 	fresh := catalog.NewSignals("t1", "p1")
 	_, _ = fresh.ApplyStock(catalog.StockSignal{Available: 0, At: t2}, t2)
-	if offer := catalog.ComposeOffer(product, fresh, visibleSeller); offer.Available != 0 || offer.InStock {
+	offer = catalog.ComposeOffer(product, fresh, visibleSeller, allowedVerdict())
+	if offer.Available != 0 || offer.InStock {
 		t.Fatalf("свежий остаток побеждает: %+v", offer)
 	}
 }
 
 func TestComposeOfferVisibility(t *testing.T) {
 	product, _ := catalog.NewProduct(snapshot(1, t1), t1)
-	offer := catalog.ComposeOffer(product, nil, visibleSeller)
+	offer := catalog.ComposeOffer(product, nil, visibleSeller, allowedVerdict())
 	if !offer.Visible || !offer.Listed || !offer.CheckoutAvailable {
 		t.Fatalf("видимое предложение: %+v", offer)
 	}
-	hidden := catalog.ComposeOffer(product, nil, catalog.Seller{Visible: false, CheckoutAvailable: true})
+	hidden := catalog.ComposeOffer(
+		product,
+		nil,
+		catalog.Seller{Visible: false, CheckoutAvailable: true},
+		allowedVerdict(),
+	)
 	if hidden.Visible || hidden.Listed || hidden.CheckoutAvailable {
 		t.Fatalf("скрытый продавец скрывает предложение: %+v", hidden)
 	}
-	onboarding := catalog.ComposeOffer(product, nil, catalog.Seller{Visible: true})
+	onboarding := catalog.ComposeOffer(product, nil, catalog.Seller{Visible: true}, allowedVerdict())
 	if !onboarding.Visible || onboarding.CheckoutAvailable {
 		t.Fatalf("продавец без оплаты: виден, но без checkout: %+v", onboarding)
 	}
 	variant := snapshot(1, t1)
 	variant.Card.OnlyVariant = true
 	variantProduct, _ := catalog.NewProduct(variant, t1)
-	if offer := catalog.ComposeOffer(variantProduct, nil, visibleSeller); !offer.Visible || !offer.Listed {
+	offer = catalog.ComposeOffer(variantProduct, nil, visibleSeller, allowedVerdict())
+	if !offer.Visible || !offer.Listed {
 		t.Fatalf("флаг витрины продавца не скрывает предложение площадки: %+v", offer)
 	}
 	off := snapshot(1, t1)
 	off.Card.Visible = false
 	offProduct, _ := catalog.NewProduct(off, t1)
-	if offer := catalog.ComposeOffer(offProduct, nil, visibleSeller); offer.Visible {
+	if offer := catalog.ComposeOffer(offProduct, nil, visibleSeller, allowedVerdict()); offer.Visible {
 		t.Fatalf("выключенный в магазине товар скрыт: %+v", offer)
 	}
 
@@ -218,11 +228,16 @@ func TestComposeOfferVisibility(t *testing.T) {
 		catalog.Snapshot{TenantID: "t1", ProductID: "p1", Revision: 1, Deleted: true, At: t1},
 		t1,
 	)
-	if offer := catalog.ComposeOffer(deleted, nil, visibleSeller); offer.Visible || offer.ID.String() != "t1~p1" {
+	offer = catalog.ComposeOffer(deleted, nil, visibleSeller, allowedVerdict())
+	if offer.Visible || offer.ID.String() != "t1~p1" {
 		t.Fatalf("удалённый товар скрыт: %+v", offer)
 	}
 
-	if offer := catalog.ComposeOffer(nil, nil, visibleSeller); offer.Visible {
+	if offer := catalog.ComposeOffer(nil, nil, visibleSeller, allowedVerdict()); offer.Visible {
 		t.Fatal("без товара предложения нет")
 	}
+}
+
+func allowedVerdict() *moderation.Verdict {
+	return moderation.RestoreVerdict(moderation.VerdictState{Status: moderation.Allowed, Version: 1})
 }

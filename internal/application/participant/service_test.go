@@ -8,6 +8,7 @@ import (
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -29,7 +30,7 @@ func setup(t *testing.T) (*fake.Store, *fake.Clock, *appparticipant.Service) {
 		UpdatedAt: t0,
 	})
 
-	return store, clock, appparticipant.NewService(store, clock)
+	return store, clock, appparticipant.NewService(store, clock, &fake.IDs{})
 }
 
 func TestCreate(t *testing.T) {
@@ -45,8 +46,9 @@ func TestCreate(t *testing.T) {
 	}
 
 	rows := store.OutboxRows()
-	if len(rows) != 1 || rows[0].Kind != appcatalog.TaskSyncTenant || rows[0].TenantID != "t1" {
-		t.Fatalf("ожидалась задача синхронизации магазина: %+v", rows)
+	if len(rows) != 2 || rows[0].Kind != appcatalog.TaskSyncTenant || rows[0].TenantID != "t1" ||
+		rows[1].Kind != appmoderation.TaskReevaluate || rows[1].TenantID != "t1" {
+		t.Fatalf("ожидались задачи синхронизации магазина и переоценки модерации: %+v", rows)
 	}
 
 	_, err = service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Ещё раз"})
@@ -94,7 +96,7 @@ func TestChangesEnqueueSyncOnlyWhenChanged(t *testing.T) {
 	}
 	clock.Advance(time.Minute)
 
-	view, err := service.Enable(ctx, "t1")
+	view, err := service.Enable(ctx, "t1", participant.Decision{})
 	if err != nil || !view.Participant.Enabled || view.Visibility.Visible || view.Participant.Version != 2 {
 		t.Fatalf("включение оператором без согласия магазина не делает видимым: %+v, %v", view, err)
 	}
@@ -103,13 +105,13 @@ func TestChangesEnqueueSyncOnlyWhenChanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	view, err = service.Disable(ctx, "t1")
+	view, err = service.Disable(ctx, "t1", participant.Decision{})
 	if err != nil || view.Visibility.Visible || view.Participant.Version != 4 {
 		t.Fatalf("выключение: %+v, %v", view, err)
 	}
 
 	before := len(store.OutboxRows())
-	if _, err := service.Disable(ctx, "t1"); err != nil {
+	if _, err := service.Disable(ctx, "t1", participant.Decision{}); err != nil {
 		t.Fatal(err)
 	}
 	if len(store.OutboxRows()) != before {
@@ -121,7 +123,7 @@ func TestChangeErrors(t *testing.T) {
 	_, _, service := setup(t)
 	ctx := context.Background()
 
-	if _, err := service.Enable(ctx, "missing"); !errors.Is(err, participant.ErrNotFound) {
+	if _, err := service.Enable(ctx, "missing", participant.Decision{}); !errors.Is(err, participant.ErrNotFound) {
 		t.Fatalf("ожидалось ErrNotFound, получено %v", err)
 	}
 	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Магазин"}); err != nil {
