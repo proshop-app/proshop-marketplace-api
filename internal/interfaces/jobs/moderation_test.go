@@ -35,15 +35,16 @@ func TestModerationMetricsCommittedDecisions(t *testing.T) {
 		ProbationOffers: 50,
 		Metrics:         metrics,
 	})
+	offer := ids.OfferID{Tenant: "t1", Product: "p1"}
 	store.FailCommit = errors.New("ошибка фиксации")
-	if _, err := service.OpenCase(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, "Проверка"); err == nil {
+	if _, err := service.OpenCase(ctx, offer, "Проверка", moderation.Actor{}); err == nil {
 		t.Fatal("ошибка фиксации потеряна")
 	}
 	if value := moderationMetric(t, registry, "marketplace_moderation_verdicts_total"); value != 0 {
 		t.Fatal("откат учтён в счётчике", value)
 	}
 	store.FailCommit = nil
-	c, err := service.OpenCase(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, "Проверка")
+	c, err := service.OpenCase(ctx, offer, "Проверка", moderation.Actor{})
 	if err != nil {
 		t.Fatal(err)
 	}

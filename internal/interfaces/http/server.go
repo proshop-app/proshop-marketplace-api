@@ -104,6 +104,7 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/operator/moderation/cases/{caseId}/reject", operator(moderation.decide)},
 		{http.MethodGet, "/api/v1/operator/moderation/offers/{offerId}", operator(moderation.offer)},
 		{http.MethodGet, "/api/v1/operator/moderation/verdicts", operator(moderation.verdicts)},
+		{http.MethodGet, "/api/v1/operator/moderation/rules", operator(moderation.rules)},
 		{http.MethodGet, "/api/v1/operator/moderation/stop-phrases", operator(moderation.phrases)},
 		{http.MethodPost, "/api/v1/operator/moderation/stop-phrases", operator(moderation.addPhrase)},
 		{http.MethodDelete, "/api/v1/operator/moderation/stop-phrases/{key}", operator(moderation.removePhrase)},

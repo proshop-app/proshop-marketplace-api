@@ -10,10 +10,10 @@ import (
 // Значения статусов сохраняются в БД и проверяются ограничениями схемы.
 const (
 	insertParticipantDecision = `INSERT INTO participant_decisions
- (id, tenant_id, operator_id, operator_name, action, value, reason, note, at, reason_message, actor)
- VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+ (id, tenant_id, operator_id, operator_name, action, value, reason, note, at, reason_message, actor, previous_value)
+ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
 	listParticipantDecisions = `SELECT id, tenant_id, operator_id, operator_name,
- action, value, reason, note, at, reason_message, actor
+ action, value, reason, note, at, reason_message, actor, previous_value
  FROM participant_decisions WHERE tenant_id = $1 ORDER BY at DESC, id DESC LIMIT $2 OFFSET $3`
 	countParticipantDecisions = `SELECT count(*) FROM participant_decisions WHERE tenant_id = $1`
 )
@@ -40,6 +40,7 @@ func (r *ParticipantDecisions) Add(ctx context.Context, d participant.DecisionRe
 		d.At,
 		d.ReasonMessage,
 		d.Actor,
+		d.PreviousValue,
 	)
 	return err
 }
@@ -74,6 +75,7 @@ func (r *ParticipantDecisions) List(
 			&d.At,
 			&d.ReasonMessage,
 			&d.Actor,
+			&d.PreviousValue,
 		)
 		if err != nil {
 			return nil, 0, err

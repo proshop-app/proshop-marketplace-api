@@ -28,10 +28,11 @@ type DecisionRecord struct {
 	ID       ids.UUID
 	TenantID ids.TenantID
 	Decision
-	Actor  string
-	Action string
-	Value  string
-	At     time.Time
+	PreviousValue string
+	Actor         string
+	Action        string
+	Value         string
+	At            time.Time
 }
 
 // DecisionRepository разрешает только добавление и чтение журнала.
@@ -69,12 +70,13 @@ func (p *Participant) ApproveOffer(threshold int, now time.Time) bool {
 // PromotionDecision не приписывает автоматическое повышение последнему оператору.
 func (p *Participant) PromotionDecision(id ids.UUID, now time.Time) DecisionRecord {
 	return DecisionRecord{
-		ID:       id,
-		TenantID: p.state.TenantID,
-		Actor:    "system",
-		Action:   "trust",
-		Value:    Trusted,
-		Decision: Decision{Note: fmt.Sprintf("Одобрено %d предложений", p.state.ApprovedOffers)},
-		At:       now,
+		ID:            id,
+		TenantID:      p.state.TenantID,
+		Actor:         "system",
+		Action:        "trust",
+		Value:         Trusted,
+		PreviousValue: Probation,
+		Decision:      Decision{Note: fmt.Sprintf("Одобрено %d предложений", p.state.ApprovedOffers)},
+		At:            now,
 	}
 }

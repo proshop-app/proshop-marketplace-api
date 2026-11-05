@@ -3,7 +3,6 @@ package http
 import (
 	"net/http"
 	"strings"
-	"unicode/utf8"
 
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
@@ -24,10 +23,6 @@ func (h *participantHandlers) decision(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, err)
 			return
 		}
-	}
-	if r.Method == http.MethodPut && (strings.TrimSpace(body.Note) == "" || utf8.RuneCountInString(body.Note) > 2000) {
-		writeError(w, r, moderation.ErrInvalid)
-		return
 	}
 	decision := participant.Decision{
 		Operator: principalFrom(r),
@@ -64,13 +59,14 @@ func (h *participantHandlers) decisions(w http.ResponseWriter, r *http.Request) 
 	items := make([]any, 0, len(page.Items))
 	for _, d := range page.Items {
 		items = append(items, map[string]any{
-			"operator": moderation.Actor{ID: d.Operator.ID, Name: d.Operator.Name},
-			"action":   d.Action,
-			"value":    d.Value,
-			"reason":   moderation.DecisionReason(d.Reason, d.ReasonMessage),
-			"by":       d.Actor,
-			"note":     d.Note,
-			"at":       d.At,
+			"operator":      moderation.Actor{ID: d.Operator.ID, Name: d.Operator.Name},
+			"action":        d.Action,
+			"value":         d.Value,
+			"previousValue": d.PreviousValue,
+			"reason":        moderation.DecisionReason(d.Reason, d.ReasonMessage),
+			"by":            d.Actor,
+			"note":          d.Note,
+			"at":            d.At,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

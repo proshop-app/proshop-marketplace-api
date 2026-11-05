@@ -122,6 +122,12 @@ paths:
           enum:
           - rule
           - operator
+      - name: order
+        in: query
+        schema: {type: string, enum: [oldest, newest], default: oldest}
+      - name: reason
+        in: query
+        schema: {type: string}
     post:
       tags:
       - moderation
@@ -401,6 +407,31 @@ paths:
         in: query
         required: false
         schema: *id002
+      - name: decidedBy
+        in: query
+        schema: {type: string, enum: [rule, operator]}
+  /api/v1/operator/moderation/rules:
+    get:
+      tags: [moderation]
+      summary: Прочитать настройки и версии правил модерации
+      operationId: moderationRules
+      security: [{operatorToken: []}, {operatorSession: []}]
+      responses:
+        '200':
+          description: Настройки оценщика
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision, taxonomyVersion, requireImage, probationOffers]
+                properties:
+                  revision: {type: integer, format: int64}
+                  taxonomyVersion: {type: integer, format: int64}
+                  requireImage: {type: boolean}
+                  probationOffers: {type: integer}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
   /api/v1/operator/moderation/stop-phrases:
     get:
       tags:
@@ -699,6 +730,7 @@ paths:
                       - operator
                       - action
                       - value
+                      - previousValue
                       - by
                       - reason
                       - note
@@ -719,6 +751,7 @@ paths:
                           - disable
                           - trust
                         value: *id002
+                        previousValue: {type: string, description: Прежнее значение; у старых записей пусто.}
                         reason:
                           anyOf:
                           - $ref: '#/components/schemas/ModerationReason'
@@ -1804,7 +1837,7 @@ paths:
               type: object
               properties:
                 reason: { type: string }
-                note: { type: string }
+                note: { type: string, maxLength: 2000 }
       responses:
         "200": { $ref: "#/components/responses/Participant" }
         "400": { $ref: "#/components/responses/Error" }
@@ -1820,14 +1853,15 @@ paths:
       parameters:
         - $ref: "#/components/parameters/TenantId"
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
               type: object
+              required: [note]
               properties:
                 reason: { type: string }
-                note: { type: string }
+                note: { type: string, minLength: 1, maxLength: 2000, description: Непустая после TrimSpace. }
       responses:
         "200": { $ref: "#/components/responses/Participant" }
         "400": { $ref: "#/components/responses/Error" }
@@ -2449,6 +2483,8 @@ components:
     ModerationCase:
       type: object
       required:
+      - offer
+      - seller
       - id
       - offerId
       - tenantId
@@ -2462,6 +2498,19 @@ components:
       - decidedAt
       - version
       properties:
+        offer:
+          type: object
+          required: [name, image, price]
+          properties:
+            name: {type: string}
+            image: {type: string}
+            price: {type: integer, format: int64, description: Цена в копейках}
+        seller:
+          type: object
+          required: [slug, name]
+          properties:
+            slug: {type: string}
+            name: {type: string}
         id:
           type: string
           format: uuid
@@ -2507,6 +2556,12 @@ components:
     ModerationVerdict:
       type: object
       required:
+      - offer
+      - seller
+      - rulesRevision
+      - taxonomyVersion
+      - operator
+      - decision
       - offerId
       - tenantId
       - productId
@@ -2516,6 +2571,40 @@ components:
       - decidedBy
       - updatedAt
       properties:
+        offer:
+          type: object
+          required: [name, image, price]
+          properties:
+            name: {type: string}
+            image: {type: string}
+            price: {type: integer, format: int64, description: Цена в копейках}
+        seller:
+          type: object
+          required: [slug, name]
+          properties:
+            slug: {type: string}
+            name: {type: string}
+        rulesRevision: {type: integer, format: int64}
+        taxonomyVersion: {type: integer, format: int64}
+        operator:
+          type: object
+          required: [id, name]
+          properties:
+            id: {type: string}
+            name: {type: string}
+        decision:
+          anyOf:
+          - type: 'null'
+          - type: object
+            required: [action, reason, note, at]
+            properties:
+              action: {type: string, enum: [allow, reject]}
+              reason:
+                anyOf:
+                - $ref: '#/components/schemas/ModerationReason'
+                - type: 'null'
+              note: {type: string}
+              at: {type: string, format: date-time}
         offerId: *id001
         tenantId: *id001
         productId: *id001
@@ -2654,10 +2743,51 @@ components:
     ModerationOfferState:
       type: object
       required:
+      - offer
+      - participant
+      - verdicts
       - verdict
       - case
       - history
       properties:
+        offer:
+          $ref: '#/components/schemas/ModerationOffer'
+        participant:
+          type: object
+          required: [tenantId, name, enabled, visible]
+          properties:
+            tenantId: {type: string}
+            name: {type: string}
+            enabled: {type: boolean}
+            visible: {type: boolean}
+        verdicts:
+          type: array
+          maxItems: 50
+          description: Сохранённые изменения вердикта, новые сверху.
+          items:
+            type: object
+            required: [revision, status, reasons, decidedBy, operator, rulesRevision, taxonomyVersion, at]
+            properties:
+              revision: {type: integer, format: int64}
+              status: {type: string, enum: [allowed, pending, rejected]}
+              reasons:
+                type: array
+                items:
+                  type: object
+                  required: [key, message]
+                  properties:
+                    key: {type: string}
+                    message: {type: string}
+              decidedBy: {type: string, enum: [rule, operator]}
+              operator:
+                type: object
+                required: [id, name]
+                properties:
+                  id: {type: string}
+                  name: {type: string}
+              rulesRevision: {type: integer, format: int64}
+              taxonomyVersion: {type: integer, format: int64}
+              at: {type: string, format: date-time}
         verdict:
           anyOf:
           - $ref: '#/components/schemas/ModerationVerdict'
@@ -3241,9 +3371,10 @@ components:
         maxAmount: { type: integer, format: int64, description: Потолок в копейках; 0 — без потолка }
     Participant:
       type: object
-      required: [trust, approvedOffers, tenantId, slug, name, status, enabled, freeDeliveryFrom, delivery, shopEnabled, subsidy, settingsSyncedAt, tenantStatus, visible, checkoutAvailable, version, createdAt, updatedAt]
+      required: [trust, probationOffers, approvedOffers, tenantId, slug, name, status, enabled, freeDeliveryFrom, delivery, shopEnabled, subsidy, settingsSyncedAt, tenantStatus, visible, checkoutAvailable, version, createdAt, updatedAt]
       properties:
         trust: { type: string, enum: [probation, trusted] }
+        probationOffers: { type: integer, minimum: 0 }
         approvedOffers: { type: integer, minimum: 0 }
         tenantId: { type: string }
         slug: { type: string }

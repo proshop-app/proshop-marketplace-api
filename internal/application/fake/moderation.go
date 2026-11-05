@@ -13,6 +13,7 @@ import (
 )
 
 type moderationData struct {
+	verdictLog           []moderation.VerdictState
 	cached               map[string]moderation.CachedDecision
 	verdicts             map[productKey]moderation.VerdictState
 	cases                map[ids.UUID]moderation.CaseState
@@ -43,6 +44,7 @@ func newModerationData() *moderationData {
 func (d *moderationData) clone() *moderationData {
 	return &moderationData{
 		cached:               maps.Clone(d.cached),
+		verdictLog:           slices.Clone(d.verdictLog),
 		verdicts:             maps.Clone(d.verdicts),
 		cases:                maps.Clone(d.cases),
 		decisions:            slices.Clone(d.decisions),
@@ -81,6 +83,9 @@ func (r moderationVerdicts) Save(_ context.Context, v *moderation.Verdict) error
 		return moderation.ErrConflict
 	}
 	r.d.verdicts[key] = state
+	if state.Version != old.Version {
+		r.d.verdictLog = append(r.d.verdictLog, state)
+	}
 	v.MarkSaved()
 	return nil
 }
@@ -88,7 +93,8 @@ func (r moderationVerdicts) Save(_ context.Context, v *moderation.Verdict) error
 func (r moderationVerdicts) List(_ context.Context, f moderation.Filter) ([]moderation.VerdictState, int, error) {
 	all := []moderation.VerdictState{}
 	for _, v := range r.d.verdicts {
-		if (f.Status == "" || v.Status == f.Status) && (f.TenantID == "" || v.TenantID == f.TenantID) {
+		if (f.Status == "" || v.Status == f.Status) && (f.TenantID == "" || v.TenantID == f.TenantID) &&
+			(f.DecidedBy == "" || v.DecidedBy == f.DecidedBy) {
 			all = append(all, moderation.RestoreVerdict(v).State())
 		}
 	}
@@ -147,15 +153,24 @@ func (r moderationCases) List(_ context.Context, f moderation.Filter) ([]moderat
 	all := []moderation.CaseState{}
 	for _, c := range r.d.cases {
 		if (f.Status == "" || c.Status == f.Status) && (f.TenantID == "" || c.TenantID == f.TenantID) &&
-			(f.Source == "" || c.Source == f.Source) {
+			(f.Source == "" || c.Source == f.Source) &&
+			(f.Reason == "" || slices.ContainsFunc(c.Reasons, func(r moderation.Reason) bool {
+				return r.Key == f.Reason
+			})) {
 			all = append(all, moderation.RestoreCase(c).State())
 		}
 	}
 	sort.Slice(all, func(i, j int) bool {
 		if all[i].OpenedAt.Equal(all[j].OpenedAt) {
-			return all[i].ID > all[j].ID
+			if f.Order == "newest" {
+				return all[i].ID > all[j].ID
+			}
+			return all[i].ID < all[j].ID
 		}
-		return all[i].OpenedAt.After(all[j].OpenedAt)
+		if f.Order == "newest" {
+			return all[i].OpenedAt.After(all[j].OpenedAt)
+		}
+		return all[i].OpenedAt.Before(all[j].OpenedAt)
 	})
 	return window(all, f.Limit, f.Offset), len(all), nil
 }
@@ -305,4 +320,20 @@ func (r moderationCases) OpenStats(_ context.Context) ([]moderation.OpenStat, er
 		result = append(result, stat)
 	}
 	return result, nil
+}
+
+func (r moderationVerdicts) History(
+	_ context.Context,
+	tenant ids.TenantID,
+	product ids.ProductID,
+) ([]moderation.VerdictState, error) {
+	result := []moderation.VerdictState{}
+	for i := len(r.d.verdictLog) - 1; i >= 0; i-- {
+		v := r.d.verdictLog[i]
+		if v.TenantID == tenant && v.ProductID == product {
+			result = append(result, moderation.RestoreVerdict(v).State())
+		}
+	}
+	sort.SliceStable(result, func(i, j int) bool { return result[i].UpdatedAt.After(result[j].UpdatedAt) })
+	return result[:min(50, len(result))], nil
 }

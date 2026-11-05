@@ -12,6 +12,7 @@ import (
 
 // participantJSON — участник в операторском ответе.
 type participantJSON struct {
+	ProbationOffers   int                          `json:"probationOffers"`
 	Trust             string                       `json:"trust"`
 	ApprovedOffers    int                          `json:"approvedOffers"`
 	TenantID          string                       `json:"tenantId"`
@@ -68,6 +69,7 @@ type participantDeliveryJSON struct {
 func toParticipantJSON(view appparticipant.View) participantJSON {
 	p := view.Participant
 	out := participantJSON{
+		ProbationOffers:   view.ProbationOffers,
 		Trust:             p.Trust,
 		ApprovedOffers:    p.ApprovedOffers,
 		TenantID:          string(p.TenantID),

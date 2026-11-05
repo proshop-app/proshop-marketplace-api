@@ -53,7 +53,7 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
 | `moderation.probation` | участник на испытании |
 | `moderation.rejected_revision` | предыдущая ревизия отклонена оператором, новая ждёт человека |
 | `moderation.manual_review` | оператор открыл дело вручную, «На ручной проверке» |
-| `moderation.rejected_by_operator` | отказ оператора; `message` — код причины или заметка |
+| `moderation.rejected_by_operator` | отказ оператора; `message` — текст из словаря или заметка |
 
 Правила применяются к снимку карточки по порядку; первый отказ
 останавливает оценку, пометки `pending` накапливаются:

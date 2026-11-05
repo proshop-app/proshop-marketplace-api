@@ -9,15 +9,19 @@ import (
 
 // Filter ограничивает выборку очереди для постраничного чтения.
 type Filter struct {
-	Status   Status
-	TenantID ids.TenantID
-	Source   string
-	Limit    int
-	Offset   int
+	Order     string
+	Reason    string
+	DecidedBy string
+	Status    Status
+	TenantID  ids.TenantID
+	Source    string
+	Limit     int
+	Offset    int
 }
 
 // VerdictRepository сохраняет вердикты с контролем исходной версии.
 type VerdictRepository interface {
+	History(context.Context, ids.TenantID, ids.ProductID) ([]VerdictState, error)
 	Get(context.Context, ids.TenantID, ids.ProductID) (*Verdict, error)
 	Save(context.Context, *Verdict) error
 	List(context.Context, Filter) ([]VerdictState, int, error)

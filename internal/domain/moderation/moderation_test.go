@@ -57,7 +57,7 @@ func TestRules(t *testing.T) {
 			"испытание и ручной отказ",
 			moderation.Input{Probation: true, ManualReject: true, Image: "image"},
 			moderation.Pending,
-			[]string{"probation", "manual_review"},
+			[]string{"probation", "rejected_revision"},
 		},
 	}
 	phrases := []moderation.StopPhrase{{Text: "Товар", Key: "товар"}, {Text: "Магазин", Key: "магазин"}}

@@ -80,7 +80,7 @@ func (r Rules) Evaluate(in Input) (Status, []Reason) {
 		add("probation", "участник на испытании")
 	}
 	if in.ManualReject {
-		add("manual_review", "На ручной проверке")
+		add("rejected_revision", "Предыдущая ревизия отклонена оператором")
 	}
 	if len(reasons) > 0 {
 		return Pending, reasons

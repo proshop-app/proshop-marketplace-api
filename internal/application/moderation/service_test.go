@@ -340,7 +340,7 @@ func TestOperatorCaseRejectAndNewRevision(t *testing.T) {
 	e := setup()
 	ctx := context.Background()
 	members := appparticipant.NewService(e.store, e.clock, &fake.IDs{})
-	if _, err := members.SetTrust(ctx, "t1", participant.Trusted, participant.Decision{}); err != nil {
+	if _, err := members.SetTrust(ctx, "t1", participant.Trusted, participant.Decision{Note: "Заметка"}); err != nil {
 		t.Fatal(err)
 	}
 	e.project(t, "p1", 1)
@@ -351,7 +351,7 @@ func TestOperatorCaseRejectAndNewRevision(t *testing.T) {
 	if err := e.store.Complete(ctx, initial.ID, e.clock.Now()); err != nil {
 		t.Fatal(err)
 	}
-	c, err := e.service.OpenCase(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, "Проверка")
+	c, err := e.service.OpenCase(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, "Проверка", moderation.Actor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -378,7 +378,7 @@ func TestOperatorCaseRejectAndNewRevision(t *testing.T) {
 	e.project(t, "p1", 2)
 	pending := e.view(t, "p1")
 	if pending.Verdict.Status != moderation.Pending || pending.Case == nil ||
-		pending.Verdict.Reasons[0].Key != "moderation.manual_review" {
+		pending.Verdict.Reasons[0].Key != "moderation.rejected_revision" {
 		t.Fatal(pending)
 	}
 }

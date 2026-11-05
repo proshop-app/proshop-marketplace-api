@@ -35,6 +35,7 @@ func (s *Service) OpenCase(
 	ctx context.Context,
 	offer ids.OfferID,
 	note string,
+	actor moderation.Actor,
 ) (moderation.CaseState, error) {
 	if strings.TrimSpace(note) == "" || utf8.RuneCountInString(strings.TrimSpace(note)) > 2000 {
 		return moderation.CaseState{}, moderation.ErrInvalid
@@ -64,7 +65,7 @@ func (s *Service) OpenCase(
 			return err
 		}
 		now := s.clock.Now()
-		verdict.Review(p.Revision, now)
+		verdict.Review(p.Revision, actor, now)
 		card, err := reviewCard(ctx, tx, offer.Tenant, offer.Product)
 		if err != nil {
 			return err
@@ -159,11 +160,17 @@ func (s *Service) decide(
 		if err != nil {
 			return err
 		}
-		message := cmd.Reason
+		message := reasonMessage
 		if message == "" {
 			message = strings.TrimSpace(cmd.Note)
 		}
 		verdict.Decide(action, message, now)
+		verdict.RecordDecision(cmd.Operator, moderation.VerdictDecision{
+			Action: action,
+			Reason: moderation.DecisionReason(cmd.Reason, reasonMessage),
+			Note:   strings.TrimSpace(cmd.Note),
+			At:     now,
+		})
 		// Одинаковый порядок с Evaluate исключает взаимную блокировку дела и вердикта.
 		if err := tx.ModerationVerdicts().Save(ctx, verdict); err != nil {
 			return err
