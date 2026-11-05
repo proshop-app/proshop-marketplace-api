@@ -558,6 +558,9 @@ PUT той же части принимает один YAML до 2 МиБ с о�
 | `moderation.image_missing` | у карточки нет изображения; `hidden`, новая ревизия с картинкой проходит сама |
 | `moderation.probation` | участник на испытании; `pending` |
 | `moderation.manual_review` | оператор открыл дело вручную, «На ручной проверке»; `pending` |
+| `moderation.rejected_revision` | предыдущая ревизия отклонена оператором, новая ждёт человека; `pending` |
+| `moderation.rejected_by_operator` | отказ оператора, в `message` — причина из словаря или заметка; `hidden` |
+| `moderation.not_evaluated` | вердикта ещё нет, до первой оценки; `hidden` |
 
 Отказ оператора даёт `hidden` с причинами дела и `decision.action: "reject"`;
 он прилипает к предложению, и следующая ревизия снова приходит со статусом

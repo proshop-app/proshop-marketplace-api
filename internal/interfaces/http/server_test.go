@@ -325,7 +325,7 @@ func TestOperatorFlow(t *testing.T) {
 		t.Fatalf("включение оператором без согласия магазина: %+v", r)
 	}
 
-	r = e.call(t, http.MethodPost, "/api/v1/operator/participants/t1/disable", "", true)
+	r = e.call(t, http.MethodPost, "/api/v1/operator/participants/t1/disable", `{"note":"Заметка"}`, true)
 	if r.status != http.StatusOK || r.body["visible"] != false {
 		t.Fatalf("выключение: %+v", r)
 	}

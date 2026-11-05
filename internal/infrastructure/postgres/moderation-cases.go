@@ -37,11 +37,16 @@ const (
  card = $12
  WHERE id = $1 AND version = $13 AND status = $14`
 	countModerationCases = `SELECT count(*) FROM moderation_cases
- WHERE ($1 = '' OR status = $1) AND ($2 = '' OR tenant_id = $2) AND ($3 = '' OR source = $3)`
+ WHERE ($1 = '' OR status = $1) AND ($2 = '' OR tenant_id = $2) AND ($3 = '' OR source = $3)
+ AND ($4 = '' OR reasons @> jsonb_build_array(jsonb_build_object('key', $4::text)))`
 	listModerationCases = `SELECT ` + caseColumns + ` FROM moderation_cases
 
  WHERE ($1 = '' OR status = $1) AND ($2 = '' OR tenant_id = $2) AND ($3 = '' OR source = $3)
- ORDER BY opened_at DESC, id DESC LIMIT $4 OFFSET $5`
+ AND ($4 = '' OR reasons @> jsonb_build_array(jsonb_build_object('key', $4::text)))
+ ORDER BY
+ CASE WHEN $5 = 'newest' THEN opened_at END DESC,
+ CASE WHEN $5 = 'newest' THEN id END DESC,
+ opened_at ASC, id ASC LIMIT $6 OFFSET $7`
 	openModerationCase = `SELECT ` + caseColumns + ` FROM moderation_cases
  WHERE tenant_id = $1 AND product_id = $2 AND status = 'open'`
 )
@@ -148,10 +153,21 @@ func (r *ModerationCases) Save(ctx context.Context, value *moderation.Case) erro
 // List ограничивает объём чтения для операторского сценария.
 func (r *ModerationCases) List(ctx context.Context, f moderation.Filter) ([]moderation.CaseState, int, error) {
 	var total int
-	if err := r.q.QueryRow(ctx, countModerationCases, f.Status, f.TenantID, f.Source).Scan(&total); err != nil {
+	row := r.q.QueryRow(ctx, countModerationCases, f.Status, f.TenantID, f.Source, f.Reason)
+	if err := row.Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := r.q.Query(ctx, listModerationCases, f.Status, f.TenantID, f.Source, f.Limit, f.Offset)
+	rows, err := r.q.Query(
+		ctx,
+		listModerationCases,
+		f.Status,
+		f.TenantID,
+		f.Source,
+		f.Reason,
+		f.Order,
+		f.Limit,
+		f.Offset,
+	)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -2,6 +2,9 @@ package participant
 
 import (
 	"context"
+	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
@@ -37,6 +40,10 @@ func (s *Service) decide(
 	value string,
 	decision participant.Decision,
 ) (View, error) {
+	decision.Note = strings.TrimSpace(decision.Note)
+	if utf8.RuneCountInString(decision.Note) > 2000 || (action != "enable" && decision.Note == "") {
+		return View{}, participant.ErrInvalidNote
+	}
 	var view View
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		p, err := tx.Participants().Get(ctx, tenant)
@@ -48,6 +55,10 @@ func (s *Service) decide(
 			return err
 		}
 		decision.ReasonMessage = message
+		previous := p.State().Trust
+		if action != "trust" {
+			previous = strconv.FormatBool(p.Enabled())
+		}
 		now := s.clock.Now()
 		changed := false
 		switch action {
@@ -66,13 +77,14 @@ func (s *Service) decide(
 				return err
 			}
 			record := participant.DecisionRecord{
-				ID:       s.ids.NewUUID(),
-				TenantID: tenant,
-				Decision: decision,
-				Actor:    "operator",
-				Action:   action,
-				Value:    value,
-				At:       now,
+				ID:            s.ids.NewUUID(),
+				TenantID:      tenant,
+				Decision:      decision,
+				Actor:         "operator",
+				Action:        action,
+				Value:         value,
+				PreviousValue: previous,
+				At:            now,
 			}
 			if err := tx.ParticipantDecisions().Add(ctx, record); err != nil {
 				return err
@@ -89,7 +101,7 @@ func (s *Service) decide(
 				}
 			}
 		}
-		view, err = withTenant(ctx, tx, p)
+		view, err = s.withTenant(ctx, tx, p)
 		return err
 	})
 	return view, err

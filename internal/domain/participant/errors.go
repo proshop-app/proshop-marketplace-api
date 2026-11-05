@@ -3,6 +3,8 @@ package participant
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrInvalidNote требует объяснения операторского изменения.
+	ErrInvalidNote = errs.New(errs.Invalid, "participant.invalid_note", "заметка: от 1 до 2000 символов")
 	// ErrInvalidTrust запрещает неизвестный уровень доверия.
 	ErrInvalidTrust = errs.New(errs.Invalid, "participant.invalid_trust", "неизвестный уровень доверия")
 	// ErrNotFound — участника нет.

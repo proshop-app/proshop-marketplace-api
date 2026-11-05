@@ -15,9 +15,10 @@ import (
 
 // View — участник с состоянием магазина в реестре.
 type View struct {
-	Participant  participant.State
-	TenantStatus participant.TenantStatus
-	Visibility   participant.Visibility
+	ProbationOffers int
+	Participant     participant.State
+	TenantStatus    participant.TenantStatus
+	Visibility      participant.Visibility
 }
 
 // List — страница участников.
@@ -38,9 +39,10 @@ const MaxPageLimit = 200
 // Service — операторские сценарии участников. Любое изменение участника
 // ставит задачу синхронизации индекса в той же транзакции.
 type Service struct {
-	ids   ports.IDs
-	uow   ports.UnitOfWork
-	clock ports.Clock
+	probationOffers int
+	ids             ports.IDs
+	uow             ports.UnitOfWork
+	clock           ports.Clock
 }
 
 // NewService — сценарии участников.
@@ -86,6 +88,7 @@ func (s *Service) Create(ctx context.Context, cmd CreateCommand) (View, error) {
 		}
 
 		view = viewOf(p, tenant)
+		view.ProbationOffers = s.probationOffers
 
 		return nil
 	})
@@ -120,7 +123,7 @@ func (s *Service) Get(ctx context.Context, tenantID ids.TenantID) (View, error) 
 			return err
 		}
 
-		view, err = withTenant(ctx, tx, p)
+		view, err = s.withTenant(ctx, tx, p)
 
 		return err
 	})
@@ -150,7 +153,7 @@ func (s *Service) List(ctx context.Context, page participant.Page) (List, error)
 
 		list = List{Items: make([]View, 0, len(items)), Total: total}
 		for _, p := range items {
-			view, err := withTenant(ctx, tx, p)
+			view, err := s.withTenant(ctx, tx, p)
 			if err != nil {
 				return err
 			}
@@ -191,7 +194,7 @@ func (s *Service) change(
 			}
 		}
 
-		view, err = withTenant(ctx, tx, p)
+		view, err = s.withTenant(ctx, tx, p)
 
 		return err
 	})
@@ -199,13 +202,15 @@ func (s *Service) change(
 	return view, err
 }
 
-func withTenant(ctx context.Context, tx ports.Tx, p *participant.Participant) (View, error) {
+func (s *Service) withTenant(ctx context.Context, tx ports.Tx, p *participant.Participant) (View, error) {
 	tenant, err := tx.Registry().Get(ctx, p.TenantID())
 	if err != nil {
 		return View{}, err
 	}
 
-	return viewOf(p, tenant), nil
+	view := viewOf(p, tenant)
+	view.ProbationOffers = s.probationOffers
+	return view, nil
 }
 
 func viewOf(p *participant.Participant, tenant *participant.Tenant) View {
@@ -226,4 +231,10 @@ func (s *Service) SetDelivery(
 	return s.change(ctx, tenantID, func(p *participant.Participant) (bool, error) {
 		return p.SetDelivery(settings, version, s.clock.Now())
 	})
+}
+
+// WithProbationOffers согласует отображаемый порог с настройкой оценщика.
+func (s *Service) WithProbationOffers(threshold int) *Service {
+	s.probationOffers = threshold
+	return s
 }

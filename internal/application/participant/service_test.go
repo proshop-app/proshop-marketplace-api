@@ -96,7 +96,7 @@ func TestChangesEnqueueSyncOnlyWhenChanged(t *testing.T) {
 	}
 	clock.Advance(time.Minute)
 
-	view, err := service.Enable(ctx, "t1", participant.Decision{})
+	view, err := service.Enable(ctx, "t1", participant.Decision{Note: "Заметка"})
 	if err != nil || !view.Participant.Enabled || view.Visibility.Visible || view.Participant.Version != 2 {
 		t.Fatalf("включение оператором без согласия магазина не делает видимым: %+v, %v", view, err)
 	}
@@ -105,13 +105,13 @@ func TestChangesEnqueueSyncOnlyWhenChanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	view, err = service.Disable(ctx, "t1", participant.Decision{})
+	view, err = service.Disable(ctx, "t1", participant.Decision{Note: "Заметка"})
 	if err != nil || view.Visibility.Visible || view.Participant.Version != 4 {
 		t.Fatalf("выключение: %+v, %v", view, err)
 	}
 
 	before := len(store.OutboxRows())
-	if _, err := service.Disable(ctx, "t1", participant.Decision{}); err != nil {
+	if _, err := service.Disable(ctx, "t1", participant.Decision{Note: "Заметка"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(store.OutboxRows()) != before {

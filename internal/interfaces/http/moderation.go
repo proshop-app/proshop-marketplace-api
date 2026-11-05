@@ -13,7 +13,15 @@ type moderationHandlers struct{ service *appmoderation.Service }
 
 type moderationCaseJSON struct {
 	moderation.CaseState
-	OfferID string `json:"offerId"`
+	OfferID string                  `json:"offerId"`
+	Offer   moderationOfferSummary  `json:"offer"`
+	Seller  moderation.ReviewSeller `json:"seller"`
+}
+
+type moderationOfferSummary struct {
+	Name  string `json:"name"`
+	Image string `json:"image"`
+	Price int64  `json:"price"`
 }
 
 type moderationRequest struct {
@@ -27,11 +35,20 @@ type moderationRequest struct {
 }
 
 func caseJSON(c moderation.CaseState) moderationCaseJSON {
+	card := c.Card
 	c.Card = nil
 	if c.Reasons == nil {
 		c.Reasons = []moderation.Reason{}
 	}
-	return moderationCaseJSON{CaseState: c, OfferID: ids.OfferID{Tenant: c.TenantID, Product: c.ProductID}.String()}
+	result := moderationCaseJSON{
+		CaseState: c,
+		OfferID:   ids.OfferID{Tenant: c.TenantID, Product: c.ProductID}.String(),
+	}
+	if card != nil {
+		result.Offer = moderationOfferSummary{Name: card.Name, Image: card.Image, Price: card.Price}
+		result.Seller = card.Seller
+	}
+	return result
 }
 
 func verdictJSON(v *moderation.VerdictState) any {
@@ -42,15 +59,27 @@ func verdictJSON(v *moderation.VerdictState) any {
 	if reasons == nil {
 		reasons = []moderation.Reason{}
 	}
+	var offer moderationOfferSummary
+	var seller moderation.ReviewSeller
+	if v.Card != nil {
+		offer = moderationOfferSummary{Name: v.Card.Name, Image: v.Card.Image, Price: v.Card.Price}
+		seller = v.Card.Seller
+	}
 	return map[string]any{
-		"offerId":   ids.OfferID{Tenant: v.TenantID, Product: v.ProductID}.String(),
-		"tenantId":  v.TenantID,
-		"productId": v.ProductID,
-		"revision":  v.Revision,
-		"status":    v.Status,
-		"reasons":   reasons,
-		"decidedBy": v.DecidedBy,
-		"updatedAt": v.UpdatedAt,
+		"offer":           offer,
+		"seller":          seller,
+		"operator":        v.Operator,
+		"decision":        v.Decision,
+		"rulesRevision":   v.RulesRevision,
+		"taxonomyVersion": v.TaxonomyVersion,
+		"offerId":         ids.OfferID{Tenant: v.TenantID, Product: v.ProductID}.String(),
+		"tenantId":        v.TenantID,
+		"productId":       v.ProductID,
+		"revision":        v.Revision,
+		"status":          v.Status,
+		"reasons":         reasons,
+		"decidedBy":       v.DecidedBy,
+		"updatedAt":       v.UpdatedAt,
 	}
 }
 
@@ -103,6 +132,15 @@ func (h *moderationHandlers) verdicts(w http.ResponseWriter, r *http.Request) {
 func moderationFilter(r *http.Request, verdict bool) (moderation.Filter, error) {
 	q := r.URL.Query()
 	f := moderation.Filter{Status: moderation.Status(q.Get("status")), Source: q.Get("source")}
+	f.Order = q.Get("order")
+	f.Reason = q.Get("reason")
+	f.DecidedBy = q.Get("decidedBy")
+	if f.Order != "" && f.Order != "oldest" && f.Order != "newest" {
+		return f, moderation.ErrInvalid
+	}
+	if f.DecidedBy != "" && f.DecidedBy != moderation.Rule && f.DecidedBy != moderation.Operator {
+		return f, moderation.ErrInvalid
+	}
 	var err error
 	f.Limit, err = intParam(q.Get("limit"))
 	if err != nil {
@@ -169,7 +207,9 @@ func (h *moderationHandlers) open(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, moderation.ErrInvalid)
 		return
 	}
-	c, err := h.service.OpenCase(r.Context(), id, body.Note)
+	principal := principalFrom(r)
+	actor := moderation.Actor{ID: principal.ID, Name: principal.Name}
+	c, err := h.service.OpenCase(r.Context(), id, body.Note, actor)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -230,9 +270,12 @@ func (h *moderationHandlers) offer(w http.ResponseWriter, r *http.Request) {
 		c = &value
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"verdict": verdictJSON(view.Verdict),
-		"case":    c,
-		"history": decisionHistory(view.History),
+		"offer":       view.Offer,
+		"participant": view.Participant,
+		"verdicts":    verdictHistory(view.Verdicts),
+		"verdict":     verdictJSON(view.Verdict),
+		"case":        c,
+		"history":     decisionHistory(view.History),
 	})
 }
 
@@ -334,4 +377,30 @@ func decisionJSON(d *moderation.Decision) any {
 		"revision": d.Revision,
 		"at":       d.At,
 	}
+}
+
+func (h *moderationHandlers) rules(w http.ResponseWriter, r *http.Request) {
+	view, err := h.service.Rules(r.Context())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func verdictHistory(history []moderation.VerdictState) []any {
+	result := make([]any, 0, len(history))
+	for _, v := range history {
+		result = append(result, map[string]any{
+			"revision":        v.Revision,
+			"status":          v.Status,
+			"reasons":         v.Reasons,
+			"decidedBy":       v.DecidedBy,
+			"operator":        v.Operator,
+			"rulesRevision":   v.RulesRevision,
+			"taxonomyVersion": v.TaxonomyVersion,
+			"at":              v.UpdatedAt,
+		})
+	}
+	return result
 }

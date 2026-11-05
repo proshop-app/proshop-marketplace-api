@@ -262,6 +262,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		Batch:           retentionBatch,
 	})
 
+	participants := appparticipant.NewService(uow, now, identities).WithProbationOffers(cfg.Moderation.ProbationOffers)
 	return services{
 		moderationMetrics: moderationMetrics,
 		moderation:        moderation,
@@ -271,7 +272,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		projector:         projector,
 		indexer:           indexer,
 		queries:           appcatalog.NewQueries(uow, s.store.index, resyncing),
-		participants:      appparticipant.NewService(uow, now, identities),
+		participants:      participants,
 		registry:          registry,
 		settings:          settings,
 		auth:              auth,

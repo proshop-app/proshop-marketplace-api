@@ -10,17 +10,28 @@ import (
 
 // VerdictState сохраняет основания оценки и версии её источников.
 type VerdictState struct {
-	TenantID        ids.TenantID  `json:"tenant_id"`
-	ProductID       ids.ProductID `json:"product_id"`
-	Revision        int64         `json:"revision"`
-	RulesRevision   int64         `json:"rules_revision"`
-	TaxonomyVersion int64         `json:"taxonomy_version"`
-	Status          Status        `json:"status"`
-	Reasons         []Reason      `json:"reasons"`
-	DecidedBy       string        `json:"decided_by"`
-	ManualReject    bool          `json:"manual_reject"`
-	Version         int64         `json:"version"`
-	UpdatedAt       time.Time     `json:"updated_at"`
+	Operator        Actor            `json:"operator"`
+	Decision        *VerdictDecision `json:"decision"`
+	Card            *ReviewCard      `json:"-"`
+	TenantID        ids.TenantID     `json:"tenant_id"`
+	ProductID       ids.ProductID    `json:"product_id"`
+	Revision        int64            `json:"revision"`
+	RulesRevision   int64            `json:"rules_revision"`
+	TaxonomyVersion int64            `json:"taxonomy_version"`
+	Status          Status           `json:"status"`
+	Reasons         []Reason         `json:"reasons"`
+	DecidedBy       string           `json:"decided_by"`
+	ManualReject    bool             `json:"manual_reject"`
+	Version         int64            `json:"version"`
+	UpdatedAt       time.Time        `json:"updated_at"`
+}
+
+// VerdictDecision сохраняет текст причины на момент решения.
+type VerdictDecision struct {
+	Action Action      `json:"action"`
+	Reason *ReasonCode `json:"reason"`
+	Note   string      `json:"note"`
+	At     time.Time   `json:"at"`
 }
 
 // Verdict защищает ручные решения от автоматической переоценки.
@@ -37,6 +48,14 @@ func NewVerdict(tenant ids.TenantID, product ids.ProductID) *Verdict {
 // RestoreVerdict восстанавливает исходную версию для условного обновления.
 func RestoreVerdict(s VerdictState) *Verdict {
 	s.Reasons = slices.Clone(s.Reasons)
+	if s.Decision != nil {
+		d := *s.Decision
+		if d.Reason != nil {
+			reason := *d.Reason
+			d.Reason = &reason
+		}
+		s.Decision = &d
+	}
 	return &Verdict{state: s, origin: s}
 }
 
@@ -44,6 +63,14 @@ func RestoreVerdict(s VerdictState) *Verdict {
 func (v *Verdict) State() VerdictState {
 	s := v.state
 	s.Reasons = slices.Clone(s.Reasons)
+	if s.Decision != nil {
+		d := *s.Decision
+		if d.Reason != nil {
+			reason := *d.Reason
+			d.Reason = &reason
+		}
+		s.Decision = &d
+	}
 	return s
 }
 
@@ -74,17 +101,21 @@ func (v *Verdict) Evaluate(revision, taxonomy int64, rules Rules, in Input, now 
 	v.state.Status = status
 	v.state.Reasons = reasons
 	v.state.DecidedBy = Rule
+	v.state.Operator = Actor{}
+	v.state.Decision = nil
 	v.touch(now)
 	return true
 }
 
 // Review скрывает предложение на время инициированной оператором проверки.
-func (v *Verdict) Review(revision int64, now time.Time) bool {
+func (v *Verdict) Review(revision int64, actor Actor, now time.Time) bool {
 	if revision < v.state.Revision ||
 		(revision == v.state.Revision && v.state.Status == Pending && v.state.DecidedBy == Operator) {
 		return false
 	}
 	v.state.Revision = revision
+	v.state.Operator = actor
+	v.state.Decision = nil
 	v.state.Status = Pending
 	v.state.DecidedBy = Operator
 	v.state.Reasons = []Reason{{Key: "moderation.manual_review", Message: "На ручной проверке"}}
@@ -117,4 +148,12 @@ func (v *Verdict) Decide(action Action, message string, now time.Time) bool {
 func (v *Verdict) touch(now time.Time) {
 	v.state.Version = v.origin.Version + 1
 	v.state.UpdatedAt = now
+}
+
+// RecordDecision связывает итог с оператором до атомарного сохранения.
+func (v *Verdict) RecordDecision(actor Actor, decision VerdictDecision) {
+	v.state.Operator = actor
+	v.state.Decision = &decision
+	v.state = v.State()
+	v.touch(decision.At)
 }

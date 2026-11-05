@@ -251,7 +251,7 @@ func TestModerationM4Responses(t *testing.T) {
 	}
 	prefix := "/api/v1/operator/participants/t1"
 	for _, action := range []string{"enable", "disable"} {
-		response := e.request(t, "POST", prefix+"/"+action, `{"reason":"r2"}`, "", 400)
+		response := e.request(t, "POST", prefix+"/"+action, `{"reason":"r2","note":"Заметка"}`, "", 400)
 		if !strings.Contains(response.Body.String(), "moderation.reason_unknown") {
 			t.Fatal(response.Body.String())
 		}

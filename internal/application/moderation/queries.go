@@ -6,6 +6,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -27,9 +28,28 @@ type VerdictPage struct {
 
 // OfferView объединяет текущую оценку с открытым делом и историей решений.
 type OfferView struct {
-	Verdict *moderation.VerdictState
-	Case    *moderation.CaseState
-	History []moderation.Decision
+	Offer       ReviewCard
+	Participant OfferParticipant
+	Verdicts    []moderation.VerdictState
+	Verdict     *moderation.VerdictState
+	Case        *moderation.CaseState
+	History     []moderation.Decision
+}
+
+// OfferParticipant объясняет видимость независимо от оценки карточки.
+type OfferParticipant struct {
+	TenantID ids.TenantID `json:"tenantId"`
+	Name     string       `json:"name"`
+	Enabled  bool         `json:"enabled"`
+	Visible  bool         `json:"visible"`
+}
+
+// RulesView показывает версии источников оценки.
+type RulesView struct {
+	Revision        int64 `json:"revision"`
+	TaxonomyVersion int64 `json:"taxonomyVersion"`
+	RequireImage    bool  `json:"requireImage"`
+	ProbationOffers int   `json:"probationOffers"`
 }
 
 // GetCase возвращает версию для следующего решения оператора.
@@ -52,7 +72,20 @@ func (s *Service) ListCases(ctx context.Context, f moderation.Filter) (CasePage,
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
 		result.Items, result.Total, err = tx.ModerationCases().List(ctx, f)
-		return err
+		if err != nil {
+			return err
+		}
+		for i := range result.Items {
+			c := &result.Items[i]
+			if c.Card == nil {
+				card, err := reviewCard(ctx, tx, c.TenantID, c.ProductID)
+				if err != nil {
+					return err
+				}
+				c.Card = &card
+			}
+		}
+		return nil
 	})
 	return result, err
 }
@@ -64,7 +97,18 @@ func (s *Service) ListVerdicts(ctx context.Context, f moderation.Filter) (Verdic
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
 		result.Items, result.Total, err = tx.ModerationVerdicts().List(ctx, f)
-		return err
+		if err != nil {
+			return err
+		}
+		for i := range result.Items {
+			v := &result.Items[i]
+			card, err := reviewCard(ctx, tx, v.TenantID, v.ProductID)
+			if err != nil {
+				return err
+			}
+			v.Card = &card
+		}
+		return nil
 	})
 	return result, err
 }
@@ -101,6 +145,28 @@ func (s *Service) GetOffer(ctx context.Context, offer ids.OfferID) (OfferView, e
 		if c != nil {
 			state := c.State()
 			result.Case = &state
+		}
+		result.Offer, err = reviewCard(ctx, tx, offer.Tenant, offer.Product)
+		if err != nil {
+			return err
+		}
+		state, err := tx.Offers().Offer(ctx, offer.Tenant, offer.Product)
+		if err != nil {
+			return err
+		}
+		if result.Verdict != nil {
+			result.Verdict.Card = &result.Offer
+		}
+		result.Participant.TenantID = offer.Tenant
+		if state.Participant != nil {
+			p := state.Participant.State()
+			result.Participant.Name = p.Name
+			result.Participant.Enabled = p.Enabled
+			result.Participant.Visible = participant.VisibilityOf(state.Participant, state.Tenant).Visible
+		}
+		result.Verdicts, err = tx.ModerationVerdicts().History(ctx, offer.Tenant, offer.Product)
+		if err != nil {
+			return err
 		}
 		result.History, err = tx.ModerationDecisions().List(ctx, offer.Tenant, offer.Product)
 		return err
@@ -196,6 +262,25 @@ func (s *Service) OpenStats(ctx context.Context) ([]moderation.OpenStat, error) 
 		var err error
 		result, err = tx.ModerationCases().OpenStats(ctx)
 		return err
+	})
+	return result, err
+}
+
+// Rules читает версии правил и таксономии в одной транзакции.
+func (s *Service) Rules(ctx context.Context) (RulesView, error) {
+	result := RulesView{RequireImage: s.config.RequireImage, ProbationOffers: s.config.ProbationOffers}
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		rules, err := tx.ModerationRules().Current(ctx)
+		if err != nil {
+			return err
+		}
+		taxonomy, err := tx.Taxonomy().Current(ctx)
+		if err != nil {
+			return err
+		}
+		result.Revision = rules.Revision
+		result.TaxonomyVersion = taxonomy.Version
+		return nil
 	})
 	return result, err
 }
