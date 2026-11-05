@@ -223,7 +223,8 @@
       slug: datchiki-umnogo-doma
       schema: electronic_accessory
 - id: computers
-  name: Компьютеры и комплектующие
+  name: Компьютерная техника
+  title: Компьютеры и комплектующие
   slug: kompyutery-i-komplektuyushchie
   children:
   - id: computers.devices
@@ -691,7 +692,8 @@
       slug: massazhery
       schema: personal_appliance
 - id: kitchen
-  name: Посуда и товары для кухни
+  name: Посуда и кухня
+  title: Посуда и товары для кухни
   slug: posuda-i-tovary-dlya-kukhni
   children:
   - id: kitchen.cookware
@@ -2016,7 +2018,8 @@
       slug: sredstva-dlya-ukhoda-za-obuvyu
       schema: household_chemical
 - id: accessories
-  name: Сумки, часы и аксессуары
+  name: Аксессуары
+  title: Сумки, часы и аксессуары
   slug: sumki-chasy-i-aksessuary
   children:
   - id: accessories.bags
@@ -3038,7 +3041,8 @@
       slug: sportivnaya-zashchita
       schema: sport_equipment
 - id: outdoors
-  name: Туризм и активный отдых
+  name: Туризм и отдых
+  title: Туризм и активный отдых
   slug: turizm-i-aktivnyy-otdykh
   children:
   - id: outdoors.camping
@@ -3570,7 +3574,8 @@
       slug: khranenie-instrumenta
       schema: storage
 - id: renovation
-  name: Строительство и ремонт
+  name: Стройка и ремонт
+  title: Строительство и ремонт
   slug: stroitelstvo-i-remont
   children:
   - id: renovation.materials
@@ -4566,7 +4571,8 @@
       slug: pechati-i-shtampy
       schema: stationery
 - id: books
-  name: Книги и печатные издания
+  name: Книги
+  title: Книги и печатные издания
   slug: knigi-i-pechatnye-izdaniya
   children:
   - id: books.fiction
@@ -4905,7 +4911,8 @@
       slug: kollektsionnye-predmety
       schema: craft
 - id: music
-  name: Музыкальные инструменты и оборудование
+  name: Музыка и звук
+  title: Музыкальные инструменты и оборудование
   slug: muzykalnye-instrumenty-i-oborudovanie
   children:
   - id: music.instruments
@@ -5017,7 +5024,8 @@
       slug: audiokabeli
       schema: cable
 - id: home
-  name: Декор и обустройство дома
+  name: Дом и интерьер
+  title: Декор и обустройство дома
   slug: dekor-i-obustroystvo-doma
   children:
   - id: home.decor
@@ -5153,7 +5161,8 @@
       slug: ershiki-dlya-unitaza
       schema: home_decor
 - id: household
-  name: Бытовая химия и хозяйственные товары
+  name: Хозтовары
+  title: Бытовая химия и хозяйственные товары
   slug: bytovaya-khimiya-i-khozyaystvennye-tovary
   children:
   - id: household.cleaning
@@ -5281,7 +5290,8 @@
       slug: upakovochnye-materialy
       schema: household_supply
 - id: industry
-  name: Оборудование и спецодежда
+  name: Оборудование
+  title: Оборудование и средства защиты
   slug: oborudovanie-i-spetsodezhda
   children:
   - id: industry.equipment
