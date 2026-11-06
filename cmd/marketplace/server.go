@@ -86,9 +86,10 @@ type server struct {
 	app     services
 }
 
-// serve — HTTP, консьюмер Kafka и фоновые задачи до сигнала остановки.
+// promotionRandom использует math/rand/v2: ротации не нужна криптографическая случайность.
 type promotionRandom struct{}
 
+// serve — HTTP, консьюмер Kafka и фоновые задачи до сигнала остановки.
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if cfg.Operator.PasswordHash != "" {
 		if err := password.Validate(cfg.Operator.PasswordHash); err != nil {
@@ -269,17 +270,20 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 
 	participants := appparticipant.NewService(uow, now, identities).WithProbationOffers(cfg.Moderation.ProbationOffers)
+	queries := appcatalog.NewQueries(uow, s.store.index, resyncing)
 	location, err := time.LoadLocation(cfg.Promotion.Timezone)
 	if err != nil {
 		return services{}, err
 	}
 	promotions := apppromotion.NewService(uow, now, identities, s.store.index, apppromotion.Config{
-		Catalog:     appcatalog.NewQueries(uow, s.store.index, resyncing),
-		Location:    location,
-		SearchDepth: cfg.Promotion.SearchRelevanceDepth,
-		VisitorSalt: cfg.Promotion.VisitorSalt,
-		Random:      promotionRandom{},
-		Metrics:     telemetry.NewPromotion(s.metrics),
+		Catalog:         queries,
+		Limiter:         redis.NewLimiter(s.cache, keyPrefix),
+		EventsPerMinute: cfg.Promotion.EventsPerMinute,
+		Location:        location,
+		SearchDepth:     cfg.Promotion.SearchRelevanceDepth,
+		VisitorSalt:     cfg.Promotion.VisitorSalt,
+		Random:          promotionRandom{},
+		Metrics:         telemetry.NewPromotion(s.metrics),
 	})
 	return services{
 		promotion:         promotions,
@@ -290,7 +294,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		taxonomy:          apptaxonomy.NewService(uow, now, moderation),
 		projector:         projector,
 		indexer:           indexer,
-		queries:           appcatalog.NewQueries(uow, s.store.index, resyncing),
+		queries:           queries,
 		participants:      participants,
 		registry:          registry,
 		settings:          settings,
@@ -401,7 +405,12 @@ func (s *server) jobs() []func(context.Context) error {
 		).Run)
 	}
 	return append(runners, []func(context.Context) error{
-		jobs.NewPromotionRunner(s.app.promotion, postgres.NewPromotionLock(s.store.pool), s.logger).Run,
+		jobs.NewPromotionRunner(
+			s.app.promotion,
+			postgres.NewPromotionLock(s.store.pool),
+			s.logger,
+			s.cfg.Promotion.TickInterval,
+		).Run,
 		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
 		jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, cfg.Outbox.Batch, s.logger, s.metrics).Run,

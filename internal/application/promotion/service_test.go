@@ -33,7 +33,7 @@ func setup() environment {
 		Location:    time.UTC,
 		SearchDepth: 100,
 		VisitorSalt: "test-visitor-salt-012345",
-		Random:      fake.PromotionRandom{},
+		Random:      fake.Random{},
 	})
 	store.SeedParticipant(participant.State{
 		TenantID:    "t1",
@@ -55,10 +55,14 @@ func setup() environment {
 				Name:        "Товар",
 				Visible:     true,
 				Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
-				Publication: taxonomy.Publication{Published: true},
+				Publication: taxonomy.Publication{Published: true, CategoryID: "c1"},
 			},
-			PriceProfiles: []catalog.PriceProfile{{Key: catalog.DefaultPriceProfile, Price: money.FromKopecks(100)}},
-			Version:       1,
+			PriceProfiles: []catalog.PriceProfile{{
+				Key:            catalog.DefaultPriceProfile,
+				Price:          money.FromKopecks(100),
+				EffectivePrice: money.FromKopecks(100),
+			}},
+			Version: 1,
 		})
 		store.SeedVerdict(moderation.VerdictState{
 			TenantID:  "t1",
@@ -97,14 +101,15 @@ func (e environment) create(t *testing.T, code string) promotion.CampaignState {
 		Target:        promotion.Target{OfferID: ids.OfferID{Tenant: "t1", Product: "p1"}},
 		Period:        promotion.Period{From: "2026-11-09", To: "2026-11-15"},
 	}
-	result, err := e.service.Create(context.Background(), app.Access{TenantID: "t1", Actor: "tenant"}, input)
+	access := app.Access{TenantID: "t1", Actor: promotion.ActorTenant}
+	result, err := e.service.Create(context.Background(), access, input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.Price.Kopecks() != 700 || result.Target.CategoryID != "c1" {
 		t.Fatal(result)
 	}
-	return result
+	return result.CampaignState
 }
 
 func (e environment) decide(t *testing.T, c promotion.CampaignState, action promotion.Action) promotion.CampaignState {
@@ -115,11 +120,11 @@ func (e environment) decide(t *testing.T, c promotion.CampaignState, action prom
 		ERID:            "erid",
 		Payment:         promotion.Payment{Amount: money.FromKopecks(700), PaidOn: "2026-11-06"},
 	}
-	result, err := e.service.Decide(context.Background(), app.Access{Actor: "operator"}, c.ID, command)
+	result, err := e.service.Decide(context.Background(), app.Access{Actor: promotion.ActorOperator}, c.ID, command)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return result
+	return result.CampaignState
 }
 
 func TestCapacityApprovalAndTenant(t *testing.T) {
@@ -127,7 +132,7 @@ func TestCapacityApprovalAndTenant(t *testing.T) {
 	ctx := context.Background()
 	first := e.decide(t, e.create(t, "category_slot"), promotion.Submit)
 	second := e.create(t, "category_slot")
-	_, err := e.service.Decide(ctx, app.Access{Actor: "tenant", TenantID: "t1"}, second.ID, app.Command{
+	_, err := e.service.Decide(ctx, app.Access{Actor: promotion.ActorTenant, TenantID: "t1"}, second.ID, app.Command{
 		Action:          promotion.Submit,
 		ExpectedVersion: second.Version,
 	})
@@ -138,7 +143,7 @@ func TestCapacityApprovalAndTenant(t *testing.T) {
 	if err != nil || unchanged.Status != promotion.Draft {
 		t.Fatal(unchanged, err)
 	}
-	_, err = e.service.Decide(ctx, app.Access{Actor: "operator"}, first.ID, app.Command{
+	_, err = e.service.Decide(ctx, app.Access{Actor: promotion.ActorOperator}, first.ID, app.Command{
 		Action:          promotion.Approve,
 		ExpectedVersion: first.Version,
 	})
@@ -179,14 +184,14 @@ func TestActivationCountersAndSystemStop(t *testing.T) {
 		}
 	}
 	rows, err := e.service.Stats(ctx, app.Access{TenantID: "t1"}, c.ID, "2026-11-09", "2026-11-15")
-	if err != nil || len(rows) != 1 || rows[0].Impressions != 1 || rows[0].Clicks != 2 {
+	if err != nil || len(rows) != 1 || rows[0].Impressions != 1 || rows[0].Clicks != 1 {
 		t.Fatal(rows, err)
 	}
 	e.clock.Advance(24 * time.Hour)
 	if err := e.service.Events(ctx, "visitor", events); err != nil {
 		t.Fatal(err)
 	}
-	rows, err = e.service.Stats(ctx, app.Access{}, c.ID, "", "")
+	rows, err = e.service.Stats(ctx, app.Access{}, c.ID, "2026-11-09", "2026-11-15")
 	if err != nil || len(rows) != 2 {
 		t.Fatal(rows, err)
 	}
@@ -204,7 +209,7 @@ func TestActivationCountersAndSystemStop(t *testing.T) {
 		t.Fatal(stopped, err)
 	}
 	decisions, err := e.service.Decisions(ctx, app.Access{}, c.ID)
-	if err != nil || decisions[len(decisions)-1].Actor != "system" {
+	if err != nil || decisions[len(decisions)-1].Actor != promotion.ActorSystem {
 		t.Fatal(decisions, err)
 	}
 }
@@ -238,7 +243,7 @@ func TestSearchRelevanceAndRotation(t *testing.T) {
 	e.index.Result.Items = append(e.index.Result.Items, ports.OfferDocument{ID: first.Target.OfferID.String()})
 	query.Offset = 0
 	rows, err = e.service.Sponsored(ctx, query)
-	if err != nil || len(rows) != 1 || rows[0].PromotionID != second.ID {
+	if err != nil || len(rows) != 1 || rows[0].PromotionID != first.ID {
 		t.Fatal(rows, err)
 	}
 }
@@ -247,7 +252,7 @@ func TestCommitRollback(t *testing.T) {
 	e := setup()
 	c := e.create(t, "category_slot")
 	e.store.FailCommit = errors.New("отказ фиксации")
-	_, err := e.service.Decide(context.Background(), app.Access{Actor: "operator"}, c.ID, app.Command{
+	_, err := e.service.Decide(context.Background(), app.Access{Actor: promotion.ActorOperator}, c.ID, app.Command{
 		Action:          promotion.Submit,
 		ExpectedVersion: c.Version,
 	})
@@ -279,14 +284,14 @@ func TestCalendarOverviewAndPeriodEdit(t *testing.T) {
 	}
 	other := e.create(t, "category_slot")
 	other.Period = promotion.Period{From: "2026-11-16", To: "2026-11-22"}
-	other, err = e.service.Edit(ctx, app.Access{Actor: "operator"}, other.ID, other.Version, other)
+	edited, err := e.service.Edit(ctx, app.Access{Actor: promotion.ActorOperator}, other.ID, other.Version, other)
 	if err != nil {
 		t.Fatal(err)
 	}
-	other = e.decide(t, other, promotion.Submit)
+	other = e.decide(t, edited.CampaignState, promotion.Submit)
 	other.Period = c.Period
-	_, err = e.service.Edit(ctx, app.Access{Actor: "operator"}, other.ID, other.Version, other)
-	if !errors.Is(err, promotion.ErrNoCapacity) {
+	_, err = e.service.Edit(ctx, app.Access{Actor: promotion.ActorOperator}, other.ID, other.Version, other)
+	if !errors.Is(err, promotion.ErrConflict) {
 		t.Fatal(err)
 	}
 	c.Status = promotion.Active
@@ -311,9 +316,9 @@ func TestCalendarOverviewAndPeriodEdit(t *testing.T) {
 func TestReviseResubmitCapacityAndHistory(t *testing.T) {
 	e := setup()
 	ctx := context.Background()
-	access := app.Access{TenantID: "t1", Actor: "tenant"}
+	access := app.Access{TenantID: "t1", Actor: promotion.ActorTenant}
 	c := e.decide(t, e.create(t, "category_slot"), promotion.Submit)
-	c, err := e.service.Decide(ctx, app.Access{Actor: "operator"}, c.ID, app.Command{
+	view, err := e.service.Decide(ctx, app.Access{Actor: promotion.ActorOperator}, c.ID, app.Command{
 		Action:          promotion.Reject,
 		ExpectedVersion: c.Version,
 		Note:            "Исправить реквизиты",
@@ -321,7 +326,9 @@ func TestReviseResubmitCapacityAndHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err = e.service.Decide(ctx, access, c.ID, app.Command{Action: promotion.Revise, ExpectedVersion: c.Version})
+	c = view.CampaignState
+	view, err = e.service.Decide(ctx, access, c.ID, app.Command{Action: promotion.Revise, ExpectedVersion: c.Version})
+	c = view.CampaignState
 	if err != nil || c.Status != promotion.Draft || c.RejectionReason != "" {
 		t.Fatal(c, err)
 	}
@@ -344,7 +351,15 @@ func TestReviseResubmitCapacityAndHistory(t *testing.T) {
 
 func TestAvailabilityMany(t *testing.T) {
 	e := setup()
-	_, err := e.service.ConfigurePlacement(context.Background(), "category_slot", 3, money.FromKopecks(700), nil, true)
+	_, err := e.service.ConfigurePlacement(
+		context.Background(),
+		"category_slot",
+		3,
+		money.FromKopecks(700),
+		nil,
+		true,
+		1,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,4 +367,188 @@ func TestAvailabilityMany(t *testing.T) {
 	if err != nil || len(result.Weeks) != 1 || result.Weeks[0].Free != "many" {
 		t.Fatal(result, err)
 	}
+}
+
+func TestM12ExpiryAndFinish(t *testing.T) {
+	for _, status := range []promotion.Status{promotion.Review, promotion.Approved, promotion.Active} {
+		t.Run(string(status), func(t *testing.T) {
+			e := setup()
+			c := e.create(t, "category_slot")
+			c.Status = status
+			e.store.SeedPromotion(c)
+			e.clock.Advance(10 * 24 * time.Hour)
+			if err := e.service.Tick(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			got, err := e.service.Get(context.Background(), app.Access{}, c.ID)
+			want := promotion.Stopped
+			if status == promotion.Active {
+				want = promotion.Finished
+			}
+			if err != nil || got.Status != want {
+				t.Fatal(got, err)
+			}
+			history, err := e.service.Decisions(context.Background(), app.Access{}, c.ID)
+			if err != nil || len(history) != 1 || history[0].Actor != promotion.ActorSystem {
+				t.Fatal(history, err)
+			}
+			if want == promotion.Stopped && history[0].Note != "период прошёл без оплаты/решения" {
+				t.Fatal(history)
+			}
+			if err := e.service.Tick(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			history, err = e.service.Decisions(context.Background(), app.Access{}, c.ID)
+			if err != nil || len(history) != 1 {
+				t.Fatal(history, err)
+			}
+		})
+	}
+}
+
+func TestM12EditsPaymentAndDelete(t *testing.T) {
+	e := setup()
+	ctx := context.Background()
+	c := e.create(t, "category_slot")
+	for _, action := range []promotion.Action{promotion.Pay, promotion.Finish} {
+		_, err := e.service.Decide(ctx, app.Access{}, c.ID, app.Command{Action: action, ExpectedVersion: c.Version})
+		if !errors.Is(err, promotion.ErrConflict) {
+			t.Fatal(action, err)
+		}
+	}
+	if err := e.service.Delete(ctx, app.Access{TenantID: "t2"}, c.ID); !errors.Is(err, promotion.ErrNotFound) {
+		t.Fatal(err)
+	}
+	c = e.decide(t, c, promotion.Submit)
+	if err := e.service.Delete(ctx, app.Access{}, c.ID); !errors.Is(err, promotion.ErrConflict) {
+		t.Fatal(err)
+	}
+	c = e.decide(t, c, promotion.Approve)
+	changed := c
+	changed.Position = 5
+	if _, err := e.service.Edit(ctx, app.Access{}, c.ID, c.Version, changed); !errors.Is(err, promotion.ErrConflict) {
+		t.Fatal(err)
+	}
+	_, tenantErr := e.service.Edit(ctx, app.Access{TenantID: "t1"}, c.ID, c.Version, c)
+	if !errors.Is(tenantErr, promotion.ErrConflict) {
+		t.Fatal(tenantErr)
+	}
+	other := e.create(t, "category_slot")
+	draft := e.create(t, "search_slot")
+	_, err := e.service.ConfigurePlacement(ctx, "category_slot", 1, money.FromKopecks(900), nil, true, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed = c
+	changed.Title = "Новое название"
+	result, err := e.service.Edit(ctx, app.Access{}, c.ID, c.Version, changed)
+	if err != nil || result.Price != c.Price {
+		t.Fatal(result, err)
+	}
+	_, err = e.service.ConfigurePlacement(ctx, "category_slot", 2, money.FromKopecks(900), nil, true, 1)
+	if !errors.Is(err, promotion.ErrConflict) {
+		t.Fatal(err)
+	}
+	// Даже правка реквизитов одобренного размещения проверяет текущую ёмкость.
+	other.Status = promotion.Review
+	e.store.SeedPromotion(other)
+	changed = result.CampaignState
+	changed.Title = "Ещё одно название"
+	_, err = e.service.Edit(ctx, app.Access{}, c.ID, result.Version, changed)
+	if !errors.Is(err, promotion.ErrNoCapacity) {
+		t.Fatal(err)
+	}
+	if err := e.service.Delete(ctx, app.Access{TenantID: "t1"}, draft.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.service.Get(ctx, app.Access{}, draft.ID); !errors.Is(err, promotion.ErrNotFound) {
+		t.Fatal(err)
+	}
+}
+
+func TestM12ListCountsFillAndNextMonday(t *testing.T) {
+	e := setup()
+	ctx := context.Background()
+	first := e.create(t, "category_slot")
+	e.clock.Advance(time.Hour)
+	second := e.create(t, "category_slot")
+	second.Status = promotion.Review
+	second.Target.OfferID.Product = "p2"
+	e.store.SeedPromotion(second)
+	page, total, err := e.service.List(ctx, app.Access{TenantID: "t1"}, promotion.Filter{Limit: 1})
+	if err != nil || total != 2 || len(page.Items) != 1 || page.Items[0].ID != second.ID {
+		t.Fatal(page, total, err)
+	}
+	if page.Counts[promotion.Draft] != 1 || page.Counts[promotion.Review] != 1 || len(page.Counts) != 7 {
+		t.Fatal(page.Counts)
+	}
+	page, total, err = e.service.List(ctx, app.Access{TenantID: "t1"}, promotion.Filter{ProductID: "p1"})
+	if err != nil || total != 1 || page.Items[0].ID != first.ID || page.Limit != 50 {
+		t.Fatal(page, total, err)
+	}
+	first.Target.CategoryID = "c2"
+	e.store.SeedPromotion(first)
+	report, err := e.service.Overview(ctx, "2026-11-09", "2026-11-15")
+	if err != nil || report.Placements[0].Total != 2 {
+		t.Fatal(report, err)
+	}
+	if e.service.NextMonday() != "2026-11-09" {
+		t.Fatal(e.service.NextMonday())
+	}
+	e.clock.Advance(72 * time.Hour)
+	if e.service.NextMonday() != "2026-11-16" {
+		t.Fatal(e.service.NextMonday())
+	}
+}
+
+func TestM12EventsLimitUnknownAndCategory(t *testing.T) {
+	e := setup()
+	ctx := context.Background()
+	limited := app.NewService(e.store, e.clock, &fake.IDs{}, e.index, app.Config{
+		Location:        time.UTC,
+		Random:          fake.Random{},
+		Limiter:         fake.NewLimiter(),
+		EventsPerMinute: 1,
+	})
+	if err := limited.AllowEvents(ctx, "address1", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := limited.AllowEvents(ctx, "address1", 1); !errors.Is(err, promotion.ErrRateLimited) {
+		t.Fatal(err)
+	}
+	if err := limited.AllowEvents(ctx, "address2", 1); err != nil {
+		t.Fatal(err)
+	}
+	events := []app.Event{
+		{PromotionID: "not-uuid", Kind: "click"},
+		{PromotionID: "ffffffff-ffff-ffff-ffff-ffffffffffff", Kind: "view"},
+	}
+	if err := e.service.Events(ctx, "visitor", events); err != nil {
+		t.Fatal(err)
+	}
+	c := e.create(t, "category_slot")
+	c.Status = promotion.Active
+	c.Target.CategoryID = "old-category"
+	e.store.SeedPromotion(c)
+	e.clock.Advance(72 * time.Hour)
+	rows, err := e.service.Sponsored(ctx, ports.OfferQuery{CategoryID: "old-category"})
+	if err != nil || len(rows) != 0 {
+		t.Fatal(rows, err)
+	}
+	if err := e.service.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.service.Get(ctx, app.Access{}, c.ID)
+	if err != nil || got.Status != promotion.Stopped {
+		t.Fatal(got, err)
+	}
+}
+
+func TestM12RandomRequired(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("ожидалась ошибка сборки без Random")
+		}
+	}()
+	app.NewService(fake.NewStore(), fake.NewClock(time.Now()), &fake.IDs{}, fake.NewIndex(), app.Config{})
 }

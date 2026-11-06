@@ -57,28 +57,28 @@ paths:
                   items:
                     type: array
                     items:
-                      $ref: "#/components/schemas/ModerationCase"
+                      $ref: '#/components/schemas/ModerationCase'
                   total: &id001
                     type: integer
                     format: int64
                   limit: *id001
                   offset: *id001
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
           description: moderation.case_conflict с текущим делом; moderation.case_stale; IDEMPOTENCY_KEY_REUSED
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationConflict"
+                $ref: '#/components/schemas/ModerationConflict'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - &id005
         name: limit
@@ -142,23 +142,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationCase"
+                $ref: '#/components/schemas/ModerationCase'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
           description: moderation.case_conflict с текущим делом; moderation.case_stale; IDEMPOTENCY_KEY_REUSED
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationConflict"
+                $ref: '#/components/schemas/ModerationConflict'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       requestBody:
         required: true
         content:
@@ -190,23 +190,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationCaseDetails"
+                $ref: '#/components/schemas/ModerationCaseDetails'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
           description: moderation.case_conflict с текущим делом; moderation.case_stale; IDEMPOTENCY_KEY_REUSED
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationConflict"
+                $ref: '#/components/schemas/ModerationConflict'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: caseId
         in: path
@@ -227,23 +227,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationCase"
+                $ref: '#/components/schemas/ModerationCase'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
           description: moderation.case_conflict с текущим делом; moderation.case_stale; IDEMPOTENCY_KEY_REUSED
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationConflict"
+                $ref: '#/components/schemas/ModerationConflict'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: caseId
         in: path
@@ -285,23 +285,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationCase"
+                $ref: '#/components/schemas/ModerationCase'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
           description: moderation.case_conflict с текущим делом; moderation.case_stale; IDEMPOTENCY_KEY_REUSED
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationConflict"
+                $ref: '#/components/schemas/ModerationConflict'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: caseId
         in: path
@@ -332,19 +332,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationOfferState"
+                $ref: '#/components/schemas/ModerationOfferState'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: offerId
         in: path
@@ -375,22 +375,22 @@ paths:
                   items:
                     type: array
                     items:
-                      $ref: "#/components/schemas/ModerationVerdict"
+                      $ref: '#/components/schemas/ModerationVerdict'
                   total: *id001
                   limit: *id001
                   offset: *id001
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - *id005
       - *id006
@@ -429,9 +429,9 @@ paths:
                   taxonomyVersion: {type: integer, format: int64}
                   requireImage: {type: boolean}
                   probationOffers: {type: integer}
-        '401': {$ref: "#/components/responses/Error"}
-        '403': {$ref: "#/components/responses/Error"}
-        '500': {$ref: "#/components/responses/Error"}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
   /api/v1/operator/moderation/stop-phrases:
     get:
       tags:
@@ -454,19 +454,19 @@ paths:
                   items:
                     type: array
                     items:
-                      $ref: "#/components/schemas/ModerationStopPhrase"
+                      $ref: '#/components/schemas/ModerationStopPhrase'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
     post:
       tags:
       - moderation
@@ -481,19 +481,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationStopPhrase"
+                $ref: '#/components/schemas/ModerationStopPhrase'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       requestBody:
         required: true
         content:
@@ -520,17 +520,17 @@ paths:
         '204':
           description: Успешно
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: key
         in: path
@@ -558,19 +558,19 @@ paths:
                   items:
                     type: array
                     items:
-                      $ref: "#/components/schemas/ModerationReason"
+                      $ref: '#/components/schemas/ModerationReason'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
     post:
       tags:
       - moderation
@@ -585,25 +585,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationReason"
+                $ref: '#/components/schemas/ModerationReason'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ModerationReason"
+              $ref: '#/components/schemas/ModerationReason'
   /api/v1/operator/moderation/reasons/{code}:
     put:
       tags:
@@ -619,19 +619,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModerationReason"
+                $ref: '#/components/schemas/ModerationReason'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: code
         in: path
@@ -665,19 +665,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Participant"
+                $ref: '#/components/schemas/Participant'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: tenantId
         in: path
@@ -754,7 +754,7 @@ paths:
                         previousValue: {type: string, description: Прежнее значение; у старых записей пусто.}
                         reason:
                           anyOf:
-                          - $ref: "#/components/schemas/ModerationReason"
+                          - $ref: '#/components/schemas/ModerationReason'
                           - type: 'null'
                         by:
                           type: string
@@ -767,17 +767,17 @@ paths:
                   limit: *id001
                   offset: *id001
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '404':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '500':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: tenantId
         in: path
@@ -807,7 +807,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Operator"
+                $ref: '#/components/schemas/Operator'
           headers:
             Set-Cookie:
               description: __Host-kvazar_operator=<opaque>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=<TTL>.
@@ -815,17 +815,17 @@ paths:
               schema:
                 type: string
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '503':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '429':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       requestBody:
         required: true
         content:
@@ -859,17 +859,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Operator"
+                $ref: '#/components/schemas/Operator'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '503':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
     delete:
       tags:
       - operator
@@ -878,15 +878,15 @@ paths:
       - operatorSession: []
       responses:
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '503':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '204':
           description: Сессия отозвана; cookie удалена с теми же атрибутами и Max-Age=0.
   /api/v1/operator/participants/{tenantId}/delivery:
@@ -903,17 +903,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Participant"
+                $ref: '#/components/schemas/Participant'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '503':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: tenantId
         in: path
@@ -936,7 +936,7 @@ paths:
                   format: int64
                   minimum: 1
                 delivery:
-                  $ref: "#/components/schemas/ParticipationDelivery"
+                  $ref: '#/components/schemas/ParticipationDelivery'
       description: Сверяет version атомарно. PATCH участника по-прежнему меняет только name. Плановая сверка с магазином
         заменяет покрытие его авторитетными настройками.
   /api/v1/operator/events:
@@ -951,17 +951,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ParkedEventPage"
+                $ref: '#/components/schemas/ParkedEventPage'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '503':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: limit
         in: query
@@ -1018,17 +1018,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ParkedEvent"
+                $ref: '#/components/schemas/ParkedEvent'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/EventConflict"
+          $ref: '#/components/responses/EventConflict'
         '503':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: Idempotency-Key
         in: header
@@ -1084,17 +1084,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ParkedEvent"
+                $ref: '#/components/schemas/ParkedEvent'
         '400':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '403':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
         '409':
-          $ref: "#/components/responses/EventConflict"
+          $ref: '#/components/responses/EventConflict'
         '503':
-          $ref: "#/components/responses/Error"
+          $ref: '#/components/responses/Error'
       parameters:
       - name: Idempotency-Key
         in: header
@@ -2346,24 +2346,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        '401':
-          description: Нет доступа
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '404':
-          description: Не найдено или машинный API выключен
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '409':
-          description: Версия изменена или нет свободных недель
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
       parameters:
       - name: from
         in: query
@@ -2398,25 +2380,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        '401':
-          description: Нет доступа
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '404':
-          description: Не найдено или машинный API выключен
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '409':
-          description: Версия изменена или нет свободных недель
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
       parameters:
+      - name: productId
+        in: query
+        schema: {type: string}
       - name: status
         in: query
         required: false
@@ -2515,24 +2482,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        '401':
-          description: Нет доступа
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '404':
-          description: Не найдено или машинный API выключен
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '409':
-          description: Версия изменена или нет свободных недель
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
       parameters:
       - name: id
         in: path
@@ -2589,9 +2538,23 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/PromotionPatch"
+    delete:
+      summary: Удалить черновик и журнал решений
+      security: [{operatorToken: []}, {operatorSession: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '204': {description: Черновик удалён}
+        '400': {$ref: "#/components/responses/Error"}
+        '404': {$ref: "#/components/responses/Error"}
+        '409': {$ref: "#/components/responses/Error"}
+
   /api/v1/operator/promotion/campaigns/{id}/decisions:
     post:
-      summary: 'Продвижение: decide'
+      summary: Принять решение по размещению
       security:
       - operatorToken: []
       - operatorSession: []
@@ -2659,24 +2622,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        '401':
-          description: Нет доступа
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '404':
-          description: Не найдено или машинный API выключен
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '409':
-          description: Версия изменена или нет свободных недель
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
       parameters:
       - name: id
         in: path
@@ -2701,24 +2646,6 @@ paths:
                   $ref: "#/components/schemas/PromotionStatsRow"
         '400':
           description: Некорректные параметры
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '401':
-          description: Нет доступа
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '404':
-          description: Не найдено или машинный API выключен
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '409':
-          description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
@@ -2759,24 +2686,6 @@ paths:
                   $ref: "#/components/schemas/PromotionPlacement"
         '400':
           description: Некорректные параметры
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '401':
-          description: Нет доступа
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '404':
-          description: Не найдено или машинный API выключен
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '409':
-          description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
@@ -2849,24 +2758,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        '401':
-          description: Нет доступа
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '404':
-          description: Не найдено или машинный API выключен
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        '409':
-          description: Версия изменена или нет свободных недель
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
       parameters:
       - name: code
         in: path
@@ -2901,9 +2792,16 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PromotionPlacement"
+                type: object
+                required: [items, nextMonday]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/PromotionPlacement"}
+                  nextMonday:
+                    type: string
+                    format: date
+                    description: Ближайший понедельник не раньше завтра в PROMOTION_TIMEZONE.
         '400':
           description: Некорректные параметры
           content:
@@ -3045,6 +2943,9 @@ paths:
         required: true
         schema:
           type: string
+      - name: productId
+        in: query
+        schema: {type: string}
       - name: status
         in: query
         required: false
@@ -3208,9 +3109,27 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/PromotionPatch"
+    delete:
+      summary: Удалить черновик и журнал решений
+      security: [{serverApiToken: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '204': {description: Черновик удалён}
+        '400': {$ref: "#/components/responses/Error"}
+        '404': {$ref: "#/components/responses/Error"}
+        '409': {$ref: "#/components/responses/Error"}
+
   /api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/submit:
     post:
-      summary: 'Продвижение: decide'
+      summary: Отправить заявку на проверку
       security:
       - serverApiToken: []
       responses:
@@ -3318,7 +3237,7 @@ paths:
               $ref: "#/components/schemas/PromotionVersionInput"
   /api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/stop:
     post:
-      summary: 'Продвижение: decide'
+      summary: Остановить размещение
       security:
       - serverApiToken: []
       responses:
@@ -3437,6 +3356,7 @@ paths:
       summary: 'Продвижение: events'
       security: []
       responses:
+        '429': {$ref: "#/components/responses/Error"}
         '204':
           description: Успешно
         '400':
@@ -3474,10 +3394,6 @@ paths:
       summary: Спонсорские карточки первой страницы
       security: []
       parameters:
-      - name: categoryId
-        in: query
-        schema: {type: string}
-        description: Категория площадки; также принимается параметр category из каталога.
       - name: deliveryCarrier
         in: query
         schema:
@@ -3563,7 +3479,7 @@ components:
     serverApiToken:
       type: http
       scheme: bearer
-      description: SERVER_API_TOKEN; без настройки маршруты отвечают 404.
+      description: Отдельный SERVER_API_TOKEN для машинного API магазинов.
     operatorSession:
       type: apiKey
       in: cookie
@@ -3659,10 +3575,10 @@ components:
         application/json:
           schema:
             allOf:
-              - $ref: "#/components/schemas/Error"
+              - $ref: '#/components/schemas/Error'
               - type: object
                 properties:
-                  event: { $ref: "#/components/schemas/ParkedEvent" }
+                  event: { $ref: '#/components/schemas/ParkedEvent' }
     Error:
       description: Ошибка
       content:
@@ -3750,14 +3666,14 @@ components:
           type: string
     PromotionRefund:
       type: object
-      required: [amountKopecks, on]
+      required: [amountKopecks, 'on']
       description: Ручная запись возврата для stopped или finished; сумма не больше оплаты.
       properties:
         amountKopecks:
           type: integer
           format: int64
           minimum: 1
-        on:
+        'on':
           type: string
           format: date
         document:
@@ -3818,7 +3734,6 @@ components:
           format: date
         position:
           type: integer
-          nullable: true
         impressions:
           type: integer
           format: int64
@@ -3886,6 +3801,9 @@ components:
             paidOn:
               type: string
               format: date
+            note:
+              type: string
+              description: Примечание к оплате.
             document:
               type: string
     PromotionTenantInput:
@@ -3989,10 +3907,12 @@ components:
     PromotionPlacementInput:
       type: object
       required:
+      - expectedVersion
       - slotLimit
       - defaultPriceKopecks
       - active
       properties:
+        expectedVersion: {type: integer, minimum: 1}
         slotLimit:
           type: integer
           minimum: 1
@@ -4147,6 +4067,7 @@ components:
     PromotionCampaignInput:
       type: object
       required:
+      - position
       - tenantId
       - kind
       - placementCode
@@ -4167,11 +4088,6 @@ components:
           $ref: "#/components/schemas/PromotionTarget"
         period:
           $ref: "#/components/schemas/PromotionPeriod"
-        priceKopecks:
-          type: integer
-          format: int64
-          minimum: 0
-          description: Снимок прайса. При создании и правке вычисляется сервером.
         marking:
           $ref: "#/components/schemas/PromotionMarking"
     PromotionCampaign:
@@ -4241,11 +4157,14 @@ components:
     PromotionCampaignPage:
       type: object
       required:
+      - counts
       - items
       - total
       - limit
       - offset
       properties:
+        counts:
+          $ref: "#/components/schemas/PromotionCounts"
         items:
           type: array
           items:
@@ -4355,9 +4274,21 @@ components:
                 type: integer
                 format: int64
                 minimum: 0
+    PromotionCounts:
+      type: object
+      required: [draft, review, approved, rejected, active, finished, stopped]
+      description: По тем же фильтрам, включая status и productId, без пагинации.
+      properties:
+        draft: {type: integer, minimum: 0}
+        review: {type: integer, minimum: 0}
+        approved: {type: integer, minimum: 0}
+        rejected: {type: integer, minimum: 0}
+        active: {type: integer, minimum: 0}
+        finished: {type: integer, minimum: 0}
+        stopped: {type: integer, minimum: 0}
     OperatorPublication:
       allOf:
-      - $ref: "#/components/schemas/Publication"
+      - $ref: '#/components/schemas/Publication'
       - type: object
         required:
         - moderation
@@ -4507,7 +4438,7 @@ components:
               action: {type: string, enum: [allow, reject]}
               reason:
                 anyOf:
-                - $ref: "#/components/schemas/ModerationReason"
+                - $ref: '#/components/schemas/ModerationReason'
                 - type: 'null'
               note: {type: string}
               at: {type: string, format: date-time}
@@ -4554,7 +4485,7 @@ components:
           type: array
           items: *id001
         attributes:
-          $ref: "#/components/schemas/CanonicalAttributes"
+          $ref: '#/components/schemas/CanonicalAttributes'
         seller:
           type: object
           required:
@@ -4564,11 +4495,11 @@ components:
             slug: *id001
             name: *id001
         publication:
-          $ref: "#/components/schemas/Publication"
+          $ref: '#/components/schemas/Publication'
     ModerationHistory:
       type: array
       items:
-        $ref: "#/components/schemas/ModerationDecision"
+        $ref: '#/components/schemas/ModerationDecision'
     ModerationDecision:
       type: object
       required:
@@ -4594,7 +4525,7 @@ components:
           - reject
         reason:
           anyOf:
-          - $ref: "#/components/schemas/ModerationReason"
+          - $ref: '#/components/schemas/ModerationReason'
           - type: 'null'
         note: *id001
         revision: *id002
@@ -4638,14 +4569,14 @@ components:
       properties:
         decision:
           anyOf:
-          - $ref: "#/components/schemas/ModerationDecision"
+          - $ref: '#/components/schemas/ModerationDecision'
           - type: 'null'
         case:
-          $ref: "#/components/schemas/ModerationCase"
+          $ref: '#/components/schemas/ModerationCase'
         offer:
-          $ref: "#/components/schemas/ModerationOffer"
+          $ref: '#/components/schemas/ModerationOffer'
         history:
-          $ref: "#/components/schemas/ModerationHistory"
+          $ref: '#/components/schemas/ModerationHistory'
     ModerationOfferState:
       type: object
       required:
@@ -4657,7 +4588,7 @@ components:
       - history
       properties:
         offer:
-          $ref: "#/components/schemas/ModerationOffer"
+          $ref: '#/components/schemas/ModerationOffer'
         participant:
           type: object
           required: [tenantId, name, enabled, visible]
@@ -4696,14 +4627,14 @@ components:
               at: {type: string, format: date-time}
         verdict:
           anyOf:
-          - $ref: "#/components/schemas/ModerationVerdict"
+          - $ref: '#/components/schemas/ModerationVerdict'
           - type: 'null'
         case:
           anyOf:
-          - $ref: "#/components/schemas/ModerationCase"
+          - $ref: '#/components/schemas/ModerationCase'
           - type: 'null'
         history:
-          $ref: "#/components/schemas/ModerationHistory"
+          $ref: '#/components/schemas/ModerationHistory'
     ModerationConflict:
       type: object
       required:
@@ -4718,7 +4649,7 @@ components:
             code: *id001
             message: *id001
         case:
-          $ref: "#/components/schemas/ModerationCase"
+          $ref: '#/components/schemas/ModerationCase'
     Operator:
       type: object
       required:
@@ -4797,7 +4728,7 @@ components:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/ParkedEvent"
+            $ref: '#/components/schemas/ParkedEvent'
         total:
           type: integer
         limit:

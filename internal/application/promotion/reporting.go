@@ -154,7 +154,7 @@ func (s *Service) Overview(ctx context.Context, from, to string) (Overview, erro
 		return result, err
 	}
 	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		all, _, err := tx.Promotion().List(ctx, promotion.Filter{From: from, To: to})
+		all, err := tx.Promotion().ReportGroups(ctx, from, to)
 		if err != nil {
 			return err
 		}
@@ -164,13 +164,14 @@ func (s *Service) Overview(ctx context.Context, from, to string) (Overview, erro
 		}
 		revenue := map[string]money.Money{}
 		traffic := map[string]TrafficDay{}
-		result.TotalCampaigns = len(all)
+
 		for _, c := range all {
+			result.TotalCampaigns += c.Count
 			if c.Status == promotion.Active {
-				result.ActiveCampaigns++
+				result.ActiveCampaigns += c.Count
 			}
 			if c.Status == promotion.Review {
-				result.ReviewQueue++
+				result.ReviewQueue += c.Count
 			}
 			if c.Status == promotion.Active || c.Status == promotion.Finished {
 				days, err := reportDays(c.Period.From, c.Period.To, s.config.Location)
@@ -186,23 +187,23 @@ func (s *Service) Overview(ctx context.Context, from, to string) (Overview, erro
 					if int64(i) < c.Price.Kopecks()%int64(len(days)) {
 						value++
 					}
-					revenue[key], err = revenue[key].Add(money.FromKopecks(value))
+					portion, err := money.FromKopecks(value).MulRatio(int64(c.Count), 1)
+					if err != nil {
+						return err
+					}
+					revenue[key], err = revenue[key].Add(portion)
 					if err != nil {
 						return err
 					}
 				}
 			}
-			rows, err := tx.Promotion().Stats(ctx, c.ID, from, to)
-			if err != nil {
-				return err
-			}
-			for _, row := range rows {
-				day := traffic[row.Day]
-				day.Day = row.Day
-				day.Impressions += row.Impressions
-				day.Clicks += row.Clicks
-				traffic[row.Day] = day
-			}
+		}
+		rows, err := tx.Promotion().Traffic(ctx, from, to)
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			traffic[row.Day] = TrafficDay{Day: row.Day, Impressions: row.Impressions, Clicks: row.Clicks}
 		}
 		total := money.Money{}
 		for _, date := range dates {
@@ -228,7 +229,7 @@ func (s *Service) Overview(ctx context.Context, from, to string) (Overview, erro
 	return result, err
 }
 
-func placementFill(p promotion.PlacementState, all []promotion.CampaignState, dates []time.Time) PlacementFill {
+func placementFill(p promotion.PlacementState, all []promotion.ReportGroup, dates []time.Time) PlacementFill {
 	result := PlacementFill{Code: p.Code, Title: p.Title}
 	weeks := map[string]bool{}
 	categories := map[string]bool{}
@@ -240,13 +241,13 @@ func placementFill(p promotion.PlacementState, all []promotion.CampaignState, da
 		if c.PlacementCode != p.Code {
 			continue
 		}
-		categories[c.Target.CategoryID] = true
 		if !promotion.Occupies(c.Status) {
 			continue
 		}
+		categories[c.Target.CategoryID] = true
 		for week := range weeks {
 			if c.Period.From <= week && c.Period.To >= week {
-				result.Sold++
+				result.Sold += c.Count
 			}
 		}
 	}

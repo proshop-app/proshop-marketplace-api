@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"time"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -54,7 +55,7 @@ func (s *Service) Sponsored(ctx context.Context, query ports.OfferQuery) ([]Spon
 		}
 	}
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		day := s.clock.Now().In(s.config.Location).Format("2006-01-02")
+		day := s.clock.Now().In(s.config.Location).Format(time.DateOnly)
 		filter := promotion.Filter{Status: promotion.Active, PlacementCode: code, From: day, To: day}
 		all, _, err := tx.Promotion().List(ctx, filter)
 		if err != nil {
@@ -112,7 +113,16 @@ func currentOffer(ctx context.Context, tx ports.Tx, c promotion.CampaignState) (
 		return ports.OfferDocument{}, false, err
 	}
 	doc, ok := appcatalog.Document(state)
-	return doc, ok && doc.Listed, nil
+	card := state.Product.State().Card.Marketplace
+	if card == nil {
+		return doc, false, nil
+	}
+	if card.CategoryID != c.Target.CategoryID {
+		// Такой документ не выдаётся: категория нужна только для пояснения остановки.
+		doc.CategoryID = card.CategoryID
+		return doc, false, nil
+	}
+	return doc, ok && doc.Listed && doc.CategoryID == c.Target.CategoryID, nil
 }
 
 // Events обезличивает посетителя и атомарно учитывает пачку маячков.
@@ -128,7 +138,7 @@ func (s *Service) Events(ctx context.Context, visitor string, events []Event) er
 	hash := sha256.Sum256([]byte(s.config.VisitorSalt + "\x00" + visitor))
 	visitorHash := hex.EncodeToString(hash[:])
 	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		day := s.clock.Now().In(s.config.Location).Format("2006-01-02")
+		day := s.clock.Now().In(s.config.Location).Format(time.DateOnly)
 		for _, event := range events {
 			if _, err := ids.ParseUUID(string(event.PromotionID)); err != nil {
 				continue
@@ -156,43 +166,57 @@ func (s *Service) Events(ctx context.Context, visitor string, events []Event) er
 	})
 }
 
-// Tick вызывается под общей блокировкой фонового цикла.
+// Tick выбирает только живые размещения; просроченная очередь освобождает резерв.
 func (s *Service) Tick(ctx context.Context) error {
 	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		all, _, err := tx.Promotion().List(ctx, promotion.Filter{})
-		if err != nil {
-			return err
-		}
-		for _, state := range all {
-			if state.Status != promotion.Active && state.Status != promotion.Approved {
-				continue
+		now := s.clock.Now().In(s.config.Location)
+		day := now.Format(time.DateOnly)
+		for _, status := range []promotion.Status{promotion.Active, promotion.Approved, promotion.Review} {
+			filter := promotion.Filter{Status: status}
+			if status == promotion.Review {
+				filter.To = day
 			}
-			c := promotion.RestoreCampaign(state)
-			_, listed, err := currentOffer(ctx, tx, state)
+			all, _, err := tx.Promotion().List(ctx, filter)
 			if err != nil {
 				return err
 			}
-			action := promotion.Action("activate")
-			note := ""
-			changed := false
-			day := s.clock.Now().In(s.config.Location).Format("2006-01-02")
-			due := state.Status == promotion.Approved && state.Payment.Status == promotion.Paid &&
-				day >= state.Period.From
-			if !listed && (state.Status == promotion.Active || due) {
-				action, note = promotion.Stop, "товар больше не опубликован"
-				changed, err = c.Decide(action, note, "", promotion.Payment{}, s.clock.Now())
-			} else {
-				changed = c.Tick(s.clock.Now(), s.config.Location)
-				if c.State().Status == promotion.Finished {
-					action = promotion.Finish
+			for _, state := range all {
+				if status == promotion.Review && day <= state.Period.To {
+					continue
 				}
-			}
-			if err != nil {
-				return err
-			}
-			if changed {
-				if err := s.saveDecision(ctx, tx, c, state.Status, "system", action, note); err != nil {
+				c := promotion.RestoreCampaign(state)
+				action, note := promotion.Activate, ""
+				changed := false
+				switch {
+				case status != promotion.Active && day > state.Period.To:
+					action, note = promotion.Stop, "период прошёл без оплаты/решения"
+					changed, err = c.Decide(action, note, "", promotion.Payment{}, now)
+				case status == promotion.Active && day > state.Period.To:
+					changed = c.Tick(now, s.config.Location)
+					action = promotion.Finish
+				default:
+					doc, listed, readErr := currentOffer(ctx, tx, state)
+					if readErr != nil {
+						return readErr
+					}
+					if !listed {
+						action, note = promotion.Stop, "товар больше не опубликован"
+						if doc.CategoryID != "" && doc.CategoryID != state.Target.CategoryID {
+							note = "категория товара изменилась"
+						}
+						changed, err = c.Decide(action, note, "", promotion.Payment{}, now)
+					} else {
+						changed = c.Tick(now, s.config.Location)
+					}
+				}
+				if err != nil {
 					return err
+				}
+				if changed {
+					err := s.saveDecision(ctx, tx, c, state.Status, promotion.ActorSystem, action, note)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}

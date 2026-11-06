@@ -18,28 +18,35 @@ type Status string
 // Action отделяет решение от статуса оплаты.
 type Action string
 
+// PaymentStatus отделяет оплату от жизненного цикла.
+type PaymentStatus string
+
 // Значения контракта продвижения не зависят от конкретного магазина.
 const (
-	SponsoredSlot Kind   = "sponsored_slot"
-	Banner        Kind   = "banner"
-	Showcase      Kind   = "showcase"
-	Draft         Status = "draft"
-	Review        Status = "review"
-	Approved      Status = "approved"
-	Rejected      Status = "rejected"
-	Active        Status = "active"
-	Finished      Status = "finished"
-	Stopped       Status = "stopped"
-	Submit        Action = "submit"
-	Approve       Action = "approve"
-	Reject        Action = "reject"
-	Pay           Action = "pay"
-	Finish        Action = "finish"
-	Stop          Action = "stop"
-	Revise        Action = "revise"
-	Refund        Action = "refund"
-	Pending              = "pending"
-	Paid                 = "paid"
+	SponsoredSlot Kind          = "sponsored_slot"
+	Banner        Kind          = "banner"
+	Showcase      Kind          = "showcase"
+	Draft         Status        = "draft"
+	Review        Status        = "review"
+	Approved      Status        = "approved"
+	Rejected      Status        = "rejected"
+	Active        Status        = "active"
+	Finished      Status        = "finished"
+	Stopped       Status        = "stopped"
+	Submit        Action        = "submit"
+	Approve       Action        = "approve"
+	Reject        Action        = "reject"
+	Pay           Action        = "pay"
+	Finish        Action        = "finish"
+	Stop          Action        = "stop"
+	Revise        Action        = "revise"
+	Refund        Action        = "refund"
+	Pending       PaymentStatus = "pending"
+	Paid          PaymentStatus = "paid"
+	Activate      Action        = "activate"
+	ActorOperator               = "operator"
+	ActorTenant                 = "tenant"
+	ActorSystem                 = "system"
 )
 
 // Target сохраняет категорию площадки на момент заявки.
@@ -68,7 +75,7 @@ type RefundRecord struct {
 // Payment хранит оплату и ручной возврат.
 type Payment struct {
 	Refund   RefundRecord `json:"refund"`
-	Status   string
+	Status   PaymentStatus
 	PaidOn   string
 	Amount   money.Money
 	Document string
@@ -111,9 +118,6 @@ type Decision struct {
 
 // NewCampaign создаёт черновик с новой версией и неоплаченным состоянием.
 func NewCampaign(s CampaignState, now time.Time, location *time.Location) (*Campaign, error) {
-	if s.Kind != SponsoredSlot {
-		return nil, ErrKindUnsupported
-	}
 	if _, err := ids.ParseUUID(string(s.ID)); err != nil {
 		return nil, ErrInvalid
 	}
@@ -140,7 +144,7 @@ func validateInput(s CampaignState, now time.Time, location *time.Location) erro
 		s.Target.SaleID != "" || s.Target.StoreID != "" || s.Position < 1 || s.Price.Kopecks() <= 0 {
 		return ErrInvalid
 	}
-	if s.PlacementCode == "category_slot" && s.Target.CategoryID == "" {
+	if s.Target.CategoryID == "" {
 		return ErrOfferWithoutCategory
 	}
 	if err := s.Marking.Validate(false); err != nil {
@@ -165,6 +169,13 @@ func (c *Campaign) MarkSaved() { c.origin = c.state }
 func (c *Campaign) Edit(input CampaignState, now time.Time, location *time.Location) (bool, error) {
 	if c.state.Status != Draft && c.state.Status != Review && c.state.Status != Approved {
 		return false, ErrConflict
+	}
+	if c.state.Status != Draft && (input.Period != c.state.Period ||
+		input.Position != c.state.Position || input.PlacementCode != c.state.PlacementCode) {
+		return false, ErrConflict
+	}
+	if c.state.Status != Draft {
+		input.Price = c.state.Price
 	}
 	if err := validateInput(input, now, location); err != nil {
 		return false, err

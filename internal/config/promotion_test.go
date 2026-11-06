@@ -14,7 +14,9 @@ func TestPromotionConfiguration(t *testing.T) {
 		{"PROMOTION_TIMEZONE", "invalid/zone"},
 		{"PROMOTION_VISITOR_SALT", "short"},
 		{"PROMOTION_SEARCH_RELEVANCE_DEPTH", "9"},
-		{"PROMOTION_SEARCH_RELEVANCE_DEPTH", "501"},
+		{"PROMOTION_EVENTS_PER_MINUTE", "0"},
+		{"PROMOTION_TICK_INTERVAL", "0s"},
+		{"PROMOTION_SEARCH_RELEVANCE_DEPTH", "101"},
 		{"SERVER_API_TOKEN", "short"},
 		{"SERVER_API_TOKEN", strings.Repeat("x", 32)},
 	} {

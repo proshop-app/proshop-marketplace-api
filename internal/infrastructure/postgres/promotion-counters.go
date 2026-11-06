@@ -11,7 +11,8 @@ import (
 const (
 	promotionDecisionAdd = `INSERT INTO promotion_decisions(campaign_id,at,actor,action,note) VALUES($1,$2,$3,$4,$5)`
 	promotionDecisions   = `SELECT at,actor,action,note FROM promotion_decisions WHERE campaign_id=$1 ORDER BY id`
-	promotionView        = `INSERT INTO promotion_views(campaign_id,day,visitor_hash) VALUES($1,$2::text::date,$3)
+	promotionView        = `INSERT INTO promotion_views(campaign_id,day,visitor_hash,kind)
+ VALUES($1,$2::text::date,$3,$4)
  ON CONFLICT DO NOTHING`
 	promotionCount = `INSERT INTO promotion_counters(campaign_id,day,position,impressions,clicks)
  VALUES($1,$2::text::date,$3,$4,$5)
@@ -56,21 +57,23 @@ func (r *Promotions) Count(
 	views, clicks := 0, 0
 	switch kind {
 	case "view":
-		tag, err := r.q.Exec(ctx, promotionView, s.ID, day, visitor)
-		if err != nil {
-			return false, err
-		}
-		if tag.RowsAffected() == 0 {
-			return false, nil
-		}
 		views = 1
 	case "click":
 		clicks = 1
 	default:
 		return false, promotion.ErrInvalid
 	}
-	_, err := r.q.Exec(ctx, promotionCount, s.ID, day, s.Position, views, clicks)
-	return err == nil, err
+	tag, err := r.q.Exec(ctx, promotionView, s.ID, day, visitor, kind)
+	if err != nil {
+		return false, err
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	if _, err := r.q.Exec(ctx, promotionCount, s.ID, day, s.Position, views, clicks); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Stats читает суточные счётчики за указанный период.

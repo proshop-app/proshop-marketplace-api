@@ -76,7 +76,7 @@ type healthJSON struct {
 // routes — все маршруты маркетплейса. Та же таблица сверяется с
 // api/openapi.yaml в тестах: маршрут без описания — красный тест.
 func routes(deps Deps) []route {
-	promotion := &promotionHandlers{service: deps.Promotion}
+	promotion := &promotionHandlers{service: deps.Promotion, trustProxy: deps.TrustProxy}
 	machine := func(next http.HandlerFunc) http.HandlerFunc { return serverAPI(deps.ServerAPIToken, next) }
 	moderation := &moderationHandlers{service: deps.Moderation}
 	catalog := &catalogHandlers{queries: deps.Catalog}
@@ -106,6 +106,7 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/operator/promotion/campaigns", operator(promotion.create)},
 		{http.MethodGet, "/api/v1/operator/promotion/campaigns/{id}", operator(promotion.campaign)},
 		{http.MethodPatch, "/api/v1/operator/promotion/campaigns/{id}", operator(promotion.edit)},
+		{http.MethodDelete, "/api/v1/operator/promotion/campaigns/{id}", operator(promotion.delete)},
 		{http.MethodPost, "/api/v1/operator/promotion/campaigns/{id}/decisions", operator(promotion.decide)},
 		{http.MethodGet, "/api/v1/operator/promotion/campaigns/{id}/decisions", operator(promotion.decisions)},
 		{http.MethodGet, "/api/v1/operator/promotion/campaigns/{id}/stats", operator(promotion.stats)},
@@ -118,11 +119,13 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns", machine(promotion.create)},
 		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}", machine(promotion.campaign)},
 		{http.MethodPatch, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}", machine(promotion.edit)},
+		{http.MethodDelete, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}", machine(promotion.delete)},
 		{
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/submit",
 			machine(promotion.decide),
-		}, {
+		},
+		{
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/revise",
 			machine(promotion.decide),
@@ -138,7 +141,7 @@ func routes(deps Deps) []route {
 			machine(promotion.stats),
 		},
 		{http.MethodGet, "/api/v1/catalog/sponsored", optionalBuyer(deps.Auth, promotion.sponsored)},
-		{http.MethodPost, "/api/v1/promotion/events", promotion.events},
+		{http.MethodPost, "/api/v1/promotion/events", optionalBuyer(deps.Auth, promotion.events)},
 		{http.MethodPut, "/api/v1/operator/participants/{tenantId}/trust", operator(participants.decision)},
 		{http.MethodGet, "/api/v1/operator/participants/{tenantId}/decisions", operator(participants.decisions)},
 		{http.MethodGet, "/api/v1/operator/moderation/cases", operator(moderation.cases)},

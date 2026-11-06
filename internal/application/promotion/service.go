@@ -16,12 +16,14 @@ import (
 
 // Config передаёт календарь, ротацию и внешние зависимости без чтения окружения.
 type Config struct {
-	Catalog     *appcatalog.Queries
-	Location    *time.Location
-	SearchDepth int
-	VisitorSalt string
-	Random      promotion.Random
-	Metrics     ports.PromotionMetrics
+	Catalog         *appcatalog.Queries
+	Location        *time.Location
+	SearchDepth     int
+	VisitorSalt     string
+	Random          promotion.Random
+	Metrics         ports.PromotionMetrics
+	Limiter         ports.RateLimiter
+	EventsPerMinute int
 }
 
 // Service связывает изменения продвижения одной транзакцией.
@@ -56,13 +58,13 @@ func NewService(
 	index ports.OfferIndex,
 	config Config,
 ) *Service {
+	if config.Random == nil {
+		panic("promotion: необходим Random")
+	}
 	return &Service{uow: uow, clock: clock, ids: identities, index: index, config: config}
 }
 
 func (s *Service) prepare(ctx context.Context, tx ports.Tx, input *promotion.CampaignState) error {
-	if input.Kind != promotion.SponsoredSlot {
-		return promotion.ErrKindUnsupported
-	}
 	if input.Target.OfferID.Tenant != input.TenantID {
 		return promotion.ErrNotFound
 	}
@@ -82,6 +84,9 @@ func (s *Service) prepare(ctx context.Context, tx ports.Tx, input *promotion.Cam
 		return promotion.ErrOfferWithoutCategory
 	}
 	input.Target.CategoryID = card.CategoryID
+	if input.Status != "" && input.Status != promotion.Draft {
+		return nil
+	}
 	p, err := tx.Promotion().Placement(ctx, input.PlacementCode)
 	if err != nil {
 		return err
@@ -99,8 +104,8 @@ func (s *Service) Create(
 	ctx context.Context,
 	access Access,
 	input promotion.CampaignState,
-) (promotion.CampaignState, error) {
-	var result promotion.CampaignState
+) (Campaign, error) {
+	var result Campaign
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		if access.TenantID != "" {
 			input.TenantID = access.TenantID
@@ -108,6 +113,7 @@ func (s *Service) Create(
 		if access.TenantID != "" && input.Marking.ERID != "" {
 			return promotion.ErrInvalid
 		}
+		input.Status = promotion.Draft
 		if err := s.prepare(ctx, tx, &input); err != nil {
 			return err
 		}
@@ -119,8 +125,8 @@ func (s *Service) Create(
 		if err := tx.Promotion().Save(ctx, campaign); err != nil {
 			return err
 		}
-		result = campaign.State()
-		return nil
+		result, err = campaignView(ctx, tx, campaign.State())
+		return err
 	})
 	return result, err
 }
@@ -151,7 +157,7 @@ func (s *Service) capacity(ctx context.Context, tx ports.Tx, state promotion.Cam
 	if err != nil {
 		return err
 	}
-	occupancy, err := tx.Promotion().Occupancy(ctx, state, p.State().Scope, weeks)
+	occupancy, err := tx.Promotion().Occupancy(ctx, state, p.State().Scope, weeks, state.ID)
 	if err != nil {
 		return err
 	}
@@ -165,8 +171,8 @@ func (s *Service) Edit(
 	id ids.UUID,
 	expected int64,
 	input promotion.CampaignState,
-) (promotion.CampaignState, error) {
-	var result promotion.CampaignState
+) (Campaign, error) {
+	var result Campaign
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := owned(ctx, tx, access, id)
 		if err != nil {
@@ -179,6 +185,8 @@ func (s *Service) Edit(
 			return promotion.ErrConflict
 		}
 		input.TenantID = c.State().TenantID
+		input.Status = c.State().Status
+		input.Price = c.State().Price
 		if access.TenantID != "" && input.Marking.ERID != "" {
 			return promotion.ErrInvalid
 		}
@@ -199,8 +207,8 @@ func (s *Service) Edit(
 				return err
 			}
 		}
-		result = c.State()
-		return nil
+		result, err = campaignView(ctx, tx, c.State())
+		return err
 	})
 	return result, err
 }
@@ -211,8 +219,8 @@ func (s *Service) Decide(
 	access Access,
 	id ids.UUID,
 	command Command,
-) (promotion.CampaignState, error) {
-	var result promotion.CampaignState
+) (Campaign, error) {
+	var result Campaign
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := owned(ctx, tx, access, id)
 		if err != nil {
@@ -264,8 +272,8 @@ func (s *Service) Decide(
 				return err
 			}
 		}
-		result = c.State()
-		return nil
+		result, err = campaignView(ctx, tx, c.State())
+		return err
 	})
 	return result, err
 }
@@ -301,6 +309,7 @@ func (s *Service) ConfigurePlacement(
 	price money.Money,
 	prices map[int]money.Money,
 	active bool,
+	expectedVersion int64,
 ) (promotion.PlacementState, error) {
 	var result promotion.PlacementState
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -310,6 +319,9 @@ func (s *Service) ConfigurePlacement(
 		p, err := tx.Promotion().Placement(ctx, code)
 		if err != nil {
 			return err
+		}
+		if p.State().Version != expectedVersion {
+			return promotion.ErrConflict
 		}
 		changed, err := p.Configure(limit, price, prices, active)
 		if err != nil {

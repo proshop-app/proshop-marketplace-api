@@ -14,13 +14,14 @@ const (
 	promotionGet   = `SELECT state, price, payment_amount FROM promotion_campaigns WHERE id=$1`
 	promotionWhere = ` WHERE ($1='' OR status=$1) AND ($2='' OR kind=$2) AND ($3='' OR tenant_id=$3)
  AND ($4='' OR placement_code=$4) AND ($5='' OR date_to>=NULLIF($5,'')::date)
- AND ($6='' OR date_from<=NULLIF($6,'')::date)`
+ AND ($6='' OR date_from<=NULLIF($6,'')::date) AND ($7='' OR product_id=$7)`
 	promotionList = `SELECT state, price, payment_amount FROM promotion_campaigns` + promotionWhere +
-		` ORDER BY id LIMIT NULLIF($7,0) OFFSET $8`
+		` ORDER BY created_at DESC, id DESC LIMIT NULLIF($8,0) OFFSET $9`
 	promotionTotal  = `SELECT count(*) FROM promotion_campaigns` + promotionWhere
 	promotionInsert = `INSERT INTO promotion_campaigns
- (id,tenant_id,kind,placement_code,position,category_id,date_from,date_to,price,payment_amount,status,version,state)
- VALUES ($1,$2,$3,$4,$5,$6,$7::text::date,$8::text::date,$9,$10,$11,$12,$13) ON CONFLICT DO NOTHING`
+ (id,tenant_id,kind,placement_code,position,category_id,date_from,date_to,price,payment_amount,status,version,state,
+ created_at,updated_at,product_id)
+ VALUES ($1,$2,$3,$4,$5,$6,$7::text::date,$8::text::date,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT DO NOTHING`
 	promotionUpdate = `UPDATE promotion_campaigns SET
  tenant_id=$2,
  kind=$3,
@@ -33,12 +34,16 @@ const (
  payment_amount=$10,
  status=$11,
  version=$12,
- state=$13
- WHERE id=$1 AND version=$14 AND status=$15`
+ state=$13,
+ created_at=$14,
+ updated_at=$15,
+ product_id=$16
+ WHERE id=$1 AND version=$17 AND status=$18`
 	promotionOccupancy = `SELECT w.day, count(c.id)
  FROM unnest($1::text[]) AS w(day) LEFT JOIN promotion_campaigns c
  ON c.placement_code=$2 AND c.position=$3 AND ($4='global' OR c.category_id=$5)
- AND c.id<>$6 AND c.status IN ('review','approved','active') AND c.date_from<=w.day::date AND c.date_to>=w.day::date
+ AND ($6 = '' OR c.id <> NULLIF($6,'')::uuid) AND c.status IN ('review','approved','active')
+ AND c.date_from<=w.day::date AND c.date_to>=w.day::date
  GROUP BY w.day ORDER BY w.day`
 )
 
@@ -46,7 +51,7 @@ const (
 type Promotions struct{ q querier }
 
 func scanPromotion(row rowScanner) (*promotion.Campaign, error) {
-	var state promotion.CampaignState
+	var stored storedCampaignState
 	var raw []byte
 	var price, amount int64
 	if err := row.Scan(&raw, &price, &amount); err != nil {
@@ -55,9 +60,10 @@ func scanPromotion(row rowScanner) (*promotion.Campaign, error) {
 		}
 		return nil, err
 	}
-	if err := json.Unmarshal(raw, &state); err != nil {
+	if err := json.Unmarshal(raw, &stored); err != nil {
 		return nil, err
 	}
+	state := domainState(stored)
 	state.Price = money.FromKopecks(price)
 	state.Payment.Amount = money.FromKopecks(amount)
 	return promotion.RestoreCampaign(state), nil
@@ -70,7 +76,7 @@ func (r *Promotions) Get(ctx context.Context, id ids.UUID) (*promotion.Campaign,
 
 // List возвращает страницу размещений и полное число совпадений.
 func (r *Promotions) List(ctx context.Context, f promotion.Filter) ([]promotion.CampaignState, int, error) {
-	args := []any{f.Status, f.Kind, f.TenantID, f.PlacementCode, f.From, f.To}
+	args := []any{f.Status, f.Kind, f.TenantID, f.PlacementCode, f.From, f.To, f.ProductID}
 	var total int
 	if err := r.q.QueryRow(ctx, promotionTotal, args...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -94,7 +100,7 @@ func (r *Promotions) List(ctx context.Context, f promotion.Filter) ([]promotion.
 // Save записывает агрегат условно по исходным статусу и версии.
 func (r *Promotions) Save(ctx context.Context, c *promotion.Campaign) error {
 	s := c.State()
-	raw, err := json.Marshal(s)
+	raw, err := json.Marshal(storageState(s))
 	if err != nil {
 		return err
 	}
@@ -112,6 +118,9 @@ func (r *Promotions) Save(ctx context.Context, c *promotion.Campaign) error {
 		s.Status,
 		s.Version,
 		raw,
+		s.CreatedAt,
+		s.UpdatedAt,
+		s.Target.OfferID.Product,
 	}
 	query := promotionInsert
 	if c.Origin().Version > 0 {
@@ -135,6 +144,7 @@ func (r *Promotions) Occupancy(
 	s promotion.CampaignState,
 	scope promotion.Scope,
 	weeks []string,
+	exclude ids.UUID,
 ) ([]promotion.Week, error) {
 	rows, err := r.q.Query(
 		ctx,
@@ -144,7 +154,7 @@ func (r *Promotions) Occupancy(
 		s.Position,
 		scope,
 		s.Target.CategoryID,
-		s.ID,
+		exclude,
 	)
 	if err != nil {
 		return nil, err

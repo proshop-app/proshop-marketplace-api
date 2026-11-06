@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -26,7 +25,7 @@ func TestPromotionMachineTokenAndTenant(t *testing.T) {
 	})
 	service := app.NewService(store, fake.NewClock(time.Now()), &fake.IDs{}, fake.NewIndex(), app.Config{
 		Location: time.UTC,
-		Random:   fake.PromotionRandom{},
+		Random:   fake.Random{},
 	})
 	h := &promotionHandlers{service: service}
 	for _, test := range []struct {
@@ -66,7 +65,7 @@ func TestPromotionPauseAndBatch(t *testing.T) {
 		fake.NewClock(time.Now()),
 		&fake.IDs{},
 		fake.NewIndex(),
-		app.Config{Location: time.UTC},
+		app.Config{Location: time.UTC, Random: fake.Random{}},
 	)
 	h := &promotionHandlers{service: service}
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"action":"pause","expectedVersion":1}`))
@@ -90,10 +89,9 @@ func TestPromotionTenantERIDForbidden(t *testing.T) {
 		`{"marking":{"erid":"value"}}`,
 		`{"marking":{"erid":""}}`,
 		`{"marking":{"erid":null}}`,
-		`{"erid":null}`,
 	} {
-		var input promotionInput
-		if err := json.Unmarshal([]byte(raw), &input); err != nil {
+		input, err := decodePromotion([]byte(raw), promotionInput{}, true)
+		if err != nil {
 			t.Fatal(err)
 		}
 		if _, err := h.input(input, true); !errors.Is(err, promotion.ErrInvalid) {
@@ -114,6 +112,7 @@ func TestPromotionReviseAndRefundHTTP(t *testing.T) {
 	store.SeedPromotion(state)
 	service := app.NewService(store, fake.NewClock(time.Now()), &fake.IDs{}, fake.NewIndex(), app.Config{
 		Location: time.UTC,
+		Random:   fake.Random{},
 	})
 	h := &promotionHandlers{service: service}
 	req := httptest.NewRequest(http.MethodPost, "/revise", strings.NewReader(`{"expectedVersion":1}`))

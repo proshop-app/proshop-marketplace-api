@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
@@ -14,7 +15,10 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-type promotionHandlers struct{ service *apppromotion.Service }
+type promotionHandlers struct {
+	service    *apppromotion.Service
+	trustProxy bool
+}
 
 type promotionTargetJSON struct {
 	OfferID    string `json:"offerId"`
@@ -39,6 +43,27 @@ type promotionInput struct {
 	Weeks         int                 `json:"weeks,omitempty"`
 }
 
+type promotionOperatorInput struct {
+	Title         string              `json:"title"`
+	TenantID      ids.TenantID        `json:"tenantId"`
+	Kind          promotion.Kind      `json:"kind"`
+	PlacementCode string              `json:"placementCode"`
+	Position      int                 `json:"position"`
+	Target        promotionTargetJSON `json:"target"`
+	Period        promotion.Period    `json:"period"`
+	Marking       promotion.Marking   `json:"marking"`
+}
+
+type promotionTenantInput struct {
+	Title         string            `json:"title"`
+	PlacementCode string            `json:"placementCode"`
+	Position      int               `json:"position"`
+	OfferID       string            `json:"offerId"`
+	From          string            `json:"from"`
+	Weeks         int               `json:"weeks"`
+	Marking       promotion.Marking `json:"marking"`
+}
+
 type promotionRefundJSON struct {
 	AmountKopecks int64  `json:"amountKopecks"`
 	On            string `json:"on"`
@@ -47,12 +72,12 @@ type promotionRefundJSON struct {
 }
 
 type promotionPaymentJSON struct {
-	Refund        *promotionRefundJSON `json:"refund,omitempty"`
-	Status        string               `json:"status"`
-	PaidOn        string               `json:"paidOn,omitempty"`
-	AmountKopecks int64                `json:"amountKopecks,omitempty"`
-	Document      string               `json:"document,omitempty"`
-	Note          string               `json:"note,omitempty"`
+	Refund        *promotionRefundJSON    `json:"refund,omitempty"`
+	Status        promotion.PaymentStatus `json:"status"`
+	PaidOn        string                  `json:"paidOn,omitempty"`
+	AmountKopecks int64                   `json:"amountKopecks,omitempty"`
+	Document      string                  `json:"document,omitempty"`
+	Note          string                  `json:"note,omitempty"`
 }
 
 type promotionSummary struct {
@@ -62,7 +87,15 @@ type promotionSummary struct {
 }
 
 type campaignJSON struct {
-	promotionInput
+	Title           string               `json:"title"`
+	TenantID        ids.TenantID         `json:"tenantId"`
+	Kind            promotion.Kind       `json:"kind"`
+	PlacementCode   string               `json:"placementCode"`
+	Position        int                  `json:"position"`
+	Target          promotionTargetJSON  `json:"target"`
+	Period          promotion.Period     `json:"period"`
+	PriceKopecks    int64                `json:"priceKopecks"`
+	Marking         promotion.Marking    `json:"marking"`
 	ID              ids.UUID             `json:"id"`
 	TenantName      string               `json:"tenantName"`
 	Payment         promotionPaymentJSON `json:"payment"`
@@ -85,6 +118,7 @@ type promotionPlacementJSON struct {
 	Active              bool            `json:"active"`
 	Scope               promotion.Scope `json:"scope"`
 	Version             int64           `json:"version"`
+	ExpectedVersion     int64           `json:"expectedVersion,omitempty"`
 }
 
 type promotionDecisionInput struct {
@@ -108,21 +142,50 @@ type sponsoredJSON struct {
 	Offer       offerJSON `json:"offer"`
 }
 
-func (p *promotionInput) UnmarshalJSON(raw []byte) error {
-	type plain promotionInput
-	if err := json.Unmarshal(raw, (*plain)(p)); err != nil {
-		return err
+func decodePromotion(raw []byte, p promotionInput, tenant bool) (promotionInput, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if tenant {
+		body := promotionTenantInput{
+			Title:         p.Title,
+			PlacementCode: p.PlacementCode,
+			Position:      p.Position,
+			OfferID:       p.OfferID,
+			From:          p.From,
+			Weeks:         p.Weeks,
+			Marking:       p.Marking,
+		}
+		if err := decoder.Decode(&body); err != nil {
+			return p, promotion.ErrInvalid
+		}
+		p.Title, p.PlacementCode, p.Position = body.Title, body.PlacementCode, body.Position
+		p.OfferID, p.From, p.Weeks, p.Marking = body.OfferID, body.From, body.Weeks, body.Marking
+	} else {
+		body := promotionOperatorInput{
+			Title:         p.Title,
+			TenantID:      p.TenantID,
+			Kind:          p.Kind,
+			PlacementCode: p.PlacementCode,
+			Position:      p.Position,
+			Target:        p.Target,
+			Period:        p.Period,
+			Marking:       p.Marking,
+		}
+		if err := decoder.Decode(&body); err != nil {
+			return p, promotion.ErrInvalid
+		}
+		p.Title, p.TenantID, p.Kind = body.Title, body.TenantID, body.Kind
+		p.PlacementCode, p.Position, p.Target = body.PlacementCode, body.Position, body.Target
+		p.Period, p.Marking = body.Period, body.Marking
 	}
 	var fields struct {
-		ERID    json.RawMessage            `json:"erid"`
 		Marking map[string]json.RawMessage `json:"marking"`
 	}
 	if err := json.Unmarshal(raw, &fields); err != nil {
-		return err
+		return p, promotion.ErrInvalid
 	}
-	_, supplied := fields.Marking["erid"]
-	p.eridSupplied = supplied || fields.ERID != nil
-	return nil
+	_, p.eridSupplied = fields.Marking["erid"]
+	return p, nil
 }
 
 func refundResponse(r promotion.RefundRecord) *promotionRefundJSON {
@@ -154,9 +217,9 @@ func serverAPI(token string, next http.HandlerFunc) http.HandlerFunc {
 
 func promotionAccess(r *http.Request) apppromotion.Access {
 	tenant := ids.TenantID(r.PathValue("tenantId"))
-	actor := "operator"
+	actor := promotion.ActorOperator
 	if tenant != "" {
-		actor = "tenant"
+		actor = promotion.ActorTenant
 	}
 	return apppromotion.Access{TenantID: tenant, Actor: actor}
 }
@@ -164,14 +227,10 @@ func promotionAccess(r *http.Request) apppromotion.Access {
 func promotionID(r *http.Request) (ids.UUID, error) { return ids.ParseUUID(r.PathValue("id")) }
 
 func (h *promotionHandlers) input(body promotionInput, tenant bool) (promotion.CampaignState, error) {
-	if (tenant && body.Kind != "" && body.Kind != promotion.SponsoredSlot) ||
-		(!tenant && body.Kind != promotion.SponsoredSlot) {
-		return promotion.CampaignState{}, promotion.ErrKindUnsupported
-	}
 	if tenant && body.eridSupplied {
 		return promotion.CampaignState{}, promotion.ErrInvalid
 	}
-	if tenant && body.Position == 0 {
+	if body.Position == 0 {
 		return promotion.CampaignState{}, promotion.ErrInvalid
 	}
 	offer := body.Target.OfferID
@@ -188,9 +247,6 @@ func (h *promotionHandlers) input(body promotionInput, tenant bool) (promotion.C
 		if err != nil {
 			return promotion.CampaignState{}, err
 		}
-	}
-	if body.Position == 0 {
-		body.Position = 1
 	}
 	return promotion.CampaignState{
 		Title:         body.Title,
@@ -211,17 +267,15 @@ func (h *promotionHandlers) input(body promotionInput, tenant bool) (promotion.C
 
 func campaignResponse(s promotion.CampaignState) campaignJSON {
 	return campaignJSON{
-		promotionInput: promotionInput{
-			Title:         s.Title,
-			TenantID:      s.TenantID,
-			Kind:          s.Kind,
-			PlacementCode: s.PlacementCode,
-			Position:      s.Position,
-			Target:        promotionTargetJSON{OfferID: s.Target.OfferID.String(), CategoryID: s.Target.CategoryID},
-			Period:        s.Period,
-			PriceKopecks:  s.Price.Kopecks(),
-			Marking:       s.Marking,
-		},
+		Title:           s.Title,
+		TenantID:        s.TenantID,
+		Kind:            s.Kind,
+		PlacementCode:   s.PlacementCode,
+		Position:        s.Position,
+		Target:          promotionTargetJSON{OfferID: s.Target.OfferID.String(), CategoryID: s.Target.CategoryID},
+		Period:          s.Period,
+		PriceKopecks:    s.Price.Kopecks(),
+		Marking:         s.Marking,
 		RejectionReason: s.RejectionReason,
 		ID:              s.ID,
 		Status:          s.Status,
@@ -239,21 +293,15 @@ func campaignResponse(s promotion.CampaignState) campaignJSON {
 	}
 }
 
-func (h *promotionHandlers) response(r *http.Request, state promotion.CampaignState) (campaignJSON, error) {
-	body := campaignResponse(state)
-	name, rows, err := h.service.Summary(r.Context(), state)
-	if err != nil {
-		return body, err
-	}
-	body.TenantName = name
-	for _, row := range rows {
-		body.Stats.Impressions += row.Impressions
-		body.Stats.Clicks += row.Clicks
-	}
+func promotionResponse(state apppromotion.Campaign) campaignJSON {
+	body := campaignResponse(state.CampaignState)
+	body.TenantName = state.Summary.TenantName
+	body.Stats.Impressions = state.Summary.Impressions
+	body.Stats.Clicks = state.Summary.Clicks
 	if body.Stats.Impressions > 0 {
 		body.Stats.CTR = 100 * float64(body.Stats.Clicks) / float64(body.Stats.Impressions)
 	}
-	return body, nil
+	return body
 }
 
 func (h *promotionHandlers) campaign(w http.ResponseWriter, r *http.Request) {
@@ -267,21 +315,22 @@ func (h *promotionHandlers) campaign(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	body, err := h.response(r, state)
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
+	body := promotionResponse(state)
 	writeJSON(w, http.StatusOK, body)
 }
 
 func (h *promotionHandlers) create(w http.ResponseWriter, r *http.Request) {
-	var body promotionInput
-	if err := readJSON(w, r, &body); err != nil {
+	var raw json.RawMessage
+	if err := readJSON(w, r, &raw); err != nil {
 		writeError(w, r, err)
 		return
 	}
 	access := promotionAccess(r)
+	body, err := decodePromotion(raw, promotionInput{}, access.TenantID != "")
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	input, err := h.input(body, access.TenantID != "")
 	if err != nil {
 		writeError(w, r, err)
@@ -292,11 +341,7 @@ func (h *promotionHandlers) create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	result, err := h.response(r, state)
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
+	result := promotionResponse(state)
 	writeJSON(w, http.StatusCreated, result)
 }
 
@@ -317,7 +362,19 @@ func (h *promotionHandlers) edit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	body := campaignResponse(current).promotionInput
+	body := promotionInput{
+		Title:         current.Title,
+		TenantID:      current.TenantID,
+		Kind:          current.Kind,
+		PlacementCode: current.PlacementCode,
+		Position:      current.Position,
+		Target: promotionTargetJSON{
+			OfferID:    current.Target.OfferID.String(),
+			CategoryID: current.Target.CategoryID,
+		},
+		Period:  current.Period,
+		Marking: current.Marking,
+	}
 	if access.TenantID != "" {
 		body.OfferID, body.From = current.Target.OfferID.String(), current.Period.From
 		body.Weeks, err = h.service.Weeks(current.Period)
@@ -326,7 +383,8 @@ func (h *promotionHandlers) edit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := json.Unmarshal(patch.Changes, &body); err != nil {
+	body, err = decodePromotion(patch.Changes, body, access.TenantID != "")
+	if err != nil {
 		writeError(w, r, promotion.ErrInvalid)
 		return
 	}
@@ -340,11 +398,7 @@ func (h *promotionHandlers) edit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	result, err := h.response(r, state)
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
+	result := promotionResponse(state)
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -385,7 +439,7 @@ func (h *promotionHandlers) decide(w http.ResponseWriter, r *http.Request) {
 			Amount:   money.FromKopecks(body.Payment.AmountKopecks),
 			PaidOn:   body.Payment.PaidOn,
 			Document: body.Payment.Document,
-			Note:     body.Note,
+			Note:     body.Payment.Note,
 		},
 	}
 	state, err := h.service.Decide(r.Context(), access, id, command)
@@ -393,11 +447,7 @@ func (h *promotionHandlers) decide(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	result, err := h.response(r, state)
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
+	result := promotionResponse(state)
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -413,33 +463,36 @@ func (h *promotionHandlers) list(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if limit == 0 {
-		limit = 50
-	}
 	filter := promotion.Filter{
-		Status:   promotion.Status(q.Get("status")),
-		Kind:     promotion.Kind(q.Get("kind")),
-		TenantID: ids.TenantID(q.Get("tenantId")),
-		From:     q.Get("from"),
-		To:       q.Get("to"),
-		Limit:    limit,
-		Offset:   offset,
+		ProductID: ids.ProductID(q.Get("productId")),
+		Status:    promotion.Status(q.Get("status")),
+		Kind:      promotion.Kind(q.Get("kind")),
+		TenantID:  ids.TenantID(q.Get("tenantId")),
+		From:      q.Get("from"),
+		To:        q.Get("to"),
+		Limit:     limit,
+		Offset:    offset,
 	}
-	states, total, err := h.service.List(r.Context(), promotionAccess(r), filter)
+	if promotionAccess(r).TenantID != "" {
+		filter.Kind, filter.From, filter.To = "", "", ""
+	}
+	page, total, err := h.service.List(r.Context(), promotionAccess(r), filter)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	items := []campaignJSON{}
-	for _, state := range states {
-		body, err := h.response(r, state)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
+	for _, state := range page.Items {
+		body := promotionResponse(state)
 		items = append(items, body)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":  items,
+		"total":  total,
+		"limit":  page.Limit,
+		"offset": page.Offset,
+		"counts": page.Counts,
+	})
 }
 
 func (h *promotionHandlers) decisions(w http.ResponseWriter, r *http.Request) {
@@ -500,6 +553,10 @@ func (h *promotionHandlers) placements(w http.ResponseWriter, r *http.Request) {
 	for _, state := range states {
 		items = append(items, placementResponse(state))
 	}
+	if promotionAccess(r).TenantID != "" {
+		writeJSON(w, http.StatusOK, map[string]any{"items": items, "nextMonday": h.service.NextMonday()})
+		return
+	}
 	writeJSON(w, http.StatusOK, items)
 }
 
@@ -520,6 +577,7 @@ func (h *promotionHandlers) configure(w http.ResponseWriter, r *http.Request) {
 		money.FromKopecks(body.DefaultPriceKopecks),
 		prices,
 		body.Active,
+		body.ExpectedVersion,
 	)
 	if err != nil {
 		writeError(w, r, err)
@@ -581,9 +639,6 @@ func (h *promotionHandlers) sponsored(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if category := r.URL.Query().Get("categoryId"); category != "" {
-		query.CategoryID = category
-	}
 	query.BuyerID = BuyerID(r.Context())
 	rows, err := h.service.Sponsored(r.Context(), query)
 	if err != nil {
@@ -613,7 +668,29 @@ func (h *promotionHandlers) events(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	if body.VisitorID != "" {
+		body.VisitorID = "visitor:" + body.VisitorID
+	}
+	if buyer := BuyerID(r.Context()); buyer != "" {
+		body.VisitorID = "buyer:" + string(buyer)
+	}
+	if err := h.service.AllowEvents(r.Context(), clientIP(r, h.trustProxy), len(body.Events)); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	if err := h.service.Events(r.Context(), body.VisitorID, body.Events); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *promotionHandlers) delete(w http.ResponseWriter, r *http.Request) {
+	id, err := promotionID(r)
+	if err == nil {
+		err = h.service.Delete(r.Context(), promotionAccess(r), id)
+	}
+	if err != nil {
 		writeError(w, r, err)
 		return
 	}

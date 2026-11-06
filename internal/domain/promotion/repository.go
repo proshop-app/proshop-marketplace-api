@@ -8,6 +8,7 @@ import (
 
 // Filter ограничивает выборку размещений; пустой лимит репозитория означает все строки.
 type Filter struct {
+	ProductID     ids.ProductID
 	Status        Status
 	Kind          Kind
 	TenantID      ids.TenantID
@@ -26,6 +27,19 @@ type Counter struct {
 	Clicks      int64  `json:"clicks"`
 }
 
+// Summary — итоги размещения и имя магазина для чтения.
+type Summary struct {
+	TenantName  string
+	Impressions int64
+	Clicks      int64
+}
+
+// ReportGroup объединяет одинаковые условия для сводного отчёта.
+type ReportGroup struct {
+	CampaignState
+	Count int
+}
+
 // Repository привязан к транзакции; LockPlacement сериализует резервирование слотов.
 type Repository interface {
 	LockPlacement(context.Context, string) error
@@ -35,7 +49,12 @@ type Repository interface {
 	Get(context.Context, ids.UUID) (*Campaign, error)
 	List(context.Context, Filter) ([]CampaignState, int, error)
 	Save(context.Context, *Campaign) error
-	Occupancy(context.Context, CampaignState, Scope, []string) ([]Week, error)
+	Delete(context.Context, *Campaign) error
+	Counts(context.Context, Filter) (map[Status]int, error)
+	Summaries(context.Context, []ids.UUID) (map[ids.UUID]Summary, error)
+	Traffic(context.Context, string, string) ([]Counter, error)
+	ReportGroups(context.Context, string, string) ([]ReportGroup, error)
+	Occupancy(context.Context, CampaignState, Scope, []string, ids.UUID) ([]Week, error)
 	AddDecision(context.Context, ids.UUID, Decision) error
 	Decisions(context.Context, ids.UUID) ([]Decision, error)
 	Count(context.Context, CampaignState, string, string, string) (bool, error)

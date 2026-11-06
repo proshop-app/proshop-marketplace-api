@@ -12,10 +12,14 @@ type Promotion struct {
 	SearchRelevanceDepth int
 	VisitorSalt          string
 	ServerAPIToken       string
+	EventsPerMinute      int
+	TickInterval         time.Duration
 }
 
 func (r *reader) promotion() Promotion {
 	p := Promotion{
+		EventsPerMinute:      r.positive("PROMOTION_EVENTS_PER_MINUTE", 120),
+		TickInterval:         r.duration("PROMOTION_TICK_INTERVAL", 15*time.Minute),
 		Timezone:             r.required("PROMOTION_TIMEZONE"),
 		SearchRelevanceDepth: r.positive("PROMOTION_SEARCH_RELEVANCE_DEPTH", 100),
 		VisitorSalt:          r.required("PROMOTION_VISITOR_SALT"),
@@ -24,8 +28,8 @@ func (r *reader) promotion() Promotion {
 	if _, err := time.LoadLocation(p.Timezone); err != nil || p.Timezone == "" || p.Timezone == "Local" {
 		r.fail("PROMOTION_TIMEZONE", "нужен явный часовой пояс IANA")
 	}
-	if p.SearchRelevanceDepth < 10 || p.SearchRelevanceDepth > 500 {
-		r.fail("PROMOTION_SEARCH_RELEVANCE_DEPTH", "от 10 до 500")
+	if p.SearchRelevanceDepth < 10 || p.SearchRelevanceDepth > 100 {
+		r.fail("PROMOTION_SEARCH_RELEVANCE_DEPTH", "от 10 до 100")
 	}
 	if len(p.VisitorSalt) < 16 {
 		r.fail("PROMOTION_VISITOR_SALT", "не короче 16 символов")

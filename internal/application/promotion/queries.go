@@ -24,12 +24,12 @@ type AvailableWeek struct {
 }
 
 // Get читает размещение с проверкой области доступа.
-func (s *Service) Get(ctx context.Context, access Access, id ids.UUID) (promotion.CampaignState, error) {
-	var result promotion.CampaignState
+func (s *Service) Get(ctx context.Context, access Access, id ids.UUID) (Campaign, error) {
+	var result Campaign
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := owned(ctx, tx, access, id)
 		if err == nil {
-			result = c.State()
+			result, err = campaignView(ctx, tx, c.State())
 		}
 		return err
 	})
@@ -41,9 +41,9 @@ func (s *Service) List(
 	ctx context.Context,
 	access Access,
 	filter promotion.Filter,
-) ([]promotion.CampaignState, int, error) {
+) (Page, int, error) {
 	if err := validateDates(filter.From, filter.To); err != nil {
-		return nil, 0, err
+		return Page{}, 0, err
 	}
 	if filter.Status != "" && !slices.Contains(
 		[]promotion.Status{
@@ -57,29 +57,61 @@ func (s *Service) List(
 		},
 		filter.Status,
 	) {
-		return nil, 0, promotion.ErrInvalid
+		return Page{}, 0, promotion.ErrInvalid
 	}
 	if filter.Kind != "" && !slices.Contains(
 		[]promotion.Kind{promotion.SponsoredSlot, promotion.Banner, promotion.Showcase},
 		filter.Kind,
 	) {
-		return nil, 0, promotion.ErrInvalid
+		return Page{}, 0, promotion.ErrInvalid
 	}
-	var result []promotion.CampaignState
+	result := Page{Items: []Campaign{}, Counts: map[promotion.Status]int{}}
 	var total int
 	if access.TenantID != "" {
 		filter.TenantID = access.TenantID
 	}
 	if filter.Limit < 0 || filter.Limit > 200 || filter.Offset < 0 {
-		return nil, 0, promotion.ErrInvalid
+		return Page{}, 0, promotion.ErrInvalid
 	}
 	if filter.Limit == 0 {
 		filter.Limit = 50
 	}
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		var err error
-		result, total, err = tx.Promotion().List(ctx, filter)
-		return err
+		states, count, err := tx.Promotion().List(ctx, filter)
+		if err != nil {
+			return err
+		}
+		total = count
+		result.Limit, result.Offset = filter.Limit, filter.Offset
+		result.Counts, err = tx.Promotion().Counts(ctx, filter)
+		if err != nil {
+			return err
+		}
+		for _, status := range []promotion.Status{
+			promotion.Draft,
+			promotion.Review,
+			promotion.Approved,
+			promotion.Rejected,
+			promotion.Active,
+			promotion.Finished,
+			promotion.Stopped,
+		} {
+			if _, ok := result.Counts[status]; !ok {
+				result.Counts[status] = 0
+			}
+		}
+		campaignIDs := make([]ids.UUID, len(states))
+		for i, state := range states {
+			campaignIDs[i] = state.ID
+		}
+		summaries, err := tx.Promotion().Summaries(ctx, campaignIDs)
+		if err != nil {
+			return err
+		}
+		for _, state := range states {
+			result.Items = append(result.Items, Campaign{CampaignState: state, Summary: summaries[state.ID]})
+		}
+		return nil
 	})
 	return result, total, err
 }
@@ -118,6 +150,9 @@ func (s *Service) Decisions(ctx context.Context, access Access, id ids.UUID) ([]
 
 // Stats читает суточные счётчики за указанный период.
 func (s *Service) Stats(ctx context.Context, access Access, id ids.UUID, from, to string) ([]promotion.Counter, error) {
+	if from == "" || to == "" {
+		return nil, promotion.ErrInvalid
+	}
 	if err := validateDates(from, to); err != nil {
 		return nil, err
 	}
@@ -167,12 +202,11 @@ func (s *Service) Availability(
 			return err
 		}
 		state := promotion.CampaignState{
-			ID:            ids.UUID("00000000-0000-0000-0000-000000000000"),
 			PlacementCode: code,
 			Position:      position,
 			Target:        promotion.Target{CategoryID: category},
 		}
-		occupancy, err := tx.Promotion().Occupancy(ctx, state, p.State().Scope, dates)
+		occupancy, err := tx.Promotion().Occupancy(ctx, state, p.State().Scope, dates, "")
 		if err != nil {
 			return err
 		}
