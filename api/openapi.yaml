@@ -3108,7 +3108,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PromotionPatch"
+              $ref: "#/components/schemas/PromotionTenantPatch"
     delete:
       summary: Удалить черновик и журнал решений
       security: [{serverApiToken: []}]
@@ -4185,7 +4185,63 @@ components:
           type: integer
         changes:
           type: object
-          description: Частичные поля PromotionCampaignInput; машинный API использует поля PromotionTenantInput.
+          additionalProperties: false
+          description: Частичные поля PromotionCampaignInput.
+          properties:
+            title:
+              type: string
+            tenantId:
+              type: string
+            kind:
+              $ref: "#/components/schemas/PromotionKind"
+            placementCode:
+              type: string
+            position:
+              type: integer
+            target:
+              $ref: "#/components/schemas/PromotionTarget"
+            period:
+              $ref: "#/components/schemas/PromotionPeriod"
+            marking:
+              $ref: "#/components/schemas/PromotionMarking"
+    PromotionTenantPatch:
+      type: object
+      required:
+      - expectedVersion
+      - changes
+      properties:
+        expectedVersion:
+          type: integer
+        changes:
+          type: object
+          additionalProperties: false
+          description: Частичные поля PromotionTenantInput.
+          properties:
+            marking:
+              type: object
+              additionalProperties: false
+              description: advertiser и inn обязательны при submit; erid запрещён.
+              properties:
+                advertiser:
+                  type: string
+                inn:
+                  type: string
+                  pattern: '^([0-9]{10}|[0-9]{12})$'
+            placementCode:
+              type: string
+            position:
+              type: integer
+            offerId:
+              type: string
+            from:
+              type: string
+              format: date
+            weeks:
+              type: integer
+              minimum: 1
+              maximum: 520
+            title:
+              type: string
     PromotionOverview:
       type: object
       required:
