@@ -79,8 +79,6 @@ type Login struct {
 	SessionTTL    time.Duration
 	PhoneLimit    Limit
 	IPLimit       Limit
-	// TrustProxy — адрес покупателя брать из X-Forwarded-For.
-	TrustProxy bool
 }
 
 // Platform — внутренний API сервера установки.
@@ -131,6 +129,10 @@ type Settings struct {
 type HTTP struct {
 	Addr            string
 	ShutdownTimeout time.Duration
+	// TrustedProxies — сколько прокси перед сервисом дописывают X-Forwarded-For. От него
+	// зависит адрес клиента, а с ним лимиты по адресу: больше, чем прокси на деле, — и
+	// клиент снова подставляет адрес сам.
+	TrustedProxies int
 }
 
 // Database — PostgreSQL.
@@ -220,6 +222,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		HTTP: HTTP{
 			Addr:            r.str("HTTP_ADDR", ":8080"),
 			ShutdownTimeout: r.duration("SHUTDOWN_TIMEOUT", 20*time.Second),
+			TrustedProxies:  r.nonNegative("HTTP_TRUST_PROXY", 0),
 		},
 		Database: r.database(),
 		Search: Search{
@@ -281,7 +284,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			SessionTTL:    r.duration("SESSION_TTL", 30*24*time.Hour),
 			PhoneLimit:    r.limit("LOGIN_PHONE_LIMIT", Limit{Count: 3, Window: 10 * time.Minute}),
 			IPLimit:       r.limit("LOGIN_IP_LIMIT", Limit{Count: 20, Window: time.Hour}),
-			TrustProxy:    r.boolean("HTTP_TRUST_PROXY", false),
 		},
 		Platform: Platform{
 			URL:     r.httpURL("PLATFORM_API_URL"),

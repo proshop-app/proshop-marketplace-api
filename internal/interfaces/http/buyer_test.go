@@ -2,6 +2,7 @@ package http_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -142,6 +143,44 @@ func TestLoginRateLimit(t *testing.T) {
 	r := e.session(t, http.MethodPost, "/api/v1/auth/call", `{"phone":"79251234567"}`, "")
 	if r.status != http.StatusTooManyRequests || errorCode(r) != "buyer.too_many_attempts" {
 		t.Fatalf("лимит попыток — 429: %+v", r)
+	}
+}
+
+// Лимит входа на адрес не обходится подделкой X-Forwarded-For: без настройки заголовок не
+// читается, за двумя прокси учитывается только звено, которое записал дальний из них.
+func TestLoginIPLimitIgnoresForgedForwardedFor(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		trusted int
+		chain   string
+	}{
+		{name: "без настройки", chain: "203.0.113.7"},
+		{name: "два доверенных прокси", trusted: 2, chain: "203.0.113.7, 10.0.0.2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t, func(deps *transport.Deps) { deps.TrustedProxies = tc.trusted })
+			start := func(phone, forwarded string) response {
+				body := `{"phone":"` + phone + `"}`
+				return e.session(t, http.MethodPost, "/api/v1/auth/call", body, "", "X-Forwarded-For", forwarded)
+			}
+
+			for i := range 10 {
+				phone := fmt.Sprintf("7925123450%d", i)
+				if r := start(phone, fmt.Sprintf("198.51.100.%d, %s", i, tc.chain)); r.status != http.StatusCreated {
+					t.Fatalf("попытка %d в пределах лимита: %+v", i, r)
+				}
+			}
+			r := start("79251234599", "198.51.100.99, "+tc.chain)
+			if r.status != http.StatusTooManyRequests || errorCode(r) != "buyer.too_many_attempts" {
+				t.Fatalf("новый левый адрес не даёт новых попыток: %+v", r)
+			}
+			if tc.trusted == 0 {
+				return
+			}
+			if r := start("79251234598", "198.51.100.99, 203.0.113.8, 10.0.0.2"); r.status != http.StatusCreated {
+				t.Fatalf("у другого клиента за теми же прокси свой счётчик: %+v", r)
+			}
+		})
 	}
 }
 

@@ -228,6 +228,38 @@ func TestDeliverySubsidyMinPercent(t *testing.T) {
 	}
 }
 
+// HTTP_TRUST_PROXY — число прокси: прежнее true доверяло бы любому X-Forwarded-For клиента.
+func TestTrustedProxies(t *testing.T) {
+	cfg, err := config.Load(envOf(validEnv()))
+	if err != nil || cfg.HTTP.TrustedProxies != 0 {
+		t.Fatalf("без настройки заголовок не читается: %+v %v", cfg.HTTP, err)
+	}
+	for _, tc := range []struct {
+		raw   string
+		want  int
+		valid bool
+	}{
+		{"0", 0, true},
+		{"2", 2, true},
+		{"true", 0, false},
+		{"false", 0, false},
+		{"-1", 0, false},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			env := validEnv()
+			env["HTTP_TRUST_PROXY"] = tc.raw
+			cfg, err := config.Load(envOf(env))
+			if tc.valid {
+				if err != nil || cfg.HTTP.TrustedProxies != tc.want {
+					t.Fatalf("число прокси: %+v %v", cfg.HTTP, err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "HTTP_TRUST_PROXY") {
+				t.Fatalf("ожидалась ошибка числа прокси: %v", err)
+			}
+		})
+	}
+}
+
 func TestOperatorAndRegionConfiguration(t *testing.T) {
 	values := validEnv()
 	values["OPERATOR_EMAIL"] = "op@example.test"

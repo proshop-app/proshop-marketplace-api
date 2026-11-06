@@ -148,6 +148,9 @@ domain ← application ← interfaces, infrastructure        сборка гра
   `docs/identity-jwt-cookies.md`. Старые opaque-токены не принимаются.
 - Лимиты входа — на номер и на адрес клиента, окно в Redis; превышение —
   `too_many_requests` с подсказкой, когда повторить.
+- Адрес клиента (лимиты, регион) — только `clientIP` в `interfaces/http`: по
+  числу доверенных прокси `HTTP_TRUST_PROXY` справа, левое звено
+  `X-Forwarded-For` задаёт сам клиент.
 - `buyerId` лежит в контексте запроса и попадает в журнал.
 
 ## Универсальность
