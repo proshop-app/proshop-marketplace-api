@@ -9,12 +9,14 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // View — участник с состоянием магазина в реестре.
 type View struct {
+	DeliveryValid   bool
 	ProbationOffers int
 	Participant     participant.State
 	TenantStatus    participant.TenantStatus
@@ -29,6 +31,7 @@ type List struct {
 
 // CreateCommand — завести участника.
 type CreateCommand struct {
+	Operator operator.Principal
 	TenantID ids.TenantID
 	Name     string
 }
@@ -76,6 +79,17 @@ func (s *Service) Create(ctx context.Context, cmd CreateCommand) (View, error) {
 			return err
 		}
 		if err := tx.Participants().Add(ctx, p); err != nil {
+			return err
+		}
+		if err := tx.ParticipantDecisions().Add(ctx, participant.DecisionRecord{
+			ID:       s.ids.NewUUID(),
+			TenantID: p.TenantID(),
+			Decision: participant.Decision{Operator: cmd.Operator},
+			Actor:    "operator",
+			Action:   "candidate",
+			Value:    string(participant.StageCandidate),
+			At:       now,
+		}); err != nil {
 			return err
 		}
 		if err := tx.Outbox().Enqueue(ctx, appcatalog.SyncTenantTask(cmd.TenantID, now)); err != nil {
@@ -133,6 +147,12 @@ func (s *Service) Get(ctx context.Context, tenantID ids.TenantID) (View, error) 
 
 // List — участники по времени создания.
 func (s *Service) List(ctx context.Context, page participant.Page) (List, error) {
+	switch page.Stage {
+	case "", participant.StageCandidate, participant.StageConnected,
+		participant.StageReturned, participant.StageDisconnected:
+	default:
+		return List{}, participant.ErrInvalidStage
+	}
 	if page.Trust != "" && page.Trust != participant.Probation && page.Trust != participant.Trusted {
 		return List{}, participant.ErrInvalidTrust
 	}
@@ -215,9 +235,10 @@ func (s *Service) withTenant(ctx context.Context, tx ports.Tx, p *participant.Pa
 
 func viewOf(p *participant.Participant, tenant *participant.Tenant) View {
 	return View{
-		Participant:  p.State(),
-		TenantStatus: tenant.Status(),
-		Visibility:   participant.VisibilityOf(p, tenant),
+		Participant:   p.State(),
+		DeliveryValid: p.DeliveryValid(),
+		TenantStatus:  tenant.Status(),
+		Visibility:    participant.VisibilityOf(p, tenant),
 	}
 }
 
@@ -237,4 +258,14 @@ func (s *Service) SetDelivery(
 func (s *Service) WithProbationOffers(threshold int) *Service {
 	s.probationOffers = threshold
 	return s
+}
+
+// Return возвращает кандидата с замечаниями оператора.
+func (s *Service) Return(ctx context.Context, tenant ids.TenantID, decision participant.Decision) (View, error) {
+	return s.decide(ctx, tenant, "return", "", decision)
+}
+
+// Submit повторно ставит исправленного кандидата на рассмотрение.
+func (s *Service) Submit(ctx context.Context, tenant ids.TenantID) (View, error) {
+	return s.change(ctx, tenant, func(p *participant.Participant) (bool, error) { return p.Submit(s.clock.Now()) })
 }

@@ -302,3 +302,22 @@ func TestModerationTopics(t *testing.T) {
 		})
 	}
 }
+
+func TestServerAPIToken(t *testing.T) {
+	env := validEnv()
+	cfg, err := config.Load(envOf(env))
+	if err != nil || cfg.Promotion.ServerAPIToken != "" {
+		t.Fatal(err)
+	}
+	env["SERVER_API_TOKEN"] = strings.Repeat("m", 32)
+	cfg, err = config.Load(envOf(env))
+	if err != nil || cfg.Promotion.ServerAPIToken != env["SERVER_API_TOKEN"] {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"short", env["OPERATOR_TOKEN"], env["SERVICE_TOKEN_MARKETPLACE"]} {
+		env["SERVER_API_TOKEN"] = bad
+		if _, err := config.Load(envOf(env)); err == nil {
+			t.Fatal("принят небезопасный токен")
+		}
+	}
+}

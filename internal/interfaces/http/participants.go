@@ -12,15 +12,17 @@ import (
 
 // participantJSON — участник в операторском ответе.
 type participantJSON struct {
+	AwaitingReview    bool                         `json:"awaitingReview"`
+	DeliveryValid     bool                         `json:"deliveryValid"`
+	LastDecision      *participationDecisionJSON   `json:"lastDecision"`
 	ProbationOffers   int                          `json:"probationOffers"`
 	Trust             string                       `json:"trust"`
 	ApprovedOffers    int                          `json:"approvedOffers"`
 	TenantID          string                       `json:"tenantId"`
 	Slug              string                       `json:"slug"`
 	Name              string                       `json:"name"`
-	Status            string                       `json:"status"`
+	Stage             string                       `json:"stage"`
 	Enabled           bool                         `json:"enabled"`
-	ShopEnabled       bool                         `json:"shopEnabled"`
 	Subsidy           subsidyJSON                  `json:"subsidy"`
 	FreeDeliveryFrom  int64                        `json:"freeDeliveryFrom"`
 	Delivery          participant.DeliverySettings `json:"delivery"`
@@ -69,6 +71,9 @@ type participantDeliveryJSON struct {
 func toParticipantJSON(view appparticipant.View) participantJSON {
 	p := view.Participant
 	out := participantJSON{
+		AwaitingReview:    p.AwaitingReview,
+		DeliveryValid:     view.DeliveryValid,
+		LastDecision:      toParticipationDecision(p.LastDecision),
 		ProbationOffers:   view.ProbationOffers,
 		Trust:             p.Trust,
 		ApprovedOffers:    p.ApprovedOffers,
@@ -77,7 +82,7 @@ func toParticipantJSON(view appparticipant.View) participantJSON {
 		Delivery:          p.Delivery,
 		Slug:              p.Slug,
 		Name:              p.Name,
-		Status:            string(p.Status),
+		Stage:             string(p.Stage),
 		Enabled:           p.Enabled,
 		TenantStatus:      string(view.TenantStatus),
 		Visible:           view.Visibility.Visible,
@@ -85,7 +90,6 @@ func toParticipantJSON(view appparticipant.View) participantJSON {
 		Version:           p.Version,
 		CreatedAt:         p.CreatedAt.UTC(),
 		UpdatedAt:         p.UpdatedAt.UTC(),
-		ShopEnabled:       p.ShopEnabled,
 		Subsidy: subsidyJSON{
 			Enabled:   p.Subsidy.Enabled,
 			Type:      string(p.Subsidy.Type),
@@ -102,7 +106,19 @@ func toParticipantJSON(view appparticipant.View) participantJSON {
 }
 
 func (h *participantHandlers) list(w http.ResponseWriter, r *http.Request) {
-	page := participant.Page{Limit: appparticipant.MaxPageLimit, Trust: r.URL.Query().Get("trust")}
+	page := participant.Page{
+		Limit: appparticipant.MaxPageLimit,
+		Trust: r.URL.Query().Get("trust"),
+		Stage: participant.Stage(r.URL.Query().Get("stage")),
+	}
+	if raw := r.URL.Query().Get("queue"); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, r, ErrInvalidQuery)
+			return
+		}
+		page.Queue = value
+	}
 
 	for name, target := range map[string]*int{"limit": &page.Limit, "offset": &page.Offset} {
 		if raw := r.URL.Query().Get(name); raw != "" {
@@ -156,7 +172,11 @@ func (h *participantHandlers) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	view, err := h.service.Create(r.Context(), appparticipant.CreateCommand{TenantID: tenantID, Name: body.Name})
+	view, err := h.service.Create(r.Context(), appparticipant.CreateCommand{
+		TenantID: tenantID,
+		Name:     body.Name,
+		Operator: principalFrom(r),
+	})
 	respond(w, r, http.StatusCreated, view, err)
 }
 

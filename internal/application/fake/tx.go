@@ -81,7 +81,8 @@ func (r participants) Get(_ context.Context, id ids.TenantID) (*participant.Part
 func (r participants) List(_ context.Context, page participant.Page) ([]*participant.Participant, int, error) {
 	states := make([]participant.State, 0, len(r.d.participants))
 	for _, state := range r.d.participants {
-		if page.Trust == "" || state.Trust == page.Trust {
+		if (page.Trust == "" || state.Trust == page.Trust) &&
+			(page.Stage == "" || state.Stage == page.Stage) && (!page.Queue || participant.Restore(state).InQueue()) {
 			states = append(states, state)
 		}
 	}
@@ -126,7 +127,7 @@ func (r participants) Update(_ context.Context, p *participant.Participant) erro
 	state := p.State()
 	stored, ok := r.d.participants[state.TenantID]
 
-	if !ok || stored.Status != p.Origin().Status || stored.Version != p.Origin().Version {
+	if !ok || stored.Stage != p.Origin().Stage || stored.Version != p.Origin().Version {
 		return participant.ErrConflict
 	}
 
@@ -397,6 +398,32 @@ func (t *tx) Taxonomy() taxonomy.Repository { return taxonomies{t.data} }
 
 func (t *tx) AfterCommit(fn func()) { t.afterCommit = append(t.afterCommit, fn) }
 
+func (r registry) List(_ context.Context, after ids.TenantID, limit int) ([]*participant.Tenant, error) {
+	keys := []ids.TenantID{}
+	for id, state := range r.d.tenants {
+		if id > after && state.Status == participant.TenantActive {
+			keys = append(keys, id)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	result := []*participant.Tenant{}
+	for _, id := range keys[:min(limit, len(keys))] {
+		result = append(result, participant.RestoreTenant(r.d.tenants[id]))
+	}
+	return result, nil
+}
+
 func (t *tx) Promotion() promotion.Repository {
 	return promotionRepo{d: t.data.promotion, participants: t.data.participants}
+}
+
+func (r participants) Count(_ context.Context, page participant.Page) (int, error) {
+	count := 0
+	for _, state := range r.d.participants {
+		if (page.Trust == "" || state.Trust == page.Trust) &&
+			(page.Stage == "" || state.Stage == page.Stage) && (!page.Queue || participant.Restore(state).InQueue()) {
+			count++
+		}
+	}
+	return count, nil
 }

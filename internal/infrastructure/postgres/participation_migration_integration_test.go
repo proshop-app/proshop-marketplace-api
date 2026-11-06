@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -14,21 +15,11 @@ import (
 func TestOrderSettingsMigrationDisablesLegacyParticipation(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	statuses, err := postgres.MigrationStatus(ctx, pool)
-	if err != nil {
+	if err := postgres.MigrateDownTo(ctx, pool, 20); err != nil {
 		t.Fatal(err)
 	}
-	for _, status := range statuses {
-		if status.Source.Version < 21 {
-			continue
-		}
-		if err := postgres.MigrateDown(ctx, pool); err != nil {
-			t.Fatal(err)
-		}
-	}
 
-	// Воспроизводится установленная неделя 2: согласие и субсидия уже есть,
-	// но минимум и регионы ещё не заданы; старую платёжную привязку нужно удалить.
+	// Старое согласие и субсидия есть, но обязательные настройки ещё не заданы.
 	seed := `
   ALTER TABLE participants ADD COLUMN payment_account_id text;
   ALTER TABLE participants ADD CONSTRAINT participants_payment_account_status
@@ -54,7 +45,7 @@ func TestOrderSettingsMigrationDisablesLegacyParticipation(t *testing.T) {
 	}
 
 	uow := postgres.NewUnitOfWork(pool)
-	err = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		p, err := tx.Participants().Get(ctx, "t1")
 		if err != nil {
 			return err
@@ -65,11 +56,12 @@ func TestOrderSettingsMigrationDisablesLegacyParticipation(t *testing.T) {
 		}
 		state := p.State()
 		visibility := participant.VisibilityOf(p, tenant)
-		if p.Version() != 2 || !p.Enabled() || p.ShopEnabled() || visibility.Visible || visibility.CheckoutAvailable {
-			t.Fatalf("старое согласие без обязательных настроек выключено: %+v %+v", state, visibility)
+		if p.Version() != 2 || p.Enabled() || p.Stage() != participant.StageCandidate || !state.AwaitingReview ||
+			p.DeliveryValid() || visibility.Visible || visibility.CheckoutAvailable {
+			return fmt.Errorf("старое согласие без обязательных настроек выключено: %+v %+v", state, visibility)
 		}
 		if state.Subsidy.Value != 50 || !state.FreeDeliveryFrom.IsZero() || state.Delivery.Validate() == nil {
-			t.Fatalf("субсидия сохранена, новые настройки продавец ещё не задал: %+v", state)
+			return fmt.Errorf("субсидия сохранена, новые настройки продавец ещё не задал: %+v", state)
 		}
 		return nil
 	})

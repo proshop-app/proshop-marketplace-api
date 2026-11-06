@@ -52,7 +52,6 @@ type QuoteRequest struct {
 
 // ShopSettings — настройки магазина для маркетплейса.
 type ShopSettings struct {
-	Enabled          bool
 	Subsidy          participant.Subsidy
 	FreeDeliveryFrom money.Money
 	Delivery         participant.DeliverySettings
@@ -71,6 +70,6 @@ type PlatformAPI interface {
 	CheckItems(ctx context.Context, tenantID ids.TenantID, request ItemsCheckRequest) ([]ItemCheck, error)
 	// QuoteDelivery — стоимость и срок доставки по договору магазина.
 	QuoteDelivery(ctx context.Context, tenantID ids.TenantID, request QuoteRequest) (delivery.Offered, error)
-	// MarketplaceSettings — флаг участия и субсидия из настроек магазина.
+	// MarketplaceSettings — обязательные настройки доставки магазина.
 	MarketplaceSettings(ctx context.Context, tenantID ids.TenantID) (ShopSettings, error)
 }

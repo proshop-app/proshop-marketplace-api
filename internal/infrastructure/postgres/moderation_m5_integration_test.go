@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func TestM5VerdictStorage(t *testing.T) {
 		}
 		state := v.State()
 		if state.Operator.ID != "o1" || state.Decision.Reason.Text != "Текст" {
-			t.Fatal(state)
+			return fmt.Errorf("%+v", state)
 		}
 		filter := moderation.Filter{DecidedBy: moderation.Operator, Limit: 10}
 		page, total, err := tx.ModerationVerdicts().List(ctx, filter)
@@ -63,7 +64,7 @@ func TestM5VerdictStorage(t *testing.T) {
 			return err
 		}
 		if total != 1 || len(page) != 1 {
-			t.Fatal(page, total)
+			return fmt.Errorf("%+v %+v", page, total)
 		}
 		v.Evaluate(2, 2, moderation.Rules{Revision: 3}, moderation.Input{}, now)
 		if err := tx.ModerationVerdicts().Save(ctx, v); err != nil {
@@ -81,7 +82,7 @@ func TestM5VerdictStorage(t *testing.T) {
 		}
 		if len(history) != 2 || history[0].Status != moderation.Rejected || history[0].Operator.ID != "o1" ||
 			history[0].RulesRevision != 3 || history[0].TaxonomyVersion != 2 || !history[0].UpdatedAt.Equal(now) {
-			t.Fatal(history)
+			return fmt.Errorf("%+v", history)
 		}
 		v, err := tx.ModerationVerdicts().Get(ctx, "t1", "p1")
 		if err != nil {
@@ -95,7 +96,7 @@ func TestM5VerdictStorage(t *testing.T) {
 		}
 		history, err = tx.ModerationVerdicts().History(ctx, "t1", "p1")
 		if err == nil && (len(history) != 50 || history[0].Revision != 55) {
-			t.Fatal(history)
+			return fmt.Errorf("%+v", history)
 		}
 		return err
 	})
@@ -150,7 +151,7 @@ func TestM5ParticipantPreviousValue(t *testing.T) {
 			return err
 		}
 		if total != 2 {
-			t.Fatal(records)
+			return fmt.Errorf("%+v", records)
 		}
 		for _, record := range records {
 			expected := ""
@@ -158,7 +159,7 @@ func TestM5ParticipantPreviousValue(t *testing.T) {
 				expected = participant.Probation
 			}
 			if record.PreviousValue != expected {
-				t.Fatal(record)
+				return fmt.Errorf("%+v", record)
 			}
 		}
 		return nil
@@ -206,13 +207,13 @@ func TestM5QueueStorage(t *testing.T) {
 				expected = 2
 			}
 			if total != 2 || len(page) != 1 || page[0].Revision != expected {
-				t.Fatal(page, total)
+				return fmt.Errorf("%+v %+v", page, total)
 			}
 		}
 		filter := moderation.Filter{Reason: "moderation.image_missing", Limit: 10}
 		_, total, err := tx.ModerationCases().List(ctx, filter)
 		if err == nil && total != 0 {
-			t.Fatal(total)
+			return fmt.Errorf("%+v", total)
 		}
 		return err
 	})

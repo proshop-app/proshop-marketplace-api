@@ -2,7 +2,6 @@ package participant
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -57,7 +56,7 @@ func (s *Service) decide(
 		decision.ReasonMessage = message
 		previous := p.State().Trust
 		if action != "trust" {
-			previous = strconv.FormatBool(p.Enabled())
+			previous = string(p.Stage())
 		}
 		now := s.clock.Now()
 		changed := false
@@ -65,7 +64,12 @@ func (s *Service) decide(
 		case "enable":
 			changed = p.Enable(now)
 		case "disable":
+			if p.Stage() != participant.StageConnected && p.Stage() != participant.StageDisconnected {
+				return participant.ErrConflict
+			}
 			changed = p.Disable(now)
+		case "return":
+			changed, err = p.Return(now)
 		case "trust":
 			changed, err = p.SetTrust(value, now)
 		}
@@ -73,9 +77,6 @@ func (s *Service) decide(
 			return err
 		}
 		if changed {
-			if err := tx.Participants().Update(ctx, p); err != nil {
-				return err
-			}
 			record := participant.DecisionRecord{
 				ID:            s.ids.NewUUID(),
 				TenantID:      tenant,
@@ -85,6 +86,12 @@ func (s *Service) decide(
 				Value:         value,
 				PreviousValue: previous,
 				At:            now,
+			}
+			if action != "trust" {
+				p.RecordDecision(record)
+			}
+			if err := tx.Participants().Update(ctx, p); err != nil {
+				return err
 			}
 			if err := tx.ParticipantDecisions().Add(ctx, record); err != nil {
 				return err

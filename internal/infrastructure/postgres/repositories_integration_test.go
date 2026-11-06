@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -86,7 +87,7 @@ func TestRegistryRoundTripAndConflict(t *testing.T) {
 		reformatted := registryEvent("t1", "shop-one", participant.TenantCreating, 0)
 		reformatted.Plan = json.RawMessage(`{"limits":{"products":100},"code":"base"}`)
 		if changed, _ := tenant.Apply(reformatted, at(1)); changed {
-			t.Fatal("тот же снимок после хранения в jsonb не считается изменением")
+			return errors.New("тот же снимок после хранения в jsonb не считается изменением")
 		}
 		stale := participant.RestoreTenant(tenant.State())
 		if _, err := tenant.Apply(registryEvent("t1", "shop-one", participant.TenantActive, 1), at(1)); err != nil {
@@ -100,7 +101,7 @@ func TestRegistryRoundTripAndConflict(t *testing.T) {
 			return err
 		}
 		if err := tx.Registry().Save(ctx, stale); !errors.Is(err, participant.ErrTenantConflict) {
-			t.Fatalf("устаревшая версия: ожидалось ErrTenantConflict, получено %v", err)
+			return fmt.Errorf("устаревшая версия: ожидалось ErrTenantConflict, получено %w", err)
 		}
 
 		return nil
@@ -109,17 +110,19 @@ func TestRegistryRoundTripAndConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_ = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		tenant, err := tx.Registry().Get(ctx, "t1")
 		if err != nil || tenant.Status() != participant.TenantActive || tenant.Version() != 2 {
-			t.Fatalf("запись реестра: %+v, %v", tenant, err)
+			return fmt.Errorf("запись реестра: %+v, %w", tenant, err)
 		}
 		if _, err := tx.Registry().Get(ctx, "missing"); !errors.Is(err, participant.ErrTenantNotFound) {
-			t.Fatalf("ожидалось ErrTenantNotFound, получено %v", err)
+			return fmt.Errorf("ожидалось ErrTenantNotFound, получено %w", err)
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestParticipantsRepository(t *testing.T) {
@@ -178,7 +181,6 @@ func TestParticipantsRepository(t *testing.T) {
 		stale := participant.Restore(p.State())
 
 		if _, err := p.ApplyShopSettings(
-			true,
 			w3RepositoriesIntegrationSubsidy,
 			money.Money{},
 			w3RepositoriesIntegrationDelivery,
@@ -192,7 +194,7 @@ func TestParticipantsRepository(t *testing.T) {
 
 		stale.Enable(at(3))
 		if err := tx.Participants().Update(ctx, stale); !errors.Is(err, participant.ErrConflict) {
-			t.Fatalf("переход по устаревшему статусу и версии: ожидалось ErrConflict, получено %v", err)
+			return fmt.Errorf("переход по устаревшему статусу и версии: ожидалось ErrConflict, получено %w", err)
 		}
 
 		return nil
@@ -201,25 +203,28 @@ func TestParticipantsRepository(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_ = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		p, err := tx.Participants().Get(ctx, "t1")
-		if err != nil || p.Status() != participant.StatusConnected ||
-			p.Version() != 2 ||
-			p.Enabled() {
-			t.Fatalf("участник: %+v, %v", p.State(), err)
+		if err != nil {
+			return err
+		}
+		if p.Stage() != participant.StageCandidate || p.Version() != 2 || p.Enabled() {
+			return fmt.Errorf("участник: %+v", p.State())
 		}
 
 		items, total, err := tx.Participants().List(ctx, participant.Page{Limit: 10})
 		if err != nil || total != 1 || len(items) != 1 {
-			t.Fatalf("список: %d %d %v", total, len(items), err)
+			return fmt.Errorf("список: %d %d %w", total, len(items), err)
 		}
 
 		if _, err := tx.Participants().Get(ctx, "t2"); !errors.Is(err, participant.ErrNotFound) {
-			t.Fatalf("ожидалось ErrNotFound, получено %v", err)
+			return fmt.Errorf("ожидалось ErrNotFound, получено %w", err)
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, minute int) catalog.Snapshot {
@@ -317,7 +322,7 @@ func TestProductRoundTrip(t *testing.T) {
 			state.PromoPrice.Kopecks() != 8000 ||
 			state.Available != 5 ||
 			!state.ProjectedAt.Equal(at(0)) {
-			t.Fatalf("товар после хранения: %+v", state)
+			return fmt.Errorf("товар после хранения: %+v", state)
 		}
 		stale := catalog.RestoreProduct(state)
 		deletion := catalog.Snapshot{TenantID: "t1", ProductID: "p1", Revision: 2, Deleted: true, At: at(1)}
@@ -332,7 +337,7 @@ func TestProductRoundTrip(t *testing.T) {
 			return err
 		}
 		if err := tx.Products().Save(ctx, stale); !errors.Is(err, catalog.ErrConflict) {
-			t.Fatalf("устаревшая версия: ожидалось ErrConflict, получено %v", err)
+			return fmt.Errorf("устаревшая версия: ожидалось ErrConflict, получено %w", err)
 		}
 
 		return nil
@@ -341,17 +346,19 @@ func TestProductRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_ = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		product, err := tx.Products().Get(ctx, "t1", "p1")
 		if err != nil || !product.State().Deleted || product.State().PromoPrice != nil || product.Version() != 2 {
-			t.Fatalf("удалённый товар: %+v, %v", product.State(), err)
+			return fmt.Errorf("удалённый товар: %+v, %w", product.State(), err)
 		}
 		if _, err := tx.Products().Get(ctx, "t1", "missing"); !errors.Is(err, catalog.ErrProductNotFound) {
-			t.Fatalf("ожидалось ErrProductNotFound, получено %v", err)
+			return fmt.Errorf("ожидалось ErrProductNotFound, получено %w", err)
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSignals(t *testing.T) {
@@ -379,19 +386,21 @@ func TestSignals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_ = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		signals, err := tx.Signals().Get(ctx, "t1", "p1")
 		state := signals.State()
 		if err != nil || !state.HasStock || state.Available != 2 || !state.HasPrice || state.Price.Kopecks() != 700 ||
 			state.Version != 2 {
-			t.Fatalf("сигналы: %+v, %v", state, err)
+			return fmt.Errorf("сигналы: %+v, %w", state, err)
 		}
 		if _, err := tx.Signals().Get(ctx, "t1", "p2"); !errors.Is(err, catalog.ErrSignalsNotFound) {
-			t.Fatalf("ожидалось ErrSignalsNotFound, получено %v", err)
+			return fmt.Errorf("ожидалось ErrSignalsNotFound, получено %w", err)
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestUnitOfWorkRollsBack(t *testing.T) {
@@ -417,21 +426,25 @@ func TestUnitOfWorkRollsBack(t *testing.T) {
 			}
 		}()
 
-		_ = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			product, _ := catalog.NewProduct(snapshot("t1", "p2", 1, 0), at(0))
 			_ = tx.Products().Save(ctx, product)
 
 			panic("сбой")
-		})
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
-	_ = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		for _, id := range []ids.ProductID{"p1", "p2"} {
 			if _, err := tx.Products().Get(ctx, "t1", id); !errors.Is(err, catalog.ErrProductNotFound) {
-				t.Fatalf("%s: откат не оставляет записей, получено %v", id, err)
+				return fmt.Errorf("%s: откат не оставляет записей, получено %w", id, err)
 			}
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

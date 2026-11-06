@@ -98,7 +98,7 @@ func TestChangesEnqueueSyncOnlyWhenChanged(t *testing.T) {
 
 	view, err := service.Enable(ctx, "t1", participant.Decision{Note: "Заметка"})
 	if err != nil || !view.Participant.Enabled || view.Visibility.Visible || view.Participant.Version != 2 {
-		t.Fatalf("включение оператором без согласия магазина не делает видимым: %+v, %v", view, err)
+		t.Fatalf("включение оператором без настроек доставки не делает видимым: %+v, %v", view, err)
 	}
 
 	if _, err := service.Rename(ctx, "t1", "Новое имя"); err != nil {

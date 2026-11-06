@@ -119,6 +119,7 @@ func TestStaleDocumentDoesNotOverwrite(t *testing.T) {
 
 	p, _ := store.Participant("t1")
 	p.Enabled = false
+	p.Stage = participant.StageDisconnected
 	p.Version = 2
 	store.SeedParticipant(p)
 
@@ -149,7 +150,7 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 	)
 	owner, _ := participant.New(tenant, "Магазин", t0)
 	owner.Enable(t0)
-	if _, err := owner.ApplyShopSettings(true, w3IndexingSubsidy, money.Money{}, w3IndexingDelivery, t0); err != nil {
+	if _, err := owner.ApplyShopSettings(w3IndexingSubsidy, money.Money{}, w3IndexingDelivery, t0); err != nil {
 		t.Fatal(err)
 	}
 	state := ports.OfferState{

@@ -88,6 +88,12 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
 
 ## Уровень доверия участника
 
+Каждый активный магазин реестра — кандидат с `awaitingReview=true`, без согласия
+магазина. Валидные настройки доставки допускают кандидата в очередь оператора.
+Оператор подключает (`connected`) или возвращает (`returned`) с замечаниями;
+магазин исправляет и отправляет снова через сервер (`candidate`). Отключение
+подключённого даёт `disconnected`. Эти стадии независимы от доверия.
+
 `participant.State.Trust`: `probation` или `trusted`; `ApprovedOffers` —
 число одобренных оператором предложений. Новый участник — `probation`.
 После `MODERATION_PROBATION_OFFERS` (по умолчанию 50) одобрений участник
@@ -96,11 +102,11 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
 задача переоценки. Оператор меняет уровень вручную с причиной и заметкой.
 
 Журнал `participant_decisions` только на добавление: `tenantId`, оператор
-(`id`, `name`), действие (`enable`, `disable`, `trust`), значение (для
+(`id`, `name`), действие (`candidate`, `return`, `enable`, `disable`, `trust`), значение (для
 `trust` — новый уровень), причина, заметка, время. Включение и выключение
-участника пишут туда же; сценарии `Enable`/`Disable` принимают решение
+участника и возврат кандидата пишут туда же; сценарии решений принимают решение
 оператора (`Decision{Operator, Reason, Note}`), HTTP передаёт principal из
-контекста, тело с причиной — задача M2.
+контекста. Создание кандидата записывается с исполнителем `system`.
 
 ## Дело и решения
 
@@ -199,7 +205,7 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
 | Событие | Имя без префикса | Ключ | Когда |
 |---|---|---|---|
 | статус предложения | `KAFKA_TOPIC_OFFER_STATUS`, по умолчанию `marketplace.offer.status` | JSON `["tenantId","productId"]`, как у проекций | изменилась карточка, её публикация или вердикт |
-| статус участника | `KAFKA_TOPIC_PARTICIPANT_STATUS`, по умолчанию `marketplace.participant.status` | `tenantId` | включение, выключение, смена доверия |
+| статус участника | `KAFKA_TOPIC_PARTICIPANT_STATUS`, по умолчанию `marketplace.participant.status` | `tenantId` | возврат, включение, выключение, смена доверия |
 
 Полное имя — `<KAFKA_TOPIC_PREFIX>.<имя>`; топики заводит сервер установки,
 издатель их не создаёт. Заголовок `x-tenant` — магазин. Обе переменные не
@@ -215,7 +221,7 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
  "decision": {"action": "reject", "reason": {"code": "wrong_category", "message": "…"},
               "note": "…", "at": "2026-11-05T11:59:00Z"},
  "at": "2026-11-05T12:00:00Z"}
-{"schemaVersion": 1, "tenantId": "t1", "enabled": true, "trust": "trusted",
+{"schemaVersion": 1, "tenantId": "t1", "stage": "connected", "enabled": true, "trust": "trusted",
  "reason": null, "note": "Одобрено 50 предложений", "by": "system",
  "at": "2026-11-05T12:00:00Z"}
 ```

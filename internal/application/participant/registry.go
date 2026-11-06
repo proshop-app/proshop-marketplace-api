@@ -17,13 +17,14 @@ type RegistryEvent struct {
 
 // Registry ведёт зеркало реестра магазинов платформы.
 type Registry struct {
+	ids   ports.IDs
 	uow   ports.UnitOfWork
 	clock ports.Clock
 }
 
 // NewRegistry — приём событий реестра.
-func NewRegistry(uow ports.UnitOfWork, clock ports.Clock) *Registry {
-	return &Registry{uow: uow, clock: clock}
+func NewRegistry(uow ports.UnitOfWork, clock ports.Clock, identities ports.IDs) *Registry {
+	return &Registry{uow: uow, clock: clock, ids: identities}
 }
 
 // Apply применяет событие реестра. Если магазин участвует, слаг участника
@@ -47,22 +48,27 @@ func (r *Registry) Apply(ctx context.Context, event RegistryEvent) error {
 		case err == nil:
 			changed, err = tenant.Apply(event.Event, now)
 		}
-		if err != nil || !changed {
+		if err != nil {
 			return err
 		}
 
-		if err := tx.Registry().Save(ctx, tenant); err != nil {
-			return err
+		if changed {
+			if err := tx.Registry().Save(ctx, tenant); err != nil {
+				return err
+			}
 		}
 
 		p, err := tx.Participants().Get(ctx, tenant.ID())
 		if errors.Is(err, participant.ErrNotFound) {
-			return nil
+			return createCandidate(ctx, tx, tenant, r.ids, now)
 		}
 		if err != nil {
 			return err
 		}
 
+		if !changed {
+			return nil
+		}
 		if p.SyncSlug(tenant, now) {
 			if err := tx.Participants().Update(ctx, p); err != nil {
 				return err

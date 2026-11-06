@@ -151,17 +151,16 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	ctx := context.Background()
 
 	e.store.SeedParticipant(participant.State{
-		TenantID:    "t1",
-		Slug:        "s1",
-		Name:        "Магазин",
-		Status:      participant.StatusConnected,
-		Enabled:     true,
-		ShopEnabled: true,
-		Delivery:    w3BuyerDelivery,
-		Subsidy:     w3BuyerSubsidy,
-		Version:     1,
-		CreatedAt:   t0,
-		UpdatedAt:   t0,
+		TenantID:  "t1",
+		Slug:      "s1",
+		Name:      "Магазин",
+		Stage:     participant.StageConnected,
+		Enabled:   true,
+		Delivery:  w3BuyerDelivery,
+		Subsidy:   w3BuyerSubsidy,
+		Version:   1,
+		CreatedAt: t0,
+		UpdatedAt: t0,
 	})
 	offer := ports.OfferDocument{
 		ID:                "t1~p1",

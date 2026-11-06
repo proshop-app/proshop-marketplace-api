@@ -15,6 +15,8 @@ servers:
   - url: http://localhost:8080
     description: make dev
 tags:
+  - name: internal
+    description: Машинный API сервера
   - name: moderation
   - name: service
   - name: taxonomy
@@ -32,6 +34,72 @@ tags:
       Все ответы несут schemaVersion и revision, поля только добавляются.
       Контракт — docs/reference.md.
 paths:
+  /api/v1/operator/participants/{tenantId}/return:
+    post:
+      tags: [operator]
+      summary: Вернуть кандидата с замечаниями
+      operationId: returnParticipant
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                reason:
+                  type: object
+                  required: [code]
+                  properties:
+                    code: { type: string, description: Код moderation_reasons }
+                note: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        "200": { $ref: "#/components/responses/Participant" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/internal/tenants/{tenantId}/participation:
+    get:
+      tags: [internal]
+      summary: Состояние участия магазина
+      operationId: getParticipation
+      security: [{ serverApiToken: [] }]
+      description: SERVER_API_TOKEN; пустая настройка — 404, отсутствующий или неверный Bearer — 401.
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+      responses:
+        "200":
+          description: Участие магазина
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Participation" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/internal/tenants/{tenantId}/participation/submit:
+    post:
+      tags: [internal]
+      summary: Отправить возвращённого кандидата оператору снова
+      operationId: submitParticipation
+      security: [{ serverApiToken: [] }]
+      description: SERVER_API_TOKEN; пустая настройка — 404, отсутствующий или неверный Bearer — 401.
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+      responses:
+        "200":
+          description: Участие магазина
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Participation" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/operator/moderation/cases:
     get:
       tags:
@@ -1753,6 +1821,8 @@ paths:
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - { name: trust, in: query, schema: { type: string, enum: [probation, trusted] } }
+        - { name: stage, in: query, schema: { $ref: "#/components/schemas/ParticipationStage" } }
+        - { name: queue, in: query, schema: { type: boolean }, description: Кандидаты с awaitingReview и валидной доставкой }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 200 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
@@ -3600,6 +3670,33 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Participant" }
   schemas:
+    ParticipationStage:
+      type: string
+      enum: [candidate, connected, returned, disconnected]
+    ParticipationDecision:
+      type: [object, "null"]
+      required: [reason, note, at, operator]
+      properties:
+        reason:
+          type: [object, "null"]
+          properties:
+            code: { type: string }
+            message: { type: string }
+        note: { type: string }
+        at: { type: string, format: date-time }
+        operator:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+    Participation:
+      type: object
+      required: [stage, awaitingReview, deliveryValid, lastDecision]
+      properties:
+        stage: { $ref: "#/components/schemas/ParticipationStage" }
+        awaitingReview: { type: boolean }
+        deliveryValid: { type: boolean }
+        lastDecision: { $ref: "#/components/schemas/ParticipationDecision" }
     PromotionKind:
       type: string
       enum:
@@ -5212,7 +5309,7 @@ components:
         maxAmount: { type: integer, format: int64, description: Потолок в копейках; 0 — без потолка }
     Participant:
       type: object
-      required: [trust, probationOffers, approvedOffers, tenantId, slug, name, status, enabled, freeDeliveryFrom, delivery, shopEnabled, subsidy, settingsSyncedAt, tenantStatus, visible, checkoutAvailable, version, createdAt, updatedAt]
+      required: [trust, probationOffers, approvedOffers, tenantId, slug, name, stage, awaitingReview, lastDecision, deliveryValid, enabled, freeDeliveryFrom, delivery, subsidy, settingsSyncedAt, tenantStatus, visible, checkoutAvailable, version, createdAt, updatedAt]
       properties:
         trust: { type: string, enum: [probation, trusted] }
         probationOffers: { type: integer, minimum: 0 }
@@ -5220,11 +5317,13 @@ components:
         tenantId: { type: string }
         slug: { type: string }
         name: { type: string }
-        status: { type: string, enum: [onboarding, connected] }
+        stage: { $ref: "#/components/schemas/ParticipationStage" }
+        awaitingReview: { type: boolean }
+        deliveryValid: { type: boolean }
+        lastDecision: { $ref: "#/components/schemas/ParticipationDecision" }
         enabled: { type: boolean, description: Включён оператором }
         freeDeliveryFrom: { type: integer, format: int64, minimum: 0 }
         delivery: { $ref: "#/components/schemas/ParticipantDelivery" }
-        shopEnabled: { type: boolean, description: Магазин сам включил участие (с сервера) }
         subsidy: { $ref: "#/components/schemas/Subsidy" }
         settingsSyncedAt: { type: [string, "null"], format: date-time }
         tenantStatus: { type: string, enum: [creating, active, suspended, deleting, deleted] }

@@ -38,13 +38,16 @@ func TestM5NotesAndPreviousValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	page, err := service.ListDecisions(ctx, "t1", participant.Page{Limit: 10})
-	if err != nil || page.Total != 3 {
+	if err != nil || page.Total != 4 {
 		t.Fatal(page, err)
 	}
 	for _, record := range page.Items {
-		expected := "false"
+		expected := "candidate"
+		if record.Action == "candidate" {
+			expected = ""
+		}
 		if record.Action == "disable" {
-			expected = "true"
+			expected = "connected"
 		}
 		if record.Action == "trust" {
 			expected = participant.Probation

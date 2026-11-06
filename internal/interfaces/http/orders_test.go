@@ -52,7 +52,6 @@ func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 		t.Fatal(err)
 	}
 	e.platform.SetSettings("t1", ports.ShopSettings{
-		Enabled:          true,
 		FreeDeliveryFrom: money.Money{},
 		Subsidy:          participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 		Delivery:         participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}},
@@ -166,14 +165,14 @@ func TestCatalogShowsDeliveryUnavailableOutsideSellerRegions(t *testing.T) {
 	e := newEnv(t)
 	e.seedTenant("t1", "s1")
 	e.store.SeedParticipant(participant.State{
-		TenantID:    "t1",
-		Slug:        "s1",
-		Name:        "Магазин",
-		Enabled:     true,
-		ShopEnabled: true,
-		Version:     1,
-		Delivery:    participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
-		Subsidy:     participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+		Stage:    participant.StageConnected,
+		TenantID: "t1",
+		Slug:     "s1",
+		Name:     "Магазин",
+		Enabled:  true,
+		Version:  1,
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
+		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 	})
 	e.seedOffer(t, "t1", "p1", 10000)
 	for _, selected := range []struct {

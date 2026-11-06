@@ -43,7 +43,7 @@ func newModerationEnv(t *testing.T) moderationEnv {
 		Name:     "Магазин",
 		Slug:     "t1",
 		Trust:    participant.Probation,
-		Status:   participant.StatusConnected,
+		Stage:    participant.StageConnected,
 		Version:  1,
 	})
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Slug: "t1", Status: participant.TenantActive, Version: 1})
@@ -225,9 +225,18 @@ func TestModerationDictionariesHTTP(t *testing.T) {
 
 func TestModerationParticipantHTTP(t *testing.T) {
 	e := newModerationEnv(t)
+	p, _ := e.store.Participant("t1")
+	p.Stage = participant.StageCandidate
+	p.AwaitingReview = true
+	e.store.SeedParticipant(p)
 	e.request(t, "POST", moderationURL+"/reasons", `{"code":"r1","message":"Текст"}`, "", 201)
 	prefix := "/api/v1/operator/participants/t1"
 	e.request(t, "POST", prefix+"/enable", `{"reason":"r1","note":"Заметка"}`, "", 200)
+	enabled := e.request(t, "GET", prefix+"/decisions", "", "", 200)
+	if !strings.Contains(enabled.Body.String(), `"action":"enable"`) ||
+		!strings.Contains(enabled.Body.String(), `"previousValue":"candidate"`) {
+		t.Fatal(enabled.Body.String())
+	}
 	e.request(t, "POST", prefix+"/disable", `{"reason":"r1","note":"Заметка"}`, "", 200)
 	e.request(t, "POST", prefix+"/enable", "", "", 200)
 	response := e.request(t, "PUT", prefix+"/trust", `{"trust":"trusted","reason":"r1","note":"Заметка"}`, "", 200)
@@ -297,5 +306,22 @@ func TestModerationM4CaseDecision(t *testing.T) {
 	}
 	if len(body.History) != 1 || body.History[0].Reason.Text != "Текст" || body.Decision.Reason.Text != "Текст" {
 		t.Fatal(details.Body.String())
+	}
+}
+
+func TestManualCandidateRecordsOperatorPrincipal(t *testing.T) {
+	e := newModerationEnv(t)
+	e.store.SeedTenant(participant.TenantState{
+		TenantID: "t2",
+		Slug:     "t2",
+		Status:   participant.TenantActive,
+		Version:  1,
+	})
+	e.request(t, "POST", "/api/v1/operator/participants", `{"tenantId":"t2","name":"Магазин"}`, "", 201)
+	history := e.request(t, "GET", "/api/v1/operator/participants/t2/decisions", "", "", 200)
+	for _, want := range []string{`"action":"candidate"`, `"by":"operator"`, `"id":"machine"`} {
+		if !strings.Contains(history.Body.String(), want) {
+			t.Fatal(history.Body.String())
+		}
 	}
 }

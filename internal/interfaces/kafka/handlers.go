@@ -69,6 +69,7 @@ type priceChange struct {
 }
 
 type tenantRecord struct {
+	Name     string          `json:"name"`
 	TenantID string          `json:"tenantId"`
 	Slug     string          `json:"slug"`
 	Status   string          `json:"status"`
@@ -329,6 +330,7 @@ func tenantEvent(ctx context.Context, registry Registry, envelope Envelope) erro
 	return registry.Apply(ctx, appparticipant.RegistryEvent{EventID: envelope.EventID, Event: participant.RegistryEvent{
 		TenantID: tenant,
 		Slug:     record.Slug,
+		Name:     record.Name,
 		Status:   status,
 		Cell:     record.Cell,
 		Plan:     nullable(record.Plan),

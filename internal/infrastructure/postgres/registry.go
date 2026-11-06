@@ -9,14 +9,18 @@ import (
 )
 
 const (
+	listActiveTenants = `
+		SELECT tenant_id, slug, status, cell, plan, hosts, event_at, version, updated_at, name
+		FROM tenants WHERE status = 'active' AND tenant_id > $1
+		ORDER BY tenant_id LIMIT $2`
 	selectTenant = `
-		SELECT tenant_id, slug, status, cell, plan, hosts, event_at, version, updated_at
+		SELECT tenant_id, slug, status, cell, plan, hosts, event_at, version, updated_at, name
 		FROM tenants
 		WHERE tenant_id = $1`
 
 	insertTenant = `
-		INSERT INTO tenants (tenant_id, slug, status, cell, plan, hosts, event_at, version, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+		INSERT INTO tenants (tenant_id, slug, status, cell, plan, hosts, event_at, version, updated_at, name)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 	updateTenant = `
 		UPDATE tenants
@@ -27,8 +31,9 @@ const (
 			hosts = $6,
 			event_at = $7,
 			version = $8,
-			updated_at = $9
-		WHERE tenant_id = $1 AND version = $10`
+			updated_at = $9,
+			name = $10
+		WHERE tenant_id = $1 AND version = $11`
 )
 
 // Registry — зеркало реестра магазинов в PostgreSQL.
@@ -38,37 +43,33 @@ type Registry struct {
 
 // Get — запись реестра.
 func (r *Registry) Get(ctx context.Context, tenantID ids.TenantID) (*participant.Tenant, error) {
-	var (
-		state  participant.TenantState
-		id     string
-		status string
-		plan   []byte
-		hosts  []byte
-	)
-
-	err := r.q.QueryRow(ctx, selectTenant, string(tenantID)).Scan(
-		&id,
-		&state.Slug,
-		&status,
-		&state.Cell,
-		&plan,
-		&hosts,
-		&state.EventAt,
-		&state.Version,
-		&state.UpdatedAt,
-	)
+	tenant, err := scanTenant(r.q.QueryRow(ctx, selectTenant, string(tenantID)))
 	if notFound(err) {
 		return nil, participant.ErrTenantNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("запись реестра %s: %w", tenantID, err)
 	}
+	return tenant, nil
+}
 
-	state.TenantID = ids.TenantID(id)
-	state.Status = participant.TenantStatus(status)
-	state.Plan = plan
-	state.Hosts = hosts
-
+func scanTenant(row rowScanner) (*participant.Tenant, error) {
+	var state participant.TenantState
+	err := row.Scan(
+		&state.TenantID,
+		&state.Slug,
+		&state.Status,
+		&state.Cell,
+		&state.Plan,
+		&state.Hosts,
+		&state.EventAt,
+		&state.Version,
+		&state.UpdatedAt,
+		&state.Name,
+	)
+	if err != nil {
+		return nil, err
+	}
 	return participant.RestoreTenant(state), nil
 }
 
@@ -85,6 +86,7 @@ func (r *Registry) Save(ctx context.Context, tenant *participant.Tenant) error {
 		s.EventAt,
 		s.Version,
 		s.UpdatedAt,
+		s.Name,
 	}
 
 	if tenant.OriginVersion() == 0 {
@@ -112,4 +114,22 @@ func (r *Registry) Save(ctx context.Context, tenant *participant.Tenant) error {
 	tenant.MarkSaved()
 
 	return nil
+}
+
+// List обходит активный реестр по устойчивому ключу.
+func (r *Registry) List(ctx context.Context, after ids.TenantID, limit int) ([]*participant.Tenant, error) {
+	rows, err := r.q.Query(ctx, listActiveTenants, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []*participant.Tenant{}
+	for rows.Next() {
+		tenant, err := scanTenant(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, tenant)
+	}
+	return result, rows.Err()
 }

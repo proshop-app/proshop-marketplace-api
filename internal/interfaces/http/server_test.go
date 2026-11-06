@@ -295,7 +295,7 @@ func TestOperatorFlow(t *testing.T) {
 	}
 
 	r = e.call(t, http.MethodPost, "/api/v1/operator/participants", `{"tenantId":"t1","name":"Магазин"}`, true)
-	if r.status != http.StatusCreated || r.body["slug"] != "shop-one" || r.body["status"] != "onboarding" {
+	if r.status != http.StatusCreated || r.body["slug"] != "shop-one" || r.body["stage"] != "candidate" {
 		t.Fatalf("создание: %+v", r)
 	}
 
@@ -320,9 +320,9 @@ func TestOperatorFlow(t *testing.T) {
 	}
 
 	r = e.call(t, http.MethodPost, "/api/v1/operator/participants/t1/enable", "", true)
-	if r.status != http.StatusOK || r.body["enabled"] != true || r.body["shopEnabled"] != false ||
+	if r.status != http.StatusOK || r.body["enabled"] != true || r.body["stage"] != "connected" ||
 		r.body["visible"] != false {
-		t.Fatalf("включение оператором без согласия магазина: %+v", r)
+		t.Fatalf("включение оператором без валидных настроек доставки: %+v", r)
 	}
 
 	r = e.call(t, http.MethodPost, "/api/v1/operator/participants/t1/disable", `{"note":"Заметка"}`, true)
@@ -360,17 +360,16 @@ func TestCatalog(t *testing.T) {
 	e := newEnv(t)
 	e.seedTenant("t1", "shop-one")
 	e.store.SeedParticipant(participant.State{
-		TenantID:    "t1",
-		Slug:        "shop-one",
-		Name:        "Магазин",
-		Status:      participant.StatusOnboarding,
-		Enabled:     true,
-		ShopEnabled: true,
-		Delivery:    w3ServerDelivery,
-		Subsidy:     w3ServerSubsidy,
-		Version:     1,
-		CreatedAt:   t0,
-		UpdatedAt:   t0,
+		TenantID:  "t1",
+		Slug:      "shop-one",
+		Name:      "Магазин",
+		Stage:     participant.StageConnected,
+		Enabled:   true,
+		Delivery:  w3ServerDelivery,
+		Subsidy:   w3ServerSubsidy,
+		Version:   1,
+		CreatedAt: t0,
+		UpdatedAt: t0,
 	})
 	e.seedOffer(t, "t1", "p1", 150000)
 	e.seedOffer(t, "t1", "p2", 50000)

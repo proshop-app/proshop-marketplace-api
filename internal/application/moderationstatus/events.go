@@ -51,6 +51,7 @@ type OfferEvent struct {
 
 // ParticipantEvent отделяет доступность магазина от допуска отдельных карточек.
 type ParticipantEvent struct {
+	Stage         participant.Stage      `json:"stage"`
 	SchemaVersion int                    `json:"schemaVersion"`
 	TenantID      ids.TenantID           `json:"tenantId"`
 	Enabled       bool                   `json:"enabled"`
@@ -211,6 +212,7 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 				SchemaVersion: 1,
 				TenantID:      p.TenantID,
 				Enabled:       state.Enabled,
+				Stage:         state.Stage,
 				Trust:         state.Trust,
 				At:            at,
 			}

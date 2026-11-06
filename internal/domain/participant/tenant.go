@@ -31,6 +31,7 @@ const (
 
 // RegistryEvent — событие реестра магазинов платформы: снимок записи на момент At.
 type RegistryEvent struct {
+	Name     string
 	TenantID ids.TenantID
 	Slug     string
 	Status   TenantStatus
@@ -42,6 +43,7 @@ type RegistryEvent struct {
 
 // TenantState — плоский снимок записи зеркала.
 type TenantState struct {
+	Name      string
 	TenantID  ids.TenantID
 	Slug      string
 	Status    TenantStatus
@@ -106,6 +108,7 @@ func (t *Tenant) Apply(event RegistryEvent, now time.Time) (bool, error) {
 
 func (t *Tenant) assign(event RegistryEvent, now time.Time) {
 	t.state.TenantID = event.TenantID
+	t.state.Name = strings.TrimSpace(event.Name)
 	t.state.Slug = strings.TrimSpace(event.Slug)
 	t.state.Status = event.Status
 	t.state.Cell = event.Cell
@@ -119,6 +122,7 @@ func (t *Tenant) assign(event RegistryEvent, now time.Time) {
 func (t *Tenant) sameAs(event RegistryEvent) bool {
 	return t.state.EventAt.Equal(event.At) &&
 		t.state.Slug == strings.TrimSpace(event.Slug) &&
+		t.state.Name == strings.TrimSpace(event.Name) &&
 		t.state.Status == event.Status &&
 		t.state.Cell == event.Cell &&
 		sameJSON(t.state.Plan, event.Plan) &&

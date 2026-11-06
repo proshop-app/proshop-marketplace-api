@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -192,7 +193,12 @@ func (s *syncer) Sync(context.Context) (appparticipant.SettingsResult, error) {
 
 	s.calls++
 
-	return appparticipant.SettingsResult{Checked: 2, Failed: map[ids.TenantID]error{"t1": errors.New("сбой")}}, nil
+	return appparticipant.SettingsResult{
+		Checked:    2,
+		Candidates: 3,
+		Queue:      1,
+		Failed:     map[ids.TenantID]error{"t1": errors.New("сбой")},
+	}, nil
 }
 
 func TestSettingsSyncRunnerCountsFailures(t *testing.T) {
@@ -207,6 +213,15 @@ func TestSettingsSyncRunnerCountsFailures(t *testing.T) {
 	}
 
 	families, _ := registry.Gather()
+	counts := map[string]float64{}
+	for _, family := range families {
+		if strings.HasPrefix(family.GetName(), "marketplace_participant_") {
+			counts[family.GetName()] = family.GetMetric()[0].GetGauge().GetValue()
+		}
+	}
+	if counts["marketplace_participant_candidates"] != 3 || counts["marketplace_participant_queue"] != 1 {
+		t.Fatal(counts)
+	}
 	total := 0.0
 	for _, family := range families {
 		for _, metric := range family.GetMetric() {

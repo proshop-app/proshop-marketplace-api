@@ -17,7 +17,7 @@ const (
         FROM catalog_products p
         JOIN participants pa ON pa.tenant_id = p.tenant_id
         JOIN tenants t ON t.tenant_id = p.tenant_id
-        WHERE NOT p.deleted AND pa.enabled AND pa.shop_enabled AND t.status = 'active'
+        WHERE NOT p.deleted AND pa.stage = 'connected' AND pa.delivery_valid AND t.status = 'active'
             AND p.card->>'visible' = 'true'
             AND p.card->'publication'->>'published' = 'true'
             AND pa.subsidy->>'enabled' = 'true'

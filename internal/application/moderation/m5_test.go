@@ -146,7 +146,8 @@ func TestM5ReevaluationAndSnapshot(t *testing.T) {
 		t.Fatal(verdicts, err)
 	}
 	member, _ := e.store.Participant("t1")
-	member.ShopEnabled = false
+	member.Stage = "disconnected"
+	member.Enabled = false
 	e.store.SeedParticipant(member)
 	if e.view(t, "p1").Participant.Visible {
 		t.Fatal("видимость не учитывает согласие магазина")

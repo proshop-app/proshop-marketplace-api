@@ -87,7 +87,7 @@ func (s *Service) freshGroupQuote(
 	if err != nil {
 		return delivery.Unreachable(s.clock.Now())
 	}
-	if !settings.Enabled || settings.Delivery.Validate() != nil || !settings.Subsidy.Enabled ||
+	if settings.Delivery.Validate() != nil || !settings.Subsidy.Enabled ||
 		settings.Subsidy.Validate() != nil || settings.FreeDeliveryFrom.IsNegative() {
 		return delivery.Quote{
 			Status:    delivery.QuoteUnavailable,
@@ -96,7 +96,6 @@ func (s *Service) freshGroupQuote(
 		}
 	}
 	return s.quoteGroup(callCtx, buyerID, group, selection, participant.State{
-		ShopEnabled:      settings.Enabled,
 		FreeDeliveryFrom: settings.FreeDeliveryFrom,
 		Delivery:         settings.Delivery,
 		Subsidy:          settings.Subsidy,

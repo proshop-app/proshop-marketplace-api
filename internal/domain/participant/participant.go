@@ -19,7 +19,7 @@ const maxNameLength = 200
 // условное обновление: другой статус или версия в базе — конфликт, а не
 // тихая перезапись.
 type Origin struct {
-	Status  Status
+	Stage   Stage
 	Version int64
 }
 
@@ -30,12 +30,12 @@ type State struct {
 	TenantID         ids.TenantID
 	Slug             string
 	Name             string
-	Status           Status
+	Stage            Stage
 	Enabled          bool
 	FreeDeliveryFrom money.Money
 	Delivery         DeliverySettings
-	// ShopEnabled — магазин сам включил участие (marketplace.enabled в его настройках на сервере).
-	ShopEnabled bool
+	AwaitingReview   bool
+	LastDecision     *LastDecision
 	// Subsidy — субсидия доставки из настроек магазина.
 	Subsidy Subsidy
 	// SettingsSyncedAt — когда настройки магазина последний раз прочитаны с сервера; ноль — ещё не читались.
@@ -64,14 +64,15 @@ func New(tenant *Tenant, name string, now time.Time) (*Participant, error) {
 	}
 
 	return &Participant{state: State{
-		Trust:     Probation,
-		TenantID:  tenant.ID(),
-		Slug:      tenant.Slug(),
-		Name:      clean,
-		Status:    StatusOnboarding,
-		Version:   1,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Trust:          Probation,
+		TenantID:       tenant.ID(),
+		Slug:           tenant.Slug(),
+		Name:           clean,
+		Stage:          StageCandidate,
+		AwaitingReview: true,
+		Version:        1,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}}, nil
 }
 
@@ -80,13 +81,22 @@ func Restore(state State) *Participant {
 	if state.Trust == "" {
 		state.Trust = Probation
 	}
+	if state.LastDecision != nil {
+		d := *state.LastDecision
+		state.LastDecision = &d
+	}
+	state.Enabled = state.Stage == StageConnected
 	state.Delivery = state.Delivery.Clone()
-	return &Participant{state: state, origin: Origin{Status: state.Status, Version: state.Version}}
+	return &Participant{state: state, origin: Origin{Stage: state.Stage, Version: state.Version}}
 }
 
 // State — снимок для хранения.
 func (p *Participant) State() State {
 	state := p.state
+	if state.LastDecision != nil {
+		d := *state.LastDecision
+		state.LastDecision = &d
+	}
 	state.Delivery = state.Delivery.Clone()
 	return state
 }
@@ -99,7 +109,7 @@ func (p *Participant) IsNew() bool { return p.origin.Version == 0 }
 
 // MarkSaved фиксирует сохранённое состояние как исходное для следующего изменения.
 func (p *Participant) MarkSaved() {
-	p.origin = Origin{Status: p.state.Status, Version: p.state.Version}
+	p.origin = Origin{Stage: p.state.Stage, Version: p.state.Version}
 }
 
 // TenantID — магазин участника.
@@ -111,8 +121,8 @@ func (p *Participant) Slug() string { return p.state.Slug }
 // Name — название участника в маркетплейсе.
 func (p *Participant) Name() string { return p.state.Name }
 
-// Status — полнота настроек участия магазина.
-func (p *Participant) Status() Status { return p.state.Status }
+// Stage — стадия участия магазина.
+func (p *Participant) Stage() Stage { return p.state.Stage }
 
 // Enabled — оператор включил участника.
 func (p *Participant) Enabled() bool { return p.state.Enabled }
@@ -120,17 +130,13 @@ func (p *Participant) Enabled() bool { return p.state.Enabled }
 // Version — версия состояния.
 func (p *Participant) Version() int64 { return p.state.Version }
 
-// ShopEnabled — магазин сам включил участие в маркетплейсе.
-func (p *Participant) ShopEnabled() bool { return p.state.ShopEnabled }
-
 // Subsidy — субсидия доставки продавца.
 func (p *Participant) Subsidy() Subsidy { return p.state.Subsidy }
 
 // ApplyShopSettings переносит настройки магазина с сервера. Версия растёт,
-// только если поменялось видимое: флаг участия или субсидия; время сверки
+// только если поменялись настройки доставки; время сверки
 // обновляется всегда.
 func (p *Participant) ApplyShopSettings(
-	enabled bool,
 	subsidy Subsidy,
 	freeDeliveryFrom money.Money,
 	delivery DeliverySettings,
@@ -140,10 +146,10 @@ func (p *Participant) ApplyShopSettings(
 		return false, err
 	}
 
-	if enabled && (!subsidy.Enabled || freeDeliveryFrom.IsNegative() || delivery.Validate() != nil) {
+	if freeDeliveryFrom.IsNegative() {
 		return false, ErrInvalidDeliverySettings
 	}
-	changed := p.state.ShopEnabled != enabled || p.state.Subsidy != subsidy ||
+	changed := p.state.Subsidy != subsidy ||
 		p.state.FreeDeliveryFrom != freeDeliveryFrom || !reflect.DeepEqual(p.state.Delivery, delivery)
 	p.state.SettingsSyncedAt = now
 
@@ -151,14 +157,9 @@ func (p *Participant) ApplyShopSettings(
 		return false, nil
 	}
 
-	p.state.ShopEnabled = enabled
 	p.state.Subsidy = subsidy
 	p.state.FreeDeliveryFrom = freeDeliveryFrom
 	p.state.Delivery = delivery.Clone()
-	p.state.Status = StatusOnboarding
-	if enabled {
-		p.state.Status = StatusConnected
-	}
 	p.touch(now)
 
 	return true, nil
@@ -186,6 +187,8 @@ func (p *Participant) Enable(now time.Time) bool {
 		return false
 	}
 
+	p.state.Stage = StageConnected
+	p.state.AwaitingReview = false
 	p.state.Enabled = true
 	p.touch(now)
 
@@ -198,6 +201,8 @@ func (p *Participant) Disable(now time.Time) bool {
 		return false
 	}
 
+	p.state.Stage = StageDisconnected
+	p.state.AwaitingReview = false
 	p.state.Enabled = false
 	p.touch(now)
 
@@ -251,4 +256,50 @@ func (p *Participant) SetDelivery(settings DeliverySettings, version int64, now 
 	p.state.Delivery = settings.Clone()
 	p.touch(now)
 	return true, nil
+}
+
+// DeliveryValid — обязательные настройки доставки получены и корректны.
+func (p *Participant) DeliveryValid() bool {
+	s := p.state
+	return s.Delivery.Validate() == nil && s.Subsidy.Validate() == nil && s.Subsidy.Enabled &&
+		!s.FreeDeliveryFrom.IsNegative()
+}
+
+// InQueue — кандидат ожидает решения и готов по настройкам доставки.
+func (p *Participant) InQueue() bool {
+	return p.state.Stage == StageCandidate && p.state.AwaitingReview && p.DeliveryValid()
+}
+
+// Return возвращает кандидата с замечаниями, убирая из очереди.
+func (p *Participant) Return(now time.Time) (bool, error) {
+	if p.state.Stage != StageCandidate {
+		return false, ErrConflict
+	}
+	p.state.Stage = StageReturned
+	p.state.AwaitingReview = false
+	p.touch(now)
+	return true, nil
+}
+
+// Submit возвращает исправленный магазин в кандидаты; повтор конфликтует.
+func (p *Participant) Submit(now time.Time) (bool, error) {
+	if p.state.Stage != StageReturned {
+		return false, ErrConflict
+	}
+	p.state.Stage = StageCandidate
+	p.state.AwaitingReview = true
+	p.touch(now)
+	return true, nil
+}
+
+// RecordDecision сохраняет последнее решение об участии; доверие ведётся отдельно.
+func (p *Participant) RecordDecision(d DecisionRecord) {
+	p.state.LastDecision = &LastDecision{
+		Reason:        d.Reason,
+		ReasonMessage: d.ReasonMessage,
+		Note:          d.Note,
+		At:            d.At,
+		Operator:      d.Operator,
+	}
+	p.touch(d.At)
 }

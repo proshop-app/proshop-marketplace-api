@@ -25,6 +25,7 @@ import (
 	infrakafka "github.com/proshop-app/proshop-marketplace/internal/infrastructure/kafka"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres/pgtest"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
 )
 
@@ -281,7 +282,7 @@ func newPipeline(t *testing.T, pool *pgxpool.Pool, prefix, group string) *pipeli
 	uow := postgres.NewUnitOfWork(pool)
 	router := kafka.NewRouter(
 		appcatalog.NewProjector(uow, clock.System{}, nil),
-		appparticipant.NewRegistry(uow, clock.System{}),
+		appparticipant.NewRegistry(uow, clock.System{}, random.IDs{}),
 	)
 	reader := infrakafka.NewReader(infrakafka.Config{
 		Brokers: brokers(),
