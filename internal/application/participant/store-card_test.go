@@ -3,6 +3,7 @@ package participant_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
@@ -101,6 +102,22 @@ func TestStoreSummaryRootsPricesAndShowcase(t *testing.T) {
 	summary, err = service.StoreSummary(ctx, "t1")
 	if err != nil || summary.Showcase[0].ProductID != "p1" || summary.Offers != 3 {
 		t.Fatal(summary, err)
+	}
+	header, err := service.Shop(ctx, "shop-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pageWithShowcase, err := service.Shops(ctx, "", 20, 0)
+	if err != nil || len(pageWithShowcase.Items) != 1 {
+		t.Fatal(pageWithShowcase, err)
+	}
+	if len(header.Showcase) != 3 || !reflect.DeepEqual(header.Showcase, pageWithShowcase.Items[0].Showcase) {
+		t.Fatal(header.Showcase, pageWithShowcase.Items[0].Showcase)
+	}
+	for _, item := range header.Showcase {
+		if item.OfferID == (ids.OfferID{Tenant: "t1", Product: "p3"}).String() {
+			t.Fatal("скрытое предложение", item)
+		}
 	}
 	state, ok := store.Participant("t1")
 	if !ok {

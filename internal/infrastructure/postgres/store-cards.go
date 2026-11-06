@@ -54,8 +54,9 @@ const (
 		$4
 		)`
 	getStoreSummary = `SELECT summary, header, card, public, profile_version FROM store_cards WHERE tenant_id = $1`
-	getShopHeader   = `SELECT header FROM store_cards WHERE slug = $1 AND public`
-	listShopCards   = `
+	getShopHeader   = `SELECT header || jsonb_build_object('showcase', COALESCE(card->'showcase', '[]'::jsonb))
+		FROM store_cards WHERE slug = $1 AND public`
+	listShopCards = `
 		WITH filtered AS (
 		SELECT s.card, s.offers, s.name, s.tenant_id, count(*) OVER() AS total
 		FROM store_cards s WHERE s.public

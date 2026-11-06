@@ -154,6 +154,29 @@ func TestStoreCardHTTP(t *testing.T) {
 	if !strings.Contains(response.Body.String(), `"slogan":"Слоган"`) {
 		t.Fatal(response.Body.String())
 	}
+	var header map[string]json.RawMessage
+	if err := json.Unmarshal(response.Body.Bytes(), &header); err != nil {
+		t.Fatal(err)
+	}
+	keys = keys[:0]
+	for key := range header {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	wantKeys = strings.Fields("categories color initial isNew logo name offers showcase slogan slug tenantId")
+	if !reflect.DeepEqual(keys, wantKeys) {
+		t.Fatal(keys)
+	}
+	var showcase []map[string]json.RawMessage
+	if err := json.Unmarshal(header["showcase"], &showcase); err != nil {
+		t.Fatal(err)
+	}
+	if len(showcase) != 1 {
+		t.Fatal(showcase)
+	}
+	if len(showcase[0]) != 2 || showcase[0]["offerId"] == nil || showcase[0]["image"] == nil {
+		t.Fatal(showcase)
+	}
 	state.StoreCard.Readiness.Ready = false
 	store.SeedParticipant(state)
 	refresh()

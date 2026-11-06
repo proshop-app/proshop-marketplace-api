@@ -56,6 +56,7 @@ type ShopHeader struct {
 	Offers     int             `json:"offers"`
 	Categories []StoreCategory `json:"categories"`
 	IsNew      bool            `json:"isNew"`
+	Showcase   []ShopImage     `json:"showcase"`
 }
 
 // ShopImage — ограничивает поля товара в списке магазинов.

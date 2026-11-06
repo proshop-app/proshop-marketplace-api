@@ -308,6 +308,7 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 		for _, product := range summary.Showcase {
 			card.Showcase = append(card.Showcase, ShopImage{OfferID: product.OfferID, Image: product.Image})
 		}
+		h.Showcase = card.Showcase
 		return tx.StoreCards().Save(ctx, ports.StoreRecord{
 			ProfileVersion: p.Version(),
 			Summary:        summary,

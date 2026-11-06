@@ -38,7 +38,9 @@ func (r storeCards) Get(_ context.Context, tenant ids.TenantID) (ports.StoreReco
 func (r storeCards) Shop(_ context.Context, slug string) (ports.ShopHeader, error) {
 	for _, record := range r.d.storeCards {
 		if record.Public && record.Header.Slug == slug {
-			return record.Header, nil
+			header := record.Header
+			header.Showcase = append([]ports.ShopImage{}, record.Card.Showcase...)
+			return header, nil
 		}
 	}
 	return ports.ShopHeader{}, participant.ErrNotFound

@@ -8,6 +8,7 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -32,6 +33,7 @@ type quoteJSON struct {
 }
 
 type checkoutGroupJSON struct {
+	Seller             *participant.Seller    `json:"seller"`
 	TenantID           string                 `json:"tenantId"`
 	ExternalCheckoutID string                 `json:"externalCheckoutId"`
 	Lines              []checkoutLineJSON     `json:"lines"`
@@ -201,7 +203,7 @@ func (h *checkoutHandlers) respond(
 ) {
 	if err != nil {
 		if errors.Is(err, checkout.ErrDeliveryChanged) {
-			body, encodeErr := toCheckoutJSON(state, nil)
+			body, encodeErr := h.responseBody(r, state, nil)
 			if encodeErr != nil {
 				writeError(w, r, encodeErr)
 				return
@@ -212,7 +214,7 @@ func (h *checkoutHandlers) respond(
 		writeError(w, r, err)
 		return
 	}
-	body, err := toCheckoutJSON(state, h.checkouts.NextPayment(state))
+	body, err := h.responseBody(r, state, h.checkouts.NextPayment(state))
 	if err != nil {
 		writeError(w, r, err)
 
@@ -278,4 +280,27 @@ func (h *checkoutHandlers) confirm(w http.ResponseWriter, r *http.Request) {
 
 	state, err := h.checkouts.Confirm(r.Context(), BuyerID(r.Context()), checkoutID)
 	h.respond(w, r, http.StatusOK, state, err)
+}
+
+func (h *checkoutHandlers) responseBody(
+	r *http.Request,
+	state checkout.State,
+	next *checkout.PaymentLink,
+) (checkoutJSON, error) {
+	body, err := toCheckoutJSON(state, next)
+	if err != nil {
+		return body, err
+	}
+	sellers, err := h.checkouts.Sellers(r.Context(), []checkout.State{state})
+	if err != nil {
+		return body, err
+	}
+	setGroupSellers(&body, sellers)
+	return body, nil
+}
+
+func setGroupSellers(body *checkoutJSON, sellers map[ids.TenantID]*participant.Seller) {
+	for i := range body.Groups {
+		body.Groups[i].Seller = sellers[ids.TenantID(body.Groups[i].TenantID)]
+	}
 }
