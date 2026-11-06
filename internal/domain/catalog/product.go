@@ -47,6 +47,8 @@ type Snapshot struct {
 	ProductID     ids.ProductID
 	Revision      int64
 	SalesCount    int64
+	AverageRating float64
+	RatingsCount  int64
 	Deleted       bool
 	Card          Card
 	Price         money.Money
@@ -63,6 +65,8 @@ type ProductState struct {
 	ProductID     ids.ProductID
 	Revision      int64
 	SalesCount    int64
+	AverageRating float64
+	RatingsCount  int64
 	Deleted       bool
 	Card          Card
 	Price         money.Money
@@ -123,6 +127,9 @@ func (p *Product) assign(snapshot Snapshot, now time.Time) {
 	p.state.ProductID = snapshot.ProductID
 	p.state.Revision = snapshot.Revision
 	p.state.SalesCount = snapshot.SalesCount
+	rating, _ := NormalizeRating(snapshot.AverageRating, snapshot.RatingsCount)
+	p.state.AverageRating = rating.Value
+	p.state.RatingsCount = snapshot.RatingsCount
 	p.state.Deleted = snapshot.Deleted
 	p.state.ProjectedAt = snapshot.At
 	p.state.Version = p.originVersion + 1
@@ -163,6 +170,9 @@ func (s Snapshot) validate() error {
 		return err
 	}
 
+	if _, err := NormalizeRating(s.AverageRating, s.RatingsCount); err != nil {
+		return err
+	}
 	switch {
 	case s.Revision < 1:
 		return ErrInvalidSnapshot.WithMessage("ревизия снимка должна быть больше нуля")

@@ -49,6 +49,8 @@ type Limiter struct {
 
 // Platform — API сервера установки в памяти.
 type Platform struct {
+	Reviews           []ports.Review
+	ReviewsErr        error
 	buyerProfiles     map[ids.UUID]map[ids.TenantID]string
 	buyerItems        map[ids.UUID]map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
 	checks            []ItemCheckCall

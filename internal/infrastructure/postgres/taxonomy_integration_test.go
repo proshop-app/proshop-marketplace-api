@@ -87,7 +87,7 @@ func TestTaxonomyVersionsAndProjection(t *testing.T) {
 	}
 	read := func() taxonomy.Publication {
 		t.Helper()
-		queries := appcatalog.NewQueries(uow, nil, fake.NewPlatform())
+		queries := appcatalog.NewQueries(uow, nil, fake.NewPlatform(), nil, nil, fake.NewClock(time.Time{}))
 		p, err := queries.Publication(ctx, ids.OfferID{Tenant: "t1", Product: "p1"})
 		if err != nil {
 			t.Fatal(err)

@@ -27,6 +27,8 @@ type productProjection struct {
 }
 
 type productSnapshot struct {
+	AverageRating     float64            `json:"averageRating"`
+	RatingsCount      int64              `json:"ratingsCount"`
 	SalesCount        int64              `json:"salesCount"`
 	Variants          json.RawMessage    `json:"variants"`
 	PriceProfiles     []priceProfileJSON `json:"priceProfiles"`
@@ -150,6 +152,8 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 	}
 	snapshot.PriceProfiles = profiles
 	snapshot.SalesCount = product.SalesCount
+	snapshot.AverageRating = product.AverageRating
+	snapshot.RatingsCount = product.RatingsCount
 
 	snapshot.Price = price
 	if product.Marketplace != nil && product.Marketplace.Price != nil {

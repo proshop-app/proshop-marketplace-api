@@ -91,7 +91,7 @@ func newEnv(t *testing.T) *env {
 	)
 	handler := transport.NewHandler(transport.Deps{
 		Taxonomy:     apptaxonomy.NewService(e.store, e.clock, nil),
-		Catalog:      appcatalog.NewQueries(e.store, e.index, e.platform),
+		Catalog:      appcatalog.NewQueries(e.store, e.index, e.platform, nil, nil, fake.NewClock(time.Time{})),
 		Participants: appparticipant.NewService(e.store, e.clock, &fake.IDs{}),
 		Auth: appbuyer.NewAuth(
 			e.store,

@@ -157,7 +157,15 @@ func TestInvalidCardIsStoredAndNotParked(t *testing.T) {
 		if p.Card.Publication.Published || len(p.Card.Publication.Issues) != 1 {
 			t.Fatalf("%+v", p)
 		}
-		publication, err := appcatalog.NewQueries(store, fake.NewIndex(), fake.NewPlatform()).Publication(
+		queries := appcatalog.NewQueries(
+			store,
+			fake.NewIndex(),
+			fake.NewPlatform(),
+			nil,
+			nil,
+			fake.NewClock(time.Time{}),
+		)
+		publication, err := queries.Publication(
 			ctx,
 			ids.OfferID{Tenant: "t1", Product: "p1"},
 		)

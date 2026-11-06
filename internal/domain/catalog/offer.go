@@ -16,6 +16,7 @@ type Seller struct {
 
 // Offer — предложение маркетплейса: товар магазина с ценой и наличием.
 type Offer struct {
+	Rating  *Rating
 	Reasons []moderation.Reason
 	ID      ids.OfferID
 	Seller  Seller
@@ -66,6 +67,7 @@ func ComposeOffer(product *Product, signals *Signals, seller Seller, verdict *mo
 		}
 	}
 
+	offer.Rating = ProductRating(state.AverageRating, state.RatingsCount)
 	offer.Card = state.Card
 	offer.Price = price
 	offer.BasePrice = base

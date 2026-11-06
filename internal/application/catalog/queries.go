@@ -5,7 +5,10 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
+
+	"golang.org/x/sync/singleflight"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 
@@ -45,9 +48,15 @@ type OfferList struct {
 
 // Queries — чтение выдачи и карточек.
 type Queries struct {
-	uow     ports.UnitOfWork
-	index   ports.OfferIndex
-	pricing ports.CatalogPricing
+	clock                ports.Clock
+	recommendationFlight singleflight.Group
+	recommendationMu     sync.Mutex
+	recommendationCache  map[string]recommendationCacheEntry
+	platform             ports.PlatformAPI
+	interests            ports.BuyerInterests
+	recommendations      ports.RecommendationOffers
+	uow                  ports.UnitOfWork
+	index                ports.OfferIndex
 }
 
 // PublicationView объединяет структурные и модерационные причины скрытия.
@@ -63,8 +72,22 @@ type ModerationView struct {
 }
 
 // NewQueries — запросы каталога.
-func NewQueries(uow ports.UnitOfWork, index ports.OfferIndex, pricing ports.CatalogPricing) *Queries {
-	return &Queries{uow: uow, index: index, pricing: pricing}
+func NewQueries(
+	uow ports.UnitOfWork,
+	index ports.OfferIndex,
+	platform ports.PlatformAPI,
+	interests ports.BuyerInterests,
+	recommendations ports.RecommendationOffers,
+	clock ports.Clock,
+) *Queries {
+	return &Queries{
+		clock:           clock,
+		uow:             uow,
+		index:           index,
+		platform:        platform,
+		interests:       interests,
+		recommendations: recommendations,
+	}
 }
 
 // Search — страница выдачи каталога. Пустые лимит и порядок берутся по умолчанию.
@@ -108,10 +131,7 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UU
 	if err != nil {
 		return OfferCard{}, err
 	}
-	key := catalog.DefaultPriceProfile
-	if contexts != nil {
-		key = contexts[offerID.Tenant]
-	}
+	key := priceProfileKey(contexts, offerID.Tenant)
 	profile, found := catalog.SelectPrice(doc.PriceProfiles, key)
 	if !found {
 		return OfferCard{}, catalog.ErrOfferNotFound
@@ -149,7 +169,7 @@ func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 	if query.Limit < 0 || query.Limit > MaxLimit {
 		return query, ErrInvalidQuery.WithMessage("размер страницы — от 1 до 100")
 	}
-	if query.Offset < 0 || query.Offset+query.Limit > MaxWindow {
+	if query.Offset < 0 || query.Offset > MaxWindow-query.Limit {
 		return query, ErrInvalidQuery.WithMessage("выдача листается не глубже 10000 предложений")
 	}
 	if (query.PriceMin != nil && *query.PriceMin < 0) || (query.PriceMax != nil && *query.PriceMax < 0) {
@@ -162,7 +182,7 @@ func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 	switch query.Sort {
 	case "":
 		query.Sort = ports.SortRelevance
-	case ports.SortRelevance, ports.SortPriceAsc, ports.SortPriceDesc, ports.SortNewest:
+	case ports.SortRelevance, ports.SortPriceAsc, ports.SortPriceDesc, ports.SortNewest, ports.SortRating:
 	default:
 		return query, ErrInvalidQuery.WithMessage("неизвестный порядок выдачи")
 	}

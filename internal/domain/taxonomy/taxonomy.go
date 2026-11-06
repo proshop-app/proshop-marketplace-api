@@ -46,6 +46,7 @@ type Attribute struct {
 
 // Category ссылается на схему только в листе, чтобы дерево не дублировало атрибуты.
 type Category struct {
+	Icon   string `json:"icon,omitempty" yaml:"icon,omitempty"`
 	ID     string `json:"id" yaml:"id"`
 	Name   string `json:"name" yaml:"name"`
 	Title  string `json:"title,omitempty" yaml:"title,omitempty"`
@@ -137,6 +138,9 @@ func (d Definition) Validate() error {
 		}
 		names := map[string]bool{}
 		for _, c := range categories {
+			if c.Icon != "" && (depth != 1 || !ValidIcon(c.Icon)) {
+				return ErrInvalid.WithMessage("недопустимая иконка категории")
+			}
 			if c.Moderation != "" && c.Moderation != "auto" && c.Moderation != "manual" && c.Moderation != "forbidden" {
 				return ErrInvalid.WithMessage("неизвестная политика модерации")
 			}

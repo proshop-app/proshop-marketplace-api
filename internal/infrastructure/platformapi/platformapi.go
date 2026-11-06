@@ -14,7 +14,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -53,9 +56,12 @@ type Config struct {
 
 // Client — внутренний API сервера.
 type Client struct {
-	baseURL string
-	token   string
-	http    *http.Client
+	reviewsMu     sync.Mutex
+	reviews       map[string]reviewCacheEntry
+	reviewsFlight singleflight.Group
+	baseURL       string
+	token         string
+	http          *http.Client
 }
 
 type itemJSON struct {
@@ -251,6 +257,18 @@ func (c *Client) call(
 	payload any,
 	out any,
 ) error {
+	return c.callWithRefusal(ctx, method, tenantID, path, payload, out, refusal)
+}
+
+func (c *Client) callWithRefusal(
+	ctx context.Context,
+	method string,
+	tenantID ids.TenantID,
+	path string,
+	payload any,
+	out any,
+	parseRefusal func(string, string, ids.TenantID, *http.Response) error,
+) error {
 	var body io.Reader
 
 	if payload != nil {
@@ -284,7 +302,7 @@ func (c *Client) call(
 	defer func() { _ = reply.Body.Close() }()
 
 	if reply.StatusCode != http.StatusOK {
-		return refusal(method, path, tenantID, reply)
+		return parseRefusal(method, path, tenantID, reply)
 	}
 
 	raw, err := io.ReadAll(io.LimitReader(reply.Body, (4<<20)+1))

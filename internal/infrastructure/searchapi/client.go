@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	contractVersion = 2
+	contractVersion = 3
 	apiPath         = "/api/v1/internal/marketplace"
 	batchLimit      = 200
 	requestLimit    = 4 << 20

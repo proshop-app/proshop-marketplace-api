@@ -204,6 +204,8 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/taxonomy/schemas", taxonomy.schemas},
 		{http.MethodGet, "/api/v1/operator/catalog/offers/{offerId}/publication", operator(taxonomy.publication)},
 
+		{http.MethodGet, "/api/v1/recommendations", optionalBuyer(deps.Auth, catalog.recommendations)},
+		{http.MethodGet, "/api/v1/catalog/offers/{offerId}/reviews", catalog.reviews},
 		{http.MethodGet, "/api/v1/catalog/offers", optionalBuyer(deps.Auth, catalog.list)},
 		{http.MethodGet, "/api/v1/catalog/offers/{offerId}", optionalBuyer(deps.Auth, catalog.card)},
 

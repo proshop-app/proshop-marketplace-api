@@ -11,6 +11,7 @@ import (
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
 )
@@ -28,6 +29,7 @@ type recorder struct {
 const productBody = `{"version":1,"tenantId":"t1","productId":"p1","revision":7,"operation":"upsert","product":{
 	"id":"p1","name":"Товар","description":"Описание","image":null,"url":"/p1","sku":"S1",
 	"price":1999.9,"promoPrice":1499.995,"availableQuantity":3,"salesCount":9007199254740993,
+	"averageRating":4.7,"ratingsCount":12,
 	"categories":[{"id":"c1","name":"","title":"Категория","url":"/c1"}],"tags":["t-1"],
 	"marketplace":{"categoryId":"c1","attributes":{"a1":"v1","a2":1.5,"a3":false},"published":true},
 	"variantsId":"v1","conditions":{"isVisible":true,"isOnlyVariant":false},"unknownField":42}}`
@@ -82,8 +84,8 @@ func TestProductProjected(t *testing.T) {
 
 	got := rec.products[0]
 	s := got.Snapshot
-	if s.SalesCount != 9007199254740993 {
-		t.Fatal(s.SalesCount)
+	if s.SalesCount != 9007199254740993 || s.AverageRating != 4.7 || s.RatingsCount != 12 {
+		t.Fatalf("сигналы: продажи=%d, рейтинг=%v, оценки=%d", s.SalesCount, s.AverageRating, s.RatingsCount)
 	}
 	if got.EventID != "ev" || s.TenantID != "t1" || s.ProductID != "p1" || s.Revision != 7 || s.Deleted {
 		t.Fatalf("конверт: %+v", got)
@@ -345,5 +347,39 @@ func TestVariantSnapshotCompatibility(t *testing.T) {
 	)
 	if _, err := handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, body)); err == nil {
 		t.Fatal("принята чужая группа")
+	}
+}
+
+func TestProductRatingNormalization(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		fields string
+		value  float64
+		count  int64
+	}{
+		{"round", `"averageRating":4.333,"ratingsCount":12,`, 4.3, 12},
+		{"missing", "", 0, 0},
+		{"upper", `"averageRating":7,"ratingsCount":1,`, 5, 1},
+		{"lower", `"averageRating":-1,"ratingsCount":1,`, 0, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := strings.Replace(productBody, `"averageRating":4.7,"ratingsCount":12,`, tc.fields, 1)
+			rec, err := handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			product, err := catalog.NewProduct(rec.products[0].Snapshot, published)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state := product.State()
+			if state.AverageRating != tc.value || state.RatingsCount != tc.count {
+				t.Fatal(state)
+			}
+			rating := catalog.ProductRating(state.AverageRating, state.RatingsCount)
+			if (rating == nil) != (tc.count == 0) {
+				t.Fatal(rating)
+			}
+		})
 	}
 }

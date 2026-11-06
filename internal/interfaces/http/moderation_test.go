@@ -80,9 +80,16 @@ func newModerationEnv(t *testing.T) moderationEnv {
 		t.Fatal(view, err)
 	}
 	handler := NewHandler(Deps{
-		Moderation:    service,
-		Participants:  appparticipant.NewService(store, clock, &fake.IDs{}),
-		Catalog:       appcatalog.NewQueries(store, fake.NewIndex(), fake.NewPlatform()),
+		Moderation:   service,
+		Participants: appparticipant.NewService(store, clock, &fake.IDs{}),
+		Catalog: appcatalog.NewQueries(
+			store,
+			fake.NewIndex(),
+			fake.NewPlatform(),
+			nil,
+			nil,
+			fake.NewClock(time.Time{}),
+		),
 		OperatorToken: "token",
 		Registerer:    prometheus.NewRegistry(),
 		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),

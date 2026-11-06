@@ -388,3 +388,62 @@ func TestStoreSummaryFallbackForConnectedWithoutDelivery(t *testing.T) {
 		t.Fatal(page, err)
 	}
 }
+
+func TestStoreWeightedRatingOnlyVisibleOffers(t *testing.T) {
+	store, service := seedStoreCard(t)
+	member, _ := store.Participant("t1")
+	member.Enabled = true
+	store.SeedParticipant(member)
+	ctx := context.Background()
+	for i, id := range []ids.ProductID{"p1", "p2", "p3", "p4"} {
+		if err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+			p, err := tx.Products().Get(ctx, "t1", id)
+			if err != nil {
+				return err
+			}
+			state := p.State()
+			value, count := 4.0, int64(3)
+			if i == 0 || i == 3 {
+				state.Card.VariantsID = "v1"
+			}
+			if i == 1 {
+				value, count = 5, 1
+			}
+			if i == 2 {
+				state.Card.Visible = false
+				value, count = 1, 100
+			}
+			next := catalog.Snapshot{
+				TenantID:      state.TenantID,
+				ProductID:     state.ProductID,
+				Revision:      state.Revision + 1,
+				At:            t0,
+				Card:          state.Card,
+				PriceProfiles: state.PriceProfiles,
+				AverageRating: value,
+				RatingsCount:  count,
+			}
+			_, err = p.Apply(next, t0)
+			if err != nil {
+				return err
+			}
+			return tx.Products().Save(ctx, p)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	refreshStore(t, service)
+	summary, err := service.StoreSummary(ctx, "t1")
+	if err != nil || summary.Rating == nil || summary.Rating.Value != 4.3 || summary.Rating.Count != 4 {
+		t.Fatal(summary, err)
+	}
+	header, err := service.Shop(ctx, member.Slug)
+	if err != nil || header.Rating == nil || *header.Rating != *summary.Rating {
+		t.Fatal(header, err)
+	}
+	page, err := service.Shops(ctx, "", 20, 0)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Rating == nil ||
+		*page.Items[0].Rating != *summary.Rating {
+		t.Fatal(page, err)
+	}
+}

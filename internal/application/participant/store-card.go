@@ -146,6 +146,22 @@ func summarizeStore(ctx context.Context, tx ports.Tx, p *participant.Participant
 			break
 		}
 	}
+	var weighted float64
+	var ratings int64
+	groups := map[string]bool{}
+	for _, item := range visible {
+		key := "product:" + string(item.product.ProductID)
+		if item.product.Card.VariantsID != "" {
+			key = "variants:" + item.product.Card.VariantsID
+		}
+		if groups[key] {
+			continue
+		}
+		groups[key] = true
+		weighted += item.product.AverageRating * float64(item.product.RatingsCount)
+		ratings += item.product.RatingsCount
+	}
+	result.Rating = catalog.ProductRating(weighted/float64(ratings), ratings)
 	result.VisibleOffers = len(visible)
 	selected := visible
 	if len(selected) == 0 {
@@ -249,6 +265,7 @@ func shopHeader(p *participant.Participant, summary StoreSummary) ShopHeader {
 		color = profile.Color.Card
 	}
 	return ShopHeader{
+		Rating:     summary.Rating,
 		TenantID:   p.TenantID(),
 		Slug:       p.Slug(),
 		Name:       p.Name(),
@@ -288,6 +305,7 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 		}
 		h := shopHeader(p, summary)
 		card := ShopCard{
+			Rating:         h.Rating,
 			TenantID:       h.TenantID,
 			Slug:           h.Slug,
 			Name:           h.Name,

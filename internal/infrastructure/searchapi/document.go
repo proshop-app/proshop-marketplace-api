@@ -13,8 +13,19 @@ func toDocument(doc ports.OfferDocument) (offerDocument, error) {
 	if err != nil {
 		return offerDocument{}, err
 	}
+	if doc.Rating != nil {
+		rating, err := catalog.NormalizeRating(doc.Rating.Value, doc.Rating.Count)
+		if err != nil {
+			return offerDocument{}, err
+		}
+		doc.Rating = nil
+		if rating.Count > 0 {
+			doc.Rating = &rating
+		}
+	}
 	out := offerDocument{
 		PriceProfiles:     encodePrices(doc.PriceProfiles),
+		Rating:            doc.Rating,
 		CategoryID:        doc.CategoryID,
 		CategoryPath:      doc.CategoryPath,
 		Attributes:        attributes,
@@ -62,6 +73,7 @@ func fromDocument(doc offerDocument) (ports.OfferDocument, error) {
 		Product: ids.ProductID(doc.ProductID),
 	}
 	out := ports.OfferDocument{
+		Rating:            doc.Rating,
 		CategoryID:        doc.CategoryID,
 		CategoryPath:      doc.CategoryPath,
 		Attributes:        attributes,
