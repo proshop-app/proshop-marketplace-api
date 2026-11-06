@@ -40,9 +40,10 @@ func TestShopHeaderReadsExistingCardShowcase(t *testing.T) {
 			return err
 		}
 		return tx.StoreCards().Save(ctx, ports.StoreRecord{
-			Header: ports.ShopHeader{TenantID: "t1", Slug: "shop-one", Name: "Магазин", Offers: 3},
-			Card:   ports.ShopCard{TenantID: "t1", Slug: "shop-one", Showcase: showcase},
-			Public: true,
+			Header:     ports.ShopHeader{TenantID: "t1", Slug: "shop-one", Name: "Магазин", Offers: 3},
+			Card:       ports.ShopCard{TenantID: "t1", Slug: "shop-one", Showcase: showcase},
+			Public:     true,
+			PagePublic: true,
 		})
 	}); err != nil {
 		t.Fatal(err)
@@ -71,5 +72,43 @@ func TestShopHeaderReadsExistingCardShowcase(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestStorePagePublicationIndependentOfList(t *testing.T) {
+	uow := postgres.NewUnitOfWork(pgtest.Pool(t))
+	record := seedStoredCard(t, uow)
+	ctx := context.Background()
+	for _, pagePublic := range []bool{true, false, true} {
+		record.Public = false
+		record.PagePublic = pagePublic
+		if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+			if err := tx.StoreCards().Save(ctx, record); err != nil {
+				return err
+			}
+			loaded, err := tx.StoreCards().Get(ctx, "t1")
+			if err != nil {
+				return err
+			}
+			if loaded.Public || loaded.PagePublic != pagePublic {
+				t.Fatal(loaded)
+			}
+			_, err = tx.StoreCards().Shop(ctx, "shop")
+			if (pagePublic && err != nil) || (!pagePublic && !errors.Is(err, participant.ErrNotFound)) {
+				t.Fatal(err)
+			}
+			for _, category := range []string{"", "root"} {
+				page, err := tx.StoreCards().List(ctx, category, 20, 0)
+				if err != nil {
+					return err
+				}
+				if page.Total != 0 || len(page.Items) != 0 {
+					t.Fatal(page)
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

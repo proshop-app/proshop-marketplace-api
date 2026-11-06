@@ -405,3 +405,38 @@ func TestStoreSummaryFallbackForConnectedWithoutDelivery(t *testing.T) {
 		t.Fatal(page, err)
 	}
 }
+
+func TestShopPageWithoutReadyCard(t *testing.T) {
+	store, service := seedStoreCard(t)
+	state, _ := store.Participant("t1")
+	state.StoreCard.Readiness.Ready = false
+	store.SeedParticipant(state)
+	refreshStore(t, service)
+	ctx := context.Background()
+	if _, err := service.Shop(ctx, "shop-one"); err != nil {
+		t.Fatal(err)
+	}
+	if summary, err := service.StorePageSummary(ctx, "t1"); err != nil || summary.Offers != 4 {
+		t.Fatal(summary, err)
+	}
+	for _, category := range []string{"", "root"} {
+		page, err := service.Shops(ctx, category, 20, 0)
+		if err != nil || page.Total != 0 || len(page.Items) != 0 {
+			t.Fatal(page, err)
+		}
+	}
+	for _, id := range []ids.ProductID{"p1", "p2", "p3", "p4"} {
+		store.SeedVerdict(moderation.VerdictState{
+			TenantID:  "t1",
+			ProductID: id,
+			Status:    moderation.Pending,
+		})
+	}
+	refreshStore(t, service)
+	if _, err := service.Shop(ctx, "shop-one"); !errors.Is(err, participant.ErrNotFound) {
+		t.Fatal(err)
+	}
+	if _, err := service.StorePageSummary(ctx, "t1"); !errors.Is(err, participant.ErrNotFound) {
+		t.Fatal(err)
+	}
+}

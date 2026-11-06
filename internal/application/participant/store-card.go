@@ -309,12 +309,14 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 			card.Showcase = append(card.Showcase, ShopImage{OfferID: product.OfferID, Image: product.Image})
 		}
 		h.Showcase = card.Showcase
+		pagePublic := participant.VisibilityOf(p, tenant).Visible && summary.VisibleOffers > 0
 		return tx.StoreCards().Save(ctx, ports.StoreRecord{
 			ProfileVersion: p.Version(),
 			Summary:        summary,
 			Header:         h,
 			Card:           card,
-			Public:         p.CardReady() && participant.VisibilityOf(p, tenant).Visible && summary.VisibleOffers > 0,
+			Public:         p.CardReady() && pagePublic,
+			PagePublic:     pagePublic,
 		})
 	})
 }
@@ -360,4 +362,21 @@ func categoryPaths(nodes []taxonomy.Category) map[string][]StoreCategory {
 		visit(node, nil)
 	}
 	return result
+}
+
+// StorePageSummary возвращает сводку только магазина с доступной страницей.
+func (s *Service) StorePageSummary(ctx context.Context, tenant ids.TenantID) (StoreSummary, error) {
+	var summary StoreSummary
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		record, err := tx.StoreCards().Get(ctx, tenant)
+		if err != nil {
+			return err
+		}
+		if !record.PagePublic {
+			return participant.ErrNotFound
+		}
+		summary = record.Summary
+		return nil
+	})
+	return summary, err
 }

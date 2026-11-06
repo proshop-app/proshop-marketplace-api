@@ -348,10 +348,11 @@ func TestStoredShopsCategoryOrderAndPagination(t *testing.T) {
 				Hidden:   []participant.CardHidden{},
 			}
 			return tx.StoreCards().Save(ctx, ports.StoreRecord{
-				Summary: summary,
-				Header:  ports.ShopHeader{TenantID: tenantID, Slug: slug, Name: "Магазин", Offers: counts[i]},
-				Card:    ports.ShopCard{TenantID: tenantID, Slug: slug, Name: "Магазин", Offers: counts[i]},
-				Public:  i != 2,
+				Summary:    summary,
+				Header:     ports.ShopHeader{TenantID: tenantID, Slug: slug, Name: "Магазин", Offers: counts[i]},
+				Card:       ports.ShopCard{TenantID: tenantID, Slug: slug, Name: "Магазин", Offers: counts[i]},
+				Public:     i != 2,
+				PagePublic: i != 2,
 			})
 		}); err != nil {
 			t.Fatal(err)

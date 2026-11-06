@@ -105,6 +105,7 @@ type StoreRecord struct {
 	Header         ShopHeader
 	Card           ShopCard
 	Public         bool
+	PagePublic     bool
 }
 
 // StoreCards — хранение производной карточки без чтения каталога на запросе.
