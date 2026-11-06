@@ -156,3 +156,44 @@ func readBundle(t *testing.T, name string, target any) {
 		t.Fatalf("%s не разбирается: %v", name, err)
 	}
 }
+
+func TestOpenAPIShopShowcaseAndOrderSeller(t *testing.T) {
+	doc, _ := loadSpec(t)
+	schemas := doc.Components["schemas"]
+	for _, name := range []string{"ShopHeader", "CartLine", "CheckoutGroup"} {
+		field := "seller"
+		ref := "#/components/schemas/OrderSeller"
+		if name == "ShopHeader" {
+			field = "showcase"
+		}
+		schema := schemas[name].(map[string]any)
+		required := schema["required"].([]any)
+		found := false
+		for _, key := range required {
+			found = found || key == field
+		}
+		if !found {
+			t.Fatalf("%s: поле %s обязательно", name, field)
+		}
+		property := schema["properties"].(map[string]any)[field].(map[string]any)
+		if field == "showcase" {
+			if property["type"] != "array" || property["maxItems"] != 3 {
+				t.Fatal(property)
+			}
+			property = property["items"].(map[string]any)
+			ref = "#/components/schemas/ShopImage"
+		}
+		if property["$ref"] != ref {
+			t.Fatal(property)
+		}
+	}
+	seller := schemas["OrderSeller"].(map[string]any)
+	types := seller["type"].([]any)
+	if len(types) != 2 || types[0] != "object" || types[1] != "null" {
+		t.Fatal(types)
+	}
+	properties := seller["properties"].(map[string]any)
+	if len(properties) != 2 || properties["slug"] == nil || properties["name"] == nil {
+		t.Fatal(properties)
+	}
+}

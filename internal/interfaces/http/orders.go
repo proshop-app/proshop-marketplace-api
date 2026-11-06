@@ -113,6 +113,11 @@ func orderCursor(r *http.Request) (ids.UUID, error) {
 }
 
 func (h *checkoutHandlers) respondList(w http.ResponseWriter, r *http.Request, states []checkout.State) {
+	sellers, err := h.checkouts.Sellers(r.Context(), states)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	items := make([]checkoutJSON, 0, len(states))
 	next := ""
 	for _, state := range states {
@@ -121,6 +126,7 @@ func (h *checkoutHandlers) respondList(w http.ResponseWriter, r *http.Request, s
 			writeError(w, r, err)
 			return
 		}
+		setGroupSellers(&item, sellers)
 		items = append(items, item)
 		next = string(state.ID)
 	}

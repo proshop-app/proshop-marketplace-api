@@ -154,6 +154,30 @@ func TestStoreCardHTTP(t *testing.T) {
 	if !strings.Contains(response.Body.String(), `"slogan":"Слоган"`) {
 		t.Fatal(response.Body.String())
 	}
+	var header map[string]json.RawMessage
+	if err := json.Unmarshal(response.Body.Bytes(), &header); err != nil {
+		t.Fatal(err)
+	}
+	keys = keys[:0]
+	for key := range header {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	wantKeys = strings.Fields("categories color initial isNew logo name offers rating showcase slogan slug tenantId")
+	if !reflect.DeepEqual(keys, wantKeys) {
+		t.Fatal(keys)
+	}
+	var showcase []map[string]json.RawMessage
+	if err := json.Unmarshal(header["showcase"], &showcase); err != nil {
+		t.Fatal(err)
+	}
+	if len(showcase) != 1 {
+		t.Fatal(showcase)
+	}
+	if len(showcase[0]) != 2 || showcase[0]["offerId"] == nil || showcase[0]["image"] == nil {
+		t.Fatal(showcase)
+	}
+	state, _ = store.Participant("t1")
 	state.StoreCard.Readiness.Ready = false
 	store.SeedParticipant(state)
 	refresh()
@@ -161,5 +185,15 @@ func TestStoreCardHTTP(t *testing.T) {
 	if !strings.Contains(response.Body.String(), `"items":[]`) {
 		t.Fatal(response.Body.String())
 	}
+	response = call("GET", "/api/v1/shops/shop", "", "", http.StatusOK)
+	if !strings.Contains(response.Body.String(), `"logo":null`) {
+		t.Fatal(response.Body.String())
+	}
+	call("GET", summary, "", "server-token", http.StatusOK)
+	state.Enabled = false
+	state.Stage = participant.StageCandidate
+	store.SeedParticipant(state)
+	refresh()
 	call("GET", "/api/v1/shops/shop", "", "", http.StatusNotFound)
+	call("GET", summary, "", "server-token", http.StatusNotFound)
 }

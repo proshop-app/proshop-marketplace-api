@@ -36,7 +36,7 @@ func (h *participantHandlers) storeCard(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	result, err := h.service.StoreSummary(r.Context(), id)
+	result, err := h.service.StorePageSummary(r.Context(), id)
 	if err != nil {
 		writeError(w, r, err)
 		return

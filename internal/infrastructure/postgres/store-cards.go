@@ -14,7 +14,7 @@ const (
 	lockStoreSummary = `SELECT pg_advisory_xact_lock(hashtextextended($1, 38))`
 	saveStoreSummary = `
 		INSERT INTO store_cards (
-		 tenant_id, slug, name, offers, from_price, public, summary, header, card, profile_version
+		 tenant_id, slug, name, offers, from_price, public, summary, header, card, profile_version, page_public
 		)
 		VALUES (
 		$1,
@@ -26,7 +26,8 @@ const (
 		$7,
 		$8,
 		$9,
-		$10
+		$10,
+		$11
 		)
 		ON CONFLICT (tenant_id) DO UPDATE
 		SET
@@ -35,6 +36,7 @@ const (
 		offers = EXCLUDED.offers,
 		from_price = EXCLUDED.from_price,
 		public = EXCLUDED.public,
+		page_public = EXCLUDED.page_public,
 		summary = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
 		THEN jsonb_set(EXCLUDED.summary, '{hidden}', store_cards.summary->'hidden') ELSE EXCLUDED.summary END,
 		header = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
@@ -53,9 +55,11 @@ const (
 		$3,
 		$4
 		)`
-	getStoreSummary = `SELECT summary, header, card, public, profile_version FROM store_cards WHERE tenant_id = $1`
-	getShopHeader   = `SELECT header FROM store_cards WHERE slug = $1 AND public`
-	listShopCards   = `
+	getStoreSummary = `SELECT summary, header, card, public, profile_version, page_public
+		FROM store_cards WHERE tenant_id = $1`
+	getShopHeader = `SELECT header || jsonb_build_object('showcase', COALESCE(card->'showcase', '[]'::jsonb))
+		FROM store_cards WHERE slug = $1 AND page_public`
+	listShopCards = `
 		WITH filtered AS (
 		SELECT s.card, s.offers, s.name, s.tenant_id, count(*) OVER() AS total
 		FROM store_cards s WHERE s.public
@@ -124,6 +128,7 @@ func (r *StoreCards) Save(ctx context.Context, record ports.StoreRecord) error {
 		string(header),
 		string(card),
 		record.ProfileVersion,
+		record.PagePublic,
 	)
 	if err != nil {
 		return fmt.Errorf("сводка магазина %s: %w", h.TenantID, err)
@@ -156,6 +161,7 @@ func (r *StoreCards) Get(ctx context.Context, tenant ids.TenantID) (ports.StoreR
 		&card,
 		&result.Public,
 		&result.ProfileVersion,
+		&result.PagePublic,
 	)
 	if notFound(err) {
 		return result, participant.ErrNotFound

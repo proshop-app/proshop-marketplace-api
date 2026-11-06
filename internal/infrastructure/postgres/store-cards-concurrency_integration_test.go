@@ -27,9 +27,10 @@ func seedStoredCard(t *testing.T, uow *postgres.UnitOfWork) ports.StoreRecord {
 			Showcase:   []ports.StoreProduct{},
 			Hidden:     []participant.CardHidden{},
 		},
-		Header: ports.ShopHeader{TenantID: "t1", Slug: "shop", Name: "Магазин", Slogan: "Слоган", Offers: 1},
-		Card:   ports.ShopCard{TenantID: "t1", Slug: "shop", Name: "Магазин", Slogan: "Слоган", Offers: 1},
-		Public: true,
+		Header:     ports.ShopHeader{TenantID: "t1", Slug: "shop", Name: "Магазин", Slogan: "Слоган", Offers: 1},
+		Card:       ports.ShopCard{TenantID: "t1", Slug: "shop", Name: "Магазин", Slogan: "Слоган", Offers: 1},
+		Public:     true,
+		PagePublic: true,
 	}
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		tenant, err := tx.Registry().Get(ctx, "t1")
