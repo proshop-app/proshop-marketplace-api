@@ -33,10 +33,13 @@ func TestDecisionJournalAndTrust(t *testing.T) {
 		t.Fatal(err)
 	}
 	page, err := service.ListDecisions(ctx, "t1", participant.Page{Limit: 10})
-	if err != nil || page.Total != 3 {
+	if err != nil || page.Total != 4 {
 		t.Fatal(page, err)
 	}
 	for _, record := range page.Items {
+		if record.Action == "candidate" {
+			continue
+		}
 		if record.Operator.ID != "o1" || record.Note != "Проверено" {
 			t.Fatal(record)
 		}
@@ -79,7 +82,7 @@ func TestReasonValidationAndTrustFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 	history, err := service.ListDecisions(ctx, "t1", participant.Page{Limit: 10})
-	if err != nil || history.Total != 1 || history.Items[0].ReasonMessage != "Текст" ||
+	if err != nil || history.Total != 2 || history.Items[0].ReasonMessage != "Текст" ||
 		history.Items[0].Actor != "operator" {
 		t.Fatal(history, err)
 	}

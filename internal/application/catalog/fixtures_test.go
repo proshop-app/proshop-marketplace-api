@@ -77,18 +77,21 @@ func seedSeller(store *fake.Store, tenant ids.TenantID, status participant.Tenan
 		Version:   1,
 		UpdatedAt: t0,
 	})
+	stage := participant.StageCandidate
+	if enabled {
+		stage = participant.StageConnected
+	}
 	store.SeedParticipant(participant.State{
-		TenantID:    tenant,
-		Slug:        "slug-" + string(tenant),
-		Name:        "Магазин " + string(tenant),
-		Status:      participant.StatusConnected,
-		Enabled:     enabled,
-		ShopEnabled: true,
-		Delivery:    w3FixturesDelivery,
-		Subsidy:     w3FixturesSubsidy,
-		Version:     1,
-		CreatedAt:   t0,
-		UpdatedAt:   t0,
+		TenantID:  tenant,
+		Slug:      "slug-" + string(tenant),
+		Name:      "Магазин " + string(tenant),
+		Stage:     stage,
+		Enabled:   enabled,
+		Delivery:  w3FixturesDelivery,
+		Subsidy:   w3FixturesSubsidy,
+		Version:   1,
+		CreatedAt: t0,
+		UpdatedAt: t0,
 	})
 }
 

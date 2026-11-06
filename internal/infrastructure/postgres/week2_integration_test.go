@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -62,7 +63,7 @@ func TestParticipantShopSettings(t *testing.T) {
 			return err
 		}
 
-		if _, err := p.ApplyShopSettings(true, subsidy, money.Money{}, w3Week2IntegrationDelivery, at(1)); err != nil {
+		if _, err := p.ApplyShopSettings(subsidy, money.Money{}, w3Week2IntegrationDelivery, at(1)); err != nil {
 			return err
 		}
 
@@ -72,19 +73,21 @@ func TestParticipantShopSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_ = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
+	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		p, err := tx.Participants().Get(ctx, "t1")
-		if err != nil || !p.ShopEnabled() || p.Subsidy() != subsidy || !p.State().SettingsSyncedAt.Equal(at(1)) {
-			t.Fatalf("настройки магазина после хранения: %+v %v", p.State(), err)
+		if err != nil || !p.DeliveryValid() || p.Subsidy() != subsidy || !p.State().SettingsSyncedAt.Equal(at(1)) {
+			return fmt.Errorf("настройки магазина после хранения: %+v %w", p.State(), err)
 		}
 
 		state, err := tx.Offers().ParticipantOffers(ctx, ports.OfferKey{}, 10)
 		if err != nil || len(state) != 0 {
-			t.Fatalf("модель чтения читает новые колонки: %v", err)
+			return fmt.Errorf("модель чтения читает новые колонки: %w", err)
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBuyersAndChallenges(t *testing.T) {
@@ -117,7 +120,7 @@ func TestBuyersAndChallenges(t *testing.T) {
 
 		found, err := tx.Buyers().FindByPhone(ctx, "79251234567")
 		if err != nil || found.ID != buyerA {
-			t.Fatalf("покупатель по телефону: %+v %v", found, err)
+			return fmt.Errorf("покупатель по телефону: %+v %w", found, err)
 		}
 
 		loaded, err := tx.Challenges().FindByProviderRef(ctx, "201737-542")
@@ -133,7 +136,7 @@ func TestBuyersAndChallenges(t *testing.T) {
 
 		stale.Observe(buyer.CallExpired, at(1))
 		if err := tx.Challenges().Update(ctx, stale); !errors.Is(err, buyer.ErrChallengeConflict) {
-			t.Fatalf("устаревшая проверка: %v", err)
+			return fmt.Errorf("устаревшая проверка: %w", err)
 		}
 
 		return nil
@@ -142,21 +145,23 @@ func TestBuyersAndChallenges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_ = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
+	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Challenges().Get(ctx, buyerB)
 		if err != nil || c.Status() != buyer.ChallengeConfirmed || c.State().Checks != 1 ||
 			!c.State().LastCheckedAt.Equal(at(1)) {
-			t.Fatalf("проверка после хранения: %+v %v", c.State(), err)
+			return fmt.Errorf("проверка после хранения: %+v %w", c.State(), err)
 		}
 		if _, err := tx.Challenges().Get(ctx, buyerA); !errors.Is(err, buyer.ErrChallengeNotFound) {
-			t.Fatalf("нет проверки: %v", err)
+			return fmt.Errorf("нет проверки: %w", err)
 		}
 		if _, err := tx.Buyers().Get(ctx, buyerB); !errors.Is(err, buyer.ErrNotFound) {
-			t.Fatalf("нет покупателя: %v", err)
+			return fmt.Errorf("нет покупателя: %w", err)
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCarts(t *testing.T) {
@@ -200,7 +205,7 @@ func TestCarts(t *testing.T) {
 		if len(lines) != 2 || lines[0].Offer.Product != "p1" || lines[0].Price.Kopecks() != 199000 ||
 			lines[0].Quantity != 2 ||
 			lines[1].Name != "Кружка" {
-			t.Fatalf("строки по порядку добавления: %+v", lines)
+			return fmt.Errorf("строки по порядку добавления: %+v", lines)
 		}
 
 		stale := cart.Restore(loaded.State())
@@ -216,7 +221,7 @@ func TestCarts(t *testing.T) {
 
 		stale.Remove(offer.ID, at(1), ttl)
 		if err := tx.Carts().Save(ctx, stale); !errors.Is(err, cart.ErrConflict) {
-			t.Fatalf("устаревшая корзина: %v", err)
+			return fmt.Errorf("устаревшая корзина: %w", err)
 		}
 
 		return nil
@@ -225,23 +230,25 @@ func TestCarts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_ = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
+	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		loaded, err := tx.Carts().ByBuyer(ctx, buyerA)
 		if err != nil || loaded.Lines()[0].Issue != cart.IssuePriceChanged ||
 			loaded.Lines()[0].Price.Kopecks() != 209000 {
-			t.Fatalf("пометка после хранения: %+v %v", loaded.Lines(), err)
+			return fmt.Errorf("пометка после хранения: %+v %w", loaded.Lines(), err)
 		}
 
 		removed, err := tx.Carts().DeleteExpired(ctx, at(1).Add(48*time.Hour), 10)
 		if err != nil || removed != 1 {
-			t.Fatalf("чистка просроченных: %d %v", removed, err)
+			return fmt.Errorf("чистка просроченных: %d %w", removed, err)
 		}
 		if _, err := tx.Carts().ByBuyer(ctx, buyerA); !errors.Is(err, cart.ErrNotFound) {
-			t.Fatalf("корзины нет: %v", err)
+			return fmt.Errorf("корзины нет: %w", err)
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCheckouts(t *testing.T) {
@@ -313,7 +320,7 @@ func TestCheckouts(t *testing.T) {
 
 		_ = stale.SelectDelivery(selection, quotes, at(2))
 		if err := tx.Checkouts().Update(ctx, stale); !errors.Is(err, checkout.ErrConflict) {
-			t.Fatalf("устаревшая покупка: %v", err)
+			return fmt.Errorf("устаревшая покупка: %w", err)
 		}
 
 		return nil
@@ -322,32 +329,34 @@ func TestCheckouts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_ = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
+	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Checkouts().Get(ctx, buyerB)
 		if err != nil {
-			t.Fatal(err)
+			return fmt.Errorf("%w", err)
 		}
 
 		state := c.State()
 		if *state.Delivery != selection || state.DeliveryTotal.Kopecks() != 20000 ||
 			state.Total.Kopecks() != 2*199000+35000+20000 {
-			t.Fatalf("покупка после хранения: %+v", state)
+			return fmt.Errorf("покупка после хранения: %+v", state)
 		}
 		if q := state.Groups[0].Quote; q == nil || q.Subsidy.Kopecks() != 10000 || q.MaxDays != 4 ||
 			!q.ExpiresAt.Equal(at(30)) {
-			t.Fatalf("расчёт продавца: %+v", q)
+			return fmt.Errorf("расчёт продавца: %+v", q)
 		}
 		if q := state.Groups[1].Quote; q == nil || q.Status != delivery.QuoteUnavailable ||
 			q.Reason != "carrier_not_connected" {
-			t.Fatalf("недоступный расчёт: %+v", q)
+			return fmt.Errorf("недоступный расчёт: %+v", q)
 		}
 		if state.Groups[1].ExternalCheckoutID != string(buyerB)+":t2" ||
 			state.Groups[0].Lines[0].Price.Kopecks() != 199000 {
-			t.Fatalf("группа: %+v", state.Groups[1])
+			return fmt.Errorf("группа: %+v", state.Groups[1])
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestPickupPointsAndLeases(t *testing.T) {
@@ -391,22 +400,22 @@ func TestPickupPointsAndLeases(t *testing.T) {
 
 		closed, err := tx.PickupPoints().DeactivateStale(ctx, "cdek", at(10))
 		if err != nil || closed != 2 {
-			t.Fatalf("закрытие непришедших: %d %v", closed, err)
+			return fmt.Errorf("закрытие непришедших: %d %w", closed, err)
 		}
 
 		p, err := tx.PickupPoints().Get(ctx, "cdek", "A1")
 		if err != nil || p.Name != "Обновлённый" || !p.Active || p.Location.Lat != 55.7 ||
 			string(p.Payload) != `{"code": "A1"}` {
-			t.Fatalf("пункт после хранения: %+v %v", p, err)
+			return fmt.Errorf("пункт после хранения: %+v %w", p, err)
 		}
 
 		page, err := tx.PickupPoints().Page(ctx, "cdek", "A1", 10)
 		if err != nil || len(page) != 2 || page[0].Code != "A2" || page[0].Active {
-			t.Fatalf("страница с закрытыми: %+v %v", page, err)
+			return fmt.Errorf("страница с закрытыми: %+v %w", page, err)
 		}
 
 		if _, err := tx.PickupPoints().Get(ctx, "yandex", "A1"); !errors.Is(err, delivery.ErrPickupPointNotFound) {
-			t.Fatalf("чужой перевозчик: %v", err)
+			return fmt.Errorf("чужой перевозчик: %w", err)
 		}
 
 		return nil
@@ -441,20 +450,11 @@ func TestParticipantSettingsMigrationSchedulesReindex(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
 
-	statuses, err := postgres.MigrationStatus(ctx, pool)
-	if err != nil {
+	if err := postgres.MigrateDownTo(ctx, pool, 3); err != nil {
 		t.Fatal(err)
 	}
-	// Проверяется полный переход с версии 3: миграции 4 и 21 обе инвалидируют старую видимость.
-	for _, status := range statuses {
-		if status.Source.Version < 4 {
-			continue
-		}
-		if err := postgres.MigrateDown(ctx, pool); err != nil {
-			t.Fatal(err)
-		}
-	}
 
+	// Миграции 4 и 21 обе инвалидируют старую видимость.
 	seed := `
 		INSERT INTO tenants (tenant_id, slug, status, event_at, version, updated_at)
 		VALUES ('t1', 's', 'active', now(), 1, now());
@@ -475,13 +475,13 @@ func TestParticipantSettingsMigrationSchedulesReindex(t *testing.T) {
 		delayed bool
 	)
 
-	participant := `SELECT version, shop_enabled FROM participants WHERE tenant_id = 't1'`
+	participant := `SELECT version, delivery_valid FROM participants WHERE tenant_id = 't1'`
 
-	err = pool.QueryRow(ctx, participant).Scan(&version, &shop)
+	err := pool.QueryRow(ctx, participant).Scan(&version, &shop)
 	// Версия 1 увеличивается до 2 при добавлении согласия магазина (4),
-	// затем до 3 при введении обязательных настроек доставки (21).
+	// затем до 3 при введении доставки (21); миграция 37 данные не переносит.
 	if err != nil || version != 3 || shop {
-		t.Fatalf("две инвалидации видимости, согласия магазина пока нет: %d %v %v", version, shop, err)
+		t.Fatalf("две инвалидации видимости, доставка ещё не настроена: %d %v %v", version, shop, err)
 	}
 
 	sync := `

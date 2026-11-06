@@ -64,10 +64,9 @@ func TestSettingsTaskDisablesShop(t *testing.T) {
 		t.Fatal(err)
 	}
 	platform := fake.NewPlatform()
-	settings := appparticipant.NewSettings(store, platform, clock)
+	settings := appparticipant.NewSettings(store, platform, clock, &fake.IDs{})
 
 	platform.SetSettings("t1", ports.ShopSettings{
-		Enabled:  true,
 		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
 	})
@@ -80,7 +79,7 @@ func TestSettingsTaskDisablesShop(t *testing.T) {
 	if err := settings.HandleTask(ctx, taskOf(task)); err != nil {
 		t.Fatal(err)
 	}
-	if p, _ := store.Participant("t1"); p.ShopEnabled {
+	if p, _ := store.Participant("t1"); participant.Restore(p).DeliveryValid() {
 		t.Fatalf("отказ «магазин не участвует» выключает участие: %+v", p)
 	}
 	unknown := appparticipant.SyncSettingsTask("t9", clock.Now())
@@ -96,7 +95,7 @@ func TestSettingsTaskDisablesShop(t *testing.T) {
 		t.Fatalf("повреждённая задача: %v", err)
 	}
 
-	if p, _ := store.Participant("t1"); p.Status != participant.StatusOnboarding {
+	if p, _ := store.Participant("t1"); p.Stage != participant.StageCandidate {
 		t.Fatalf("выключенное участие возвращает статус настройки: %+v", p)
 	}
 }

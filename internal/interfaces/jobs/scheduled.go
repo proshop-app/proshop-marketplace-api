@@ -32,10 +32,12 @@ type PickupRefreshRunner struct {
 
 // SettingsSyncRunner сверяет настройки магазинов раз в интервал.
 type SettingsSyncRunner struct {
-	syncer   SettingsSyncer
-	interval time.Duration
-	logger   *slog.Logger
-	failures *prometheus.CounterVec
+	candidates prometheus.Gauge
+	queue      prometheus.Gauge
+	syncer     SettingsSyncer
+	interval   time.Duration
+	logger     *slog.Logger
+	failures   *prometheus.CounterVec
 }
 
 // NewPickupRefreshRunner — обновление справочников с метриками по перевозчику.
@@ -117,6 +119,14 @@ func NewSettingsSyncRunner(
 	registerer prometheus.Registerer,
 ) *SettingsSyncRunner {
 	r := &SettingsSyncRunner{
+		candidates: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "marketplace_participant_candidates",
+			Help: "Число кандидатов площадки.",
+		}),
+		queue: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "marketplace_participant_queue",
+			Help: "Кандидаты с валидной доставкой, ожидающие оператора.",
+		}),
 		syncer:   syncer,
 		interval: interval,
 		logger:   logger,
@@ -128,7 +138,7 @@ func NewSettingsSyncRunner(
 			[]string{"tenant"},
 		),
 	}
-	registerer.MustRegister(r.failures)
+	registerer.MustRegister(r.failures, r.candidates, r.queue)
 
 	return r
 }
@@ -142,6 +152,8 @@ func (r *SettingsSyncRunner) Run(ctx context.Context) error {
 		case err != nil && ctx.Err() == nil:
 			r.logger.Error("настройки магазинов: сверка не удалась", slog.Any("error", err))
 		case err == nil:
+			r.candidates.Set(float64(result.Candidates))
+			r.queue.Set(float64(result.Queue))
 			for tenant, cause := range result.Failed {
 				r.failures.WithLabelValues(string(tenant)).Inc()
 				r.logger.Warn(

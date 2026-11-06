@@ -8,16 +8,13 @@ type Visibility struct {
 	CheckoutAvailable bool
 }
 
-// VisibilityOf требует согласия магазина и обязательных настроек доставки.
+// VisibilityOf требует подключения оператором и валидных настроек доставки.
 func VisibilityOf(p *Participant, tenant *Tenant) Visibility {
 	if p == nil || tenant == nil || tenant.ID() != p.TenantID() {
 		return Visibility{}
 	}
 
-	state := p.State()
-	visible := p.Enabled() && p.ShopEnabled() && tenant.Status() == TenantActive &&
-		state.Delivery.Validate() == nil && state.Subsidy.Validate() == nil && state.Subsidy.Enabled &&
-		!state.FreeDeliveryFrom.IsNegative()
+	visible := p.Enabled() && tenant.Status() == TenantActive && p.DeliveryValid()
 
 	return Visibility{Visible: visible, CheckoutAvailable: visible}
 }

@@ -23,6 +23,15 @@ type Decision struct {
 	Note          string
 }
 
+// LastDecision — последнее решение об участии без реквизитов журнала.
+type LastDecision struct {
+	Reason        string             `json:"reason"`
+	ReasonMessage string             `json:"reasonMessage"`
+	Note          string             `json:"note"`
+	At            time.Time          `json:"at"`
+	Operator      operator.Principal `json:"operator"`
+}
+
 // DecisionRecord фиксирует действие и значение независимо от будущего состояния участника.
 type DecisionRecord struct {
 	ID       ids.UUID

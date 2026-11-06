@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -46,7 +47,6 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 				return err
 			}
 			if _, err := seller.ApplyShopSettings(
-				true,
 				w3RepositoriesIntegrationSubsidy,
 				money.Money{},
 				w3RepositoriesIntegrationDelivery,
@@ -102,7 +102,7 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 		state := product.State()
 		if state.Card.ModelKey != "gtin:0036000291452" ||
 			state.Card.Variants == nil || state.Card.Variants.Position != 2 {
-			t.Fatalf("потерян контракт карточки: %+v", state.Card)
+			return fmt.Errorf("потерян контракт карточки: %+v", state.Card)
 		}
 		product.SetModelKey("", "")
 		return tx.Products().Save(ctx, product)
@@ -144,7 +144,6 @@ func TestModelKeyConflictDoesNotAbortRebuild(t *testing.T) {
 			return err
 		}
 		if _, err := seller.ApplyShopSettings(
-			true,
 			w3RepositoriesIntegrationSubsidy,
 			money.Money{},
 			w3RepositoriesIntegrationDelivery,
@@ -248,7 +247,7 @@ func TestProjectorDoesNotResolveModelInsideTransaction(t *testing.T) {
 			return err
 		}
 		if product.State().Card.ModelKey != "" {
-			t.Fatal("проектор не должен вычислять ключ модели")
+			return fmt.Errorf("%+v", "проектор не должен вычислять ключ модели")
 		}
 		return nil
 	})

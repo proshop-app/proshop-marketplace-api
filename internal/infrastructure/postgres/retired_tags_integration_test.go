@@ -21,17 +21,8 @@ func TestRetiredTagsMigrationRemovesStorageAndPreservesProduct(t *testing.T) {
 	pool := testPool(t)
 
 	// Откатываемся именно до удалявшей теги миграции, независимо от новых поставок.
-	statuses, err := postgres.MigrationStatus(ctx, pool)
-	if err != nil {
+	if err := postgres.MigrateDownTo(ctx, pool, 27); err != nil {
 		t.Fatal(err)
-	}
-	for i := len(statuses) - 1; i >= 0; i-- {
-		if statuses[i].Source.Version < 28 {
-			break
-		}
-		if err := postgres.MigrateDown(ctx, pool); err != nil {
-			t.Fatal(err)
-		}
 	}
 
 	if _, err := pool.Exec(ctx, retiredTagsFixture); err != nil {
@@ -43,7 +34,7 @@ func TestRetiredTagsMigrationRemovesStorageAndPreservesProduct(t *testing.T) {
 	}
 	var tableGone, tagsGone bool
 	var name string
-	err = pool.QueryRow(ctx, `SELECT to_regclass('catalog_tags') IS NULL`).Scan(&tableGone)
+	err := pool.QueryRow(ctx, `SELECT to_regclass('catalog_tags') IS NULL`).Scan(&tableGone)
 
 	if err != nil || !tableGone {
 		t.Fatalf("таблица тегов не удалена: %v %v", tableGone, err)

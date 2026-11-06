@@ -28,7 +28,7 @@ func registryEvent(id string, slug string, status participant.TenantStatus, at t
 func TestRegistryMirrorsTenants(t *testing.T) {
 	store := fake.NewStore()
 	clock := fake.NewClock(t0)
-	registry := appparticipant.NewRegistry(store, clock)
+	registry := appparticipant.NewRegistry(store, clock, &fake.IDs{})
 	ctx := context.Background()
 
 	if err := registry.Apply(ctx, registryEvent("e1", "shop-nine", participant.TenantCreating, t0)); err != nil {
@@ -43,8 +43,8 @@ func TestRegistryMirrorsTenants(t *testing.T) {
 	if !ok || tenant.Status != participant.TenantActive || tenant.Version != 2 {
 		t.Fatalf("зеркало: %+v", tenant)
 	}
-	if len(store.OutboxRows()) != 0 {
-		t.Fatal("магазин без участника не ставит задач индекса")
+	if len(store.OutboxRows()) != 2 {
+		t.Fatal("кандидат ставит задачи индекса и модерации")
 	}
 
 	if err := registry.Apply(ctx, registryEvent("e3", "shop-nine", participant.TenantSuspended, t0)); err != nil {
@@ -57,7 +57,7 @@ func TestRegistryMirrorsTenants(t *testing.T) {
 
 func TestRegistryDeduplicatesEvents(t *testing.T) {
 	store := fake.NewStore()
-	registry := appparticipant.NewRegistry(store, fake.NewClock(t0))
+	registry := appparticipant.NewRegistry(store, fake.NewClock(t0), &fake.IDs{})
 	ctx := context.Background()
 
 	if err := registry.Apply(ctx, registryEvent("e1", "shop-nine", participant.TenantActive, t0)); err != nil {
@@ -76,14 +76,10 @@ func TestRegistryDeduplicatesEvents(t *testing.T) {
 func TestRegistrySyncsParticipant(t *testing.T) {
 	store := fake.NewStore()
 	clock := fake.NewClock(t0)
-	registry := appparticipant.NewRegistry(store, clock)
-	service := appparticipant.NewService(store, clock, &fake.IDs{})
+	registry := appparticipant.NewRegistry(store, clock, &fake.IDs{})
 	ctx := context.Background()
 
 	if err := registry.Apply(ctx, registryEvent("e1", "shop-nine", participant.TenantActive, t0)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t9", Name: "Девятый"}); err != nil {
 		t.Fatal(err)
 	}
 	clock.Advance(time.Minute)
@@ -111,7 +107,7 @@ func TestRegistrySyncsParticipant(t *testing.T) {
 
 func TestRegistryRejectsInvalidEvent(t *testing.T) {
 	store := fake.NewStore()
-	registry := appparticipant.NewRegistry(store, fake.NewClock(t0))
+	registry := appparticipant.NewRegistry(store, fake.NewClock(t0), &fake.IDs{})
 
 	err := registry.Apply(context.Background(), registryEvent("e1", "", participant.TenantActive, t0))
 	if !errors.Is(err, participant.ErrInvalidRegistryEvent) {

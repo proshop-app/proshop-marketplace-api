@@ -101,6 +101,13 @@ func routes(deps Deps) []route {
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
+		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/participation", machine(participants.participation)},
+		{
+			http.MethodPost,
+			"/api/v1/internal/tenants/{tenantId}/participation/submit",
+			machine(participants.participation),
+		},
+		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/return", operator(participants.returnParticipant)},
 		{http.MethodGet, "/api/v1/operator/promotion/overview", operator(promotion.overview)},
 		{http.MethodGet, "/api/v1/operator/promotion/campaigns", operator(promotion.list)},
 		{http.MethodPost, "/api/v1/operator/promotion/campaigns", operator(promotion.create)},

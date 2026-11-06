@@ -3,8 +3,11 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -13,38 +16,50 @@ import (
 
 const (
 	participantColumns = `
-		tenant_id, slug, name, status, enabled, shop_enabled, subsidy,
+		tenant_id, slug, name, stage, enabled, awaiting_review, subsidy,
 		settings_synced_at, version, created_at, updated_at, free_delivery_from,
-		delivery_settings, trust, approved_offers`
+		delivery_settings, trust, approved_offers, last_decision`
 
 	selectParticipant = `
 		SELECT ` + participantColumns + `
 		FROM participants
 		WHERE tenant_id = $1`
 
-	countParticipants = `SELECT count(*) FROM participants WHERE ($1 = '' OR trust = $1)`
+	countParticipants = `SELECT count(*) FROM participants WHERE ($1 = '' OR trust = $1)
+		AND ($2 = '' OR stage = $2) AND (NOT $3 OR (stage = 'candidate' AND awaiting_review AND delivery_valid))`
 
 	listParticipants = `
 		SELECT ` + participantColumns + `
 		FROM participants WHERE ($3 = '' OR trust = $3)
+		AND ($4 = '' OR stage = $4) AND (NOT $5 OR (stage = 'candidate' AND awaiting_review AND delivery_valid))
 		ORDER BY created_at, tenant_id
 		LIMIT $1 OFFSET $2`
 
 	insertParticipant = `
 		INSERT INTO participants (
-			tenant_id, slug, name, status, enabled, shop_enabled, subsidy,
+			tenant_id, slug, name, stage, enabled, awaiting_review, subsidy,
 			settings_synced_at, version, created_at, updated_at, free_delivery_from,
-		delivery_settings, trust, approved_offers
+			delivery_settings, trust, approved_offers, delivery_valid, last_decision
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		ON CONFLICT DO NOTHING`
+
+	// selectInsertConflict говорит, чья строка помешала вставке: тот же магазин или
+	// чужой с тем же слагом.
+	selectInsertConflict = `
+		SELECT tenant_id = $1
+		FROM participants
+		WHERE tenant_id = $1 OR slug = $2
+		ORDER BY tenant_id = $1 DESC
+		LIMIT 1`
 
 	updateParticipant = `
 		UPDATE participants
 		SET slug = $4,
 			name = $5,
-			status = $6,
+			stage = $6,
 			enabled = $7,
-			shop_enabled = $8,
+			awaiting_review = $8,
 			subsidy = $9,
 			settings_synced_at = $10,
 			version = $11,
@@ -52,8 +67,10 @@ const (
 			free_delivery_from = $13,
 			delivery_settings = $14,
 			trust = $15,
-			approved_offers = $16
-		WHERE tenant_id = $1 AND status = $2 AND version = $3`
+			approved_offers = $16,
+			delivery_valid = $17,
+			last_decision = $18
+		WHERE tenant_id = $1 AND stage = $2 AND version = $3`
 )
 
 // Participants — участники в PostgreSQL.
@@ -90,11 +107,11 @@ func (r *Participants) Get(ctx context.Context, tenantID ids.TenantID) (*partici
 // List — участники по времени создания.
 func (r *Participants) List(ctx context.Context, page participant.Page) ([]*participant.Participant, int, error) {
 	var total int
-	if err := r.q.QueryRow(ctx, countParticipants, page.Trust).Scan(&total); err != nil {
+	if err := r.q.QueryRow(ctx, countParticipants, page.Trust, page.Stage, page.Queue).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("число участников: %w", err)
 	}
 
-	rows, err := r.q.Query(ctx, listParticipants, page.Limit, page.Offset, page.Trust)
+	rows, err := r.q.Query(ctx, listParticipants, page.Limit, page.Offset, page.Trust, page.Stage, page.Queue)
 	if err != nil {
 		return nil, 0, fmt.Errorf("список участников: %w", err)
 	}
@@ -127,15 +144,15 @@ func (r *Participants) Add(ctx context.Context, p *participant.Participant) erro
 		return fmt.Errorf("субсидия участника %s: %w", s.TenantID, err)
 	}
 
-	_, err = r.q.Exec(
+	tag, err := r.q.Exec(
 		ctx,
 		insertParticipant,
 		string(s.TenantID),
 		s.Slug,
 		s.Name,
-		string(s.Status),
+		string(s.Stage),
 		s.Enabled,
-		s.ShopEnabled,
+		s.AwaitingReview,
 		subsidy,
 		nullTime(s.SettingsSyncedAt),
 		s.Version,
@@ -145,13 +162,13 @@ func (r *Participants) Add(ctx context.Context, p *participant.Participant) erro
 		encodeDelivery(s.Delivery),
 		s.Trust,
 		s.ApprovedOffers,
+		p.DeliveryValid(),
+		encodeLastDecision(s.LastDecision),
 	)
 
 	switch {
-	case isUnique(err, "participants_pkey"):
-		return participant.ErrAlreadyExists
-	case isUnique(err, "participants_slug_key"):
-		return participant.ErrSlugTaken
+	case err == nil && tag.RowsAffected() == 0:
+		return r.insertConflict(ctx, s)
 	case isForeignKey(err):
 		return participant.ErrTenantUnknown
 	case err != nil:
@@ -178,13 +195,13 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 		ctx,
 		updateParticipant,
 		string(s.TenantID),
-		string(origin.Status),
+		string(origin.Stage),
 		origin.Version,
 		s.Slug,
 		s.Name,
-		string(s.Status),
+		string(s.Stage),
 		s.Enabled,
-		s.ShopEnabled,
+		s.AwaitingReview,
 		subsidy,
 		nullTime(s.SettingsSyncedAt),
 		s.Version,
@@ -193,6 +210,8 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 		encodeDelivery(s.Delivery),
 		s.Trust,
 		s.ApprovedOffers,
+		p.DeliveryValid(),
+		encodeLastDecision(s.LastDecision),
 	)
 
 	switch {
@@ -213,20 +232,21 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 	var (
 		state    participant.State
 		tenantID string
-		status   string
+		stage    string
 		subsidy  []byte
 		synced   *time.Time
 		free     int64
 		delivery []byte
+		decision []byte
 	)
 
 	err := row.Scan(
 		&tenantID,
 		&state.Slug,
 		&state.Name,
-		&status,
+		&stage,
 		&state.Enabled,
-		&state.ShopEnabled,
+		&state.AwaitingReview,
 		&subsidy,
 		&synced,
 		&state.Version,
@@ -236,17 +256,23 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 		&delivery,
 		&state.Trust,
 		&state.ApprovedOffers,
+		&decision,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	if len(decision) > 0 {
+		if err := json.Unmarshal(decision, &state.LastDecision); err != nil {
+			return nil, err
+		}
+	}
 	state.FreeDeliveryFrom = money.FromKopecks(free)
 	if err := json.Unmarshal(delivery, &state.Delivery); err != nil {
 		return nil, err
 	}
 	state.TenantID = ids.TenantID(tenantID)
-	state.Status = participant.Status(status)
+	state.Stage = participant.Stage(stage)
 
 	if synced != nil {
 		state.SettingsSyncedAt = *synced
@@ -295,4 +321,41 @@ func decodeSubsidy(raw []byte) (participant.Subsidy, error) {
 func encodeDelivery(d participant.DeliverySettings) string {
 	raw, _ := json.Marshal(d)
 	return string(raw)
+}
+
+func encodeLastDecision(d *participant.LastDecision) any {
+	if d == nil {
+		return nil
+	}
+	raw, _ := json.Marshal(d)
+	return string(raw)
+}
+
+// Count считает участников и очередь без чтения снимков.
+func (r *Participants) Count(ctx context.Context, page participant.Page) (int, error) {
+	var total int
+	err := r.q.QueryRow(ctx, countParticipants, page.Trust, page.Stage, page.Queue).Scan(&total)
+	return total, err
+}
+
+// insertConflict различает гонку за тот же магазин и занятый слаг. ON CONFLICT с целью
+// tenant_id гасит только конфликт по первичному ключу: при одновременной вставке того же
+// магазина проигравшая транзакция упиралась в индекс слага и получала «слаг занят».
+// Без цели вставка ничего не делает при любом конфликте уникальности, а причину читает этот
+// запрос: в READ COMMITTED он видит строку, закоммиченную соседней транзакцией.
+func (r *Participants) insertConflict(ctx context.Context, s participant.State) error {
+	var sameTenant bool
+
+	err := r.q.QueryRow(ctx, selectInsertConflict, string(s.TenantID), s.Slug).Scan(&sameTenant)
+
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return fmt.Errorf("новый участник %s: вставка не выполнена, конфликтующей строки нет", s.TenantID)
+	case err != nil:
+		return fmt.Errorf("новый участник %s: %w", s.TenantID, err)
+	case sameTenant:
+		return participant.ErrAlreadyExists
+	default:
+		return participant.ErrSlugTaken
+	}
 }

@@ -16,28 +16,34 @@ const settingsPage = 200
 
 // SettingsResult — итог сверки настроек магазинов.
 type SettingsResult struct {
-	Checked int
-	Changed int
-	Failed  map[ids.TenantID]error
+	Candidates int
+	Queue      int
+	Checked    int
+	Changed    int
+	Failed     map[ids.TenantID]error
 }
 
-// Settings сверяет с сервером настройки магазинов-участников: флаг участия и
-// субсидию доставки. Смена флага меняет видимость предложений — магазин
+// Settings сверяет с сервером обязательные настройки доставки.
+// Изменение настроек меняет видимость предложений — магазин
 // ставится на переиндексацию в той же транзакции.
 type Settings struct {
+	ids      ports.IDs
 	uow      ports.UnitOfWork
 	platform ports.PlatformAPI
 	clock    ports.Clock
 }
 
 // NewSettings — сверка настроек магазинов.
-func NewSettings(uow ports.UnitOfWork, platform ports.PlatformAPI, clock ports.Clock) *Settings {
-	return &Settings{uow: uow, platform: platform, clock: clock}
+func NewSettings(uow ports.UnitOfWork, platform ports.PlatformAPI, clock ports.Clock, identities ports.IDs) *Settings {
+	return &Settings{uow: uow, platform: platform, clock: clock, ids: identities}
 }
 
 // Sync сверяет всех участников. Сбой по одному магазину не останавливает остальных.
 func (s *Settings) Sync(ctx context.Context) (SettingsResult, error) {
 	result := SettingsResult{Failed: map[ids.TenantID]error{}}
+	if err := s.backfill(ctx, result.Failed); err != nil {
+		return result, err
+	}
 
 	for offset := 0; ; offset += settingsPage {
 		var tenants []ids.TenantID
@@ -67,7 +73,18 @@ func (s *Settings) Sync(ctx context.Context) (SettingsResult, error) {
 		}
 
 		if len(tenants) < settingsPage {
-			return result, nil
+			err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+				var err error
+				result.Candidates, err = tx.Participants().Count(ctx, participant.Page{
+					Stage: participant.StageCandidate,
+				})
+				if err != nil {
+					return err
+				}
+				result.Queue, err = tx.Participants().Count(ctx, participant.Page{Queue: true})
+				return err
+			})
+			return result, err
 		}
 	}
 }
@@ -98,7 +115,6 @@ func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, er
 
 		now := s.clock.Now()
 		changed, err = p.ApplyShopSettings(
-			settings.Enabled,
 			settings.Subsidy,
 			settings.FreeDeliveryFrom,
 			settings.Delivery,

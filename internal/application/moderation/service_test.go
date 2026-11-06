@@ -36,16 +36,15 @@ func setup() environment {
 	store := fake.NewStore()
 	clock := fake.NewClock(time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC))
 	store.SeedParticipant(participant.State{
-		Delivery:    participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
-		Subsidy:     participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
-		TenantID:    "t1",
-		Slug:        "t1",
-		Name:        "Магазин",
-		Status:      participant.StatusConnected,
-		Enabled:     true,
-		ShopEnabled: true,
-		Trust:       participant.Probation,
-		Version:     1,
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+		TenantID: "t1",
+		Slug:     "t1",
+		Name:     "Магазин",
+		Stage:    participant.StageConnected,
+		Enabled:  true,
+		Trust:    participant.Probation,
+		Version:  1,
 	})
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Slug: "t1", Status: participant.TenantActive, Version: 1})
 	store.SeedTaxonomy(taxonomy.Definition{

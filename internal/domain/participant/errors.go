@@ -3,6 +3,8 @@ package participant
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrInvalidStage — неизвестный фильтр стадии.
+	ErrInvalidStage = errs.New(errs.Invalid, "participant.invalid_stage", "неизвестная стадия участия")
 	// ErrInvalidNote требует объяснения операторского изменения.
 	ErrInvalidNote = errs.New(errs.Invalid, "participant.invalid_note", "заметка: от 1 до 2000 символов")
 	// ErrInvalidTrust запрещает неизвестный уровень доверия.

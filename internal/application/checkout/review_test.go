@@ -26,7 +26,6 @@ func TestBeginOrdersRechecksSellerDeliveryBeforeAnyOrder(t *testing.T) {
 			p.Subsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 			e.store.SeedParticipant(p)
 			settings := ports.ShopSettings{
-				Enabled:          true,
 				Subsidy:          p.Subsidy,
 				FreeDeliveryFrom: p.FreeDeliveryFrom,
 				Delivery:         p.Delivery,

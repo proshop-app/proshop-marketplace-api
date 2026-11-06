@@ -22,8 +22,8 @@ const (
 	// согласован, поэтому версия документа индекса монотонна.
 	offerSelect = `
 		SELECT ` + productColumns + `, ` + signalsColumns + `,
-			pa.tenant_id, pa.slug, pa.name, pa.status, pa.enabled,
-			pa.shop_enabled, pa.subsidy, pa.settings_synced_at, pa.version, pa.created_at, pa.updated_at,
+			pa.tenant_id, pa.slug, pa.name, pa.stage, pa.enabled,
+			pa.awaiting_review, pa.subsidy, pa.settings_synced_at, pa.version, pa.created_at, pa.updated_at,
 			pa.free_delivery_from, pa.delivery_settings, pa.trust, pa.approved_offers,
 			t.tenant_id, t.slug, t.status, t.cell, t.plan, t.hosts, t.event_at, t.version, t.updated_at,
 			to_jsonb(mv)
@@ -77,7 +77,7 @@ type participantRow struct {
 	enabled                      *bool
 	freeDeliveryFrom             *int64
 	deliverySettings             []byte
-	shopEnabled                  *bool
+	awaitingReview               *bool
 	subsidy                      []byte
 	syncedAt                     *time.Time
 	version                      *int64
@@ -211,7 +211,7 @@ func (r *participantRow) targets() []any {
 		&r.name,
 		&r.status,
 		&r.enabled,
-		&r.shopEnabled,
+		&r.awaitingReview,
 		&r.subsidy,
 		&r.syncedAt,
 		&r.version,
@@ -241,9 +241,9 @@ func (r *participantRow) participant() (*participant.Participant, error) {
 		TenantID:       ids.TenantID(*r.tenantID),
 		Slug:           *r.slug,
 		Name:           *r.name,
-		Status:         participant.Status(*r.status),
+		Stage:          participant.Stage(*r.status),
 		Enabled:        *r.enabled,
-		ShopEnabled:    *r.shopEnabled,
+		AwaitingReview: *r.awaitingReview,
 		Subsidy:        subsidy,
 		Version:        *r.version,
 		CreatedAt:      *r.createdAt,

@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -76,7 +77,7 @@ func TestModerationM4Storage(t *testing.T) {
 			return err
 		}
 		if read.State().Card == nil || read.State().Card.Name != "Товар" || read.State().Card.Price != 100 {
-			t.Fatal(read.State())
+			return fmt.Errorf("%+v", read.State())
 		}
 		v.Revision = 2
 		card.Name = "Изменено"
@@ -89,21 +90,21 @@ func TestModerationM4Storage(t *testing.T) {
 			return err
 		}
 		if read.State().Card.Name != "Изменено" {
-			t.Fatal(read.State())
+			return fmt.Errorf("%+v", read.State())
 		}
 		decisions, err := tx.ModerationDecisions().List(ctx, "t1", "p1")
 		if err != nil {
 			return err
 		}
 		if len(decisions) != 1 || decisions[0].ReasonMessage != "Текст" {
-			t.Fatal(decisions)
+			return fmt.Errorf("%+v", decisions)
 		}
 		history, _, err := tx.ParticipantDecisions().List(ctx, "t1", participant.Page{Limit: 10})
 		if err != nil {
 			return err
 		}
 		if len(history) != 1 || history[0].Actor != "system" || history[0].Reason != "" {
-			t.Fatal(history)
+			return fmt.Errorf("%+v", history)
 		}
 		if err := tx.ParticipantDecisions().Add(ctx, participant.DecisionRecord{
 			ID:       identities.NewUUID(),
@@ -119,7 +120,7 @@ func TestModerationM4Storage(t *testing.T) {
 			return err
 		}
 		if history[0].Actor != "operator" || history[0].ReasonMessage != "Текст" {
-			t.Fatal(history)
+			return fmt.Errorf("%+v", history)
 		}
 		for _, trust := range []string{participant.Probation, participant.Trusted} {
 			items, total, err := tx.Participants().List(ctx, participant.Page{Trust: trust, Limit: 10})
@@ -131,7 +132,7 @@ func TestModerationM4Storage(t *testing.T) {
 				expected = 1
 			}
 			if total != expected || len(items) != expected {
-				t.Fatal(items, total)
+				return fmt.Errorf("%+v %+v", items, total)
 			}
 		}
 		reason := moderation.ReasonCode{Code: "r1", Text: "Текст"}
@@ -139,7 +140,7 @@ func TestModerationM4Storage(t *testing.T) {
 			return err
 		}
 		if err := tx.ModerationRules().AddReason(ctx, reason); !errors.Is(err, moderation.ErrReasonExists) {
-			t.Fatal(err)
+			return fmt.Errorf("%w", err)
 		}
 		reason.Text = "Изменено"
 		if err := tx.ModerationRules().PutReason(ctx, reason); err != nil {
@@ -147,7 +148,7 @@ func TestModerationM4Storage(t *testing.T) {
 		}
 		reason.Code = "r2"
 		if err := tx.ModerationRules().PutReason(ctx, reason); !errors.Is(err, moderation.ErrNotFound) {
-			t.Fatal(err)
+			return fmt.Errorf("%w", err)
 		}
 		v.ProductID = "p2"
 		legacy := moderation.NewCase(identities.NewUUID(), v, moderation.Rule, "", now, nil)
@@ -159,7 +160,7 @@ func TestModerationM4Storage(t *testing.T) {
 			return err
 		}
 		if read.State().Card != nil {
-			t.Fatal("NULL превратился в пустую карточку")
+			return fmt.Errorf("%+v", "NULL превратился в пустую карточку")
 		}
 		return nil
 	})

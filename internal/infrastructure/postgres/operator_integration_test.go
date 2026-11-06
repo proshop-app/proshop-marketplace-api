@@ -21,6 +21,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/event"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
@@ -142,17 +143,8 @@ func TestISORegionMigrationInvalidatesLegacyDelivery(t *testing.T) {
 	// Откатываем и последующие миграции, чтобы проверять именно переход 21 → 22.
 	rollback := func() {
 		t.Helper()
-		statuses, err := postgres.MigrationStatus(ctx, pool)
-		if err != nil {
+		if err := postgres.MigrateDownTo(ctx, pool, 21); err != nil {
 			t.Fatal(err)
-		}
-		for _, status := range statuses {
-			if status.Source.Version < 22 {
-				continue
-			}
-			if err := postgres.MigrateDown(ctx, pool); err != nil {
-				t.Fatal(err)
-			}
 		}
 	}
 	rollback()
@@ -185,17 +177,27 @@ func TestISORegionMigrationInvalidatesLegacyDelivery(t *testing.T) {
 		{"t3", false, 4, []string{"RU-MOW"}, []string{"cdek"}},
 	} {
 		t.Run(tc.tenant, func(t *testing.T) {
-			var enabled bool
+			var coverageValid, enabled bool
 			var version int64
 			var legacy sql.NullString
-			var delivery string
-			query := `SELECT shop_enabled,version,legacy_delivery_settings::text,delivery_settings::text
+			var delivery, stage string
+			query := `SELECT (delivery_settings->'regions' = '["RU-MOW"]'::jsonb),
+ version,legacy_delivery_settings::text,delivery_settings::text,stage,enabled
  FROM participants WHERE tenant_id = $1`
-			if err := pool.QueryRow(ctx, query, tc.tenant).Scan(&enabled, &version, &legacy, &delivery); err != nil {
+			err := pool.QueryRow(ctx, query, tc.tenant).Scan(
+				&coverageValid,
+				&version,
+				&legacy,
+				&delivery,
+				&stage,
+				&enabled,
+			)
+			if err != nil {
 				t.Fatal(err)
 			}
-			if enabled == tc.archived || version != tc.version || legacy.Valid != tc.archived {
-				t.Fatal(enabled, version, legacy, delivery)
+			if coverageValid == tc.archived || version != tc.version || legacy.Valid != tc.archived ||
+				stage != string(participant.StageCandidate) || enabled {
+				t.Fatal(coverageValid, version, legacy, delivery, stage, enabled)
 			}
 			original, err := json.Marshal(map[string][]string{"regions": tc.regions, "carriers": tc.carriers})
 			if err != nil {
@@ -225,14 +227,14 @@ func TestISORegionMigrationInvalidatesLegacyDelivery(t *testing.T) {
 	rollback()
 	var restored int
 	restoredQuery := `SELECT count(*) FROM participants
- WHERE (tenant_id = 't1' AND shop_enabled AND status = 'connected' AND enabled AND version = 3
+ WHERE (tenant_id = 't1' AND shop_enabled AND status = 'connected' AND NOT enabled AND version = 3
   AND delivery_settings = '{"regions":["cdek:81"],"carriers":["cdek"]}'::jsonb)
  OR (tenant_id = 't2' AND NOT shop_enabled AND status = 'onboarding' AND NOT enabled AND version = 9
   AND delivery_settings = '{"regions":["yandex:1","RU-MOW"],"carriers":["yandex"]}'::jsonb)
- OR (tenant_id = 't3' AND shop_enabled AND status = 'connected' AND enabled AND version = 4
+ OR (tenant_id = 't3' AND NOT shop_enabled AND status = 'onboarding' AND NOT enabled AND version = 4
   AND delivery_settings = '{"regions":["RU-MOW"],"carriers":["cdek"]}'::jsonb)`
 	if err := pool.QueryRow(ctx, restoredQuery).Scan(&restored); err != nil || restored != 3 {
-		t.Fatal("21 → 22 → 21: доставка, согласие и статус восстановлены", restored, err)
+		t.Fatal("откат до 21: доставка и архивные решения восстановлены, участие выключено", restored, err)
 	}
 }
 

@@ -87,6 +87,15 @@ func MigrateDown(ctx context.Context, pool *pgxpool.Pool) error {
 	})
 }
 
+// MigrateDownTo откатывает миграции новее указанной версии, сохраняя её применённой.
+func MigrateDownTo(ctx context.Context, pool *pgxpool.Pool, version int64) error {
+	return runGoose(ctx, pool, func(provider *goose.Provider) error {
+		_, err := provider.DownTo(ctx, version)
+
+		return err
+	})
+}
+
 func runGoose(ctx context.Context, pool *pgxpool.Pool, run func(*goose.Provider) error) error {
 	// закрытие *sql.DB поверх пула не закрывает сам пул
 	db := stdlib.OpenDBFromPool(pool)

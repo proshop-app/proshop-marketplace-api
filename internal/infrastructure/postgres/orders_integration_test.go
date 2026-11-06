@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -90,7 +91,7 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 			state.Groups[0].OrderID != "o1" || state.Groups[0].PaymentOrder != 1 ||
 			state.Groups[0].PaymentURL != order.PaymentURL || !state.Groups[0].ExpiresAt.Equal(at(60)) ||
 			state.Delivery.RegionCode != "RU-MOW" || state.Status != checkout.StatusAwaitingPayment {
-			t.Fatalf("после загрузки: %+v", state)
+			return fmt.Errorf("после загрузки: %+v", state)
 		}
 		items, err := tx.Checkouts().List(ctx, checkout.Filter{
 			BuyerID:        buyerA,
@@ -99,7 +100,7 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 			Limit:          100,
 		})
 		if err != nil || len(items) != 1 {
-			t.Fatalf("фильтр ожидающих: %d %v", len(items), err)
+			return fmt.Errorf("фильтр ожидающих: %d %w", len(items), err)
 		}
 		order.Status = checkout.GroupPaid
 		if _, err := loaded.Observe("t1", order, at(20).Add(10*time.Minute), at(20)); err != nil {

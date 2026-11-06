@@ -143,7 +143,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 	// корзина и покупка узнают об отказе участия первыми — по нему сверка настроек внеочередная
 	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
-	settings := appparticipant.NewSettings(uow, platform, now)
+	settings := appparticipant.NewSettings(uow, platform, now, identities)
 	var candidates ports.ReferenceCandidates
 	if cfg.Reference.CandidatesInterval > 0 && cfg.Search.CandidatesToken != "" {
 		candidates, err = searchapi.NewCandidates(searchapi.Config{
@@ -209,7 +209,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		RequireImage:    cfg.Moderation.RequireImage,
 	})
 	projector := appcatalog.NewProjector(uow, now, moderation)
-	registry := appparticipant.NewRegistry(uow, now)
+	registry := appparticipant.NewRegistry(uow, now, identities)
 	replay := kafka.NewReplay(kafka.NewRouter(projector, registry), cfg.Kafka.TopicPrefix)
 	events := messaging.NewEvents(uow, now, replay)
 	var operatorTokens ports.IdentityTokens

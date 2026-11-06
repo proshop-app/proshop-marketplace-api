@@ -36,15 +36,14 @@ func setup() environment {
 		Random:      fake.Random{},
 	})
 	store.SeedParticipant(participant.State{
-		TenantID:    "t1",
-		Slug:        "t1",
-		Name:        "Магазин",
-		Enabled:     true,
-		ShopEnabled: true,
-		Status:      participant.StatusConnected,
-		Delivery:    participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
-		Subsidy:     participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
-		Version:     1,
+		TenantID: "t1",
+		Slug:     "t1",
+		Name:     "Магазин",
+		Enabled:  true,
+		Stage:    participant.StageConnected,
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+		Version:  1,
 	})
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Slug: "t1", Status: participant.TenantActive, Version: 1})
 	for _, product := range []ids.ProductID{"p1", "p2"} {

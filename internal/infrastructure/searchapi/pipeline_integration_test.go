@@ -75,10 +75,11 @@ func TestProjectionToIndex(t *testing.T) {
 	moderationService := appmoderation.NewService(uow, now, &fake.IDs{}, appmoderation.Config{ProbationOffers: 50})
 	projector := appcatalog.NewProjector(uow, now, moderationService)
 	indexer := appcatalog.NewIndexer(uow, index, now, 100, postgres.NewIndexRebuildLock(pool), nil)
-	registry := appparticipant.NewRegistry(uow, now)
-	participants := appparticipant.NewService(uow, now, &fake.IDs{})
+	identities := &fake.IDs{}
+	registry := appparticipant.NewRegistry(uow, now, identities)
+	participants := appparticipant.NewService(uow, now, identities)
 	platform := fake.NewPlatform()
-	settings := appparticipant.NewSettings(uow, platform, now)
+	settings := appparticipant.NewSettings(uow, platform, now, identities)
 	queries := appcatalog.NewQueries(uow, index, platform)
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(pool),
@@ -218,16 +219,12 @@ func TestProjectionToIndex(t *testing.T) {
 	if list, _ := queries.Search(ctx, ports.OfferQuery{}); list.Total != 0 {
 		t.Fatalf("магазин без участия не попадает в выдачу: %+v", list)
 	}
-	command := appparticipant.CreateCommand{
-		TenantID: "t1",
-		Name:     "Первый магазин",
-	}
-
-	if _, err := participants.Create(ctx, command); err != nil {
+	if _, err := participants.Get(ctx, "t1"); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := participants.SetTrust(ctx, "t1", participant.Trusted, participant.Decision{}); err != nil {
+	decision := participant.Decision{Note: "Проверено"}
+	if _, err := participants.SetTrust(ctx, "t1", participant.Trusted, decision); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := participants.Enable(ctx, "t1", participant.Decision{}); err != nil {
@@ -236,11 +233,10 @@ func TestProjectionToIndex(t *testing.T) {
 	drain()
 
 	if list, _ := queries.Search(ctx, ports.OfferQuery{}); list.Total != 0 {
-		t.Fatalf("магазин не включил участие в настройках — не в выдаче: %+v", list)
+		t.Fatalf("магазин не передал валидные настройки доставки — не в выдаче: %+v", list)
 	}
 
 	platform.SetSettings("t1", ports.ShopSettings{
-		Enabled:  true,
 		Subsidy:  w3PipelineIntegrationSubsidy,
 		Delivery: w3PipelineIntegrationDelivery,
 	})

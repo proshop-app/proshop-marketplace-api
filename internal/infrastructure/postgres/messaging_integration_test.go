@@ -172,11 +172,11 @@ func TestInboxParkedRetention(t *testing.T) {
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		fresh, err := tx.Inbox().MarkProcessed(ctx, "topic:0:1", at(0))
 		if err != nil || !fresh {
-			t.Fatalf("первая отметка: %v, %v", fresh, err)
+			return fmt.Errorf("первая отметка: %v, %w", fresh, err)
 		}
 		fresh, err = tx.Inbox().MarkProcessed(ctx, "topic:0:1", at(1))
 		if err != nil || fresh {
-			t.Fatalf("повтор: %v, %v", fresh, err)
+			return fmt.Errorf("повтор: %v, %w", fresh, err)
 		}
 		if _, err := tx.Inbox().MarkProcessed(ctx, "topic:0:2", at(50)); err != nil {
 			return err
@@ -271,42 +271,44 @@ func TestOfferStates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_ = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		state, err := tx.Offers().Offer(ctx, "t1", "p2")
 		if err != nil || state.Participant == nil || state.Tenant == nil || state.Signals == nil ||
 			state.Signals.State().Price.Kopecks() != 5000 || state.Tenant.Status() != participant.TenantActive {
-			t.Fatalf("снимок предложения: %+v, %v", state, err)
+			return fmt.Errorf("снимок предложения: %+v, %w", state, err)
 		}
 
 		outsider, err := tx.Offers().Offer(ctx, "t2", "p1")
 		if err != nil || outsider.Participant != nil || outsider.Signals != nil || outsider.Tenant == nil {
-			t.Fatalf("товар магазина без участия: %+v, %v", outsider, err)
+			return fmt.Errorf("товар магазина без участия: %+v, %w", outsider, err)
 		}
 
 		if _, err := tx.Offers().Offer(ctx, "t1", "missing"); !errors.Is(err, catalog.ErrProductNotFound) {
-			t.Fatalf("ожидалось ErrProductNotFound, получено %v", err)
+			return fmt.Errorf("ожидалось ErrProductNotFound, получено %w", err)
 		}
 
 		page, err := tx.Offers().TenantOffers(ctx, "t1", "p1", 1)
 		if err != nil || len(page) != 1 || page[0].Product.State().ProductID != "p2" {
-			t.Fatalf("страница магазина: %+v, %v", page, err)
+			return fmt.Errorf("страница магазина: %+v, %w", page, err)
 		}
 
 		all, err := tx.Offers().ParticipantOffers(ctx, ports.OfferKey{}, 10)
 		if err != nil || len(all) != 3 {
-			t.Fatalf("предложения участников: %d, %v", len(all), err)
+			return fmt.Errorf("предложения участников: %d, %w", len(all), err)
 		}
 
 		next, err := tx.Offers().ParticipantOffers(ctx, ports.OfferKey{TenantID: "t1", ProductID: "p2"}, 10)
 		if err != nil || len(next) != 1 || next[0].Product.State().ProductID != "p3" {
-			t.Fatalf("продолжение после позиции: %+v, %v", next, err)
+			return fmt.Errorf("продолжение после позиции: %+v, %w", next, err)
 		}
 
 		changed, err := tx.Offers().ChangedSince(ctx, at(10), ports.OfferKey{}, 10)
 		if err != nil || len(changed) != 1 || changed[0].Product.State().ProductID != "p2" {
-			t.Fatalf("изменённые после границы: %+v, %v", changed, err)
+			return fmt.Errorf("изменённые после границы: %+v, %w", changed, err)
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

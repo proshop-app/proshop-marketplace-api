@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -56,11 +57,11 @@ func TestPromotionRepositories(t *testing.T) {
 			return err
 		}
 		if len(all) != 8 {
-			t.Fatal(all)
+			return fmt.Errorf("%+v", all)
 		}
 		for _, p := range all {
 			if p.Active || p.DefaultPrice.Kopecks() != 0 || p.SlotLimit != 1 {
-				t.Fatal(p)
+				return fmt.Errorf("%+v", p)
 			}
 		}
 		p, err := tx.Promotion().Placement(ctx, "category_slot")
@@ -85,7 +86,7 @@ func TestPromotionRepositories(t *testing.T) {
 			return err
 		}
 		if read.State().Price.Kopecks() != 700 {
-			t.Fatal(read.State())
+			return fmt.Errorf("%+v", read.State())
 		}
 		if _, err := read.Decide(promotion.Submit, "", "", promotion.Payment{}, now.Add(time.Hour)); err != nil {
 			return err
@@ -116,7 +117,7 @@ func TestPromotionRepositories(t *testing.T) {
 			return err
 		}
 		if len(weeks) != 1 || weeks[0].Sold != 1 {
-			t.Fatal(weeks)
+			return fmt.Errorf("%+v", weeks)
 		}
 		for i := range 2 {
 			for _, kind := range []string{"view", "click"} {
@@ -125,7 +126,7 @@ func TestPromotionRepositories(t *testing.T) {
 					return err
 				}
 				if fresh != (i == 0) {
-					t.Fatal(fresh)
+					return fmt.Errorf("%+v", fresh)
 				}
 			}
 		}
@@ -134,35 +135,35 @@ func TestPromotionRepositories(t *testing.T) {
 			return err
 		}
 		if len(rows) != 1 || rows[0].Impressions != 1 || rows[0].Clicks != 1 {
-			t.Fatal(rows)
+			return fmt.Errorf("%+v", rows)
 		}
 		summaries, err := tx.Promotion().Summaries(ctx, []ids.UUID{c.State().ID})
 		if err != nil {
 			return err
 		}
 		if summaries[c.State().ID].Impressions != 1 || summaries[c.State().ID].Clicks != 1 {
-			t.Fatal(summaries)
+			return fmt.Errorf("%+v", summaries)
 		}
 		traffic, err := tx.Promotion().Traffic(ctx, "2026-11-09", "2026-11-15")
 		if err != nil {
 			return err
 		}
 		if len(traffic) != 1 || traffic[0].Clicks != 1 {
-			t.Fatal(traffic)
+			return fmt.Errorf("%+v", traffic)
 		}
 		groups, err := tx.Promotion().ReportGroups(ctx, "2026-11-09", "2026-11-15")
 		if err != nil {
 			return err
 		}
 		if len(groups) != 1 || groups[0].Count != 1 || groups[0].Price.Kopecks() != 700 {
-			t.Fatal(groups)
+			return fmt.Errorf("%+v", groups)
 		}
 		decisions, err := tx.Promotion().Decisions(ctx, c.State().ID)
 		if err != nil {
 			return err
 		}
 		if len(decisions) != 1 || decisions[0].Actor != promotion.ActorTenant {
-			t.Fatal(decisions)
+			return fmt.Errorf("%+v", decisions)
 		}
 		return nil
 	})
@@ -248,8 +249,8 @@ func TestPromotionConcurrentCapacity(t *testing.T) {
 func TestPromotionMigrationAndQueries(t *testing.T) {
 	pool := pgtest.Pool(t)
 	ctx := context.Background()
-	// Откат только новой миграции воспроизводит установленную M1.1.
-	if err := postgres.MigrateDown(ctx, pool); err != nil {
+	// Версия 35 воспроизводит установленную M1.1 до добавления колонок размещения.
+	if err := postgres.MigrateDownTo(ctx, pool, 35); err != nil {
 		t.Fatal(err)
 	}
 	old := promotion.CampaignState{
@@ -291,7 +292,7 @@ func TestPromotionMigrationAndQueries(t *testing.T) {
 			return err
 		}
 		if c.State() != old {
-			t.Fatal(c.State(), old)
+			return fmt.Errorf("%+v %+v", c.State(), old)
 		}
 		newer := old
 		newer.ID = "00000000-0000-0000-0000-000000000002"
@@ -309,14 +310,14 @@ func TestPromotionMigrationAndQueries(t *testing.T) {
 			return err
 		}
 		if total != 2 || len(rows) != 1 || rows[0].ID != newer.ID {
-			t.Fatal(rows, total)
+			return fmt.Errorf("%+v %+v", rows, total)
 		}
 		counts, err := tx.Promotion().Counts(ctx, promotion.Filter{ProductID: "p1", Limit: 1, Offset: 1})
 		if err != nil {
 			return err
 		}
 		if counts[promotion.Draft] != 2 {
-			t.Fatal(counts)
+			return fmt.Errorf("%+v", counts)
 		}
 		if err := tx.Promotion().AddDecision(ctx, old.ID, promotion.Decision{
 			At:     old.CreatedAt,
@@ -333,7 +334,7 @@ func TestPromotionMigrationAndQueries(t *testing.T) {
 			return err
 		}
 		if len(history) != 0 {
-			t.Fatal(history)
+			return fmt.Errorf("%+v", history)
 		}
 		_, err = tx.Promotion().Count(ctx, newer, "2026-11-09", "visitor", "view")
 		return err
@@ -357,7 +358,7 @@ func TestPromotionMigrationAndQueries(t *testing.T) {
 		t.Fatal(result, err)
 	}
 	// Down удаляет кликовый дедуп перед восстановлением прежнего первичного ключа.
-	if err := postgres.MigrateDown(ctx, pool); err != nil {
+	if err := postgres.MigrateDownTo(ctx, pool, 35); err != nil {
 		t.Fatal(err)
 	}
 	if err := postgres.Migrate(ctx, pool); err != nil {

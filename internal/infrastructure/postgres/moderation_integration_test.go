@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -47,14 +48,14 @@ func TestModerationRepositories(t *testing.T) {
 			return err
 		}
 		if read.State().Status != moderation.Pending || read.Origin().Version != 1 {
-			t.Fatal(read.State())
+			return fmt.Errorf("%+v", read.State())
 		}
 		opened, err := tx.ModerationCases().Open(ctx, "t1", "p1")
 		if err != nil {
 			return err
 		}
 		if opened.State().ID != c.State().ID {
-			t.Fatal(opened.State())
+			return fmt.Errorf("%+v", opened.State())
 		}
 		read.Evaluate(2, 1, moderation.Rules{Revision: 1}, moderation.Input{Probation: true}, now)
 		if err := tx.ModerationVerdicts().Save(ctx, read); err != nil {
@@ -110,18 +111,18 @@ func TestModerationRepositories(t *testing.T) {
 			return err
 		}
 		if len(decisions) != 1 || decisions[0].Operator.ID != "o1" {
-			t.Fatal(decisions)
+			return fmt.Errorf("%+v", decisions)
 		}
 		cases, total, err := tx.ModerationCases().List(ctx, moderation.Filter{Status: "open", Limit: 10})
 		if err != nil {
 			return err
 		}
 		if total != 1 || len(cases) != 1 {
-			t.Fatal(cases, total)
+			return fmt.Errorf("%+v %+v", cases, total)
 		}
 		verdicts, total, err := tx.ModerationVerdicts().List(ctx, moderation.Filter{TenantID: "t1", Limit: 10})
 		if total != 1 || len(verdicts) != 1 {
-			t.Fatal(verdicts, total)
+			return fmt.Errorf("%+v %+v", verdicts, total)
 		}
 		return err
 	})
@@ -149,7 +150,7 @@ func TestModerationRulesRepository(t *testing.T) {
 			return err
 		}
 		if len(before.Phrases) != 0 {
-			t.Fatal("словарь должен быть пустым")
+			return fmt.Errorf("%+v", "словарь должен быть пустым")
 		}
 		if err := repo.AddPhrase(ctx, phrase); err != nil {
 			return err
@@ -159,30 +160,30 @@ func TestModerationRulesRepository(t *testing.T) {
 			return err
 		}
 		if after.Revision != before.Revision+1 || len(after.Phrases) != 1 {
-			t.Fatal(after)
+			return fmt.Errorf("%+v", after)
 		}
 		if err := repo.AddPhrase(ctx, phrase); !errors.Is(err, moderation.ErrPhraseExists) {
-			t.Fatal(err)
+			return fmt.Errorf("%w", err)
 		}
 		if _, err := repo.RemovePhrase(ctx, phrase.Key); err != nil {
 			return err
 		}
 		if changed, err := repo.RemovePhrase(ctx, phrase.Key); err != nil || changed {
-			t.Fatal(changed, err)
+			return fmt.Errorf("%+v %w", changed, err)
 		}
 		final, err := repo.Current(ctx)
 		if err != nil {
 			return err
 		}
 		if final.Revision != before.Revision+2 {
-			t.Fatal(final)
+			return fmt.Errorf("%+v", final)
 		}
 		if err := repo.AddReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Причина"}); err != nil {
 			return err
 		}
 		reasons, err := repo.ListReasons(ctx)
 		if len(reasons) != 1 || reasons[0].Code != "r1" {
-			t.Fatal(reasons)
+			return fmt.Errorf("%+v", reasons)
 		}
 		return err
 	})
@@ -217,7 +218,7 @@ func TestParticipantModerationJournal(t *testing.T) {
 			return err
 		}
 		if read.State().Trust != participant.Trusted || read.State().ApprovedOffers != 1 {
-			t.Fatal(read.State())
+			return fmt.Errorf("%+v", read.State())
 		}
 		d := participant.DecisionRecord{
 			ID:       random.IDs{}.NewUUID(),
@@ -231,7 +232,7 @@ func TestParticipantModerationJournal(t *testing.T) {
 		}
 		items, total, err := tx.ParticipantDecisions().List(ctx, "t1", participant.Page{Limit: 10})
 		if total != 1 || len(items) != 1 || items[0].Value != participant.Trusted {
-			t.Fatal(items, total)
+			return fmt.Errorf("%+v %+v", items, total)
 		}
 		return err
 	})
@@ -267,7 +268,7 @@ func TestModerationCachedDecisionAndStats(t *testing.T) {
 			return err
 		}
 		if found {
-			t.Fatal("неожиданный кеш")
+			return fmt.Errorf("%+v", "неожиданный кеш")
 		}
 		return tx.ModerationDecisions().Cache(ctx, "k1", cached)
 	})
@@ -280,21 +281,21 @@ func TestModerationCachedDecisionAndStats(t *testing.T) {
 			return err
 		}
 		if !found || value.Result.ID != c.State().ID || value.Fingerprint != "f1" {
-			t.Fatal(value, found)
+			return fmt.Errorf("%+v %+v", value, found)
 		}
 		_, found, err = tx.ModerationDecisions().Cached(ctx, "k1", cached.ExpiresAt)
 		if err != nil {
 			return err
 		}
 		if found {
-			t.Fatal("просроченный ответ возвращён")
+			return fmt.Errorf("%+v", "просроченный ответ возвращён")
 		}
 		stats, err := tx.ModerationCases().OpenStats(ctx)
 		if err != nil {
 			return err
 		}
 		if len(stats) != 1 || stats[0].TenantID != "t1" || stats[0].Count != 1 {
-			t.Fatal(stats)
+			return fmt.Errorf("%+v", stats)
 		}
 		if err := tx.ModerationRules().AddReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Причина"}); err != nil {
 			return err

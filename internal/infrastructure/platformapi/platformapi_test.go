@@ -144,7 +144,7 @@ func TestMarketplaceSettings(t *testing.T) {
 	)
 
 	settings, err := client.MarketplaceSettings(context.Background(), "t1")
-	if err != nil || !settings.Enabled || settings.Subsidy.Type != participant.SubsidyPercent ||
+	if err != nil || settings.Subsidy.Type != participant.SubsidyPercent ||
 		settings.Subsidy.Value != 50 ||
 		settings.Subsidy.MaxAmount.Kopecks() != 30000 {
 		t.Fatalf("настройки: %+v %v", settings, err)
@@ -166,7 +166,8 @@ func TestErrors(t *testing.T) {
 		map[string][2]string{"GET " + prefix + "/settings/marketplace": {"", "items_check_request.json"}},
 		http.StatusOK,
 	)
-	if settings, err := broken.MarketplaceSettings(context.Background(), "t1"); err != nil || settings.Enabled {
+	settings, err := broken.MarketplaceSettings(context.Background(), "t1")
+	if !errors.Is(err, ports.ErrInvalidSettings) {
 		t.Fatalf("тело без полей — участие выключено: %+v %v", settings, err)
 	}
 	wrongToken := platformapi.New(platformapi.Config{

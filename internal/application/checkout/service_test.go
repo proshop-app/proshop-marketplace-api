@@ -140,9 +140,8 @@ func setup(t *testing.T) *env {
 		FreeDeliveryFrom: money.FromKopecks(1000000),
 		Slug:             "s1",
 		Name:             "Первый",
-		Status:           participant.StatusConnected,
+		Stage:            participant.StageConnected,
 		Enabled:          true,
-		ShopEnabled:      true,
 		Subsidy: participant.Subsidy{
 			Enabled: true,
 			Type:    participant.SubsidyPercent,
@@ -155,8 +154,8 @@ func setup(t *testing.T) *env {
 
 	e.platform.OrderNow = t0
 	e.store.SeedParticipant(participant.State{
+		Stage:            participant.StageConnected,
 		TenantID:         "t2",
-		ShopEnabled:      true,
 		Enabled:          true,
 		Delivery:         w3ServiceDelivery,
 		Subsidy:          w3ServiceSubsidy,
@@ -165,7 +164,6 @@ func setup(t *testing.T) *env {
 	for _, tenant := range []ids.TenantID{"t1", "t2"} {
 		p, _ := e.store.Participant(tenant)
 		e.platform.SetSettings(tenant, ports.ShopSettings{
-			Enabled:          true,
 			FreeDeliveryFrom: p.FreeDeliveryFrom,
 			Subsidy:          p.Subsidy,
 			Delivery:         p.Delivery,

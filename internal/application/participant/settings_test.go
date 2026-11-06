@@ -40,10 +40,10 @@ func TestSettingsSync(t *testing.T) {
 		Value:     15000,
 		MaxAmount: money.FromKopecks(20000),
 	}
-	platform.SetSettings("t1", ports.ShopSettings{Enabled: true, Subsidy: subsidy, Delivery: w3SettingsDelivery})
+	platform.SetSettings("t1", ports.ShopSettings{Subsidy: subsidy, Delivery: w3SettingsDelivery})
 	platform.Fail("t2", errors.New("сервер недоступен"))
 
-	settings := appparticipant.NewSettings(store, platform, clock)
+	settings := appparticipant.NewSettings(store, platform, clock, &fake.IDs{})
 
 	// задачи создания участников уже отработаны: иначе новая склеилась бы с невзятой
 	tasks, _ := store.Claim(
@@ -62,7 +62,7 @@ func TestSettingsSync(t *testing.T) {
 	}
 
 	p, _ := store.Participant("t1")
-	if !p.ShopEnabled || p.Subsidy != subsidy || p.SettingsSyncedAt.IsZero() {
+	if !participant.Restore(p).DeliveryValid() || p.Subsidy != subsidy || p.SettingsSyncedAt.IsZero() {
 		t.Fatalf("настройки магазина: %+v", p)
 	}
 
@@ -91,11 +91,10 @@ func TestInvalidParticipationSettingsHideSeller(t *testing.T) {
 	}
 	platform := fake.NewPlatform()
 	platform.SetSettings("t1", ports.ShopSettings{
-		Enabled:  true,
 		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
 	})
-	syncer := appparticipant.NewSettings(store, platform, clock)
+	syncer := appparticipant.NewSettings(store, platform, clock, &fake.IDs{})
 	if _, err := syncer.SyncOne(ctx, "t1"); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +103,7 @@ func TestInvalidParticipationSettingsHideSeller(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, _ := store.Participant("t1")
-	if p.ShopEnabled {
+	if participant.Restore(p).DeliveryValid() {
 		t.Fatal("некорректные обязательные настройки должны скрыть участника")
 	}
 }

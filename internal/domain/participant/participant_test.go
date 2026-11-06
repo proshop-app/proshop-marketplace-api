@@ -53,7 +53,7 @@ func TestNewParticipant(t *testing.T) {
 	if p.TenantID() != "t1" || p.Slug() != "shop-one" || p.Name() != "Магазин один" {
 		t.Fatalf("неожиданный участник: %+v", p.State())
 	}
-	if p.Status() != participant.StatusOnboarding || p.Enabled() {
+	if p.Stage() != participant.StageCandidate || p.Enabled() {
 		t.Fatalf("новый участник должен быть скрыт и не подключён: %+v", p.State())
 	}
 	if !p.IsNew() || p.Version() != 1 {
@@ -164,10 +164,10 @@ func TestVisibility(t *testing.T) {
 
 	p.Enable(t1)
 	if got := participant.VisibilityOf(p, active); got.Visible {
-		t.Fatalf("включённый оператором, но не включившийся сам магазин не виден: %+v", got)
+		t.Fatalf("включённый оператором магазин без обязательной доставки не виден: %+v", got)
 	}
 
-	if _, err := p.ApplyShopSettings(true, w3ParticipantSubsidy, money.Money{}, w3ParticipantDelivery, t1); err != nil {
+	if _, err := p.ApplyShopSettings(w3ParticipantSubsidy, money.Money{}, w3ParticipantDelivery, t1); err != nil {
 		t.Fatal(err)
 	}
 	if got := participant.VisibilityOf(p, active); !got.Visible || !got.CheckoutAvailable {
@@ -194,20 +194,20 @@ func TestApplyShopSettings(t *testing.T) {
 		MaxAmount: money.FromKopecks(30000),
 	}
 
-	changed, err := p.ApplyShopSettings(true, subsidy, money.Money{}, w3ParticipantDelivery, t1)
-	if err != nil || !changed || !p.ShopEnabled() || p.Subsidy() != subsidy || p.Version() != 2 {
+	changed, err := p.ApplyShopSettings(subsidy, money.Money{}, w3ParticipantDelivery, t1)
+	if err != nil || !changed || !p.DeliveryValid() || p.Subsidy() != subsidy || p.Version() != 2 {
 		t.Fatalf("настройки магазина: changed=%v err=%v %+v", changed, err, p.State())
 	}
 	p.MarkSaved()
 
-	changed, err = p.ApplyShopSettings(true, subsidy, money.Money{}, w3ParticipantDelivery, t1.Add(time.Hour))
+	changed, err = p.ApplyShopSettings(subsidy, money.Money{}, w3ParticipantDelivery, t1.Add(time.Hour))
 	if err != nil || changed || p.Version() != 2 || !p.State().SettingsSyncedAt.Equal(t1.Add(time.Hour)) {
 		t.Fatalf("те же настройки не меняют версию, но время сверки обновляется: %+v", p.State())
 	}
 
 	overPercent := participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 101}
 
-	_, err = p.ApplyShopSettings(true, overPercent, money.Money{}, w3ParticipantDelivery, t1)
+	_, err = p.ApplyShopSettings(overPercent, money.Money{}, w3ParticipantDelivery, t1)
 	if !errors.Is(err, participant.ErrInvalidSubsidy) {
 		t.Fatalf("процент больше 100: %v", err)
 	}

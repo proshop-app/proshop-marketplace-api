@@ -140,7 +140,6 @@
 
 ```json
 {
-  "enabled": true,
   "freeDeliveryFrom": 500000,
   "subsidy": {"enabled": true, "type": "percent", "value": 50, "maxAmount": 30000},
   "delivery": {"regions": ["RU-MOW"], "carriers": ["cdek", "yandex"]}
@@ -149,12 +148,11 @@
 
 | Поле | Обязательное правило |
 |---|---|
-| enabled | согласие магазина на участие; false допускает отсутствие остальных настроек |
-| freeDeliveryFrom | int64 ≥ 0, копейки; отсутствие/null при enabled=true запрещено; 0 — доставка всегда включена |
-| subsidy | объект обязателен при enabled=true, enabled=true, type=fixed/percent; субсидия продавца для группы ниже порога |
+| freeDeliveryFrom | int64 ≥ 0, копейки; отсутствие/null запрещено; 0 — доставка всегда включена |
+| subsidy | объект обязателен, subsidy.enabled=true, type=fixed/percent; субсидия продавца для группы ниже порога |
 | subsidy.value | fixed: копейки ≥ 0; percent: целое 0–100 |
 | subsidy.maxAmount | копейки ≥ 0; 0 — без потолка |
-| delivery | обязательный объект при enabled=true, непустые regions и carriers |
+| delivery | обязательный объект, непустые regions и carriers |
 | delivery.regions | непустой список существующих кодов ISO 3166-2 RU, например `RU-MOW` |
 | delivery.carriers | непустой список перевозчиков из закрытого перечня `cdek`, `yandex` |
 
@@ -163,7 +161,7 @@
 Яндекса не являются ISO. Адаптеры справочников переводят их через явные
 `CDEK_REGION_CODES` / `YANDEX_REGION_CODES`; неизвестный код оставляет
 `regionCode` пустым и запрещает доставку. Магазин возвращает ISO-коды уже в
-`GET /settings/marketplace`; невалидный ответ не включает участие.
+`GET /settings/marketplace`; невалидный ответ исключает магазин из очереди и скрывает предложения.
 Поля ПВЗ хранятся маркетплейсом; покупатель не подставляет произвольный регион.
 Миграция старых зон и работа оператора описаны в [operator-gateway.md](operator-gateway.md).
 Вне списка регионов или способов предложение доступно для просмотра,
@@ -194,13 +192,21 @@
 Без обязательных настроек участник не виден. Для видимости также нужны
 включение оператором и active в реестре. Привязка кассы платформе не нужна.
 
-Настройки старого формата недели 2 (`enabled=true` и одна `subsidy`, без
-`freeDeliveryFrom` и `delivery`) больше не по контракту: сверка возвращает
-`platform.invalid_settings`, выключает сохранённое согласие и скрывает магазин.
-При обновлении схемы прежнее согласие также сбрасывается с переиндексацией.
-Нулевое значение новой колонки не означает, что продавец явно выбрал
-`freeDeliveryFrom=0`: участие возобновляется только после успешной сверки
-полного ответа §3. Платёжная привязка не заменяет эти настройки.
+Согласия магазина нет: верхнеуровневое `enabled` не читается и не требуется.
+Отсутствие обязательных настроек даёт `platform.invalid_settings` и скрывает
+магазин, сохраняя стадию участия. Видимость: `stage=connected`, валидная доставка
+и `active` в реестре. Каждый активный магазин автоматически становится кандидатом
+с доверием `probation`; на старте и перед каждой сверкой выполняется догон реестра.
+
+Сервер читает `GET /api/v1/internal/tenants/{tenantId}/participation` на маркетплейсе
+с `Authorization: Bearer <SERVER_API_TOKEN>`. Ответ: `stage`, `awaitingReview`,
+`deliveryValid`, `lastDecision: {reason, note, at, operator}` или `null`.
+Не настроенный SERVER_API_TOKEN — 404; отсутствующий или неверный Bearer — 401,
+как и у машинного API продвижения.
+`POST /api/v1/internal/tenants/{tenantId}/participation/submit` без тела переводит
+только `returned` в `candidate`, устанавливает `awaitingReview=true`, сохраняет
+последнее решение; из остальных стадий — 409 `conflict`. Кнопку показывает сервер
+магазина; согласие на участие не запрашивается.
 
 
 ## 4. Заказ и оплата
@@ -573,6 +579,7 @@ PUT той же части принимает один YAML до 2 МиБ с о�
 {
   "schemaVersion": 1,
   "tenantId": "t2",
+  "stage": "connected",
   "enabled": true,
   "trust": "probation",
   "reason": {"code": "wrong_category", "message": "Неверная категория"},
@@ -584,11 +591,15 @@ PUT той же части принимает один YAML до 2 МиБ с о�
 
 | Поле | Смысл |
 |---|---|
-| `enabled` | участие включено оператором |
+| `stage` | `candidate`, `connected`, `returned`, `disconnected` |
+| `enabled` | производное: true только для `connected` |
 | `trust` | `probation` — каждое предложение ждёт одобрения оператора; `trusted` — проходит по правилам; покупатель уровень не видит |
 | `reason` | причина из того же словаря оператора `{code, message}` или `null` |
 | `note` | заметка оператора; при `by: "system"` — служебный текст с числом одобренных |
 | `by` | `operator` — решение оператора; `system` — автоматическое повышение после `MODERATION_PROBATION_OFFERS` одобренных |
+
+Возврат оператором отправляет `stage=returned`, `enabled=false`, причину, заметку
+и `by=operator`. Отключение подключённого — `disconnected`.
 
 Ручное понижение до `probation` обнуляет счётчик одобренных, автоматическое
 повышение снова наступает после `MODERATION_PROBATION_OFFERS` одобрений.
@@ -602,3 +613,13 @@ Discovery: `GET /api/v1/internal/reference`; снимок:
 `GET /api/v1/internal/reference/{code}/entries/{id}` (200/404).
 Все три маршрута принимают `Authorization: Bearer <REFERENCE_READ_TOKEN>`.
 Поля и семантика дельт описаны в [reference.md](reference.md).
+
+### Имя кандидата из реестра магазинов
+
+События `platform.tenant.created`, `platform.tenant.updated`,
+`platform.tenant.suspended`, `platform.tenant.resumed`, `platform.tenant.deleted`
+содержат `tenantId`, `slug`, `status`, `plan`, `hosts`, `at`; поле `name` сервер
+не отправляет (формирование — `modules/platform/helpers/events.ts`,
+`tenantEventMessageOf`). Поэтому имя автоматически созданного кандидата — slug.
+Если в расширенном снимке поступит `name`, площадка использует его только при
+допустимом имени; пустое или недопустимое имя заменяется slug без отказа события.

@@ -90,7 +90,6 @@ type errorJSON struct {
 }
 
 type settingsJSON struct {
-	Enabled          bool                          `json:"enabled"`
 	FreeDeliveryFrom *int64                        `json:"freeDeliveryFrom"`
 	Delivery         *participant.DeliverySettings `json:"delivery"`
 	Subsidy          *struct {
@@ -191,7 +190,7 @@ func (c *Client) QuoteDelivery(
 	return offered, nil
 }
 
-// MarketplaceSettings — флаг участия и субсидия из настроек магазина.
+// MarketplaceSettings — обязательные настройки доставки магазина.
 func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID) (ports.ShopSettings, error) {
 	var answer settingsJSON
 	if err := c.call(ctx, http.MethodGet, tenantID, "/settings/marketplace", nil, &answer); err != nil {
@@ -200,8 +199,8 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 		}
 		return ports.ShopSettings{}, err
 	}
-	settings := ports.ShopSettings{Enabled: answer.Enabled}
-	if answer.Enabled && (answer.FreeDeliveryFrom == nil || answer.Subsidy == nil || answer.Delivery == nil) {
+	settings := ports.ShopSettings{}
+	if answer.FreeDeliveryFrom == nil || answer.Subsidy == nil || answer.Delivery == nil {
 		return ports.ShopSettings{}, ports.ErrInvalidSettings
 	}
 	if answer.FreeDeliveryFrom != nil {
@@ -213,7 +212,7 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 	if answer.Delivery != nil {
 		settings.Delivery = answer.Delivery.Clone()
 	}
-	if answer.Enabled && settings.Delivery.Validate() != nil {
+	if settings.Delivery.Validate() != nil {
 		return ports.ShopSettings{}, ports.ErrInvalidSettings
 	}
 
@@ -230,7 +229,7 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 		return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
 	}
 
-	if answer.Enabled && !settings.Subsidy.Enabled {
+	if !settings.Subsidy.Enabled {
 		return ports.ShopSettings{}, ports.ErrInvalidSettings
 	}
 	return settings, nil

@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -63,7 +64,7 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 			return err
 		}
 		if claimed, err := loaded.ClaimCreation("t1", "duplicate", now); err != nil || claimed {
-			t.Fatalf("сохранённая аренда должна пережить чтение: %v %v", claimed, err)
+			return fmt.Errorf("сохранённая аренда должна пережить чтение: %v %w", claimed, err)
 		}
 		_, err = loaded.CompleteCreation(
 			"t1",
@@ -101,7 +102,7 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 		g := loaded.Groups()[0]
 		if g.Status != checkout.GroupSellerUnreachable || g.PollFailures != checkout.MaxOrderFailures ||
 			!g.NextPollAt.Equal(now) || g.LastOrderStatus != checkout.GroupAwaitingPayment {
-			t.Fatalf("счётчик и исходный статус потеряны: %+v", g)
+			return fmt.Errorf("счётчик и исходный статус потеряны: %+v", g)
 		}
 		if _, err := loaded.Observe(
 			"t1",
@@ -130,17 +131,17 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 		}
 		g := loaded.Groups()[0]
 		if !g.ReturnFailed || g.CartReturned || len(g.ReturnRemaining) != 1 || g.ReturnRemaining[0] != line {
-			t.Fatalf("остаток возврата потерян: %+v", g)
+			return fmt.Errorf("остаток возврата потерян: %+v", g)
 		}
 		due := checkout.Filter{BuyerID: buyerA, OrdersOnly: true, Limit: 100, WorkDueAt: now}
 		waiting, err := tx.Checkouts().List(ctx, due)
 		if err != nil || len(waiting) != 0 {
-			t.Fatalf("рано повторять возврат: %d %v", len(waiting), err)
+			return fmt.Errorf("рано повторять возврат: %d %w", len(waiting), err)
 		}
 		due.WorkDueAt = now.Add(time.Minute)
 		ready, err := tx.Checkouts().List(ctx, due)
 		if err != nil || len(ready) != 1 {
-			t.Fatalf("пора вернуть остаток: %d %v", len(ready), err)
+			return fmt.Errorf("пора вернуть остаток: %d %w", len(ready), err)
 		}
 		return nil
 	})

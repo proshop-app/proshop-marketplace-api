@@ -25,14 +25,13 @@ func promotionHTTPFixture() (*promotionHandlers, *fake.Store, *fake.Clock) {
 	clock := fake.NewClock(time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC))
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Slug: "t1", Status: participant.TenantActive, Version: 1})
 	store.SeedParticipant(participant.State{
-		TenantID:    "t1",
-		Name:        "Магазин",
-		Delivery:    participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
-		Subsidy:     participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
-		Enabled:     true,
-		ShopEnabled: true,
-		Status:      participant.StatusConnected,
-		Version:     1,
+		TenantID: "t1",
+		Name:     "Магазин",
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+		Enabled:  true,
+		Stage:    participant.StageConnected,
+		Version:  1,
 	})
 	store.SeedProduct(catalog.ProductState{
 		TenantID:  "t1",
