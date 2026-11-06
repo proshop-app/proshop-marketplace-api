@@ -6,6 +6,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
@@ -31,6 +33,7 @@ type UnitOfWork interface {
 
 // Tx — хранилища, привязанные к одной транзакции.
 type Tx interface {
+	Promotion() promotion.Repository
 	// AfterCommit откладывает наблюдение до успешной фиксации данных.
 	AfterCommit(func())
 	ModerationVerdicts() moderation.VerdictRepository

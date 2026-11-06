@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	appbuyer "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
@@ -34,16 +36,18 @@ type Check struct {
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
-	Moderation    *appmoderation.Service
-	Taxonomy      *apptaxonomy.Service
-	Catalog       *appcatalog.Queries
-	Participants  *appparticipant.Service
-	Auth          *appbuyer.Auth
-	Carts         *appcart.Service
-	Directory     *appdelivery.Directory
-	Checkouts     *appcheckout.Service
-	Reference     *appreference.Service
-	OperatorToken string
+	Promotion      *apppromotion.Service
+	ServerAPIToken string
+	Moderation     *appmoderation.Service
+	Taxonomy       *apptaxonomy.Service
+	Catalog        *appcatalog.Queries
+	Participants   *appparticipant.Service
+	Auth           *appbuyer.Auth
+	Carts          *appcart.Service
+	Directory      *appdelivery.Directory
+	Checkouts      *appcheckout.Service
+	Reference      *appreference.Service
+	OperatorToken  string
 	// ReferenceReadToken — токен читателя реестра: снимок, resolve и чтение записей без прав оператора.
 	ReferenceReadToken string
 	OperatorAuth       *appoperator.Auth
@@ -72,6 +76,8 @@ type healthJSON struct {
 // routes — все маршруты маркетплейса. Та же таблица сверяется с
 // api/openapi.yaml в тестах: маршрут без описания — красный тест.
 func routes(deps Deps) []route {
+	promotion := &promotionHandlers{service: deps.Promotion}
+	machine := func(next http.HandlerFunc) http.HandlerFunc { return serverAPI(deps.ServerAPIToken, next) }
 	moderation := &moderationHandlers{service: deps.Moderation}
 	catalog := &catalogHandlers{queries: deps.Catalog}
 	taxonomy := &taxonomyHandlers{service: deps.Taxonomy, catalog: deps.Catalog}
@@ -95,6 +101,40 @@ func routes(deps Deps) []route {
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
+		{http.MethodGet, "/api/v1/operator/promotion/overview", operator(promotion.overview)},
+		{http.MethodGet, "/api/v1/operator/promotion/campaigns", operator(promotion.list)},
+		{http.MethodPost, "/api/v1/operator/promotion/campaigns", operator(promotion.create)},
+		{http.MethodGet, "/api/v1/operator/promotion/campaigns/{id}", operator(promotion.campaign)},
+		{http.MethodPatch, "/api/v1/operator/promotion/campaigns/{id}", operator(promotion.edit)},
+		{http.MethodPost, "/api/v1/operator/promotion/campaigns/{id}/decisions", operator(promotion.decide)},
+		{http.MethodGet, "/api/v1/operator/promotion/campaigns/{id}/decisions", operator(promotion.decisions)},
+		{http.MethodGet, "/api/v1/operator/promotion/campaigns/{id}/stats", operator(promotion.stats)},
+		{http.MethodGet, "/api/v1/operator/promotion/placements", operator(promotion.placements)},
+		{http.MethodPut, "/api/v1/operator/promotion/placements/{code}", operator(promotion.configure)},
+		{http.MethodGet, "/api/v1/operator/promotion/placements/{code}/calendar", operator(promotion.calendar)},
+		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/promotion/placements", machine(promotion.placements)},
+		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/promotion/availability", machine(promotion.availability)},
+		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns", machine(promotion.list)},
+		{http.MethodPost, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns", machine(promotion.create)},
+		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}", machine(promotion.campaign)},
+		{http.MethodPatch, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}", machine(promotion.edit)},
+		{
+			http.MethodPost,
+			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/submit",
+			machine(promotion.decide),
+		},
+		{
+			http.MethodPost,
+			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/stop",
+			machine(promotion.decide),
+		},
+		{
+			http.MethodGet,
+			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/stats",
+			machine(promotion.stats),
+		},
+		{http.MethodGet, "/api/v1/catalog/sponsored", optionalBuyer(deps.Auth, promotion.sponsored)},
+		{http.MethodPost, "/api/v1/promotion/events", promotion.events},
 		{http.MethodPut, "/api/v1/operator/participants/{tenantId}/trust", operator(participants.decision)},
 		{http.MethodGet, "/api/v1/operator/participants/{tenantId}/decisions", operator(participants.decisions)},
 		{http.MethodGet, "/api/v1/operator/moderation/cases", operator(moderation.cases)},
