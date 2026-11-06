@@ -6,19 +6,21 @@ import (
 
 	appcart "github.com/proshop-app/proshop-marketplace/internal/application/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 type cartLineJSON struct {
-	OfferID   string    `json:"offerId"`
-	TenantID  string    `json:"tenantId"`
-	ProductID string    `json:"productId"`
-	Name      string    `json:"name"`
-	Quantity  int       `json:"quantity"`
-	Price     int64     `json:"price"`
-	Amount    int64     `json:"amount"`
-	Issue     *string   `json:"issue"`
-	AddedAt   time.Time `json:"addedAt"`
+	Seller    *participant.Seller `json:"seller"`
+	OfferID   string              `json:"offerId"`
+	TenantID  string              `json:"tenantId"`
+	ProductID string              `json:"productId"`
+	Name      string              `json:"name"`
+	Quantity  int                 `json:"quantity"`
+	Price     int64               `json:"price"`
+	Amount    int64               `json:"amount"`
+	Issue     *string             `json:"issue"`
+	AddedAt   time.Time           `json:"addedAt"`
 }
 
 // cartJSON — корзина; суммы — копейки.
@@ -100,6 +102,14 @@ func (h *cartHandlers) respond(w http.ResponseWriter, r *http.Request, state car
 		return
 	}
 
+	sellers, err := h.carts.Sellers(r.Context(), state)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	for i := range body.Lines {
+		body.Lines[i].Seller = sellers[ids.TenantID(body.Lines[i].TenantID)]
+	}
 	writeJSON(w, http.StatusOK, body)
 }
 

@@ -56,6 +56,7 @@ type ShopHeader struct {
 	Offers     int             `json:"offers"`
 	Categories []StoreCategory `json:"categories"`
 	IsNew      bool            `json:"isNew"`
+	Showcase   []ShopImage     `json:"showcase"`
 }
 
 // ShopImage — ограничивает поля товара в списке магазинов.
@@ -104,6 +105,7 @@ type StoreRecord struct {
 	Header         ShopHeader
 	Card           ShopCard
 	Public         bool
+	PagePublic     bool
 }
 
 // StoreCards — хранение производной карточки без чтения каталога на запросе.

@@ -15,8 +15,16 @@ type Page struct {
 	Offset int
 }
 
+// Seller — публичное имя продавца для корзины и заказов.
+type Seller struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
 // Repository — хранилище участников.
 type Repository interface {
+	// Sellers читает продавцов одним запросом; отсутствующие участники не включаются.
+	Sellers(context.Context, []ids.TenantID) (map[ids.TenantID]*Seller, error)
 	// Count считает участников по фильтрам без загрузки агрегатов.
 	Count(context.Context, Page) (int, error)
 	// Get — участник; нет — ErrNotFound.

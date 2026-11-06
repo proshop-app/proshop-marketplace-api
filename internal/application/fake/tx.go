@@ -434,3 +434,13 @@ func (r participants) Count(_ context.Context, page participant.Page) (int, erro
 	}
 	return count, nil
 }
+
+func (r participants) Sellers(_ context.Context, tenants []ids.TenantID) (map[ids.TenantID]*participant.Seller, error) {
+	result := make(map[ids.TenantID]*participant.Seller)
+	for _, tenant := range tenants {
+		if p, ok := r.d.participants[tenant]; ok {
+			result[tenant] = &participant.Seller{Slug: p.Slug, Name: p.Name}
+		}
+	}
+	return result, nil
+}

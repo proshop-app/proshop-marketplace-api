@@ -3815,7 +3815,7 @@ components:
         rank: { type: "null" }
     ShopHeader:
       type: object
-      required: [tenantId, slug, name, slogan, logo, initial, color, offers, isNew, categories]
+      required: [tenantId, slug, name, slogan, logo, initial, color, offers, isNew, categories, showcase]
       properties:
         tenantId: { type: string }
         slug: { type: string }
@@ -3827,6 +3827,7 @@ components:
         offers: { type: integer, minimum: 0 }
         isNew: { type: boolean, const: true }
         categories: { type: array, items: { $ref: "#/components/schemas/StoreCategory" } }
+        showcase: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/ShopImage" } }
     ShopCard:
       type: object
       required: [tenantId, slug, name, slogan, logo, initial, color, offers, isNew, category, moreCategories, fromPrice, showcase, rating]
@@ -5380,10 +5381,17 @@ components:
         id: { type: string, format: uuid }
         exp: { type: integer, format: int64, description: Срок access JWT в Unix-секундах }
         phone: { type: string, description: Цифры в международном формате без плюса }
+    OrderSeller:
+      type: [object, "null"]
+      required: [slug, name]
+      properties:
+        slug: { type: string }
+        name: { type: string }
     CartLine:
       type: object
-      required: [offerId, tenantId, productId, name, quantity, price, amount, issue, addedAt]
+      required: [offerId, tenantId, productId, name, quantity, price, amount, issue, addedAt, seller]
       properties:
+        seller: { $ref: "#/components/schemas/OrderSeller" }
         offerId: { type: string }
         tenantId: { type: string }
         productId: { type: string }
@@ -5464,8 +5472,24 @@ components:
         amount: { type: integer, format: int64 }
     CheckoutGroup:
       type: object
-      required: [tenantId, externalCheckoutId, lines, goods, quote, status, paymentOrder, deliveryPrice, paymentUrl, returnFailed, pollFailures, nextPollAt, createFailures, createExhausted]
+      required:
+      - tenantId
+      - externalCheckoutId
+      - lines
+      - goods
+      - quote
+      - status
+      - paymentOrder
+      - deliveryPrice
+      - paymentUrl
+      - returnFailed
+      - pollFailures
+      - nextPollAt
+      - createFailures
+      - createExhausted
+      - seller
       properties:
+        seller: { $ref: "#/components/schemas/OrderSeller" }
         tenantId: { type: string }
         status:
           type: string
