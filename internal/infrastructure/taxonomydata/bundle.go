@@ -82,6 +82,11 @@ func describe(source fs.FS) (taxonomy.Release, Coverage, error) {
 	if err := taxonomy.ValidateRelease(release); err != nil {
 		return release, coverage, err
 	}
+	for _, root := range release.Categories {
+		if !taxonomy.ValidIcon(root.Icon) {
+			return release, coverage, fmt.Errorf("категория %s: %w", root.ID, ErrInvalidBundle)
+		}
+	}
 	coverage.Directions = len(release.Categories)
 	coverage.Attributes = len(release.Attributes)
 	coverage.Schemas = len(release.Schemas)

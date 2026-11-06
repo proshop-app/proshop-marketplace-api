@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -34,7 +35,7 @@ type StoreSummary struct {
 	Uncategorized  int                      `json:"uncategorized"`
 	Showcase       []StoreProduct           `json:"showcase"`
 	Hidden         []participant.CardHidden `json:"hidden"`
-	Rating         *int                     `json:"rating"`
+	Rating         *catalog.Rating          `json:"rating"`
 	Badge          *string                  `json:"badge"`
 	Rank           *int                     `json:"rank"`
 }
@@ -46,6 +47,7 @@ type ShopColor struct {
 
 // ShopHeader — публичный профиль после применения постмодерации.
 type ShopHeader struct {
+	Rating     *catalog.Rating `json:"rating"`
 	TenantID   ids.TenantID    `json:"tenantId"`
 	Slug       string          `json:"slug"`
 	Name       string          `json:"name"`
@@ -73,20 +75,20 @@ type ShopCategory struct {
 
 // ShopCard — публичная карточка готового магазина с предложениями.
 type ShopCard struct {
-	TenantID       ids.TenantID  `json:"tenantId"`
-	Slug           string        `json:"slug"`
-	Name           string        `json:"name"`
-	Slogan         string        `json:"slogan"`
-	Logo           *string       `json:"logo"`
-	Initial        string        `json:"initial"`
-	Color          ShopColor     `json:"color"`
-	Category       *ShopCategory `json:"category"`
-	MoreCategories int           `json:"moreCategories"`
-	Offers         int           `json:"offers"`
-	FromPrice      *int64        `json:"fromPrice"`
-	Showcase       []ShopImage   `json:"showcase"`
-	Rating         *int          `json:"rating"`
-	IsNew          bool          `json:"isNew"`
+	TenantID       ids.TenantID    `json:"tenantId"`
+	Slug           string          `json:"slug"`
+	Name           string          `json:"name"`
+	Slogan         string          `json:"slogan"`
+	Logo           *string         `json:"logo"`
+	Initial        string          `json:"initial"`
+	Color          ShopColor       `json:"color"`
+	Category       *ShopCategory   `json:"category"`
+	MoreCategories int             `json:"moreCategories"`
+	Offers         int             `json:"offers"`
+	FromPrice      *int64          `json:"fromPrice"`
+	Showcase       []ShopImage     `json:"showcase"`
+	Rating         *catalog.Rating `json:"rating"`
+	IsNew          bool            `json:"isNew"`
 }
 
 // ShopPage — сохраняет общее число результатов до пагинации.

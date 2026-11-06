@@ -29,7 +29,7 @@ func indexed(t *testing.T) (*fake.Store, *appcatalog.Queries) {
 		t.Fatal(err)
 	}
 
-	return store, appcatalog.NewQueries(store, index, fake.NewPlatform())
+	return store, appcatalog.NewQueries(store, index, fake.NewPlatform(), nil, nil, fake.NewClock(time.Time{}))
 }
 
 func TestSearchDefaultsAndFilters(t *testing.T) {

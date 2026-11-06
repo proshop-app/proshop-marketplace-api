@@ -69,6 +69,13 @@ type CatalogPricing interface {
 type PlatformAPI interface {
 	SellerOrders
 	CatalogPricing
+	// ProductReviews — страница опубликованных отзывов, включая безымянных авторов.
+	ProductReviews(
+		ctx context.Context,
+		tenantID ids.TenantID,
+		productID ids.ProductID,
+		limit, offset int,
+	) (ReviewPage, error)
 	// CheckItems — цена и наличие позиций у магазина сейчас.
 	CheckItems(ctx context.Context, tenantID ids.TenantID, request ItemsCheckRequest) ([]ItemCheck, error)
 	// QuoteDelivery — стоимость и срок доставки по договору магазина.

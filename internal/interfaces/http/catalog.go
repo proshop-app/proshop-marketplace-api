@@ -9,6 +9,7 @@ import (
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -28,6 +29,7 @@ type categoryJSON struct {
 
 // offerJSON — предложение в ответе. Суммы — целые копейки.
 type offerJSON struct {
+	Rating            *catalog.Rating            `json:"rating"`
 	Variants          *appcatalog.VariantBlock   `json:"variants,omitempty"`
 	DeliveryAvailable *bool                      `json:"deliveryAvailable,omitempty"`
 	CategoryID        string                     `json:"categoryId"`
@@ -65,6 +67,7 @@ type catalogHandlers struct {
 func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	doc := card.Offer
 	out := offerJSON{
+		Rating:     doc.Rating,
 		CategoryID: doc.CategoryID,
 		Attributes: doc.Attributes,
 		ID:         doc.ID,

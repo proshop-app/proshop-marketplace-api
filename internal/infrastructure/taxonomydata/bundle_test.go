@@ -162,3 +162,28 @@ func TestBundleRejectsYAMLReferencesAndExtraDocuments(t *testing.T) {
 		}
 	}
 }
+
+func TestIconsAreRootOnlyAndKnown(t *testing.T) {
+	for _, target := range []string{"root", "child", "missing"} {
+		t.Run(target, func(t *testing.T) {
+			files := cloneBundle(t)
+			var tree []taxonomy.Category
+			if err := yaml.Unmarshal(files["data/categories.yaml"].Data, &tree); err != nil {
+				t.Fatal(err)
+			}
+			switch target {
+			case "root":
+				tree[0].Icon = "unknown-icon"
+			case "child":
+				tree[0].Children[0].Icon = tree[0].Icon
+			case "missing":
+				tree[0].Icon = ""
+			}
+			files["data/categories.yaml"].Data, _ = yaml.Marshal(tree)
+			updateChecksum(t, files)
+			if _, _, err := load(files); err == nil {
+				t.Fatal("неверная иконка принята")
+			}
+		})
+	}
+}

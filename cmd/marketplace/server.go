@@ -272,7 +272,8 @@ func (s *server) services(ctx context.Context) (services, error) {
 		Batch:           retentionBatch,
 	})
 
-	queries := appcatalog.NewQueries(uow, s.store.index, resyncing)
+	features := postgres.NewCatalogFeatures(s.store.pool)
+	queries := appcatalog.NewQueries(uow, s.store.index, resyncing, features, features, now)
 	location, err := time.LoadLocation(cfg.Promotion.Timezone)
 	if err != nil {
 		return services{}, err

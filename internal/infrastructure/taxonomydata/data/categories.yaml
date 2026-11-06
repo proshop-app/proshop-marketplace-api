@@ -1,4 +1,5 @@
 - id: electronics
+  icon: smartphone
   name: Электроника
   slug: elektronika
   children:
@@ -223,6 +224,7 @@
       slug: datchiki-umnogo-doma
       schema: electronic_accessory
 - id: computers
+  icon: laptop
   name: Компьютерная техника
   title: Компьютеры и комплектующие
   slug: kompyutery-i-komplektuyushchie
@@ -436,6 +438,7 @@
       slug: kompyuternye-kabeli-i-perekhodniki
       schema: cable
 - id: appliances
+  icon: washing-machine
   name: Бытовая техника
   slug: bytovaya-tekhnika
   children:
@@ -692,6 +695,7 @@
       slug: massazhery
       schema: personal_appliance
 - id: kitchen
+  icon: cooking-pot
   name: Посуда и кухня
   title: Посуда и товары для кухни
   slug: posuda-i-tovary-dlya-kukhni
@@ -851,6 +855,7 @@
       slug: butylki-dlya-vody
       schema: storage
 - id: furniture
+  icon: armchair
   name: Мебель
   slug: mebel
   children:
@@ -1011,6 +1016,7 @@
       slug: chekhly-dlya-mebeli
       schema: furniture_part
 - id: textiles
+  icon: bed-double
   name: Домашний текстиль
   slug: domashniy-tekstil
   children:
@@ -1127,6 +1133,7 @@
       slug: kukhonnye-polotentsa
       schema: towel
 - id: clothing
+  icon: shirt
   name: Одежда
   slug: odezhda
   children:
@@ -1772,6 +1779,7 @@
         slug: tolstovki-detskie
         schema: clothing_kids
 - id: shoes
+  icon: footprints
   name: Обувь
   slug: obuv
   children:
@@ -2018,6 +2026,7 @@
       slug: sredstva-dlya-ukhoda-za-obuvyu
       schema: household_chemical
 - id: accessories
+  icon: handbag
   name: Аксессуары
   title: Сумки, часы и аксессуары
   slug: sumki-chasy-i-aksessuary
@@ -2131,6 +2140,7 @@
       slug: futlyary-dlya-chasov
       schema: phone_accessory
 - id: jewelry
+  icon: gem
   name: Украшения
   slug: ukrasheniya
   children:
@@ -2214,6 +2224,7 @@
       slug: podstavki-dlya-ukrasheniy
       schema: storage
 - id: beauty
+  icon: sparkles
   name: Красота и парфюмерия
   slug: krasota-i-parfyumeriya
   children:
@@ -2428,6 +2439,7 @@
       slug: organayzery-dlya-kosmetiki
       schema: beauty_tool
 - id: health
+  icon: heart-pulse
   name: Здоровье и гигиена
   slug: zdorove-i-gigiena
   children:
@@ -2562,6 +2574,7 @@
       slug: vpityvayushchie-izdeliya-dlya-vzroslykh
       schema: hygiene
 - id: baby
+  icon: baby
   name: Товары для малышей
   slug: tovary-dlya-malyshey
   children:
@@ -2682,6 +2695,7 @@
       slug: tovary-dlya-bezopasnosti-detey
       schema: baby_hygiene
 - id: toys
+  icon: blocks
   name: Игрушки и игры
   slug: igrushki-i-igry
   children:
@@ -2841,6 +2855,7 @@
       slug: detskie-igrovye-palatki
       schema: toy
 - id: sports
+  icon: dumbbell
   name: Спорт и фитнес
   slug: sport-i-fitnes
   children:
@@ -3041,6 +3056,7 @@
       slug: sportivnaya-zashchita
       schema: sport_equipment
 - id: outdoors
+  icon: tent
   name: Туризм и отдых
   title: Туризм и активный отдых
   slug: turizm-i-aktivnyy-otdykh
@@ -3206,6 +3222,7 @@
       slug: plyazhnye-prinadlezhnosti
       schema: outdoor
 - id: auto
+  icon: car
   name: Автотовары
   slug: avtotovary
   children:
@@ -3406,6 +3423,7 @@
       slug: motoshiny
       schema: tire
 - id: tools
+  icon: wrench
   name: Инструменты
   slug: instrumenty
   children:
@@ -3574,6 +3592,7 @@
       slug: khranenie-instrumenta
       schema: storage
 - id: renovation
+  icon: paint-roller
   name: Стройка и ремонт
   title: Строительство и ремонт
   slug: stroitelstvo-i-remont
@@ -3839,6 +3858,7 @@
       slug: okonnaya-furnitura
       schema: furniture_part
 - id: garden
+  icon: flower-2
   name: Дача и сад
   slug: dacha-i-sad
   children:
@@ -4027,6 +4047,7 @@
       slug: sadovoe-osveshchenie
       schema: lighting
 - id: pets
+  icon: paw-print
   name: Зоотовары
   slug: zootovary
   children:
@@ -4177,6 +4198,7 @@
       slug: dekor-dlya-akvariumov
       schema: pet_supply
 - id: food
+  icon: apple
   name: Продукты питания
   slug: produkty-pitaniya
   children:
@@ -4423,6 +4445,7 @@
       slug: morozhenoe
       schema: food
 - id: office
+  icon: pencil
   name: Канцелярия и офис
   slug: kantselyariya-i-ofis
   children:
@@ -4571,6 +4594,7 @@
       slug: pechati-i-shtampy
       schema: stationery
 - id: books
+  icon: book-open
   name: Книги
   title: Книги и печатные издания
   slug: knigi-i-pechatnye-izdaniya
@@ -4767,6 +4791,7 @@
       slug: knigi-kartinki
       schema: book
 - id: hobby
+  icon: palette
   name: Хобби и творчество
   slug: khobbi-i-tvorchestvo
   children:
@@ -4911,6 +4936,7 @@
       slug: kollektsionnye-predmety
       schema: craft
 - id: music
+  icon: music
   name: Музыка и звук
   title: Музыкальные инструменты и оборудование
   slug: muzykalnye-instrumenty-i-oborudovanie
@@ -5024,6 +5050,7 @@
       slug: audiokabeli
       schema: cable
 - id: home
+  icon: house
   name: Дом и интерьер
   title: Декор и обустройство дома
   slug: dekor-i-obustroystvo-doma
@@ -5161,6 +5188,7 @@
       slug: ershiki-dlya-unitaza
       schema: home_decor
 - id: household
+  icon: spray-can
   name: Хозтовары
   title: Бытовая химия и хозяйственные товары
   slug: bytovaya-khimiya-i-khozyaystvennye-tovary
@@ -5290,6 +5318,7 @@
       slug: upakovochnye-materialy
       schema: household_supply
 - id: industry
+  icon: factory
   name: Оборудование
   title: Оборудование и средства защиты
   slug: oborudovanie-i-spetsodezhda

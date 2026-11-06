@@ -81,7 +81,7 @@ func TestProjectionToIndex(t *testing.T) {
 	participants := appparticipant.NewService(uow, now, identities)
 	platform := fake.NewPlatform()
 	settings := appparticipant.NewSettings(uow, platform, now, identities)
-	queries := appcatalog.NewQueries(uow, index, platform)
+	queries := appcatalog.NewQueries(uow, index, platform, nil, nil, fake.NewClock(time.Time{}))
 	statuses := moderationstatus.NewService(uow, now, &fake.Publisher{}, "offer", "participant")
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(pool),

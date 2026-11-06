@@ -23,6 +23,7 @@ type priceProfile struct {
 }
 
 type offerDocument struct {
+	Rating            *catalog.Rating              `json:"rating"`
 	Variants          *catalog.Variants            `json:"variants,omitempty"`
 	ModelKey          string                       `json:"modelKey,omitempty"`
 	ModelKeySource    string                       `json:"modelKeySource,omitempty"`

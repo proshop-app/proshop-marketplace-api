@@ -163,7 +163,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	wantKeys = strings.Fields("categories color initial isNew logo name offers showcase slogan slug tenantId")
+	wantKeys = strings.Fields("categories color initial isNew logo name offers rating showcase slogan slug tenantId")
 	if !reflect.DeepEqual(keys, wantKeys) {
 		t.Fatal(keys)
 	}

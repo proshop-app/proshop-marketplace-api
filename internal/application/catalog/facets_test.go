@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
@@ -81,7 +82,7 @@ func TestCanonicalFiltersAndCoverage(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	q := appcatalog.NewQueries(store, index, fake.NewPlatform())
+	q := appcatalog.NewQueries(store, index, fake.NewPlatform(), nil, nil, fake.NewClock(time.Time{}))
 	page, err := q.Search(ctx, ports.OfferQuery{Limit: 1, Offset: 8})
 	if err != nil || page.Total != 10 || len(page.Facets) != 6 {
 		t.Fatalf("%+v %v", page, err)

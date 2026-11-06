@@ -46,6 +46,7 @@ type OfferStates interface {
 
 // OfferDocument — предложение в индексе поиска. Суммы — в копейках.
 type OfferDocument struct {
+	Rating            *catalog.Rating
 	Variants          *catalog.Variants
 	ModelKey          string
 	ModelKeySource    string
@@ -92,6 +93,8 @@ const (
 	SortPriceDesc OfferSort = "price_desc"
 	// SortNewest — сначала обновлённые недавно.
 	SortNewest OfferSort = "newest"
+	// SortRating — сначала предложения с наибольшим средним баллом.
+	SortRating OfferSort = "rating"
 )
 
 // OfferQuery — поиск по выдаче каталога.

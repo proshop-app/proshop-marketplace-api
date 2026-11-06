@@ -1553,6 +1553,69 @@ paths:
           content:
             text/plain:
               schema: { type: string }
+  /api/v1/catalog/offers/{offerId}/reviews:
+    get:
+      tags: [catalog]
+      operationId: listOfferReviews
+      summary: Опубликованные отзывы видимого предложения
+      parameters:
+        - name: offerId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 9999, default: 0 }
+      responses:
+        "200":
+          description: "Ответ не персональный: Cache-Control: public, max-age=30; limit + offset не больше 10000."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewPage" }
+        "400": { description: Некорректная пагинация }
+        "404": { description: Предложение скрыто или отсутствует }
+        "503": { description: Сервер магазина недоступен }
+  /api/v1/recommendations:
+    get:
+      tags: [catalog]
+      operationId: listRecommendations
+      summary: Рекомендации по категории и цене либо интересам покупателя
+      description: >-
+        offer — та же категория, цена ±40%, с исключением всей группы вариантов исходного товара, другой магазин впереди; при отсутствии других остаются товары исходного магазина.
+        home — категории интересов с исключением купленного; без интересов популярные по salesCount.
+        deliveryRegion ограничивает все виды рекомендаций; неизвестный регион — 400.
+        Для гостя и вошедшего Cache-Control: private, no-store.
+      parameters:
+        - name: context
+          in: query
+          required: true
+          schema: { type: string, enum: [home, offer] }
+        - name: offerId
+          in: query
+          description: Обязателен только для context=offer.
+          schema: { type: string }
+        - name: deliveryRegion
+          in: query
+          schema: { type: string, maxLength: 128 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Предложения и причина рекомендации.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, reason]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Offer" } }
+                  reason: { type: string, enum: [similar, personal, popular] }
+        "400": { description: Некорректный контекст или параметры }
+        "404": { description: Исходное предложение недоступно }
   /api/v1/catalog/offers:
     get:
       tags: [catalog]
@@ -1586,7 +1649,7 @@ paths:
         - { name: inStock, in: query, schema: { type: boolean } }
         - name: sort
           in: query
-          schema: { type: string, enum: [relevance, price_asc, price_desc, newest], default: relevance }
+          schema: { type: string, enum: [relevance, price_asc, price_desc, newest, rating], default: relevance }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 }, description: "offset + limit ≤ 10000" }
       responses:
@@ -3629,6 +3692,7 @@ paths:
           - price_asc
           - price_desc
           - newest
+          - rating
           default: relevance
       - name: limit
         in: query
@@ -3810,13 +3874,14 @@ components:
         uncategorized: { type: integer, minimum: 0 }
         showcase: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/StoreProduct" } }
         hidden: { type: array, items: { $ref: "#/components/schemas/StoreHidden" } }
-        rating: { type: "null" }
+        rating: { $ref: "#/components/schemas/Rating" }
         badge: { type: "null" }
         rank: { type: "null" }
     ShopHeader:
       type: object
-      required: [tenantId, slug, name, slogan, logo, initial, color, offers, isNew, categories, showcase]
+      required: [tenantId, slug, name, slogan, logo, initial, color, offers, isNew, categories, rating, showcase]
       properties:
+        rating: { $ref: "#/components/schemas/Rating" }
         tenantId: { type: string }
         slug: { type: string }
         name: { type: string }
@@ -3845,7 +3910,7 @@ components:
         moreCategories: { type: integer, minimum: 0 }
         fromPrice: { type: [integer, "null"], format: int64, minimum: 0 }
         showcase: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/ShopImage" } }
-        rating: { type: "null" }
+        rating: { $ref: "#/components/schemas/Rating" }
     ShopImage:
       type: object
       required: [offerId, image]
@@ -5134,6 +5199,12 @@ components:
       additionalProperties: false
       required: [id, name, slug]
       properties:
+        icon:
+          type: string
+          description: Имя Lucide из фиксированного набора; только у корневого узла.
+          enum: [smartphone, laptop, washing-machine, cooking-pot, armchair, bed-double, shirt, footprints,
+                 handbag, gem, sparkles, heart-pulse, baby, blocks, dumbbell, tent, car, wrench, paint-roller,
+                 flower-2, paw-print, apple, pencil, book-open, palette, music, house, spray-can, factory]
         id: { type: string, pattern: '^[a-z][a-z0-9_.-]{0,127}$' }
         name: { type: string, minLength: 1, maxLength: 256 }
         title: { type: string, minLength: 1, maxLength: 256 }
@@ -5228,10 +5299,43 @@ components:
                 type: string
                 enum: [taxonomy.card_missing, taxonomy.category_unknown, taxonomy.attribute_unknown,
                        taxonomy.type, taxonomy.required, taxonomy.enum_value, taxonomy.unpublished]
+    Rating:
+      type: [object, "null"]
+      description: null при отсутствии оценок; магазин — средневзвешенное видимых предложений.
+      required: [value, count]
+      properties:
+        value: { type: number, minimum: 0, maximum: 5, description: Балл округлён до одного знака после запятой }
+        count: { type: integer, format: int64, minimum: 1 }
+    ReviewPage:
+      type: object
+      required: [items, total]
+      properties:
+        total: { type: integer, minimum: 0 }
+        items:
+          type: array
+          items:
+            type: object
+            required: [author, rating, text, createdAt]
+            properties:
+              author: { type: string, description: Имя без фамилии }
+              rating: { type: integer, minimum: 1, maximum: 5 }
+              text: { type: string }
+              createdAt: { type: string, format: date-time }
     Facet:
       type: object
       required: [code, name, type, count, values]
       properties:
+        buckets:
+          type: array
+          maxItems: 20
+          description: Только price; границы в копейках, круглые суммы из движка. Без поддержки поле отсутствует.
+          items:
+            type: object
+            required: [from, to, count]
+            properties:
+              from: { type: integer, format: int64, minimum: 0 }
+              to: { type: integer, format: int64, minimum: 0 }
+              count: { type: integer, minimum: 0 }
         code: { type: string, description: 'category, tenant, price, inStock или attr.<код>' }
         name: { type: string }
         type: { type: string, enum: [enum, number, string, boolean] }
@@ -5291,8 +5395,9 @@ components:
     Offer:
       description: При паре deliveryCarrier и deliveryRegion возвращает deliveryAvailable; вне зон товар виден, доставка недоступна.
       type: object
-      required: [id, tenantId, productId, seller, name, categoryId, attributes, categories, price, basePrice, available, inStock, checkoutAvailable, updatedAt]
+      required: [id, tenantId, productId, seller, name, categoryId, attributes, categories, price, basePrice, available, inStock, checkoutAvailable, updatedAt, rating]
       properties:
+        rating: { $ref: "#/components/schemas/Rating" }
         deliveryAvailable: { type: boolean }
         categoryId: { type: string, description: Категория площадки }
         attributes: { $ref: "#/components/schemas/CanonicalAttributes" }

@@ -39,7 +39,7 @@ func TestSponsoredPrepareQueryAndPrices(t *testing.T) {
 		Location:    time.UTC,
 		SearchDepth: 100,
 		Random:      fake.Random{},
-		Catalog:     appcatalog.NewQueries(e.store, e.index, nil),
+		Catalog:     appcatalog.NewQueries(e.store, e.index, nil, nil, nil, fake.NewClock(time.Time{})),
 	})
 	if _, err := service.Sponsored(ctx, ports.OfferQuery{CategoryID: "unknown"}); err == nil {
 		t.Fatal("PrepareQuery должен отклонить неизвестную категорию")

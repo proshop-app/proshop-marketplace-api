@@ -16,14 +16,22 @@ type FacetBucket struct {
 	Count int    `json:"count"`
 }
 
+// PriceBucket — границы в копейках из гистограммы движка.
+type PriceBucket struct {
+	From  int64 `json:"from"`
+	To    int64 `json:"to"`
+	Count int   `json:"count"`
+}
+
 // Facet — агрегация по всей отфильтрованной выдаче до пагинации.
 type Facet struct {
-	Code   string        `json:"code"`
-	Name   string        `json:"name"`
-	Type   string        `json:"type"`
-	Unit   string        `json:"unit,omitempty"`
-	Count  int           `json:"count"`
-	Values []FacetBucket `json:"values"`
-	Min    *json.Number  `json:"min,omitempty"`
-	Max    *json.Number  `json:"max,omitempty"`
+	Buckets []PriceBucket `json:"buckets,omitempty"`
+	Code    string        `json:"code"`
+	Name    string        `json:"name"`
+	Type    string        `json:"type"`
+	Unit    string        `json:"unit,omitempty"`
+	Count   int           `json:"count"`
+	Values  []FacetBucket `json:"values"`
+	Min     *json.Number  `json:"min,omitempty"`
+	Max     *json.Number  `json:"max,omitempty"`
 }

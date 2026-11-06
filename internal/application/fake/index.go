@@ -14,6 +14,7 @@ import (
 
 // Index — индекс предложений в памяти с поколениями и версиями документов.
 type Index struct {
+	Facets      []ports.Facet
 	mu          sync.Mutex
 	generations map[string]map[string]ports.OfferDocument
 	active      string
@@ -117,6 +118,17 @@ func (x *Index) Search(_ context.Context, query ports.OfferQuery) (ports.OfferPa
 			if hits[i].Price != hits[j].Price {
 				return hits[i].Price > hits[j].Price
 			}
+		case ports.SortRating:
+			a, b := hits[i].Rating, hits[j].Rating
+			if (a == nil) != (b == nil) {
+				return a != nil
+			}
+			if a != nil && b != nil && a.Value != b.Value {
+				return a.Value > b.Value
+			}
+			if a != nil && b != nil && a.Count != b.Count {
+				return a.Count > b.Count
+			}
 		case ports.SortNewest:
 			if !hits[i].UpdatedAt.Equal(hits[j].UpdatedAt) {
 				return hits[i].UpdatedAt.After(hits[j].UpdatedAt)
@@ -126,6 +138,9 @@ func (x *Index) Search(_ context.Context, query ports.OfferQuery) (ports.OfferPa
 		return hits[i].ID < hits[j].ID
 	})
 	page := ports.OfferPage{Facets: fakeFacets(hits, query.FacetFields), Total: len(hits)}
+	if x.Facets != nil {
+		page.Facets = x.Facets
+	}
 	for i := query.Offset; i < len(hits) && len(page.Items) < query.Limit; i++ {
 		page.Items = append(page.Items, hits[i])
 	}

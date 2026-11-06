@@ -52,7 +52,7 @@ func (q *Queries) priceContexts(
 	contexts := make(map[ids.TenantID]string, len(tenants))
 	for start := 0; start < len(tenants); start += priceContextBatchSize {
 		end := min(start+priceContextBatchSize, len(tenants))
-		batch, err := q.pricing.PriceContexts(ctx, buyerID, tenants[start:end])
+		batch, err := q.platform.PriceContexts(ctx, buyerID, tenants[start:end])
 		if err != nil {
 			return nil, err
 		}
