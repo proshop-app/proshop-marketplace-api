@@ -105,6 +105,9 @@ func (s *Service) Create(
 		if access.TenantID != "" {
 			input.TenantID = access.TenantID
 		}
+		if access.TenantID != "" && input.Marking.ERID != "" {
+			return promotion.ErrInvalid
+		}
 		if err := s.prepare(ctx, tx, &input); err != nil {
 			return err
 		}
@@ -176,6 +179,9 @@ func (s *Service) Edit(
 			return promotion.ErrConflict
 		}
 		input.TenantID = c.State().TenantID
+		if access.TenantID != "" && input.Marking.ERID != "" {
+			return promotion.ErrInvalid
+		}
 		if err := s.prepare(ctx, tx, &input); err != nil {
 			return err
 		}
@@ -215,7 +221,8 @@ func (s *Service) Decide(
 		if c.State().Version != command.ExpectedVersion {
 			return promotion.ErrConflict
 		}
-		if access.TenantID != "" && command.Action != promotion.Submit && command.Action != promotion.Stop {
+		if access.TenantID != "" && command.Action != promotion.Submit &&
+			command.Action != promotion.Stop && command.Action != promotion.Revise {
 			return promotion.ErrActionUnsupported
 		}
 		if command.Action == promotion.Submit && c.State().Status == promotion.Draft {
@@ -232,6 +239,9 @@ func (s *Service) Decide(
 		}
 		before := c.State().Status
 		if command.Action == promotion.Submit || command.Action == promotion.Approve {
+			if err := c.State().Marking.Validate(true); err != nil {
+				return err
+			}
 			if err := s.capacity(ctx, tx, c.State()); err != nil {
 				return err
 			}

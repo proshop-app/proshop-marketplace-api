@@ -10,6 +10,7 @@ var (
 	ErrConflict             = errs.New(errs.Conflict, "promotion.conflict", "размещение изменено")
 	ErrKindUnsupported      = errs.New(errs.Invalid, "promotion.kind_unsupported", "вид продвижения не поддерживается")
 	ErrActionUnsupported    = errs.New(errs.Invalid, "promotion.action_unsupported", "действие не поддерживается")
+	ErrMarkingRequired      = errs.New(errs.Invalid, "promotion.marking_required", "нужны реквизиты рекламодателя")
 	ErrERIDRequired         = errs.New(errs.Invalid, "promotion.erid_required", "нужен erid")
 	ErrOfferWithoutCategory = errs.New(errs.Invalid, "promotion.offer_without_category", "нет категории площадки")
 	ErrNoCapacity           = errs.New(errs.Conflict, "promotion.no_capacity", "нет свободных слотов")

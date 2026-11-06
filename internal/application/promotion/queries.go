@@ -20,7 +20,7 @@ type Availability struct {
 // AvailableWeek показывает свободный остаток без отрицательных значений.
 type AvailableWeek struct {
 	From string `json:"from"`
-	Free int    `json:"free"`
+	Free string `json:"free"`
 }
 
 // Get читает размещение с проверкой области доступа.
@@ -178,7 +178,14 @@ func (s *Service) Availability(
 		}
 		result.WeeklyPriceKopecks, result.TotalKopecks = p.Price(position).Kopecks(), total.Kopecks()
 		for _, w := range occupancy {
-			result.Weeks = append(result.Weeks, AvailableWeek{From: w.From, Free: max(0, p.State().SlotLimit-w.Sold)})
+			free := "many"
+			switch remaining := p.State().SlotLimit - w.Sold; {
+			case remaining <= 0:
+				free = "none"
+			case remaining == 1:
+				free = "one"
+			}
+			result.Weeks = append(result.Weeks, AvailableWeek{From: w.From, Free: free})
 		}
 		return nil
 	})

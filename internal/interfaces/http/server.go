@@ -122,6 +122,10 @@ func routes(deps Deps) []route {
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/submit",
 			machine(promotion.decide),
+		}, {
+			http.MethodPost,
+			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/revise",
+			machine(promotion.decide),
 		},
 		{
 			http.MethodPost,

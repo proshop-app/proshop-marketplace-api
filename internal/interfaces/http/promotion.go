@@ -24,6 +24,7 @@ type promotionTargetJSON struct {
 }
 
 type promotionInput struct {
+	eridSupplied  bool
 	Title         string              `json:"title"`
 	TenantID      ids.TenantID        `json:"tenantId"`
 	Kind          promotion.Kind      `json:"kind"`
@@ -38,12 +39,20 @@ type promotionInput struct {
 	Weeks         int                 `json:"weeks,omitempty"`
 }
 
-type promotionPaymentJSON struct {
-	Status        string `json:"status"`
-	PaidOn        string `json:"paidOn,omitempty"`
-	AmountKopecks int64  `json:"amountKopecks,omitempty"`
+type promotionRefundJSON struct {
+	AmountKopecks int64  `json:"amountKopecks"`
+	On            string `json:"on"`
 	Document      string `json:"document,omitempty"`
 	Note          string `json:"note,omitempty"`
+}
+
+type promotionPaymentJSON struct {
+	Refund        *promotionRefundJSON `json:"refund,omitempty"`
+	Status        string               `json:"status"`
+	PaidOn        string               `json:"paidOn,omitempty"`
+	AmountKopecks int64                `json:"amountKopecks,omitempty"`
+	Document      string               `json:"document,omitempty"`
+	Note          string               `json:"note,omitempty"`
 }
 
 type promotionSummary struct {
@@ -54,14 +63,15 @@ type promotionSummary struct {
 
 type campaignJSON struct {
 	promotionInput
-	ID         ids.UUID             `json:"id"`
-	TenantName string               `json:"tenantName"`
-	Payment    promotionPaymentJSON `json:"payment"`
-	Status     promotion.Status     `json:"status"`
-	Version    int64                `json:"version"`
-	CreatedAt  time.Time            `json:"createdAt"`
-	UpdatedAt  time.Time            `json:"updatedAt"`
-	Stats      promotionSummary     `json:"stats"`
+	ID              ids.UUID             `json:"id"`
+	TenantName      string               `json:"tenantName"`
+	Payment         promotionPaymentJSON `json:"payment"`
+	Status          promotion.Status     `json:"status"`
+	Version         int64                `json:"version"`
+	CreatedAt       time.Time            `json:"createdAt"`
+	UpdatedAt       time.Time            `json:"updatedAt"`
+	RejectionReason string               `json:"rejectionReason,omitempty"`
+	Stats           promotionSummary     `json:"stats"`
 }
 
 type promotionPlacementJSON struct {
@@ -78,6 +88,7 @@ type promotionPlacementJSON struct {
 }
 
 type promotionDecisionInput struct {
+	Refund          promotionRefundJSON  `json:"refund"`
 	Action          promotion.Action     `json:"action"`
 	ExpectedVersion int64                `json:"expectedVersion"`
 	Note            string               `json:"note"`
@@ -95,6 +106,35 @@ type sponsoredJSON struct {
 	PromotionID ids.UUID  `json:"promotionId"`
 	ERID        string    `json:"erid"`
 	Offer       offerJSON `json:"offer"`
+}
+
+func (p *promotionInput) UnmarshalJSON(raw []byte) error {
+	type plain promotionInput
+	if err := json.Unmarshal(raw, (*plain)(p)); err != nil {
+		return err
+	}
+	var fields struct {
+		ERID    json.RawMessage            `json:"erid"`
+		Marking map[string]json.RawMessage `json:"marking"`
+	}
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	_, supplied := fields.Marking["erid"]
+	p.eridSupplied = supplied || fields.ERID != nil
+	return nil
+}
+
+func refundResponse(r promotion.RefundRecord) *promotionRefundJSON {
+	if r.On == "" {
+		return nil
+	}
+	return &promotionRefundJSON{
+		AmountKopecks: r.Amount.Kopecks(),
+		On:            r.On,
+		Document:      r.Document,
+		Note:          r.Note,
+	}
 }
 
 func serverAPI(token string, next http.HandlerFunc) http.HandlerFunc {
@@ -127,6 +167,9 @@ func (h *promotionHandlers) input(body promotionInput, tenant bool) (promotion.C
 	if (tenant && body.Kind != "" && body.Kind != promotion.SponsoredSlot) ||
 		(!tenant && body.Kind != promotion.SponsoredSlot) {
 		return promotion.CampaignState{}, promotion.ErrKindUnsupported
+	}
+	if tenant && body.eridSupplied {
+		return promotion.CampaignState{}, promotion.ErrInvalid
 	}
 	if tenant && body.Position == 0 {
 		return promotion.CampaignState{}, promotion.ErrInvalid
@@ -179,12 +222,14 @@ func campaignResponse(s promotion.CampaignState) campaignJSON {
 			PriceKopecks:  s.Price.Kopecks(),
 			Marking:       s.Marking,
 		},
-		ID:        s.ID,
-		Status:    s.Status,
-		Version:   s.Version,
-		CreatedAt: s.CreatedAt,
-		UpdatedAt: s.UpdatedAt,
+		RejectionReason: s.RejectionReason,
+		ID:              s.ID,
+		Status:          s.Status,
+		Version:         s.Version,
+		CreatedAt:       s.CreatedAt,
+		UpdatedAt:       s.UpdatedAt,
 		Payment: promotionPaymentJSON{
+			Refund:        refundResponse(s.Payment.Refund),
 			Status:        s.Payment.Status,
 			PaidOn:        s.Payment.PaidOn,
 			AmountKopecks: s.Payment.Amount.Kopecks(),
@@ -316,9 +361,12 @@ func (h *promotionHandlers) decide(w http.ResponseWriter, r *http.Request) {
 	}
 	access := promotionAccess(r)
 	if access.TenantID != "" {
-		if strings.HasSuffix(r.URL.Path, "/submit") {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/submit"):
 			body.Action = promotion.Submit
-		} else {
+		case strings.HasSuffix(r.URL.Path, "/revise"):
+			body.Action = promotion.Revise
+		default:
 			body.Action = promotion.Stop
 		}
 	}
@@ -328,6 +376,12 @@ func (h *promotionHandlers) decide(w http.ResponseWriter, r *http.Request) {
 		Note:            body.Note,
 		ERID:            body.ERID,
 		Payment: promotion.Payment{
+			Refund: promotion.RefundRecord{
+				Amount:   money.FromKopecks(body.Refund.AmountKopecks),
+				On:       body.Refund.On,
+				Document: body.Refund.Document,
+				Note:     body.Refund.Note,
+			},
 			Amount:   money.FromKopecks(body.Payment.AmountKopecks),
 			PaidOn:   body.Payment.PaidOn,
 			Document: body.Payment.Document,

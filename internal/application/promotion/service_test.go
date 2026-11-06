@@ -91,6 +91,7 @@ func (e environment) create(t *testing.T, code string) promotion.CampaignState {
 	input := promotion.CampaignState{
 		TenantID:      "t1",
 		Kind:          promotion.SponsoredSlot,
+		Marking:       promotion.Marking{Advertiser: "Рекламодатель", INN: "1234567890"},
 		PlacementCode: code,
 		Position:      1,
 		Target:        promotion.Target{OfferID: ids.OfferID{Tenant: "t1", Product: "p1"}},
@@ -298,11 +299,57 @@ func TestCalendarOverviewAndPeriodEdit(t *testing.T) {
 		t.Fatal(report)
 	}
 	availability, err := e.service.Availability(ctx, "category_slot", 1, "2026-11-09", 1, "c1")
-	if err != nil || availability.Weeks[0].Free != 0 || availability.TotalKopecks != 700 {
+	if err != nil || availability.Weeks[0].Free != "none" || availability.TotalKopecks != 700 {
 		t.Fatal(availability, err)
 	}
 	free, err := e.service.Availability(ctx, "category_slot", 1, "2026-11-09", 1, "c2")
-	if err != nil || free.Weeks[0].Free != 1 {
+	if err != nil || free.Weeks[0].Free != "one" {
 		t.Fatal(free, err)
+	}
+}
+
+func TestReviseResubmitCapacityAndHistory(t *testing.T) {
+	e := setup()
+	ctx := context.Background()
+	access := app.Access{TenantID: "t1", Actor: "tenant"}
+	c := e.decide(t, e.create(t, "category_slot"), promotion.Submit)
+	c, err := e.service.Decide(ctx, app.Access{Actor: "operator"}, c.ID, app.Command{
+		Action:          promotion.Reject,
+		ExpectedVersion: c.Version,
+		Note:            "Исправить реквизиты",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err = e.service.Decide(ctx, access, c.ID, app.Command{Action: promotion.Revise, ExpectedVersion: c.Version})
+	if err != nil || c.Status != promotion.Draft || c.RejectionReason != "" {
+		t.Fatal(c, err)
+	}
+	history, err := e.service.Decisions(ctx, access, c.ID)
+	if err != nil || len(history) != 3 || history[1].Note != "Исправить реквизиты" {
+		t.Fatal(history, err)
+	}
+	other := e.decide(t, e.create(t, "category_slot"), promotion.Submit)
+	_, err = e.service.Decide(ctx, access, c.ID, app.Command{Action: promotion.Submit, ExpectedVersion: c.Version})
+	if !errors.Is(err, promotion.ErrNoCapacity) {
+		t.Fatal(err)
+	}
+	e.decide(t, other, promotion.Stop)
+	c = e.decide(t, c, promotion.Submit)
+	_, err = e.service.Decide(ctx, access, c.ID, app.Command{Action: promotion.Refund, ExpectedVersion: c.Version})
+	if !errors.Is(err, promotion.ErrActionUnsupported) {
+		t.Fatal(err)
+	}
+}
+
+func TestAvailabilityMany(t *testing.T) {
+	e := setup()
+	_, err := e.service.ConfigurePlacement(context.Background(), "category_slot", 3, money.FromKopecks(700), nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := e.service.Availability(context.Background(), "category_slot", 1, "2026-11-09", 1, "c1")
+	if err != nil || len(result.Weeks) != 1 || result.Weeks[0].Free != "many" {
+		t.Fatal(result, err)
 	}
 }

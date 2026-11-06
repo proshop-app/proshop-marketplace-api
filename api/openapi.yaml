@@ -3262,6 +3262,60 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/PromotionVersionInput"
+  /api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/revise:
+    post:
+      summary: 'Продвижение: доработать отклонённую заявку'
+      security:
+      - serverApiToken: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionVersionInput"
   /api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/stop:
     post:
       summary: 'Продвижение: decide'
@@ -3652,6 +3706,8 @@ components:
       - submit
       - approve
       - reject
+      - revise
+      - refund
       - pay
       - finish
       - stop
@@ -3689,13 +3745,32 @@ components:
           type: string
         inn:
           type: string
+          pattern: '^([0-9]{10}|[0-9]{12})$'
         erid:
+          type: string
+    PromotionRefund:
+      type: object
+      required: [amountKopecks, on]
+      description: Ручная запись возврата для stopped или finished; сумма не больше оплаты.
+      properties:
+        amountKopecks:
+          type: integer
+          format: int64
+          minimum: 1
+        on:
+          type: string
+          format: date
+        document:
+          type: string
+        note:
           type: string
     PromotionPayment:
       type: object
       required:
       - status
       properties:
+        refund:
+          $ref: "#/components/schemas/PromotionRefund"
         status:
           type: string
           enum:
@@ -3774,6 +3849,8 @@ components:
           - submit
           - approve
           - reject
+          - revise
+          - refund
           - pay
           - finish
           - stop
@@ -3794,6 +3871,8 @@ components:
           type: string
         erid:
           type: string
+        refund:
+          $ref: "#/components/schemas/PromotionRefund"
         payment:
           type: object
           required:
@@ -3818,6 +3897,16 @@ components:
       - from
       - weeks
       properties:
+        marking:
+          type: object
+          additionalProperties: false
+          description: advertiser и inn обязательны при submit; erid запрещён.
+          properties:
+            advertiser:
+              type: string
+            inn:
+              type: string
+              pattern: '^([0-9]{10}|[0-9]{12})$'
         placementCode:
           type: string
         position:
@@ -3981,7 +4070,8 @@ components:
           type: string
           format: date
         free:
-          type: integer
+          type: string
+          enum: [many, one, none]
     PromotionAvailability:
       type: object
       required:
@@ -4105,6 +4195,9 @@ components:
       - updatedAt
       - stats
       properties:
+        rejectionReason:
+          type: string
+          description: Причина отказа; очищается при revise.
         title:
           type: string
         tenantId:

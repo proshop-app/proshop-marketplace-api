@@ -1,6 +1,8 @@
 package http
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	app "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestPromotionMachineTokenAndTenant(t *testing.T) {
@@ -78,5 +81,58 @@ func TestPromotionPauseAndBatch(t *testing.T) {
 	h.events(recorder, req)
 	if recorder.Code != 400 {
 		t.Fatal(recorder.Code)
+	}
+}
+
+func TestPromotionTenantERIDForbidden(t *testing.T) {
+	h := &promotionHandlers{}
+	for _, raw := range []string{
+		`{"marking":{"erid":"value"}}`,
+		`{"marking":{"erid":""}}`,
+		`{"marking":{"erid":null}}`,
+		`{"erid":null}`,
+	} {
+		var input promotionInput
+		if err := json.Unmarshal([]byte(raw), &input); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.input(input, true); !errors.Is(err, promotion.ErrInvalid) {
+			t.Fatal(raw, err)
+		}
+	}
+}
+
+func TestPromotionReviseAndRefundHTTP(t *testing.T) {
+	store := fake.NewStore()
+	state := promotion.CampaignState{
+		ID:              "00000000-0000-0000-0000-000000000001",
+		TenantID:        "t1",
+		Status:          promotion.Rejected,
+		RejectionReason: "Причина",
+		Version:         1,
+	}
+	store.SeedPromotion(state)
+	service := app.NewService(store, fake.NewClock(time.Now()), &fake.IDs{}, fake.NewIndex(), app.Config{
+		Location: time.UTC,
+	})
+	h := &promotionHandlers{service: service}
+	req := httptest.NewRequest(http.MethodPost, "/revise", strings.NewReader(`{"expectedVersion":1}`))
+	req.SetPathValue("id", string(state.ID))
+	req.SetPathValue("tenantId", "t1")
+	recorder := httptest.NewRecorder()
+	h.decide(recorder, req)
+	if recorder.Code != 200 || !strings.Contains(recorder.Body.String(), `"status":"draft"`) {
+		t.Fatal(recorder.Code, recorder.Body.String())
+	}
+	state.Status = promotion.Stopped
+	state.Payment.Amount = money.FromKopecks(700)
+	store.SeedPromotion(state)
+	body := `{"action":"refund","expectedVersion":1,"refund":{"amountKopecks":300,"on":"2026-11-06"}}`
+	req = httptest.NewRequest(http.MethodPost, "/decisions", strings.NewReader(body))
+	req.SetPathValue("id", string(state.ID))
+	recorder = httptest.NewRecorder()
+	h.decide(recorder, req)
+	if recorder.Code != 200 || !strings.Contains(recorder.Body.String(), `"refund":{"amountKopecks":300`) {
+		t.Fatal(recorder.Code, recorder.Body.String())
 	}
 }

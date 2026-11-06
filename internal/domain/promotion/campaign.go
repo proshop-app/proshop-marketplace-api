@@ -36,6 +36,8 @@ const (
 	Pay           Action = "pay"
 	Finish        Action = "finish"
 	Stop          Action = "stop"
+	Revise        Action = "revise"
+	Refund        Action = "refund"
 	Pending              = "pending"
 	Paid                 = "paid"
 )
@@ -55,8 +57,17 @@ type Marking struct {
 	ERID       string `json:"erid,omitempty"`
 }
 
-// Payment хранит оплату независимо от жизненного цикла размещения.
+// RefundRecord хранит решение оператора о возврате без автоматического расчёта.
+type RefundRecord struct {
+	Amount   money.Money `json:"amount"`
+	On       string      `json:"on"`
+	Document string      `json:"document,omitempty"`
+	Note     string      `json:"note,omitempty"`
+}
+
+// Payment хранит оплату и ручной возврат.
 type Payment struct {
+	Refund   RefundRecord `json:"refund"`
 	Status   string
 	PaidOn   string
 	Amount   money.Money
@@ -132,6 +143,9 @@ func validateInput(s CampaignState, now time.Time, location *time.Location) erro
 	if s.PlacementCode == "category_slot" && s.Target.CategoryID == "" {
 		return ErrOfferWithoutCategory
 	}
+	if err := s.Marking.Validate(false); err != nil {
+		return err
+	}
 	return s.Period.ValidateStart(now, location)
 }
 
@@ -154,6 +168,11 @@ func (c *Campaign) Edit(input CampaignState, now time.Time, location *time.Locat
 	}
 	if err := validateInput(input, now, location); err != nil {
 		return false, err
+	}
+	if c.state.Status != Draft {
+		if err := input.Marking.Validate(true); err != nil {
+			return false, err
+		}
 	}
 	if c.state.Status == Approved && strings.TrimSpace(input.Marking.ERID) == "" {
 		return false, ErrERIDRequired
@@ -185,6 +204,9 @@ func (c *Campaign) Decide(action Action, note, erid string, payment Payment, now
 		if next != Draft {
 			return false, ErrConflict
 		}
+		if err := c.state.Marking.Validate(true); err != nil {
+			return false, err
+		}
 		next = Review
 	case Approve:
 		if next == Approved {
@@ -192,6 +214,9 @@ func (c *Campaign) Decide(action Action, note, erid string, payment Payment, now
 		}
 		if next != Review {
 			return false, ErrConflict
+		}
+		if err := c.state.Marking.Validate(true); err != nil {
+			return false, err
 		}
 		if strings.TrimSpace(erid) == "" {
 			return false, ErrERIDRequired
@@ -210,6 +235,30 @@ func (c *Campaign) Decide(action Action, note, erid string, payment Payment, now
 		}
 		c.state.RejectionReason = strings.TrimSpace(note)
 		next = Rejected
+	case Revise:
+		if next == Draft {
+			return false, nil
+		}
+		if next != Rejected {
+			return false, ErrConflict
+		}
+		c.state.RejectionReason = ""
+		next = Draft
+	case Refund:
+		if next != Stopped && next != Finished {
+			return false, ErrConflict
+		}
+		r := payment.Refund
+		if r.Amount.Kopecks() <= 0 || r.Amount.Kopecks() > c.state.Payment.Amount.Kopecks() {
+			return false, ErrInvalid
+		}
+		if _, err := time.Parse(time.DateOnly, r.On); err != nil {
+			return false, ErrInvalid
+		}
+		if r == c.state.Payment.Refund {
+			return false, nil
+		}
+		c.state.Payment.Refund = r
 	case Stop:
 		if next == Stopped {
 			return false, nil
@@ -230,7 +279,7 @@ func (c *Campaign) Decide(action Action, note, erid string, payment Payment, now
 		if next != Review && next != Approved && next != Active {
 			return false, ErrConflict
 		}
-		if payment.Amount.Kopecks() <= 0 {
+		if payment.Amount.Kopecks() <= 0 || payment.Refund != (RefundRecord{}) {
 			return false, ErrInvalid
 		}
 		if _, err := time.Parse(time.DateOnly, payment.PaidOn); err != nil {
@@ -277,3 +326,22 @@ func (c *Campaign) changed(now time.Time) {
 
 // Occupies учитывает резерв заявки до завершения или остановки.
 func Occupies(status Status) bool { return status == Review || status == Approved || status == Active }
+
+// Validate допускает неполные реквизиты только в черновике.
+func (m Marking) Validate(required bool) error {
+	if required && (strings.TrimSpace(m.Advertiser) == "" || m.INN == "") {
+		return ErrMarkingRequired
+	}
+	if m.INN == "" {
+		return nil
+	}
+	if len(m.INN) != 10 && len(m.INN) != 12 {
+		return ErrInvalid
+	}
+	for _, digit := range m.INN {
+		if digit < '0' || digit > '9' {
+			return ErrInvalid
+		}
+	}
+	return nil
+}

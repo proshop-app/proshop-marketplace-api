@@ -1,6 +1,7 @@
 package promotion_test
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -21,6 +22,7 @@ func campaign(t *testing.T) *promotion.Campaign {
 			ID:            "00000000-0000-0000-0000-000000000001",
 			TenantID:      "t1",
 			Kind:          promotion.SponsoredSlot,
+			Marking:       promotion.Marking{Advertiser: "Рекламодатель", INN: "1234567890"},
 			PlacementCode: "category_slot",
 			Position:      1,
 			Target:        promotion.Target{OfferID: ids.OfferID{Tenant: "t1", Product: "p1"}, CategoryID: "c1"},
@@ -185,5 +187,136 @@ func TestPlacementAndRotation(t *testing.T) {
 	result := promotion.Rotate([]promotion.CampaignState{a, b, c, d}, chooseLast{})
 	if len(result) != 2 || result[0].ID != b.ID || result[1].Position != 5 {
 		t.Fatal(result)
+	}
+}
+
+func TestMarkingAndRevise(t *testing.T) {
+	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
+	for _, inn := range []string{"1234567890", "123456789012"} {
+		if err := (promotion.Marking{Advertiser: "Рекламодатель", INN: inn}).Validate(true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, inn := range []string{"123", "123456789a", "１２３４５６７８９０", " 1234567890"} {
+		if err := (promotion.Marking{INN: inn}).Validate(false); !errors.Is(err, promotion.ErrInvalid) {
+			t.Fatal(inn, err)
+		}
+	}
+	for _, marking := range []promotion.Marking{{}, {Advertiser: "Имя"}, {INN: "1234567890"}} {
+		s := campaign(t).State()
+		s.Marking = marking
+		c, err := promotion.NewCampaign(s, now, time.UTC)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.Decide(promotion.Submit, "", "", promotion.Payment{}, now); !errors.Is(
+			err,
+			promotion.ErrMarkingRequired,
+		) {
+			t.Fatal(err)
+		}
+	}
+	c := campaign(t)
+	for _, action := range []promotion.Action{promotion.Submit, promotion.Reject, promotion.Revise} {
+		before := c.State().Version
+		if changed, err := c.Decide(action, "Причина", "", promotion.Payment{}, now); !changed || err != nil {
+			t.Fatal(action, changed, err)
+		}
+		if c.State().Version != before+1 {
+			t.Fatal(c.State())
+		}
+		c.MarkSaved()
+	}
+	if c.State().Status != promotion.Draft || c.State().RejectionReason != "" {
+		t.Fatal(c.State())
+	}
+	if changed, err := c.Decide(promotion.Revise, "", "", promotion.Payment{}, now); changed || err != nil {
+		t.Fatal(changed, err)
+	}
+}
+
+func TestRefund(t *testing.T) {
+	for _, status := range []promotion.Status{
+		promotion.Draft,
+		promotion.Review,
+		promotion.Approved,
+		promotion.Rejected,
+		promotion.Active,
+		promotion.Stopped,
+		promotion.Finished,
+	} {
+		s := campaign(t).State()
+		s.Status = status
+		s.Payment.Amount = money.FromKopecks(700)
+		for _, amount := range []int64{-1, 0, 701, 700, 300} {
+			c := promotion.RestoreCampaign(s)
+			payment := promotion.Payment{Refund: promotion.RefundRecord{
+				Amount:   money.FromKopecks(amount),
+				On:       "2026-11-06",
+				Document: "Документ",
+				Note:     "Решение оператора",
+			}}
+			changed, err := c.Decide(promotion.Refund, "", "", payment, time.Now())
+			valid := (status == promotion.Stopped || status == promotion.Finished) && amount > 0 && amount <= 700
+			if valid != changed || valid != (err == nil) {
+				t.Fatal(status, amount, changed, err)
+			}
+			if !valid {
+				if c.State() != s {
+					t.Fatal("ошибка изменила агрегат")
+				}
+				continue
+			}
+			c.MarkSaved()
+			if changed, err := c.Decide(promotion.Refund, "", "", payment, time.Now()); changed || err != nil {
+				t.Fatal(changed, err)
+			}
+			payment.Refund.On = "bad"
+			_, err = c.Decide(promotion.Refund, "", "", payment, time.Now())
+			if !errors.Is(err, promotion.ErrInvalid) {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+func TestRefundStateJSON(t *testing.T) {
+	s := campaign(t).State()
+	s.Status = promotion.Finished
+	s.Payment = promotion.Payment{
+		Status: promotion.Paid,
+		Amount: money.FromKopecks(700),
+		Refund: promotion.RefundRecord{
+			Amount:   money.FromKopecks(300),
+			On:       "2026-11-06",
+			Document: "Документ",
+			Note:     "Возврат",
+		},
+	}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored promotion.CampaignState
+	if err := json.Unmarshal(raw, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.Payment != s.Payment {
+		t.Fatal(restored.Payment)
+	}
+}
+
+func TestPayCannotRecordRefund(t *testing.T) {
+	s := campaign(t).State()
+	s.Status = promotion.Review
+	c := promotion.RestoreCampaign(s)
+	payment := promotion.Payment{
+		Amount: money.FromKopecks(700),
+		PaidOn: "2026-11-06",
+		Refund: promotion.RefundRecord{Amount: money.FromKopecks(300), On: "2026-11-06"},
+	}
+	_, err := c.Decide(promotion.Pay, "", "", payment, time.Now())
+	if !errors.Is(err, promotion.ErrInvalid) || c.State() != s {
+		t.Fatal(c.State(), err)
 	}
 }
