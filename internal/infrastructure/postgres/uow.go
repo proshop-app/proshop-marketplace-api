@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 
 	"github.com/jackc/pgx/v5"
@@ -136,3 +138,5 @@ func (s *scope) ModerationRules() moderation.RulesRepository { return &Moderatio
 func (s *scope) ParticipantDecisions() participant.DecisionRepository {
 	return &ParticipantDecisions{q: s.q}
 }
+
+func (s *scope) Promotion() promotion.Repository { return &Promotions{q: s.q} }

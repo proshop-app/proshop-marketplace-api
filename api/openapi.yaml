@@ -2327,8 +2327,1159 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
+  /api/v1/operator/promotion/overview:
+    get:
+      summary: 'Продвижение: overview'
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionOverview"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      description: Цена активных и завершённых кампаний распределяется по дням периода с сохранением копеек. Ёмкость
+        category учитывает категории с размещениями.
+  /api/v1/operator/promotion/campaigns:
+    get:
+      summary: 'Продвижение: list'
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaignPage"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: productId
+        in: query
+        schema: {type: string}
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: kind
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: tenantId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+    post:
+      summary: 'Продвижение: create'
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '201':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionCampaignInput"
+  /api/v1/operator/promotion/campaigns/{id}:
+    get:
+      summary: 'Продвижение: campaign'
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: 'Продвижение: edit'
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionPatch"
+    delete:
+      summary: Удалить черновик и журнал решений
+      security: [{operatorToken: []}, {operatorSession: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '204': {description: Черновик удалён}
+        '400': {$ref: "#/components/responses/Error"}
+        '404': {$ref: "#/components/responses/Error"}
+        '409': {$ref: "#/components/responses/Error"}
+
+  /api/v1/operator/promotion/campaigns/{id}/decisions:
+    post:
+      summary: Принять решение по размещению
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionDecisionInput"
+    get:
+      summary: 'Продвижение: decisions'
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromotionDecision"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /api/v1/operator/promotion/campaigns/{id}/stats:
+    get:
+      summary: 'Продвижение: stats'
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromotionStatsRow"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+  /api/v1/operator/promotion/placements:
+    get:
+      summary: 'Продвижение: placements'
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromotionPlacement"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/v1/operator/promotion/placements/{code}:
+    put:
+      summary: 'Продвижение: configure'
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionPlacement"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionPlacementInput"
+  /api/v1/operator/promotion/placements/{code}/calendar:
+    get:
+      summary: 'Продвижение: calendar'
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCalendar"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: categoryId
+        in: query
+        required: false
+        schema:
+          type: string
+  /api/v1/internal/tenants/{tenantId}/promotion/placements:
+    get:
+      summary: 'Продвижение: placements'
+      security:
+      - serverApiToken: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextMonday]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/PromotionPlacement"}
+                  nextMonday:
+                    type: string
+                    format: date
+                    description: Ближайший понедельник не раньше завтра в PROMOTION_TIMEZONE.
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+  /api/v1/internal/tenants/{tenantId}/promotion/availability:
+    get:
+      summary: 'Продвижение: availability'
+      security:
+      - serverApiToken: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionAvailability"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: placementCode
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: position
+        in: query
+        required: true
+        schema:
+          type: integer
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: weeks
+        in: query
+        required: true
+        schema:
+          type: integer
+      - name: categoryId
+        in: query
+        required: false
+        schema:
+          type: string
+      description: Для category_slot обязателен categoryId. Итоговая цена и свободные слоты по календарным неделям.
+  /api/v1/internal/tenants/{tenantId}/promotion/campaigns:
+    get:
+      summary: 'Продвижение: list'
+      security:
+      - serverApiToken: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaignPage"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: productId
+        in: query
+        schema: {type: string}
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+    post:
+      summary: 'Продвижение: create'
+      security:
+      - serverApiToken: []
+      responses:
+        '201':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionTenantInput"
+  /api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}:
+    get:
+      summary: 'Продвижение: campaign'
+      security:
+      - serverApiToken: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: 'Продвижение: edit'
+      security:
+      - serverApiToken: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionTenantPatch"
+    delete:
+      summary: Удалить черновик и журнал решений
+      security: [{serverApiToken: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '204': {description: Черновик удалён}
+        '400': {$ref: "#/components/responses/Error"}
+        '404': {$ref: "#/components/responses/Error"}
+        '409': {$ref: "#/components/responses/Error"}
+
+  /api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/submit:
+    post:
+      summary: Отправить заявку на проверку
+      security:
+      - serverApiToken: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionVersionInput"
+  /api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/revise:
+    post:
+      summary: 'Продвижение: доработать отклонённую заявку'
+      security:
+      - serverApiToken: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionVersionInput"
+  /api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/stop:
+    post:
+      summary: Остановить размещение
+      security:
+      - serverApiToken: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCampaign"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionVersionInput"
+  /api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/stats:
+    get:
+      summary: 'Продвижение: stats'
+      security:
+      - serverApiToken: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromotionStatsRow"
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+  /api/v1/promotion/events:
+    post:
+      summary: 'Продвижение: events'
+      security: []
+      responses:
+        '429': {$ref: "#/components/responses/Error"}
+        '204':
+          description: Успешно
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: Нет доступа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '404':
+          description: Не найдено или машинный API выключен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '409':
+          description: Версия изменена или нет свободных недель
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionEvents"
+  /api/v1/catalog/sponsored:
+    get:
+      summary: Спонсорские карточки первой страницы
+      security: []
+      parameters:
+      - name: deliveryCarrier
+        in: query
+        schema:
+          type: string
+        description: Код перевозчика; передаётся вместе с deliveryRegion.
+      - name: deliveryRegion
+        in: query
+        schema:
+          type: string
+        description: Код ISO 3166-2 RU из ПВЗ.
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+        description: Строка поиска
+      - name: tenant
+        in: query
+        schema:
+          type: string
+        description: Магазин
+      - name: groupId
+        in: query
+        schema:
+          type: string
+        description: Группа вариантов; требует tenant
+      - name: category
+        in: query
+        schema:
+          type: string
+        description: Категория площадки с потомками
+      - name: priceMin
+        in: query
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+        description: Копейки
+      - name: priceMax
+        in: query
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+        description: Копейки
+      - name: inStock
+        in: query
+        schema:
+          type: boolean
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum:
+          - relevance
+          - price_asc
+          - price_desc
+          - newest
+          default: relevance
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+        description: offset + limit ≤ 10000
+      responses:
+        '200':
+          description: По одной карточке на позицию
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SponsoredPage"
 components:
   securitySchemes:
+    serverApiToken:
+      type: http
+      scheme: bearer
+      description: Отдельный SERVER_API_TOKEN для машинного API магазинов.
     operatorSession:
       type: apiKey
       in: cookie
@@ -2449,6 +3600,748 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Participant" }
   schemas:
+    PromotionKind:
+      type: string
+      enum:
+      - sponsored_slot
+      - banner
+      - showcase
+    PromotionStatus:
+      type: string
+      enum:
+      - draft
+      - review
+      - approved
+      - active
+      - finished
+      - rejected
+      - stopped
+    PromotionAction:
+      type: string
+      enum:
+      - submit
+      - approve
+      - reject
+      - revise
+      - refund
+      - pay
+      - finish
+      - stop
+    PromotionPeriod:
+      type: object
+      required:
+      - from
+      - to
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+    PromotionTarget:
+      type: object
+      required:
+      - offerId
+      properties:
+        offerId:
+          type: string
+        categoryId:
+          type: string
+        saleId:
+          type: string
+        storeId:
+          type: string
+    PromotionMarking:
+      type: object
+      required:
+      - advertiser
+      properties:
+        advertiser:
+          type: string
+        inn:
+          type: string
+          pattern: '^([0-9]{10}|[0-9]{12})$'
+        erid:
+          type: string
+    PromotionRefund:
+      type: object
+      required: [amountKopecks, 'on']
+      description: Ручная запись возврата для stopped или finished; сумма не больше оплаты.
+      properties:
+        amountKopecks:
+          type: integer
+          format: int64
+          minimum: 1
+        'on':
+          type: string
+          format: date
+        document:
+          type: string
+        note:
+          type: string
+    PromotionPayment:
+      type: object
+      required:
+      - status
+      properties:
+        refund:
+          $ref: "#/components/schemas/PromotionRefund"
+        status:
+          type: string
+          enum:
+          - pending
+          - paid
+        paidOn:
+          type: string
+          format: date
+        amountKopecks:
+          type: integer
+          format: int64
+          minimum: 0
+        document:
+          type: string
+        note:
+          type: string
+    PromotionStatsSummary:
+      type: object
+      required:
+      - impressions
+      - clicks
+      - ctr
+      properties:
+        impressions:
+          type: integer
+          format: int64
+          minimum: 0
+        clicks:
+          type: integer
+          format: int64
+          minimum: 0
+        ctr:
+          type: number
+          description: Процент кликов от показов; ноль без показов.
+    PromotionStatsRow:
+      type: object
+      required:
+      - day
+      - position
+      - impressions
+      - clicks
+      properties:
+        day:
+          type: string
+          format: date
+        position:
+          type: integer
+        impressions:
+          type: integer
+          format: int64
+          minimum: 0
+        clicks:
+          type: integer
+          format: int64
+          minimum: 0
+    PromotionDecision:
+      type: object
+      required:
+      - at
+      - actor
+      - action
+      properties:
+        at:
+          type: string
+          format: date-time
+        actor:
+          type: string
+          enum:
+          - operator
+          - tenant
+          - system
+        action:
+          type: string
+          enum:
+          - submit
+          - approve
+          - reject
+          - revise
+          - refund
+          - pay
+          - finish
+          - stop
+          - activate
+        note:
+          type: string
+    PromotionDecisionInput:
+      type: object
+      required:
+      - action
+      - expectedVersion
+      properties:
+        action:
+          $ref: "#/components/schemas/PromotionAction"
+        expectedVersion:
+          type: integer
+        note:
+          type: string
+        erid:
+          type: string
+        refund:
+          $ref: "#/components/schemas/PromotionRefund"
+        payment:
+          type: object
+          required:
+          - amountKopecks
+          - paidOn
+          properties:
+            amountKopecks:
+              type: integer
+              format: int64
+              minimum: 0
+            paidOn:
+              type: string
+              format: date
+            note:
+              type: string
+              description: Примечание к оплате.
+            document:
+              type: string
+    PromotionTenantInput:
+      type: object
+      required:
+      - placementCode
+      - position
+      - offerId
+      - from
+      - weeks
+      properties:
+        marking:
+          type: object
+          additionalProperties: false
+          description: advertiser и inn обязательны при submit; erid запрещён.
+          properties:
+            advertiser:
+              type: string
+            inn:
+              type: string
+              pattern: '^([0-9]{10}|[0-9]{12})$'
+        placementCode:
+          type: string
+        position:
+          type: integer
+        offerId:
+          type: string
+        from:
+          type: string
+          format: date
+        weeks:
+          type: integer
+          minimum: 1
+          maximum: 520
+        title:
+          type: string
+    PromotionVersionInput:
+      type: object
+      required:
+      - expectedVersion
+      properties:
+        expectedVersion:
+          type: integer
+        note:
+          type: string
+    PromotionPlacement:
+      type: object
+      required:
+      - code
+      - surface
+      - title
+      - positions
+      - slotLimit
+      - positionPrices
+      - defaultPriceKopecks
+      - active
+      - scope
+      - version
+      properties:
+        code:
+          type: string
+        surface:
+          type: string
+          enum:
+          - category_slot
+          - search_slot
+          - home_top_banner
+          - home_feed_banner
+          - category_banner
+          - home_stores
+          - store_card_slot
+          - showcase
+        title:
+          type: string
+        positions:
+          type: array
+          items:
+            type: integer
+        slotLimit:
+          type: integer
+          minimum: 1
+        positionPrices:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+            minimum: 0
+        defaultPriceKopecks:
+          type: integer
+          format: int64
+          minimum: 0
+        active:
+          type: boolean
+        scope:
+          type: string
+          enum:
+          - category
+          - global
+        version:
+          type: integer
+    PromotionPlacementInput:
+      type: object
+      required:
+      - expectedVersion
+      - slotLimit
+      - defaultPriceKopecks
+      - active
+      properties:
+        expectedVersion: {type: integer, minimum: 1}
+        slotLimit:
+          type: integer
+          minimum: 1
+        defaultPriceKopecks:
+          type: integer
+          format: int64
+          minimum: 0
+        positionPrices:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+            minimum: 0
+        active:
+          type: boolean
+    PromotionCalendarPosition:
+      type: object
+      required:
+      - position
+      - sold
+      - limit
+      properties:
+        position:
+          type: integer
+        sold:
+          type: integer
+        limit:
+          type: integer
+          nullable: true
+    PromotionCalendarDay:
+      type: object
+      required:
+      - day
+      - sold
+      - limit
+      - positions
+      - campaignIds
+      properties:
+        day:
+          type: string
+          format: date
+        sold:
+          type: integer
+        limit:
+          type: integer
+          nullable: true
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromotionCalendarPosition"
+        campaignIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    PromotionCalendar:
+      type: object
+      required:
+      - code
+      - days
+      properties:
+        code:
+          type: string
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromotionCalendarDay"
+    PromotionAvailabilityWeek:
+      type: object
+      required:
+      - from
+      - free
+      properties:
+        from:
+          type: string
+          format: date
+        free:
+          type: string
+          enum: [many, one, none]
+    PromotionAvailability:
+      type: object
+      required:
+      - weeklyPriceKopecks
+      - totalKopecks
+      - weeks
+      properties:
+        weeklyPriceKopecks:
+          type: integer
+          format: int64
+          minimum: 0
+        totalKopecks:
+          type: integer
+          format: int64
+          minimum: 0
+        weeks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromotionAvailabilityWeek"
+    PromotionEvents:
+      type: object
+      required:
+      - visitorId
+      - events
+      properties:
+        visitorId:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        events:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            required:
+            - promotionId
+            - kind
+            properties:
+              promotionId:
+                type: string
+                format: uuid
+              kind:
+                type: string
+                enum:
+                - view
+                - click
+    SponsoredItem:
+      type: object
+      required:
+      - position
+      - promotionId
+      - erid
+      - offer
+      properties:
+        position:
+          type: integer
+        promotionId:
+          type: string
+          format: uuid
+        erid:
+          type: string
+        offer:
+          $ref: "#/components/schemas/Offer"
+    SponsoredPage:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SponsoredItem"
+    PromotionCampaignInput:
+      type: object
+      required:
+      - position
+      - tenantId
+      - kind
+      - placementCode
+      - target
+      - period
+      properties:
+        title:
+          type: string
+        tenantId:
+          type: string
+        kind:
+          $ref: "#/components/schemas/PromotionKind"
+        placementCode:
+          type: string
+        position:
+          type: integer
+        target:
+          $ref: "#/components/schemas/PromotionTarget"
+        period:
+          $ref: "#/components/schemas/PromotionPeriod"
+        marking:
+          $ref: "#/components/schemas/PromotionMarking"
+    PromotionCampaign:
+      type: object
+      required:
+      - title
+      - tenantId
+      - kind
+      - placementCode
+      - position
+      - target
+      - period
+      - priceKopecks
+      - marking
+      - id
+      - tenantName
+      - payment
+      - status
+      - version
+      - createdAt
+      - updatedAt
+      - stats
+      properties:
+        rejectionReason:
+          type: string
+          description: Причина отказа; очищается при revise.
+        title:
+          type: string
+        tenantId:
+          type: string
+        kind:
+          $ref: "#/components/schemas/PromotionKind"
+        placementCode:
+          type: string
+        position:
+          type: integer
+        target:
+          $ref: "#/components/schemas/PromotionTarget"
+        period:
+          $ref: "#/components/schemas/PromotionPeriod"
+        priceKopecks:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Снимок прайса. При создании и правке вычисляется сервером.
+        marking:
+          $ref: "#/components/schemas/PromotionMarking"
+        id:
+          type: string
+          format: uuid
+        tenantName:
+          type: string
+        payment:
+          $ref: "#/components/schemas/PromotionPayment"
+        status:
+          $ref: "#/components/schemas/PromotionStatus"
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        stats:
+          $ref: "#/components/schemas/PromotionStatsSummary"
+    PromotionCampaignPage:
+      type: object
+      required:
+      - counts
+      - items
+      - total
+      - limit
+      - offset
+      properties:
+        counts:
+          $ref: "#/components/schemas/PromotionCounts"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromotionCampaign"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+    PromotionPatch:
+      type: object
+      required:
+      - expectedVersion
+      - changes
+      properties:
+        expectedVersion:
+          type: integer
+        changes:
+          type: object
+          additionalProperties: false
+          description: Частичные поля PromotionCampaignInput.
+          properties:
+            title:
+              type: string
+            tenantId:
+              type: string
+            kind:
+              $ref: "#/components/schemas/PromotionKind"
+            placementCode:
+              type: string
+            position:
+              type: integer
+            target:
+              $ref: "#/components/schemas/PromotionTarget"
+            period:
+              $ref: "#/components/schemas/PromotionPeriod"
+            marking:
+              $ref: "#/components/schemas/PromotionMarking"
+    PromotionTenantPatch:
+      type: object
+      required:
+      - expectedVersion
+      - changes
+      properties:
+        expectedVersion:
+          type: integer
+        changes:
+          type: object
+          additionalProperties: false
+          description: Частичные поля PromotionTenantInput.
+          properties:
+            marking:
+              type: object
+              additionalProperties: false
+              description: advertiser и inn обязательны при submit; erid запрещён.
+              properties:
+                advertiser:
+                  type: string
+                inn:
+                  type: string
+                  pattern: '^([0-9]{10}|[0-9]{12})$'
+            placementCode:
+              type: string
+            position:
+              type: integer
+            offerId:
+              type: string
+            from:
+              type: string
+              format: date
+            weeks:
+              type: integer
+              minimum: 1
+              maximum: 520
+            title:
+              type: string
+    PromotionOverview:
+      type: object
+      required:
+      - period
+      - revenueKopecks
+      - activeCampaigns
+      - totalCampaigns
+      - fill
+      - placements
+      - reviewQueue
+      - revenueByDay
+      - trafficByDay
+      properties:
+        period:
+          $ref: "#/components/schemas/PromotionPeriod"
+        revenueKopecks:
+          type: integer
+          format: int64
+          minimum: 0
+        activeCampaigns:
+          type: integer
+        totalCampaigns:
+          type: integer
+        fill:
+          type: object
+          required:
+          - sold
+          - total
+          properties:
+            sold:
+              type: integer
+            total:
+              type: integer
+        placements:
+          type: array
+          items:
+            type: object
+            required:
+            - code
+            - title
+            - sold
+            - total
+            properties:
+              code:
+                type: string
+              title:
+                type: string
+              sold:
+                type: integer
+              total:
+                type: integer
+        reviewQueue:
+          type: integer
+        revenueByDay:
+          type: array
+          items:
+            type: object
+            required:
+            - day
+            - kopecks
+            properties:
+              day:
+                type: string
+                format: date
+              kopecks:
+                type: integer
+                format: int64
+                minimum: 0
+        trafficByDay:
+          type: array
+          items:
+            type: object
+            required:
+            - day
+            - impressions
+            - clicks
+            properties:
+              day:
+                type: string
+                format: date
+              impressions:
+                type: integer
+                format: int64
+                minimum: 0
+              clicks:
+                type: integer
+                format: int64
+                minimum: 0
+    PromotionCounts:
+      type: object
+      required: [draft, review, approved, rejected, active, finished, stopped]
+      description: По тем же фильтрам, включая status и productId, без пагинации.
+      properties:
+        draft: {type: integer, minimum: 0}
+        review: {type: integer, minimum: 0}
+        approved: {type: integer, minimum: 0}
+        rejected: {type: integer, minimum: 0}
+        active: {type: integer, minimum: 0}
+        finished: {type: integer, minimum: 0}
+        stopped: {type: integer, minimum: 0}
     OperatorPublication:
       allOf:
       - $ref: '#/components/schemas/Publication'
@@ -3072,6 +4965,10 @@ components:
       type: object
       required: [error]
       properties:
+        weeks:
+          type: array
+          description: Занятые понедельники при promotion.no_capacity.
+          items: {type: string, format: date}
         checkout:
           $ref: "#/components/schemas/Checkout"
           description: Новый снимок при DELIVERY_CHANGED; требуется подтверждение.

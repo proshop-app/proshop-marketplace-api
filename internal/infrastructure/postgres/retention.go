@@ -11,6 +11,10 @@ import (
 )
 
 const (
+	purgePromotionViews = `DELETE FROM promotion_views WHERE ctid IN
+ (SELECT v.ctid FROM promotion_views v JOIN promotion_campaigns c ON c.id=v.campaign_id
+ WHERE c.date_to < $1::date LIMIT $2)`
+
 	purgeProcessedEvents = `
 		DELETE FROM processed_events
 		WHERE id IN (SELECT id FROM processed_events WHERE processed_at < $1 LIMIT $2)`
@@ -59,6 +63,7 @@ func (r *Retention) Purge(ctx context.Context, request ports.PurgeRequest) (port
 		{sql: purgeParkedEvents, before: request.ParkedBefore, count: &result.Parked},
 		{sql: purgeChallenges, before: request.ChallengesBefore, count: &result.Challenges},
 		{sql: purgeCarts, before: request.CartsBefore, count: &result.Carts},
+		{sql: purgePromotionViews, before: request.PromotionBefore, count: &result.PromotionViews},
 	}
 
 	for _, step := range steps {

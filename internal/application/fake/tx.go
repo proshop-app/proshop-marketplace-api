@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -394,3 +396,7 @@ func (o offers) ChangedSince(
 func (t *tx) Taxonomy() taxonomy.Repository { return taxonomies{t.data} }
 
 func (t *tx) AfterCommit(fn func()) { t.afterCommit = append(t.afterCommit, fn) }
+
+func (t *tx) Promotion() promotion.Repository {
+	return promotionRepo{d: t.data.promotion, participants: t.data.participants}
+}

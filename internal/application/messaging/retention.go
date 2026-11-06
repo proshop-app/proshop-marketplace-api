@@ -19,7 +19,7 @@ type RetentionPolicy struct {
 
 // Janitor чистит записи по сроку: отметки обработанных событий, выполненные
 // задачи outbox, разобранные отравленные сообщения, отжившие проверки входа и
-// просроченные корзины.
+// просроченные корзины и дедуп маячков завершённых периодов продвижения.
 type Janitor struct {
 	retention ports.Retention
 	clock     ports.Clock
@@ -41,6 +41,7 @@ func (j *Janitor) Purge(ctx context.Context) (ports.PurgeResult, error) {
 		ParkedBefore:     now.Add(-j.policy.ParkedEvents),
 		ChallengesBefore: now.Add(-j.policy.Challenges),
 		CartsBefore:      now,
+		PromotionBefore:  now.AddDate(0, 0, -30),
 		Batch:            j.policy.Batch,
 	})
 }

@@ -11,15 +11,17 @@ import (
 )
 
 const (
+	promotionLockName          = "uno:marketplace:promotion"
 	indexRebuildLockName       = "uno:marketplace:offer-index-rebuild"
 	acquireIndexRebuildLock    = "SELECT pg_try_advisory_lock(hashtextextended($1, 0))"
 	indexRebuildProbeInterval  = time.Second
 	indexRebuildCleanupTimeout = 5 * time.Second
 )
 
-// IndexRebuildLock — блокировка пересборки, общая для CLI и фоновых процессов.
+// IndexRebuildLock — общая именованная advisory lock для CLI и фоновых процессов.
 // Выделенное соединение закрывается, поэтому session lock не остаётся в пуле.
 type IndexRebuildLock struct {
+	name string
 	pool *pgxpool.Pool
 }
 
@@ -27,6 +29,7 @@ type IndexRebuildLock struct {
 func NewIndexRebuildLock(pool *pgxpool.Pool) *IndexRebuildLock {
 	return &IndexRebuildLock{
 		pool: pool,
+		name: indexRebuildLockName,
 	}
 }
 
@@ -45,7 +48,7 @@ func (l *IndexRebuildLock) WithLock(ctx context.Context, run func(context.Contex
 	}()
 
 	var acquired bool
-	err = connection.QueryRow(ctx, acquireIndexRebuildLock, indexRebuildLockName).
+	err = connection.QueryRow(ctx, acquireIndexRebuildLock, l.name).
 		Scan(&acquired)
 
 	if err != nil {
@@ -90,4 +93,9 @@ func (l *IndexRebuildLock) WithLock(ctx context.Context, run func(context.Contex
 	}
 
 	return work.Err()
+}
+
+// NewPromotionLock отделяет цикл продвижения от долгой пересборки индекса.
+func NewPromotionLock(pool *pgxpool.Pool) *IndexRebuildLock {
+	return &IndexRebuildLock{pool: pool, name: promotionLockName}
 }

@@ -21,6 +21,7 @@ const (
 
 // Config — настройки процесса маркетплейса.
 type Config struct {
+	Promotion  Promotion
 	Moderation Moderation
 	ModelKeys  bool
 	Identity   Identity
@@ -213,7 +214,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	r := reader{env: env}
 
 	cfg := Config{
-		Identity: r.identity(),
+		Promotion: r.promotion(),
+		Identity:  r.identity(),
 		HTTP: HTTP{
 			Addr:            r.str("HTTP_ADDR", ":8080"),
 			ShutdownTimeout: r.duration("SHUTDOWN_TIMEOUT", 20*time.Second),
@@ -360,6 +362,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		r.fail("CDEK_CLIENT_ID", "задаётся вместе с CDEK_CLIENT_SECRET")
 	}
 
+	r.validatePromotion(cfg)
 	r.validateReference(cfg)
 	r.validateOperator(cfg.Operator)
 	r.validateIdentityOperator(cfg)

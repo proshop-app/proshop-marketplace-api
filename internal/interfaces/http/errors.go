@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
@@ -37,6 +38,7 @@ var statusByCode = map[errs.Code]int{
 }
 
 type errorBody struct {
+	Weeks    []string            `json:"weeks,omitempty"`
 	Case     *moderationCaseJSON `json:"case,omitempty"`
 	Error    errorDetail         `json:"error"`
 	Checkout *checkoutJSON       `json:"checkout,omitempty"`
@@ -97,6 +99,10 @@ func writeErrorWithState(
 	if errors.As(err, &conflict) {
 		current := caseJSON(conflict.Current)
 		body.Case = &current
+	}
+	var capacity *promotion.CapacityError
+	if errors.As(err, &capacity) {
+		body.Weeks = capacity.Weeks
 	}
 	writeJSON(w, status, body)
 }

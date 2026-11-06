@@ -69,45 +69,7 @@ func NewQueries(uow ports.UnitOfWork, index ports.OfferIndex, pricing ports.Cata
 
 // Search — страница выдачи каталога. Пустые лимит и порядок берутся по умолчанию.
 func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList, error) {
-	normalized, err := normalize(query)
-	if err != nil {
-		return OfferList{}, err
-	}
-
-	if err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		d, err := tx.Taxonomy().Current(ctx)
-		if err != nil {
-			return err
-		}
-		if query.CategoryID != "" {
-			if _, _, ok := d.Category(query.CategoryID); !ok {
-				return ErrInvalidQuery.WithMessage("неизвестная категория")
-			}
-		}
-		fields := d.Fields()
-		if query.CategoryID != "" {
-			fields = categoryFields(d, query.CategoryID)
-		}
-		if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
-			return err
-		}
-		for code, filter := range normalized.Attributes {
-			filter.Type = fields[code].Type
-			normalized.Attributes[code] = filter
-		}
-		for _, a := range fields {
-			if a.Facet {
-				normalized.FacetFields = append(normalized.FacetFields, a)
-			}
-		}
-		sort.Slice(normalized.FacetFields, func(i, j int) bool {
-			return normalized.FacetFields[i].Code < normalized.FacetFields[j].Code
-		})
-		return nil
-	}); err != nil {
-		return OfferList{}, err
-	}
-	normalized.PriceContexts, err = q.priceContexts(ctx, normalized.BuyerID, normalized.TenantID)
+	normalized, err := q.PrepareQuery(ctx, query)
 	if err != nil {
 		return OfferList{}, err
 	}
@@ -249,4 +211,51 @@ func categoryFields(d taxonomy.Definition, id string) map[string]taxonomy.Attrib
 	}
 	collect(id)
 	return fields
+}
+
+// PrepareQuery сохраняет одинаковые фильтры и ценовой контекст для органики и рекламы.
+func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (ports.OfferQuery, error) {
+	normalized, err := normalize(query)
+	if err != nil {
+		return ports.OfferQuery{}, err
+	}
+
+	if err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		d, err := tx.Taxonomy().Current(ctx)
+		if err != nil {
+			return err
+		}
+		if query.CategoryID != "" {
+			if _, _, ok := d.Category(query.CategoryID); !ok {
+				return ErrInvalidQuery.WithMessage("неизвестная категория")
+			}
+		}
+		fields := d.Fields()
+		if query.CategoryID != "" {
+			fields = categoryFields(d, query.CategoryID)
+		}
+		if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
+			return err
+		}
+		for code, filter := range normalized.Attributes {
+			filter.Type = fields[code].Type
+			normalized.Attributes[code] = filter
+		}
+		for _, a := range fields {
+			if a.Facet {
+				normalized.FacetFields = append(normalized.FacetFields, a)
+			}
+		}
+		sort.Slice(normalized.FacetFields, func(i, j int) bool {
+			return normalized.FacetFields[i].Code < normalized.FacetFields[j].Code
+		})
+		return nil
+	}); err != nil {
+		return ports.OfferQuery{}, err
+	}
+	normalized.PriceContexts, err = q.priceContexts(ctx, normalized.BuyerID, normalized.TenantID)
+	if err != nil {
+		return ports.OfferQuery{}, err
+	}
+	return normalized, nil
 }
