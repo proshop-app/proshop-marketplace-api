@@ -18,7 +18,7 @@ const (
 	participantColumns = `
 		tenant_id, slug, name, stage, enabled, awaiting_review, subsidy,
 		settings_synced_at, version, created_at, updated_at, free_delivery_from,
-		delivery_settings, trust, approved_offers, last_decision`
+		delivery_settings, trust, approved_offers, last_decision, store_card`
 
 	selectParticipant = `
 		SELECT ` + participantColumns + `
@@ -26,12 +26,14 @@ const (
 		WHERE tenant_id = $1`
 
 	countParticipants = `SELECT count(*) FROM participants WHERE ($1 = '' OR trust = $1)
-		AND ($2 = '' OR stage = $2) AND (NOT $3 OR (stage = 'candidate' AND awaiting_review AND delivery_valid))`
+		AND ($2 = '' OR stage = $2) AND (NOT $3 OR (stage = 'candidate' AND awaiting_review
+		AND delivery_valid AND card_ready))`
 
 	listParticipants = `
 		SELECT ` + participantColumns + `
 		FROM participants WHERE ($3 = '' OR trust = $3)
-		AND ($4 = '' OR stage = $4) AND (NOT $5 OR (stage = 'candidate' AND awaiting_review AND delivery_valid))
+		AND ($4 = '' OR stage = $4) AND (NOT $5 OR (stage = 'candidate' AND awaiting_review
+		AND delivery_valid AND card_ready))
 		ORDER BY created_at, tenant_id
 		LIMIT $1 OFFSET $2`
 
@@ -39,9 +41,9 @@ const (
 		INSERT INTO participants (
 			tenant_id, slug, name, stage, enabled, awaiting_review, subsidy,
 			settings_synced_at, version, created_at, updated_at, free_delivery_from,
-			delivery_settings, trust, approved_offers, delivery_valid, last_decision
+			delivery_settings, trust, approved_offers, delivery_valid, last_decision, store_card, card_ready
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		ON CONFLICT DO NOTHING`
 
 	// selectInsertConflict говорит, чья строка помешала вставке: тот же магазин или
@@ -69,7 +71,9 @@ const (
 			trust = $15,
 			approved_offers = $16,
 			delivery_valid = $17,
-			last_decision = $18
+			last_decision = $18,
+			store_card = $19,
+			card_ready = $20
 		WHERE tenant_id = $1 AND stage = $2 AND version = $3`
 )
 
@@ -107,11 +111,20 @@ func (r *Participants) Get(ctx context.Context, tenantID ids.TenantID) (*partici
 // List — участники по времени создания.
 func (r *Participants) List(ctx context.Context, page participant.Page) ([]*participant.Participant, int, error) {
 	var total int
-	if err := r.q.QueryRow(ctx, countParticipants, page.Trust, page.Stage, page.Queue).Scan(&total); err != nil {
+	args := []any{page.Trust, page.Stage, page.Queue}
+	if err := r.q.QueryRow(ctx, countParticipants, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("число участников: %w", err)
 	}
 
-	rows, err := r.q.Query(ctx, listParticipants, page.Limit, page.Offset, page.Trust, page.Stage, page.Queue)
+	rows, err := r.q.Query(
+		ctx,
+		listParticipants,
+		page.Limit,
+		page.Offset,
+		page.Trust,
+		page.Stage,
+		page.Queue,
+	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("список участников: %w", err)
 	}
@@ -144,6 +157,11 @@ func (r *Participants) Add(ctx context.Context, p *participant.Participant) erro
 		return fmt.Errorf("субсидия участника %s: %w", s.TenantID, err)
 	}
 
+	card, err := encodeStoreCard(s.StoreCard)
+	if err != nil {
+		return fmt.Errorf("карточка участника %s: %w", s.TenantID, err)
+	}
+
 	tag, err := r.q.Exec(
 		ctx,
 		insertParticipant,
@@ -164,6 +182,8 @@ func (r *Participants) Add(ctx context.Context, p *participant.Participant) erro
 		s.ApprovedOffers,
 		p.DeliveryValid(),
 		encodeLastDecision(s.LastDecision),
+		card,
+		p.CardReady(),
 	)
 
 	switch {
@@ -191,6 +211,11 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 		return fmt.Errorf("субсидия участника %s: %w", s.TenantID, err)
 	}
 
+	card, err := encodeStoreCard(s.StoreCard)
+	if err != nil {
+		return fmt.Errorf("карточка участника %s: %w", s.TenantID, err)
+	}
+
 	tag, err := r.q.Exec(
 		ctx,
 		updateParticipant,
@@ -212,6 +237,8 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 		s.ApprovedOffers,
 		p.DeliveryValid(),
 		encodeLastDecision(s.LastDecision),
+		card,
+		p.CardReady(),
 	)
 
 	switch {
@@ -238,6 +265,7 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 		free     int64
 		delivery []byte
 		decision []byte
+		card     []byte
 	)
 
 	err := row.Scan(
@@ -257,11 +285,15 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 		&state.Trust,
 		&state.ApprovedOffers,
 		&decision,
+		&card,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	if err := json.Unmarshal(card, &state.StoreCard); err != nil {
+		return nil, fmt.Errorf("карточка участника %s: %w", state.TenantID, err)
+	}
 	if len(decision) > 0 {
 		if err := json.Unmarshal(decision, &state.LastDecision); err != nil {
 			return nil, err
@@ -334,7 +366,8 @@ func encodeLastDecision(d *participant.LastDecision) any {
 // Count считает участников и очередь без чтения снимков.
 func (r *Participants) Count(ctx context.Context, page participant.Page) (int, error) {
 	var total int
-	err := r.q.QueryRow(ctx, countParticipants, page.Trust, page.Stage, page.Queue).Scan(&total)
+	args := []any{page.Trust, page.Stage, page.Queue}
+	err := r.q.QueryRow(ctx, countParticipants, args...).Scan(&total)
 	return total, err
 }
 
@@ -358,4 +391,9 @@ func (r *Participants) insertConflict(ctx context.Context, s participant.State) 
 	default:
 		return participant.ErrSlugTaken
 	}
+}
+
+func encodeStoreCard(c participant.StoreCard) (string, error) {
+	raw, err := json.Marshal(c)
+	return string(raw), err
 }

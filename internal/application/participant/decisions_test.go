@@ -20,6 +20,13 @@ func TestDecisionJournalAndTrust(t *testing.T) {
 		t.Fatal(err)
 	}
 	decision := participant.Decision{Operator: operator.Principal{ID: "o1", Name: "Оператор"}, Note: "Проверено"}
+	readyState, ok := store.Participant("t1")
+	if !ok {
+		t.Fatal("участник не найден")
+	}
+	readyState.StoreCard.Readiness.Ready = true
+	store.SeedParticipant(readyState)
+
 	if _, err := service.Enable(ctx, "t1", decision); err != nil {
 		t.Fatal(err)
 	}

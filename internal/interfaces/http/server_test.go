@@ -220,7 +220,7 @@ func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID
 		Version:   1,
 	})
 
-	indexer := appcatalog.NewIndexer(e.store, e.index, e.clock, 100, &fake.IndexRebuildLock{}, nil)
+	indexer := appcatalog.NewIndexer(e.store, e.index, e.clock, 100, &fake.IndexRebuildLock{}, nil, 30*time.Second)
 	err = indexer.SyncTenant(context.Background(), tenant)
 	if err != nil {
 		t.Fatal(err)
@@ -314,11 +314,16 @@ func TestOperatorFlow(t *testing.T) {
 		t.Fatalf("лишнее поле: %+v", r)
 	}
 
-	r = e.call(t, http.MethodPatch, "/api/v1/operator/participants/t1", `{"name":"Новое имя"}`, true)
-	if r.status != http.StatusOK || r.body["name"] != "Новое имя" {
-		t.Fatalf("переименование: %+v", r)
+	r = e.call(t, http.MethodPost, "/api/v1/operator/participants/t1/enable", "", true)
+	if r.status != http.StatusConflict || errorCode(r) != "participant.card_not_ready" {
+		t.Fatal(r)
 	}
-
+	state, ok := e.store.Participant("t1")
+	if !ok {
+		t.Fatal("участник не найден")
+	}
+	state.StoreCard.Readiness.Ready = true
+	e.store.SeedParticipant(state)
 	r = e.call(t, http.MethodPost, "/api/v1/operator/participants/t1/enable", "", true)
 	if r.status != http.StatusOK || r.body["enabled"] != true || r.body["stage"] != "connected" ||
 		r.body["visible"] != false {

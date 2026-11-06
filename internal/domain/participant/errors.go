@@ -3,6 +3,10 @@ package participant
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrCardNotReady запрещает подключение до заполнения карточки.
+	ErrCardNotReady = errs.New(errs.Conflict, "participant.card_not_ready", "карточка магазина не готова")
+	// ErrInvalidCardKey ограничивает постмодерацию разрешёнными пунктами.
+	ErrInvalidCardKey = errs.New(errs.Invalid, "participant.invalid_card_key", "неизвестный пункт карточки")
 	// ErrInvalidStage — неизвестный фильтр стадии.
 	ErrInvalidStage = errs.New(errs.Invalid, "participant.invalid_stage", "неизвестная стадия участия")
 	// ErrInvalidNote требует объяснения операторского изменения.

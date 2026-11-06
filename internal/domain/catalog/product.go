@@ -46,6 +46,7 @@ type Snapshot struct {
 	TenantID      ids.TenantID
 	ProductID     ids.ProductID
 	Revision      int64
+	SalesCount    int64
 	Deleted       bool
 	Card          Card
 	Price         money.Money
@@ -61,6 +62,7 @@ type ProductState struct {
 	TenantID      ids.TenantID
 	ProductID     ids.ProductID
 	Revision      int64
+	SalesCount    int64
 	Deleted       bool
 	Card          Card
 	Price         money.Money
@@ -120,6 +122,7 @@ func (p *Product) assign(snapshot Snapshot, now time.Time) {
 	p.state.TenantID = snapshot.TenantID
 	p.state.ProductID = snapshot.ProductID
 	p.state.Revision = snapshot.Revision
+	p.state.SalesCount = snapshot.SalesCount
 	p.state.Deleted = snapshot.Deleted
 	p.state.ProjectedAt = snapshot.At
 	p.state.Version = p.originVersion + 1

@@ -1,0 +1,26 @@
+{
+  "profile": {
+    "name": "Кандидат",
+    "slogan": "",
+    "logo": null,
+    "color": null,
+    "showcase": {
+      "mode": "auto",
+      "productIds": []
+    }
+  },
+  "card": {
+    "ready": false,
+    "missing": [
+      "requisites",
+      "contacts",
+      "terms",
+      "slogan",
+      "brandColor"
+    ]
+  },
+  "returns": null,
+  "delivery": null,
+  "freeDeliveryFrom": null,
+  "subsidy": null
+}

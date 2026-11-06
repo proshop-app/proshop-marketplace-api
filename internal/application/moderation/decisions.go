@@ -83,6 +83,9 @@ func (s *Service) OpenCase(
 		if err := tx.Outbox().Enqueue(ctx, moderationstatus.OfferTask(offer.Tenant, offer.Product, now)); err != nil {
 			return err
 		}
+		if err := tx.Outbox().Enqueue(ctx, ports.StoreCardTask(offer.Tenant, now)); err != nil {
+			return err
+		}
 		return tx.Outbox().Enqueue(ctx, appcatalog.SyncOfferTask(offer.Tenant, offer.Product, now))
 	})
 	if errors.Is(err, moderation.ErrCaseConflict) || errors.Is(err, moderation.ErrConflict) {
@@ -203,6 +206,9 @@ func (s *Service) decide(
 			tx.AfterCommit(func() { s.config.Metrics.Decision(action) })
 		}
 		if err := tx.Outbox().Enqueue(ctx, appcatalog.SyncOfferTask(state.TenantID, state.ProductID, now)); err != nil {
+			return err
+		}
+		if err := tx.Outbox().Enqueue(ctx, ports.StoreCardTask(state.TenantID, now)); err != nil {
 			return err
 		}
 		statusTask := moderationstatus.OfferTask(state.TenantID, state.ProductID, now)

@@ -321,3 +321,28 @@ func TestServerAPIToken(t *testing.T) {
 		}
 	}
 }
+
+func TestStoreCardRefreshDelay(t *testing.T) {
+	for _, value := range []string{"", "45s", "0s", "-1s", "invalid"} {
+		t.Run(value, func(t *testing.T) {
+			env := validEnv()
+			if value != "" {
+				env["STORE_CARD_REFRESH_DELAY"] = value
+			}
+			cfg, err := config.Load(envOf(env))
+			if value == "0s" || value == "-1s" || value == "invalid" {
+				if err == nil || !strings.Contains(err.Error(), "STORE_CARD_REFRESH_DELAY") {
+					t.Fatal(err)
+				}
+				return
+			}
+			want := 30 * time.Second
+			if value == "45s" {
+				want = 45 * time.Second
+			}
+			if err != nil || cfg.Settings.StoreCardRefreshDelay != want {
+				t.Fatal(cfg.Settings, err)
+			}
+		})
+	}
+}

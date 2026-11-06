@@ -33,7 +33,7 @@ func (r *unavailableBrandResolver) Resolve(ctx context.Context, _ string) (strin
 }
 
 func indexer(store *fake.Store, index *fake.Index, clock *fake.Clock) *appcatalog.Indexer {
-	return appcatalog.NewIndexer(store, index, clock, 2, &fake.IndexRebuildLock{}, nil)
+	return appcatalog.NewIndexer(store, index, clock, 2, &fake.IndexRebuildLock{}, nil, 30*time.Second)
 }
 
 func TestSyncOfferWritesParticipantOffers(t *testing.T) {
@@ -149,7 +149,17 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 		t0,
 	)
 	owner, _ := participant.New(tenant, "Магазин", t0)
-	owner.Enable(t0)
+	if _, err := owner.ApplyStoreCard(
+		participant.Profile{},
+		participant.CardReadiness{Ready: true},
+		nil,
+		t0,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := owner.Enable(t0); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := owner.ApplyShopSettings(w3IndexingSubsidy, money.Money{}, w3IndexingDelivery, t0); err != nil {
 		t.Fatal(err)
 	}
@@ -324,6 +334,7 @@ func TestProjectionContinuesWhileBrandRegistryIsUnavailable(t *testing.T) {
 		1,
 		&fake.IndexRebuildLock{},
 		appcatalog.NewModelKeys(resolver, nil, true),
+		30*time.Second,
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -346,4 +357,45 @@ func TestProjectionContinuesWhileBrandRegistryIsUnavailable(t *testing.T) {
 	}
 	cancel()
 	<-done
+}
+
+func TestStoreCardRefreshCoalescing(t *testing.T) {
+	store, index, clock := fake.NewStore(), fake.NewIndex(), fake.NewClock(t1)
+	seedSeller(store, "t1", participant.TenantActive, true)
+	seedProduct(store, "t1", "p1")
+	ctx := context.Background()
+	refreshAt := clock.Now().Add(30 * time.Second)
+	service := indexer(store, index, clock)
+	if err := service.SyncOffer(ctx, "t1", "p1"); err != nil {
+		t.Fatal(err)
+	}
+	clock.Advance(time.Second)
+	if err := service.SyncTenant(ctx, "t1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Rebuild(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertTask := func(want time.Time) {
+		t.Helper()
+		count := 0
+		for _, row := range store.OutboxRows() {
+			if row.Kind == ports.TaskStoreCard {
+				count++
+				if !row.NextAt.Equal(want) {
+					t.Fatalf("время задачи: %v, нужно %v", row.NextAt, want)
+				}
+			}
+		}
+		if count != 1 {
+			t.Fatalf("задач пересчёта: %d", count)
+		}
+	}
+	assertTask(refreshAt)
+	if err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		return tx.Outbox().Enqueue(ctx, ports.StoreCardTask("t1", clock.Now()))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	assertTask(clock.Now())
 }

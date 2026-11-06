@@ -87,6 +87,9 @@ func restored(t *testing.T) *participant.Participant {
 	t.Helper()
 
 	p := newParticipant(t)
+	if _, err := p.ApplyStoreCard(participant.Profile{}, participant.CardReadiness{Ready: true}, nil, t0); err != nil {
+		t.Fatal(err)
+	}
 	p.MarkSaved()
 
 	return participant.Restore(p.State())
@@ -95,7 +98,9 @@ func restored(t *testing.T) *participant.Participant {
 func TestEnableDisableIdempotent(t *testing.T) {
 	p := restored(t)
 
-	if !p.Enable(t1) || p.Enable(t1) {
+	changed, enableErr := p.Enable(t1)
+	repeated, repeatErr := p.Enable(t1)
+	if !changed || enableErr != nil || repeated || repeatErr != nil {
 		t.Fatal("включение должно сработать один раз")
 	}
 	if !p.Enabled() || p.Version() != 2 {
@@ -115,7 +120,11 @@ func TestEnableDisableIdempotent(t *testing.T) {
 func TestVersionGrowsOncePerSave(t *testing.T) {
 	p := restored(t)
 
-	p.Enable(t1)
+	if _, err := p.Enable(t1); err != nil {
+
+		t.Fatal(err)
+
+	}
 	if _, err := p.Rename("Новое имя", t1); err != nil {
 		t.Fatal(err)
 	}
@@ -162,9 +171,13 @@ func TestVisibility(t *testing.T) {
 		t.Fatalf("выключенный участник не виден: %+v", got)
 	}
 
-	p.Enable(t1)
-	if got := participant.VisibilityOf(p, active); got.Visible {
-		t.Fatalf("включённый оператором магазин без обязательной доставки не виден: %+v", got)
+	if _, err := p.Enable(t1); err != nil {
+
+		t.Fatal(err)
+
+	}
+	if got := participant.VisibilityOf(p, active); got.Visible || got.CheckoutAvailable {
+		t.Fatalf("без доставки магазин скрыт: %+v", got)
 	}
 
 	if _, err := p.ApplyShopSettings(w3ParticipantSubsidy, money.Money{}, w3ParticipantDelivery, t1); err != nil {

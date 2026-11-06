@@ -156,6 +156,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		}
 	}
 	writer := infrakafka.NewWriter(cfg.Kafka.Brokers)
+	participants := appparticipant.NewService(uow, now, identities).WithProbationOffers(cfg.Moderation.ProbationOffers)
 	statuses := moderationstatus.NewService(
 		uow,
 		now,
@@ -178,6 +179,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		indexBatch,
 		postgres.NewIndexRebuildLock(s.store.pool),
 		models,
+		cfg.Settings.StoreCardRefreshDelay,
 	)
 	pickups := directory(s.store, cfg)
 	auth := appbuyer.NewAuth(
@@ -256,6 +258,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			appcatalog.TaskSyncOffer:         indexer.HandleTask,
 			appcatalog.TaskSyncTenant:        indexer.HandleTask,
 			appparticipant.TaskSyncSettings:  settings.HandleTask,
+			ports.TaskStoreCard:              participants.RefreshStoreCard,
 			appreference.TaskChanged:         references.HandleTask,
 			moderationstatus.TaskOffer:       statuses.HandleTask,
 			moderationstatus.TaskParticipant: statuses.HandleTask,
@@ -269,7 +272,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 		Batch:           retentionBatch,
 	})
 
-	participants := appparticipant.NewService(uow, now, identities).WithProbationOffers(cfg.Moderation.ProbationOffers)
 	queries := appcatalog.NewQueries(uow, s.store.index, resyncing)
 	location, err := time.LoadLocation(cfg.Promotion.Timezone)
 	if err != nil {

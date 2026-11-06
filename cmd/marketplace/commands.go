@@ -48,6 +48,7 @@ func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 		indexBatch,
 		postgres.NewIndexRebuildLock(store.pool),
 		models,
+		cfg.Settings.StoreCardRefreshDelay,
 	)
 
 	result, err := indexer.Rebuild(ctx)

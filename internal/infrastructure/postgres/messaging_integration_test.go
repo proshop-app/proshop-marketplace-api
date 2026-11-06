@@ -247,7 +247,17 @@ func TestOfferStates(t *testing.T) {
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		tenant, _ := tx.Registry().Get(ctx, "t1")
 		p, _ := participant.New(tenant, "Первый", at(0))
-		p.Enable(at(0))
+		if _, err := p.ApplyStoreCard(
+			participant.Profile{},
+			participant.CardReadiness{Ready: true},
+			nil,
+			at(0),
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := p.Enable(at(0)); err != nil {
+			t.Fatal(err)
+		}
 		if err := tx.Participants().Add(ctx, p); err != nil {
 			return err
 		}

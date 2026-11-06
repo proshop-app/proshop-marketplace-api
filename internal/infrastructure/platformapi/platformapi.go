@@ -90,6 +90,9 @@ type errorJSON struct {
 }
 
 type settingsJSON struct {
+	Profile          *participant.Profile          `json:"profile"`
+	Card             *participant.CardReadiness    `json:"card"`
+	Returns          *participant.Returns          `json:"returns"`
 	FreeDeliveryFrom *int64                        `json:"freeDeliveryFrom"`
 	Delivery         *participant.DeliverySettings `json:"delivery"`
 	Subsidy          *struct {
@@ -199,10 +202,11 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 		}
 		return ports.ShopSettings{}, err
 	}
-	settings := ports.ShopSettings{}
-	if answer.FreeDeliveryFrom == nil || answer.Subsidy == nil || answer.Delivery == nil {
+	if answer.Profile == nil || answer.Card == nil {
 		return ports.ShopSettings{}, ports.ErrInvalidSettings
 	}
+	settings := ports.ShopSettings{Profile: *answer.Profile, Card: *answer.Card, Returns: answer.Returns}
+
 	if answer.FreeDeliveryFrom != nil {
 		if *answer.FreeDeliveryFrom < 0 {
 			return ports.ShopSettings{}, ports.ErrInvalidSettings
@@ -210,13 +214,16 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 		settings.FreeDeliveryFrom = money.FromKopecks(*answer.FreeDeliveryFrom)
 	}
 	if answer.Delivery != nil {
+		if err := answer.Delivery.Validate(); err != nil {
+			return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
+		}
 		settings.Delivery = answer.Delivery.Clone()
-	}
-	if settings.Delivery.Validate() != nil {
-		return ports.ShopSettings{}, ports.ErrInvalidSettings
 	}
 
 	if s := answer.Subsidy; s != nil {
+		if !s.Enabled {
+			return ports.ShopSettings{}, ports.ErrInvalidSettings
+		}
 		settings.Subsidy = participant.Subsidy{
 			Enabled:   s.Enabled,
 			Type:      participant.SubsidyType(s.Type),
@@ -228,10 +235,11 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 	if err := settings.Subsidy.Validate(); err != nil {
 		return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
 	}
-
-	if !settings.Subsidy.Enabled {
-		return ports.ShopSettings{}, ports.ErrInvalidSettings
+	// Неполный набор настроек не разрешает торговлю, но профиль кандидата сохраняется.
+	if answer.FreeDeliveryFrom == nil || answer.Subsidy == nil || answer.Delivery == nil {
+		settings.Delivery = participant.DeliverySettings{}
 	}
+
 	return settings, nil
 }
 

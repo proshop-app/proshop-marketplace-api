@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
@@ -23,7 +24,7 @@ func indexed(t *testing.T) (*fake.Store, *appcatalog.Queries) {
 	seedProduct(store, "t1", "p2")
 	seedProduct(store, "t2", "p1")
 
-	indexer := appcatalog.NewIndexer(store, index, clock, 10, &fake.IndexRebuildLock{}, nil)
+	indexer := appcatalog.NewIndexer(store, index, clock, 10, &fake.IndexRebuildLock{}, nil, 30*time.Second)
 	if _, err := indexer.Rebuild(context.Background()); err != nil {
 		t.Fatal(err)
 	}

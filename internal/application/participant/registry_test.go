@@ -89,7 +89,11 @@ func TestRegistrySyncsParticipant(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, _ := store.Participant("t9")
+	p, ok := store.Participant("t9")
+
+	if !ok {
+		t.Fatal("участник не найден")
+	}
 	if p.Slug != "shop-nine-renamed" || p.Version != 2 {
 		t.Fatalf("слаг участника сверяется с реестром: %+v", p)
 	}

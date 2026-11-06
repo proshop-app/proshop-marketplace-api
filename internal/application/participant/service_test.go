@@ -96,17 +96,21 @@ func TestChangesEnqueueSyncOnlyWhenChanged(t *testing.T) {
 	}
 	clock.Advance(time.Minute)
 
+	readyState, ok := store.Participant("t1")
+
+	if !ok {
+		t.Fatal("участник не найден")
+	}
+	readyState.StoreCard.Readiness.Ready = true
+	store.SeedParticipant(readyState)
+
 	view, err := service.Enable(ctx, "t1", participant.Decision{Note: "Заметка"})
 	if err != nil || !view.Participant.Enabled || view.Visibility.Visible || view.Participant.Version != 2 {
-		t.Fatalf("включение оператором без настроек доставки не делает видимым: %+v, %v", view, err)
-	}
-
-	if _, err := service.Rename(ctx, "t1", "Новое имя"); err != nil {
-		t.Fatal(err)
+		t.Fatalf("подключённый магазин скрыт без доставки: %+v, %v", view, err)
 	}
 
 	view, err = service.Disable(ctx, "t1", participant.Decision{Note: "Заметка"})
-	if err != nil || view.Visibility.Visible || view.Participant.Version != 4 {
+	if err != nil || view.Visibility.Visible || view.Participant.Version != 3 {
 		t.Fatalf("выключение: %+v, %v", view, err)
 	}
 

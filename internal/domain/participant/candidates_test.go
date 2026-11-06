@@ -35,7 +35,11 @@ func TestCandidateStages(t *testing.T) {
 	if _, err := p.Submit(t0); !errors.Is(err, participant.ErrConflict) {
 		t.Fatal(err)
 	}
-	if !p.Enable(t0) || p.Stage() != participant.StageConnected || !p.Enabled() || p.State().AwaitingReview {
+	if _, err := p.ApplyStoreCard(participant.Profile{}, participant.CardReadiness{Ready: true}, nil, t0); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := p.Enable(t0); err != nil || !changed ||
+		p.Stage() != participant.StageConnected || !p.Enabled() || p.State().AwaitingReview {
 		t.Fatal(p.State())
 	}
 	if _, err := p.Submit(t0); !errors.Is(err, participant.ErrConflict) {

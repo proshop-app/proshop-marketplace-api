@@ -49,6 +49,8 @@ func (t *tx) Products() catalog.ProductRepository { return products{t.data} }
 
 func (t *tx) Signals() catalog.SignalsRepository { return signals{t.data} }
 
+func (t *tx) StoreCards() ports.StoreCards { return storeCards{t.data} }
+
 func (t *tx) Offers() ports.OfferStates { return offers{t.data} }
 
 func (t *tx) Outbox() ports.Outbox { return outbox{t.data} }
@@ -82,7 +84,8 @@ func (r participants) List(_ context.Context, page participant.Page) ([]*partici
 	states := make([]participant.State, 0, len(r.d.participants))
 	for _, state := range r.d.participants {
 		if (page.Trust == "" || state.Trust == page.Trust) &&
-			(page.Stage == "" || state.Stage == page.Stage) && (!page.Queue || participant.Restore(state).InQueue()) {
+			(page.Stage == "" || state.Stage == page.Stage) &&
+			(!page.Queue || participant.Restore(state).InQueue()) {
 			states = append(states, state)
 		}
 	}
@@ -229,8 +232,11 @@ func versionMatches[K comparable, V any](rows map[K]V, key K, origin int64, vers
 
 func (o outbox) Enqueue(_ context.Context, task ports.NewTask) error {
 	if task.DedupKey != "" {
-		for _, row := range o.d.outbox {
+		for i, row := range o.d.outbox {
 			if row.DedupKey == task.DedupKey && row.DoneAt == nil && row.Attempts == 0 {
+				if task.At.Before(row.NextAt) {
+					o.d.outbox[i].NextAt = task.At
+				}
 				return nil
 			}
 		}
@@ -421,7 +427,8 @@ func (r participants) Count(_ context.Context, page participant.Page) (int, erro
 	count := 0
 	for _, state := range r.d.participants {
 		if (page.Trust == "" || state.Trust == page.Trust) &&
-			(page.Stage == "" || state.Stage == page.Stage) && (!page.Queue || participant.Restore(state).InQueue()) {
+			(page.Stage == "" || state.Stage == page.Stage) &&
+			(!page.Queue || participant.Restore(state).InQueue()) {
 			count++
 		}
 	}

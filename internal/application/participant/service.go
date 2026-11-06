@@ -110,13 +110,6 @@ func (s *Service) Create(ctx context.Context, cmd CreateCommand) (View, error) {
 	return view, err
 }
 
-// Rename меняет название участника.
-func (s *Service) Rename(ctx context.Context, tenantID ids.TenantID, name string) (View, error) {
-	return s.change(ctx, tenantID, func(p *participant.Participant) (bool, error) {
-		return p.Rename(name, s.clock.Now())
-	})
-}
-
 // Enable включает участника в каталог.
 func (s *Service) Enable(ctx context.Context, tenantID ids.TenantID, decision participant.Decision) (View, error) {
 	return s.decide(ctx, tenantID, "enable", "", decision)

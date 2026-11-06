@@ -27,7 +27,7 @@ type recorder struct {
 
 const productBody = `{"version":1,"tenantId":"t1","productId":"p1","revision":7,"operation":"upsert","product":{
 	"id":"p1","name":"Товар","description":"Описание","image":null,"url":"/p1","sku":"S1",
-	"price":1999.9,"promoPrice":1499.995,"availableQuantity":3,
+	"price":1999.9,"promoPrice":1499.995,"availableQuantity":3,"salesCount":9007199254740993,
 	"categories":[{"id":"c1","name":"","title":"Категория","url":"/c1"}],"tags":["t-1"],
 	"marketplace":{"categoryId":"c1","attributes":{"a1":"v1","a2":1.5,"a3":false},"published":true},
 	"variantsId":"v1","conditions":{"isVisible":true,"isOnlyVariant":false},"unknownField":42}}`
@@ -82,6 +82,9 @@ func TestProductProjected(t *testing.T) {
 
 	got := rec.products[0]
 	s := got.Snapshot
+	if s.SalesCount != 9007199254740993 {
+		t.Fatal(s.SalesCount)
+	}
 	if got.EventID != "ev" || s.TenantID != "t1" || s.ProductID != "p1" || s.Revision != 7 || s.Deleted {
 		t.Fatalf("конверт: %+v", got)
 	}

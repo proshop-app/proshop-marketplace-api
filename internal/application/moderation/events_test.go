@@ -193,6 +193,12 @@ func TestParticipantStatusLatestDecisionAndRollback(t *testing.T) {
 		t.Fatal(disabled, err)
 	}
 	e.clock.Advance(time.Second)
+	state, ok := e.store.Participant("t1")
+	if !ok {
+		t.Fatal("участник t1 не найден")
+	}
+	state.StoreCard.Readiness.Ready = true
+	e.store.SeedParticipant(state)
 	decision = participant.Decision{Reason: "r1", Note: "Проверено"}
 	if _, err := members.Enable(ctx, "t1", decision); err != nil {
 		t.Fatal(err)

@@ -101,6 +101,24 @@ func routes(deps Deps) []route {
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
+		{http.MethodGet, "/api/v1/shops", participants.shops},
+		{http.MethodGet, "/api/v1/shops/{slug}", participants.shop},
+		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/store-card", machine(participants.storeCard)},
+		{
+			http.MethodPost,
+			"/api/v1/internal/tenants/{tenantId}/settings/sync",
+			machine(participants.syncSettings),
+		},
+		{
+			http.MethodPost,
+			"/api/v1/operator/participants/{tenantId}/card/hide",
+			operator(participants.moderateCard),
+		},
+		{
+			http.MethodDelete,
+			"/api/v1/operator/participants/{tenantId}/card/hide/{key}",
+			operator(participants.moderateCard),
+		},
 		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/participation", machine(participants.participation)},
 		{
 			http.MethodPost,
@@ -192,7 +210,6 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/operator/participants", operator(participants.list)},
 		{http.MethodPost, "/api/v1/operator/participants", operator(participants.create)},
 		{http.MethodGet, "/api/v1/operator/participants/{tenantId}", operator(participants.get)},
-		{http.MethodPatch, "/api/v1/operator/participants/{tenantId}", operator(participants.rename)},
 		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/enable", operator(participants.decision)},
 		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/disable", operator(participants.decision)},
 
