@@ -62,7 +62,7 @@ func (s *Service) decide(
 		changed := false
 		switch action {
 		case "enable":
-			changed = p.Enable(now)
+			changed, err = p.Enable(now)
 		case "disable":
 			if p.Stage() != participant.StageConnected && p.Stage() != participant.StageDisconnected {
 				return participant.ErrConflict
@@ -97,6 +97,9 @@ func (s *Service) decide(
 				return err
 			}
 			if err := tx.Outbox().Enqueue(ctx, appcatalog.SyncTenantTask(tenant, now)); err != nil {
+				return err
+			}
+			if err := tx.Outbox().Enqueue(ctx, ports.StoreCardTask(tenant, now)); err != nil {
 				return err
 			}
 			if err := tx.Outbox().Enqueue(ctx, moderationstatus.ParticipantTask(tenant, now)); err != nil {

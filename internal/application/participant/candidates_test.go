@@ -121,7 +121,7 @@ func TestCandidateRegistryAndBackfill(t *testing.T) {
 	if err != nil || history.Total != 1 {
 		t.Fatal(history, err)
 	}
-	if p, _ := store.Participant("t000"); p.Name != "t000" {
+	if p, ok := store.Participant("t000"); !ok || p.Name != "t000" {
 		t.Fatal(p)
 	}
 }
@@ -142,6 +142,7 @@ func TestCandidateReviewLifecycle(t *testing.T) {
 	assertQueue(0)
 	platform := fake.NewPlatform()
 	platform.SetSettings("t1", ports.ShopSettings{
+		Card:     participant.CardReadiness{Ready: true},
 		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 		Delivery: w3SettingsDelivery,
 	})
@@ -243,6 +244,7 @@ func TestCandidateBackfillIsolatesFailureAndAlreadyExists(t *testing.T) {
 	platform := fake.NewPlatform()
 	for _, id := range []ids.TenantID{"t1", "t3"} {
 		platform.SetSettings(id, ports.ShopSettings{
+			Card:     participant.CardReadiness{Ready: true},
 			Delivery: w3SettingsDelivery,
 			Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 		})
@@ -279,7 +281,16 @@ func TestCandidateDecisionTransitions(t *testing.T) {
 		if _, err := service.Return(ctx, "t1", decision); !errors.Is(err, participant.ErrConflict) {
 			t.Fatal(stage, err)
 		}
-		if stage == participant.StageReturned {
+		if stage == participant.StageReturned || stage == participant.StageDisconnected {
+			if _, err := service.Enable(ctx, "t1", decision); !errors.Is(err, participant.ErrCardNotReady) {
+				t.Fatal(err)
+			}
+			state, ok := store.Participant("t1")
+			if !ok {
+				t.Fatal("участник не найден")
+			}
+			state.StoreCard.Readiness.Ready = true
+			store.SeedParticipant(state)
 			view, err := service.Enable(ctx, "t1", decision)
 			if err != nil || view.Participant.Stage != participant.StageConnected {
 				t.Fatal(view, err)

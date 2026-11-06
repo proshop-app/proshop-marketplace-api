@@ -90,6 +90,14 @@ func TestCandidateRepositoryQueueAndConflict(t *testing.T) {
 		); err != nil {
 			return err
 		}
+		if _, err := p.ApplyStoreCard(
+			participant.Profile{},
+			participant.CardReadiness{Ready: true},
+			nil,
+			at(1),
+		); err != nil {
+			t.Fatal(err)
+		}
 		if err := tx.Participants().Update(ctx, p); err != nil {
 			return err
 		}
@@ -120,7 +128,17 @@ func TestCandidateRepositoryQueueAndConflict(t *testing.T) {
 		if read.Stage() != participant.StageReturned || read.State().LastDecision.Note != "Исправьте" {
 			return fmt.Errorf("%+v", read.State())
 		}
-		stale.Enable(at(3))
+		if _, err := stale.ApplyStoreCard(
+			participant.Profile{},
+			participant.CardReadiness{Ready: true},
+			nil,
+			at(3),
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := stale.Enable(at(3)); err != nil {
+			t.Fatal(err)
+		}
 		if err := tx.Participants().Update(ctx, stale); !errors.Is(err, participant.ErrConflict) {
 			return fmt.Errorf("%w", err)
 		}

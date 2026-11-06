@@ -21,17 +21,8 @@ type taxonomyHandlers struct {
 
 func taxonomyCached(w http.ResponseWriter, r *http.Request, version int64) bool {
 	etag := `"taxonomy-` + strconv.FormatInt(version, 10) + `"`
-	w.Header().Set("ETag", etag)
 	w.Header().Set("X-Taxonomy-Version", strconv.FormatInt(version, 10))
-	w.Header().Set("Cache-Control", "public, max-age=0, must-revalidate")
-	for _, candidate := range strings.Split(r.Header.Get("If-None-Match"), ",") {
-		candidate = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(candidate), "W/"))
-		if candidate == etag || candidate == "*" {
-			w.WriteHeader(http.StatusNotModified)
-			return true
-		}
-	}
-	return false
+	return publicCached(w, r, etag)
 }
 
 func (h *taxonomyHandlers) categories(w http.ResponseWriter, r *http.Request) {

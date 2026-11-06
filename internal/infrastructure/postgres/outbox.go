@@ -16,7 +16,9 @@ const (
 	insertTask = `
 		INSERT INTO outbox (kind, tenant_id, dedup_key, payload, next_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, $5)
-		ON CONFLICT (dedup_key) WHERE done_at IS NULL AND attempts = 0 DO NOTHING`
+		ON CONFLICT (dedup_key) WHERE done_at IS NULL AND attempts = 0 DO UPDATE
+		SET next_at = EXCLUDED.next_at
+		WHERE EXCLUDED.next_at < outbox.next_at`
 
 	// claimTasks берёт созревшие задачи с квотой на магазин и пропуском занятых строк.
 	claimTasks = `

@@ -27,6 +27,7 @@ type productProjection struct {
 }
 
 type productSnapshot struct {
+	SalesCount        int64              `json:"salesCount"`
 	Variants          json.RawMessage    `json:"variants"`
 	PriceProfiles     []priceProfileJSON `json:"priceProfiles"`
 	Marketplace       *taxonomy.Card     `json:"marketplace"`
@@ -148,6 +149,7 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 		return err
 	}
 	snapshot.PriceProfiles = profiles
+	snapshot.SalesCount = product.SalesCount
 
 	snapshot.Price = price
 	if product.Marketplace != nil && product.Marketplace.Price != nil {

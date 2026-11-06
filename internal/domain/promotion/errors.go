@@ -4,6 +4,7 @@ import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 // Значения контракта продвижения не зависят от конкретного магазина.
 var (
+	ErrCardNotReady         = errs.New(errs.Conflict, "promotion.card_not_ready", "карточка магазина не готова")
 	ErrRateLimited          = errs.New(errs.TooManyRequests, "promotion.rate_limited", "лимит маячков исчерпан")
 	ErrUnauthorized         = errs.New(errs.Unauthorized, "promotion.unauthorized", "нужен служебный токен")
 	ErrInvalid              = errs.New(errs.Invalid, "promotion.invalid", "некорректное размещение")

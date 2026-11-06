@@ -15,7 +15,7 @@ import (
 const (
 	productColumns = `
 		p.tenant_id, p.product_id, p.revision, p.deleted, p.card, p.price, p.promo_price,
-		p.available, p.projected_at, p.version, p.updated_at, p.price_profiles`
+		p.available, p.projected_at, p.version, p.updated_at, p.price_profiles, p.sales_count`
 
 	selectProduct = `
 		SELECT ` + productColumns + `
@@ -25,9 +25,9 @@ const (
 	insertProduct = `
 		INSERT INTO catalog_products (
 			tenant_id, product_id, revision, deleted, card, price, promo_price,
-			available, projected_at, version, updated_at, price_profiles
+			available, projected_at, version, updated_at, price_profiles, sales_count
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
 
 	updateProduct = `
 		UPDATE catalog_products
@@ -40,8 +40,9 @@ const (
 			projected_at = $9,
 			version = $10,
 			updated_at = $11,
-			price_profiles = $12
-		WHERE tenant_id = $1 AND product_id = $2 AND version = $13`
+			price_profiles = $12,
+			sales_count = $13
+		WHERE tenant_id = $1 AND product_id = $2 AND version = $14`
 )
 
 // Products — проекция товаров в PostgreSQL.
@@ -77,6 +78,7 @@ type categoryJSON struct {
 type productRow struct {
 	tenantID, productID string
 	revision            int64
+	salesCount          int64
 	deleted             bool
 	card                []byte
 	priceProfiles       []byte
@@ -138,6 +140,7 @@ func (r *Products) Save(ctx context.Context, product *catalog.Product) error {
 		s.Version,
 		s.UpdatedAt,
 		string(profiles),
+		s.SalesCount,
 	}
 
 	if product.OriginVersion() == 0 {
@@ -167,6 +170,7 @@ func (r *productRow) targets() []any {
 		&r.version,
 		&r.updatedAt,
 		&r.priceProfiles,
+		&r.salesCount,
 	}
 }
 
@@ -179,6 +183,7 @@ func (r *productRow) product() (*catalog.Product, error) {
 		TenantID:    ids.TenantID(r.tenantID),
 		ProductID:   ids.ProductID(r.productID),
 		Revision:    r.revision,
+		SalesCount:  r.salesCount,
 		Deleted:     r.deleted,
 		Card:        card,
 		Available:   r.available,

@@ -192,7 +192,22 @@ func TestParticipantsRepository(t *testing.T) {
 			return err
 		}
 
-		stale.Enable(at(3))
+		if _, err := stale.ApplyStoreCard(
+			participant.Profile{},
+			participant.CardReadiness{Ready: true},
+			nil,
+			at(3),
+		); err != nil {
+
+			t.Fatal(err)
+
+		}
+
+		if _, err := stale.Enable(at(3)); err != nil {
+
+			t.Fatal(err)
+
+		}
 		if err := tx.Participants().Update(ctx, stale); !errors.Is(err, participant.ErrConflict) {
 			return fmt.Errorf("переход по устаревшему статусу и версии: ожидалось ErrConflict, получено %w", err)
 		}

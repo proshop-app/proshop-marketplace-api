@@ -1,0 +1,40 @@
+{
+  "subsidy": {
+    "enabled": false,
+    "type": "fixed",
+    "value": 0,
+    "maxAmount": 0
+  },
+  "freeDeliveryFrom": 0,
+  "delivery": {
+    "regions": [
+      "RU-MOW"
+    ],
+    "carriers": [
+      "cdek"
+    ]
+  },
+  "profile": {
+    "name": "Магазин",
+    "slogan": "Слоган",
+    "logo": null,
+    "color": {
+      "value": "#2F5D8A",
+      "card": "#2F5D8A",
+      "contrast": 6.8
+    },
+    "showcase": {
+      "mode": "auto",
+      "productIds": []
+    }
+  },
+  "card": {
+    "ready": true,
+    "missing": []
+  },
+  "returns": {
+    "days": 14,
+    "shipping": "Условия",
+    "how": "Инструкция"
+  }
+}

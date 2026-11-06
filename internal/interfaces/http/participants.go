@@ -12,6 +12,9 @@ import (
 
 // participantJSON — участник в операторском ответе.
 type participantJSON struct {
+	Card              operatorCardJSON             `json:"card"`
+	CardReady         bool                         `json:"cardReady"`
+	CardMissing       []string                     `json:"cardMissing"`
 	AwaitingReview    bool                         `json:"awaitingReview"`
 	DeliveryValid     bool                         `json:"deliveryValid"`
 	LastDecision      *participationDecisionJSON   `json:"lastDecision"`
@@ -59,8 +62,10 @@ type createParticipantJSON struct {
 	Name     string `json:"name"`
 }
 
-type renameParticipantJSON struct {
-	Name string `json:"name"`
+type operatorCardJSON struct {
+	Slogan string                   `json:"slogan"`
+	Logo   *string                  `json:"logo"`
+	Hidden []participant.CardHidden `json:"hidden"`
 }
 
 type participantDeliveryJSON struct {
@@ -71,6 +76,13 @@ type participantDeliveryJSON struct {
 func toParticipantJSON(view appparticipant.View) participantJSON {
 	p := view.Participant
 	out := participantJSON{
+		Card: operatorCardJSON{
+			Slogan: p.StoreCard.Profile.Slogan,
+			Logo:   p.StoreCard.Profile.Logo,
+			Hidden: append([]participant.CardHidden{}, p.StoreCard.Hidden...),
+		},
+		CardReady:         p.StoreCard.Readiness.Ready,
+		CardMissing:       append([]string{}, p.StoreCard.Readiness.Missing...),
 		AwaitingReview:    p.AwaitingReview,
 		DeliveryValid:     view.DeliveryValid,
 		LastDecision:      toParticipationDecision(p.LastDecision),
@@ -183,19 +195,6 @@ func (h *participantHandlers) create(w http.ResponseWriter, r *http.Request) {
 func (h *participantHandlers) get(w http.ResponseWriter, r *http.Request) {
 	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
 		return h.service.Get(r.Context(), tenantID)
-	})
-}
-
-func (h *participantHandlers) rename(w http.ResponseWriter, r *http.Request) {
-	var body renameParticipantJSON
-	if err := readJSON(w, r, &body); err != nil {
-		writeError(w, r, err)
-
-		return
-	}
-
-	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
-		return h.service.Rename(r.Context(), tenantID, body.Name)
 	})
 }
 

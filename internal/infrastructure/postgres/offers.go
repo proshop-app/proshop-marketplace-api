@@ -252,7 +252,7 @@ func (r *participantRow) participant() (*participant.Participant, error) {
 
 	state.FreeDeliveryFrom = money.FromKopecks(*r.freeDeliveryFrom)
 	if err := json.Unmarshal(r.deliverySettings, &state.Delivery); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("доставка участника %s: %w", *r.tenantID, err)
 	}
 	if r.syncedAt != nil {
 		state.SettingsSyncedAt = *r.syncedAt

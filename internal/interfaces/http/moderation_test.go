@@ -39,12 +39,13 @@ func newModerationEnv(t *testing.T) moderationEnv {
 	store := fake.NewStore()
 	clock := fake.NewClock(time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC))
 	store.SeedParticipant(participant.State{
-		TenantID: "t1",
-		Name:     "Магазин",
-		Slug:     "t1",
-		Trust:    participant.Probation,
-		Stage:    participant.StageConnected,
-		Version:  1,
+		StoreCard: participant.StoreCard{Readiness: participant.CardReadiness{Ready: true}},
+		TenantID:  "t1",
+		Name:      "Магазин",
+		Slug:      "t1",
+		Trust:     participant.Probation,
+		Stage:     participant.StageConnected,
+		Version:   1,
 	})
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Slug: "t1", Status: participant.TenantActive, Version: 1})
 	store.SeedTaxonomy(taxonomy.Definition{
@@ -225,7 +226,10 @@ func TestModerationDictionariesHTTP(t *testing.T) {
 
 func TestModerationParticipantHTTP(t *testing.T) {
 	e := newModerationEnv(t)
-	p, _ := e.store.Participant("t1")
+	p, ok := e.store.Participant("t1")
+	if !ok {
+		t.Fatal("участник не найден")
+	}
 	p.Stage = participant.StageCandidate
 	p.AwaitingReview = true
 	e.store.SeedParticipant(p)

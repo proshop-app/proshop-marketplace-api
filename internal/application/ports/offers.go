@@ -31,6 +31,8 @@ type OfferKey struct {
 
 // OfferStates — чтение проекции для индекса.
 type OfferStates interface {
+	// StoreCardOffers — отмеченные к публикации товары для пересчёта сводки.
+	StoreCardOffers(context.Context, ids.TenantID, ids.ProductID, int) ([]OfferState, error)
 	// Offer — снимок одного предложения; товара нет — catalog.ErrProductNotFound.
 	Offer(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) (OfferState, error)
 	// TenantOffers — предложения магазина после позиции after по возрастанию товара.

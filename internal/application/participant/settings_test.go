@@ -3,6 +3,8 @@ package participant_test
 import (
 	"context"
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
@@ -40,18 +42,27 @@ func TestSettingsSync(t *testing.T) {
 		Value:     15000,
 		MaxAmount: money.FromKopecks(20000),
 	}
-	platform.SetSettings("t1", ports.ShopSettings{Subsidy: subsidy, Delivery: w3SettingsDelivery})
+	platform.SetSettings("t1", ports.ShopSettings{
+		Profile:  participant.Profile{Name: "Магазин t1"},
+		Subsidy:  subsidy,
+		Delivery: w3SettingsDelivery,
+	})
 	platform.Fail("t2", errors.New("сервер недоступен"))
 
 	settings := appparticipant.NewSettings(store, platform, clock, &fake.IDs{})
 
 	// задачи создания участников уже отработаны: иначе новая склеилась бы с невзятой
-	tasks, _ := store.Claim(
+	tasks, err := store.Claim(
 		ctx,
 		ports.ClaimRequest{Now: clock.Now(), Limit: 100, PerTenant: 100, LeaseUntil: clock.Now()},
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, task := range tasks {
-		_ = store.Complete(ctx, task.ID, clock.Now())
+		if err := store.Complete(ctx, task.ID, clock.Now()); err != nil {
+			t.Fatal(err)
+		}
 	}
 	before := len(store.OutboxRows())
 
@@ -61,24 +72,47 @@ func TestSettingsSync(t *testing.T) {
 		t.Fatalf("сверка: %+v %v", result, err)
 	}
 
-	p, _ := store.Participant("t1")
+	p, ok := store.Participant("t1")
+
+	if !ok {
+		t.Fatal("участник не найден")
+	}
 	if !participant.Restore(p).DeliveryValid() || p.Subsidy != subsidy || p.SettingsSyncedAt.IsZero() {
 		t.Fatalf("настройки магазина: %+v", p)
 	}
 
 	rows := store.OutboxRows()
 	if len(rows) == before {
-		t.Fatal("смена флага ставит переиндексацию магазина")
+		t.Fatal("смена доставки без смены имени ставит переиндексацию магазина")
 	}
 	if last := rows[len(rows)-1]; last.Kind != appcatalog.TaskSyncTenant || last.TenantID != "t1" {
 		t.Fatalf("задача переиндексации: %+v", last)
 	}
 
+	// Удаляем ожидающие задачи, чтобы дедуп не маскировал лишнюю постановку.
+	tasks, err = store.Claim(ctx, ports.ClaimRequest{
+		Now:        clock.Now(),
+		Limit:      100,
+		PerTenant:  100,
+		LeaseUntil: clock.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range tasks {
+		if err := store.Complete(ctx, task.ID, clock.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before = len(store.OutboxRows())
 	again, err := settings.Sync(ctx)
 	if err != nil || again.Changed != 0 {
 		t.Fatalf("без изменений версия не растёт: %+v %v", again, err)
 	}
-	if p, _ := store.Participant("t1"); p.Version != 2 {
+	if len(store.OutboxRows()) != before {
+		t.Fatal("повторная сверка поставила задачи")
+	}
+	if p, ok := store.Participant("t1"); !ok || p.Version != 2 {
 		t.Fatalf("версия участника: %d", p.Version)
 	}
 }
@@ -102,8 +136,130 @@ func TestInvalidParticipationSettingsHideSeller(t *testing.T) {
 	if _, err := syncer.SyncOne(ctx, "t1"); !errors.Is(err, ports.ErrInvalidSettings) {
 		t.Fatal(err)
 	}
-	p, _ := store.Participant("t1")
+	p, ok := store.Participant("t1")
+	if !ok {
+		t.Fatal("участник не найден")
+	}
 	if participant.Restore(p).DeliveryValid() {
 		t.Fatal("некорректные обязательные настройки должны скрыть участника")
+	}
+}
+
+func TestFailedSettingsPreserveCardAndModeration(t *testing.T) {
+	for _, failure := range []error{ports.ErrInvalidSettings, ports.ErrMarketplaceDisabled} {
+		t.Run(failure.Error(), func(t *testing.T) {
+			store, service := seedStoreCard(t)
+			ctx := context.Background()
+			platform := fake.NewPlatform()
+			settings := ports.ShopSettings{
+				Profile:  participant.Profile{Name: "Магазин", Slogan: "Исходный слоган"},
+				Card:     participant.CardReadiness{Ready: true},
+				Returns:  &participant.Returns{Days: 14, Shipping: "Условия", How: "Инструкция"},
+				Delivery: w3SettingsDelivery,
+			}
+			platform.Fail("t1", nil)
+			platform.SetSettings("t1", settings)
+			syncer := appparticipant.NewSettings(store, platform, fake.NewClock(t0), &fake.IDs{})
+			if _, err := syncer.SyncOne(ctx, "t1"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := service.ModerateCard(ctx, "t1", participant.CardSlogan, true, participant.Decision{
+				Note: "  Причина  ",
+			}); err != nil {
+				t.Fatal(err)
+			}
+			before, ok := store.Participant("t1")
+			if !ok {
+				t.Fatal("участник не найден")
+			}
+			platform.Fail("t1", failure)
+			_, err := syncer.SyncOne(ctx, "t1")
+			if errors.Is(failure, ports.ErrInvalidSettings) && !errors.Is(err, failure) {
+				t.Fatal(err)
+			}
+			if errors.Is(failure, ports.ErrMarketplaceDisabled) && err != nil {
+				t.Fatal(err)
+			}
+			after, ok := store.Participant("t1")
+			if !ok {
+				t.Fatal("участник не найден")
+			}
+			if !reflect.DeepEqual(before.StoreCard, after.StoreCard) {
+				t.Fatal(before.StoreCard, after.StoreCard)
+			}
+			journal, err := service.ListDecisions(ctx, "t1", participant.Page{})
+			if err != nil || journal.Total != 1 {
+				t.Fatal(journal, err)
+			}
+			if journal.Items[0].PreviousValue != "Исходный слоган" || journal.Items[0].Note != "Причина" {
+				t.Fatal(journal.Items)
+			}
+			platform.Fail("t1", nil)
+			platform.SetSettings("t1", settings)
+			if _, err := syncer.SyncOne(ctx, "t1"); err != nil {
+				t.Fatal(err)
+			}
+			if after, ok = store.Participant("t1"); !ok {
+				t.Fatal("участник t1 не найден")
+			}
+			if len(after.StoreCard.Hidden) != 1 {
+				t.Fatal(after.StoreCard)
+			}
+			settings.Profile.Slogan = "Исправленный слоган"
+			platform.Fail("t1", nil)
+			platform.SetSettings("t1", settings)
+			if _, err := syncer.SyncOne(ctx, "t1"); err != nil {
+				t.Fatal(err)
+			}
+			journal, err = service.ListDecisions(ctx, "t1", participant.Page{})
+			if err != nil || journal.Total != 2 {
+				t.Fatal(journal, err)
+			}
+			found := false
+			for _, record := range journal.Items {
+				if record.Action == participant.ActionCardShow {
+					found = record.Actor == participant.ActorSystem && record.PreviousValue == "Исходный слоган"
+				}
+			}
+			if !found {
+				t.Fatal(journal.Items)
+			}
+		})
+	}
+}
+
+func TestCardOnlySettingsDoNotReindex(t *testing.T) {
+	store, _, _ := setup(t)
+	store.SeedParticipant(participant.State{
+		TenantID:  "t1",
+		Slug:      "shop",
+		Name:      "Магазин",
+		Stage:     participant.StageCandidate,
+		Version:   1,
+		StoreCard: participant.StoreCard{Profile: participant.Profile{Name: "Магазин"}},
+	})
+	platform := fake.NewPlatform()
+	platform.SetSettings("t1", ports.ShopSettings{
+		Profile: participant.Profile{Name: strings.Repeat("я", 201), Slogan: "Новый слоган"},
+		Card:    participant.CardReadiness{Missing: []string{"terms"}},
+	})
+	syncer := appparticipant.NewSettings(store, platform, fake.NewClock(t0), &fake.IDs{})
+	if changed, err := syncer.SyncOne(context.Background(), "t1"); err != nil || !changed {
+		t.Fatal(changed, err)
+	}
+	state, ok := store.Participant("t1")
+	if !ok {
+		t.Fatal("участник не найден")
+	}
+	if state.Name != "Магазин" || state.StoreCard.Profile.Slogan != "Новый слоган" {
+		t.Fatal(state)
+	}
+	for _, row := range store.OutboxRows() {
+		if row.Kind == appcatalog.TaskSyncTenant {
+			t.Fatal("смена карточки поставила переиндексацию")
+		}
+	}
+	if len(store.OutboxRows()) != 1 || store.OutboxRows()[0].Kind != ports.TaskStoreCard {
+		t.Fatal(store.OutboxRows())
 	}
 }

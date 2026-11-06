@@ -23,9 +23,8 @@ type SettingsResult struct {
 	Failed     map[ids.TenantID]error
 }
 
-// Settings сверяет с сервером обязательные настройки доставки.
-// Изменение настроек меняет видимость предложений — магазин
-// ставится на переиндексацию в той же транзакции.
+// Settings переносит настройки и серверную готовность одной транзакцией.
+// Из карточки в документ предложения входит имя: только его смена ставит переиндексацию.
 type Settings struct {
 	ids      ports.IDs
 	uow      ports.UnitOfWork
@@ -89,16 +88,17 @@ func (s *Settings) Sync(ctx context.Context) (SettingsResult, error) {
 	}
 }
 
-// SyncOne сверяет одного участника; true — видимое поменялось.
+// SyncOne сверяет одного участника; true — сохранённые настройки изменились.
 func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, error) {
 	settings, err := s.platform.MarketplaceSettings(ctx, tenantID)
+	validCard := err == nil
 	var invalid error
 	if errors.Is(err, ports.ErrInvalidSettings) {
 		invalid = err
 		settings, err = ports.ShopSettings{}, nil
 	}
 	if errors.Is(err, ports.ErrMarketplaceDisabled) {
-		// сервер отказал магазину-неучастнику — участие выключено, субсидии нет
+		// Отказ обнуляет доставку; карточка и решения оператора сохраняются.
 		settings, err = ports.ShopSettings{}, nil
 	}
 	if err != nil {
@@ -114,7 +114,10 @@ func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, er
 		}
 
 		now := s.clock.Now()
-		changed, err = p.ApplyShopSettings(
+		oldName := p.Name()
+		cardBefore := p.State().StoreCard
+		hiddenBefore := cardBefore.Hidden
+		shopChanged, err := p.ApplyShopSettings(
 			settings.Subsidy,
 			settings.FreeDeliveryFrom,
 			settings.Delivery,
@@ -124,10 +127,50 @@ func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, er
 			return err
 		}
 
+		changed = shopChanged
+		var cardChanged bool
+		if validCard {
+			cardChanged, err = p.ApplyStoreCard(settings.Profile, settings.Card, settings.Returns, now)
+		}
+		if err != nil {
+			return err
+		}
+		changed = changed || cardChanged
+
+		remaining := p.State().StoreCard.Hidden
+		for _, hidden := range hiddenBefore {
+			stillHidden := false
+			for _, current := range remaining {
+				stillHidden = stillHidden || current.Key == hidden.Key
+			}
+			if stillHidden {
+				continue
+			}
+			if err := tx.ParticipantDecisions().Add(ctx, participant.DecisionRecord{
+				ID:            s.ids.NewUUID(),
+				TenantID:      tenantID,
+				Actor:         participant.ActorSystem,
+				Action:        participant.ActionCardShow,
+				Value:         hidden.Key,
+				PreviousValue: cardBefore.Profile.FieldValue(hidden.Key),
+				Decision:      participant.Decision{Note: "Значение пункта изменилось при сверке"},
+				At:            now,
+			}); err != nil {
+				return err
+			}
+		}
+
+		// Время сверки сохраняется и без изменений: по нему оператор видит, что сервер отвечает.
 		if err := tx.Participants().Update(ctx, p); err != nil {
 			return err
 		}
 		if !changed {
+			return nil
+		}
+		if err := tx.Outbox().Enqueue(ctx, ports.StoreCardTask(tenantID, now)); err != nil {
+			return err
+		}
+		if !shopChanged && oldName == p.Name() {
 			return nil
 		}
 

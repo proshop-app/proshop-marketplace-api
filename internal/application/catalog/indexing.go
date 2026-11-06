@@ -18,12 +18,13 @@ const CatchUpMargin = 5 * time.Minute
 // Indexer переносит предложения из проекции в индекс. Источник истины —
 // проекция: индекс всегда можно собрать заново.
 type Indexer struct {
-	models *ModelKeys
-	uow    ports.UnitOfWork
-	index  ports.OfferIndex
-	clock  ports.Clock
-	batch  int
-	lock   ports.IndexRebuildLock
+	models       *ModelKeys
+	uow          ports.UnitOfWork
+	index        ports.OfferIndex
+	clock        ports.Clock
+	batch        int
+	refreshDelay time.Duration
+	lock         ports.IndexRebuildLock
 }
 
 // RebuildResult — итог перестроения.
@@ -41,14 +42,16 @@ func NewIndexer(
 	batch int,
 	lock ports.IndexRebuildLock,
 	models *ModelKeys,
+	refreshDelay time.Duration,
 ) *Indexer {
 	return &Indexer{
-		uow:    uow,
-		index:  index,
-		clock:  clock,
-		batch:  batch,
-		lock:   lock,
-		models: models,
+		uow:          uow,
+		index:        index,
+		clock:        clock,
+		batch:        batch,
+		lock:         lock,
+		models:       models,
+		refreshDelay: refreshDelay,
 	}
 }
 
@@ -77,8 +80,10 @@ func (i *Indexer) SyncOffer(ctx context.Context, tenantID ids.TenantID, productI
 	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
 		state, err = tx.Offers().Offer(ctx, tenantID, productID)
-
-		return err
+		if err != nil {
+			return err
+		}
+		return tx.Outbox().Enqueue(ctx, ports.StoreCardTask(tenantID, i.clock.Now().Add(i.refreshDelay)))
 	})
 	if errors.Is(err, catalog.ErrProductNotFound) {
 		return nil
@@ -110,8 +115,10 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 		err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var err error
 			states, err = tx.Offers().TenantOffers(ctx, tenantID, after, i.batch)
-
-			return err
+			if err != nil {
+				return err
+			}
+			return tx.Outbox().Enqueue(ctx, ports.StoreCardTask(tenantID, i.clock.Now().Add(i.refreshDelay)))
 		})
 		if err != nil {
 			return err
@@ -215,8 +222,22 @@ func (i *Indexer) pages(
 		err := i.uow.Do(ctx, func(_ context.Context, tx ports.Tx) error {
 			var err error
 			states, err = read(tx, after)
-
-			return err
+			if err != nil {
+				return err
+			}
+			tenants := map[ids.TenantID]bool{}
+			for _, state := range states {
+				tenant := state.Product.State().TenantID
+				if tenants[tenant] {
+					continue
+				}
+				tenants[tenant] = true
+				task := ports.StoreCardTask(tenant, i.clock.Now().Add(i.refreshDelay))
+				if err := tx.Outbox().Enqueue(ctx, task); err != nil {
+					return err
+				}
+			}
+			return nil
 		})
 		if err != nil {
 			return err

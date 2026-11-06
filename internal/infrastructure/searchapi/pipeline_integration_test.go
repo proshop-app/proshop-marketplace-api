@@ -14,6 +14,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
@@ -74,13 +75,14 @@ func TestProjectionToIndex(t *testing.T) {
 	}
 	moderationService := appmoderation.NewService(uow, now, &fake.IDs{}, appmoderation.Config{ProbationOffers: 50})
 	projector := appcatalog.NewProjector(uow, now, moderationService)
-	indexer := appcatalog.NewIndexer(uow, index, now, 100, postgres.NewIndexRebuildLock(pool), nil)
+	indexer := appcatalog.NewIndexer(uow, index, now, 100, postgres.NewIndexRebuildLock(pool), nil, 30*time.Second)
 	identities := &fake.IDs{}
 	registry := appparticipant.NewRegistry(uow, now, identities)
 	participants := appparticipant.NewService(uow, now, identities)
 	platform := fake.NewPlatform()
 	settings := appparticipant.NewSettings(uow, platform, now, identities)
 	queries := appcatalog.NewQueries(uow, index, platform)
+	statuses := moderationstatus.NewService(uow, now, &fake.Publisher{}, "offer", "participant")
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(pool),
 		now,
@@ -90,9 +92,12 @@ func TestProjectionToIndex(t *testing.T) {
 			Lease:     time.Minute,
 		},
 		map[string]messaging.Handler{
-			appmoderation.TaskReevaluate: moderationService.HandleTask,
-			appcatalog.TaskSyncOffer:     indexer.HandleTask,
-			appcatalog.TaskSyncTenant:    indexer.HandleTask,
+			appmoderation.TaskReevaluate:     moderationService.HandleTask,
+			appcatalog.TaskSyncOffer:         indexer.HandleTask,
+			appcatalog.TaskSyncTenant:        indexer.HandleTask,
+			ports.TaskStoreCard:              participants.RefreshStoreCard,
+			moderationstatus.TaskOffer:       statuses.HandleTask,
+			moderationstatus.TaskParticipant: statuses.HandleTask,
 		},
 	)
 
@@ -227,16 +232,22 @@ func TestProjectionToIndex(t *testing.T) {
 	if _, err := participants.SetTrust(ctx, "t1", participant.Trusted, decision); err != nil {
 		t.Fatal(err)
 	}
+	platform.SetSettings("t1", ports.ShopSettings{Card: participant.CardReadiness{Ready: true}})
+	if _, err := settings.SyncOne(ctx, "t1"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := participants.Enable(ctx, "t1", participant.Decision{}); err != nil {
 		t.Fatal(err)
 	}
 	drain()
 
 	if list, _ := queries.Search(ctx, ports.OfferQuery{}); list.Total != 0 {
-		t.Fatalf("магазин не передал валидные настройки доставки — не в выдаче: %+v", list)
+		t.Fatalf("магазин скрыт без доставки: %+v", list)
 	}
 
 	platform.SetSettings("t1", ports.ShopSettings{
+		Profile:  participant.Profile{Name: "Первый магазин"},
+		Card:     participant.CardReadiness{Ready: true},
 		Subsidy:  w3PipelineIntegrationSubsidy,
 		Delivery: w3PipelineIntegrationDelivery,
 	})

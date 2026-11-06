@@ -47,6 +47,7 @@ type Tx interface {
 	Products() catalog.ProductRepository
 	Signals() catalog.SignalsRepository
 	Offers() OfferStates
+	StoreCards() StoreCards
 	Outbox() Outbox
 	Inbox() Inbox
 	Parked() ParkedEvents

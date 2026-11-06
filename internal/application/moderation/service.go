@@ -110,6 +110,7 @@ func (s *Service) Evaluate(
 	if err := tx.Outbox().Enqueue(ctx, moderationstatus.OfferTask(p.TenantID, p.ProductID, now)); err != nil {
 		return err
 	}
+	// Пересчёт сводки магазина ставит синхронизация предложения — с окном склейки.
 	return tx.Outbox().Enqueue(ctx, appcatalog.SyncOfferTask(p.TenantID, p.ProductID, now))
 }
 

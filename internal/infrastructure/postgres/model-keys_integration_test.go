@@ -54,7 +54,17 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 			); err != nil {
 				return err
 			}
-			seller.Enable(at(3))
+			if _, err := seller.ApplyStoreCard(
+				participant.Profile{},
+				participant.CardReadiness{Ready: true},
+				nil,
+				at(3),
+			); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := seller.Enable(at(3)); err != nil {
+				t.Fatal(err)
+			}
 			if err := tx.Participants().Add(ctx, seller); err != nil {
 				return err
 			}
@@ -151,7 +161,17 @@ func TestModelKeyConflictDoesNotAbortRebuild(t *testing.T) {
 		); err != nil {
 			return err
 		}
-		seller.Enable(at(3))
+		if _, err := seller.ApplyStoreCard(
+			participant.Profile{},
+			participant.CardReadiness{Ready: true},
+			nil,
+			at(3),
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := seller.Enable(at(3)); err != nil {
+			t.Fatal(err)
+		}
 		if err := tx.Participants().Add(ctx, seller); err != nil {
 			return err
 		}
@@ -207,6 +227,7 @@ func TestModelKeyConflictDoesNotAbortRebuild(t *testing.T) {
 		1,
 		&fake.IndexRebuildLock{},
 		appcatalog.NewModelKeys(resolver, observer, true),
+		30*time.Second,
 	)
 	if _, err := indexer.Rebuild(ctx); err != nil {
 		t.Fatal(err)

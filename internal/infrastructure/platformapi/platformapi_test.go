@@ -146,7 +146,8 @@ func TestMarketplaceSettings(t *testing.T) {
 	settings, err := client.MarketplaceSettings(context.Background(), "t1")
 	if err != nil || settings.Subsidy.Type != participant.SubsidyPercent ||
 		settings.Subsidy.Value != 50 ||
-		settings.Subsidy.MaxAmount.Kopecks() != 30000 {
+		settings.Subsidy.MaxAmount.Kopecks() != 30000 || settings.Profile.Name != "Магазин" ||
+		!settings.Card.Ready || settings.Returns == nil || settings.Profile.Color.Card != "#2F5D8A" {
 		t.Fatalf("настройки: %+v %v", settings, err)
 	}
 }
@@ -211,5 +212,35 @@ func TestMarketplaceDisabled(t *testing.T) {
 	if !errors.As(err, &refusal) || !refusal.Unexpected || refusal.Code != "MARKETPLACE_DISABLED" ||
 		errors.Is(err, ports.ErrMarketplaceDisabled) {
 		t.Fatalf("500 с кодом участия — неизвестный протоколу отказ, не выключение магазина: %v", err)
+	}
+}
+
+func TestCandidateProfileWithoutDelivery(t *testing.T) {
+	client := server(
+		t,
+		map[string][2]string{"GET " + prefix + "/settings/marketplace": {"", "settings_candidate.json"}},
+		http.StatusOK,
+	)
+	settings, err := client.MarketplaceSettings(context.Background(), "t1")
+	if err != nil || settings.Profile.Name != "Кандидат" || settings.Card.Ready || len(settings.Card.Missing) != 5 ||
+		settings.Profile.Color != nil || settings.Returns != nil || settings.Delivery.Validate() == nil {
+		t.Fatal(settings, err)
+	}
+}
+
+func TestNonNullInvalidSettings(t *testing.T) {
+	for _, name := range []string{"delivery", "subsidy", "subsidy_disabled"} {
+		t.Run(name, func(t *testing.T) {
+			fixture := "settings_invalid_" + name + ".json"
+			client := server(
+				t,
+				map[string][2]string{"GET " + prefix + "/settings/marketplace": {"", fixture}},
+				http.StatusOK,
+			)
+			_, err := client.MarketplaceSettings(context.Background(), "t1")
+			if !errors.Is(err, ports.ErrInvalidSettings) {
+				t.Fatal(err)
+			}
+		})
 	}
 }

@@ -36,14 +36,15 @@ func setup() environment {
 		Random:      fake.Random{},
 	})
 	store.SeedParticipant(participant.State{
-		TenantID: "t1",
-		Slug:     "t1",
-		Name:     "Магазин",
-		Enabled:  true,
-		Stage:    participant.StageConnected,
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
-		Version:  1,
+		StoreCard: participant.StoreCard{Readiness: participant.CardReadiness{Ready: true}},
+		TenantID:  "t1",
+		Slug:      "t1",
+		Name:      "Магазин",
+		Enabled:   true,
+		Stage:     participant.StageConnected,
+		Delivery:  participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Subsidy:   participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+		Version:   1,
 	})
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Slug: "t1", Status: participant.TenantActive, Version: 1})
 	for _, product := range []ids.ProductID{"p1", "p2"} {
@@ -550,4 +551,22 @@ func TestM12RandomRequired(t *testing.T) {
 		}
 	}()
 	app.NewService(fake.NewStore(), fake.NewClock(time.Now()), &fake.IDs{}, fake.NewIndex(), app.Config{})
+}
+
+func TestSubmitRequiresReadyStoreCard(t *testing.T) {
+	e := setup()
+	state, ok := e.store.Participant("t1")
+	if !ok {
+		t.Fatal("участник t1 не найден")
+	}
+	state.StoreCard.Readiness.Ready = false
+	e.store.SeedParticipant(state)
+	c := e.create(t, "category_slot")
+	_, err := e.service.Decide(context.Background(), app.Access{TenantID: "t1"}, c.ID, app.Command{
+		Action:          promotion.Submit,
+		ExpectedVersion: c.Version,
+	})
+	if !errors.Is(err, promotion.ErrCardNotReady) {
+		t.Fatal(err)
+	}
 }

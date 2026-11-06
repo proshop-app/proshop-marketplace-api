@@ -233,6 +233,15 @@ func (s *Service) Decide(
 			command.Action != promotion.Stop && command.Action != promotion.Revise {
 			return promotion.ErrActionUnsupported
 		}
+		if command.Action == promotion.Submit {
+			p, err := tx.Participants().Get(ctx, c.State().TenantID)
+			if err != nil {
+				return err
+			}
+			if !p.CardReady() {
+				return promotion.ErrCardNotReady
+			}
+		}
 		if command.Action == promotion.Submit && c.State().Status == promotion.Draft {
 			if err := c.State().Period.ValidateStart(s.clock.Now(), s.config.Location); err != nil {
 				return err

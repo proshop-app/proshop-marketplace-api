@@ -123,7 +123,8 @@ type Delivery struct {
 
 // Settings — сверка настроек магазинов с сервером.
 type Settings struct {
-	SyncInterval time.Duration
+	StoreCardRefreshDelay time.Duration
+	SyncInterval          time.Duration
 }
 
 // HTTP — сервер REST.
@@ -310,7 +311,10 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			RefreshInterval: r.duration("PICKUP_REFRESH_INTERVAL", 24*time.Hour),
 			PickupIndex:     r.str("OPENSEARCH_PICKUP_INDEX", "marketplace-pickup-points"),
 		},
-		Settings: Settings{SyncInterval: r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute)},
+		Settings: Settings{
+			SyncInterval:          r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute),
+			StoreCardRefreshDelay: r.duration("STORE_CARD_REFRESH_DELAY", 30*time.Second),
+		},
 		Reference: Reference{
 			ReadToken:          r.str("REFERENCE_READ_TOKEN", ""),
 			CandidatesInterval: r.optionalInterval("REFERENCE_CANDIDATES_INTERVAL", time.Hour),

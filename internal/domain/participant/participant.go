@@ -25,6 +25,7 @@ type Origin struct {
 
 // State — плоский снимок агрегата для хранения.
 type State struct {
+	StoreCard        StoreCard
 	Trust            string
 	ApprovedOffers   int
 	TenantID         ids.TenantID
@@ -87,6 +88,7 @@ func Restore(state State) *Participant {
 	}
 	state.Enabled = state.Stage == StageConnected
 	state.Delivery = state.Delivery.Clone()
+	state.StoreCard = state.StoreCard.Clone()
 	return &Participant{state: state, origin: Origin{Stage: state.Stage, Version: state.Version}}
 }
 
@@ -98,6 +100,7 @@ func (p *Participant) State() State {
 		state.LastDecision = &d
 	}
 	state.Delivery = state.Delivery.Clone()
+	state.StoreCard = state.StoreCard.Clone()
 	return state
 }
 
@@ -149,6 +152,7 @@ func (p *Participant) ApplyShopSettings(
 	if freeDeliveryFrom.IsNegative() {
 		return false, ErrInvalidDeliverySettings
 	}
+	delivery = delivery.Clone()
 	changed := p.state.Subsidy != subsidy ||
 		p.state.FreeDeliveryFrom != freeDeliveryFrom || !reflect.DeepEqual(p.state.Delivery, delivery)
 	p.state.SettingsSyncedAt = now
@@ -182,9 +186,12 @@ func (p *Participant) Rename(name string, now time.Time) (bool, error) {
 }
 
 // Enable включает участника в каталог. Повтор ничего не меняет.
-func (p *Participant) Enable(now time.Time) bool {
+func (p *Participant) Enable(now time.Time) (bool, error) {
+	if p.state.Stage != StageConnected && !p.CardReady() {
+		return false, ErrCardNotReady
+	}
 	if p.state.Enabled {
-		return false
+		return false, nil
 	}
 
 	p.state.Stage = StageConnected
@@ -192,7 +199,7 @@ func (p *Participant) Enable(now time.Time) bool {
 	p.state.Enabled = true
 	p.touch(now)
 
-	return true
+	return true, nil
 }
 
 // Disable скрывает участника из каталога. Повтор ничего не меняет.
@@ -265,9 +272,9 @@ func (p *Participant) DeliveryValid() bool {
 		!s.FreeDeliveryFrom.IsNegative()
 }
 
-// InQueue — кандидат ожидает решения и готов по настройкам доставки.
+// InQueue не отправляет оператору кандидата с незаполненной карточкой или доставкой.
 func (p *Participant) InQueue() bool {
-	return p.state.Stage == StageCandidate && p.state.AwaitingReview && p.DeliveryValid()
+	return p.state.Stage == StageCandidate && p.state.AwaitingReview && p.CardReady() && p.DeliveryValid()
 }
 
 // Return возвращает кандидата с замечаниями, убирая из очереди.

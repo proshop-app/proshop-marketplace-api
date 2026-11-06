@@ -11,13 +11,20 @@ import (
 )
 
 func TestM5NotesAndPreviousValues(t *testing.T) {
-	_, _, service := setup(t)
+	store, _, service := setup(t)
 	service.WithProbationOffers(12)
 	ctx := context.Background()
 	view, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Магазин"})
 	if err != nil || view.ProbationOffers != 12 {
 		t.Fatal(view, err)
 	}
+	readyState, ok := store.Participant("t1")
+	if !ok {
+		t.Fatal("участник не найден")
+	}
+	readyState.StoreCard.Readiness.Ready = true
+	store.SeedParticipant(readyState)
+
 	if _, err := service.Enable(ctx, "t1", participant.Decision{}); err != nil {
 		t.Fatal(err)
 	}
