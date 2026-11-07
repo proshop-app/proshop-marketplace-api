@@ -16,16 +16,15 @@ import (
 )
 
 type sellerOrderJSON struct {
-	Tracking   *trackingJSON        `json:"tracking"`
-	OrderID    string               `json:"orderId"`
-	PaymentURL string               `json:"paymentUrl"`
-	ExpiresAt  time.Time            `json:"expiresAt"`
-	Total      *int64               `json:"total"`
-	Status     checkout.GroupStatus `json:"status"`
-	Reason     string               `json:"reason"`
+	Tracking  *trackingJSON        `json:"tracking"`
+	OrderID   string               `json:"orderId"`
+	ExpiresAt time.Time            `json:"expiresAt"`
+	Total     *int64               `json:"total"`
+	Status    checkout.GroupStatus `json:"status"`
+	Reason    string               `json:"reason"`
 }
 
-// CreateOrder создаёт заказ на кассе магазина по ключу покупки и группы.
+// CreateOrder создаёт заказ магазина без открытия кассы по ключу покупки и группы.
 func (c *Client) CreateOrder(
 	ctx context.Context,
 	tenant ids.TenantID,
@@ -71,7 +70,7 @@ func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
 	if a.OrderID == "" || (a.Status == checkout.GroupCancelled && a.Reason == "") {
 		return checkout.SellerOrder{}, ErrInvalidResponse
 	}
-	if creating && (a.Total == nil || *a.Total < 0 || !checkout.ValidURL(a.PaymentURL) || a.ExpiresAt.IsZero()) {
+	if creating && (a.Total == nil || *a.Total < 0 || a.ExpiresAt.IsZero()) {
 		return checkout.SellerOrder{}, ErrInvalidResponse
 	}
 	if a.Tracking != nil && (strings.TrimSpace(a.Tracking.Carrier) == "" || !checkout.ValidURL(a.Tracking.URL)) {
@@ -81,15 +80,30 @@ func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
 		a.Tracking.Number = nil
 	}
 	order := checkout.SellerOrder{
-		OrderID:    a.OrderID,
-		PaymentURL: a.PaymentURL,
-		ExpiresAt:  a.ExpiresAt,
-		Status:     a.Status,
-		Reason:     a.Reason,
-		Tracking:   a.Tracking.domain(),
+		OrderID:   a.OrderID,
+		ExpiresAt: a.ExpiresAt,
+		Status:    a.Status,
+		Reason:    a.Reason,
+		Tracking:  a.Tracking.domain(),
 	}
 	if a.Total != nil {
 		order.Total = money.FromKopecks(*a.Total)
 	}
 	return order, nil
+}
+
+// StubPayment подтверждает заказ служебным платежом без движения денег.
+func (c *Client) StubPayment(ctx context.Context, tenant ids.TenantID, id string, amount money.Money) error {
+	var answer struct {
+		Status string `json:"status"`
+	}
+	path := "/orders/" + url.PathEscape(id) + "/stub-payment"
+	body := map[string]int64{"amount": amount.Kopecks()}
+	if err := c.call(ctx, http.MethodPost, tenant, path, body, &answer); err != nil {
+		return err
+	}
+	if answer.Status != "paid" {
+		return ErrInvalidResponse
+	}
+	return nil
 }

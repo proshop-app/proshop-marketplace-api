@@ -145,7 +145,7 @@ func TestPartialCartReturnDoesNotBlockShippedOrPayment(t *testing.T) {
 	if _, err := e.service.Refresh(ctx, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.Pay(ctx, buyerID, c.ID, "t2"); err != nil {
+	if _, err := e.service.Pay(ctx, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
 	e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupPaid, "")
@@ -217,10 +217,9 @@ func TestFailedPollBackoffAndRecovery(t *testing.T) {
 				if _, err := e.service.Refresh(ctx, buyerID, c.ID); err != nil {
 					t.Fatal(err)
 				}
-				_, _ = e.service.Pay(ctx, buyerID, c.ID, "t1")
 			}
 			if e.platform.PollCalls("t1") != calls {
-				t.Fatal("GET и /pay обошли NextPollAt")
+				t.Fatal("GET обошёл NextPollAt")
 			}
 			previousDelay = delay
 			if i < checkout.MaxOrderFailures {
@@ -229,9 +228,6 @@ func TestFailedPollBackoffAndRecovery(t *testing.T) {
 		}
 		if state.Groups[0].Status != checkout.GroupSellerUnreachable || previousDelay != checkout.OrderSlowPoll {
 			t.Fatal(state.Groups[0])
-		}
-		if link := e.service.NextPayment(state); link == nil || link.TenantID != "t2" {
-			t.Fatal(link)
 		}
 		e.platform.FailPoll("t1", nil)
 		e.platform.SetOrderStatus(firstID, checkout.GroupPaid, "")

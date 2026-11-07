@@ -15,6 +15,5 @@
     "phone": "79251234567",
     "name": "Покупатель"
   },
-  "deliveryPrice": 15000,
-  "returnUrl": "https://market.example/return"
+  "deliveryPrice": 15000
 }

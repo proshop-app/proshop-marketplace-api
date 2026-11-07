@@ -378,3 +378,21 @@ func TestStoreCardRefreshDelay(t *testing.T) {
 		})
 	}
 }
+
+func TestPaymentStubConfig(t *testing.T) {
+	values := validEnv()
+	cfg, err := config.Load(envOf(values))
+	if err != nil || cfg.Checkout.PaymentStub {
+		t.Fatal(cfg.Checkout, err)
+	}
+	values["PAYMENT_STUB"] = "true"
+	values["MARKETPLACE_PUBLIC_URL"] = "https://storefront.example"
+	cfg, err = config.Load(envOf(values))
+	if err != nil || !cfg.Checkout.PaymentStub || cfg.Checkout.ReturnBaseURL != "https://storefront.example" {
+		t.Fatal(cfg.Checkout, err)
+	}
+	values["PAYMENT_STUB"] = "invalid"
+	if _, err := config.Load(envOf(values)); err == nil {
+		t.Fatal("некорректный флаг принят")
+	}
+}

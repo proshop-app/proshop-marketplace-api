@@ -95,11 +95,10 @@ func (p *Platform) CreateOrder(
 		return checkout.SellerOrder{}, err
 	}
 	order := checkout.SellerOrder{
-		OrderID:    fmt.Sprintf("order-%d", len(p.orders)+1),
-		PaymentURL: "https://seller.example/pay/" + request.ExternalCheckoutID,
-		ExpiresAt:  p.OrderNow.Add(time.Hour),
-		Total:      total,
-		Status:     checkout.GroupAwaitingPayment,
+		OrderID:   fmt.Sprintf("order-%d", len(p.orders)+1),
+		ExpiresAt: p.OrderNow.Add(time.Hour),
+		Total:     total,
+		Status:    checkout.GroupAwaitingPayment,
 	}
 	p.orders[key] = order
 	p.orderTenants[order.OrderID] = tenant
@@ -259,4 +258,48 @@ func sameDiscounts(expected, actual []cart.Discount) bool {
 		}
 	}
 	return true
+}
+
+// StubPayment моделирует идемпотентное подтверждение серверного заказа.
+func (p *Platform) StubPayment(_ context.Context, tenant ids.TenantID, id string, amount money.Money) error {
+	p.mu.Lock()
+	var after func()
+	defer func() {
+		p.mu.Unlock()
+		if after != nil {
+			after()
+		}
+	}()
+	p.stubCalls = append(p.stubCalls, tenant)
+	if err := p.failing[tenant]; err != nil {
+		return err
+	}
+	for key, order := range p.orders {
+		if order.OrderID != id || p.orderTenants[id] != tenant {
+			continue
+		}
+		if order.Total != amount {
+			return &ports.OrderRefusal{Code: "MARKETPLACE_STUB_PAYMENT_AMOUNT"}
+		}
+		if p.stubPaid[key] && (order.Status == checkout.GroupPaid ||
+			order.Status == checkout.GroupShipped || order.Status == checkout.GroupDelivered) {
+			return nil
+		}
+		if order.Status != checkout.GroupAwaitingPayment {
+			return &ports.OrderRefusal{Code: "MARKETPLACE_STUB_PAYMENT_STATE"}
+		}
+		p.stubPaid[key] = true
+		order.Status = checkout.GroupPaid
+		p.orders[key] = order
+		after = p.AfterStubPayment
+		return nil
+	}
+	return &ports.OrderRefusal{Code: "ORDER_NOT_FOUND"}
+}
+
+// StubPaymentCalls возвращает все попытки, включая неуспешные.
+func (p *Platform) StubPaymentCalls() []ids.TenantID {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]ids.TenantID(nil), p.stubCalls...)
 }

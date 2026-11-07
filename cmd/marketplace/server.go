@@ -211,6 +211,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			DeliverySubsidyMinPercent: cfg.Checkout.DeliverySubsidyMinPercent,
 			QuoteTTL:                  cfg.Checkout.QuoteTTL,
 			ReturnBaseURL:             cfg.Checkout.ReturnBaseURL,
+			PaymentStub:               cfg.Checkout.PaymentStub,
 			CartTTL:                   cfg.Cart.TTL,
 			QuoteTimeout:              cfg.Checkout.QuoteTimeout,
 		},

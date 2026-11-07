@@ -62,7 +62,8 @@ func (g Group) PollDue(now time.Time) bool {
 
 // Returnable — группа без исполненного заказа, которую нужно вернуть в корзину.
 func (g Group) Returnable() bool {
-	return g.Status == GroupCancelled || g.Status == GroupPriceChanged || g.Status == GroupDeliveryUnavailable
+	status := g.EffectiveStatus()
+	return status == GroupCancelled || status == GroupPriceChanged || status == GroupDeliveryUnavailable
 }
 
 // ReturnDue ограничивает повтор частичного возврата в переполненную корзину.
@@ -137,7 +138,7 @@ func (c *Checkout) FailCreation(
 	return true, c.touch(now)
 }
 
-// ClaimPoll записывает NextPollAt до запроса: ни GET, ни /pay не обходят ограничение частоты.
+// ClaimPoll записывает NextPollAt до запроса: GET не обходит ограничение частоты.
 func (c *Checkout) ClaimPoll(tenant ids.TenantID, token string, now time.Time) (bool, error) {
 	g := c.group(tenant)
 	if g == nil {
@@ -175,7 +176,7 @@ func (c *Checkout) CompletePoll(
 	return changed, err
 }
 
-// FailPoll сохраняет задержку даже при неизвестном статусе; после серии ошибок очередь оплаты сдвигается.
+// FailPoll сохраняет задержку даже при неизвестном статусе; после серии ошибок опрос становится редким.
 func (c *Checkout) FailPoll(tenant ids.TenantID, token, reason string, now time.Time) (bool, error) {
 	g := c.group(tenant)
 	if g == nil {

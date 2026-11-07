@@ -49,9 +49,7 @@ type checkoutGroupJSON struct {
 	Quote              *quoteJSON             `json:"quote"`
 	Status             checkout.GroupStatus   `json:"status"`
 	OrderID            string                 `json:"orderId,omitempty"`
-	PaymentURL         *string                `json:"paymentUrl"`
 	ExpiresAt          *time.Time             `json:"expiresAt,omitempty"`
-	PaymentOrder       int                    `json:"paymentOrder"`
 	DeliveryPrice      int64                  `json:"deliveryPrice"`
 	Reason             string                 `json:"reason,omitempty"`
 	CurrentPrices      []checkout.PriceChange `json:"currentPrices,omitempty"`
@@ -74,18 +72,17 @@ type selectionJSON struct {
 
 // checkoutJSON — покупка; суммы — копейки.
 type checkoutJSON struct {
-	ID            string                `json:"id"`
-	Status        string                `json:"status"`
-	Groups        []checkoutGroupJSON   `json:"groups"`
-	Delivery      *selectionJSON        `json:"delivery"`
-	GoodsTotal    int64                 `json:"goodsTotal"`
-	DeliveryTotal int64                 `json:"deliveryTotal"`
-	Total         int64                 `json:"total"`
-	Version       int64                 `json:"version"`
-	CreatedAt     time.Time             `json:"createdAt"`
-	UpdatedAt     time.Time             `json:"updatedAt"`
-	ConfirmedAt   *time.Time            `json:"confirmedAt"`
-	NextPayment   *checkout.PaymentLink `json:"nextPayment"`
+	ID            string              `json:"id"`
+	Status        string              `json:"status"`
+	Groups        []checkoutGroupJSON `json:"groups"`
+	Delivery      *selectionJSON      `json:"delivery"`
+	GoodsTotal    int64               `json:"goodsTotal"`
+	DeliveryTotal int64               `json:"deliveryTotal"`
+	Total         int64               `json:"total"`
+	Version       int64               `json:"version"`
+	CreatedAt     time.Time           `json:"createdAt"`
+	UpdatedAt     time.Time           `json:"updatedAt"`
+	ConfirmedAt   *time.Time          `json:"confirmedAt"`
 }
 
 type checkoutHandlers struct {
@@ -102,10 +99,9 @@ type returnLineJSON struct {
 	Quantity int    `json:"quantity"`
 }
 
-func toCheckoutJSON(state checkout.State, next *checkout.PaymentLink) (checkoutJSON, error) {
+func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 	out := checkoutJSON{
 		ID:            string(state.ID),
-		NextPayment:   next,
 		Status:        string(state.Status),
 		Groups:        make([]checkoutGroupJSON, 0, len(state.Groups)),
 		GoodsTotal:    state.GoodsTotal.Kopecks(),
@@ -138,7 +134,6 @@ func toCheckoutJSON(state checkout.State, next *checkout.PaymentLink) (checkoutJ
 			Goods:              group.Goods.Kopecks(),
 			Status:             group.Status,
 			OrderID:            group.OrderID,
-			PaymentOrder:       group.PaymentOrder,
 			DeliveryPrice:      group.DeliveryPrice.Kopecks(),
 			Reason:             group.Reason,
 			Tracking:           trackingResponse(group.Tracking),
@@ -152,10 +147,6 @@ func toCheckoutJSON(state checkout.State, next *checkout.PaymentLink) (checkoutJ
 			CreateExhausted:    group.CreateExhausted,
 		}
 
-		if next != nil && next.TenantID == group.TenantID {
-			value := next.URL
-			g.PaymentURL = &value
-		}
 		for _, remaining := range group.ReturnRemaining {
 			g.ReturnRemaining = append(g.ReturnRemaining, returnLineJSON{
 				OfferID:  remaining.Offer.String(),
@@ -210,7 +201,7 @@ func (h *checkoutHandlers) respond(
 ) {
 	if err != nil {
 		if errors.Is(err, checkout.ErrDeliveryChanged) {
-			body, encodeErr := h.responseBody(r, state, nil)
+			body, encodeErr := h.responseBody(r, state)
 			if encodeErr != nil {
 				writeError(w, r, encodeErr)
 				return
@@ -221,7 +212,7 @@ func (h *checkoutHandlers) respond(
 		writeError(w, r, err)
 		return
 	}
-	body, err := h.responseBody(r, state, h.checkouts.NextPayment(state))
+	body, err := h.responseBody(r, state)
 	if err != nil {
 		writeError(w, r, err)
 
@@ -292,9 +283,8 @@ func (h *checkoutHandlers) confirm(w http.ResponseWriter, r *http.Request) {
 func (h *checkoutHandlers) responseBody(
 	r *http.Request,
 	state checkout.State,
-	next *checkout.PaymentLink,
 ) (checkoutJSON, error) {
-	body, err := toCheckoutJSON(state, next)
+	body, err := toCheckoutJSON(state)
 	if err != nil {
 		return body, err
 	}

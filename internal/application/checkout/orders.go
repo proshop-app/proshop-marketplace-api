@@ -26,6 +26,12 @@ func (s *Service) CreateOrders(
 	checkoutID ids.UUID,
 	contact checkout.Contact,
 ) (checkout.State, error) {
+	if _, err := s.Get(ctx, buyerID, checkoutID); err != nil {
+		return checkout.State{}, err
+	}
+	if !s.config.PaymentStub {
+		return checkout.State{}, checkout.ErrPaymentUnavailable
+	}
 	state, err := s.prepareOrders(ctx, buyerID, checkoutID, contact)
 	if err != nil {
 		return state, err
@@ -74,15 +80,6 @@ func (s *Service) Refresh(ctx context.Context, buyerID, id ids.UUID) (checkout.S
 		return checkout.State{}, err
 	}
 	return s.Get(ctx, buyerID, id)
-}
-
-// Pay сверяет группу и возвращает ссылку владельцу до истечения окна.
-func (s *Service) Pay(ctx context.Context, buyerID, id ids.UUID, tenant ids.TenantID) (*checkout.PaymentLink, error) {
-	state, err := s.Refresh(ctx, buyerID, id)
-	if err != nil {
-		return nil, err
-	}
-	return checkout.Restore(state).Payment(tenant, s.clock.Now())
 }
 
 // Resume работает и при запуске, и по расписанию. Отдельная покупка не задерживает остальные.
@@ -315,9 +312,4 @@ func (s *Service) cartTTL() time.Duration {
 		return s.config.CartTTL
 	}
 	return 30 * 24 * time.Hour
-}
-
-// NextPayment выбирает ссылку относительно часов приложения.
-func (s *Service) NextPayment(state checkout.State) *checkout.PaymentLink {
-	return checkout.Restore(state).NextPayment(s.clock.Now())
 }

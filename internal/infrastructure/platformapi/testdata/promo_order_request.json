@@ -21,6 +21,5 @@
     "name": "Покупатель"
   },
   "deliveryPrice": 15000,
-  "returnUrl": "https://market.example/return",
   "promoCode": "SAVE"
 }

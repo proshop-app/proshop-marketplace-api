@@ -11,54 +11,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-func TestPaymentQueueRejectsLaterGroupAndAdvances(t *testing.T) {
-	for _, outcome := range []checkout.GroupStatus{
-		checkout.GroupCancelled,
-		checkout.GroupSellerUnreachable,
-		checkout.GroupDeliveryUnavailable,
-	} {
-		c := ordersReady(t)
-		if _, err := c.BeginOrders(contact, "https://market.example/return", t0); err != nil {
-			t.Fatal(err)
-		}
-		if outcome == checkout.GroupCancelled {
-			first := attach(t, c, 0)
-			attach(t, c, 1)
-			if _, err := c.Payment("t2", t0); !errors.Is(err, checkout.ErrPaymentOrder) {
-				t.Fatal(err)
-			}
-			first.Status, first.Reason = checkout.GroupCancelled, "payment_expired"
-			if _, err := c.Observe("t1", first, t0, t0); err != nil {
-				t.Fatal(err)
-			}
-		} else {
-			if _, err := c.ClaimCreation("t1", "attempt", t0); err != nil {
-				t.Fatal(err)
-			}
-			terminal := outcome
-			if outcome == checkout.GroupSellerUnreachable {
-				terminal = ""
-			}
-			if _, err := c.FailCreation(
-				"t1",
-				"attempt",
-				"DELIVERY_UNAVAILABLE",
-				"pickup_point_unavailable",
-				terminal,
-				nil,
-				t0,
-			); err != nil {
-				t.Fatal(err)
-			}
-			attach(t, c, 1)
-		}
-		link, err := c.Payment("t2", t0)
-		if err != nil || link.Position != 2 || c.NextPayment(t0).TenantID != "t2" {
-			t.Fatalf("сдвиг очереди: %+v %v", link, err)
-		}
-	}
-}
-
 func TestDeliveryRecheckReturnsToDraftWithNewTotals(t *testing.T) {
 	c := ordersReady(t)
 	changed, err := c.RecheckDelivery(
@@ -71,14 +23,14 @@ func TestDeliveryRecheckReturnsToDraftWithNewTotals(t *testing.T) {
 	if err != nil || !changed || c.Status() != checkout.StatusDraft || c.State().DeliveryTotal.Kopecks() != 100 {
 		t.Fatalf("новые условия: %+v %v", c.State(), err)
 	}
-	if _, err := c.BeginOrders(contact, "https://market.example/return", t0); !errors.Is(err, checkout.ErrTransition) {
+	if _, err := c.BeginOrders(contact, t0); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
 }
 
 func TestOrderAttemptClaimsAndStaleResponses(t *testing.T) {
 	c := ordersReady(t)
-	if _, err := c.BeginOrders(contact, "https://market.example/return", t0); err != nil {
+	if _, err := c.BeginOrders(contact, t0); err != nil {
 		t.Fatal(err)
 	}
 	if changed, err := c.ClaimCreation("t1", "one", t0); err != nil || !changed {
@@ -97,7 +49,7 @@ func TestOrderAttemptClaimsAndStaleResponses(t *testing.T) {
 
 func TestPollBackoffCapAndMonotoneRecovery(t *testing.T) {
 	c := ordersReady(t)
-	if _, err := c.BeginOrders(contact, "https://market.example/return", t0); err != nil {
+	if _, err := c.BeginOrders(contact, t0); err != nil {
 		t.Fatal(err)
 	}
 	order := attach(t, c, 0)
@@ -141,7 +93,7 @@ func TestPollBackoffCapAndMonotoneRecovery(t *testing.T) {
 
 func TestReturnRemainingIsIsolatedFromSnapshot(t *testing.T) {
 	c := ordersReady(t)
-	if _, err := c.BeginOrders(contact, "https://market.example/return", t0); err != nil {
+	if _, err := c.BeginOrders(contact, t0); err != nil {
 		t.Fatal(err)
 	}
 	order := attach(t, c, 0)

@@ -40,7 +40,6 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		PickupPointCode:    state.Delivery.PickupPointCode,
 		Contact:            state.Contact,
 		DeliveryPrice:      group.DeliveryPrice,
-		ReturnURL:          state.ReturnURL,
 	}
 	for _, line := range group.Lines {
 		request.Items = append(request.Items, ports.OrderItem{

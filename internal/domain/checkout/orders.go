@@ -2,7 +2,6 @@ package checkout
 
 import (
 	"net/url"
-	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -41,7 +40,7 @@ const (
 // GroupDeliveryUnavailable — окончательный отказ, нужен новый ПВЗ и новая покупка.
 const GroupDeliveryUnavailable GroupStatus = "delivery_unavailable"
 
-// Contact — гостевой покупатель для кассы и доставки магазина.
+// Contact — гостевой покупатель для заказа и доставки магазина.
 type Contact struct {
 	Phone string `json:"phone"`
 	Name  string `json:"name"`
@@ -55,22 +54,12 @@ type PriceChange struct {
 
 // SellerOrder — подтверждённый сервером снимок; возврат с кассы его не заменяет.
 type SellerOrder struct {
-	Tracking   *Tracking
-	OrderID    string
-	PaymentURL string
-	ExpiresAt  time.Time
-	Total      money.Money
-	Status     GroupStatus
-	Reason     string
-}
-
-// PaymentLink — следующий шаг оплаты с сохранённой позицией в очереди.
-type PaymentLink struct {
-	TenantID  ids.TenantID `json:"tenantId"`
-	URL       string       `json:"url"`
-	ExpiresAt time.Time    `json:"expiresAt"`
-	Position  int          `json:"position"`
-	Count     int          `json:"count"`
+	Tracking  *Tracking
+	OrderID   string
+	ExpiresAt time.Time
+	Total     money.Money
+	Status    GroupStatus
+	Reason    string
 }
 
 // Tracking — номер и ссылка перевозчика из заказа сервера.
@@ -81,7 +70,7 @@ type Tracking struct {
 }
 
 // BeginOrders сохраняет неизменный запрос до первого внешнего вызова.
-func (c *Checkout) BeginOrders(contact Contact, returnURL string, now time.Time) (bool, error) {
+func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 	if c.state.Status != StatusConfirmed {
 		if c.state.Status == StatusDraft {
 			return false, ErrTransition
@@ -94,23 +83,9 @@ func (c *Checkout) BeginOrders(contact Contact, returnURL string, now time.Time)
 		return false, ErrInvalidContact
 	}
 	contact.Phone, contact.Name = string(phone), strings.TrimSpace(contact.Name)
-	if !ValidURL(returnURL) {
-		return false, ErrInvalidContact
-	}
 	c.state.Contact = contact
-	c.state.ReturnURL = returnURL
 	c.state.Status = StatusCreatingOrders
-	order := make([]int, len(c.state.Groups))
-	for i := range order {
-		order[i] = i
-	}
-	sort.SliceStable(order, func(i, j int) bool {
-		left, _ := c.state.Groups[order[i]].Goods.Add(c.state.Groups[order[i]].DeliveryPrice)
-		right, _ := c.state.Groups[order[j]].Goods.Add(c.state.Groups[order[j]].DeliveryPrice)
-		return left.Cmp(right) > 0
-	})
-	for position, i := range order {
-		c.state.Groups[i].PaymentOrder = position + 1
+	for i := range c.state.Groups {
 		c.state.Groups[i].Status = GroupCreating
 	}
 	return true, c.touch(now)
@@ -135,17 +110,17 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	if err != nil {
 		return false, err
 	}
-	if order.OrderID == "" || !ValidURL(order.PaymentURL) || order.ExpiresAt.IsZero() || total.Cmp(order.Total) != 0 {
+	if order.OrderID == "" || order.ExpiresAt.IsZero() || total.Cmp(order.Total) != 0 {
 		return false, ErrInvalidOrder
 	}
-	g.OrderID, g.PaymentURL, g.ExpiresAt = order.OrderID, order.PaymentURL, order.ExpiresAt
+	g.OrderID, g.ExpiresAt = order.OrderID, order.ExpiresAt
 	g.Status, g.Reason, g.NextPollAt = GroupAwaitingPayment, "", now
 	g.AwaitingSince = now
 	c.rollup()
 	return true, c.touch(now)
 }
 
-// Observe принимает только допустимые переходы. Истечение окна запрещает ссылку,
+// Observe принимает только допустимые переходы. Истечение окна запрещает оплату,
 // но отмену подтверждает магазин: он мог получить оплату перед границей окна.
 func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Time, now time.Time) (bool, error) {
 	g := c.group(tenant)
@@ -174,49 +149,6 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	return true, c.touch(now)
 }
 
-// Payment возвращает ссылку только для ожидающей группы с действующим окном.
-func (c *Checkout) Payment(tenant ids.TenantID, now time.Time) (*PaymentLink, error) {
-	g := c.group(tenant)
-	if g == nil {
-		return nil, ErrNotFound
-	}
-	if g.Status != GroupAwaitingPayment {
-		return nil, ErrTransition
-	}
-	if !now.Before(g.ExpiresAt) {
-		return nil, ErrPaymentExpired
-	}
-	current := c.NextPayment(now)
-	if current == nil || current.TenantID != tenant {
-		return nil, ErrPaymentOrder
-	}
-	return current, nil
-}
-
-// NextPayment выбирает только текущий магазин с действующим окном.
-func (c *Checkout) NextPayment(now time.Time) *PaymentLink {
-	var current *Group
-	for _, g := range c.state.Groups {
-		if g.Status != GroupAwaitingPayment || !now.Before(g.ExpiresAt) {
-			continue
-		}
-		if current == nil || g.PaymentOrder < current.PaymentOrder {
-			copy := g
-			current = &copy
-		}
-	}
-	if current == nil {
-		return nil
-	}
-	return &PaymentLink{
-		TenantID:  current.TenantID,
-		URL:       current.PaymentURL,
-		ExpiresAt: current.ExpiresAt,
-		Position:  current.PaymentOrder,
-		Count:     len(c.state.Groups),
-	}
-}
-
 // MarkCartConsumed отмечает атомарное изъятие снимка из корзины.
 func (c *Checkout) MarkCartConsumed(now time.Time) (bool, error) {
 	if c.state.CartConsumed {
@@ -241,11 +173,7 @@ func (c *Checkout) group(tenant ids.TenantID) *Group {
 func (c *Checkout) rollup() {
 	paid, cancelled, pending := 0, 0, 0
 	for _, g := range c.state.Groups {
-		status := g.Status
-		if status == GroupSellerUnreachable && g.OrderID != "" && g.LastOrderStatus != "" {
-			status = g.LastOrderStatus
-		}
-		switch status {
+		switch g.EffectiveStatus() {
 		case GroupPaid, GroupShipped, GroupDelivered, GroupReturned:
 			paid++
 		case GroupCancelled, GroupPriceChanged, GroupDeliveryUnavailable:
@@ -330,4 +258,15 @@ func cloneTracking(value *Tracking) *Tracking {
 		result.Number = &number
 	}
 	return &result
+}
+
+// EffectiveStatus сохраняет последний статус заказа при сбое опроса и исключает окончательный отказ создания.
+func (g Group) EffectiveStatus() GroupStatus {
+	if g.OrderID == "" && g.CreateExhausted {
+		return GroupCancelled
+	}
+	if g.Status == GroupSellerUnreachable && g.OrderID != "" && g.LastOrderStatus != "" {
+		return g.LastOrderStatus
+	}
+	return g.Status
 }

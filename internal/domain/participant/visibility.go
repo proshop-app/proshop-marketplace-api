@@ -4,7 +4,7 @@ package participant
 type Visibility struct {
 	// Visible — предложения магазина показываются в каталоге.
 	Visible bool
-	// CheckoutAvailable — предложения можно оформить на кассе магазина.
+	// CheckoutAvailable — по предложениям можно оформить заказ.
 	CheckoutAvailable bool
 }
 

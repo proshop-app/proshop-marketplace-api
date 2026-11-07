@@ -2401,8 +2401,9 @@ paths:
   /api/v1/checkout/{checkoutId}/orders:
     post:
       tags: [checkout]
-      summary: Создать независимые заказы и получить первую ссылку
+      summary: Создать независимые заказы для единого платежа
       description: >-
+        Без PAYMENT_STUB — 503 checkout.payment_unavailable до изъятия корзины.
         Сначала обновляются все расчёты и настройки. Новая плата — 409 DELIVERY_CHANGED
         с checkout и новыми итогами, заказов нет. Отказ промокода магазина — ответ 200:
         в группе status=price_changed, lastErrorCode=checkout.promo_invalid, reason — причина отказа,
@@ -2435,28 +2436,128 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
-  /api/v1/checkout/{checkoutId}/groups/{groupId}/pay:
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/pay:
     post:
       tags: [checkout]
-      summary: Ссылка только для текущей группы до окончания её окна
-      description: Более поздняя awaiting_payment — 409 PAYMENT_ORDER; GET и pay не обходят NextPollAt.
-      operationId: payCheckoutGroup
+      summary: Открыть единую кассу покупки
+      description: >-
+        Только владелец. Без PAYMENT_STUB — 503 checkout.payment_unavailable.
+        Проверяется now < expiresAt всех ожидающих групп; истёкший срок — 409 checkout.payment_expired.
+        Нечего оплачивать (включая уже оплаченную покупку) — 409 checkout.transition.
+        Исчерпанное создание без orderId возвращается в корзину и исключается из суммы;
+        группа с заказом при сбое опроса учитывается по последнему известному статусу.
+        Недоступный магазин с ожидающим заказом блокирует единый платёж до успешной сверки;
+        после expiresAt оплата всей покупки отклоняется, даже если у остальных групп срок ещё не истёк.
+        Плата за доставку входит в сумму.
+      operationId: payCheckout
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
         - $ref: "#/components/parameters/CheckoutId"
-        - name: groupId
-          in: path
-          required: true
-          schema: { type: string }
       responses:
         "200":
-          description: Ссылка на кассу магазина
+          description: Относительный адрес кассы на том же origin
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/PaymentLink" }
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url: { type: string, example: /api/v1/payment-stub/checkoutId }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/payment-stub/{checkoutId}:
+    get:
+      tags: [checkout]
+      summary: Служебная касса-заглушка — paymentStub
+      description: >-
+        HTML-касса Go, только владелец; POST-формы без полей, проверка Origin.
+        До показа суммы проверяется now < expiresAt всех ожидающих заказов (иначе 409).
+        При ошибке, включая истёкший access, возвращается HTML с сообщением и ссылкой возврата, без JSON.
+        Оплаченная покупка показывает «Покупка оплачена» и ссылку возврата без форм.
+      operationId: paymentStub
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200":
+          description: Остаток к оплате с доставкой, формы Оплатить и Отказаться
+          content:
+            text/html:
+              schema: { type: string }
+        "401":
+          description: HTML с сообщением и ссылкой возврата
+          content:
+            text/html:
+              schema: { type: string }
+        "403":
+          description: HTML с сообщением и ссылкой возврата
+          content:
+            text/html:
+              schema: { type: string }
+        "404":
+          description: HTML с сообщением и ссылкой возврата
+          content:
+            text/html:
+              schema: { type: string }
+        "409":
+          description: HTML с сообщением и ссылкой возврата
+          content:
+            text/html:
+              schema: { type: string }
+        "503":
+          description: HTML с сообщением и ссылкой возврата
+          content:
+            text/html:
+              schema: { type: string }
+  /api/v1/payment-stub/{checkoutId}/confirm:
+    post:
+      tags: [checkout]
+      summary: Служебная касса-заглушка — confirmStubPayment
+      description: >-
+        Только владелец; POST-форма без полей, проверка Origin.
+        Всегда 303, включая ошибку авторизации при истёкшем access.
+        Витрина обновляет сессию и читает покупку; возврат не является подтверждением оплаты.
+        До вызовов сервера проверяется now < expiresAt всех ожидающих заказов.
+        Вызовы идут до первого отказа; STATE/AMOUNT, ORDER_NOT_FOUND и MARKETPLACE_DISABLED
+        означают checkout.transition (409). Отсутствие маршрута (404 без ORDER_NOT_FOUND) или
+        технический сбой — checkout.payment_unavailable (503). Эти ошибки также заканчиваются редиректом.
+        После частичного сбоя опрос покажет состояние групп. Повтор безопасен: сервер идемпотентен
+        и после отгрузки/доставки. При конфликте версий локальная запись повторяется до трёх раз
+        без повторных вызовов сервера. Если конфликты продолжаются, состояние восстановит опрос.
+      operationId: confirmStubPayment
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "303":
+          description: На MARKETPLACE_PUBLIC_URL/checkout/{checkoutId}/return при любом результате
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+
+  /api/v1/payment-stub/{checkoutId}/cancel:
+    post:
+      tags: [checkout]
+      summary: Служебная касса-заглушка — cancelStubPayment
+      description: >-
+        Только владелец; POST-форма без полей, проверка Origin. Покупка не меняется.
+        Всегда 303, включая ошибку авторизации при истёкшем access.
+        Витрина обновляет сессию и читает покупку; отказ от кассы не отменяет заказы.
+      operationId: cancelStubPayment
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "303":
+          description: На MARKETPLACE_PUBLIC_URL/checkout/{checkoutId}/return при любом результате
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+
   /api/v1/checkout/{checkoutId}/return:
     get:
       tags: [checkout]
@@ -5588,15 +5689,6 @@ components:
       properties:
         regions: { type: array, items: { type: string, pattern: "^RU-[A-Z]{2,3}$" } }
         carriers: { type: array, items: { type: string, enum: [cdek, yandex] } }
-    PaymentLink:
-      type: object
-      required: [tenantId, url, expiresAt, position, count]
-      properties:
-        tenantId: { type: string }
-        url: { type: string, format: uri }
-        expiresAt: { type: string, format: date-time }
-        position: { type: integer, minimum: 1 }
-        count: { type: integer, minimum: 1 }
     PurchaseList:
       type: object
       required: [items, next]
@@ -6056,9 +6148,7 @@ components:
       - goods
       - quote
       - status
-      - paymentOrder
       - deliveryPrice
-      - paymentUrl
       - returnFailed
       - pollFailures
       - nextPollAt
@@ -6074,13 +6164,8 @@ components:
           type: string
           enum: ["", creating_order, awaiting_payment, paid, cancelled, shipped, delivered, returned, seller_unreachable, price_changed, delivery_unavailable]
         orderId: { type: string }
-        paymentUrl:
-          type: [string, "null"]
-          format: uri
-          description: Только текущая awaiting_payment и now < expiresAt; у остальных null.
         expiresAt: { type: string, format: date-time }
-        paymentOrder: { type: integer }
-        deliveryPrice: { type: integer, format: int64, minimum: 0, description: Плата на кассе этого магазина; 0 — строка доставки скрыта }
+        deliveryPrice: { type: integer, format: int64, minimum: 0, description: Доставка группы в составе единого платежа; 0 — строка доставки скрыта }
         reason: { type: string }
         returnFailed: { type: boolean }
         returnReason: { type: string }
@@ -6142,10 +6227,6 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         confirmedAt: { type: [string, "null"], format: date-time }
-        nextPayment:
-          oneOf:
-            - $ref: "#/components/schemas/PaymentLink"
-            - type: "null"
     Subsidy:
       type: object
       required: [enabled, value, maxAmount]
