@@ -6,18 +6,20 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
-
 	"github.com/jackc/pgx/v5"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 const (
+	selectOfferBatch = offerSelect + `
+		WHERE (p.tenant_id, p.product_id) IN (SELECT * FROM unnest($1::text[], $2::text[]))`
+
 	// offerSelect — всё, из чего собирается предложение, одним запросом: снимок
 	// согласован, поэтому версия документа индекса монотонна.
 	offerSelect = `
@@ -293,4 +295,14 @@ func (r *tenantRow) tenant() *participant.Tenant {
 	}
 
 	return participant.RestoreTenant(state)
+}
+
+// Batch — читает состояния предложений одним запросом к проекции.
+func (r *Offers) Batch(ctx context.Context, keys []ids.OfferID) ([]ports.OfferState, error) {
+	tenants, products := make([]string, 0, len(keys)), make([]string, 0, len(keys))
+	for _, key := range keys {
+		tenants = append(tenants, string(key.Tenant))
+		products = append(products, string(key.Product))
+	}
+	return r.query(ctx, selectOfferBatch, tenants, products)
 }

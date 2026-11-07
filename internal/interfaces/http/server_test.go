@@ -42,6 +42,8 @@ const token = "operator-token-for-tests-0123456789"
 var t0 = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
 
 type env struct {
+	limiter    *fake.Limiter
+	geo        *fake.GeoIP
 	refreshKey string
 	server     *httptest.Server
 	store      *fake.Store
@@ -65,6 +67,8 @@ var w3ServerSubsidy = participant.Subsidy{Enabled: true, Type: participant.Subsi
 func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 	t.Helper()
 	e := &env{
+		geo:      &fake.GeoIP{},
+		limiter:  fake.NewLimiter(),
 		store:    fake.NewStore(),
 		index:    fake.NewIndex(),
 		clock:    fake.NewClock(t0),
@@ -90,6 +94,7 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 		"pod",
 	)
 	deps := transport.Deps{
+		Features:     appbuyer.NewFeatures(e.store, e.geo, e.platform, e.limiter),
 		Taxonomy:     apptaxonomy.NewService(e.store, e.clock, nil),
 		Catalog:      appcatalog.NewQueries(e.store, e.index, e.platform, nil, nil, fake.NewClock(time.Time{})),
 		Participants: appparticipant.NewService(e.store, e.clock, &fake.IDs{}),

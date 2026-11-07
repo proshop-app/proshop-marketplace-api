@@ -240,13 +240,7 @@ func buyerOnly(auth *appbuyer.Auth, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		rememberBuyer(r.Context(), session.BuyerID)
-
-		logger := loggerFrom(r.Context()).With(slog.String("buyerId", string(session.BuyerID)))
-		ctx := context.WithValue(r.Context(), keyBuyer, session.BuyerID)
-		ctx = context.WithValue(ctx, keyLogger, logger)
-
-		next(w, r.WithContext(ctx))
+		next(w, withBuyer(r, session.BuyerID))
 	}
 }
 

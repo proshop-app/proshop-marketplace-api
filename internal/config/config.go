@@ -15,12 +15,21 @@ import (
 const (
 	// minOperatorTokenLength — служебный токен оператора не короче 32 символов.
 	minOperatorTokenLength = 32
+	// minGeoIPCacheSecretLength — секрет обезличенного кэша не короче 32 символов.
+	minGeoIPCacheSecretLength = 32
 	// maxConnections — потолок пула соединений с базой.
 	maxConnections = 1000
 )
 
+// DaData — необязательная геолокация и секрет обезличенного кэша.
+type DaData struct {
+	APIKey      string
+	CacheSecret string
+}
+
 // Config — настройки процесса маркетплейса.
 type Config struct {
+	DaData     DaData
 	Promotion  Promotion
 	Moderation Moderation
 	ModelKeys  bool
@@ -270,6 +279,10 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			SessionTTL:   r.duration("OPERATOR_SESSION_TTL", 8*time.Hour),
 			Origin:       r.str("OPERATOR_ORIGIN", ""),
 		},
+		DaData: DaData{
+			APIKey:      r.str("DADATA_API_KEY", ""),
+			CacheSecret: r.str("GEOIP_CACHE_SECRET", ""),
+		},
 		Redis: Redis{URL: r.redisURL()},
 		SmsRu: SmsRu{
 			Mode:                r.oneOf("SMSRU_MODE", SmsRuLive, SmsRuLive, SmsRuSandbox),
@@ -328,6 +341,10 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		},
 		ModelKeys: r.boolean("MARKETPLACE_MODEL_KEYS", false),
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
+	}
+
+	if secret := cfg.DaData.CacheSecret; secret != "" && len(secret) < minGeoIPCacheSecretLength {
+		r.fail("GEOIP_CACHE_SECRET", fmt.Sprintf("не короче %d байт", minGeoIPCacheSecretLength))
 	}
 
 	if token := cfg.Operator.Token; token != "" && len(token) < minOperatorTokenLength {

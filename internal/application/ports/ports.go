@@ -6,16 +6,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
-
-	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
-
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
@@ -33,6 +31,7 @@ type UnitOfWork interface {
 
 // Tx — хранилища, привязанные к одной транзакции.
 type Tx interface {
+	BuyerFeatures() BuyerFeatures
 	Promotion() promotion.Repository
 	// AfterCommit откладывает наблюдение до успешной фиксации данных.
 	AfterCommit(func())
