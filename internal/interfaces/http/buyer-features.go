@@ -17,8 +17,8 @@ import (
 )
 
 type buyerFeatureHandlers struct {
-	service    *appbuyer.Features
-	trustProxy bool
+	service        *appbuyer.Features
+	trustedProxies int
 }
 
 type alertsJSON struct {
@@ -116,7 +116,7 @@ func (h *buyerFeatureHandlers) patchProfile(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *buyerFeatureHandlers) region(w http.ResponseWriter, r *http.Request) {
-	result, err := h.service.Region(r.Context(), BuyerID(r.Context()), clientIP(r, h.trustProxy))
+	result, err := h.service.Region(r.Context(), BuyerID(r.Context()), clientIP(r, h.trustedProxies))
 	if err != nil {
 		var limited *appbuyer.RegionLimitError
 		if errors.As(err, &limited) {

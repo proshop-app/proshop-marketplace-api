@@ -64,7 +64,7 @@ type response struct {
 var w3ServerDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
 var w3ServerSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 	t.Helper()
 	e := &env{
 		geo:      &fake.GeoIP{},
@@ -93,7 +93,7 @@ func newEnv(t *testing.T) *env {
 		e.clock,
 		"pod",
 	)
-	handler := transport.NewHandler(transport.Deps{
+	deps := transport.Deps{
 		Features:     appbuyer.NewFeatures(e.store, e.geo, e.platform, e.limiter),
 		Taxonomy:     apptaxonomy.NewService(e.store, e.clock, nil),
 		Catalog:      appcatalog.NewQueries(e.store, e.index, e.platform, nil, nil, fake.NewClock(time.Time{})),
@@ -161,9 +161,12 @@ func newEnv(t *testing.T) *env {
 		Metrics:    promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
 		Registerer: registry,
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
-	})
+	}
+	for _, option := range options {
+		option(&deps)
+	}
 
-	e.server = httptest.NewServer(handler)
+	e.server = httptest.NewServer(transport.NewHandler(deps))
 	t.Cleanup(e.server.Close)
 
 	return e

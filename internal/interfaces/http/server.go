@@ -54,12 +54,12 @@ type Deps struct {
 	OperatorAuth       *appoperator.Auth
 	Events             *messaging.Events
 	OperatorOrigin     string
-	// TrustProxy — адрес покупателя брать из X-Forwarded-For: сервис за доверенным прокси.
-	TrustProxy bool
-	Checks     []Check
-	Metrics    http.Handler
-	Registerer prometheus.Registerer
-	Logger     *slog.Logger
+	// TrustedProxies — сколько прокси перед сервисом дописывают X-Forwarded-For; 0 — заголовок не читается.
+	TrustedProxies int
+	Checks         []Check
+	Metrics        http.Handler
+	Registerer     prometheus.Registerer
+	Logger         *slog.Logger
 }
 
 // route — маршрут: метод, шаблон пути и обработчик.
@@ -77,26 +77,26 @@ type healthJSON struct {
 // routes — все маршруты маркетплейса. Та же таблица сверяется с
 // api/openapi.yaml в тестах: маршрут без описания — красный тест.
 func routes(deps Deps) []route {
-	promotion := &promotionHandlers{service: deps.Promotion, trustProxy: deps.TrustProxy}
+	promotion := &promotionHandlers{service: deps.Promotion, trustedProxies: deps.TrustedProxies}
 	machine := func(next http.HandlerFunc) http.HandlerFunc { return serverAPI(deps.ServerAPIToken, next) }
 	moderation := &moderationHandlers{service: deps.Moderation}
 	catalog := &catalogHandlers{queries: deps.Catalog}
 	taxonomy := &taxonomyHandlers{service: deps.Taxonomy, catalog: deps.Catalog}
 	participants := &participantHandlers{service: deps.Participants, buyerFeatures: deps.Features}
 	features := &buyerFeatureHandlers{
-		service:    deps.Features,
-		trustProxy: deps.TrustProxy,
+		service:        deps.Features,
+		trustedProxies: deps.TrustedProxies,
 	}
-	auth := &authHandlers{auth: deps.Auth, trustProxy: deps.TrustProxy}
+	auth := &authHandlers{auth: deps.Auth, trustedProxies: deps.TrustedProxies}
 	carts := &cartHandlers{carts: deps.Carts}
 	shipping := &deliveryHandlers{directory: deps.Directory}
 	checkouts := &checkoutHandlers{checkouts: deps.Checkouts}
 	registry := newReferenceHandlers(deps.Reference, deps.Registerer)
 	gateway := &operatorHandlers{
-		auth:       deps.OperatorAuth,
-		events:     deps.Events,
-		origin:     deps.OperatorOrigin,
-		trustProxy: deps.TrustProxy,
+		auth:           deps.OperatorAuth,
+		events:         deps.Events,
+		origin:         deps.OperatorOrigin,
+		trustedProxies: deps.TrustedProxies,
 	}
 	operator := func(next http.HandlerFunc) http.HandlerFunc { return gateway.only(deps.OperatorToken, next) }
 	signedIn := func(next http.HandlerFunc) http.HandlerFunc { return buyerOnly(deps.Auth, next) }

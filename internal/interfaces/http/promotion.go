@@ -16,8 +16,8 @@ import (
 )
 
 type promotionHandlers struct {
-	service    *apppromotion.Service
-	trustProxy bool
+	service        *apppromotion.Service
+	trustedProxies int
 }
 
 type promotionTargetJSON struct {
@@ -674,7 +674,7 @@ func (h *promotionHandlers) events(w http.ResponseWriter, r *http.Request) {
 	if buyer := BuyerID(r.Context()); buyer != "" {
 		body.VisitorID = "buyer:" + string(buyer)
 	}
-	if err := h.service.AllowEvents(r.Context(), clientIP(r, h.trustProxy), len(body.Events)); err != nil {
+	if err := h.service.AllowEvents(r.Context(), clientIP(r, h.trustedProxies), len(body.Events)); err != nil {
 		writeError(w, r, err)
 		return
 	}
