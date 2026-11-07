@@ -44,6 +44,7 @@ type OutboxRow struct {
 }
 
 type data struct {
+	features        *buyerFeaturesData
 	storeCards      map[ids.TenantID]ports.StoreRecord
 	promotion       *promotionData
 	moderation      *moderationData
@@ -88,6 +89,7 @@ type Store struct {
 
 func (d *data) clone() *data {
 	return &data{
+		features:        d.features.clone(),
 		storeCards:      maps.Clone(d.storeCards),
 		promotion:       d.promotion.clone(),
 		moderation:      d.moderation.clone(),
@@ -116,6 +118,7 @@ func (d *data) clone() *data {
 // NewStore — пустое хранилище.
 func NewStore() *Store {
 	return &Store{data: &data{
+		features:     newBuyerFeaturesData(),
 		storeCards:   map[ids.TenantID]ports.StoreRecord{},
 		promotion:    newPromotionData(),
 		moderation:   newModerationData(),

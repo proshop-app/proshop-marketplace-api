@@ -43,8 +43,10 @@ type Sessions struct {
 
 // Limiter — лимиты частоты без окна: счётчик на ключ.
 type Limiter struct {
-	mu     sync.Mutex
-	counts map[string]int
+	RetryAfter time.Duration
+	Err        error
+	mu         sync.Mutex
+	counts     map[string]int
 }
 
 // Platform — API сервера установки в памяти.
@@ -224,9 +226,15 @@ func (l *Limiter) Allow(_ context.Context, key string, limit int, window time.Du
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if l.Err != nil {
+		return false, 0, l.Err
+	}
 	l.counts[key]++
 
 	if l.counts[key] > limit {
+		if l.RetryAfter > 0 {
+			return false, l.RetryAfter, nil
+		}
 		return false, window, nil
 	}
 

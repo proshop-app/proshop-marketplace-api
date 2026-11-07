@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	goredis "github.com/redis/go-redis/v9"
@@ -27,6 +25,7 @@ import (
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
@@ -51,6 +50,8 @@ const referenceStatsInterval = time.Minute
 
 // services — сценарии приложения процесса.
 type services struct {
+	buyerFeatures *appbuyer.Features
+
 	promotion         *apppromotion.Service
 	moderationMetrics *jobs.ModerationMetrics
 	moderation        *appmoderation.Service
@@ -299,6 +300,8 @@ func (s *server) services(ctx context.Context) (services, error) {
 		Metrics:         telemetry.NewPromotion(s.metrics),
 	})
 	return services{
+		buyerFeatures: appbuyer.NewFeatures(uow, s.geoIP(), resyncing, redis.NewLimiter(s.cache, keyPrefix)),
+
 		promotion:         promotions,
 		moderationMetrics: moderationMetrics,
 		moderation:        moderation,
@@ -364,7 +367,11 @@ func (s *server) run(ctx context.Context) error {
 	group, groupCtx := errgroup.WithContext(ctx)
 
 	group.Go(func() error {
-		s.logger.Info("HTTP слушает", slog.String("addr", cfg.HTTP.Addr))
+		s.logger.Info(
+			"HTTP слушает",
+			slog.String("addr", cfg.HTTP.Addr),
+			slog.Int("trustedProxies", cfg.HTTP.TrustedProxies),
+		)
 
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("HTTP: %w", err)
@@ -452,6 +459,8 @@ func (s *server) httpServer() *http.Server {
 		{Name: "kafka", Probe: func(ctx context.Context) error { return infrakafka.Ping(ctx, cfg.Kafka.Brokers) }},
 	}
 	handler := transport.NewHandler(transport.Deps{
+		Features: s.app.buyerFeatures,
+
 		Promotion:      s.app.promotion,
 		ServerAPIToken: cfg.Promotion.ServerAPIToken,
 		Moderation:     s.app.moderation,
@@ -469,7 +478,7 @@ func (s *server) httpServer() *http.Server {
 		OperatorAuth:       s.app.operatorAuth,
 		Events:             s.app.events,
 		OperatorOrigin:     cfg.Operator.Origin,
-		TrustProxy:         cfg.Login.TrustProxy,
+		TrustedProxies:     cfg.HTTP.TrustedProxies,
 		Checks:             checks,
 		Metrics:            promhttp.HandlerFor(s.metrics, promhttp.HandlerOpts{}),
 		Registerer:         s.metrics,

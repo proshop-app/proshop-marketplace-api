@@ -15,12 +15,21 @@ import (
 const (
 	// minOperatorTokenLength — служебный токен оператора не короче 32 символов.
 	minOperatorTokenLength = 32
+	// minGeoIPCacheSecretLength — секрет обезличенного кэша не короче 32 символов.
+	minGeoIPCacheSecretLength = 32
 	// maxConnections — потолок пула соединений с базой.
 	maxConnections = 1000
 )
 
+// DaData — необязательная геолокация и секрет обезличенного кэша.
+type DaData struct {
+	APIKey      string
+	CacheSecret string
+}
+
 // Config — настройки процесса маркетплейса.
 type Config struct {
+	DaData     DaData
 	Promotion  Promotion
 	Moderation Moderation
 	ModelKeys  bool
@@ -79,8 +88,6 @@ type Login struct {
 	SessionTTL    time.Duration
 	PhoneLimit    Limit
 	IPLimit       Limit
-	// TrustProxy — адрес покупателя брать из X-Forwarded-For.
-	TrustProxy bool
 }
 
 // Platform — внутренний API сервера установки.
@@ -131,6 +138,10 @@ type Settings struct {
 type HTTP struct {
 	Addr            string
 	ShutdownTimeout time.Duration
+	// TrustedProxies — сколько прокси перед сервисом дописывают X-Forwarded-For. От него
+	// зависит адрес клиента, а с ним лимиты по адресу: больше, чем прокси на деле, — и
+	// клиент снова подставляет адрес сам.
+	TrustedProxies int
 }
 
 // Database — PostgreSQL.
@@ -220,6 +231,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		HTTP: HTTP{
 			Addr:            r.str("HTTP_ADDR", ":8080"),
 			ShutdownTimeout: r.duration("SHUTDOWN_TIMEOUT", 20*time.Second),
+			TrustedProxies:  r.nonNegative("HTTP_TRUST_PROXY", 0),
 		},
 		Database: r.database(),
 		Search: Search{
@@ -267,6 +279,10 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			SessionTTL:   r.duration("OPERATOR_SESSION_TTL", 8*time.Hour),
 			Origin:       r.str("OPERATOR_ORIGIN", ""),
 		},
+		DaData: DaData{
+			APIKey:      r.str("DADATA_API_KEY", ""),
+			CacheSecret: r.str("GEOIP_CACHE_SECRET", ""),
+		},
 		Redis: Redis{URL: r.redisURL()},
 		SmsRu: SmsRu{
 			Mode:                r.oneOf("SMSRU_MODE", SmsRuLive, SmsRuLive, SmsRuSandbox),
@@ -281,7 +297,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			SessionTTL:    r.duration("SESSION_TTL", 30*24*time.Hour),
 			PhoneLimit:    r.limit("LOGIN_PHONE_LIMIT", Limit{Count: 3, Window: 10 * time.Minute}),
 			IPLimit:       r.limit("LOGIN_IP_LIMIT", Limit{Count: 20, Window: time.Hour}),
-			TrustProxy:    r.boolean("HTTP_TRUST_PROXY", false),
 		},
 		Platform: Platform{
 			URL:     r.httpURL("PLATFORM_API_URL"),
@@ -326,6 +341,10 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		},
 		ModelKeys: r.boolean("MARKETPLACE_MODEL_KEYS", false),
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
+	}
+
+	if secret := cfg.DaData.CacheSecret; secret != "" && len(secret) < minGeoIPCacheSecretLength {
+		r.fail("GEOIP_CACHE_SECRET", fmt.Sprintf("не короче %d байт", minGeoIPCacheSecretLength))
 	}
 
 	if token := cfg.Operator.Token; token != "" && len(token) < minOperatorTokenLength {

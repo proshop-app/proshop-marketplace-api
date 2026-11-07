@@ -112,6 +112,8 @@ type StoreRecord struct {
 
 // StoreCards — хранение производной карточки без чтения каталога на запросе.
 type StoreCards interface {
+	// BatchPublic возвращает только публичные карточки выбранных магазинов.
+	BatchPublic(context.Context, []ids.TenantID) ([]ShopCard, error)
 	// UpdateProfile немедленно применяет постмодерацию к публичному снимку и hidden.
 	UpdateProfile(context.Context, *participant.Participant) error
 	// Lock сериализует только пересчёты, не блокируя строку участника.

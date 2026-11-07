@@ -11,6 +11,7 @@ import (
 
 	appcart "github.com/proshop-app/proshop-marketplace/internal/application/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
@@ -210,9 +211,8 @@ func (s *Service) Quote(
 		return checkout.State{}, err
 	}
 
-	return s.update(ctx, buyerID, checkoutID, func(c *checkout.Checkout, now time.Time) error {
-		return c.SelectDelivery(selection, quotes, now)
-	})
+	choose := func(c *checkout.Checkout, now time.Time) error { return c.SelectDelivery(selection, quotes, now) }
+	return s.updateSelection(ctx, buyerID, checkoutID, saveBuyerPickup, choose)
 }
 
 // Confirm перепроверяет цены и наличие у магазинов, пересчитывает
@@ -524,6 +524,15 @@ func (s *Service) update(
 	buyerID, checkoutID ids.UUID,
 	mutate func(*checkout.Checkout, time.Time) error,
 ) (checkout.State, error) {
+	return s.updateSelection(ctx, buyerID, checkoutID, nil, mutate)
+}
+
+func (s *Service) updateSelection(
+	ctx context.Context,
+	buyerID, checkoutID ids.UUID,
+	after func(context.Context, ports.Tx, *checkout.Checkout) error,
+	mutate func(*checkout.Checkout, time.Time) error,
+) (checkout.State, error) {
 	var state checkout.State
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Checkouts().Get(ctx, checkoutID)
@@ -540,6 +549,12 @@ func (s *Service) update(
 
 		if c.State().Version != before {
 			if err := tx.Checkouts().Update(ctx, c); err != nil {
+				return err
+			}
+		}
+
+		if after != nil {
+			if err := after(ctx, tx, c); err != nil {
 				return err
 			}
 		}
@@ -576,4 +591,32 @@ func (s *Service) verifyCart(ctx context.Context, buyerID ids.UUID) {
 	if _, err := s.carts.Verify(ctx, buyerID); err != nil {
 		slog.Warn("не удалось перепроверить корзину", "buyerId", string(buyerID), "error", err)
 	}
+}
+
+func saveBuyerPickup(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
+	if selection := c.Delivery(); selection != nil {
+		repo := tx.BuyerFeatures()
+		if err := repo.Lock(ctx, c.BuyerID()); err != nil {
+			return err
+		}
+		profile, err := repo.Profile(ctx, c.BuyerID())
+		if err != nil {
+			return err
+		}
+		changed, err := profile.SelectPickup(buyer.Pickup{
+			Provider:   string(selection.Carrier),
+			Code:       selection.PickupPointCode,
+			Address:    selection.Address,
+			RegionCode: selection.RegionCode,
+		})
+		if err != nil {
+			return err
+		}
+		if changed {
+			if err := repo.SaveProfile(ctx, c.BuyerID(), profile); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

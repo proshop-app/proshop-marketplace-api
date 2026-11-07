@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -24,8 +23,8 @@ const (
 const smsruAck = "100"
 
 type authHandlers struct {
-	auth       *appbuyer.Auth
-	trustProxy bool
+	auth           *appbuyer.Auth
+	trustedProxies int
 }
 
 type startLoginJSON struct {
@@ -86,7 +85,7 @@ func (h *authHandlers) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	view, err := h.auth.StartLogin(r.Context(), body.Phone, clientIP(r, h.trustProxy))
+	view, err := h.auth.StartLogin(r.Context(), body.Phone, clientIP(r, h.trustedProxies))
 	if err != nil {
 		writeError(w, r, err)
 
@@ -241,13 +240,7 @@ func buyerOnly(auth *appbuyer.Auth, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		rememberBuyer(r.Context(), session.BuyerID)
-
-		logger := loggerFrom(r.Context()).With(slog.String("buyerId", string(session.BuyerID)))
-		ctx := context.WithValue(r.Context(), keyBuyer, session.BuyerID)
-		ctx = context.WithValue(ctx, keyLogger, logger)
-
-		next(w, r.WithContext(ctx))
+		next(w, withBuyer(r, session.BuyerID))
 	}
 }
 
@@ -259,27 +252,4 @@ func sessionToken(r *http.Request) string {
 	token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 
 	return strings.TrimSpace(token)
-}
-
-// clientIP — адрес покупателя: за доверенным прокси — первый в X-Forwarded-For.
-func clientIP(r *http.Request, trustProxy bool) string {
-	if trustProxy {
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			first, _, _ := strings.Cut(forwarded, ",")
-			if ip := net.ParseIP(strings.TrimSpace(first)); ip != nil {
-				return ip.String()
-			}
-		}
-	}
-
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.String()
-	}
-
-	return ""
 }

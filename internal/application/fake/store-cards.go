@@ -97,3 +97,14 @@ func (r storeCards) UpdateProfile(_ context.Context, p *participant.Participant)
 	r.d.storeCards[p.TenantID()] = record
 	return nil
 }
+
+// BatchPublic возвращает публичные карточки выбранных магазинов.
+func (r storeCards) BatchPublic(_ context.Context, tenants []ids.TenantID) ([]ports.ShopCard, error) {
+	result := []ports.ShopCard{}
+	for _, tenant := range tenants {
+		if record := r.d.storeCards[tenant]; record.PagePublic {
+			result = append(result, record.Card)
+		}
+	}
+	return result, nil
+}
