@@ -167,6 +167,7 @@ func (c *Checkout) CompletePoll(
 	changed, err := c.Observe(tenant, order, next, now)
 	if err == nil {
 		g.PollToken = ""
+		g.Tracking = cloneTracking(order.Tracking)
 		if !changed {
 			return true, c.touch(now)
 		}

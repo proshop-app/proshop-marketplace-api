@@ -269,6 +269,8 @@ func routes(deps Deps) []route {
 		{http.MethodPut, "/api/v1/cart/lines/{offerId}", signedIn(carts.setQuantity)},
 		{http.MethodDelete, "/api/v1/cart/lines/{offerId}", signedIn(carts.remove)},
 		{http.MethodPost, "/api/v1/cart/verify", signedIn(carts.verify)},
+		{http.MethodPut, "/api/v1/cart/groups/{tenantId}/promo-code", signedIn(carts.promo)},
+		{http.MethodDelete, "/api/v1/cart/groups/{tenantId}/promo-code", signedIn(carts.promo)},
 
 		{http.MethodGet, "/api/v1/delivery/carriers", shipping.carriers},
 		{http.MethodGet, "/api/v1/delivery/settings", checkouts.deliverySettings},

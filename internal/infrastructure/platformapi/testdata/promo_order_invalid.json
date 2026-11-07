@@ -1,0 +1,20 @@
+{
+  "orderId": "o1",
+  "paymentUrl": "https://seller.example/pay/o1",
+  "expiresAt": "2026-10-24T11:00:00Z",
+  "total": 413000,
+  "promoCode": {
+    "code": "SAVE",
+    "valid": false,
+    "discount": 0,
+    "message": "промокод истёк"
+  },
+  "items": [
+    {
+      "productId": "p1",
+      "price": 199000,
+      "discounts": [],
+      "quantity": 2
+    }
+  ]
+}

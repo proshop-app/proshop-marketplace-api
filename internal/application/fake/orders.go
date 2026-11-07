@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -46,13 +48,33 @@ func (p *Platform) CreateOrder(
 		}
 		return checkout.SellerOrder{}, err
 	}
-	if err := p.validateOrderDelivery(tenant, request); err != nil {
-		p.orderRefusals[key] = err
-		return checkout.SellerOrder{}, err
+	if request.PromoCode != "" {
+		promo, ok := p.promos[tenant]
+		if !ok || promo.PromoCode == nil || !promo.PromoCode.Valid {
+			refusal := checkout.ErrPromoInvalid
+			if promo.PromoCode != nil && promo.PromoCode.Message != nil {
+				refusal = refusal.WithMessage(*promo.PromoCode.Message)
+			}
+			p.orderRefusals[key] = refusal
+			return checkout.SellerOrder{}, refusal
+		}
 	}
 	total := request.DeliveryPrice
 	for _, item := range request.Items {
-		amount, err := item.Price.MulRatio(int64(item.Quantity), 1)
+		discounts := item.Discounts
+		current := p.promos[tenant]
+		if request.PromoCode == "" && current.PromoCode != nil {
+			current = ports.GroupPricing{}
+		}
+		actual := current.Discounts[item.ProductID]
+		if !sameDiscounts(discounts, actual) {
+			refused := &ports.PriceChanged{Items: []checkout.PriceChange{
+				{ProductID: item.ProductID, Price: item.Price},
+			}}
+			p.orderRefusals[key] = refused
+			return checkout.SellerOrder{}, refused
+		}
+		amount, err := cart.DiscountedAmount(item.Price, item.Quantity, actual)
 		if err != nil {
 			return checkout.SellerOrder{}, err
 		}
@@ -67,6 +89,10 @@ func (p *Platform) CreateOrder(
 			p.orderRefusals[key] = refused
 			return checkout.SellerOrder{}, refused
 		}
+	}
+	if err := p.validateOrderDelivery(tenant, request); err != nil {
+		p.orderRefusals[key] = err
+		return checkout.SellerOrder{}, err
 	}
 	order := checkout.SellerOrder{
 		OrderID:    fmt.Sprintf("order-%d", len(p.orders)+1),
@@ -103,14 +129,14 @@ func (p *Platform) GetOrder(_ context.Context, tenant ids.TenantID, id string) (
 }
 
 // SetOrderStatus моделирует оплату и исполнение на стороне магазина.
-func (p *Platform) SetOrderStatus(id string, status checkout.GroupStatus, reason, track string) {
+func (p *Platform) SetOrderStatus(id string, status checkout.GroupStatus, reason string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for key, order := range p.orders {
 		if order.OrderID != id {
 			continue
 		}
-		order.Status, order.Reason, order.Track = status, reason, track
+		order.Status, order.Reason = status, reason
 		p.orders[key] = order
 	}
 }
@@ -177,7 +203,12 @@ func (p *Platform) validateOrderDelivery(tenant ids.TenantID, request ports.Crea
 	}
 	goods := money.Money{}
 	for _, item := range request.Items {
-		amount, err := item.Price.MulRatio(int64(item.Quantity), 1)
+		current := p.promos[tenant]
+		if request.PromoCode == "" && current.PromoCode != nil {
+			current = ports.GroupPricing{}
+		}
+		discounts := current.Discounts[item.ProductID]
+		amount, err := cart.DiscountedAmount(item.Price, item.Quantity, discounts)
 		if err != nil {
 			return err
 		}
@@ -203,4 +234,29 @@ func (p *Platform) validateOrderDelivery(tenant ids.TenantID, request ports.Crea
 		return &ports.OrderRefusal{Code: "DELIVERY_CHANGED"}
 	}
 	return nil
+}
+
+// SetTracking — задаёт отслеживание заказа для сценария.
+func (p *Platform) SetTracking(id string, tracking *checkout.Tracking) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for key, order := range p.orders {
+		if order.OrderID == id {
+			order.Tracking = tracking
+			p.orders[key] = order
+		}
+	}
+}
+
+// Сервер сравнивает набор скидок независимо от их порядка в запросе.
+func sameDiscounts(expected, actual []cart.Discount) bool {
+	if len(expected) != len(actual) {
+		return false
+	}
+	for _, discount := range expected {
+		if !slices.Contains(actual, discount) {
+			return false
+		}
+	}
+	return true
 }

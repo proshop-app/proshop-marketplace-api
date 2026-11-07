@@ -4,10 +4,12 @@ package checkout
 
 import (
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -37,15 +39,18 @@ const (
 
 // Line — позиция снимка.
 type Line struct {
-	Offer    ids.OfferID
-	Name     string
-	Quantity int
-	Price    money.Money
+	Discounts []cart.Discount
+	Offer     ids.OfferID
+	Name      string
+	Quantity  int
+	Price     money.Money
 }
 
 // Group — заказ одного продавца в покупке.
 type Group struct {
-	TenantID ids.TenantID
+	PromoCode string
+	Tracking  *Tracking
+	TenantID  ids.TenantID
 	// ExternalCheckoutID — ключ заказа у магазина: <checkoutId>:<tenantId>.
 	ExternalCheckoutID string
 	Lines              []Line
@@ -59,7 +64,6 @@ type Group struct {
 	PaymentOrder    int
 	DeliveryPrice   money.Money
 	Reason          string
-	Track           string
 	NextPollAt      time.Time
 	AwaitingSince   time.Time
 	CartReturned    bool
@@ -89,6 +93,7 @@ type Selection struct {
 
 // PriceCheck — ответ магазина по позиции при подтверждении.
 type PriceCheck struct {
+	Discounts []cart.Discount
 	Exists    bool
 	Price     money.Money
 	Available int
@@ -178,6 +183,7 @@ func New(id, buyerID ids.UUID, key string, lines []Line, now time.Time) (*Checko
 		return nil, err
 	}
 
+	c.state = cloneState(c.state)
 	return c, nil
 }
 
@@ -305,6 +311,11 @@ func (c *Checkout) Reprice(checks map[ids.OfferID]PriceCheck, now time.Time) (bo
 	for _, group := range c.state.Groups {
 		for _, line := range group.Lines {
 			check, ok := checks[line.Offer]
+			if ok {
+				if _, err := cart.DiscountedAmount(check.Price, line.Quantity, check.Discounts); err != nil {
+					return false, ErrOfferUnavailable.Wrap(err)
+				}
+			}
 			if !ok || !check.Exists || check.Available < line.Quantity {
 				missing = append(missing, line.Offer.String())
 			}
@@ -323,8 +334,10 @@ func (c *Checkout) Reprice(checks map[ids.OfferID]PriceCheck, now time.Time) (bo
 
 		for li := range group.Lines {
 			line := &group.Lines[li]
-			if price := checks[line.Offer].Price; price.Cmp(line.Price) != 0 {
-				line.Price = price
+			check := checks[line.Offer]
+			if check.Price != line.Price || !slices.Equal(check.Discounts, line.Discounts) {
+				line.Price = check.Price
+				line.Discounts = append([]cart.Discount(nil), check.Discounts...)
 				groupChanged = true
 			}
 		}
@@ -395,7 +408,7 @@ func (c *Checkout) recount() error {
 		goods := money.Money{}
 
 		for _, line := range group.Lines {
-			amount, err := line.Price.MulRatio(int64(line.Quantity), 1)
+			amount, err := cart.DiscountedAmount(line.Price, line.Quantity, line.Discounts)
 			if err != nil {
 				return err
 			}

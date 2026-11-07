@@ -1,1 +1,1 @@
-{"orderId":"o1","status":"shipped","track":"TRACK1"}
+{"orderId":"o1","status":"shipped","tracking":{"carrier":"carrier","number":"TRACK1","url":"https://example.test/TRACK1"}}

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -15,13 +16,13 @@ import (
 )
 
 type sellerOrderJSON struct {
+	Tracking   *trackingJSON        `json:"tracking"`
 	OrderID    string               `json:"orderId"`
 	PaymentURL string               `json:"paymentUrl"`
 	ExpiresAt  time.Time            `json:"expiresAt"`
 	Total      *int64               `json:"total"`
 	Status     checkout.GroupStatus `json:"status"`
 	Reason     string               `json:"reason"`
-	Track      string               `json:"track"`
 }
 
 // CreateOrder создаёт заказ на кассе магазина по ключу покупки и группы.
@@ -31,7 +32,7 @@ func (c *Client) CreateOrder(
 	request ports.CreateOrderRequest,
 ) (checkout.SellerOrder, error) {
 	var answer sellerOrderJSON
-	if err := c.call(ctx, http.MethodPost, tenant, "/orders", request, &answer); err != nil {
+	if err := c.call(ctx, http.MethodPost, tenant, "/orders", orderBody(request), &answer); err != nil {
 		return checkout.SellerOrder{}, err
 	}
 	if answer.Status == "" {
@@ -73,13 +74,19 @@ func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
 	if creating && (a.Total == nil || *a.Total < 0 || !checkout.ValidURL(a.PaymentURL) || a.ExpiresAt.IsZero()) {
 		return checkout.SellerOrder{}, ErrInvalidResponse
 	}
+	if a.Tracking != nil && (strings.TrimSpace(a.Tracking.Carrier) == "" || !checkout.ValidURL(a.Tracking.URL)) {
+		a.Tracking = nil
+	}
+	if a.Tracking != nil && a.Tracking.Number != nil && strings.TrimSpace(*a.Tracking.Number) == "" {
+		a.Tracking.Number = nil
+	}
 	order := checkout.SellerOrder{
 		OrderID:    a.OrderID,
 		PaymentURL: a.PaymentURL,
 		ExpiresAt:  a.ExpiresAt,
 		Status:     a.Status,
 		Reason:     a.Reason,
-		Track:      a.Track,
+		Tracking:   a.Tracking.domain(),
 	}
 	if a.Total != nil {
 		order.Total = money.FromKopecks(*a.Total)

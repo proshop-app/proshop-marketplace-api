@@ -117,8 +117,8 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	first, second := state.Groups[0], state.Groups[1]
-	e.platform.SetOrderStatus(first.OrderID, checkout.GroupPaid, "", "")
-	e.platform.SetOrderStatus(second.OrderID, checkout.GroupCancelled, "payment_expired", "")
+	e.platform.SetOrderStatus(first.OrderID, checkout.GroupPaid, "")
+	e.platform.SetOrderStatus(second.OrderID, checkout.GroupCancelled, "payment_expired")
 	state, err = e.service.Refresh(ctx, buyerID, c.ID)
 	if err != nil || state.Status != checkout.StatusPartiallyPaid {
 		t.Fatalf("сверка: %+v %v", state, err)
@@ -145,9 +145,9 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.clock.Advance(11 * time.Minute)
-	e.platform.SetOrderStatus(first.OrderID, checkout.GroupShipped, "", "TRACK")
+	e.platform.SetOrderStatus(first.OrderID, checkout.GroupShipped, "")
 	state, err = e.service.Refresh(ctx, buyerID, c.ID)
-	if err != nil || state.Groups[0].Track != "TRACK" {
+	if err != nil || state.Groups[0].Status != checkout.GroupShipped {
 		t.Fatalf("трек: %+v %v", state, err)
 	}
 }

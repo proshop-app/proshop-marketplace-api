@@ -116,7 +116,7 @@ func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
 	if operator.status != http.StatusOK || len(items) != 1 {
 		t.Fatalf("панель: %+v", operator)
 	}
-	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "", "")
+	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
 	refreshed := e.session(t, http.MethodGet, path, "", cookie)
 	if refreshed.status != http.StatusOK || refreshed.body["status"] != "paid" || refreshed.body["nextPayment"] != nil {
 		t.Fatalf("источник статуса — магазин: %+v", refreshed)

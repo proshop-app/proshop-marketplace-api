@@ -232,6 +232,22 @@ func (s *Service) returnCancelledGroup(ctx context.Context, buyerID, id ids.UUID
 				lines = g.ReturnRemaining
 			}
 			remaining, reason := returnGroup(basket, lines, now, ttl)
+			// Новый код покупателя важнее снимка покупки; отказ того же кода сохраняем с причиной.
+			if g.PromoCode != "" && basket.State().Promos[tenant].Code == "" {
+				_, err := basket.SetPromo(tenant, g.PromoCode, now, ttl)
+				if err != nil && !errors.Is(err, cart.ErrLineNotFound) {
+					return err
+				}
+			}
+			if g.PromoCode != "" && basket.State().Promos[tenant].Code == g.PromoCode {
+				if g.LastErrorCode == checkout.ErrPromoInvalid.Key() {
+					message := g.Reason
+					if message == "" {
+						message = checkout.ErrPromoInvalid.Message()
+					}
+					basket.ApplyPromo(tenant, cart.PromoCode{Code: g.PromoCode, Message: &message}, nil, now, ttl)
+				}
+			}
 			if _, err := c.RecordCartReturn(tenant, remaining, reason, now); err != nil {
 				return err
 			}

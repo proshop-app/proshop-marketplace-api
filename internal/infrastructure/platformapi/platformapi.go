@@ -34,6 +34,8 @@ const (
 
 	// codeMarketplaceDisabled — код отказа сервера для магазина, который не участвует в маркетплейсе.
 	codeMarketplaceDisabled = "MARKETPLACE_DISABLED"
+	// codePromoInvalid — сервер отклонил промокод заказа.
+	codePromoInvalid = "MARKETPLACE_PROMO_CODE_INVALID"
 )
 
 var (
@@ -70,10 +72,11 @@ type itemJSON struct {
 }
 
 type itemCheckJSON struct {
-	ProductID         string `json:"productId"`
-	Available         bool   `json:"available"`
-	Price             int64  `json:"price"`
-	AvailableQuantity int    `json:"availableQuantity"`
+	Discounts         []discountJSON `json:"discounts"`
+	ProductID         string         `json:"productId"`
+	Available         bool           `json:"available"`
+	Price             int64          `json:"price"`
+	AvailableQuantity int            `json:"availableQuantity"`
 }
 
 type quoteJSON struct {
@@ -85,8 +88,11 @@ type quoteJSON struct {
 	ExpiresAt string `json:"expiresAt"`
 }
 
-// errorJSON — тело отказа сервера: {"ok":false,"message","status","code","items"}.
+// errorJSON — тело отказа сервера: {"ok":false,"message","status","code","items","data"}.
 type errorJSON struct {
+	Data *struct {
+		PromoCode *promoCodeJSON `json:"promoCode"`
+	} `json:"data"`
 	Code   string `json:"code"`
 	Reason string `json:"reason"`
 	Items  []struct {
@@ -121,41 +127,6 @@ func New(cfg Config) *Client {
 		token:   cfg.Token,
 		http:    &http.Client{Timeout: timeout, CheckRedirect: refuseRedirect},
 	}
-}
-
-// CheckItems — цена и наличие позиций у магазина.
-func (c *Client) CheckItems(
-	ctx context.Context,
-	tenantID ids.TenantID,
-	request ports.ItemsCheckRequest,
-) ([]ports.ItemCheck, error) {
-	var answer struct {
-		Items []itemCheckJSON `json:"items"`
-	}
-	body := map[string]any{"items": itemsJSON(request.Items)}
-	if request.BuyerID != "" {
-		body["buyerId"] = request.BuyerID
-	}
-	if err := c.call(ctx, http.MethodPost, tenantID, "/items/check", body, &answer); err != nil {
-		return nil, err
-	}
-	checks := make([]ports.ItemCheck, 0, len(answer.Items))
-	for _, item := range answer.Items {
-		product, err := ids.ParseProductID(item.ProductID)
-		if err != nil || item.Price < 0 || item.AvailableQuantity < 0 {
-			return nil, ErrInvalidResponse.WithMessage("позиция ответа не по контракту: " + item.ProductID)
-		}
-		check := ports.ItemCheck{
-			ProductID: product,
-			Exists:    item.Available,
-			Price:     money.FromKopecks(item.Price),
-			Available: item.AvailableQuantity,
-		}
-
-		checks = append(checks, check)
-	}
-
-	return checks, nil
 }
 
 // QuoteDelivery — стоимость и срок доставки до пункта по договору магазина.
@@ -256,8 +227,9 @@ func (c *Client) call(
 	path string,
 	payload any,
 	out any,
+	logTenant ...ids.TenantID,
 ) error {
-	return c.callWithRefusal(ctx, method, tenantID, path, payload, out, refusal)
+	return c.callWithRefusal(ctx, method, tenantID, path, payload, out, refusal, logTenant...)
 }
 
 func (c *Client) callWithRefusal(
@@ -268,6 +240,7 @@ func (c *Client) callWithRefusal(
 	payload any,
 	out any,
 	parseRefusal func(string, string, ids.TenantID, *http.Response) error,
+	logTenant ...ids.TenantID,
 ) error {
 	var body io.Reader
 
@@ -302,6 +275,9 @@ func (c *Client) callWithRefusal(
 	defer func() { _ = reply.Body.Close() }()
 
 	if reply.StatusCode != http.StatusOK {
+		if len(logTenant) > 0 {
+			tenantID = logTenant[0]
+		}
 		return parseRefusal(method, path, tenantID, reply)
 	}
 
@@ -329,6 +305,13 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 	message := fmt.Sprintf("%s %s: HTTP %d %s", method, path, reply.StatusCode, strings.TrimSpace(string(detail)))
 
 	var body errorJSON
+	if reply.StatusCode == http.StatusConflict && json.Unmarshal(raw, &body) == nil &&
+		body.Code == codePromoInvalid {
+		if body.Data != nil && body.Data.PromoCode != nil && body.Data.PromoCode.Message != nil {
+			return checkout.ErrPromoInvalid.WithMessage(*body.Data.PromoCode.Message)
+		}
+		return checkout.ErrPromoInvalid
+	}
 	if reply.StatusCode == http.StatusConflict && json.Unmarshal(raw, &body) == nil && body.Code == "PRICE_CHANGED" {
 		changed := &ports.PriceChanged{}
 		for _, item := range body.Items {

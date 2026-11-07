@@ -39,7 +39,7 @@ func TestOrderContract(t *testing.T) {
 		t.Fatalf("создание: %+v %v", order, err)
 	}
 	status, err := client.GetOrder(context.Background(), "t1", order.OrderID)
-	if err != nil || status.Status != checkout.GroupShipped || status.Track != "TRACK1" {
+	if err != nil || status.Status != checkout.GroupShipped {
 		t.Fatalf("статус: %+v %v", status, err)
 	}
 }

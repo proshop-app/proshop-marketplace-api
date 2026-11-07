@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -54,13 +55,13 @@ type PriceChange struct {
 
 // SellerOrder — подтверждённый сервером снимок; возврат с кассы его не заменяет.
 type SellerOrder struct {
+	Tracking   *Tracking
 	OrderID    string
 	PaymentURL string
 	ExpiresAt  time.Time
 	Total      money.Money
 	Status     GroupStatus
 	Reason     string
-	Track      string
 }
 
 // PaymentLink — следующий шаг оплаты с сохранённой позицией в очереди.
@@ -70,6 +71,13 @@ type PaymentLink struct {
 	ExpiresAt time.Time    `json:"expiresAt"`
 	Position  int          `json:"position"`
 	Count     int          `json:"count"`
+}
+
+// Tracking — номер и ссылка перевозчика из заказа сервера.
+type Tracking struct {
+	Carrier string  `json:"carrier"`
+	Number  *string `json:"number"`
+	URL     string  `json:"url"`
 }
 
 // BeginOrders сохраняет неизменный запрос до первого внешнего вызова.
@@ -154,10 +162,10 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	if order.Status == GroupCancelled && order.Reason == "" {
 		return false, ErrInvalidOrder
 	}
-	if g.Status == order.Status && g.Reason == order.Reason && g.Track == order.Track && g.NextPollAt.Equal(next) {
+	if g.Status == order.Status && g.Reason == order.Reason && g.NextPollAt.Equal(next) {
 		return false, nil
 	}
-	g.Status, g.Reason, g.Track = order.Status, order.Reason, order.Track
+	g.Status, g.Reason = order.Status, order.Reason
 	g.NextPollAt = next
 	g.PollFailures = 0
 	g.LastErrorCode = ""
@@ -290,8 +298,15 @@ func cloneState(state State) State {
 	for i := range state.Groups {
 		g := &state.Groups[i]
 		g.Lines = append([]Line(nil), g.Lines...)
+		for j := range g.Lines {
+			g.Lines[j].Discounts = append([]cart.Discount(nil), g.Lines[j].Discounts...)
+		}
+		g.Tracking = cloneTracking(g.Tracking)
 		g.CurrentPrices = append([]PriceChange(nil), g.CurrentPrices...)
 		g.ReturnRemaining = append([]Line(nil), g.ReturnRemaining...)
+		for j := range g.ReturnRemaining {
+			g.ReturnRemaining[j].Discounts = append([]cart.Discount(nil), g.ReturnRemaining[j].Discounts...)
+		}
 		if g.Quote != nil {
 			q := *g.Quote
 			g.Quote = &q
@@ -302,4 +317,17 @@ func cloneState(state State) State {
 		state.Delivery = &d
 	}
 	return state
+}
+
+// cloneTracking отделяет указатель номера от снимка заказа.
+func cloneTracking(value *Tracking) *Tracking {
+	if value == nil {
+		return nil
+	}
+	result := *value
+	if value.Number != nil {
+		number := *value.Number
+		result.Number = &number
+	}
+	return &result
 }

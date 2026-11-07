@@ -35,6 +35,7 @@ type env struct {
 	index    *fake.Index
 	platform *fake.Platform
 	clock    *fake.Clock
+	verifier *fake.CartVerifier
 	carts    *appcart.Service
 	service  *appcheckout.Service
 }
@@ -58,11 +59,13 @@ func setup(t *testing.T) *env {
 	)
 
 	e.carts = appcart.NewService(e.store, e.index, e.platform, identities, e.clock, 30*24*time.Hour)
+	e.verifier = &fake.CartVerifier{CartVerifier: e.carts}
 	e.service = appcheckout.NewService(
 		e.store,
 		e.index,
 		e.platform,
 		directory,
+		e.verifier,
 		identities,
 		e.clock,
 		appcheckout.Config{

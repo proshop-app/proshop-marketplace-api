@@ -198,13 +198,23 @@ func (s *server) services(ctx context.Context) (services, error) {
 			IPLimit:       appbuyer.Limit(cfg.Login.IPLimit),
 		},
 	)
-	checkouts := appcheckout.NewService(uow, s.store.index, resyncing, pickups, identities, now, appcheckout.Config{
-		DeliverySubsidyMinPercent: cfg.Checkout.DeliverySubsidyMinPercent,
-		QuoteTTL:                  cfg.Checkout.QuoteTTL,
-		ReturnBaseURL:             cfg.Checkout.ReturnBaseURL,
-		CartTTL:                   cfg.Cart.TTL,
-		QuoteTimeout:              cfg.Checkout.QuoteTimeout,
-	})
+	carts := appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL)
+	checkouts := appcheckout.NewService(
+		uow,
+		s.store.index,
+		resyncing,
+		pickups,
+		carts,
+		identities,
+		now,
+		appcheckout.Config{
+			DeliverySubsidyMinPercent: cfg.Checkout.DeliverySubsidyMinPercent,
+			QuoteTTL:                  cfg.Checkout.QuoteTTL,
+			ReturnBaseURL:             cfg.Checkout.ReturnBaseURL,
+			CartTTL:                   cfg.Cart.TTL,
+			QuoteTimeout:              cfg.Checkout.QuoteTimeout,
+		},
+	)
 	moderationMetrics := jobs.NewModerationMetrics(s.metrics)
 	moderation := appmoderation.NewService(uow, now, identities, appmoderation.Config{
 		Metrics:         moderationMetrics,
@@ -305,7 +315,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		registry:          registry,
 		settings:          settings,
 		auth:              auth,
-		carts:             appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL),
+		carts:             carts,
 		directory:         pickups,
 		checkouts:         checkouts,
 		dispatcher:        dispatcher,
