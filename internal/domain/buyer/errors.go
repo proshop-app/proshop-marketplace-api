@@ -6,6 +6,17 @@ import (
 )
 
 var (
+	// ErrRegionLimit — исчерпан лимит обращений гостя к провайдеру региона.
+	ErrRegionLimit = errs.New(errs.TooManyRequests, "buyer.region_limit", "превышен лимит подсказок региона")
+	// ErrInvalidProfile — поля профиля не проходят проверку.
+	ErrInvalidProfile = errs.New(errs.Invalid, "buyer.invalid_profile", "некорректный профиль")
+	// ErrProfileConflict — профиль изменился после чтения.
+	ErrProfileConflict = errs.New(errs.Conflict, "buyer.profile_conflict", "профиль изменён параллельно")
+	// ErrCollectionLimit — достигнут лимит покупательского списка.
+	ErrCollectionLimit = errs.New(errs.Conflict, "buyer.collection_limit", "достигнут лимит списка")
+	// ErrInvalidTarget — целевая цена не может быть отрицательной.
+	ErrInvalidTarget = errs.New(errs.Invalid, "buyer.invalid_target", "цель должна быть неотрицательной")
+
 	// ErrAccessExpired — подпись и границы JWT верны, истёк только access.
 	ErrAccessExpired = identity.ErrAccessExpired
 	// ErrInvalidPhone — номер не похож на телефон.

@@ -5,17 +5,15 @@ import (
 	"sort"
 	"time"
 
-	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
-
-	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
-
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -440,6 +438,18 @@ func (r participants) Sellers(_ context.Context, tenants []ids.TenantID) (map[id
 	for _, tenant := range tenants {
 		if p, ok := r.d.participants[tenant]; ok {
 			result[tenant] = &participant.Seller{Slug: p.Slug, Name: p.Name}
+		}
+	}
+	return result, nil
+}
+
+// Batch — читает состояния предложений одним запросом к проекции.
+func (o offers) Batch(_ context.Context, keys []ids.OfferID) ([]ports.OfferState, error) {
+	result := []ports.OfferState{}
+	for _, key := range keys {
+		k := productKey{key.Tenant, key.Product}
+		if _, ok := o.d.products[k]; ok {
+			result = append(result, o.state(k))
 		}
 	}
 	return result, nil

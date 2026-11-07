@@ -1,0 +1,17 @@
+{
+  "location": {
+    "value": "Неизвестный регион",
+    "unrestricted_value": "Неизвестный регион",
+    "data": {
+      "country": "Россия",
+      "country_iso_code": "RU",
+      "region": "Неизвестный регион",
+      "region_with_type": "Неизвестный регион",
+      "region_iso_code": "UNKNOWN",
+      "city": null,
+      "postal_code": null,
+      "geo_lat": null,
+      "geo_lon": null
+    }
+  }
+}

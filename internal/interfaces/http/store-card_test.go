@@ -13,6 +13,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	appbuyer "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	app "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -68,6 +69,7 @@ func TestStoreCardHTTP(t *testing.T) {
 	}
 	refresh()
 	handler := transport.NewHandler(transport.Deps{
+		Features:       appbuyer.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter()),
 		Registerer:     prometheus.NewRegistry(),
 		Logger:         slog.Default(),
 		Participants:   service,
@@ -163,7 +165,8 @@ func TestStoreCardHTTP(t *testing.T) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	wantKeys = strings.Fields("categories color initial isNew logo name offers rating showcase slogan slug tenantId")
+	headerKeys := "categories color initial isNew logo name offers rating showcase slogan slug subscribers tenantId"
+	wantKeys = strings.Fields(headerKeys)
 	if !reflect.DeepEqual(keys, wantKeys) {
 		t.Fatal(keys)
 	}

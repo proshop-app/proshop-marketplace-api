@@ -7,11 +7,18 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 const shopDefaultLimit = 20
+
+type shopHeaderJSON struct {
+	ports.ShopHeader
+	Subscribers int   `json:"subscribers"`
+	Subscribed  *bool `json:"subscribed,omitempty"`
+}
 
 type hideCardJSON struct {
 	Key    string `json:"key"`
@@ -66,9 +73,23 @@ func (h *participantHandlers) moderateCard(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *participantHandlers) shop(w http.ResponseWriter, r *http.Request) {
-	result, err := h.service.Shop(r.Context(), r.PathValue("slug"))
+	w.Header().Set("Vary", "Cookie, Authorization")
+	header, err := h.service.Shop(r.Context(), r.PathValue("slug"))
 	if err != nil {
 		writeError(w, r, err)
+		return
+	}
+	result := shopHeaderJSON{ShopHeader: header}
+	id := BuyerID(r.Context())
+	result.Subscribers, result.Subscribed, err = h.buyerFeatures.Subscribers(r.Context(), header.TenantID, id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	if id != "" {
+		w.Header().Set("Cache-Control", "private, no-store")
+		writeJSON(w, http.StatusOK, result)
 		return
 	}
 	writeShopJSON(w, r, result)

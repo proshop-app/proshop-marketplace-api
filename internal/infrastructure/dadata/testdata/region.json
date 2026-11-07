@@ -1,0 +1,17 @@
+{
+  "location": {
+    "value": "Регион",
+    "unrestricted_value": "Регион",
+    "data": {
+      "country": "Россия",
+      "country_iso_code": "RU",
+      "region": "Регион",
+      "region_with_type": "Регион",
+      "region_iso_code": "RU-AD",
+      "city": null,
+      "postal_code": null,
+      "geo_lat": null,
+      "geo_lon": null
+    }
+  }
+}

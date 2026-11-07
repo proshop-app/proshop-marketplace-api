@@ -21,6 +21,7 @@ tags:
   - name: service
   - name: taxonomy
   - name: catalog
+  - name: buyer
   - name: auth
   - name: cart
   - name: delivery
@@ -34,6 +35,234 @@ tags:
       Все ответы несут schemaVersion и revision, поля только добавляются.
       Контракт — docs/reference.md.
 paths:
+  /api/v1/buyer/profile:
+    get:
+      tags: [buyer]
+      operationId: getBuyerProfile
+      summary: Профиль и число снижений цены
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      responses:
+        "200":
+          description: Ответ; Cache-Control private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuyerProfile"
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [buyer]
+      operationId: patchBuyerProfile
+      summary: Изменить профиль покупателя
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuyerProfilePatch"
+      responses:
+        "200":
+          description: Ответ; Cache-Control private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuyerProfile"
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /api/v1/region:
+    get:
+      tags: [buyer]
+      operationId: getBuyerRegion
+      summary: Подсказка региона покупателя
+      security: [{}, { sessionCookie: [] }, { sessionBearer: [] }]
+      responses:
+        "200":
+          description: Ответ; Cache-Control private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuyerRegionResult"
+        "429": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/buyer/favorites:
+    get:
+      tags: [buyer]
+      operationId: listBuyerFavorites
+      summary: Страница избранных предложений
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Ответ; Cache-Control private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuyerFavorites"
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/buyer/price-watches:
+    get:
+      tags: [buyer]
+      operationId: listBuyerPriceWatches
+      summary: Наблюдения за ценами
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      responses:
+        "200":
+          description: Ответ; Cache-Control private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuyerPriceWatches"
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/buyer/subscriptions/shops:
+    get:
+      tags: [buyer]
+      operationId: listBuyerShopSubscriptions
+      summary: Публичные магазины в подписках
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      responses:
+        "200":
+          description: Ответ; Cache-Control private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuyerSubscriptions"
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /api/v1/buyer/favorites/{offerId}:
+    put:
+      tags: [buyer]
+      operationId: putBuyerFavorite
+      summary: Добавить предложение в избранное
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - name: offerId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Состояние сохранено; повтор идемпотентен
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [buyer]
+      operationId: deleteBuyerFavorite
+      summary: Удалить предложение из избранного
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - name: offerId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Состояние сохранено; повтор идемпотентен
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /api/v1/buyer/price-watches/{offerId}:
+    put:
+      tags: [buyer]
+      operationId: putBuyerPriceWatch
+      summary: Следить за ценой или изменить цель
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - name: offerId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuyerWatchTarget"
+      responses:
+        "204":
+          description: Состояние сохранено; повтор идемпотентен
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [buyer]
+      operationId: deleteBuyerPriceWatch
+      summary: Прекратить наблюдение за ценой
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - name: offerId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Состояние сохранено; повтор идемпотентен
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /api/v1/buyer/subscriptions/shops/{tenantId}:
+    put:
+      tags: [buyer]
+      operationId: putBuyerShopSubscription
+      summary: Подписаться на магазин
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Состояние сохранено; повтор идемпотентен
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [buyer]
+      operationId: deleteBuyerShopSubscription
+      summary: Отписаться от магазина
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Состояние сохранено; повтор идемпотентен
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/shops:
     get:
       tags: [catalog]
@@ -62,7 +291,10 @@ paths:
       tags: [catalog]
       operationId: getShop
       summary: Публичная шапка магазина
-      security: []
+      description: >-
+        Для вошедшего добавляется subscribed, ответ private, no-store. Анонимный ответ
+        публичный с ETag; недействительный вход считается анонимным. Vary — Cookie, Authorization.
+      security: [{}, { sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
         - { name: slug, in: path, required: true, schema: { type: string } }
       responses:
@@ -3841,6 +4073,140 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Participant" }
   schemas:
+    BuyerRegionChoice:
+      type: [object, "null"]
+      required: [code]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        name: { type: string, description: Игнорируется; берётся из справочника }
+    BuyerPickupChoice:
+      type: [object, "null"]
+      required: [provider, code]
+      additionalProperties: false
+      properties:
+        provider: { type: string }
+        code: { type: string }
+        address: { type: string, description: Игнорируется; берётся из справочника }
+        regionCode: { type: string, description: Игнорируется; берётся из справочника }
+    BuyerRegion:
+      type: [object, "null"]
+      required: [code, name]
+      properties:
+        code: { type: string, description: ISO 3166-2 из справочника доставки }
+        name: { type: string, description: Каноническое имя; входное имя игнорируется }
+    BuyerPickup:
+      type: [object, "null"]
+      required: [provider, code, address, regionCode]
+      properties:
+        provider: { type: string }
+        code: { type: string }
+        address: { type: string, description: Из справочника ПВЗ }
+        regionCode: { type: string }
+    BuyerNotifications:
+      type: object
+      additionalProperties: false
+      required: [priceDrops, shopNews]
+      properties:
+        priceDrops: { type: boolean }
+        shopNews: { type: boolean }
+    BuyerNotificationsPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        priceDrops: { type: boolean }
+        shopNews: { type: boolean }
+    BuyerProfilePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 200 }
+        region:
+          $ref: "#/components/schemas/BuyerRegionChoice"
+        pickupPoint:
+          $ref: "#/components/schemas/BuyerPickupChoice"
+        notifications:
+          $ref: "#/components/schemas/BuyerNotificationsPatch"
+    BuyerProfile:
+      type: object
+      additionalProperties: false
+      required: [name, region, pickupPoint, notifications, alerts]
+      properties:
+        name: { type: string, maxLength: 200 }
+        region:
+          $ref: "#/components/schemas/BuyerRegion"
+        pickupPoint:
+          $ref: "#/components/schemas/BuyerPickup"
+        notifications:
+          $ref: "#/components/schemas/BuyerNotifications"
+        alerts:
+          type: object
+          required: [priceDrops]
+          properties:
+            priceDrops:
+              type: [integer, "null"]
+              minimum: 0
+              description: Число снижений цены; null при недоступности ценовых контекстов платформы.
+    BuyerRegionResult:
+      type: object
+      required: [code, name, source]
+      properties:
+        code: { type: [string, "null"] }
+        name: { type: [string, "null"] }
+        source: { type: string, enum: [profile, pickup, ip, none] }
+    BuyerFavorite:
+      description: Снятое предложение сохраняет карточку, listed=false и нулевой остаток.
+      allOf:
+        - $ref: "#/components/schemas/Offer"
+        - type: object
+          required: [listed]
+          properties:
+            listed: { type: boolean }
+    BuyerFavorites:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BuyerFavorite"
+        total: { type: integer, minimum: 0 }
+    BuyerWatchTarget:
+      type: object
+      additionalProperties: false
+      properties:
+        targetPrice: { type: [integer, "null"], format: int64, minimum: 0 }
+    BuyerPriceWatch:
+      type: object
+      required: [offer, priceAtWatch, currentPrice, dropped]
+      properties:
+        offer:
+          $ref: "#/components/schemas/Offer"
+        priceAtWatch: { type: integer, format: int64, minimum: 0 }
+        currentPrice:
+          type: [integer, "null"]
+          format: int64
+          description: null у снятого предложения; dropped тогда false
+        targetPrice: { type: integer, format: int64, minimum: 0 }
+        dropped:
+          type: boolean
+          description: Текущая цена ниже priceAtWatch и, при заданной цели, не выше targetPrice.
+    BuyerPriceWatches:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BuyerPriceWatch"
+    BuyerSubscriptions:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShopCard"
     StoreCategory:
       type: object
       required: [id, name, count]
@@ -3879,9 +4245,11 @@ components:
         rank: { type: "null" }
     ShopHeader:
       type: object
-      required: [tenantId, slug, name, slogan, logo, initial, color, offers, isNew, categories, rating, showcase]
+      required: [tenantId, slug, name, slogan, logo, initial, color, offers, isNew, categories, rating, showcase, subscribers]
       properties:
         rating: { $ref: "#/components/schemas/Rating" }
+        subscribers: { type: integer, minimum: 0 }
+        subscribed: { type: boolean, description: Только для вошедшего покупателя }
         tenantId: { type: string }
         slug: { type: string }
         name: { type: string }

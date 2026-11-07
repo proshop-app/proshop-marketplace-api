@@ -6,6 +6,8 @@ import (
 	"context"
 	"testing"
 
+	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
@@ -278,5 +280,45 @@ func TestInterestsIncludeUnpaidOrders(t *testing.T) {
 		if err != nil || len(interests.Categories) != 1 || len(interests.Purchased) != 0 {
 			t.Fatal(status, interests, err)
 		}
+	}
+}
+
+func TestFavoriteCategoryProducesPersonalRecommendations(t *testing.T) {
+	pool := testPool(t)
+	uow := postgres.NewUnitOfWork(pool)
+	ctx := context.Background()
+	seedRecommendationTenant(t, uow, "t1")
+	seedBuyer(t, uow, buyerA, "79990000001")
+	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		return tx.BuyerFeatures().PutSaved(ctx, buyerA, ports.Favorites, ports.SavedOffer{
+			Offer: ports.OfferSnapshot{ID: "t1~p1"},
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repository := postgres.NewCatalogFeatures(pool)
+	interests, err := repository.Interests(ctx, buyerA)
+	if err != nil || len(interests.Categories) != 1 || interests.Categories[0] != "c1" ||
+		len(interests.Purchased) != 0 {
+		t.Fatal(interests, err)
+	}
+	queries := appcatalog.NewQueries(uow, nil, fake.NewPlatform(), repository, repository, fake.NewClock(at(0)))
+	personal, err := queries.Recommend(ctx, appcatalog.RecommendationRequest{
+		Context: "home",
+		BuyerID: buyerA,
+		Limit:   20,
+	})
+	if err != nil || personal.Reason != "personal" || len(personal.Items) != 2 {
+		t.Fatal(personal, err)
+	}
+	found := false
+	for _, item := range personal.Items {
+		if item.Offer.CategoryID != "c1" {
+			t.Fatal(item)
+		}
+		found = found || item.Offer.ID == "t1~p1"
+	}
+	if !found {
+		t.Fatal("избранное ошибочно исключено как купленное")
 	}
 }

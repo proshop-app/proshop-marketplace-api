@@ -2,7 +2,9 @@ package http
 
 import (
 	"os"
+	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -195,5 +197,89 @@ func TestOpenAPIShopShowcaseAndOrderSeller(t *testing.T) {
 	properties := seller["properties"].(map[string]any)
 	if len(properties) != 2 || properties["slug"] == nil || properties["name"] == nil {
 		t.Fatal(properties)
+	}
+}
+
+func TestOpenAPIBuyerSchemas(t *testing.T) {
+	doc, _ := loadSpec(t)
+	schemas := doc.Components["schemas"]
+	for _, name := range []string{"BuyerProfile", "BuyerFavorites", "BuyerPriceWatches", "BuyerSubscriptions"} {
+		if _, ok := schemas[name]; !ok {
+			t.Fatalf("нет схемы %s", name)
+		}
+	}
+	favorite := schemas["BuyerFavorite"].(map[string]any)["allOf"].([]any)
+	if favorite[0].(map[string]any)["$ref"] != "#/components/schemas/Offer" {
+		t.Fatal("нет полей Offer")
+	}
+	properties := favorite[1].(map[string]any)["properties"].(map[string]any)
+	if properties["listed"].(map[string]any)["type"] != "boolean" {
+		t.Fatal("нет listed")
+	}
+	offer := schemas["Offer"].(map[string]any)["properties"].(map[string]any)
+	if offer["available"].(map[string]any)["type"] != "integer" {
+		t.Fatal("остаток должен быть целым")
+	}
+	header := schemas["ShopHeader"].(map[string]any)["properties"].(map[string]any)
+	if header["subscribers"] == nil || header["subscribed"] == nil {
+		t.Fatal("нет подписчиков в шапке")
+	}
+}
+
+func TestOpenAPIBuyerContractFields(t *testing.T) {
+	doc, _ := loadSpec(t)
+	schemas := doc.Components["schemas"]
+	header := schemas["ShopHeader"].(map[string]any)
+	required := header["required"].([]any)
+	for _, name := range []string{"rating", "showcase", "subscribers"} {
+		if !slices.Contains(required, any(name)) {
+			t.Fatalf("ShopHeader.required: нет %s", name)
+		}
+	}
+	if slices.Contains(required, any("subscribed")) {
+		t.Fatal("subscribed обязателен для гостя")
+	}
+	profile := schemas["BuyerProfile"].(map[string]any)["properties"].(map[string]any)
+	alerts := profile["alerts"].(map[string]any)
+	if !slices.Contains(alerts["required"].([]any), any("priceDrops")) {
+		t.Fatal(alerts)
+	}
+	drops := alerts["properties"].(map[string]any)["priceDrops"].(map[string]any)
+	if !reflect.DeepEqual(drops["type"], []any{"integer", "null"}) || drops["minimum"] != 0 {
+		t.Fatal(drops)
+	}
+	for _, name := range []string{"BuyerNotifications", "BuyerNotificationsPatch"} {
+		schema := schemas[name].(map[string]any)
+		if schema["additionalProperties"] != false {
+			t.Fatal(schema)
+		}
+		for _, property := range schema["properties"].(map[string]any) {
+			if _, ok := property.(map[string]any)["default"]; ok {
+				t.Fatal("PATCH не должен подставлять default")
+			}
+		}
+		if name == "BuyerNotifications" {
+			if !reflect.DeepEqual(schema["required"], []any{"priceDrops", "shopNews"}) {
+				t.Fatal(schema)
+			}
+		} else if schema["required"] != nil {
+			t.Fatal(schema)
+		}
+	}
+	patch := schemas["BuyerProfilePatch"].(map[string]any)["properties"].(map[string]any)
+	if patch["notifications"].(map[string]any)["$ref"] != "#/components/schemas/BuyerNotificationsPatch" ||
+		profile["notifications"].(map[string]any)["$ref"] != "#/components/schemas/BuyerNotifications" {
+		t.Fatal("схемы уведомлений перепутаны")
+	}
+	for path, method := range map[string]string{
+		"/api/v1/buyer/favorites":               "get",
+		"/api/v1/buyer/price-watches":           "get",
+		"/api/v1/buyer/favorites/{offerId}":     "put",
+		"/api/v1/buyer/price-watches/{offerId}": "put",
+	} {
+		operation := doc.Paths[path][method].(map[string]any)
+		if operation["responses"].(map[string]any)["503"] == nil {
+			t.Fatal(path, "нет 503")
+		}
 	}
 }

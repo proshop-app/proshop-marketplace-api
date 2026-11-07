@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
-
 	"github.com/prometheus/client_golang/prometheus"
 
 	appbuyer "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
@@ -22,6 +20,8 @@ import (
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 )
@@ -36,6 +36,7 @@ type Check struct {
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
+	Features       *appbuyer.Features
 	Promotion      *apppromotion.Service
 	ServerAPIToken string
 	Moderation     *appmoderation.Service
@@ -81,7 +82,11 @@ func routes(deps Deps) []route {
 	moderation := &moderationHandlers{service: deps.Moderation}
 	catalog := &catalogHandlers{queries: deps.Catalog}
 	taxonomy := &taxonomyHandlers{service: deps.Taxonomy, catalog: deps.Catalog}
-	participants := &participantHandlers{service: deps.Participants}
+	participants := &participantHandlers{service: deps.Participants, buyerFeatures: deps.Features}
+	features := &buyerFeatureHandlers{
+		service:    deps.Features,
+		trustProxy: deps.TrustProxy,
+	}
 	auth := &authHandlers{auth: deps.Auth, trustProxy: deps.TrustProxy}
 	carts := &cartHandlers{carts: deps.Carts}
 	shipping := &deliveryHandlers{directory: deps.Directory}
@@ -101,8 +106,45 @@ func routes(deps Deps) []route {
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
+		{http.MethodGet, "/api/v1/buyer/profile", privateBuyer(signedIn(features.profile))},
+		{http.MethodPatch, "/api/v1/buyer/profile", privateBuyer(signedIn(features.patchProfile))},
+		{http.MethodGet, "/api/v1/buyer/favorites", privateBuyer(signedIn(features.favorites))},
+		{
+			http.MethodPut,
+			"/api/v1/buyer/favorites/{offerId}",
+			privateBuyer(signedIn(features.putSaved(ports.Favorites))),
+		},
+		{
+			http.MethodDelete,
+			"/api/v1/buyer/favorites/{offerId}",
+			privateBuyer(signedIn(features.deleteSaved(ports.Favorites))),
+		},
+		{http.MethodGet, "/api/v1/buyer/price-watches", privateBuyer(signedIn(features.watches))},
+		{
+			http.MethodPut,
+			"/api/v1/buyer/price-watches/{offerId}",
+			privateBuyer(signedIn(features.putSaved(ports.PriceWatches))),
+		},
+		{
+			http.MethodDelete,
+			"/api/v1/buyer/price-watches/{offerId}",
+			privateBuyer(signedIn(features.deleteSaved(ports.PriceWatches))),
+		},
+		{http.MethodGet, "/api/v1/buyer/subscriptions/shops", privateBuyer(signedIn(features.subscriptions))},
+		{
+			http.MethodPut,
+			"/api/v1/buyer/subscriptions/shops/{tenantId}",
+			privateBuyer(signedIn(features.putSubscription)),
+		},
+		{
+			http.MethodDelete,
+			"/api/v1/buyer/subscriptions/shops/{tenantId}",
+			privateBuyer(signedIn(features.deleteSubscription)),
+		},
+		{http.MethodGet, "/api/v1/region", publicBuyer(deps.Auth, features.region)},
+
 		{http.MethodGet, "/api/v1/shops", participants.shops},
-		{http.MethodGet, "/api/v1/shops/{slug}", participants.shop},
+		{http.MethodGet, "/api/v1/shops/{slug}", publicBuyer(deps.Auth, participants.shop)},
 		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/store-card", machine(participants.storeCard)},
 		{
 			http.MethodPost,

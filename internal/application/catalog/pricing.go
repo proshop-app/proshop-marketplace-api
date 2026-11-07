@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"slices"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -15,11 +16,27 @@ func (q *Queries) priceContexts(
 	buyerID ids.UUID,
 	tenantFilter string,
 ) (map[ids.TenantID]string, error) {
+	var tenants []ids.TenantID
+	if tenantFilter != "" {
+		tenants = []ids.TenantID{ids.TenantID(tenantFilter)}
+	}
+	return PriceContexts(ctx, q.uow, q.platform, buyerID, tenants)
+}
+
+// PriceContexts выбирает контексты публичных магазинов из того же источника, что каталог.
+// nil-фильтр выбирает все магазины, пустой список — ни одного.
+func PriceContexts(
+	ctx context.Context,
+	uow ports.UnitOfWork,
+	pricing ports.CatalogPricing,
+	buyerID ids.UUID,
+	tenantFilter []ids.TenantID,
+) (map[ids.TenantID]string, error) {
 	if buyerID == "" {
 		return nil, nil
 	}
 	tenants := []ids.TenantID{}
-	err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		for offset := 0; ; offset += priceContextBatchSize {
 			list, _, err := tx.Participants().List(ctx, participant.Page{
 				Limit:  priceContextBatchSize,
@@ -30,7 +47,7 @@ func (q *Queries) priceContexts(
 			}
 			for _, seller := range list {
 				state := seller.State()
-				if !state.Enabled || (tenantFilter != "" && string(state.TenantID) != tenantFilter) {
+				if !state.Enabled || (tenantFilter != nil && !slices.Contains(tenantFilter, state.TenantID)) {
 					continue
 				}
 				tenant, err := tx.Registry().Get(ctx, state.TenantID)
@@ -52,7 +69,7 @@ func (q *Queries) priceContexts(
 	contexts := make(map[ids.TenantID]string, len(tenants))
 	for start := 0; start < len(tenants); start += priceContextBatchSize {
 		end := min(start+priceContextBatchSize, len(tenants))
-		batch, err := q.platform.PriceContexts(ctx, buyerID, tenants[start:end])
+		batch, err := pricing.PriceContexts(ctx, buyerID, tenants[start:end])
 		if err != nil {
 			return nil, err
 		}

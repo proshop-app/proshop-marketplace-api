@@ -11,6 +11,8 @@ import (
 )
 
 const (
+	batchPublicCards = `SELECT card FROM store_cards WHERE tenant_id = ANY($1) AND page_public
+		ORDER BY array_position($1::text[], tenant_id)`
 	lockStoreSummary = `SELECT pg_advisory_xact_lock(hashtextextended($1, 38))`
 	saveStoreSummary = `
 		INSERT INTO store_cards (
@@ -242,4 +244,30 @@ func (r *StoreCards) UpdateProfile(ctx context.Context, p *participant.Participa
 		string(empty),
 	)
 	return err
+}
+
+// BatchPublic сохраняет порядок подписок и исключает скрытые страницы.
+func (r *StoreCards) BatchPublic(ctx context.Context, tenants []ids.TenantID) ([]ports.ShopCard, error) {
+	keys := make([]string, len(tenants))
+	for i, tenant := range tenants {
+		keys[i] = string(tenant)
+	}
+	rows, err := r.q.Query(ctx, batchPublicCards, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []ports.ShopCard{}
+	for rows.Next() {
+		var raw []byte
+		var card ports.ShopCard
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(raw, &card); err != nil {
+			return nil, err
+		}
+		result = append(result, card)
+	}
+	return result, rows.Err()
 }

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	appbuyer "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -54,7 +55,8 @@ type participantListJSON struct {
 }
 
 type participantHandlers struct {
-	service *appparticipant.Service
+	buyerFeatures *appbuyer.Features
+	service       *appparticipant.Service
 }
 
 type createParticipantJSON struct {

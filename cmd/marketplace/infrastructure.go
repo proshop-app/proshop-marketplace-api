@@ -13,8 +13,10 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/cdek"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/dadata"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/opensearch"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/smsru"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/yandex"
@@ -146,4 +148,12 @@ func holder() string {
 	}
 
 	return fmt.Sprintf("%s:%d", host, os.Getpid())
+}
+
+func (s *server) geoIP() ports.GeoIP {
+	if s.cfg.DaData.APIKey == "" {
+		return nil
+	}
+	source := dadata.New(s.cfg.DaData.APIKey, dadata.Endpoint)
+	return redis.NewGeoIP(s.cache, source, keyPrefix, s.cfg.DaData.CacheSecret)
 }

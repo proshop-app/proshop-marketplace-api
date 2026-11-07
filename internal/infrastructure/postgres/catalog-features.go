@@ -14,6 +14,9 @@ const (
 	recommendationCandidateMultiplier = 10
 	selectBuyerInterests              = `
 		WITH interests AS (
+			SELECT tenant_id, product_id, false AS purchased
+			FROM buyer_favorites WHERE buyer_id = $1
+			UNION
 			SELECT l.tenant_id, l.product_id, false AS purchased
 			FROM carts c JOIN cart_lines l ON l.cart_id = c.id
 			WHERE c.buyer_id = $1 AND c.expires_at > now()
@@ -90,7 +93,7 @@ type CatalogFeatures struct{ q querier }
 // NewCatalogFeatures подключает чтение без дополнительных вызовов на каждый товар.
 func NewCatalogFeatures(pool *pgxpool.Pool) *CatalogFeatures { return &CatalogFeatures{q: pool} }
 
-// Interests использует корзину и заказы, включая оформление; избранное добавляется реализацией порта после R1.
+// Interests использует избранное, корзину и заказы, включая оформление.
 func (r *CatalogFeatures) Interests(ctx context.Context, buyer ids.UUID) (ports.BuyerInterestSet, error) {
 	result := ports.BuyerInterestSet{Categories: []string{}, Purchased: []ids.OfferID{}}
 	rows, err := r.q.Query(ctx, selectBuyerInterests, string(buyer))

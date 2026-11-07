@@ -5,9 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
-
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -31,6 +30,8 @@ type OfferKey struct {
 
 // OfferStates — чтение проекции для индекса.
 type OfferStates interface {
+	// Batch читает проекции выбранных предложений одной пачкой.
+	Batch(context.Context, []ids.OfferID) ([]OfferState, error)
 	// StoreCardOffers — отмеченные к публикации товары для пересчёта сводки.
 	StoreCardOffers(context.Context, ids.TenantID, ids.ProductID, int) ([]OfferState, error)
 	// Offer — снимок одного предложения; товара нет — catalog.ErrProductNotFound.
