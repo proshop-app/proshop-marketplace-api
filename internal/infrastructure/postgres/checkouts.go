@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -44,7 +45,7 @@ const (
 
 	groupColumns = `
 		tenant_id, external_checkout_id, lines, goods, quote_status, quote_reason, delivery_cost,
-		subsidy, buyer_delivery, min_days, max_days, quote_expires_at, order_progress`
+		subsidy, buyer_delivery, min_days, max_days, quote_expires_at, order_progress, tracking`
 
 	selectCheckoutGroups = `
 		SELECT ` + groupColumns + `
@@ -55,7 +56,7 @@ const (
 
 	insertCheckoutGroup = `
 		INSERT INTO checkout_groups (checkout_id, ` + groupColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
 
 	updateCheckoutGroup = `
 		UPDATE checkout_groups
@@ -70,7 +71,8 @@ const (
 			min_days = $11,
 			max_days = $12,
 			quote_expires_at = $13,
-			order_progress = $14
+			order_progress = $14,
+			tracking = $15
 		WHERE checkout_id = $1 AND tenant_id = $2`
 )
 
@@ -81,10 +83,11 @@ type Checkouts struct {
 
 // lineJSON — позиция снимка в колонке jsonb; цена — копейки.
 type lineJSON struct {
-	ProductID string `json:"productId"`
-	Name      string `json:"name"`
-	Quantity  int    `json:"quantity"`
-	Price     int64  `json:"price"`
+	Discounts []cart.Discount `json:"discounts,omitempty"`
+	ProductID string          `json:"productId"`
+	Name      string          `json:"name"`
+	Quantity  int             `json:"quantity"`
+	Price     int64           `json:"price"`
 }
 
 // selectionJSON — выбранная доставка в колонке jsonb.
@@ -107,6 +110,7 @@ type checkoutRow struct {
 
 // groupRow — строка группы; поля расчёта пусты, пока доставку не считали.
 type groupRow struct {
+	tracking                     []byte
 	group                        checkout.Group
 	tenantID                     string
 	lines                        []byte
@@ -363,6 +367,7 @@ func (r *groupRow) targets() []any {
 		&r.maxDays,
 		&r.expiresAt,
 		&r.orderProgress,
+		&r.tracking,
 	}
 }
 
@@ -370,6 +375,14 @@ func (r *groupRow) checkoutGroup() (checkout.Group, error) {
 	group := r.group
 	if err := json.Unmarshal(r.orderProgress, &group); err != nil {
 		return checkout.Group{}, err
+	}
+	if len(r.tracking) > 0 {
+		// Tracking исключён из order_progress, поэтому читается отдельно.
+		var tracking *checkout.Tracking
+		if err := json.Unmarshal(r.tracking, &tracking); err != nil {
+			return checkout.Group{}, err
+		}
+		group.Tracking = tracking
 	}
 	group.TenantID = ids.TenantID(r.tenantID)
 	group.Goods = money.FromKopecks(r.goods)
@@ -381,10 +394,11 @@ func (r *groupRow) checkoutGroup() (checkout.Group, error) {
 
 	for _, doc := range docs {
 		line := checkout.Line{
-			Offer:    ids.OfferID{Tenant: group.TenantID, Product: ids.ProductID(doc.ProductID)},
-			Name:     doc.Name,
-			Quantity: doc.Quantity,
-			Price:    money.FromKopecks(doc.Price),
+			Offer:     ids.OfferID{Tenant: group.TenantID, Product: ids.ProductID(doc.ProductID)},
+			Name:      doc.Name,
+			Quantity:  doc.Quantity,
+			Price:     money.FromKopecks(doc.Price),
+			Discounts: doc.Discounts,
 		}
 
 		group.Lines = append(group.Lines, line)
@@ -449,6 +463,7 @@ func groupArgs(group checkout.Group) ([]any, error) {
 			Name:      line.Name,
 			Quantity:  line.Quantity,
 			Price:     line.Price.Kopecks(),
+			Discounts: line.Discounts,
 		}
 
 		docs = append(docs, doc)
@@ -467,7 +482,11 @@ func groupArgs(group checkout.Group) ([]any, error) {
 	}
 
 	args = append(args, quoteArgs(group.Quote)...)
-	return append(args, encodeOrderProgress(group)), nil
+	tracking, err := jsonValue(group.Tracking, "")
+	if err != nil {
+		return nil, err
+	}
+	return append(args, encodeOrderProgress(group), jsonArg([]byte(tracking))), nil
 }
 
 // quoteArgs — поля расчёта доставки; суммы и сроки есть только у доступного расчёта.

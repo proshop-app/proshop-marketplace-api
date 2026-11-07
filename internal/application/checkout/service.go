@@ -4,6 +4,7 @@ package checkout
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +38,7 @@ type Config struct {
 
 // Service — покупка покупателя.
 type Service struct {
+	carts    ports.CartVerifier
 	uow      ports.UnitOfWork
 	index    ports.OfferIndex
 	platform ports.PlatformAPI
@@ -47,9 +49,18 @@ type Service struct {
 }
 
 // NewService — сценарии покупки.
-func NewService(uow ports.UnitOfWork, index ports.OfferIndex, platform ports.PlatformAPI, points PointLookup,
-	identities ports.IDs, clock ports.Clock, config Config) *Service {
+func NewService(
+	uow ports.UnitOfWork,
+	index ports.OfferIndex,
+	platform ports.PlatformAPI,
+	points PointLookup,
+	carts ports.CartVerifier,
+	identities ports.IDs,
+	clock ports.Clock,
+	config Config,
+) *Service {
 	return &Service{
+		carts:    carts,
 		uow:      uow,
 		index:    index,
 		platform: platform,
@@ -72,6 +83,7 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 	}
 
 	var lines []checkout.Line
+	codes := make(map[ids.TenantID]string)
 
 	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Carts().ByBuyer(ctx, buyerID)
@@ -85,6 +97,11 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 			return checkout.ErrEmpty
 		}
 
+		for tenant, promo := range c.State().Promos {
+			if promo.Valid || promo.Message == nil {
+				codes[tenant] = promo.Code
+			}
+		}
 		for _, line := range c.Lines() {
 			if line.Issue == cart.IssueUnavailable || line.Issue == cart.IssueNotEnoughStock {
 				message := "в корзине есть недоступные позиции: " + line.Offer.String()
@@ -94,7 +111,13 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 
 			lines = append(
 				lines,
-				checkout.Line{Offer: line.Offer, Name: line.Name, Quantity: line.Quantity, Price: line.Price},
+				checkout.Line{
+					Offer:     line.Offer,
+					Name:      line.Name,
+					Quantity:  line.Quantity,
+					Price:     line.Price,
+					Discounts: line.Discounts,
+				},
 			)
 		}
 
@@ -113,6 +136,24 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 		return checkout.State{}, err
 	}
 
+	if _, err := created.SetPromoCodes(codes, s.clock.Now()); err != nil {
+		return checkout.State{}, err
+	}
+	checks, err := s.check(ctx, buyerID, created.Groups())
+	if err != nil {
+		return checkout.State{}, s.verifyOnPromoError(ctx, buyerID, err)
+	}
+	changed, err := created.Reprice(checks, s.clock.Now())
+	if err != nil {
+		if errors.Is(err, checkout.ErrOfferUnavailable) {
+			s.verifyCart(ctx, buyerID)
+		}
+		return checkout.State{}, err
+	}
+	if changed {
+		s.verifyCart(ctx, buyerID)
+		return checkout.State{}, checkout.ErrChanged
+	}
 	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		return tx.Checkouts().Add(ctx, created)
 	})
@@ -197,21 +238,29 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 
 	checks, err := s.check(ctx, buyerID, c.Groups())
 	if err != nil {
-		return checkout.State{}, err
+		return checkout.State{}, s.verifyOnPromoError(ctx, buyerID, err)
 	}
 
 	var changed bool
+	expected := c.State().Version
 
 	repriced, err := s.update(ctx, buyerID, checkoutID, func(c *checkout.Checkout, now time.Time) error {
+		if c.State().Version != expected {
+			return checkout.ErrConflict
+		}
 		var err error
 		changed, err = c.Reprice(checks, now)
 
 		return err
 	})
 	if err != nil {
+		if errors.Is(err, checkout.ErrOfferUnavailable) {
+			s.verifyCart(ctx, buyerID)
+		}
 		return checkout.State{}, err
 	}
 	if changed {
+		s.verifyCart(ctx, buyerID)
 		return repriced, checkout.ErrChanged
 	}
 
@@ -378,6 +427,9 @@ func (s *Service) check(
 
 	for _, group := range groups {
 		cartGroup := cart.Group{TenantID: group.TenantID}
+		if group.PromoCode != "" {
+			cartGroup.PromoCode = &cart.PromoCode{Code: group.PromoCode}
+		}
 		for _, line := range group.Lines {
 			cartGroup.Lines = append(
 				cartGroup.Lines,
@@ -388,16 +440,25 @@ func (s *Service) check(
 		cartGroups = append(cartGroups, cartGroup)
 	}
 
-	answers, err := appcart.CheckGroups(ctx, s.platform, buyerID, cartGroups)
+	results, err := appcart.PriceGroups(ctx, s.platform, buyerID, cartGroups)
 	if err != nil {
 		return nil, err
 	}
-	checks := make(map[ids.OfferID]checkout.PriceCheck, len(answers))
-	for _, answer := range answers {
-		checks[answer.Offer] = checkout.PriceCheck{
-			Exists:    answer.Exists,
-			Price:     answer.Price,
-			Available: answer.Available,
+	checks := make(map[ids.OfferID]checkout.PriceCheck)
+	for tenant, result := range results {
+		if result.PromoCode != nil && !result.PromoCode.Valid {
+			if result.PromoCode.Message != nil {
+				return nil, checkout.ErrPromoInvalid.WithMessage(*result.PromoCode.Message)
+			}
+			return nil, checkout.ErrPromoInvalid
+		}
+		for _, item := range result.Items {
+			checks[ids.OfferID{Tenant: tenant, Product: item.ProductID}] = checkout.PriceCheck{
+				Exists:    item.Exists,
+				Price:     item.Price,
+				Available: item.Available,
+				Discounts: result.Discounts[item.ProductID],
+			}
 		}
 	}
 
@@ -502,3 +563,17 @@ func joinTenants(tenants []ids.TenantID) string {
 
 // DeliverySubsidyMinPercent — действующий порог для админки магазина.
 func (s *Service) DeliverySubsidyMinPercent() int { return s.config.DeliverySubsidyMinPercent }
+
+func (s *Service) verifyOnPromoError(ctx context.Context, buyerID ids.UUID, cause error) error {
+	if errors.Is(cause, checkout.ErrPromoInvalid) {
+		s.verifyCart(ctx, buyerID)
+	}
+	return cause
+}
+
+// Перепроверка корзины вторична: её сбой не отменяет результат операции покупки.
+func (s *Service) verifyCart(ctx context.Context, buyerID ids.UUID) {
+	if _, err := s.carts.Verify(ctx, buyerID); err != nil {
+		slog.Warn("не удалось перепроверить корзину", "buyerId", string(buyerID), "error", err)
+	}
+}

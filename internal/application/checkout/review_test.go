@@ -141,19 +141,19 @@ func TestPartialCartReturnDoesNotBlockShippedOrPayment(t *testing.T) {
 		ExpiresAt: t0.Add(24 * time.Hour),
 		Lines:     []cart.Line{{Offer: p1, Name: "Товар", Price: money.FromKopecks(199000), Quantity: 998}},
 	})
-	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupCancelled, "payment_expired", "")
+	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupCancelled, "payment_expired")
 	if _, err := e.service.Refresh(ctx, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.service.Pay(ctx, buyerID, c.ID, "t2"); err != nil {
 		t.Fatal(err)
 	}
-	e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupPaid, "", "")
+	e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupPaid, "")
 	e.clock.Advance(30 * time.Second)
 	if _, err := e.service.Refresh(ctx, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupShipped, "", "TRACK")
+	e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupShipped, "")
 	e.clock.Advance(10 * time.Minute)
 	if err := e.service.Resume(ctx); err != nil {
 		t.Fatal(err)
@@ -198,7 +198,7 @@ func TestFailedPollBackoffAndRecovery(t *testing.T) {
 		}
 		firstID := state.Groups[0].OrderID
 		if invalidStatus {
-			e.platform.SetOrderStatus(firstID, "unknown_status", "", "")
+			e.platform.SetOrderStatus(firstID, "unknown_status", "")
 		} else {
 			e.platform.FailPoll("t1", errors.New("сервер не отвечает"))
 		}
@@ -234,7 +234,7 @@ func TestFailedPollBackoffAndRecovery(t *testing.T) {
 			t.Fatal(link)
 		}
 		e.platform.FailPoll("t1", nil)
-		e.platform.SetOrderStatus(firstID, checkout.GroupPaid, "", "")
+		e.platform.SetOrderStatus(firstID, checkout.GroupPaid, "")
 		e.clock.Advance(checkout.OrderSlowPoll)
 		state, err = e.service.Refresh(ctx, buyerID, c.ID)
 		if err != nil || state.Groups[0].Status != checkout.GroupPaid || state.Groups[0].PollFailures != 0 {

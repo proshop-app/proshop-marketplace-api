@@ -51,7 +51,7 @@ func encodeOrderContext(s checkout.State) string {
 }
 
 func encodeOrderProgress(g checkout.Group) string {
-	g.Lines, g.Quote = nil, nil
+	g.Lines, g.Quote, g.Tracking = nil, nil, nil
 	raw, _ := json.Marshal(g)
 	return string(raw)
 }

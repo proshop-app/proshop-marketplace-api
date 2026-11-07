@@ -21,6 +21,7 @@ func TestPublicDeliverySettings(t *testing.T) {
 			nil,
 			nil,
 			nil,
+			nil,
 			&fake.IDs{},
 			fake.NewClock(t0),
 			appcheckout.Config{DeliverySubsidyMinPercent: percent},

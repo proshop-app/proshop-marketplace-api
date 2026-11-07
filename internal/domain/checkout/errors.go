@@ -68,4 +68,6 @@ var (
 	)
 	// ErrConflict — покупку изменили параллельно.
 	ErrConflict = errs.New(errs.Conflict, "checkout.version_conflict", "покупка изменена параллельно, повторите")
+	// ErrPromoInvalid — сервер отклонил промокод при оформлении покупки.
+	ErrPromoInvalid = errs.New(errs.Invalid, "checkout.promo_invalid", "промокод больше не действует: измените корзину")
 )

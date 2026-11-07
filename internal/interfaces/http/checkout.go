@@ -6,11 +6,18 @@ import (
 	"time"
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
+
+type trackingJSON struct {
+	Carrier string  `json:"carrier"`
+	Number  *string `json:"number"`
+	URL     string  `json:"url"`
+}
 
 type checkoutLineJSON struct {
 	OfferID   string `json:"offerId"`
@@ -34,6 +41,7 @@ type quoteJSON struct {
 
 type checkoutGroupJSON struct {
 	Seller             *participant.Seller    `json:"seller"`
+	Tracking           *trackingJSON          `json:"tracking"`
 	TenantID           string                 `json:"tenantId"`
 	ExternalCheckoutID string                 `json:"externalCheckoutId"`
 	Lines              []checkoutLineJSON     `json:"lines"`
@@ -46,7 +54,6 @@ type checkoutGroupJSON struct {
 	PaymentOrder       int                    `json:"paymentOrder"`
 	DeliveryPrice      int64                  `json:"deliveryPrice"`
 	Reason             string                 `json:"reason,omitempty"`
-	Track              string                 `json:"track,omitempty"`
 	CurrentPrices      []checkout.PriceChange `json:"currentPrices,omitempty"`
 	ReturnFailed       bool                   `json:"returnFailed"`
 	ReturnReason       string                 `json:"returnReason,omitempty"`
@@ -134,7 +141,7 @@ func toCheckoutJSON(state checkout.State, next *checkout.PaymentLink) (checkoutJ
 			PaymentOrder:       group.PaymentOrder,
 			DeliveryPrice:      group.DeliveryPrice.Kopecks(),
 			Reason:             group.Reason,
-			Track:              group.Track,
+			Tracking:           trackingResponse(group.Tracking),
 			CurrentPrices:      group.CurrentPrices,
 			ReturnFailed:       group.ReturnFailed,
 			ReturnReason:       group.ReturnReason,
@@ -160,7 +167,7 @@ func toCheckoutJSON(state checkout.State, next *checkout.PaymentLink) (checkoutJ
 			g.ExpiresAt = &expires
 		}
 		for _, line := range group.Lines {
-			amount, err := line.Price.MulRatio(int64(line.Quantity), 1)
+			amount, err := cart.DiscountedAmount(line.Price, line.Quantity, line.Discounts)
 			if err != nil {
 				return checkoutJSON{}, err
 			}
@@ -303,4 +310,11 @@ func setGroupSellers(body *checkoutJSON, sellers map[ids.TenantID]*participant.S
 	for i := range body.Groups {
 		body.Groups[i].Seller = sellers[ids.TenantID(body.Groups[i].TenantID)]
 	}
+}
+
+func trackingResponse(value *checkout.Tracking) *trackingJSON {
+	if value == nil {
+		return nil
+	}
+	return &trackingJSON{Carrier: value.Carrier, Number: value.Number, URL: value.URL}
 }

@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -130,7 +131,8 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 			return err
 		}
 		g := loaded.Groups()[0]
-		if !g.ReturnFailed || g.CartReturned || len(g.ReturnRemaining) != 1 || g.ReturnRemaining[0] != line {
+		if !g.ReturnFailed || g.CartReturned || len(g.ReturnRemaining) != 1 ||
+			!reflect.DeepEqual(g.ReturnRemaining[0], line) {
 			return fmt.Errorf("остаток возврата потерян: %+v", g)
 		}
 		due := checkout.Filter{BuyerID: buyerA, OrdersOnly: true, Limit: 100, WorkDueAt: now}

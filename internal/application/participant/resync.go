@@ -39,17 +39,6 @@ func NewResyncingPlatform(platform ports.PlatformAPI, uow ports.UnitOfWork, cloc
 	return &ResyncingPlatform{PlatformAPI: platform, uow: uow, clock: clock}
 }
 
-// CheckItems — цена и наличие позиций у магазина.
-func (p *ResyncingPlatform) CheckItems(
-	ctx context.Context,
-	tenantID ids.TenantID,
-	request ports.ItemsCheckRequest,
-) ([]ports.ItemCheck, error) {
-	checks, err := p.PlatformAPI.CheckItems(ctx, tenantID, request)
-
-	return checks, p.resync(ctx, tenantID, err)
-}
-
 // QuoteDelivery — стоимость и срок доставки по договору магазина.
 func (p *ResyncingPlatform) QuoteDelivery(
 	ctx context.Context,
@@ -101,4 +90,14 @@ func (p *ResyncingPlatform) CreateOrder(
 ) (checkout.SellerOrder, error) {
 	order, err := p.PlatformAPI.CreateOrder(ctx, tenantID, request)
 	return order, p.resync(ctx, tenantID, err)
+}
+
+// PriceGroup сверяет настройки и при отказе расчёта скидок группы.
+func (p *ResyncingPlatform) PriceGroup(
+	ctx context.Context,
+	tenant ids.TenantID,
+	request ports.GroupPricingRequest,
+) (ports.GroupPricing, error) {
+	result, err := p.PlatformAPI.PriceGroup(ctx, tenant, request)
+	return result, p.resync(ctx, tenant, err)
 }

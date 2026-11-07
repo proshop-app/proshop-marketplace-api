@@ -43,6 +43,7 @@ type Offer struct {
 // Line — строка корзины: предложение со снимком цены на момент добавления
 // или последней перепроверки.
 type Line struct {
+	Discounts []Discount
 	Offer     ids.OfferID
 	Name      string
 	Quantity  int
@@ -62,12 +63,14 @@ type Check struct {
 
 // Group — строки одного магазина.
 type Group struct {
-	TenantID ids.TenantID
-	Lines    []Line
+	PromoCode *PromoCode
+	TenantID  ids.TenantID
+	Lines     []Line
 }
 
 // State — плоский снимок корзины.
 type State struct {
+	Promos    map[ids.TenantID]PromoCode
 	ID        ids.UUID
 	BuyerID   ids.UUID
 	Lines     []Line
@@ -92,13 +95,19 @@ func New(id, buyerID ids.UUID, now time.Time, ttl time.Duration) *Cart {
 
 // Restore поднимает корзину из хранилища.
 func Restore(state State) *Cart {
-	return &Cart{state: state, originVersion: state.Version}
+	c := &Cart{state: state, originVersion: state.Version}
+	c.state = c.State()
+	return c
 }
 
 // State — снимок для хранения.
 func (c *Cart) State() State {
 	state := c.state
+	state.Promos = ClonePromos(c.state.Promos)
 	state.Lines = append([]Line(nil), c.state.Lines...)
+	for i := range state.Lines {
+		state.Lines[i].Discounts = append([]Discount(nil), state.Lines[i].Discounts...)
+	}
 
 	return state
 }
@@ -113,7 +122,7 @@ func (c *Cart) MarkSaved() { c.originVersion = c.state.Version }
 func (c *Cart) ID() ids.UUID { return c.state.ID }
 
 // Lines — строки по порядку добавления.
-func (c *Cart) Lines() []Line { return append([]Line(nil), c.state.Lines...) }
+func (c *Cart) Lines() []Line { return c.State().Lines }
 
 // Expired — корзину не трогали дольше срока.
 func (c *Cart) Expired(now time.Time) bool { return !now.Before(c.state.ExpiresAt) }
@@ -125,6 +134,7 @@ func (c *Cart) ResetIfExpired(now time.Time, ttl time.Duration) bool {
 	}
 
 	c.state.Lines = nil
+	c.state.Promos = nil
 	c.touch(now, ttl)
 
 	return true
@@ -195,7 +205,16 @@ func (c *Cart) Remove(offerID ids.OfferID, now time.Time, ttl time.Duration) boo
 		return false
 	}
 
+	tenant := c.state.Lines[index].Offer.Tenant
 	c.state.Lines = append(c.state.Lines[:index], c.state.Lines[index+1:]...)
+	found := false
+	for _, line := range c.state.Lines {
+		found = found || line.Offer.Tenant == tenant
+	}
+	c.resetPromo(tenant)
+	if !found {
+		delete(c.state.Promos, tenant)
+	}
 	c.touch(now, ttl)
 
 	return true
@@ -249,12 +268,16 @@ func (c *Cart) Apply(checks []Check, now time.Time, ttl time.Duration) bool {
 // Groups — строки по магазинам в порядке идентификаторов магазинов.
 func (c *Cart) Groups() []Group {
 	byTenant := map[ids.TenantID]*Group{}
+	promos := ClonePromos(c.state.Promos)
 	var order []ids.TenantID
 
-	for _, line := range c.state.Lines {
+	for _, line := range c.Lines() {
 		group, ok := byTenant[line.Offer.Tenant]
 		if !ok {
 			group = &Group{TenantID: line.Offer.Tenant}
+			if promo, ok := promos[line.Offer.Tenant]; ok {
+				group.PromoCode = &promo
+			}
 			byTenant[line.Offer.Tenant] = group
 			order = append(order, line.Offer.Tenant)
 		}
@@ -292,7 +315,7 @@ func (c *Cart) Total() (money.Money, error) {
 
 // LineAmount — цена строки, умноженная на количество, сложением через Money.
 func LineAmount(line Line) (money.Money, error) {
-	return line.Price.MulRatio(int64(line.Quantity), 1)
+	return DiscountedAmount(line.Price, line.Quantity, line.Discounts)
 }
 
 func fits(offer Offer, quantity int) error {

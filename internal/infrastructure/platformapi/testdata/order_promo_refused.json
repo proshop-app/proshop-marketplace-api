@@ -1,0 +1,15 @@
+{
+  "ok": false,
+  "message": "Промокод больше не действует",
+  "status": 409,
+  "code": "MARKETPLACE_PROMO_CODE_INVALID",
+  "items": null,
+  "data": {
+    "promoCode": {
+      "code": "SAVE",
+      "valid": false,
+      "discount": 0,
+      "message": "промокод истёк"
+    }
+  }
+}

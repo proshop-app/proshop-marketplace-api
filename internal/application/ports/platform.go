@@ -27,12 +27,6 @@ type ItemRequest struct {
 	Quantity  int
 }
 
-// ItemsCheckRequest привязывает проверку к аккаунту, а не контакту получателя.
-type ItemsCheckRequest struct {
-	BuyerID ids.UUID
-	Items   []ItemRequest
-}
-
 // ItemCheck — ответ магазина по позиции: продаёт ли, по какой цене, сколько есть.
 type ItemCheck struct {
 	ProductID ids.ProductID
@@ -68,6 +62,7 @@ type CatalogPricing interface {
 // PlatformAPI — доверенный канал продавца; цены выбираются по проверенному аккаунту.
 type PlatformAPI interface {
 	SellerOrders
+	PromoPricing
 	CatalogPricing
 	// ProductReviews — страница опубликованных отзывов, включая безымянных авторов.
 	ProductReviews(
@@ -76,8 +71,6 @@ type PlatformAPI interface {
 		productID ids.ProductID,
 		limit, offset int,
 	) (ReviewPage, error)
-	// CheckItems — цена и наличие позиций у магазина сейчас.
-	CheckItems(ctx context.Context, tenantID ids.TenantID, request ItemsCheckRequest) ([]ItemCheck, error)
 	// QuoteDelivery — стоимость и срок доставки по договору магазина.
 	QuoteDelivery(ctx context.Context, tenantID ids.TenantID, request QuoteRequest) (delivery.Offered, error)
 	// MarketplaceSettings — обязательные настройки доставки магазина.

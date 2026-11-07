@@ -12,7 +12,7 @@ import (
 // ItemCheckCall сохраняет проверенный аккаунт каждого обращения к продавцу.
 type ItemCheckCall struct {
 	TenantID ids.TenantID
-	Request  ports.ItemsCheckRequest
+	Request  ports.GroupPricingRequest
 }
 
 // PriceContexts возвращает выбор профиля независимо для каждого покупателя и магазина.

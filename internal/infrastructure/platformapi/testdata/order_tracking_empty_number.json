@@ -1,0 +1,9 @@
+{
+  "orderId": "o1",
+  "status": "shipped",
+  "tracking": {
+    "carrier": "carrier",
+    "number": " ",
+    "url": "https://example.test/"
+  }
+}

@@ -32,7 +32,7 @@ func TestResyncOnMarketplaceDisabled(t *testing.T) {
 
 	platform.Fail("t1", ports.ErrMarketplaceDisabled)
 
-	_, err := resyncing.CheckItems(ctx, "t1", ports.ItemsCheckRequest{
+	_, err := resyncing.PriceGroup(ctx, "t1", ports.GroupPricingRequest{
 		Items: []ports.ItemRequest{{ProductID: "p1", Quantity: 1}},
 	})
 	if !errors.Is(err, ports.ErrMarketplaceDisabled) {
@@ -49,7 +49,7 @@ func TestResyncOnMarketplaceDisabled(t *testing.T) {
 	}
 
 	platform.Fail("t2", errors.New("сервер недоступен"))
-	if _, err := resyncing.CheckItems(ctx, "t2", ports.ItemsCheckRequest{
+	if _, err := resyncing.PriceGroup(ctx, "t2", ports.GroupPricingRequest{
 		Items: nil,
 	}); err == nil || len(settingsTasks(store)) != 1 {
 		t.Fatalf("прочие сбои сверку не ставят: %v", err)
@@ -106,5 +106,17 @@ func taskOf(task ports.NewTask) ports.Task {
 		Kind:     task.Kind,
 		TenantID: task.TenantID,
 		Payload:  task.Payload,
+	}
+}
+
+func TestPricingResyncOnMarketplaceDisabled(t *testing.T) {
+	store, clock, _ := setup(t)
+	platform := fake.NewPlatform()
+	resyncing := appparticipant.NewResyncingPlatform(platform, store, clock)
+	platform.Fail("t1", ports.ErrMarketplaceDisabled)
+	_, err := resyncing.PriceGroup(context.Background(), "t1", ports.GroupPricingRequest{})
+	tasks := settingsTasks(store)
+	if !errors.Is(err, ports.ErrMarketplaceDisabled) || len(tasks) != 1 || tasks[0].TenantID != "t1" {
+		t.Fatal(tasks, err)
 	}
 }

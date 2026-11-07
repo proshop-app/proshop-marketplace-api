@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "tenantId": "t1",
+      "profileKey": "marketplace:default",
+      "revision": 1,
+      "promoCode": {
+        "code": "SAVE",
+        "valid": true,
+        "discount": 11,
+        "message": null
+      },
+      "items": [
+        {
+          "productId": "p1",
+          "available": true,
+          "availableQuantity": 10,
+          "price": 100,
+          "discounts": [
+            {
+              "promotionId": "promo1",
+              "amount": 301
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

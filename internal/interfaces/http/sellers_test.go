@@ -65,6 +65,7 @@ func TestSellerResponsesBatchAndNull(t *testing.T) {
 		fake.NewIndex(),
 		fake.NewPlatform(),
 		nil,
+		carts,
 		&fake.IDs{},
 		clock,
 		appcheckout.Config{},
@@ -91,7 +92,10 @@ func TestSellerResponsesBatchAndNull(t *testing.T) {
 		t.Fatal(response.Body.String(), uow.calls, uow.tenants)
 	}
 	states := []checkout.State{
-		{Groups: []checkout.Group{{TenantID: "t1"}, {TenantID: "missing"}}},
+		{Groups: []checkout.Group{
+			{TenantID: "t1", Tracking: &checkout.Tracking{Carrier: "carrier", URL: "https://example.test/track"}},
+			{TenantID: "missing"},
+		}},
 		{Groups: []checkout.Group{{TenantID: "t1"}, {TenantID: "t2"}}},
 	}
 	h := &checkoutHandlers{checkouts: checkouts}
@@ -135,6 +139,13 @@ func TestSellerResponsesBatchAndNull(t *testing.T) {
 				t.Fatal(response.Body.String())
 			}
 			assertSellerJSON(t, purchase.Groups[0]["seller"], "shop-one", "Магазин")
+			var tracking checkout.Tracking
+			if err := json.Unmarshal(purchase.Groups[0]["tracking"], &tracking); err != nil {
+				t.Fatal(err)
+			}
+			if tracking.Carrier != "carrier" || tracking.URL != "https://example.test/track" {
+				t.Fatal(tracking)
+			}
 			if string(purchase.Groups[1]["seller"]) != "null" || uow.calls != 1 {
 				t.Fatal(response.Body.String(), uow.calls)
 			}

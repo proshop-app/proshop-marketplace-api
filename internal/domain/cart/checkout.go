@@ -17,6 +17,7 @@ func (c *Cart) Consume(id ids.OfferID, quantity int, now time.Time, ttl time.Dur
 		return c.Remove(id, now, ttl)
 	}
 	c.state.Lines[index].Quantity -= quantity
+	c.resetPromo(id.Tenant)
 	c.touch(now, ttl)
 	return true
 }
@@ -43,6 +44,7 @@ func (c *Cart) Return(
 	}
 	line := &c.state.Lines[index]
 	line.Quantity += quantity
+	c.resetPromo(id.Tenant)
 	line.Name, line.Price, line.Issue = name, price, IssuePriceChanged
 	c.touch(now, ttl)
 	return nil

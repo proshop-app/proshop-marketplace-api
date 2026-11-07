@@ -7,6 +7,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -32,6 +33,7 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 	}
 	request := ports.CreateOrderRequest{
 		BuyerID:            buyerID,
+		PromoCode:          group.PromoCode,
 		ExternalCheckoutID: group.ExternalCheckoutID,
 		GroupID:            tenant,
 		Carrier:            string(state.Delivery.Carrier),
@@ -45,8 +47,11 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 			ProductID: line.Offer.Product,
 			Quantity:  line.Quantity,
 			Price:     line.Price,
+			Discounts: line.Discounts,
 		})
 	}
+	// Повтор команды должен вернуть сохранённый заказ, даже если код уже истёк.
+	// Сервер сравнивает снимок discounts внутри транзакции создания.
 	answer, failed := s.platform.CreateOrder(ctx, tenant, request)
 	_, err = s.update(ctx, buyerID, id, func(c *checkout.Checkout, now time.Time) error {
 		if failed == nil {
@@ -58,6 +63,12 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		}
 		code, terminal, prices := creationFailure(failed)
 		reason := code
+		if errors.Is(failed, checkout.ErrPromoInvalid) {
+			reason = checkout.ErrPromoInvalid.Message()
+			if typed, ok := errs.As(failed); ok {
+				reason = typed.Message()
+			}
+		}
 		var refusal *ports.OrderRefusal
 		if errors.As(failed, &refusal) && refusal.Reason != "" {
 			reason = refusal.Reason
@@ -69,6 +80,9 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 }
 
 func creationFailure(err error) (string, checkout.GroupStatus, []checkout.PriceChange) {
+	if errors.Is(err, checkout.ErrPromoInvalid) {
+		return checkout.ErrPromoInvalid.Key(), checkout.GroupPriceChanged, nil
+	}
 	var price *ports.PriceChanged
 	if errors.As(err, &price) {
 		return "PRICE_CHANGED", checkout.GroupPriceChanged, price.Items

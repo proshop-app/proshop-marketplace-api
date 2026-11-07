@@ -3,6 +3,7 @@ package ports
 import (
 	"context"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -27,13 +28,15 @@ type PriceChanged struct{ Items []checkout.PriceChange }
 
 // OrderItem — позиция с неизменной ценой маркетплейса при оформлении.
 type OrderItem struct {
-	ProductID ids.ProductID `json:"productId"`
-	Quantity  int           `json:"quantity"`
-	Price     money.Money   `json:"price"`
+	Discounts []cart.Discount
+	ProductID ids.ProductID
+	Quantity  int
+	Price     money.Money
 }
 
 // CreateOrderRequest — сохранённая команда магазина с ключом группы.
 type CreateOrderRequest struct {
+	PromoCode          string           `json:"promoCode,omitempty"`
 	BuyerID            ids.UUID         `json:"buyerId,omitempty"`
 	ExternalCheckoutID string           `json:"externalCheckoutId"`
 	GroupID            ids.TenantID     `json:"groupId"`

@@ -1,6 +1,10 @@
 package cart
 
-import "github.com/proshop-app/proshop-marketplace/pkg/errs"
+import (
+	"fmt"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+)
 
 var (
 	// ErrNotFound — корзины нет.
@@ -17,4 +21,10 @@ var (
 	ErrNotEnoughStock = errs.New(errs.Conflict, "cart.not_enough_stock", "в наличии меньше, чем в корзине")
 	// ErrConflict — корзину изменили параллельно.
 	ErrConflict = errs.New(errs.Conflict, "cart.version_conflict", "корзина изменена параллельно, повторите")
+	// ErrPromoInvalid — код пуст или длиннее MaxPromoLength.
+	ErrPromoInvalid = errs.New(
+		errs.Invalid,
+		"cart.promo_invalid",
+		fmt.Sprintf("укажите промокод длиной от 1 до %d символов", MaxPromoLength),
+	)
 )

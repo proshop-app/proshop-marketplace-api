@@ -51,6 +51,7 @@ type Limiter struct {
 type Platform struct {
 	Reviews           []ports.Review
 	ReviewsErr        error
+	promos            map[ids.TenantID]ports.GroupPricing
 	buyerProfiles     map[ids.UUID]map[ids.TenantID]string
 	buyerItems        map[ids.UUID]map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
 	checks            []ItemCheckCall
@@ -295,11 +296,11 @@ func (p *Platform) QuoteRequests() []ports.QuoteRequest {
 	return append([]ports.QuoteRequest(nil), p.requests...)
 }
 
-// CheckItems — ответы по позициям; неизвестная позиция — не продаётся.
-func (p *Platform) CheckItems(
+// checkItems — ответы по позициям; неизвестная позиция — не продаётся.
+func (p *Platform) checkItems(
 	_ context.Context,
 	tenant ids.TenantID,
-	request ports.ItemsCheckRequest,
+	request ports.GroupPricingRequest,
 ) ([]ports.ItemCheck, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -1,0 +1,13 @@
+{
+  "buyerId": "7a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b",
+  "tenantIds": [
+    "t1"
+  ],
+  "promoCode": "SAVE",
+  "items": [
+    {
+      "productId": "p1",
+      "quantity": 3
+    }
+  ]
+}

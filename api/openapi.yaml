@@ -1804,12 +1804,16 @@ paths:
     get:
       tags: [cart]
       summary: Корзина покупателя
-      description: Нет корзины или она просрочена — пустая.
+      description: >-
+        Нет корзины или она просрочена — пустая. Все группы проверяются у магазинов параллельно,
+        включая группы без промокода; возвращаются актуальные цены покупателя и скидки.
       operationId: getCart
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       responses:
         "200": { $ref: "#/components/responses/Cart" }
         "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/cart/lines:
     post:
       tags: [cart]
@@ -1833,6 +1837,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/cart/lines/{offerId}:
     put:
       tags: [cart]
@@ -1858,6 +1863,7 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
     delete:
       tags: [cart]
       summary: Убрать строку
@@ -1869,6 +1875,47 @@ paths:
         "200": { $ref: "#/components/responses/Cart" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/cart/groups/{tenantId}/promo-code:
+    put:
+      tags: [cart]
+      operationId: setCartPromoCode
+      summary: Проверить и сохранить промокод группы магазина
+      description: Неверный код возвращается как valid=false с причиной; Cache-Control private, no-store.
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [cart]
+      operationId: deleteCartPromoCode
+      summary: Удалить промокод группы магазина
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/cart/verify:
     post:
       tags: [cart]
@@ -1880,6 +1927,7 @@ paths:
         "200": { $ref: "#/components/responses/Cart" }
         "401": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/delivery/carriers:
     get:
       tags: [delivery]
@@ -1930,7 +1978,11 @@ paths:
     post:
       tags: [checkout]
       summary: Собрать покупку из корзины
-      description: Повтор с тем же Idempotency-Key отдаёт ту же покупку.
+      description: |
+        Повтор с тем же Idempotency-Key отдаёт ту же покупку.
+        Изменение цен или скидок — 409 checkout.changed: корзина перепроверена,
+        перечитайте её и создайте покупку заново. Отказ кода — 400 checkout.promo_invalid;
+        измените код в корзине и создайте новую покупку.
       operationId: createCheckout
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
@@ -1943,6 +1995,11 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+        "503":
+          description: cart.seller_unreachable — магазин не ответил на перепроверку.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/checkout/{checkoutId}:
     get:
       tags: [checkout]
@@ -1990,8 +2047,9 @@ paths:
       tags: [checkout]
       summary: Подтвердить покупку
       description: |
-        Цены и наличие перепроверяются у магазинов, устаревшая доставка
-        пересчитывается. Изменились цены — 409 checkout.changed: покупка уже
+        Отказ кода — 400 checkout.promo_invalid: измените код в корзине и создайте новую покупку.
+        Цены, скидки и наличие перепроверяются у магазинов, устаревшая доставка
+        пересчитывается. Изменились цены или скидки — 409 checkout.changed: покупка уже
         обновлена, её нужно перечитать и подтвердить заново. Подтверждённая
         покупка отдаётся как есть.
       operationId: confirmCheckout
@@ -2000,6 +2058,7 @@ paths:
         - $ref: "#/components/parameters/CheckoutId"
       responses:
         "200": { $ref: "#/components/responses/Checkout" }
+        "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -2111,7 +2170,13 @@ paths:
     post:
       tags: [checkout]
       summary: Создать независимые заказы и получить первую ссылку
-      description: Сначала обновляются все расчёты и настройки. Новая плата — 409 DELIVERY_CHANGED с checkout и новыми итогами, заказов нет.
+      description: >-
+        Сначала обновляются все расчёты и настройки. Новая плата — 409 DELIVERY_CHANGED
+        с checkout и новыми итогами, заказов нет. Отказ промокода магазина — ответ 200:
+        в группе status=price_changed, lastErrorCode=checkout.promo_invalid, reason — причина отказа,
+        cartReturned=true после полного возврата строк в корзину. Код корзины имеет приоритет
+        над кодом покупки; при совпадении кодов сохраняется причина отказа, при пустом коде — код покупки.
+        Остальные магазины продолжают оформление. Код и скидки передаются в заказ магазина.
       operationId: createCheckoutOrders
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
@@ -5503,22 +5568,54 @@ components:
         name: { type: string }
         quantity: { type: integer, minimum: 1, maximum: 999 }
         price: { type: integer, format: int64, description: Снимок цены в копейках }
-        amount: { type: integer, format: int64 }
+        amount: { type: integer, format: int64, description: Сумма после скидок в копейках }
         issue:
           type: [string, "null"]
           enum: [price_changed, not_enough_stock, unavailable, null]
           description: Пометка после перепроверки у магазина
         addedAt: { type: string, format: date-time }
+    PromoCode:
+      description: >-
+        Непроверенный код имеет valid=false, discount=0, message=null; Create проверяет его у сервера.
+        Отвергнутый код имеет valid=false и причину в message, в покупку не переносится.
+        Возврат группы сохраняет код покупателя непроверенным, при отказе кода — отвергнутым.
+      type: [object, "null"]
+      additionalProperties: false
+      required: [code, valid, discount, message]
+      properties:
+        code: { type: string }
+        valid: { type: boolean }
+        discount: { type: integer, format: int64, minimum: 0, description: Скидка промокода в копейках }
+        message: { type: [string, "null"] }
+    CartGroup:
+      type: object
+      additionalProperties: false
+      required: [tenantId, total, promoCode]
+      properties:
+        tenantId: { type: string }
+        total: { type: integer, format: int64, description: Сумма после скидок в копейках }
+        promoCode: { $ref: "#/components/schemas/PromoCode" }
+    OrderTracking:
+      type: [object, "null"]
+      additionalProperties: false
+      required: [carrier, number, url]
+      properties:
+        carrier: { type: string }
+        number: { type: [string, "null"] }
+        url: { type: string, format: uri }
     Cart:
       type: object
-      required: [id, lines, total, version, expiresAt]
+      required: [id, lines, groups, total, version, expiresAt]
       properties:
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/CartGroup" }
         id: { type: string, format: uuid }
         lines:
           type: array
           maxItems: 100
           items: { $ref: "#/components/schemas/CartLine" }
-        total: { type: integer, format: int64 }
+        total: { type: integer, format: int64, description: Сумма после скидок в копейках }
         version: { type: integer, format: int64 }
         expiresAt: { type: string, format: date-time }
     Carrier:
@@ -5574,7 +5671,7 @@ components:
         name: { type: string }
         quantity: { type: integer }
         price: { type: integer, format: int64 }
-        amount: { type: integer, format: int64 }
+        amount: { type: integer, format: int64, description: Сумма после скидок в копейках }
     CheckoutGroup:
       type: object
       required:
@@ -5593,8 +5690,10 @@ components:
       - createFailures
       - createExhausted
       - seller
+      - tracking
       properties:
         seller: { $ref: "#/components/schemas/OrderSeller" }
+        tracking: { $ref: "#/components/schemas/OrderTracking" }
         tenantId: { type: string }
         status:
           type: string
@@ -5608,7 +5707,6 @@ components:
         paymentOrder: { type: integer }
         deliveryPrice: { type: integer, format: int64, minimum: 0, description: Плата на кассе этого магазина; 0 — строка доставки скрыта }
         reason: { type: string }
-        track: { type: string }
         returnFailed: { type: boolean }
         returnReason: { type: string }
         returnRemaining:

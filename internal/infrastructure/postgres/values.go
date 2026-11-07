@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -66,4 +67,16 @@ func nullTime(at time.Time) any {
 	}
 
 	return at
+}
+
+// jsonValue заменяет JSON null пустым значением колонки.
+func jsonValue(value any, empty string) (string, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	if string(raw) == "null" {
+		return empty, nil
+	}
+	return string(raw), nil
 }

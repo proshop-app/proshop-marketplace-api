@@ -118,6 +118,7 @@ func newEnv(t *testing.T) *env {
 			e.index,
 			e.platform,
 			directory,
+			appcart.NewService(e.store, e.index, e.platform, identities, e.clock, time.Hour),
 			identities,
 			e.clock,
 			appcheckout.Config{

@@ -8,6 +8,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 type cartLineJSON struct {
@@ -25,11 +26,12 @@ type cartLineJSON struct {
 
 // cartJSON — корзина; суммы — копейки.
 type cartJSON struct {
-	ID        string         `json:"id"`
-	Lines     []cartLineJSON `json:"lines"`
-	Total     int64          `json:"total"`
-	Version   int64          `json:"version"`
-	ExpiresAt time.Time      `json:"expiresAt"`
+	Groups    []cartGroupJSON `json:"groups"`
+	ID        string          `json:"id"`
+	Lines     []cartLineJSON  `json:"lines"`
+	Total     int64           `json:"total"`
+	Version   int64           `json:"version"`
+	ExpiresAt time.Time       `json:"expiresAt"`
 }
 
 type cartHandlers struct {
@@ -48,6 +50,7 @@ type quantityJSON struct {
 func toCartJSON(state cart.State) (cartJSON, error) {
 	out := cartJSON{
 		ID:        string(state.ID),
+		Groups:    make([]cartGroupJSON, 0),
 		Lines:     make([]cartLineJSON, 0, len(state.Lines)),
 		Version:   state.Version,
 		ExpiresAt: state.ExpiresAt.UTC(),
@@ -85,6 +88,22 @@ func toCartJSON(state cart.State) (cartJSON, error) {
 		})
 	}
 
+	for _, group := range cart.Restore(state).Groups() {
+		g := cartGroupJSON{TenantID: string(group.TenantID), PromoCode: cartPromoResponse(group.PromoCode)}
+		total := money.Money{}
+		for _, line := range group.Lines {
+			amount, err := cart.LineAmount(line)
+			if err != nil {
+				return cartJSON{}, err
+			}
+			total, err = total.Add(amount)
+			if err != nil {
+				return cartJSON{}, err
+			}
+		}
+		g.Total = total.Kopecks()
+		out.Groups = append(out.Groups, g)
+	}
 	return out, nil
 }
 

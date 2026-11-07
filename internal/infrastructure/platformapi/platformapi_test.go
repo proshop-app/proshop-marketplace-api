@@ -77,33 +77,6 @@ func server(t *testing.T, routes map[string][2]string, status int) *platformapi.
 	return platformapi.New(platformapi.Config{BaseURL: srv.URL, Token: "service-token", Timeout: time.Second})
 }
 
-func TestCheckItems(t *testing.T) {
-	client := server(
-		t,
-		map[string][2]string{
-			"POST " + prefix + "/items/check": {"items_check_request.json", "items_check_response.json"},
-		},
-		http.StatusOK,
-	)
-
-	checks, err := client.CheckItems(
-
-		context.Background(),
-
-		"t1",
-		ports.ItemsCheckRequest{
-			Items: []ports.ItemRequest{{ProductID: "p1", Quantity: 2}, {ProductID: "p2", Quantity: 1}},
-		},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(checks) != 2 || !checks[0].Exists || checks[0].Price.Kopecks() != 199000 || checks[0].Available != 5 ||
-		checks[1].Exists {
-		t.Fatalf("ответ: %+v", checks)
-	}
-}
-
 func TestQuoteDelivery(t *testing.T) {
 	request := ports.QuoteRequest{
 		Carrier:         "cdek",
@@ -164,7 +137,7 @@ func TestErrors(t *testing.T) {
 	}
 	broken := server(
 		t,
-		map[string][2]string{"GET " + prefix + "/settings/marketplace": {"", "items_check_request.json"}},
+		map[string][2]string{"GET " + prefix + "/settings/marketplace": {"", "error.json"}},
 		http.StatusOK,
 	)
 	settings, err := broken.MarketplaceSettings(context.Background(), "t1")
@@ -176,7 +149,7 @@ func TestErrors(t *testing.T) {
 		Token:   "x",
 		Timeout: 100 * time.Millisecond,
 	})
-	if _, err := wrongToken.CheckItems(context.Background(), "t1", ports.ItemsCheckRequest{
+	if _, err := wrongToken.PriceGroup(context.Background(), "t1", ports.GroupPricingRequest{
 		Items: nil,
 	}); !errors.Is(err, platformapi.ErrUnavailable) {
 		t.Fatalf("сервер не отвечает: %v", err)
@@ -185,12 +158,12 @@ func TestErrors(t *testing.T) {
 
 func TestMarketplaceDisabled(t *testing.T) {
 	routes := map[string][2]string{
-		"POST " + prefix + "/items/check":    {"", "marketplace_disabled.json"},
-		"POST " + prefix + "/delivery/quote": {"", "marketplace_disabled.json"},
+		"POST /api/v1/internal/marketplace/pricing/contexts": {"", "marketplace_disabled.json"},
+		"POST " + prefix + "/delivery/quote":                 {"", "marketplace_disabled.json"},
 	}
 	disabled := server(t, routes, http.StatusForbidden)
 
-	_, err := disabled.CheckItems(context.Background(), "t1", ports.ItemsCheckRequest{
+	_, err := disabled.PriceGroup(context.Background(), "t1", ports.GroupPricingRequest{
 		Items: []ports.ItemRequest{{ProductID: "p1", Quantity: 1}},
 	})
 	if !errors.Is(err, ports.ErrMarketplaceDisabled) || errs.CodeOf(err) != errs.Unavailable {
@@ -205,7 +178,7 @@ func TestMarketplaceDisabled(t *testing.T) {
 	// код учитывается только у 403: тот же ответ с другим статусом — просто недоступность
 	failing := server(t, routes, http.StatusInternalServerError)
 
-	_, err = failing.CheckItems(context.Background(), "t1", ports.ItemsCheckRequest{
+	_, err = failing.PriceGroup(context.Background(), "t1", ports.GroupPricingRequest{
 		Items: nil,
 	})
 	var refusal *ports.OrderRefusal
