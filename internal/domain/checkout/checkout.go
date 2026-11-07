@@ -29,7 +29,7 @@ const (
 	StatusCreatingOrders Status = "creating_orders"
 	// StatusAwaitingPayment — все созданные группы ждут оплаты.
 	StatusAwaitingPayment Status = "awaiting_payment"
-	// StatusPartiallyPaid — оплачена часть магазинов, остальные независимы.
+	// StatusPartiallyPaid — оплачена часть групп; остальные ждут единого платежа или отменены.
 	StatusPartiallyPaid Status = "partially_paid"
 	// StatusPaid — оплачены все группы.
 	StatusPaid Status = "paid"

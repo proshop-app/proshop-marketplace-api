@@ -1,6 +1,5 @@
 {
   "orderId": "o1",
-  "paymentUrl": "https://seller.example/pay/o1",
   "expiresAt": "2026-10-24T11:00:00Z",
   "total": 412989,
   "promoCode": {

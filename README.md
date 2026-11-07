@@ -45,7 +45,15 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 Процесс проверяет окружение на старте и не поднимается, пока не заданы
 обязательные переменные; все ошибки выводятся разом. `make dev` задаёт
 значения для compose сам (вход по звонку — в песочнице, API сервера —
-`http://localhost:5001`), полный список с умолчаниями — `.env.example`.
+`http://localhost:5001`, `PAYMENT_STUB=true`, `MARKETPLACE_PUBLIC_URL=http://localhost:3000`).
+Для продвижения локально заданы `PROMOTION_TIMEZONE=UTC` и отдельная тестовая `PROMOTION_VISITOR_SALT`.
+Перед `make dev` вручную экспортируйте `IDENTITY_HUB_URL`, `IDENTITY_CLIENT_ID`,
+`IDENTITY_BACKEND_SECRET` (адрес и учётные данные клиента из identity-hub) и
+`IDENTITY_REFRESH_KEY` (отдельный ключ шифрования refresh: 32 случайных байта в base64).
+Значения можно переопределить переменными окружения или аргументами make; пример окружения — `.env.example`.
+Файл `.env` автоматически не загружается.
+Для браузерной оплаты нужен HTTPS-прокси, общий для витрины и `/api/v1`:
+переопределите `MARKETPLACE_PUBLIC_URL` его адресом; локальное HTTP-значение служит для запуска разработки.
 
 | Переменная | Обязательна | По умолчанию | Назначение |
 |---|---|---|---|
@@ -75,6 +83,10 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `RETENTION_PROCESSED_EVENTS`, `RETENTION_OUTBOX_DONE`, `RETENTION_PARKED_EVENTS`, `RETENTION_INTERVAL` | | `336h`, `72h`, `720h`, `1h` | чистка служебных записей |
 | `RETENTION_CHALLENGES` | | `24h` | чистка истёкших проверок входа |
 | `REDIS_URL` | да | — | Redis `redis://…`: сессии и лимиты входа |
+| `IDENTITY_HUB_URL` | да | — | HTTPS origin identity-hub; HTTP допустим только на loopback |
+| `IDENTITY_CLIENT_ID` | да | — | backend-клиент покупателей в identity-hub |
+| `IDENTITY_BACKEND_SECRET` | да | — | секрет клиента из identity-hub, ≥ 32 символов |
+| `IDENTITY_REFRESH_KEY` | да | — | отдельный ключ шифрования refresh: 32 случайных байта в base64 |
 | `SMSRU_MODE` | | `live` | `live` — шлюз sms.ru, `sandbox` — любой номер подтверждается сам, только для разработки |
 | `SMSRU_API_ID` | при `live` | — | ключ sms.ru |
 | `SMSRU_BASE_URL` | | `https://sms.ru` | адрес шлюза |
@@ -95,6 +107,8 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `YANDEX_DELIVERY_API_URL` | | `https://b2b-authproxy.taxi.yandex.net` | адрес API Яндекс Доставки |
 | `PICKUP_REFRESH_INTERVAL` | | `24h` | обновление справочников пунктов выдачи |
 | `OPENSEARCH_PICKUP_INDEX` | | `marketplace-pickup-points` | индекс пунктов выдачи |
+| `PROMOTION_TIMEZONE` | да | — | часовой пояс IANA для календаря продвижения; в make dev — UTC |
+| `PROMOTION_VISITOR_SALT` | да | — | соль обезличивания посетителей, ≥ 16 символов; в make dev — тестовая |
 | `SETTINGS_SYNC_INTERVAL` | | `5m` | сверка настроек участия магазинов с сервером |
 
 ## HTTP
@@ -177,7 +191,8 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 Плата за доставку входит в единый платёж. Субсидия продавца не меньше
 `DELIVERY_SUBSIDY_MIN_PERCENT` (по умолчанию 30%, диапазон 0–100), даже если
 его maxAmount ниже. Публичный порог для админки: `GET /api/v1/delivery/settings`.
-`MARKETPLACE_PUBLIC_URL` — обязательный адрес витрины. Касса возвращает туда на
+`MARKETPLACE_PUBLIC_URL` — обязательный адрес витрины, тот же HTTPS-origin, с которого отдаётся
+`/api/v1` (касса и витрина за одним прокси). Касса возвращает туда на
 `/checkout/{id}/return`: confirm/cancel всегда отвечают 303, в том числе при ошибке
 или истёкшем access. Витрина обновляет сессию и читает покупку; редирект не подтверждает оплату.
 GET кассы при ошибке показывает HTML со ссылкой возврата; оплаченная покупка — без форм.

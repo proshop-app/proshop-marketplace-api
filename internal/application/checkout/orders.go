@@ -193,7 +193,7 @@ func (s *Service) ReturnCancelled(ctx context.Context, buyerID, id ids.UUID) err
 		}
 		if err := s.returnCancelledGroup(ctx, buyerID, id, g.TenantID); err != nil {
 			// Транзакция возврата откатилась. Запоминаем текущий остаток отдельно:
-			// временная проблема корзины не должна закрывать оплату другого магазина.
+			// временная проблема корзины не должна задерживать единый платёж остальных групп.
 			if deferred := s.deferCartReturn(ctx, buyerID, id, g.TenantID, err); deferred != nil {
 				failures = append(failures, errors.Join(err, deferred))
 			}
