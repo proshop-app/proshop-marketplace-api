@@ -10,9 +10,6 @@ import (
 )
 
 const (
-	// CardSlogan — ключ слогана в постмодерации.
-	CardSlogan = "slogan"
-
 	// CardLogo — ключ логотипа в постмодерации.
 	CardLogo = "logo"
 
@@ -42,7 +39,6 @@ type Returns struct {
 // Profile — профиль принадлежит серверу, маркетплейс хранит его снимок.
 type Profile struct {
 	Name     string      `json:"name"`
-	Slogan   string      `json:"slogan"`
 	Logo     *string     `json:"logo"`
 	Color    *BrandColor `json:"color"`
 	Showcase Showcase    `json:"showcase"`
@@ -117,10 +113,7 @@ func (p *Participant) ApplyStoreCard(
 	next := StoreCard{Profile: profile, Readiness: card, Returns: returns, Hidden: p.state.StoreCard.Hidden}
 	next = next.Clone()
 	next.Hidden = slices.DeleteFunc(next.Hidden, func(h CardHidden) bool {
-		if h.Key == CardSlogan {
-			return profile.Slogan != p.state.StoreCard.Profile.Slogan
-		}
-		return !reflect.DeepEqual(profile.Logo, p.state.StoreCard.Profile.Logo)
+		return h.Key == CardLogo && !reflect.DeepEqual(profile.Logo, p.state.StoreCard.Profile.Logo)
 	})
 	changed := !reflect.DeepEqual(next, p.state.StoreCard)
 	renamed, err := p.Rename(profile.Name, now)
@@ -140,7 +133,7 @@ func (p *Participant) CardReady() bool { return p.state.StoreCard.Readiness.Read
 
 // HideCard не меняет готовность: скрытие и заполненность независимы.
 func (p *Participant) HideCard(key, reason string, now time.Time) (bool, error) {
-	if key != CardSlogan && key != CardLogo {
+	if key != CardLogo {
 		return false, ErrInvalidCardKey
 	}
 	reason = strings.TrimSpace(reason)
@@ -165,7 +158,7 @@ func (p *Participant) HideCard(key, reason string, now time.Time) (bool, error) 
 
 // ShowCard снимает запрет без изменения исходного значения.
 func (p *Participant) ShowCard(key string, now time.Time) (bool, error) {
-	if key != CardSlogan && key != CardLogo {
+	if key != CardLogo {
 		return false, ErrInvalidCardKey
 	}
 	before := len(p.state.StoreCard.Hidden)
@@ -183,9 +176,6 @@ func (p *Participant) ShowCard(key string, now time.Time) (bool, error) {
 func (p *Participant) PublicProfile() Profile {
 	profile := p.state.StoreCard.Clone().Profile
 	for _, h := range p.state.StoreCard.Hidden {
-		if h.Key == CardSlogan {
-			profile.Slogan = ""
-		}
 		if h.Key == CardLogo {
 			profile.Logo = nil
 		}
@@ -195,9 +185,6 @@ func (p *Participant) PublicProfile() Profile {
 
 // FieldValue — исходное значение для журнала постмодерации.
 func (p Profile) FieldValue(key string) string {
-	if key == CardSlogan {
-		return p.Slogan
-	}
 	if key == CardLogo && p.Logo != nil {
 		return *p.Logo
 	}

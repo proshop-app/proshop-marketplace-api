@@ -65,7 +65,6 @@ type createParticipantJSON struct {
 }
 
 type operatorCardJSON struct {
-	Slogan string                   `json:"slogan"`
 	Logo   *string                  `json:"logo"`
 	Hidden []participant.CardHidden `json:"hidden"`
 }
@@ -79,7 +78,6 @@ func toParticipantJSON(view appparticipant.View) participantJSON {
 	p := view.Participant
 	out := participantJSON{
 		Card: operatorCardJSON{
-			Slogan: p.StoreCard.Profile.Slogan,
 			Logo:   p.StoreCard.Profile.Logo,
 			Hidden: append([]participant.CardHidden{}, p.StoreCard.Hidden...),
 		},

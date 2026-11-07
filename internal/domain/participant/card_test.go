@@ -21,7 +21,7 @@ func TestCardReadinessAndModeration(t *testing.T) {
 		t.Fatal(err)
 	}
 	logo := "logo"
-	profile := participant.Profile{Name: "Имя", Slogan: "Слоган", Logo: &logo}
+	profile := participant.Profile{Name: "Имя", Logo: &logo}
 	ready := participant.CardReadiness{Ready: true}
 	if _, err := p.ApplyStoreCard(profile, ready, nil, t0); err != nil {
 		t.Fatal(err)
@@ -32,23 +32,19 @@ func TestCardReadinessAndModeration(t *testing.T) {
 	if _, err := p.Enable(t0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.HideCard("slogan", "Причина", t0); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := p.HideCard("logo", "Причина", t0); err != nil {
 		t.Fatal(err)
 	}
-	if p.PublicProfile().Slogan != "" || p.PublicProfile().Logo != nil {
+	if p.PublicProfile().Logo != nil {
 		t.Fatal("скрытое раскрыто")
 	}
 	if changed, err := p.ApplyStoreCard(profile, ready, nil, t1); err != nil || changed {
 		t.Fatal(changed, err)
 	}
-	profile.Slogan = "Исправлено"
 	if _, err := p.ApplyStoreCard(profile, participant.CardReadiness{}, nil, t1); err != nil {
 		t.Fatal(err)
 	}
-	if p.PublicProfile().Slogan != "Исправлено" || p.PublicProfile().Logo != nil {
+	if p.PublicProfile().Logo != nil {
 		t.Fatal(p.PublicProfile())
 	}
 	if !participant.VisibilityOf(p, activeTenant(t, participant.TenantActive)).Visible {
@@ -78,5 +74,17 @@ func TestCardReadinessAndModeration(t *testing.T) {
 	}
 	if len(p.State().StoreCard.Hidden) != 0 {
 		t.Fatal("смена логотипа не сняла скрытие")
+	}
+}
+
+func TestCardModerationRejectsUnknownKeys(t *testing.T) {
+	p := newParticipant(t)
+	for _, key := range []string{"", "name", "unknown"} {
+		if _, err := p.HideCard(key, "Причина", t0); !errors.Is(err, participant.ErrInvalidCardKey) {
+			t.Fatal(key, err)
+		}
+		if _, err := p.ShowCard(key, t0); !errors.Is(err, participant.ErrInvalidCardKey) {
+			t.Fatal(key, err)
+		}
 	}
 }

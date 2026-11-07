@@ -38,7 +38,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 		StoreCard: participant.StoreCard{
 			Readiness: participant.CardReadiness{Ready: true},
-			Profile:   participant.Profile{Slogan: "Слоган", Logo: &logo},
+			Profile:   participant.Profile{Logo: &logo},
 		},
 	}
 	store.SeedParticipant(state)
@@ -117,25 +117,29 @@ func TestStoreCardHTTP(t *testing.T) {
 	// Имя задаёт магазин в сверке: ручки переименования участника нет.
 	call("PATCH", "/api/v1/operator/participants/t1", `{"name":"Другое имя"}`, token, http.StatusNotFound)
 	hide := "/api/v1/operator/participants/t1/card/hide"
-	hiddenResponse := call("POST", hide, `{"key":"slogan","reason":"Причина"}`, token, http.StatusOK)
+	call("POST", hide, `{"key":"name","reason":"Причина"}`, token, http.StatusBadRequest)
+	call("DELETE", hide+"/name", "", token, http.StatusBadRequest)
+	hiddenResponse := call("POST", hide, `{"key":"logo","reason":"Причина"}`, token, http.StatusOK)
 	var member struct {
 		Card struct {
-			Slogan string                   `json:"slogan"`
+			Logo   *string                  `json:"logo"`
 			Hidden []participant.CardHidden `json:"hidden"`
 		} `json:"card"`
 	}
 	if err := json.Unmarshal(hiddenResponse.Body.Bytes(), &member); err != nil {
 		t.Fatal(err)
 	}
-	if member.Card.Slogan != "Слоган" || len(member.Card.Hidden) != 1 || member.Card.Hidden[0].Reason != "Причина" {
+	if member.Card.Logo == nil || *member.Card.Logo != logo {
 		t.Fatal(member)
 	}
-	call("POST", hide, `{"key":"logo","reason":"Причина"}`, token, http.StatusOK)
+	if len(member.Card.Hidden) != 1 || member.Card.Hidden[0].Reason != "Причина" {
+		t.Fatal(member)
+	}
 	refresh()
 	for _, path := range []string{"/api/v1/shops", "/api/v1/shops/shop"} {
 		response := call("GET", path, "", "", http.StatusOK)
 		body := response.Body.String()
-		if !strings.Contains(body, `"slogan":""`) || !strings.Contains(body, `"logo":null`) {
+		if !strings.Contains(body, `"logo":null`) {
 			t.Fatal(body)
 		}
 		if response.Header().Get("Cache-Control") != "public, max-age=0, must-revalidate" {
@@ -150,10 +154,10 @@ func TestStoreCardHTTP(t *testing.T) {
 		}
 
 	}
-	call("DELETE", hide+"/slogan", "", token, http.StatusOK)
+	call("DELETE", hide+"/logo", "", token, http.StatusOK)
 	refresh()
 	response := call("GET", "/api/v1/shops/shop", "", "", http.StatusOK)
-	if !strings.Contains(response.Body.String(), `"slogan":"Слоган"`) {
+	if !strings.Contains(response.Body.String(), `"logo":"logo-key"`) {
 		t.Fatal(response.Body.String())
 	}
 	var header map[string]json.RawMessage
@@ -165,7 +169,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	headerKeys := "categories color initial isNew logo name offers rating showcase slogan slug subscribers tenantId"
+	headerKeys := "categories color initial isNew logo name offers rating showcase slug subscribers tenantId"
 	wantKeys = strings.Fields(headerKeys)
 	if !reflect.DeepEqual(keys, wantKeys) {
 		t.Fatal(keys)
@@ -189,7 +193,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		t.Fatal(response.Body.String())
 	}
 	response = call("GET", "/api/v1/shops/shop", "", "", http.StatusOK)
-	if !strings.Contains(response.Body.String(), `"logo":null`) {
+	if !strings.Contains(response.Body.String(), `"logo":"logo-key"`) {
 		t.Fatal(response.Body.String())
 	}
 	call("GET", summary, "", "server-token", http.StatusOK)

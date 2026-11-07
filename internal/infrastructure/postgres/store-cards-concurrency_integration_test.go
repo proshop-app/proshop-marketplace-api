@@ -19,6 +19,7 @@ func seedStoredCard(t *testing.T, uow *postgres.UnitOfWork) ports.StoreRecord {
 	t.Helper()
 	ctx := context.Background()
 	seedTenant(t, uow, "t1", "shop", participant.TenantActive)
+	logo := "logo"
 	record := ports.StoreRecord{
 		ProfileVersion: 1,
 		Summary: ports.StoreSummary{
@@ -27,8 +28,8 @@ func seedStoredCard(t *testing.T, uow *postgres.UnitOfWork) ports.StoreRecord {
 			Showcase:   []ports.StoreProduct{},
 			Hidden:     []participant.CardHidden{},
 		},
-		Header:     ports.ShopHeader{TenantID: "t1", Slug: "shop", Name: "Магазин", Slogan: "Слоган", Offers: 1},
-		Card:       ports.ShopCard{TenantID: "t1", Slug: "shop", Name: "Магазин", Slogan: "Слоган", Offers: 1},
+		Header:     ports.ShopHeader{TenantID: "t1", Slug: "shop", Name: "Магазин", Logo: &logo, Offers: 1},
+		Card:       ports.ShopCard{TenantID: "t1", Slug: "shop", Name: "Магазин", Logo: &logo, Offers: 1},
 		Public:     true,
 		PagePublic: true,
 	}
@@ -42,7 +43,7 @@ func seedStoredCard(t *testing.T, uow *postgres.UnitOfWork) ports.StoreRecord {
 			return err
 		}
 		if _, err := p.ApplyStoreCard(
-			participant.Profile{Name: "Магазин", Slogan: "Слоган"},
+			participant.Profile{Name: "Магазин", Logo: &logo},
 			participant.CardReadiness{Ready: true},
 			nil,
 			at(0),
@@ -96,11 +97,11 @@ func TestStoreRefreshLockDoesNotBlockModeration(t *testing.T) {
 	}
 	service := app.NewService(uow, fake.NewClock(at(1)), &fake.IDs{})
 	decision := participant.Decision{Note: "Причина"}
-	if _, err := service.ModerateCard(ctx, "t1", participant.CardSlogan, true, decision); err != nil {
+	if _, err := service.ModerateCard(ctx, "t1", participant.CardLogo, true, decision); err != nil {
 		t.Fatal(err)
 	}
 	header, err := service.Shop(ctx, "shop")
-	if err != nil || header.Slogan != "" {
+	if err != nil || header.Logo != nil {
 		t.Fatal(header, err)
 	}
 	close(release)
@@ -108,18 +109,18 @@ func TestStoreRefreshLockDoesNotBlockModeration(t *testing.T) {
 		t.Fatal(err)
 	}
 	header, err = service.Shop(ctx, "shop")
-	if err != nil || header.Slogan != "" {
-		t.Fatalf("старый пересчёт вернул слоган: %+v %v", header, err)
+	if err != nil || header.Logo != nil {
+		t.Fatalf("старый пересчёт вернул логотип: %+v %v", header, err)
 	}
 	summary, err := service.StoreSummary(ctx, "t1")
 	if err != nil || len(summary.Hidden) != 1 {
 		t.Fatal(summary, err)
 	}
-	if _, err := service.ModerateCard(ctx, "t1", participant.CardSlogan, false, participant.Decision{}); err != nil {
+	if _, err := service.ModerateCard(ctx, "t1", participant.CardLogo, false, participant.Decision{}); err != nil {
 		t.Fatal(err)
 	}
 	page, err := service.Shops(ctx, "", 20, 0)
-	if err != nil || len(page.Items) != 1 || page.Items[0].Slogan != "Слоган" {
+	if err != nil || len(page.Items) != 1 || page.Items[0].Logo == nil || *page.Items[0].Logo != "logo" {
 		t.Fatal(page, err)
 	}
 }
@@ -191,7 +192,7 @@ func TestModerationBeforeFirstSummarySurvivesStaleRefresh(t *testing.T) {
 		t.Fatal(summary, err)
 	}
 	decision := participant.Decision{Note: "Причина"}
-	if _, err := service.ModerateCard(ctx, "t1", participant.CardSlogan, true, decision); err != nil {
+	if _, err := service.ModerateCard(ctx, "t1", participant.CardLogo, true, decision); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.Shop(ctx, "shop"); !errors.Is(err, participant.ErrNotFound) {
@@ -203,7 +204,7 @@ func TestModerationBeforeFirstSummarySurvivesStaleRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	header, err := service.Shop(ctx, "shop")
-	if err != nil || header.Slogan != "" {
+	if err != nil || header.Logo != nil {
 		t.Fatal(header, err)
 	}
 }

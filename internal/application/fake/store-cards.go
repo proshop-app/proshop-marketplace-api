@@ -18,7 +18,6 @@ func (r storeCards) Lock(_ context.Context, _ ids.TenantID) error {
 func (r storeCards) Save(_ context.Context, record ports.StoreRecord) error {
 	previous := r.d.storeCards[record.Header.TenantID]
 	if previous.ProfileVersion > record.ProfileVersion {
-		record.Header.Slogan, record.Card.Slogan = previous.Header.Slogan, previous.Card.Slogan
 		record.Header.Logo, record.Card.Logo = previous.Header.Logo, previous.Card.Logo
 		record.Summary.Hidden = previous.Summary.Hidden
 		record.ProfileVersion = previous.ProfileVersion
@@ -90,7 +89,6 @@ func (r storeCards) UpdateProfile(_ context.Context, p *participant.Participant)
 		}
 	}
 	profile := p.PublicProfile()
-	record.Header.Slogan, record.Card.Slogan = profile.Slogan, profile.Slogan
 	record.Header.Logo, record.Card.Logo = profile.Logo, profile.Logo
 	record.Summary.Hidden = append([]participant.CardHidden{}, p.State().StoreCard.Hidden...)
 	record.ProfileVersion = p.Version()
