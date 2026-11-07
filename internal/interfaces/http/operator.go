@@ -24,10 +24,10 @@ const (
 )
 
 type operatorHandlers struct {
-	auth       *appoperator.Auth
-	events     *messaging.Events
-	origin     string
-	trustProxy bool
+	auth           *appoperator.Auth
+	events         *messaging.Events
+	origin         string
+	trustedProxies int
 }
 
 type operatorProfileJSON struct {
@@ -179,7 +179,7 @@ func (h *operatorHandlers) login(w http.ResponseWriter, r *http.Request) {
 		r.Context(),
 		body.Email,
 		body.Password,
-		clientIP(r, h.trustProxy),
+		clientIP(r, h.trustedProxies),
 		operatorKey(r),
 	)
 	if err != nil {

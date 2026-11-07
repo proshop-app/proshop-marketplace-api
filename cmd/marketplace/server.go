@@ -354,7 +354,11 @@ func (s *server) run(ctx context.Context) error {
 	group, groupCtx := errgroup.WithContext(ctx)
 
 	group.Go(func() error {
-		s.logger.Info("HTTP слушает", slog.String("addr", cfg.HTTP.Addr))
+		s.logger.Info(
+			"HTTP слушает",
+			slog.String("addr", cfg.HTTP.Addr),
+			slog.Int("trustedProxies", cfg.HTTP.TrustedProxies),
+		)
 
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("HTTP: %w", err)
@@ -459,7 +463,7 @@ func (s *server) httpServer() *http.Server {
 		OperatorAuth:       s.app.operatorAuth,
 		Events:             s.app.events,
 		OperatorOrigin:     cfg.Operator.Origin,
-		TrustProxy:         cfg.Login.TrustProxy,
+		TrustedProxies:     cfg.HTTP.TrustedProxies,
 		Checks:             checks,
 		Metrics:            promhttp.HandlerFor(s.metrics, promhttp.HandlerOpts{}),
 		Registerer:         s.metrics,
