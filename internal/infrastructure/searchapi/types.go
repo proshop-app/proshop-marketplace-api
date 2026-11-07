@@ -39,6 +39,7 @@ type offerDocument struct {
 	Name              string                       `json:"name"`
 	Description       string                       `json:"description"`
 	Image             string                       `json:"image"`
+	Assets            []string                     `json:"assets"`
 	URL               string                       `json:"url"`
 	SKU               string                       `json:"sku"`
 	CategoryID        string                       `json:"categoryId"`

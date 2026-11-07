@@ -172,6 +172,7 @@ func TestRatingRepositoryRevision(t *testing.T) {
 	ctx := context.Background()
 	first := snapshot("t1", "p1", 1, 0)
 	first.AverageRating, first.RatingsCount = 4.7, 20
+	first.Card.Assets = []string{"main", "detail"}
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		p, err := catalog.NewProduct(first, at(0))
 		if err != nil {
@@ -189,6 +190,9 @@ func TestRatingRepositoryRevision(t *testing.T) {
 			}
 			if p.State().AverageRating != 4.7 || p.State().RatingsCount != 20 {
 				t.Fatal(p.State())
+			}
+			if got := p.State().Card.Assets; len(got) != 2 || got[0] != "main" || got[1] != "detail" {
+				t.Fatal(got)
 			}
 			next := first
 			next.Revision, next.AverageRating, next.RatingsCount = revision, 3.5, 30
@@ -208,6 +212,9 @@ func TestRatingRepositoryRevision(t *testing.T) {
 		p, err := tx.Products().Get(ctx, "t1", "p1")
 		if err != nil {
 			return err
+		}
+		if got := p.State().Card.Assets; len(got) != 2 || got[0] != "main" || got[1] != "detail" {
+			t.Fatal(got)
 		}
 		if p.State().AverageRating != 3.5 || p.State().RatingsCount != 30 {
 			t.Fatal(p.State())

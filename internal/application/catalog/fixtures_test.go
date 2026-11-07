@@ -46,6 +46,7 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at tim
 				CategoryPath: []string{"c1"},
 			},
 			Name:       "Товар " + string(product),
+			Assets:     []string{"main", "detail"},
 			Visible:    true,
 			Categories: []catalog.Category{{ID: "c1", Name: "Категория"}},
 		},

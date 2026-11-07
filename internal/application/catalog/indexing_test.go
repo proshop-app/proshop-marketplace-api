@@ -55,6 +55,9 @@ func TestSyncOfferWritesParticipantOffers(t *testing.T) {
 		doc.SellerSlug != "slug-t1" {
 		t.Fatalf("документ: %+v", doc)
 	}
+	if len(doc.Assets) != 2 || doc.Assets[0] != "main" || doc.Assets[1] != "detail" {
+		t.Fatal(doc.Assets)
+	}
 	if doc.Version != 4 {
 		t.Fatalf("версия — сумма версий товара, участника и реестра: %d", doc.Version)
 	}
@@ -81,7 +84,7 @@ func TestSyncOfferHiddenSellerLeavesTombstone(t *testing.T) {
 	}
 
 	doc, ok := index.Doc("t1~p1")
-	if !ok || doc.Visible || doc.Listed || doc.Name != "" || doc.Price != 0 {
+	if !ok || doc.Visible || doc.Listed || doc.Name != "" || doc.Price != 0 || len(doc.Assets) != 0 {
 		t.Fatalf("скрытое предложение — документ без карточки: %+v", doc)
 	}
 }

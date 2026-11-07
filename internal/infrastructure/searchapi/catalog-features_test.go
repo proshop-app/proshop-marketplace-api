@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -70,7 +71,7 @@ func TestPriceBucketsAndRatingContract(t *testing.T) {
 	}
 }
 
-func TestVersionThreeDocumentContract(t *testing.T) {
+func TestVersionFourDocumentContract(t *testing.T) {
 	raw, err := os.ReadFile("testdata/search_buckets.json")
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +97,7 @@ func TestVersionThreeDocumentContract(t *testing.T) {
 	client.client.Transport = featureTransport(func(r *http.Request) (*http.Response, error) {
 		w := httptest.NewRecorder()
 		if strings.HasSuffix(r.URL.Path, "/status") {
-			_, _ = w.Write([]byte(`{"contractVersion":3,"ready":true}`))
+			_, _ = w.Write([]byte(`{"contractVersion":4,"ready":true}`))
 			return w.Result(), nil
 		}
 		var body struct {
@@ -119,6 +120,9 @@ func TestVersionThreeDocumentContract(t *testing.T) {
 		}
 		if _, exists := fields["salesCount"]; exists {
 			t.Error("salesCount передан поиску")
+		}
+		if !slices.Equal(sent.Assets, []string{"p/main.jpg", "p/detail.jpg"}) {
+			t.Error(sent.Assets)
 		}
 		if sent.Rating == nil || *sent.Rating != *fixture.Items[0].Rating {
 			t.Error(sent)
@@ -146,7 +150,7 @@ func TestDocumentNormalizesRating(t *testing.T) {
 	}
 }
 
-func TestStatusVersionTwoRejected(t *testing.T) {
+func TestStatusVersionThreeRejected(t *testing.T) {
 	client, err := New(Config{
 		URL:     "http://search.test",
 		Token:   strings.Repeat("m", 32),
@@ -160,10 +164,21 @@ func TestStatusVersionTwoRejected(t *testing.T) {
 			t.Error("ожидался /status", r.URL.Path)
 		}
 		w := httptest.NewRecorder()
-		_, _ = w.Write([]byte(`{"contractVersion":2,"ready":true}`))
+		_, _ = w.Write([]byte(`{"contractVersion":3,"ready":true}`))
 		return w.Result(), nil
 	})
 	if err := client.Ping(context.Background()); !errors.Is(err, ErrUnavailable) {
-		t.Fatal("контракт 2 принят", err)
+		t.Fatal("контракт 3 принят", err)
+	}
+}
+
+func TestEmptyAssetsAreArray(t *testing.T) {
+	doc, err := toDocument(ports.OfferDocument{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil || !strings.Contains(string(raw), `"assets":[]`) {
+		t.Fatalf("%s: %v", raw, err)
 	}
 }

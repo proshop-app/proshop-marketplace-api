@@ -65,6 +65,7 @@ type OfferDocument struct {
 	Name              string
 	Description       string
 	Image             string
+	Assets            []string
 	URL               string
 	SKU               string
 	Categories        []catalog.Category

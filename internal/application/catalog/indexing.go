@@ -336,6 +336,7 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	doc.Name = offer.Card.Name
 	doc.Description = offer.Card.Description
 	doc.Image = offer.Card.Image
+	doc.Assets = append([]string(nil), offer.Card.Assets...)
 	doc.URL = offer.Card.URL
 	doc.SKU = offer.Card.SKU
 	publication := offer.Card.Publication

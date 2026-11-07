@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+	"unicode"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
@@ -17,6 +18,12 @@ import (
 // projectionVersion — версия контракта проекций сервера.
 const projectionVersion = 1
 
+// Лимиты совпадают с MaxAssets/MaxAssetLength движка и защищают размер документа и пачки.
+const (
+	maxProductAssets     = 20
+	maxProductAssetBytes = 512
+)
+
 type productProjection struct {
 	Version   int              `json:"version"`
 	TenantID  string           `json:"tenantId"`
@@ -27,6 +34,7 @@ type productProjection struct {
 }
 
 type productSnapshot struct {
+	Assets            []json.RawMessage  `json:"assets"`
 	AverageRating     float64            `json:"averageRating"`
 	RatingsCount      int64              `json:"ratingsCount"`
 	SalesCount        int64              `json:"salesCount"`
@@ -186,6 +194,7 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 	if product.Image != nil {
 		card.Image = *product.Image
 	}
+	card.Assets = snapshotAssets(product.Assets, card.Image)
 	if product.VariantsID != nil {
 		card.VariantsID = *product.VariantsID
 	}
@@ -351,4 +360,42 @@ func nullable(raw json.RawMessage) json.RawMessage {
 	}
 
 	return raw
+}
+
+func snapshotAssets(raw []json.RawMessage, image string) []string {
+	assets := make([]string, 0, maxProductAssets)
+	seen := make(map[string]bool)
+	for _, item := range raw {
+		var value string
+		if json.Unmarshal(item, &value) != nil {
+			continue
+		}
+		value = cleanAsset(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		assets = append(assets, value)
+		if len(assets) == maxProductAssets {
+			break
+		}
+	}
+	if len(assets) == 0 {
+		if value := cleanAsset(image); value != "" {
+			assets = append(assets, value)
+		}
+	}
+	return assets
+}
+
+func cleanAsset(value string) string {
+	value = strings.TrimSpace(value)
+	lower := strings.ToLower(value)
+	if len(value) > maxProductAssetBytes || strings.HasPrefix(lower, "data:") || strings.HasPrefix(lower, "blob:") {
+		return ""
+	}
+	if strings.ContainsFunc(value, unicode.IsControl) {
+		return ""
+	}
+	return value
 }

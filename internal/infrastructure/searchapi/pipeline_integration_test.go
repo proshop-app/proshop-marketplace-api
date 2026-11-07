@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -142,6 +143,7 @@ func TestProjectionToIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	assets := []string{"p/detail.jpg", "p/main.jpg", "p/back.jpg"}
 	for i, product := range []ids.ProductID{"p1", "p2"} {
 		err := projector.ApplyProduct(
 			ctx,
@@ -164,6 +166,7 @@ func TestProjectionToIndex(t *testing.T) {
 								"a3": json.RawMessage(`false`),
 							},
 						},
+						Assets:  assets,
 						Name:    "Товар " + string(product),
 						Visible: true,
 						Categories: []catalog.Category{
@@ -266,6 +269,16 @@ func TestProjectionToIndex(t *testing.T) {
 		t.Fatalf("включённый участник в выдаче, с настройками доступен для оформления: %+v, %v", list, err)
 	}
 
+	for _, item := range list.Items {
+		if !slices.Equal(item.Offer.Assets, assets) {
+			t.Fatalf("поиск изменил галерею: %v, ожидалась %v", item.Offer.Assets, assets)
+		}
+	}
+	doc, found, err := index.Get(ctx, "t1~p1")
+	if err != nil || !found || !slices.Equal(doc.Assets, assets) {
+		t.Fatalf("Get изменил галерею: %+v, найдено %v, ошибка %v", doc, found, err)
+	}
+
 	card, err := queries.Offer(
 		ctx,
 		ids.OfferID{
@@ -334,6 +347,11 @@ func TestProjectionToIndex(t *testing.T) {
 
 	if list, _ := queries.Search(ctx, ports.OfferQuery{}); list.Total != 0 {
 		t.Fatalf("приостановленный магазин уходит из выдачи: %+v", list)
+	}
+
+	doc, found, err = index.Get(ctx, "t1~p1")
+	if err != nil || found || len(doc.Assets) != 0 {
+		t.Fatalf("скрытое предложение вернуло карточку или галерею: %+v, найдено %v, ошибка %v", doc, found, err)
 	}
 
 	result, err := indexer.Rebuild(ctx)

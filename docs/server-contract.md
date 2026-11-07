@@ -410,6 +410,8 @@ seller_unreachable или delivery_unavailable, либо истечение ок
   "product": {
     "id": "p1",
     "name": "Товар",
+    "image": "products/p1/main.jpg",
+    "assets": ["products/p1/main.jpg", "products/p1/detail.jpg"],
     "price": 199.99,
     "priceProfiles": [{"key":"marketplace:default","price":249.99,"promoPrice":null,"effectivePrice":249.99}],
     "availableQuantity": 3,
@@ -425,6 +427,14 @@ seller_unreachable или delivery_unavailable, либо истечение ок
   }
 }
 ```
+
+Галерея снимка v1 — `product.assets`: ключи бакета без хоста и `/images/`,
+сегменты не кодированы (кодирует витрина), порядок магазина; `image` обычно равен
+первому элементу. При разборе остаются строки после `TrimSpace`, без пустых,
+`data:`, `blob:`, управляющих символов Unicode (Cc, `unicode.IsControl`), повторов
+и значений длиннее 512 байт; максимум 20.
+Недопустимые и нестроковые элементы пропускаются, сообщение принимается.
+Отсутствие поля и null означают пустую галерею; если после очистки она пуста, используется допустимый `image`.
 
 `c1`, `a1`–`a3`, `v1` в примере — условные идентификаторы из загруженной
 оператором схемы. Ключ Kafka по-прежнему `["t1","p1"]`; время публикации —

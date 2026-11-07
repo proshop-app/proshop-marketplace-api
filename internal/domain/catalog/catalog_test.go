@@ -241,3 +241,28 @@ func TestComposeOfferVisibility(t *testing.T) {
 func allowedVerdict() *moderation.Verdict {
 	return moderation.RestoreVerdict(moderation.VerdictState{Status: moderation.Allowed, Version: 1})
 }
+
+func TestProductCopiesAssets(t *testing.T) {
+	first := snapshot(1, t0)
+	first.Card.Assets = []string{"main", "detail"}
+	product, err := catalog.NewProduct(first, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Card.Assets[0] = "changed"
+	if product.State().Card.Assets[0] != "main" {
+		t.Fatal("снимок изменил галерею агрегата")
+	}
+	next := snapshot(2, t1)
+	next.Card.Assets = []string{"next"}
+	if _, err := product.Apply(next, t1); err != nil {
+		t.Fatal(err)
+	}
+	next.Card.Assets[0] = "changed"
+	state := product.State()
+	restored := catalog.RestoreProduct(state)
+	state.Card.Assets[0] = "changed"
+	if restored.State().Card.Assets[0] != "next" {
+		t.Fatal("восстановленная галерея разделяет срез")
+	}
+}

@@ -88,6 +88,7 @@ type cardJSON struct {
 	Name           string               `json:"name"`
 	Description    string               `json:"description,omitempty"`
 	Image          string               `json:"image,omitempty"`
+	Assets         []string             `json:"assets"`
 	URL            string               `json:"url,omitempty"`
 	SKU            string               `json:"sku,omitempty"`
 	Categories     []categoryJSON       `json:"categories,omitempty"`
@@ -254,6 +255,7 @@ func encodeCard(card catalog.Card) ([]byte, error) {
 		Name:           card.Name,
 		Description:    card.Description,
 		Image:          card.Image,
+		Assets:         card.Assets,
 		URL:            card.URL,
 		SKU:            card.SKU,
 		VariantsID:     card.VariantsID,
@@ -286,6 +288,7 @@ func decodeCard(raw []byte) (catalog.Card, error) {
 		Name:           doc.Name,
 		Description:    doc.Description,
 		Image:          doc.Image,
+		Assets:         doc.Assets,
 		URL:            doc.URL,
 		SKU:            doc.SKU,
 		VariantsID:     doc.VariantsID,

@@ -1,1 +1,1 @@
-{"facets":[{"code":"price","name":"Цена","type":"number","count":5,"values":[],"min":0,"max":20000,"buckets":[{"from":0,"to":10000,"count":2},{"from":10000,"to":20000,"count":3}]}],"total":5,"items":[{"tenantId":"t1","productId":"p1","rating":{"value":4.5,"count":12}}]}
+{"facets":[{"code":"price","name":"Цена","type":"number","count":5,"values":[],"min":0,"max":20000,"buckets":[{"from":0,"to":10000,"count":2},{"from":10000,"to":20000,"count":3}]}],"total":5,"items":[{"tenantId":"t1","productId":"p1","assets":["p/main.jpg","p/detail.jpg"],"rating":{"value":4.5,"count":12}}]}

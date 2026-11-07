@@ -29,6 +29,7 @@ type Card struct {
 	Name           string
 	Description    string
 	Image          string
+	Assets         []string
 	URL            string
 	SKU            string
 	Categories     []Category
@@ -96,6 +97,7 @@ func NewProduct(snapshot Snapshot, now time.Time) (*Product, error) {
 
 // RestoreProduct поднимает запись из хранилища.
 func RestoreProduct(state ProductState) *Product {
+	state.Card.Assets = append([]string(nil), state.Card.Assets...)
 	return &Product{state: state, originVersion: state.Version}
 }
 
@@ -147,6 +149,7 @@ func (p *Product) assign(snapshot Snapshot, now time.Time) {
 
 	p.state.PriceProfiles = append([]PriceProfile(nil), snapshot.PriceProfiles...)
 	p.state.Card = snapshot.Card
+	p.state.Card.Assets = append([]string(nil), snapshot.Card.Assets...)
 	p.state.Card.Name = strings.TrimSpace(snapshot.Card.Name)
 	p.state.Price = snapshot.Price
 	p.state.PromoPrice = snapshot.PromoPrice
