@@ -50,12 +50,13 @@ func TestStoreCardRepositoryRoundTripAndConflict(t *testing.T) {
 		); err != nil {
 			return err
 		}
-		profile := participant.Profile{Name: "Новое имя", Slogan: "Слоган"}
+		logo := "logo"
+		profile := participant.Profile{Name: "Новое имя", Logo: &logo}
 		ready := participant.CardReadiness{Ready: true}
 		if _, err := p.ApplyStoreCard(profile, ready, &participant.Returns{Days: 14}, at(1)); err != nil {
 			return err
 		}
-		if _, err := p.HideCard("slogan", "Причина", at(1)); err != nil {
+		if _, err := p.HideCard("logo", "Причина", at(1)); err != nil {
 			return err
 		}
 		if err := tx.Participants().Update(ctx, p); err != nil {
@@ -80,7 +81,7 @@ func TestStoreCardRepositoryRoundTripAndConflict(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		profile.Slogan = "Исправлен"
+		profile.Logo = nil
 		if _, err := loaded.ApplyStoreCard(profile, ready, card.Returns, at(2)); err != nil {
 			return err
 		}

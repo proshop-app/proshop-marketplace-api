@@ -43,10 +43,10 @@ const (
 		THEN jsonb_set(EXCLUDED.summary, '{hidden}', store_cards.summary->'hidden') ELSE EXCLUDED.summary END,
 		header = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
 		THEN EXCLUDED.header || jsonb_build_object(
-		 'slogan', store_cards.header->'slogan', 'logo', store_cards.header->'logo')
+		 'logo', store_cards.header->'logo')
 		ELSE EXCLUDED.header END,
 		card = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
-		THEN EXCLUDED.card || jsonb_build_object('slogan', store_cards.card->'slogan', 'logo', store_cards.card->'logo')
+		THEN EXCLUDED.card || jsonb_build_object('logo', store_cards.card->'logo')
 		ELSE EXCLUDED.card END,
 		profile_version = GREATEST(store_cards.profile_version, EXCLUDED.profile_version)`
 	deleteStoreCategories = `DELETE FROM store_card_categories WHERE tenant_id = $1`
@@ -216,7 +216,7 @@ func (r *StoreCards) List(ctx context.Context, category string, limit, offset in
 // оператора от уже начавшегося пересчёта со старым снимком участника.
 func (r *StoreCards) UpdateProfile(ctx context.Context, p *participant.Participant) error {
 	profile := p.PublicProfile()
-	patch, err := json.Marshal(map[string]any{"slogan": profile.Slogan, "logo": profile.Logo})
+	patch, err := json.Marshal(map[string]any{"logo": profile.Logo})
 	if err != nil {
 		return err
 	}

@@ -151,8 +151,9 @@ func TestFailedSettingsPreserveCardAndModeration(t *testing.T) {
 			store, service := seedStoreCard(t)
 			ctx := context.Background()
 			platform := fake.NewPlatform()
+			logo := "original-logo"
 			settings := ports.ShopSettings{
-				Profile:  participant.Profile{Name: "Магазин", Slogan: "Исходный слоган"},
+				Profile:  participant.Profile{Name: "Магазин", Logo: &logo},
 				Card:     participant.CardReadiness{Ready: true},
 				Returns:  &participant.Returns{Days: 14, Shipping: "Условия", How: "Инструкция"},
 				Delivery: w3SettingsDelivery,
@@ -163,7 +164,7 @@ func TestFailedSettingsPreserveCardAndModeration(t *testing.T) {
 			if _, err := syncer.SyncOne(ctx, "t1"); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := service.ModerateCard(ctx, "t1", participant.CardSlogan, true, participant.Decision{
+			if _, err := service.ModerateCard(ctx, "t1", participant.CardLogo, true, participant.Decision{
 				Note: "  Причина  ",
 			}); err != nil {
 				t.Fatal(err)
@@ -191,7 +192,7 @@ func TestFailedSettingsPreserveCardAndModeration(t *testing.T) {
 			if err != nil || journal.Total != 1 {
 				t.Fatal(journal, err)
 			}
-			if journal.Items[0].PreviousValue != "Исходный слоган" || journal.Items[0].Note != "Причина" {
+			if journal.Items[0].PreviousValue != "original-logo" || journal.Items[0].Note != "Причина" {
 				t.Fatal(journal.Items)
 			}
 			platform.Fail("t1", nil)
@@ -205,7 +206,8 @@ func TestFailedSettingsPreserveCardAndModeration(t *testing.T) {
 			if len(after.StoreCard.Hidden) != 1 {
 				t.Fatal(after.StoreCard)
 			}
-			settings.Profile.Slogan = "Исправленный слоган"
+			updatedLogo := "updated-logo"
+			settings.Profile.Logo = &updatedLogo
 			platform.Fail("t1", nil)
 			platform.SetSettings("t1", settings)
 			if _, err := syncer.SyncOne(ctx, "t1"); err != nil {
@@ -218,7 +220,7 @@ func TestFailedSettingsPreserveCardAndModeration(t *testing.T) {
 			found := false
 			for _, record := range journal.Items {
 				if record.Action == participant.ActionCardShow {
-					found = record.Actor == participant.ActorSystem && record.PreviousValue == "Исходный слоган"
+					found = record.Actor == participant.ActorSystem && record.PreviousValue == "original-logo"
 				}
 			}
 			if !found {
@@ -239,8 +241,9 @@ func TestCardOnlySettingsDoNotReindex(t *testing.T) {
 		StoreCard: participant.StoreCard{Profile: participant.Profile{Name: "Магазин"}},
 	})
 	platform := fake.NewPlatform()
+	logo := "new-logo"
 	platform.SetSettings("t1", ports.ShopSettings{
-		Profile: participant.Profile{Name: strings.Repeat("я", 201), Slogan: "Новый слоган"},
+		Profile: participant.Profile{Name: strings.Repeat("я", 201), Logo: &logo},
 		Card:    participant.CardReadiness{Missing: []string{"terms"}},
 	})
 	syncer := appparticipant.NewSettings(store, platform, fake.NewClock(t0), &fake.IDs{})
@@ -251,7 +254,7 @@ func TestCardOnlySettingsDoNotReindex(t *testing.T) {
 	if !ok {
 		t.Fatal("участник не найден")
 	}
-	if state.Name != "Магазин" || state.StoreCard.Profile.Slogan != "Новый слоган" {
+	if state.Name != "Магазин" || state.StoreCard.Profile.Logo == nil || *state.StoreCard.Profile.Logo != logo {
 		t.Fatal(state)
 	}
 	for _, row := range store.OutboxRows() {

@@ -51,7 +51,6 @@ type ShopHeader struct {
 	TenantID   ids.TenantID    `json:"tenantId"`
 	Slug       string          `json:"slug"`
 	Name       string          `json:"name"`
-	Slogan     string          `json:"slogan"`
 	Logo       *string         `json:"logo"`
 	Initial    string          `json:"initial"`
 	Color      ShopColor       `json:"color"`
@@ -78,7 +77,6 @@ type ShopCard struct {
 	TenantID       ids.TenantID    `json:"tenantId"`
 	Slug           string          `json:"slug"`
 	Name           string          `json:"name"`
-	Slogan         string          `json:"slogan"`
 	Logo           *string         `json:"logo"`
 	Initial        string          `json:"initial"`
 	Color          ShopColor       `json:"color"`

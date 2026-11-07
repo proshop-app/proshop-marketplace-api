@@ -195,7 +195,7 @@ func TestCandidateProfileWithoutDelivery(t *testing.T) {
 		http.StatusOK,
 	)
 	settings, err := client.MarketplaceSettings(context.Background(), "t1")
-	if err != nil || settings.Profile.Name != "Кандидат" || settings.Card.Ready || len(settings.Card.Missing) != 5 ||
+	if err != nil || settings.Profile.Name != "Кандидат" || settings.Card.Ready || len(settings.Card.Missing) != 4 ||
 		settings.Profile.Color != nil || settings.Returns != nil || settings.Delivery.Validate() == nil {
 		t.Fatal(settings, err)
 	}

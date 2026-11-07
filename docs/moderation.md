@@ -469,7 +469,7 @@ Gauge обновляет фоновый цикл раз в `MODERATION_METRICS_I
 Утрата готовности карточки не меняет стадию подключённого участника.
 
 `POST /api/v1/operator/participants/{tenantId}/card/hide` принимает
-`{key: "slogan"|"logo", reason: "..."}`; причина обязательна, до 2000 символов.
+`{key: "logo", reason: "..."}`; причина обязательна, до 2000 символов.
 `DELETE /api/v1/operator/participants/{tenantId}/card/hide/{key}` снимает скрытие.
 Изменение и решение `card_hide` / `card_show` записываются одной транзакцией
 в существующий журнал участника; value — ключ пункта, note — причина скрытия.

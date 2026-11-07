@@ -141,8 +141,9 @@ func TestStoreCardSettingsAndJournal(t *testing.T) {
 	store, service := seedStoreCard(t)
 	ctx := context.Background()
 	platform := fake.NewPlatform()
+	logo := "logo"
 	settings := ports.ShopSettings{
-		Profile:  participant.Profile{Name: "Имя сервера", Slogan: "Слоган"},
+		Profile:  participant.Profile{Name: "Имя сервера", Logo: &logo},
 		Card:     participant.CardReadiness{Ready: true},
 		Delivery: w3SettingsDelivery,
 		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
@@ -156,12 +157,12 @@ func TestStoreCardSettingsAndJournal(t *testing.T) {
 		t.Fatal(state)
 	}
 	decision := participant.Decision{Note: "Причина"}
-	if _, err := service.ModerateCard(ctx, "t1", "slogan", true, decision); err != nil {
+	if _, err := service.ModerateCard(ctx, "t1", "logo", true, decision); err != nil {
 		t.Fatal(err)
 	}
 	refreshStore(t, service)
 	header, err := service.Shop(ctx, "shop-one")
-	if err != nil || header.Slogan != "" {
+	if err != nil || header.Logo != nil {
 		t.Fatal(header, err)
 	}
 	history, err := service.ListDecisions(ctx, "t1", participant.Page{})
@@ -169,7 +170,7 @@ func TestStoreCardSettingsAndJournal(t *testing.T) {
 		t.Fatal(history, err)
 	}
 	tasks := len(store.OutboxRows())
-	settings.Profile.Slogan = "Исправлен"
+	settings.Profile.Logo = nil
 	settings.Card.Ready = false
 	platform.SetSettings("t1", settings)
 	if _, err := syncer.SyncOne(ctx, "t1"); err != nil {
@@ -354,35 +355,30 @@ func TestModerationUpdatesPublicSnapshotImmediately(t *testing.T) {
 		t.Fatal("участник не найден")
 	}
 	logo := "logo"
-	state.StoreCard.Profile.Slogan = "Слоган"
 	state.StoreCard.Profile.Logo = &logo
 	store.SeedParticipant(state)
 	refreshStore(t, service)
 	ctx := context.Background()
-	for _, key := range []string{participant.CardSlogan, participant.CardLogo} {
-		for _, hide := range []bool{true, false} {
-			if _, err := service.ModerateCard(ctx, "t1", key, hide, participant.Decision{Note: "Причина"}); err != nil {
-				t.Fatal(err)
-			}
-			header, err := service.Shop(ctx, "shop-one")
-			if err != nil {
-				t.Fatal(err)
-			}
-			page, err := service.Shops(ctx, "", 20, 0)
-			if err != nil || len(page.Items) != 1 {
-				t.Fatal(page, err)
-			}
-			card := page.Items[0]
-			if key == participant.CardSlogan && ((header.Slogan == "") != hide || (card.Slogan == "") != hide) {
-				t.Fatal(header, card)
-			}
-			if key == participant.CardLogo && ((header.Logo == nil) != hide || (card.Logo == nil) != hide) {
-				t.Fatal(header, card)
-			}
-			summary, err := service.StoreSummary(ctx, "t1")
-			if err != nil || (len(summary.Hidden) == 1) != hide {
-				t.Fatal(summary, err)
-			}
+	decision := participant.Decision{Note: "Причина"}
+	for _, hide := range []bool{true, false} {
+		if _, err := service.ModerateCard(ctx, "t1", participant.CardLogo, hide, decision); err != nil {
+			t.Fatal(err)
+		}
+		header, err := service.Shop(ctx, "shop-one")
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, err := service.Shops(ctx, "", 20, 0)
+		if err != nil || len(page.Items) != 1 {
+			t.Fatal(page, err)
+		}
+		card := page.Items[0]
+		if (header.Logo == nil) != hide || (card.Logo == nil) != hide {
+			t.Fatal(header, card)
+		}
+		summary, err := service.StoreSummary(ctx, "t1")
+		if err != nil || (len(summary.Hidden) == 1) != hide {
+			t.Fatal(summary, err)
 		}
 	}
 }
