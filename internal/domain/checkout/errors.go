@@ -22,7 +22,7 @@ var (
 
 	// ErrTransition — команда не подходит текущему состоянию покупки или группы.
 	ErrTransition = errs.New(errs.Conflict, "checkout.transition", "недопустимый переход покупки или группы")
-	// ErrInvalidContact — нет корректного контакта или адреса возврата.
+	// ErrInvalidContact — нет корректного имени или телефона покупателя.
 	ErrInvalidContact = errs.New(errs.Invalid, "checkout.invalid_contact", "укажите имя и телефон покупателя")
 	// ErrInvalidOrder — магазин вернул некорректный заказ или сумму.
 	ErrInvalidOrder = errs.New(errs.Unavailable, "checkout.invalid_order", "заказ магазина не по контракту")

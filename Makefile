@@ -13,14 +13,16 @@ AIR           := go run github.com/air-verse/air@$(AIR_VERSION)
 
 # Окружение разработки указывает на docker-compose.yml. В кластере те же
 # переменные задаёт выкат; любую можно переопределить: make dev HTTP_ADDR=:9000
-DATABASE_URL        ?= postgres://marketplace:marketplace@localhost:25432/marketplace?sslmode=disable
-OPENSEARCH_URLS     ?= http://localhost:29200
-OPENSEARCH_REPLICAS ?= 0
-KAFKA_BROKERS       ?= localhost:29094
-KAFKA_TOPIC_PREFIX  ?=
-OPERATOR_TOKEN      ?= local-operator-token-0123456789abcdef
-HTTP_ADDR           ?= :8080
-REDIS_URL           ?= redis://localhost:26379/0
+DATABASE_URL           ?= postgres://marketplace:marketplace@localhost:25432/marketplace?sslmode=disable
+OPENSEARCH_URLS        ?= http://localhost:29200
+OPENSEARCH_REPLICAS    ?= 0
+KAFKA_BROKERS          ?= localhost:29094
+KAFKA_TOPIC_PREFIX     ?=
+OPERATOR_TOKEN         ?= local-operator-token-0123456789abcdef
+HTTP_ADDR              ?= :8080
+MARKETPLACE_PUBLIC_URL ?= http://localhost:3000
+PAYMENT_STUB           ?= true
+REDIS_URL              ?= redis://localhost:26379/0
 # внутренний API сервера Proshop (PORT из его .env.example) и служебный токен к нему
 PLATFORM_API_URL          ?= http://localhost:5001
 SERVICE_TOKEN_MARKETPLACE ?= local-marketplace-service-token-0123456789
@@ -28,9 +30,13 @@ SERVICE_TOKEN_MARKETPLACE ?= local-marketplace-service-token-0123456789
 SMSRU_MODE ?= sandbox
 SEARCH_URL ?= http://localhost:5002
 SEARCH_MARKETPLACE_TOKEN ?= local-marketplace-search-token-0123456789
+# локальный календарь и соль обезличивания; для стенда задаются отдельно
+PROMOTION_TIMEZONE     ?= UTC
+PROMOTION_VISITOR_SALT ?= local-promotion-visitor-salt-0123456789
 export PROMOTION_EVENTS_PER_MINUTE PROMOTION_TICK_INTERVAL
 export PROMOTION_TIMEZONE PROMOTION_VISITOR_SALT PROMOTION_SEARCH_RELEVANCE_DEPTH SERVER_API_TOKEN
 export DATABASE_URL OPENSEARCH_URLS OPENSEARCH_REPLICAS KAFKA_BROKERS KAFKA_TOPIC_PREFIX OPERATOR_TOKEN HTTP_ADDR
+export MARKETPLACE_PUBLIC_URL PAYMENT_STUB
 export REDIS_URL PLATFORM_API_URL SERVICE_TOKEN_MARKETPLACE SMSRU_MODE SEARCH_URL SEARCH_MARKETPLACE_TOKEN
 
 IMAGE ?= proshop-marketplace:dev

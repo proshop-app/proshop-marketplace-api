@@ -2407,7 +2407,7 @@ paths:
         Сначала обновляются все расчёты и настройки. Новая плата — 409 DELIVERY_CHANGED
         с checkout и новыми итогами, заказов нет. Отказ промокода магазина — ответ 200:
         в группе status=price_changed, lastErrorCode=checkout.promo_invalid, reason — причина отказа,
-        cartReturned=true после полного возврата строк в корзину. Код корзины имеет приоритет
+        строки возвращаются в корзину. Код корзины имеет приоритет
         над кодом покупки; при совпадении кодов сохраняется причина отказа, при пустом коде — код покупки.
         Остальные магазины продолжают оформление. Код и скидки передаются в заказ магазина.
       operationId: createCheckoutOrders
@@ -2444,10 +2444,12 @@ paths:
       description: >-
         Только владелец. Без PAYMENT_STUB — 503 checkout.payment_unavailable.
         Проверяется now < expiresAt всех ожидающих групп; истёкший срок — 409 checkout.payment_expired.
+        Пока покупка в creating_orders (идёт повтор создания заказов) — 409 checkout.transition:
+        витрина ждёт и опрашивает GET /api/v1/checkout/{checkoutId}; повторы длятся около 7,5 минуты.
         Нечего оплачивать (включая уже оплаченную покупку) — 409 checkout.transition.
         Исчерпанное создание без orderId возвращается в корзину и исключается из суммы;
         группа с заказом при сбое опроса учитывается по последнему известному статусу.
-        Недоступный магазин с ожидающим заказом блокирует единый платёж до успешной сверки;
+        Недоступный магазин с ожидающим заказом блокирует единый платёж, пока магазин не ответит на подтверждение;
         после expiresAt оплата всей покупки отклоняется, даже если у остальных групп срок ещё не истёк.
         Плата за доставку входит в сумму.
       operationId: payCheckout
@@ -2472,7 +2474,7 @@ paths:
   /api/v1/payment-stub/{checkoutId}:
     get:
       tags: [checkout]
-      summary: Служебная касса-заглушка — paymentStub
+      summary: Страница кассы
       description: >-
         HTML-касса Go, только владелец; POST-формы без полей, проверка Origin.
         До показа суммы проверяется now < expiresAt всех ожидающих заказов (иначе 409).
@@ -2516,7 +2518,7 @@ paths:
   /api/v1/payment-stub/{checkoutId}/confirm:
     post:
       tags: [checkout]
-      summary: Служебная касса-заглушка — confirmStubPayment
+      summary: Подтвердить оплату
       description: >-
         Только владелец; POST-форма без полей, проверка Origin.
         Всегда 303, включая ошибку авторизации при истёкшем access.
@@ -2542,7 +2544,7 @@ paths:
   /api/v1/payment-stub/{checkoutId}/cancel:
     post:
       tags: [checkout]
-      summary: Служебная касса-заглушка — cancelStubPayment
+      summary: Отказаться
       description: >-
         Только владелец; POST-форма без полей, проверка Origin. Покупка не меняется.
         Всегда 303, включая ошибку авторизации при истёкшем access.
@@ -6180,7 +6182,12 @@ components:
         pollFailures: { type: integer, minimum: 0, maximum: 5 }
         nextPollAt: { type: string, format: date-time }
         createFailures: { type: integer, minimum: 0, maximum: 5 }
-        createExhausted: { type: boolean }
+        createExhausted:
+          type: boolean
+          description: >-
+            true без orderId — окончательный отказ создания: группа возвращается в корзину
+            и в платёж не входит, даже если status остаётся seller_unreachable.
+            Неполный возврат отмечается returnFailed; остаток возвращается повторно.
         lastErrorCode: { type: string }
         currentPrices:
           type: array
@@ -6212,7 +6219,18 @@ components:
       required: [id, status, groups, delivery, goodsTotal, deliveryTotal, total, version, createdAt, updatedAt, confirmedAt]
       properties:
         id: { type: string, format: uuid }
-        status: { type: string, enum: [draft, confirmed, creating_orders, awaiting_payment, partially_paid, paid, cancelled] }
+        status:
+          type: string
+          enum: [draft, confirmed, creating_orders, awaiting_payment, partially_paid, paid, cancelled]
+          description: >-
+            partially_paid означает частичный успех единого платежа либо окончательное состояние,
+            когда оплачено всё, что не отменено. Витрина различает эти случаи по groups:
+            группа awaiting_payment требует оплаты; если остальные группы отменены или окончательно
+            отклонены (включая createExhausted=true без orderId), доплата не нужна.
+            seller_unreachable с orderId учитывается по последнему подтверждённому статусу,
+            который публично не возвращается: витрина опрашивает покупку до успешной сверки
+            либо вызывает POST /api/v1/checkout/{checkoutId}/pay — 409 checkout.transition означает,
+            что оплачивать нечего. Вызов не меняет покупку и только возвращает адрес кассы.
         groups:
           type: array
           items: { $ref: "#/components/schemas/CheckoutGroup" }

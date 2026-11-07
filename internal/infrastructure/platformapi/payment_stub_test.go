@@ -83,8 +83,8 @@ func TestStubPaymentMissingRoute(t *testing.T) {
 			}
 			continue
 		}
-		var refusal *ports.OrderRefusal
-		if !errors.As(err, &refusal) || refusal.Code != "ORDER_NOT_FOUND" {
+		var got *ports.OrderRefusal
+		if !errors.As(err, &got) || got.Code != "ORDER_NOT_FOUND" {
 			t.Fatal(err)
 		}
 	}
