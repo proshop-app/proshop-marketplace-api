@@ -14,6 +14,10 @@ import (
 
 const taxonomyData = "../../infrastructure/taxonomydata/data/"
 
+// Якоря и ссылки дампера (&id001, *id001): повтор имени якоря yaml.v3
+// терпит, а PyYAML и генераторы клиентов — нет.
+var dumperAnchor = regexp.MustCompile(`(^|\s)[&*]id\d+`)
+
 type spec struct {
 	Paths      map[string]map[string]any `yaml:"paths"`
 	Components map[string]map[string]any `yaml:"components"`
@@ -96,6 +100,18 @@ func TestOpenAPIRefsResolve(t *testing.T) {
 
 		if _, ok := doc.Components[kind][name]; !ok {
 			t.Errorf("ссылка на несуществующий компонент: %s/%s", kind, name)
+		}
+	}
+}
+
+// TestOpenAPIHasNoAnchors — в описании нет якорей и ссылок YAML: каждое
+// значение записано явно, файл разбирает любой парсер.
+func TestOpenAPIHasNoAnchors(t *testing.T) {
+	_, raw := loadSpec(t)
+
+	for number, line := range strings.Split(string(raw), "\n") {
+		if dumperAnchor.MatchString(line) {
+			t.Errorf("api/openapi.yaml:%d: якорь или ссылка YAML: %s", number+1, strings.TrimSpace(line))
 		}
 	}
 }

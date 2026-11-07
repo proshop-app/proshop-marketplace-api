@@ -482,11 +482,9 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ModerationCase'
-                  total: &id001
-                    type: integer
-                    format: int64
-                  limit: *id001
-                  offset: *id001
+                  total: { type: integer, format: int64 }
+                  limit: { type: integer, format: int64 }
+                  offset: { type: integer, format: int64 }
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -504,23 +502,8 @@ paths:
         '500':
           $ref: '#/components/responses/Error'
       parameters:
-      - &id005
-        name: limit
-        in: query
-        required: false
-        schema:
-          type: integer
-          default: 50
-          minimum: 1
-          maximum: 200
-      - &id006
-        name: offset
-        in: query
-        required: false
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
+      - { name: limit, in: query, required: false, schema: { type: integer, default: 50, minimum: 1, maximum: 200 } }
+      - { name: offset, in: query, required: false, schema: { type: integer, default: 0, minimum: 0 } }
       - name: status
         in: query
         required: false
@@ -536,8 +519,7 @@ paths:
       - name: tenantId
         in: query
         required: false
-        schema: &id002
-          type: string
+        schema: { type: string }
       - name: source
         in: query
         required: false
@@ -593,12 +575,8 @@ paths:
               - offerId
               - note
               properties:
-                offerId: *id002
-                note: &id003
-                  type: string
-                  minLength: 1
-                  maxLength: 2000
-                  description: 1–2000 символов после TrimSpace
+                offerId: { type: string }
+                note: { type: string, minLength: 1, maxLength: 2000, description: 1–2000 символов после TrimSpace }
   /api/v1/operator/moderation/cases/{caseId}:
     get:
       tags:
@@ -635,7 +613,7 @@ paths:
       - name: caseId
         in: path
         required: true
-        schema: *id002
+        schema: { type: string }
   /api/v1/operator/moderation/cases/{caseId}/allow:
     post:
       tags:
@@ -672,17 +650,17 @@ paths:
       - name: caseId
         in: path
         required: true
-        schema: *id002
+        schema: { type: string }
       - name: Idempotency-Key
         in: header
         required: false
-        schema: *id002
+        schema: { type: string }
         description: Ключ ограничен оператором. Исходный ответ хранится 24 часа; изменение запроса — 409 IDEMPOTENCY_KEY_REUSED.
       requestBody:
         required: true
         content:
           application/json:
-            schema: &id004
+            schema:
               type: object
               required:
               - expectedVersion
@@ -692,8 +670,8 @@ paths:
                   type: integer
                   format: int64
                   minimum: 1
-                reason: *id002
-                note: *id003
+                reason: { type: string }
+                note: { type: string, minLength: 1, maxLength: 2000, description: 1–2000 символов после TrimSpace }
   /api/v1/operator/moderation/cases/{caseId}/reject:
     post:
       tags:
@@ -730,17 +708,28 @@ paths:
       - name: caseId
         in: path
         required: true
-        schema: *id002
+        schema: { type: string }
       - name: Idempotency-Key
         in: header
         required: false
-        schema: *id002
+        schema: { type: string }
         description: Ключ ограничен оператором. Исходный ответ хранится 24 часа; изменение запроса — 409 IDEMPOTENCY_KEY_REUSED.
       requestBody:
         required: true
         content:
           application/json:
-            schema: *id004
+            schema:
+              type: object
+              required:
+              - expectedVersion
+              - note
+              properties:
+                expectedVersion:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                reason: { type: string }
+                note: { type: string, minLength: 1, maxLength: 2000, description: 1–2000 символов после TrimSpace }
   /api/v1/operator/moderation/offers/{offerId}:
     get:
       tags:
@@ -773,7 +762,7 @@ paths:
       - name: offerId
         in: path
         required: true
-        schema: *id002
+        schema: { type: string }
   /api/v1/operator/moderation/verdicts:
     get:
       tags:
@@ -800,9 +789,9 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ModerationVerdict'
-                  total: *id001
-                  limit: *id001
-                  offset: *id001
+                  total: { type: integer, format: int64 }
+                  limit: { type: integer, format: int64 }
+                  offset: { type: integer, format: int64 }
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -816,8 +805,8 @@ paths:
         '500':
           $ref: '#/components/responses/Error'
       parameters:
-      - *id005
-      - *id006
+      - { name: limit, in: query, required: false, schema: { type: integer, default: 50, minimum: 1, maximum: 200 } }
+      - { name: offset, in: query, required: false, schema: { type: integer, default: 0, minimum: 0 } }
       - name: status
         in: query
         required: true
@@ -830,7 +819,7 @@ paths:
       - name: tenantId
         in: query
         required: false
-        schema: *id002
+        schema: { type: string }
       - name: decidedBy
         in: query
         schema: {type: string, enum: [rule, operator]}
@@ -959,7 +948,7 @@ paths:
       - name: key
         in: path
         required: true
-        schema: *id002
+        schema: { type: string }
   /api/v1/operator/moderation/reasons:
     get:
       tags:
@@ -1060,7 +1049,7 @@ paths:
       - name: code
         in: path
         required: true
-        schema: *id002
+        schema: { type: string }
       requestBody:
         required: true
         content:
@@ -1106,7 +1095,7 @@ paths:
       - name: tenantId
         in: path
         required: true
-        schema: *id002
+        schema: { type: string }
       requestBody:
         required: true
         content:
@@ -1122,8 +1111,8 @@ paths:
                   enum:
                   - probation
                   - trusted
-                reason: *id002
-                note: *id003
+                reason: { type: string }
+                note: { type: string, minLength: 1, maxLength: 2000, description: 1–2000 символов после TrimSpace }
   /api/v1/operator/participants/{tenantId}/decisions:
     get:
       tags:
@@ -1166,8 +1155,8 @@ paths:
                           - id
                           - name
                           properties:
-                            id: *id002
-                            name: *id002
+                            id: { type: string }
+                            name: { type: string }
                         action:
                           type: string
                           enum:
@@ -1178,7 +1167,7 @@ paths:
                           - return
                           - card_hide
                           - card_show
-                        value: *id002
+                        value: { type: string }
                         previousValue: {type: string, description: Прежнее значение; у старых записей пусто.}
                         reason:
                           anyOf:
@@ -1187,13 +1176,13 @@ paths:
                         by:
                           type: string
                           enum: [operator, system]
-                        note: *id002
+                        note: { type: string }
                         at:
                           type: string
                           format: date-time
-                  total: *id001
-                  limit: *id001
-                  offset: *id001
+                  total: { type: integer, format: int64 }
+                  limit: { type: integer, format: int64 }
+                  offset: { type: integer, format: int64 }
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -1210,9 +1199,9 @@ paths:
       - name: tenantId
         in: path
         required: true
-        schema: *id002
-      - *id005
-      - *id006
+        schema: { type: string }
+      - { name: limit, in: query, required: false, schema: { type: integer, default: 50, minimum: 1, maximum: 200 } }
+      - { name: offset, in: query, required: false, schema: { type: integer, default: 0, minimum: 0 } }
   /api/v1/operator/session/refresh:
     post:
       operationId: refreshOperatorAccess
@@ -1322,9 +1311,7 @@ paths:
       tags:
       - operator
       operationId: updateParticipantDelivery
-      security: &id001
-      - operatorToken: []
-      - operatorSession: []
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       responses:
         '200':
           description: Успешно
@@ -1372,7 +1359,7 @@ paths:
       tags:
       - operator
       operationId: parkedEvents
-      security: *id001
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       responses:
         '200':
           description: Успешно
@@ -1439,7 +1426,7 @@ paths:
       tags:
       - operator
       operationId: retryParkedEvent
-      security: *id001
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       responses:
         '200':
           description: Успешно
@@ -1505,7 +1492,7 @@ paths:
       tags:
       - operator
       operationId: resolveParkedEvent
-      security: *id001
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
       responses:
         '200':
           description: Успешно
@@ -5155,9 +5142,8 @@ components:
                   - key
                   - message
                   properties:
-                    key: &id001
-                      type: string
-                    message: *id001
+                    key: { type: string }
+                    message: { type: string }
     ModerationCase:
       type: object
       required:
@@ -5192,13 +5178,10 @@ components:
         id:
           type: string
           format: uuid
-        offerId: &id001
-          type: string
-        tenantId: *id001
-        productId: *id001
-        revision: &id002
-          type: integer
-          format: int64
+        offerId: { type: string }
+        tenantId: { type: string }
+        productId: { type: string }
+        revision: { type: integer, format: int64 }
         source:
           type: string
           enum:
@@ -5211,7 +5194,7 @@ components:
           - allowed
           - rejected
           - superseded
-        reasons: &id003
+        reasons:
           type: array
           items:
             type: object
@@ -5219,9 +5202,9 @@ components:
             - key
             - message
             properties:
-              key: *id001
-              message: *id001
-        note: *id001
+              key: { type: string }
+              message: { type: string }
+        note: { type: string }
         openedAt:
           type: string
           format: date-time
@@ -5230,7 +5213,7 @@ components:
           - string
           - 'null'
           format: date-time
-        version: *id002
+        version: { type: integer, format: int64 }
     ModerationVerdict:
       type: object
       required:
@@ -5283,17 +5266,26 @@ components:
                 - type: 'null'
               note: {type: string}
               at: {type: string, format: date-time}
-        offerId: *id001
-        tenantId: *id001
-        productId: *id001
-        revision: *id002
+        offerId: { type: string }
+        tenantId: { type: string }
+        productId: { type: string }
+        revision: { type: integer, format: int64 }
         status:
           type: string
           enum:
           - allowed
           - pending
           - rejected
-        reasons: *id003
+        reasons:
+          type: array
+          items:
+            type: object
+            required:
+            - key
+            - message
+            properties:
+              key: { type: string }
+              message: { type: string }
         decidedBy:
           type: string
           enum:
@@ -5316,15 +5308,15 @@ components:
       - seller
       - publication
       properties:
-        name: *id001
-        description: *id001
-        image: *id001
-        price: *id002
-        basePrice: *id002
-        categoryId: *id001
+        name: { type: string }
+        description: { type: string }
+        image: { type: string }
+        price: { type: integer, format: int64 }
+        basePrice: { type: integer, format: int64 }
+        categoryId: { type: string }
         categoryPath:
           type: array
-          items: *id001
+          items: { type: string }
         attributes:
           $ref: '#/components/schemas/CanonicalAttributes'
         seller:
@@ -5333,8 +5325,8 @@ components:
           - slug
           - name
           properties:
-            slug: *id001
-            name: *id001
+            slug: { type: string }
+            name: { type: string }
         publication:
           $ref: '#/components/schemas/Publication'
     ModerationHistory:
@@ -5351,14 +5343,14 @@ components:
       - revision
       - at
       properties:
-        operator: &id004
+        operator:
           type: object
           required:
           - id
           - name
           properties:
-            id: *id001
-            name: *id001
+            id: { type: string }
+            name: { type: string }
         action:
           type: string
           enum:
@@ -5368,8 +5360,8 @@ components:
           anyOf:
           - $ref: '#/components/schemas/ModerationReason'
           - type: 'null'
-        note: *id001
-        revision: *id002
+        note: { type: string }
+        revision: { type: integer, format: int64 }
         at:
           type: string
           format: date-time
@@ -5381,9 +5373,16 @@ components:
       - operator
       - createdAt
       properties:
-        key: *id001
-        text: *id001
-        operator: *id004
+        key: { type: string }
+        text: { type: string }
+        operator:
+          type: object
+          required:
+          - id
+          - name
+          properties:
+            id: { type: string }
+            name: { type: string }
         createdAt:
           type: string
           format: date-time
@@ -5487,8 +5486,8 @@ components:
           - code
           - message
           properties:
-            code: *id001
-            message: *id001
+            code: { type: string }
+            message: { type: string }
         case:
           $ref: '#/components/schemas/ModerationCase'
     Operator:
