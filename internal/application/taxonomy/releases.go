@@ -86,7 +86,7 @@ func (s *Service) changeRelease(
 		if err != nil {
 			return err
 		}
-		if err := s.revalidate(ctx, tx, next); err != nil {
+		if err := s.schedule(ctx, tx, next.Version); err != nil {
 			return err
 		}
 		result.SnapshotVersion = next.Version

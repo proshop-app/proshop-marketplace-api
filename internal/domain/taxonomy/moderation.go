@@ -1,5 +1,8 @@
 package taxonomy
 
+// DefaultModerationPolicy применяется при отсутствии явной политики.
+const DefaultModerationPolicy = "auto"
+
 // ModerationPolicy наследует ближайшую явно заданную политику узла.
 func (d Definition) ModerationPolicy(id string) string {
 	var walk func([]Category, string) (string, bool)
@@ -16,8 +19,8 @@ func (d Definition) ModerationPolicy(id string) string {
 				return result, true
 			}
 		}
-		return "auto", false
+		return DefaultModerationPolicy, false
 	}
-	policy, _ := walk(d.Categories, "auto")
+	policy, _ := walk(d.Categories, DefaultModerationPolicy)
 	return policy
 }

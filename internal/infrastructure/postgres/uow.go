@@ -142,3 +142,5 @@ func (s *scope) ParticipantDecisions() participant.DecisionRepository {
 }
 
 func (s *scope) Promotion() promotion.Repository { return &Promotions{q: s.q} }
+
+func (s *scope) TaxonomyRevalidation() ports.TaxonomyRevalidation { return &Taxonomy{q: s.q} }

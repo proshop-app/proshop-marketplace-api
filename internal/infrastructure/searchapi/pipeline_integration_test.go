@@ -47,7 +47,7 @@ func TestProjectionToIndex(t *testing.T) {
 	now := clock.System{}
 	uow := postgres.NewUnitOfWork(pool)
 
-	if _, err := apptaxonomy.NewService(uow, now, nil).Apply(ctx, taxonomy.Release{
+	if _, err := apptaxonomy.NewService(uow, now, nil, 0).Apply(ctx, taxonomy.Release{
 		Checksum: strings.Repeat("a", 64),
 		Attributes: []taxonomy.Attribute{
 			{

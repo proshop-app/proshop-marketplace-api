@@ -41,6 +41,7 @@ type Tx interface {
 	ModerationRules() moderation.RulesRepository
 	ParticipantDecisions() participant.DecisionRepository
 	Taxonomy() taxonomy.Repository
+	TaxonomyRevalidation() TaxonomyRevalidation
 	Participants() participant.Repository
 	Registry() participant.Registry
 	Products() catalog.ProductRepository

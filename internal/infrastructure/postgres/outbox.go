@@ -17,8 +17,9 @@ const (
 		INSERT INTO outbox (kind, tenant_id, dedup_key, payload, next_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, $5)
 		ON CONFLICT (dedup_key) WHERE done_at IS NULL AND attempts = 0 DO UPDATE
-		SET next_at = EXCLUDED.next_at
-		WHERE EXCLUDED.next_at < outbox.next_at`
+		SET next_at = LEAST(outbox.next_at, EXCLUDED.next_at),
+			payload = CASE WHEN $6 THEN EXCLUDED.payload ELSE outbox.payload END
+		WHERE $6 OR EXCLUDED.next_at < outbox.next_at`
 
 	// claimTasks берёт созревшие задачи с квотой на магазин и пропуском занятых строк.
 	claimTasks = `
@@ -90,6 +91,7 @@ func (o *Outbox) Enqueue(ctx context.Context, task ports.NewTask) error {
 		dedup,
 		string(task.Payload),
 		task.At,
+		task.ReplacePayload,
 	)
 	if err != nil {
 		return fmt.Errorf("задача %s: %w", task.Kind, err)

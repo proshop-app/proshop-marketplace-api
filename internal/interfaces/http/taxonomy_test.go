@@ -60,7 +60,7 @@ func TestTaxonomyHTTP(t *testing.T) {
 	index := fake.NewIndex()
 	handler := NewHandler(Deps{
 		Registerer:    prometheus.NewRegistry(),
-		Taxonomy:      apptaxonomy.NewService(store, clock, nil),
+		Taxonomy:      apptaxonomy.NewService(store, clock, nil, 0),
 		Catalog:       appcatalog.NewQueries(store, index, fake.NewPlatform(), nil, nil, fake.NewClock(time.Time{})),
 		OperatorToken: "token",
 		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),

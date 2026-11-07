@@ -3,6 +3,10 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
@@ -10,9 +14,10 @@ import (
 )
 
 const (
-	selectTaxonomy = `SELECT definition FROM taxonomy_head WHERE singleton FOR SHARE`
-	lockTaxonomy   = `SELECT version FROM taxonomy_head WHERE singleton FOR UPDATE`
-	updateTaxonomy = `UPDATE taxonomy_head
+	selectTaxonomyVersion = `SELECT definition FROM taxonomy_versions WHERE version = $1`
+	selectTaxonomy        = `SELECT definition FROM taxonomy_head WHERE singleton FOR SHARE`
+	lockTaxonomy          = `SELECT version FROM taxonomy_head WHERE singleton FOR UPDATE`
+	updateTaxonomy        = `UPDATE taxonomy_head
 		SET version = $1,
 			definition = $2
 		WHERE singleton AND version = $3`
@@ -83,4 +88,21 @@ func (r *Products) Page(
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// Version нужен для сравнения эффективной политики с последней проверкой товара.
+func (r *Taxonomy) Version(ctx context.Context, version int64) (taxonomy.Definition, error) {
+	if version == 0 {
+		return taxonomy.Definition{}, nil
+	}
+	var raw []byte
+	if err := r.q.QueryRow(ctx, selectTaxonomyVersion, version).Scan(&raw); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = taxonomy.ErrConflict
+		}
+		return taxonomy.Definition{}, fmt.Errorf("снимок таксономии %d: %w", version, err)
+	}
+	var d taxonomy.Definition
+	err := json.Unmarshal(raw, &d)
+	return d, err
 }

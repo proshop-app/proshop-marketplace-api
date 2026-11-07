@@ -95,7 +95,7 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 	)
 	deps := transport.Deps{
 		Features:     appbuyer.NewFeatures(e.store, e.geo, e.platform, e.limiter),
-		Taxonomy:     apptaxonomy.NewService(e.store, e.clock, nil),
+		Taxonomy:     apptaxonomy.NewService(e.store, e.clock, nil, 0),
 		Catalog:      appcatalog.NewQueries(e.store, e.index, e.platform, nil, nil, fake.NewClock(time.Time{})),
 		Participants: appparticipant.NewService(e.store, e.clock, &fake.IDs{}),
 		Auth: appbuyer.NewAuth(
