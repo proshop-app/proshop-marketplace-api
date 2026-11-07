@@ -75,6 +75,9 @@ type Platform struct {
 	BeforeSettings    func(ids.TenantID)
 	OrderNow          time.Time
 	AfterCreate       func()
+	AfterStubPayment  func()
+	stubPaid          map[string]bool
+	stubCalls         []ids.TenantID
 }
 
 // PickupProvider — справочник перевозчика в памяти.
@@ -246,6 +249,7 @@ func NewPlatform() *Platform {
 	return &Platform{
 		items:             map[ids.TenantID]map[ids.ProductID]ports.ItemCheck{},
 		orders:            map[string]checkout.SellerOrder{},
+		stubPaid:          map[string]bool{},
 		orderRefusals:     map[string]error{},
 		orderTenants:      map[string]ids.TenantID{},
 		orderBodies:       map[string]string{},

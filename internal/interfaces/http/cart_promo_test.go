@@ -85,7 +85,7 @@ func TestCheckoutTrackingJSON(t *testing.T) {
 		{Carrier: "carrier", Number: nil, URL: "https://example.test/123"},
 	} {
 		state := checkout.State{Groups: []checkout.Group{{TenantID: "t1", Tracking: tracking}}}
-		body, err := toCheckoutJSON(state, nil)
+		body, err := toCheckoutJSON(state)
 		if err != nil {
 			t.Fatal(err)
 		}

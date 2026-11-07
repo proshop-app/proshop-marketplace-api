@@ -73,6 +73,7 @@ func setup(t *testing.T) *env {
 			QuoteTTL:                  30 * time.Minute,
 			QuoteTimeout:              time.Second,
 			ReturnBaseURL:             "https://market.example",
+			PaymentStub:               true,
 		},
 	)
 	ctx := context.Background()

@@ -28,7 +28,6 @@ func (s *Service) prepareOrders(
 	}
 	quotes := s.freshQuotes(ctx, buyerID, c.Groups(), *c.Delivery())
 	expected := c.State().Version
-	returnURL := s.config.ReturnBaseURL + "/api/v1/checkout/" + string(id) + "/return"
 	deliveryChanged := false
 	state, err := s.update(ctx, buyerID, id, func(current *checkout.Checkout, now time.Time) error {
 		if current.State().Version != expected {
@@ -39,7 +38,7 @@ func (s *Service) prepareOrders(
 		if err != nil || deliveryChanged {
 			return err
 		}
-		_, err = current.BeginOrders(contact, returnURL, now)
+		_, err = current.BeginOrders(contact, now)
 		return err
 	})
 	if err != nil {

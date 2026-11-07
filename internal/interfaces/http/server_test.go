@@ -131,6 +131,7 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 				QuoteTTL:                  30 * time.Minute,
 				QuoteTimeout:              time.Second,
 				ReturnBaseURL:             "https://market.example",
+				PaymentStub:               true,
 			},
 		),
 		OperatorToken:  token,

@@ -281,7 +281,22 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/checkout/{checkoutId}/delivery/quotes", signedIn(checkouts.quote)},
 		{http.MethodPost, "/api/v1/checkout/{checkoutId}/confirm", signedIn(checkouts.confirm)},
 		{http.MethodPost, "/api/v1/checkout/{checkoutId}/orders", signedIn(checkouts.createOrders)},
-		{http.MethodPost, "/api/v1/checkout/{checkoutId}/groups/{groupId}/pay", signedIn(checkouts.pay)},
+		{http.MethodPost, "/api/v1/checkout/{checkoutId}/pay", signedIn(checkouts.pay)},
+		{
+			http.MethodGet,
+			"/api/v1/payment-stub/{checkoutId}",
+			checkouts.paymentBrowser(signedIn(checkouts.paymentStub)),
+		},
+		{
+			http.MethodPost,
+			"/api/v1/payment-stub/{checkoutId}/confirm",
+			checkouts.paymentBrowser(signedIn(checkouts.confirmPayment)),
+		},
+		{
+			http.MethodPost,
+			"/api/v1/payment-stub/{checkoutId}/cancel",
+			checkouts.paymentBrowser(signedIn(checkouts.cancelPayment)),
+		},
 		{http.MethodGet, "/api/v1/checkout/{checkoutId}/return", signedIn(checkouts.paymentReturn)},
 		{http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
 		{http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},

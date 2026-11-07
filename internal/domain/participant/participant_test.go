@@ -184,7 +184,7 @@ func TestVisibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := participant.VisibilityOf(p, active); !got.Visible || !got.CheckoutAvailable {
-		t.Fatalf("участник с настройками доступен на кассе магазина: %+v", got)
+		t.Fatalf("участник с настройками доступен для оформления: %+v", got)
 	}
 
 	if got := participant.VisibilityOf(p, active); !got.Visible || !got.CheckoutAvailable {

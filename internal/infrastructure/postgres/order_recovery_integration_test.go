@@ -42,7 +42,6 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 	}
 	if _, err := c.BeginOrders(
 		checkout.Contact{Phone: "79251234567", Name: "Покупатель"},
-		"https://market.example/return",
 		at(0),
 	); err != nil {
 		t.Fatal(err)
@@ -71,10 +70,9 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 			"t1",
 			"create",
 			checkout.SellerOrder{
-				OrderID:    "o1",
-				PaymentURL: "https://seller.example/pay/o1",
-				Total:      money.FromKopecks(10000),
-				ExpiresAt:  at(60),
+				OrderID:   "o1",
+				Total:     money.FromKopecks(10000),
+				ExpiresAt: at(60),
 			},
 			now,
 		)
@@ -149,5 +147,82 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestExhaustedCreationReturnDueAfterRestart(t *testing.T) {
+	uow := postgres.NewUnitOfWork(testPool(t))
+	seedBuyer(t, uow, buyerA, "79251234567")
+	line := checkout.Line{
+		Offer:    ids.OfferID{Tenant: "t1", Product: "p1"},
+		Quantity: 1,
+		Name:     "Товар",
+		Price:    money.FromKopecks(10000),
+	}
+	c, err := checkout.New(buyerB, buyerA, "exhausted-persistence", []checkout.Line{line}, at(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SelectDelivery(
+		checkout.Selection{Carrier: "cdek", PickupPointCode: "P1"},
+		map[ids.TenantID]delivery.Quote{"t1": {Status: delivery.QuoteAvailable, ExpiresAt: at(60)}},
+		at(0),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Confirm(at(0)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.BeginOrders(
+		checkout.Contact{Phone: "79251234567", Name: "Покупатель"},
+		at(0),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.MarkCartConsumed(at(0)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ClaimCreation("t1", "create", at(0)); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.FailCreation(
+		"t1",
+		"create",
+		"IDEMPOTENCY_CONFLICT",
+		"отказ",
+		checkout.GroupSellerUnreachable,
+		nil,
+		at(0),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
+		return tx.Checkouts().Add(ctx, c)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, returned := range []bool{false, true} {
+		if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
+			due, err := tx.Checkouts().List(ctx, checkout.Filter{OrdersOnly: true, Limit: 100, WorkDueAt: at(0)})
+			if err != nil {
+				return err
+			}
+			if returned {
+				if len(due) != 0 {
+					return fmt.Errorf("возвращённая группа снова выбрана")
+				}
+				return nil
+			}
+			if len(due) != 1 {
+				return fmt.Errorf("исчерпанная группа не выбрана: %d", len(due))
+			}
+			if _, err := due[0].RecordCartReturn("t1", nil, "", at(0)); err != nil {
+				return err
+			}
+			return tx.Checkouts().Update(ctx, due[0])
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

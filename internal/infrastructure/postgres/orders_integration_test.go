@@ -51,7 +51,7 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	contact := checkout.Contact{Phone: "79251234567", Name: "Покупатель"}
-	if _, err := c.BeginOrders(contact, "https://market.example/return", at(0)); err != nil {
+	if _, err := c.BeginOrders(contact, at(0)); err != nil {
 		t.Fatal(err)
 	}
 	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
@@ -61,10 +61,9 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 	}
 	stale := checkout.Restore(c.State())
 	order := checkout.SellerOrder{
-		OrderID:    "o1",
-		PaymentURL: "https://seller.example/pay/o1",
-		ExpiresAt:  at(60),
-		Total:      money.FromKopecks(10000),
+		OrderID:   "o1",
+		ExpiresAt: at(60),
+		Total:     money.FromKopecks(10000),
 	}
 	if _, err := c.AttachOrder("t1", order, at(1)); err != nil {
 		t.Fatal(err)
@@ -87,9 +86,9 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 			return err
 		}
 		state := loaded.State()
-		if state.Contact != contact || state.ReturnURL != "https://market.example/return" ||
-			state.Groups[0].OrderID != "o1" || state.Groups[0].PaymentOrder != 1 ||
-			state.Groups[0].PaymentURL != order.PaymentURL || !state.Groups[0].ExpiresAt.Equal(at(60)) ||
+		if state.Contact != contact ||
+			state.Groups[0].OrderID != "o1" ||
+			!state.Groups[0].ExpiresAt.Equal(at(60)) ||
 			state.Delivery.RegionCode != "RU-MOW" || state.Status != checkout.StatusAwaitingPayment {
 			return fmt.Errorf("после загрузки: %+v", state)
 		}

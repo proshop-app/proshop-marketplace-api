@@ -24,7 +24,8 @@ const listCheckouts = `
     AND coalesce(g.order_progress->>'OrderID', '') = ''
     AND g.order_progress->>'CreateExhausted' IS DISTINCT FROM 'true'
     AND coalesce((g.order_progress->>'NextCreateAt')::timestamptz, '-infinity') <= $6)
-   OR (g.order_progress->>'Status' IN ('cancelled', 'price_changed', 'delivery_unavailable')
+   OR ((g.order_progress->>'Status' IN ('cancelled', 'price_changed', 'delivery_unavailable')
+    OR (g.order_progress->>'CreateExhausted' = 'true' AND coalesce(g.order_progress->>'OrderID', '') = ''))
     AND g.order_progress->>'CartReturned' IS DISTINCT FROM 'true'
     AND coalesce((g.order_progress->>'NextReturnAt')::timestamptz, '-infinity') <= $6)
    OR (g.order_progress->>'OrderID' <> ''
@@ -37,14 +38,12 @@ const listCheckouts = `
 
 type checkoutOrderContext struct {
 	Contact      checkout.Contact
-	ReturnURL    string
 	CartConsumed bool
 }
 
 func encodeOrderContext(s checkout.State) string {
 	raw, _ := json.Marshal(checkoutOrderContext{
 		Contact:      s.Contact,
-		ReturnURL:    s.ReturnURL,
 		CartConsumed: s.CartConsumed,
 	})
 	return string(raw)

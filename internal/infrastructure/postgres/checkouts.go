@@ -318,7 +318,7 @@ func (r *checkoutRow) checkout() (checkout.State, error) {
 	if err := json.Unmarshal(r.orderContext, &meta); err != nil {
 		return checkout.State{}, err
 	}
-	state.Contact, state.ReturnURL, state.CartConsumed = meta.Contact, meta.ReturnURL, meta.CartConsumed
+	state.Contact, state.CartConsumed = meta.Contact, meta.CartConsumed
 	state.ID = ids.UUID(r.id)
 	state.BuyerID = ids.UUID(r.buyerID)
 	state.Status = checkout.Status(r.status)

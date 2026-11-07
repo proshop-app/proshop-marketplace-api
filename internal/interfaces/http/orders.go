@@ -26,26 +26,7 @@ func (h *checkoutHandlers) createOrders(w http.ResponseWriter, r *http.Request) 
 	h.respond(w, r, http.StatusOK, state, err)
 }
 
-func (h *checkoutHandlers) pay(w http.ResponseWriter, r *http.Request) {
-	id, err := ids.ParseUUID(r.PathValue("checkoutId"))
-	if err != nil {
-		writeError(w, r, checkout.ErrNotFound)
-		return
-	}
-	tenant, err := ids.ParseTenantID(r.PathValue("groupId"))
-	if err != nil {
-		writeError(w, r, checkout.ErrNotFound)
-		return
-	}
-	link, err := h.checkouts.Pay(r.Context(), BuyerID(r.Context()), id, tenant)
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, link)
-}
-
-// paymentReturn игнорирует любые параметры кассы. Только опрос магазина меняет статус.
+// paymentReturn игнорирует параметры браузера: статус подтверждается сервером через оплату или опрос.
 func (h *checkoutHandlers) paymentReturn(w http.ResponseWriter, r *http.Request) {
 	id, err := ids.ParseUUID(r.PathValue("checkoutId"))
 	if err != nil {
@@ -121,7 +102,7 @@ func (h *checkoutHandlers) respondList(w http.ResponseWriter, r *http.Request, s
 	items := make([]checkoutJSON, 0, len(states))
 	next := ""
 	for _, state := range states {
-		item, err := toCheckoutJSON(state, h.checkouts.NextPayment(state))
+		item, err := toCheckoutJSON(state)
 		if err != nil {
 			writeError(w, r, err)
 			return

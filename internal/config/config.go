@@ -104,6 +104,7 @@ type Cart struct {
 
 // Checkout — расчёты доставки.
 type Checkout struct {
+	PaymentStub               bool
 	DeliverySubsidyMinPercent int
 	ReturnBaseURL             string
 	OrdersInterval            time.Duration
@@ -306,6 +307,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		Cart: Cart{TTL: r.duration("CART_TTL", 30*24*time.Hour)},
 		Checkout: Checkout{
 			DeliverySubsidyMinPercent: r.subsidyPercent(),
+			PaymentStub:               r.boolean("PAYMENT_STUB", false),
 			ReturnBaseURL:             r.httpURL("MARKETPLACE_PUBLIC_URL"),
 			OrdersInterval:            r.duration("ORDERS_SYNC_INTERVAL", 30*time.Second),
 			QuoteTTL:                  r.duration("QUOTE_TTL", 30*time.Minute),

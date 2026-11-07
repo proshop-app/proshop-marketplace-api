@@ -59,9 +59,7 @@ type Group struct {
 	Quote           *delivery.Quote
 	Status          GroupStatus
 	OrderID         string
-	PaymentURL      string
 	ExpiresAt       time.Time
-	PaymentOrder    int
 	DeliveryPrice   money.Money
 	Reason          string
 	NextPollAt      time.Time
@@ -115,7 +113,6 @@ type State struct {
 	UpdatedAt      time.Time
 	ConfirmedAt    time.Time
 	Contact        Contact
-	ReturnURL      string
 	CartConsumed   bool
 }
 

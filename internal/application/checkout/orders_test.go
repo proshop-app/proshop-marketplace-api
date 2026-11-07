@@ -70,7 +70,7 @@ func TestSellerFailureDoesNotBlockOtherGroups(t *testing.T) {
 	e.platform.FailCreate("t1", errors.New("магазин не отвечает"))
 	state, err := e.service.CreateOrders(context.Background(), buyerID, c.ID, orderContact)
 	if err != nil || state.Groups[0].Status != checkout.GroupSellerUnreachable ||
-		state.Groups[1].Status != checkout.GroupAwaitingPayment || e.service.NextPayment(state).TenantID != "t2" {
+		state.Groups[1].Status != checkout.GroupAwaitingPayment {
 		t.Fatalf("независимые группы: %+v %v", state, err)
 	}
 	e.platform.FailCreate("t1", nil)
@@ -123,7 +123,7 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 	if err != nil || state.Status != checkout.StatusPartiallyPaid {
 		t.Fatalf("сверка: %+v %v", state, err)
 	}
-	if _, err := e.service.Pay(ctx, buyerID, c.ID, "t2"); !errors.Is(err, checkout.ErrTransition) {
+	if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
 	if err := e.service.Resume(ctx); err != nil {
@@ -141,7 +141,7 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 	if _, err := e.service.CreateOrders(ctx, other, c.ID, orderContact); !errors.Is(err, checkout.ErrNotFound) {
 		t.Fatal(err)
 	}
-	if _, err := e.service.Pay(ctx, other, c.ID, "t1"); !errors.Is(err, checkout.ErrNotFound) {
+	if _, err := e.service.Pay(ctx, other, c.ID); !errors.Is(err, checkout.ErrNotFound) {
 		t.Fatal(err)
 	}
 	e.clock.Advance(11 * time.Minute)
@@ -168,11 +168,11 @@ func TestPaymentExpiryAndStuckFilter(t *testing.T) {
 		t.Fatalf("опрос не сбрасывает время ожидания: %+v %v", stuck, err)
 	}
 	e.clock.Advance(44 * time.Minute)
-	if _, err := e.service.Pay(ctx, buyerID, c.ID, "t1"); !errors.Is(err, checkout.ErrPaymentExpired) {
+	if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrPaymentExpired) {
 		t.Fatal(err)
 	}
 	state, err := e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || e.service.NextPayment(state) != nil || state.Status != checkout.StatusAwaitingPayment {
+	if err != nil || state.Status != checkout.StatusAwaitingPayment {
 		t.Fatalf("истечение не равно отмене: %+v %v", state, err)
 	}
 }

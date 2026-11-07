@@ -87,8 +87,6 @@ func writeErrorWithState(
 		detail.Code = "IDEMPOTENCY_KEY_REUSED"
 	case "checkout.delivery_changed":
 		detail.Code = "DELIVERY_CHANGED"
-	case "checkout.payment_order":
-		detail.Code = "PAYMENT_ORDER"
 	case "reference.entry_changed":
 		detail.Code = "REFERENCE_ENTRY_CHANGED"
 	case "reference.key_taken":

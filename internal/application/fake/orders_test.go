@@ -31,7 +31,6 @@ func TestOrderIdempotencyComparesRequestBody(t *testing.T) {
 		func(r *ports.CreateOrderRequest) { r.Items[0].Quantity++ },
 		func(r *ports.CreateOrderRequest) { r.Contact.Name = "Другой покупатель" },
 		func(r *ports.CreateOrderRequest) { r.PickupPointCode = "other" },
-		func(r *ports.CreateOrderRequest) { r.ReturnURL = "https://other.example/return" },
 	} {
 		altered := request
 		altered.Items = append([]ports.OrderItem(nil), request.Items...)

@@ -1,0 +1,1 @@
+{"ok":false,"message":"Сумма болванки платежа не совпадает с суммой заказа","status":409,"code":"MARKETPLACE_STUB_PAYMENT_AMOUNT","items":null}

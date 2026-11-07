@@ -39,11 +39,10 @@ func attach(t *testing.T, c *checkout.Checkout, index int) checkout.SellerOrder 
 		t.Fatal(err)
 	}
 	order := checkout.SellerOrder{
-		OrderID:    string(g.TenantID) + "-order",
-		PaymentURL: "https://seller.example/pay/" + string(g.TenantID),
-		ExpiresAt:  t0.Add(time.Hour),
-		Total:      total,
-		Status:     checkout.GroupAwaitingPayment,
+		OrderID:   string(g.TenantID) + "-order",
+		ExpiresAt: t0.Add(time.Hour),
+		Total:     total,
+		Status:    checkout.GroupAwaitingPayment,
 	}
 	if _, err := c.AttachOrder(g.TenantID, order, t0); err != nil {
 		t.Fatal(err)
@@ -51,23 +50,19 @@ func attach(t *testing.T, c *checkout.Checkout, index int) checkout.SellerOrder 
 	return order
 }
 
-func TestOrdersTransitionsAndPaymentOrder(t *testing.T) {
+func TestOrdersTransitions(t *testing.T) {
 	c := ordersReady(t)
-	changed, err := c.BeginOrders(contact, "https://market.example/return", t0)
+	changed, err := c.BeginOrders(contact, t0)
 	if err != nil || !changed || c.Status() != checkout.StatusCreatingOrders {
 		t.Fatalf("начало: %v", err)
 	}
 	c.MarkSaved()
-	if changed, err := c.BeginOrders(contact, "https://other.example", t0); err != nil || changed {
-		t.Fatalf("повтор не меняет контакт и адрес: %v", err)
+	if changed, err := c.BeginOrders(contact, t0); err != nil || changed {
+		t.Fatalf("повтор не меняет контакт: %v", err)
 	}
 	first, second := attach(t, c, 0), attach(t, c, 1)
 	if c.Status() != checkout.StatusAwaitingPayment {
 		t.Fatal(c.Status())
-	}
-	next := c.NextPayment(t0)
-	if next == nil || next.TenantID != "t1" || next.Position != 1 || next.Count != 2 {
-		t.Fatalf("порядок: %+v", next)
 	}
 	if changed, err := c.AttachOrder("t1", first, t0); err != nil || changed {
 		t.Fatalf("повтор ответа: %v", err)
@@ -76,7 +71,7 @@ func TestOrdersTransitionsAndPaymentOrder(t *testing.T) {
 	if _, err := c.Observe("t1", first, t0.Add(time.Minute), t0); err != nil {
 		t.Fatal(err)
 	}
-	if c.Status() != checkout.StatusPartiallyPaid || c.NextPayment(t0).TenantID != "t2" {
+	if c.Status() != checkout.StatusPartiallyPaid {
 		t.Fatal(c.State())
 	}
 	first.Status = checkout.GroupAwaitingPayment
@@ -87,22 +82,22 @@ func TestOrdersTransitionsAndPaymentOrder(t *testing.T) {
 	if _, err := c.Observe("t2", second, t0, t0); err != nil {
 		t.Fatal(err)
 	}
-	if c.Status() != checkout.StatusPaid || c.NextPayment(t0) != nil {
+	if c.Status() != checkout.StatusPaid {
 		t.Fatal(c.State())
 	}
 }
 
 func TestExpiryNeedsSellerCancellation(t *testing.T) {
 	c := ordersReady(t)
-	if _, err := c.BeginOrders(contact, "https://market.example/return", t0); err != nil {
+	if _, err := c.BeginOrders(contact, t0); err != nil {
 		t.Fatal(err)
 	}
 	first, second := attach(t, c, 0), attach(t, c, 1)
 	expired := t0.Add(time.Hour)
-	if _, err := c.Payment("t1", expired); !errors.Is(err, checkout.ErrPaymentExpired) {
+	if _, err := c.PaymentAmount(); err != nil {
 		t.Fatal(err)
 	}
-	if c.NextPayment(expired) != nil || c.Status() != checkout.StatusAwaitingPayment {
+	if c.Status() != checkout.StatusAwaitingPayment {
 		t.Fatal(c.State())
 	}
 	// Оплата могла пройти в последнюю секунду: истечение локальных часов не отменяет заказ.
@@ -121,7 +116,7 @@ func TestExpiryNeedsSellerCancellation(t *testing.T) {
 
 func TestAllCancelledAndSnapshotIsolation(t *testing.T) {
 	c := ordersReady(t)
-	if _, err := c.BeginOrders(contact, "https://market.example/return", t0); err != nil {
+	if _, err := c.BeginOrders(contact, t0); err != nil {
 		t.Fatal(err)
 	}
 	for i := range c.Groups() {
@@ -144,18 +139,15 @@ func TestAllCancelledAndSnapshotIsolation(t *testing.T) {
 }
 
 func TestOrdersRequireConfirmedContactAndValidResponse(t *testing.T) {
-	if _, err := draft(t).BeginOrders(contact, "https://market.example", t0); !errors.Is(err, checkout.ErrTransition) {
+	if _, err := draft(t).BeginOrders(contact, t0); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
 	c := ordersReady(t)
-	_, err := c.BeginOrders(checkout.Contact{}, "https://market.example", t0)
+	_, err := c.BeginOrders(checkout.Contact{}, t0)
 	if !errors.Is(err, checkout.ErrInvalidContact) {
 		t.Fatal(err)
 	}
-	if _, err := c.BeginOrders(contact, "javascript:alert(1)", t0); !errors.Is(err, checkout.ErrInvalidContact) {
-		t.Fatal(err)
-	}
-	if _, err := c.BeginOrders(contact, "https://market.example", t0); err != nil {
+	if _, err := c.BeginOrders(contact, t0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.AttachOrder("t1", checkout.SellerOrder{}, t0); !errors.Is(err, checkout.ErrInvalidOrder) {

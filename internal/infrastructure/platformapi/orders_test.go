@@ -20,7 +20,6 @@ func orderRequest() ports.CreateOrderRequest {
 		PickupPointCode:    "P1",
 		Contact:            checkout.Contact{Phone: "79251234567", Name: "Покупатель"},
 		DeliveryPrice:      money.FromKopecks(15000),
-		ReturnURL:          "https://market.example/return",
 	}
 }
 

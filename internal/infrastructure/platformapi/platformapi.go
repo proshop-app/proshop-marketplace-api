@@ -335,8 +335,18 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 		}
 	}
 
+	if reply.StatusCode == http.StatusNotFound && strings.HasSuffix(path, "/stub-payment") {
+		if json.Unmarshal(raw, &body) != nil || body.Code != "ORDER_NOT_FOUND" {
+			return ErrUnavailable.WithMessage(message)
+		}
+	}
 	if json.Unmarshal(raw, &body) == nil && body.Code != "" {
 		switch {
+		case reply.StatusCode == http.StatusServiceUnavailable && body.Code == "MARKETPLACE_TEMPORARY_FAILURE":
+			return &ports.OrderRefusal{Code: body.Code}
+		case reply.StatusCode == http.StatusConflict && strings.HasSuffix(path, "/stub-payment") &&
+			(body.Code == "MARKETPLACE_STUB_PAYMENT_AMOUNT" || body.Code == "MARKETPLACE_STUB_PAYMENT_STATE"):
+			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
 		case reply.StatusCode == http.StatusConflict && (body.Code == "DELIVERY_UNAVAILABLE" ||
 			body.Code == "DELIVERY_CHANGED" || body.Code == "OUT_OF_STOCK" || body.Code == "IDEMPOTENCY_CONFLICT"):
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}

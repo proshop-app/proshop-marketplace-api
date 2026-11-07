@@ -45,11 +45,12 @@ type CreateOrderRequest struct {
 	PickupPointCode    string           `json:"pickupPointCode"`
 	Contact            checkout.Contact `json:"contact"`
 	DeliveryPrice      money.Money      `json:"deliveryPrice"`
-	ReturnURL          string           `json:"returnUrl"`
 }
 
 // SellerOrders — команды и сверка заказов через тот же доверенный канал.
 type SellerOrders interface {
+	// StubPayment идемпотентно подтверждает заказ болванкой; amount — сумма в копейках.
+	StubPayment(ctx context.Context, tenantID ids.TenantID, orderID string, amount money.Money) error
 	CreateOrder(context.Context, ids.TenantID, CreateOrderRequest) (checkout.SellerOrder, error)
 	GetOrder(context.Context, ids.TenantID, string) (checkout.SellerOrder, error)
 }

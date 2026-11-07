@@ -78,11 +78,11 @@ func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
 	path := "/api/v1/checkout/" + string(id)
 	body := `{"contact":{"phone":"79251234567","name":"Покупатель"}}`
 	created := e.session(t, http.MethodPost, path+"/orders", body, cookie)
-	if created.status != http.StatusOK || created.body["nextPayment"] == nil ||
+	if created.status != http.StatusOK || created.body["nextPayment"] != nil ||
 		created.body["status"] != "awaiting_payment" {
 		t.Fatalf("заказы: %+v", created)
 	}
-	paidURL := path + "/groups/t1/pay"
+	paidURL := path + "/pay"
 	link := e.session(t, http.MethodPost, paidURL, "", cookie)
 	if link.status != http.StatusOK || link.body["url"] == "" {
 		t.Fatalf("ссылка: %+v", link)
@@ -142,7 +142,7 @@ func TestPurchaseEndpointsRequireOwner(t *testing.T) {
 		{http.MethodGet, "", ""},
 		{http.MethodGet, "/return?status=paid", ""},
 		{http.MethodPost, "/orders", `{"contact":{"phone":"79251234567","name":"Покупатель"}}`},
-		{http.MethodPost, "/groups/t1/pay", ""},
+		{http.MethodPost, "/pay", ""},
 	} {
 		r := e.session(t, request.method, path+request.suffix, request.body, cookie)
 		if r.status != http.StatusNotFound {

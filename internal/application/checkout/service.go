@@ -30,7 +30,10 @@ type Config struct {
 	// DeliverySubsidyMinPercent — нижняя граница субсидии продавца, 0–100.
 	DeliverySubsidyMinPercent int
 	// QuoteTTL — дольше этого цена доставки не держится, что бы ни обещал магазин.
-	QuoteTTL      time.Duration
+	QuoteTTL time.Duration
+	// PaymentStub включает единственную доступную сейчас оплату без движения денег.
+	PaymentStub bool
+	// ReturnBaseURL — MARKETPLACE_PUBLIC_URL витрины.
 	ReturnBaseURL string
 	CartTTL       time.Duration
 	// QuoteTimeout — сколько ждать ответа магазина на расчёт.
