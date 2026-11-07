@@ -2,7 +2,10 @@ package kafka_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -379,6 +382,60 @@ func TestProductRatingNormalization(t *testing.T) {
 			rating := catalog.ProductRating(state.AverageRating, state.RatingsCount)
 			if (rating == nil) != (tc.count == 0) {
 				t.Fatal(rating)
+			}
+		})
+	}
+}
+
+func TestProductAssets(t *testing.T) {
+	many := make([]string, 22)
+	for i := range many {
+		many[i] = fmt.Sprintf("p/%02d.jpg", i)
+	}
+	manyJSON, _ := json.Marshal(many)
+	cases := []struct {
+		name   string
+		fields string
+		want   []string
+	}{
+		{
+			name:   "порядок и очистка",
+			fields: `"assets":[" b ","a","b","", "  ","data:x","blob:x",42,null,{},[],true]`,
+			want:   []string{"b", "a"},
+		},
+		{
+			name:   "управляющие символы",
+			fields: `"assets":["a\u0000b","a\tb","a\u007fb"," ","p/main.jpg"]`,
+			want:   []string{"p/main.jpg"},
+		},
+		{name: "табуляция в image", fields: `"image":"a\tb"`},
+		{name: "NUL в image", fields: `"image":"a\u0000b"`},
+		{name: "DEL в image", fields: `"image":"a\u007fb"`},
+		{name: "лимит", fields: `"assets":` + string(manyJSON), want: many[:20]},
+		{
+			name:   "байты",
+			fields: `"assets":["` + strings.Repeat("я", 257) + `","` + strings.Repeat("я", 256) + `"]`,
+			want:   []string{strings.Repeat("я", 256)},
+		},
+		{name: "image", fields: `"image":"p/main.jpg"`, want: []string{"p/main.jpg"}},
+		{name: "пустой массив", fields: `"assets":[],"image":"p/main.jpg"`, want: []string{"p/main.jpg"}},
+		{name: "null", fields: `"assets":null,"image":"p/main.jpg"`, want: []string{"p/main.jpg"}},
+		{name: "ничего", fields: `"assets":null`},
+		{name: "нет поля", fields: `"image":null`},
+		{name: "недопустимый image", fields: `"assets":[],"image":"data:x"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := strings.Replace(productBody, `"image":null`, tc.fields, 1)
+			rec, err := handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rec.products) != 1 {
+				t.Fatalf("сообщение не принято: %d проекций", len(rec.products))
+			}
+			if got := rec.products[0].Snapshot.Card.Assets; !slices.Equal(got, tc.want) {
+				t.Fatalf("галерея: %v, ожидалась %v", got, tc.want)
 			}
 		})
 	}

@@ -5842,6 +5842,15 @@ components:
         description: { type: string, description: Только в карточке }
         variants: { $ref: "#/components/schemas/OfferVariants", description: Только в карточке; один продавец и ценовой контекст }
         image: { type: string }
+        assets:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          description: >
+            Только в карточке товара; всегда массив. Ключи бакета без хоста и /images/,
+            сегменты не кодированы. Порядок магазина, первый совпадает с image.
+            Каждый ключ — не больше 512 байт.
+          items: { type: string, maxLength: 512 }
         url: { type: string }
         sku: { type: string }
         categories:

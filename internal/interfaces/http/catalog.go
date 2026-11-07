@@ -29,6 +29,7 @@ type categoryJSON struct {
 
 // offerJSON — предложение в ответе. Суммы — целые копейки.
 type offerJSON struct {
+	Assets            *[]string                  `json:"assets,omitempty"`
 	Rating            *catalog.Rating            `json:"rating"`
 	Variants          *appcatalog.VariantBlock   `json:"variants,omitempty"`
 	DeliveryAvailable *bool                      `json:"deliveryAvailable,omitempty"`
@@ -95,6 +96,8 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 		out.Attributes = map[string]json.RawMessage{}
 	}
 	if withDescription {
+		assets := append([]string{}, doc.Assets...)
+		out.Assets = &assets
 		out.Description = doc.Description
 		out.Variants = card.Variants
 	}

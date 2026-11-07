@@ -204,6 +204,7 @@ func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID
 			},
 			Name:        "Товар " + string(product),
 			Description: "Описание",
+			Assets:      []string{"main", "detail"},
 			Visible:     true,
 			Categories:  []catalog.Category{{ID: "c1", Name: "Категория"}},
 		},
@@ -399,6 +400,9 @@ func TestCatalog(t *testing.T) {
 		first["checkoutAvailable"] != true {
 		t.Fatalf("предложение в выдаче: %+v", first)
 	}
+	if _, ok := first["assets"]; ok {
+		t.Fatal("галерея — только в карточке")
+	}
 	if _, ok := first["description"]; ok {
 		t.Fatal("описание — только в карточке")
 	}
@@ -419,6 +423,10 @@ func TestCatalog(t *testing.T) {
 	}
 
 	r = e.call(t, http.MethodGet, "/api/v1/catalog/offers/t1~p1", "", false)
+	assets, ok := r.body["assets"].([]any)
+	if r.status != http.StatusOK || !ok || len(assets) != 2 || assets[0] != "main" || assets[1] != "detail" {
+		t.Fatal(r)
+	}
 	if _, exists := r.body["tags"]; exists {
 		t.Fatal("поисковые теги остались в публичной карточке")
 	}
