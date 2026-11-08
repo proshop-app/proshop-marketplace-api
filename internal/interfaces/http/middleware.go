@@ -41,6 +41,8 @@ type requestFacts struct {
 }
 
 type catalogFacetFacts struct {
+	selector   string
+	class      string
 	total      int
 	attributes int
 }
@@ -51,8 +53,9 @@ type statusRecorder struct {
 }
 
 type httpMetrics struct {
-	requests *prometheus.CounterVec
-	duration *prometheus.HistogramVec
+	catalogOffers *prometheus.CounterVec
+	requests      *prometheus.CounterVec
+	duration      *prometheus.HistogramVec
 }
 
 // RequestID — идентификатор запроса из контекста.
@@ -77,6 +80,13 @@ func (s *statusRecorder) WriteHeader(status int) {
 
 func newHTTPMetrics(registerer prometheus.Registerer) *httpMetrics {
 	m := &httpMetrics{
+		catalogOffers: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_catalog_offers_total",
+				Help: "Успешные HTTP-выдачи каталога по выбору фасетов.",
+			},
+			[]string{"selector"},
+		),
 		requests: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "marketplace_http_requests_total",
@@ -93,7 +103,10 @@ func newHTTPMetrics(registerer prometheus.Registerer) *httpMetrics {
 			[]string{"route"},
 		),
 	}
-	registerer.MustRegister(m.requests, m.duration)
+	registerer.MustRegister(m.requests, m.duration, m.catalogOffers)
+	for _, selector := range []string{"all", "none", "partial"} {
+		m.catalogOffers.WithLabelValues(selector)
+	}
 
 	return m
 }
@@ -147,7 +160,12 @@ func observe(logger *slog.Logger, metrics *httpMetrics, next http.Handler) http.
 				attrs = append(attrs, slog.String("buyerId", string(facts.buyerID)))
 			}
 			if facts.catalogFacets != nil {
-				attrs = append(attrs,
+				if recorder.status == http.StatusOK {
+					metrics.catalogOffers.WithLabelValues(facts.catalogFacets.class).Inc()
+				}
+				attrs = append(
+					attrs,
+					slog.String("catalogFacetSelector", facts.catalogFacets.selector),
 					slog.Int("catalogFacetCount", facts.catalogFacets.total),
 					slog.Int("catalogAttributeFacetCount", facts.catalogFacets.attributes),
 				)

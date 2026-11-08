@@ -1,6 +1,8 @@
 package ports
 
-// FacetCode — базовый фасет общего поискового контракта 5.1.
+import "slices"
+
+// FacetCode — код выбора фасетов API; attributes разворачивается в поля таксономии.
 type FacetCode string
 
 const (
@@ -12,14 +14,21 @@ const (
 	FacetInStock FacetCode = "inStock"
 	// FacetPrice — границы и гистограмма цены.
 	FacetPrice FacetCode = "price"
+	// FacetAttributes — атрибутные фасеты таксономии, не код общего поискового контракта.
+	FacetAttributes FacetCode = "attributes"
 )
 
 // Valid проверяет код без обращения к таксономии атрибутов.
 func (code FacetCode) Valid() bool {
 	switch code {
-	case FacetCategory, FacetTenant, FacetInStock, FacetPrice:
+	case FacetCategory, FacetTenant, FacetInStock, FacetPrice, FacetAttributes:
 		return true
 	default:
 		return false
 	}
+}
+
+// WantsFacet применяет один выбор и к движку, и к fake-индексу, и к видимому ответу.
+func (query OfferQuery) WantsFacet(code FacetCode) bool {
+	return query.Facets == nil || slices.Contains(*query.Facets, code)
 }

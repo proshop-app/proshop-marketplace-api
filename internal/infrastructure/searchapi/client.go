@@ -205,7 +205,7 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 			TrackQuery:    query.TrackQuery,
 			PriceContexts: wirePriceContexts(query.PriceContexts),
 			Attributes:    query.Attributes,
-			FacetFields:   wireFacetFields(query.FacetFields),
+			FacetFields:   wireFacetFields(query),
 			Facets:        wireFacetSelection(query.Facets),
 			InStockSet:    query.InStockSet,
 			Text:          query.Text,

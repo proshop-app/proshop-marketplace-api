@@ -9,7 +9,7 @@ func validateFacetSelection(facets *[]ports.FacetCode) error {
 	seen := make(map[ports.FacetCode]bool, len(*facets))
 	for _, code := range *facets {
 		if !code.Valid() || seen[code] {
-			return ErrInvalidQuery.WithMessage("неизвестный или повторный базовый фасет")
+			return ErrInvalidQuery.WithMessage("неизвестный или повторный фасет")
 		}
 		seen[code] = true
 	}

@@ -1860,7 +1860,9 @@ paths:
         Пример: ?category=c1&attr.a1=v1&attr.a1=v2&attr.a2.min=1.5&attr.a2.max=10.
         Фасеты считаются до пагинации со всеми фильтрами, кроме собственного; category — со всеми. Атрибутные —
         только при facet=true и покрытии >=20%; без селекторов category, tenant, price, inStock — всегда.
-        facets выбирает базовые фасеты; attributeFacets=false отключает атрибутные.
+        facets=none отключает все фасеты; список выбирает только перечисленные базовые,
+        attributes добавляет атрибутные фасеты таксономии. Без селекторов ответ прежний.
+        API обновляется раньше витрины: предыдущая версия отклоняет новые none/attributes/повторы.
         Размер страницы не определяет выбор фасетов. Фильтры и total от селекторов не меняются.
         Числа: min/max; остальные: до 256 наиболее частых значений с count.
         При пустой выдаче фасеты могут содержать варианты после снятия собственного фильтра.
@@ -1897,21 +1899,32 @@ paths:
         - name: facets
           in: query
           style: form
-          explode: false
+          explode: true
           allowEmptyValue: true
           schema:
-            type: array
-            uniqueItems: true
-            items:
-              type: string
-              enum: [category, tenant, inStock, price]
+            oneOf:
+              - type: string
+                enum: [none]
+              - type: array
+                maxItems: 5
+                uniqueItems: true
+                items:
+                  type: string
+                  enum: [category, tenant, inStock, price, attributes]
           description: >-
-            Один список через запятую без пробелов. Без параметра — все базовые фасеты;
-            facets= — ни одного. Неизвестный код, повтор кода или параметра — 400.
+            Список через запятую и/или повтором параметра, без пробелов. Без селекторов — все фасеты.
+            none — пустой массив в ответе. Список — только указанные базовые; attributes включает атрибутные.
+            Неизвестный код, повтор кода, none с другим значением — 400.
+            Устаревший facets= сохраняет только атрибуты, с attributeFacets=false отключает всё.
+            В отличие от PR44, частичный список без флага больше не добавляет атрибуты автоматически.
         - name: attributeFacets
           in: query
-          schema: { type: boolean, default: true }
-          description: Только true или false, один раз. false отключает атрибутные фасеты.
+          deprecated: true
+          schema: { type: boolean }
+          description: >-
+            Псевдоним PR44: строго true/false один раз. Без facets false оставляет четыре базовых,
+            true сохраняет все фасеты. С явным списком true добавляет attributes; false оставляет базовые.
+            Явные attributes с false или none с true несовместимы (400). Новым клиентам использовать facets.
         - name: sort
           in: query
           schema: { type: string, enum: [relevance, price_asc, price_desc, newest, rating], default: relevance }
@@ -2223,7 +2236,7 @@ paths:
           in: query
           description: "minLon,minLat,maxLon,maxLat в градусах"
           schema: { type: string, examples: ["37.5,55.6,37.8,55.9"] }
-        - { name: city, in: query, schema: { type: string }, description: Город словами перевозчика, без учёта регистра }
+        - { name: city, in: query, schema: { type: string }, description: "Город словами перевозчика, без учёта регистра" }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } }
       responses:
         "200":
@@ -4232,7 +4245,7 @@ components:
       headers:
         ETag: { schema: { type: string } }
         X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
-        Cache-Control: { schema: { type: string }, description: public, max-age=0, must-revalidate }
+        Cache-Control: { schema: { type: string }, description: "public, max-age=0, must-revalidate" }
       content:
         application/json:
           schema:
@@ -6011,6 +6024,7 @@ components:
           items: { $ref: "#/components/schemas/Offer" }
         facets:
           description: >-
+            Состав определяется параметром facets; массив обязателен, при none всегда [] (не null).
             Счётчики и min/max учитывают все фильтры, кроме собственного фильтра фасета.
             category учитывает все фильтры. Значения внутри фасета объединяются через ИЛИ,
             разные фасеты — через И. total и items учитывают все фильтры.

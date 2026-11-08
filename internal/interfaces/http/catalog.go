@@ -124,7 +124,7 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
-	rememberCatalogFacets(r.Context(), list.Facets)
+	rememberCatalogFacets(r.Context(), query, list.Facets)
 	limit := query.Limit
 	if limit == 0 {
 		limit = appcatalog.DefaultLimit
