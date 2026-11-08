@@ -4398,15 +4398,6 @@ components:
         id: { type: string }
         name: { type: string }
         count: { type: integer, minimum: 0 }
-    StoreProduct:
-      type: object
-      required: [offerId, productId, name, price, image]
-      properties:
-        offerId: { type: string }
-        productId: { type: string }
-        name: { type: string }
-        price: { type: integer, format: int64, minimum: 0 }
-        image: { type: [string, "null"] }
     StoreHidden:
       type: object
       required: [key, reason, at]
@@ -4416,20 +4407,19 @@ components:
         at: { type: string, format: date-time }
     StoreSummary:
       type: object
-      required: [offers, fromPrice, categories, uncategorized, showcase, hidden, rating, badge, rank]
+      required: [offers, fromPrice, categories, uncategorized, hidden, rating, badge, rank]
       properties:
         offers: { type: integer, minimum: 0 }
         fromPrice: { type: [integer, "null"], format: int64, minimum: 0 }
         categories: { type: array, items: { $ref: "#/components/schemas/StoreCategory" } }
         uncategorized: { type: integer, minimum: 0 }
-        showcase: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/StoreProduct" } }
         hidden: { type: array, items: { $ref: "#/components/schemas/StoreHidden" } }
         rating: { $ref: "#/components/schemas/Rating" }
         badge: { type: "null" }
         rank: { type: "null" }
     ShopHeader:
       type: object
-      required: [tenantId, slug, name, logo, initial, color, offers, isNew, categories, rating, showcase, subscribers]
+      required: [tenantId, slug, name, logo, initial, color, offers, isNew, categories, rating, subscribers]
       properties:
         rating: { $ref: "#/components/schemas/Rating" }
         subscribers: { type: integer, minimum: 0 }
@@ -4443,10 +4433,9 @@ components:
         offers: { type: integer, minimum: 0 }
         isNew: { type: boolean, const: true }
         categories: { type: array, items: { $ref: "#/components/schemas/StoreCategory" } }
-        showcase: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/ShopImage" } }
     ShopCard:
       type: object
-      required: [tenantId, slug, name, logo, initial, color, offers, isNew, category, moreCategories, fromPrice, showcase, rating]
+      required: [tenantId, slug, name, logo, initial, color, offers, isNew, category, moreCategories, fromPrice, rating]
       properties:
         tenantId: { type: string }
         slug: { type: string }
@@ -4459,14 +4448,7 @@ components:
         category: { type: [object, "null"], required: [id, name], properties: { id: { type: string }, name: { type: string } } }
         moreCategories: { type: integer, minimum: 0 }
         fromPrice: { type: [integer, "null"], format: int64, minimum: 0 }
-        showcase: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/ShopImage" } }
         rating: { $ref: "#/components/schemas/Rating" }
-    ShopImage:
-      type: object
-      required: [offerId, image]
-      properties:
-        offerId: { type: string }
-        image: { type: [string, "null"] }
     ShopPage:
       type: object
       required: [items, total, limit, offset]

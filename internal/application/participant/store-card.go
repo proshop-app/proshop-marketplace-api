@@ -18,16 +18,12 @@ const (
 	storeDefaultLimit = 20
 	storeMaxLimit     = 100
 	storeBatchSize    = 200
-	storeShowcaseSize = 3
 )
 
 // StoreCategory — счётчик корневой категории магазина.
 type StoreCategory = ports.StoreCategory
 
-// StoreProduct — товар витрины с действующей ценой.
-type StoreProduct = ports.StoreProduct
-
-// StoreSummary — внутренняя статистика и витрина магазина.
+// StoreSummary — внутренняя статистика магазина.
 type StoreSummary = ports.StoreSummary
 
 // ShopColor — цвет публичной карточки с контрастом, рассчитанным сервером.
@@ -35,9 +31,6 @@ type ShopColor = ports.ShopColor
 
 // ShopHeader — публичный профиль с учётом постмодерации.
 type ShopHeader = ports.ShopHeader
-
-// ShopImage — идентификатор и изображение товара в списке магазинов.
-type ShopImage = ports.ShopImage
 
 // ShopCategory — категория отбора либо крупнейшая категория магазина.
 type ShopCategory = ports.ShopCategory
@@ -66,7 +59,6 @@ func (s *Service) StoreSummary(ctx context.Context, tenant ids.TenantID) (StoreS
 			}
 			summary = StoreSummary{
 				Categories: []StoreCategory{},
-				Showcase:   []StoreProduct{},
 				Hidden:     append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
 			}
 			return nil
@@ -95,7 +87,6 @@ func categoryRoots(nodes []taxonomy.Category) map[string]StoreCategory {
 func summarizeStore(ctx context.Context, tx ports.Tx, p *participant.Participant) (StoreSummary, error) {
 	result := StoreSummary{
 		Categories: []StoreCategory{},
-		Showcase:   []StoreProduct{},
 		Hidden:     append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
 	}
 	definition, err := tx.Taxonomy().Current(ctx)
@@ -198,57 +189,7 @@ func summarizeStore(ctx context.Context, tx ports.Tx, p *participant.Participant
 		}
 		return a.ID < b.ID
 	})
-	result.Showcase = storeShowcase(selected, p.State().StoreCard.Profile.Showcase)
 	return result, nil
-}
-
-func storeShowcase(items []storeOffer, settings participant.Showcase) []StoreProduct {
-	sort.Slice(items, func(i, j int) bool {
-		a, b := items[i].product, items[j].product
-		if a.SalesCount != b.SalesCount {
-			return a.SalesCount > b.SalesCount
-		}
-		if (a.Card.Image != "") != (b.Card.Image != "") {
-			return a.Card.Image != ""
-		}
-		if a.Revision != b.Revision {
-			return a.Revision > b.Revision
-		}
-		return a.ProductID < b.ProductID
-	})
-	result := []StoreProduct{}
-	used := map[ids.ProductID]bool{}
-	add := func(item storeOffer) {
-		p := item.product
-		if used[p.ProductID] || len(result) == storeShowcaseSize {
-			return
-		}
-		used[p.ProductID] = true
-		var image *string
-		if p.Card.Image != "" {
-			image = &p.Card.Image
-		}
-		result = append(result, StoreProduct{
-			OfferID:   item.offer.ID.String(),
-			ProductID: string(p.ProductID),
-			Name:      p.Card.Name,
-			Price:     item.offer.Price.Kopecks(),
-			Image:     image,
-		})
-	}
-	if settings.Mode == participant.ShowcasePinned {
-		for _, id := range settings.ProductIDs {
-			for _, item := range items {
-				if string(item.product.ProductID) == id {
-					add(item)
-				}
-			}
-		}
-	}
-	for _, item := range items {
-		add(item)
-	}
-	return result
 }
 
 func shopHeader(p *participant.Participant, summary StoreSummary) ShopHeader {
@@ -314,17 +255,12 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 			Offers:         h.Offers,
 			FromPrice:      summary.FromPrice,
 			MoreCategories: max(len(h.Categories)-1, 0),
-			Showcase:       []ShopImage{},
 			IsNew:          h.IsNew,
 		}
 		if len(h.Categories) > 0 {
 			c := h.Categories[0]
 			card.Category = &ShopCategory{ID: c.ID, Name: c.Name}
 		}
-		for _, product := range summary.Showcase {
-			card.Showcase = append(card.Showcase, ShopImage{OfferID: product.OfferID, Image: product.Image})
-		}
-		h.Showcase = card.Showcase
 		pagePublic := participant.VisibilityOf(p, tenant).Visible && summary.VisibleOffers > 0
 		return tx.StoreCards().Save(ctx, ports.StoreRecord{
 			ProfileVersion: p.Version(),

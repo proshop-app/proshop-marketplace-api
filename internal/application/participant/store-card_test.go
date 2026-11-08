@@ -3,7 +3,6 @@ package participant_test
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
@@ -30,9 +29,6 @@ func seedStoreCard(t *testing.T) (*fake.Store, *app.Service) {
 		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 		StoreCard: participant.StoreCard{
 			Readiness: participant.CardReadiness{Ready: true},
-			Profile: participant.Profile{
-				Showcase: participant.Showcase{Mode: "pinned", ProductIDs: []string{"p3", "gone"}},
-			},
 		},
 	})
 	store.SeedTaxonomy(taxonomy.Definition{Categories: []taxonomy.Category{{
@@ -79,7 +75,7 @@ func seedStoreCard(t *testing.T) (*fake.Store, *app.Service) {
 	return store, service
 }
 
-func TestStoreSummaryRootsPricesAndShowcase(t *testing.T) {
+func TestStoreSummaryRootsAndPrices(t *testing.T) {
 	store, service := seedStoreCard(t)
 	ctx := context.Background()
 	refreshStore(t, service)
@@ -93,31 +89,19 @@ func TestStoreSummaryRootsPricesAndShowcase(t *testing.T) {
 	if len(summary.Categories) != 1 || summary.Categories[0].ID != "root" || summary.Categories[0].Count != 4 {
 		t.Fatal(summary.Categories)
 	}
-	if len(summary.Showcase) != 3 || summary.Showcase[0].ProductID != "p3" ||
-		summary.Showcase[1].ProductID != "p1" || summary.Showcase[2].ProductID != "p4" {
-		t.Fatal(summary.Showcase)
-	}
 	store.SeedVerdict(moderation.VerdictState{TenantID: "t1", ProductID: "p3", Status: moderation.Rejected})
 	refreshStore(t, service)
 	summary, err = service.StoreSummary(ctx, "t1")
-	if err != nil || summary.Showcase[0].ProductID != "p1" || summary.Offers != 3 {
+	if err != nil || summary.Offers != 3 {
 		t.Fatal(summary, err)
 	}
-	header, err := service.Shop(ctx, "shop-one")
+	_, err = service.Shop(ctx, "shop-one")
 	if err != nil {
 		t.Fatal(err)
 	}
-	pageWithShowcase, err := service.Shops(ctx, "", 20, 0)
-	if err != nil || len(pageWithShowcase.Items) != 1 {
-		t.Fatal(pageWithShowcase, err)
-	}
-	if len(header.Showcase) != 3 || !reflect.DeepEqual(header.Showcase, pageWithShowcase.Items[0].Showcase) {
-		t.Fatal(header.Showcase, pageWithShowcase.Items[0].Showcase)
-	}
-	for _, item := range header.Showcase {
-		if item.OfferID == (ids.OfferID{Tenant: "t1", Product: "p3"}).String() {
-			t.Fatal("скрытое предложение", item)
-		}
+	pageWithOffers, err := service.Shops(ctx, "", 20, 0)
+	if err != nil || len(pageWithOffers.Items) != 1 {
+		t.Fatal(pageWithOffers, err)
 	}
 	state, ok := store.Participant("t1")
 	if !ok {
@@ -127,7 +111,7 @@ func TestStoreSummaryRootsPricesAndShowcase(t *testing.T) {
 	store.SeedParticipant(state)
 	refreshStore(t, service)
 	summary, err = service.StoreSummary(ctx, "t1")
-	if err != nil || summary.Offers != 4 || len(summary.Showcase) != 3 {
+	if err != nil || summary.Offers != 4 {
 		t.Fatal(summary, err)
 	}
 	refreshStore(t, service)
@@ -190,48 +174,6 @@ func TestStoreCardSettingsAndJournal(t *testing.T) {
 	page, err := service.Shops(ctx, "", 20, 0)
 	if err != nil || page.Total != 0 {
 		t.Fatal(page, err)
-	}
-}
-
-func TestStoreSalesPrecedeImageAndRevision(t *testing.T) {
-	store, service := seedStoreCard(t)
-	if err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
-		p, err := tx.Products().Get(ctx, "t1", "p2")
-		if err != nil {
-			return err
-		}
-		state := p.State()
-		snapshot := catalog.Snapshot{
-			TenantID:      state.TenantID,
-			ProductID:     state.ProductID,
-			Revision:      state.Revision + 1,
-			Card:          state.Card,
-			PriceProfiles: state.PriceProfiles,
-			SalesCount:    2,
-			At:            t0,
-		}
-		if _, err := p.Apply(snapshot, t0); err != nil {
-			return err
-		}
-		return tx.Products().Save(ctx, p)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	refreshStore(t, service)
-	summary, err := service.StoreSummary(context.Background(), "t1")
-	if err != nil || summary.Showcase[1].ProductID != "p2" {
-		t.Fatal(summary, err)
-	}
-	member, ok := store.Participant("t1")
-	if !ok {
-		t.Fatal("участник не найден")
-	}
-	member.StoreCard.Profile.Showcase.Mode = "auto"
-	store.SeedParticipant(member)
-	refreshStore(t, service)
-	summary, err = service.StoreSummary(context.Background(), "t1")
-	if err != nil || summary.Showcase[0].ProductID != "p2" || summary.Showcase[1].ProductID != "p1" {
-		t.Fatal(summary, err)
 	}
 }
 
@@ -315,7 +257,7 @@ func TestStoreSummaryCandidateSkipsMissingDefaultPrice(t *testing.T) {
 	})
 	refreshStore(t, service)
 	summary, err := service.StoreSummary(context.Background(), "t1")
-	if err != nil || summary.Offers != 4 || *summary.FromPrice != 100 || len(summary.Showcase) != 3 {
+	if err != nil || summary.Offers != 4 || *summary.FromPrice != 100 {
 		t.Fatal(summary, err)
 	}
 	if err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
@@ -336,7 +278,7 @@ func TestStoreSummaryBeforeFirstRefresh(t *testing.T) {
 	_, service := seedStoreCard(t)
 	summary, err := service.StoreSummary(context.Background(), "t1")
 	if err != nil || summary.Offers != 0 || summary.FromPrice != nil || summary.Categories == nil ||
-		summary.Showcase == nil || summary.Hidden == nil ||
+		summary.Hidden == nil ||
 		summary.Rating != nil || summary.Badge != nil || summary.Rank != nil {
 		t.Fatal(summary, err)
 	}
@@ -393,7 +335,7 @@ func TestStoreSummaryFallbackForConnectedWithoutDelivery(t *testing.T) {
 	store.SeedParticipant(state)
 	refreshStore(t, service)
 	summary, err := service.StoreSummary(context.Background(), "t1")
-	if err != nil || summary.Offers != 4 || len(summary.Showcase) != 3 {
+	if err != nil || summary.Offers != 4 {
 		t.Fatal(summary, err)
 	}
 	page, err := service.Shops(context.Background(), "", 20, 0)

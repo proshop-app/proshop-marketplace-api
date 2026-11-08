@@ -161,7 +161,7 @@ func TestStoreCardOfferProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	summary, err := service.StoreSummary(ctx, "t1")
-	if err != nil || summary.Offers != 1 || summary.FromPrice == nil || len(summary.Showcase) != 1 {
+	if err != nil || summary.Offers != 1 || summary.FromPrice == nil {
 		t.Fatal(summary, err)
 	}
 	page, err := service.Shops(ctx, "", 20, 0)
@@ -309,7 +309,7 @@ func TestStoreCardCandidateProjectionAndSalesRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	summary, err := service.StoreSummary(ctx, "t1")
-	if err != nil || summary.Offers != 1 || len(summary.Showcase) != 1 || summary.Showcase[0].ProductID != "valid" {
+	if err != nil || summary.Offers != 1 {
 		t.Fatal(summary, err)
 	}
 	page, err := service.Shops(ctx, "", 20, 0)
@@ -345,8 +345,7 @@ func TestStoredShopsCategoryOrderAndPagination(t *testing.T) {
 					"root": {ID: "root", Name: "Категория", Count: counts[i]},
 					"leaf": {ID: "leaf", Name: "Подкатегория", Count: categoryCounts[i]},
 				},
-				Showcase: []ports.StoreProduct{},
-				Hidden:   []participant.CardHidden{},
+				Hidden: []participant.CardHidden{},
 			}
 			return tx.StoreCards().Save(ctx, ports.StoreRecord{
 				Summary:    summary,

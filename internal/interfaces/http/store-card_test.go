@@ -110,7 +110,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	wantKeys := strings.Fields("badge categories fromPrice hidden offers rank rating showcase uncategorized")
+	wantKeys := strings.Fields("badge categories fromPrice hidden offers rank rating uncategorized")
 	if !reflect.DeepEqual(keys, wantKeys) {
 		t.Fatal(keys)
 	}
@@ -139,7 +139,7 @@ func TestStoreCardHTTP(t *testing.T) {
 	for _, path := range []string{"/api/v1/shops", "/api/v1/shops/shop"} {
 		response := call("GET", path, "", "", http.StatusOK)
 		body := response.Body.String()
-		if !strings.Contains(body, `"logo":null`) {
+		if !strings.Contains(body, `"logo":null`) || strings.Contains(body, `"showcase":`) {
 			t.Fatal(body)
 		}
 		if response.Header().Get("Cache-Control") != "public, max-age=0, must-revalidate" {
@@ -169,20 +169,10 @@ func TestStoreCardHTTP(t *testing.T) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	headerKeys := "categories color initial isNew logo name offers rating showcase slug subscribers tenantId"
+	headerKeys := "categories color initial isNew logo name offers rating slug subscribers tenantId"
 	wantKeys = strings.Fields(headerKeys)
 	if !reflect.DeepEqual(keys, wantKeys) {
 		t.Fatal(keys)
-	}
-	var showcase []map[string]json.RawMessage
-	if err := json.Unmarshal(header["showcase"], &showcase); err != nil {
-		t.Fatal(err)
-	}
-	if len(showcase) != 1 {
-		t.Fatal(showcase)
-	}
-	if len(showcase[0]) != 2 || showcase[0]["offerId"] == nil || showcase[0]["image"] == nil {
-		t.Fatal(showcase)
 	}
 	state, _ = store.Participant("t1")
 	state.StoreCard.Readiness.Ready = false

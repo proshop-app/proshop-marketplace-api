@@ -25,7 +25,6 @@ func seedStoredCard(t *testing.T, uow *postgres.UnitOfWork) ports.StoreRecord {
 		Summary: ports.StoreSummary{
 			Offers:     1,
 			Categories: []ports.StoreCategory{},
-			Showcase:   []ports.StoreProduct{},
 			Hidden:     []participant.CardHidden{},
 		},
 		Header:     ports.ShopHeader{TenantID: "t1", Slug: "shop", Name: "Магазин", Logo: &logo, Offers: 1},
@@ -188,7 +187,7 @@ func TestModerationBeforeFirstSummarySurvivesStaleRefresh(t *testing.T) {
 	}
 	service := app.NewService(uow, fake.NewClock(at(1)), &fake.IDs{})
 	summary, err := service.StoreSummary(ctx, "t1")
-	if err != nil || summary.Offers != 0 || summary.Categories == nil || summary.Showcase == nil {
+	if err != nil || summary.Offers != 0 || summary.Categories == nil {
 		t.Fatal(summary, err)
 	}
 	decision := participant.Decision{Note: "Причина"}

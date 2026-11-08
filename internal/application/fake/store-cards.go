@@ -38,7 +38,6 @@ func (r storeCards) Shop(_ context.Context, slug string) (ports.ShopHeader, erro
 	for _, record := range r.d.storeCards {
 		if record.PagePublic && record.Header.Slug == slug {
 			header := record.Header
-			header.Showcase = append([]ports.ShopImage{}, record.Card.Showcase...)
 			return header, nil
 		}
 	}
@@ -84,7 +83,6 @@ func (r storeCards) UpdateProfile(_ context.Context, p *participant.Participant)
 		record.Header = ports.ShopHeader{TenantID: p.TenantID(), Slug: p.Slug(), Name: p.Name()}
 		record.Summary = ports.StoreSummary{
 			Categories: []ports.StoreCategory{},
-			Showcase:   []ports.StoreProduct{},
 			Hidden:     []participant.CardHidden{},
 		}
 	}

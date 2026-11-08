@@ -59,7 +59,7 @@ const (
 		)`
 	getStoreSummary = `SELECT summary, header, card, public, profile_version, page_public
 		FROM store_cards WHERE tenant_id = $1`
-	getShopHeader = `SELECT header || jsonb_build_object('showcase', COALESCE(card->'showcase', '[]'::jsonb))
+	getShopHeader = `SELECT header
 		FROM store_cards WHERE slug = $1 AND page_public`
 	listShopCards = `
 		WITH filtered AS (
@@ -226,7 +226,6 @@ func (r *StoreCards) UpdateProfile(ctx context.Context, p *participant.Participa
 	}
 	empty, err := json.Marshal(ports.StoreSummary{
 		Categories: []ports.StoreCategory{},
-		Showcase:   []ports.StoreProduct{},
 		Hidden:     append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
 	})
 	if err != nil {

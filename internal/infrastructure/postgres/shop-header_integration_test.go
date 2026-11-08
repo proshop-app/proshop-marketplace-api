@@ -5,7 +5,6 @@ package postgres_test
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -14,19 +13,11 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres/pgtest"
 )
 
-const removeHeaderShowcase = `UPDATE store_cards SET header = header - 'showcase' WHERE tenant_id = $1`
-
-func TestShopHeaderReadsExistingCardShowcase(t *testing.T) {
+func TestShopHeaderReadsStoredCard(t *testing.T) {
 	pool := pgtest.Pool(t)
 	uow := postgres.NewUnitOfWork(pool)
 	ctx := context.Background()
 	seedTenant(t, uow, "t1", "shop-one", participant.TenantActive)
-	image := "https://example.test/image"
-	showcase := []ports.ShopImage{
-		{OfferID: "t1:p1", Image: &image},
-		{OfferID: "t1:p2"},
-		{OfferID: "t1:p3"},
-	}
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		tenant, err := tx.Registry().Get(ctx, "t1")
 		if err != nil {
@@ -41,15 +32,11 @@ func TestShopHeaderReadsExistingCardShowcase(t *testing.T) {
 		}
 		return tx.StoreCards().Save(ctx, ports.StoreRecord{
 			Header:     ports.ShopHeader{TenantID: "t1", Slug: "shop-one", Name: "Магазин", Offers: 3},
-			Card:       ports.ShopCard{TenantID: "t1", Slug: "shop-one", Showcase: showcase},
+			Card:       ports.ShopCard{TenantID: "t1", Slug: "shop-one", Name: "Магазин", Offers: 3},
 			Public:     true,
 			PagePublic: true,
 		})
 	}); err != nil {
-		t.Fatal(err)
-	}
-	// Старая сводка не требует пересчёта ради нового поля шапки.
-	if _, err := pool.Exec(ctx, removeHeaderShowcase, "t1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -61,8 +48,7 @@ func TestShopHeaderReadsExistingCardShowcase(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if len(page.Items) != 1 || !reflect.DeepEqual(header.Showcase, showcase) ||
-			!reflect.DeepEqual(header.Showcase, page.Items[0].Showcase) {
+		if len(page.Items) != 1 || header.Name != "Магазин" || header.Offers != page.Items[0].Offers {
 			t.Fatal(header, page)
 		}
 		_, err = tx.StoreCards().Shop(ctx, "unknown")
