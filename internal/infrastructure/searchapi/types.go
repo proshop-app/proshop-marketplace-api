@@ -69,6 +69,7 @@ type offerQuery struct {
 	PriceContexts map[string]string                `json:"priceContexts"`
 	Attributes    map[string]ports.AttributeFilter `json:"attributes"`
 	FacetFields   []facetField                     `json:"facetFields"`
+	Facets        *[]ports.FacetCode               `json:"facets,omitempty"`
 	InStockSet    bool                             `json:"inStockSet"`
 	Text          string                           `json:"text"`
 	TenantIDs     []string                         `json:"tenantIds"`

@@ -31,6 +31,7 @@ func TestSponsoredPrepareQueryAndPrices(t *testing.T) {
 		t.Fatal(rows, err)
 	}
 	e.store.SeedTaxonomy(taxonomy.Definition{
+		Attributes: []taxonomy.Attribute{{Code: "a1", Type: "enum", Facet: true}},
 		Version:    1,
 		Categories: []taxonomy.Category{{ID: "c1", Schema: "s1"}},
 		Schemas:    map[string]taxonomy.Schema{"s1": {}},
@@ -46,6 +47,9 @@ func TestSponsoredPrepareQueryAndPrices(t *testing.T) {
 	}
 	if e.index.Query.TrackQuery || e.index.Query.Text != "Товар" {
 		t.Fatalf("рекламный поиск после PrepareQuery: %+v", e.index.Query)
+	}
+	if e.index.Query.Facets == nil || len(*e.index.Query.Facets) != 0 || len(e.index.Query.FacetFields) != 0 {
+		t.Fatalf("рекламный подбор запросил ненужные фасеты: %+v", e.index.Query)
 	}
 
 	if _, err := service.Sponsored(ctx, ports.OfferQuery{CategoryID: "unknown"}); err == nil {

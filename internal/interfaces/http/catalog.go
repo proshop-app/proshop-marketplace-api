@@ -124,6 +124,7 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+	rememberCatalogFacets(r.Context(), list.Facets)
 	limit := query.Limit
 	if limit == 0 {
 		limit = appcatalog.DefaultLimit
@@ -179,6 +180,9 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 		GroupID:    values.Get("groupId"),
 		CategoryID: values.Get("category"),
 		Sort:       ports.OfferSort(values.Get("sort")),
+	}
+	if err := parseOfferFacetSelection(values, &query); err != nil {
+		return query, err
 	}
 
 	if tracks, present := values["track"]; present {

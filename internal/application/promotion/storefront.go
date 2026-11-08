@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -48,6 +49,10 @@ func (s *Service) Sponsored(ctx context.Context, query ports.OfferQuery) ([]Spon
 	if query.Text != "" {
 		code = "search_slot"
 		query.Offset, query.Limit = 0, s.config.SearchDepth
+		// Рекламному подбору нужны только карточки: фасеты и гистограмма не читаются.
+		facets := []ports.FacetCode{}
+		query.Facets = &facets
+		query.FacetFields = []taxonomy.Attribute{}
 		page, err := s.index.Search(ctx, query)
 		if err != nil {
 			return nil, err

@@ -152,6 +152,9 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UU
 }
 
 func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
+	if err := validateFacetSelection(query.Facets); err != nil {
+		return query, err
+	}
 	query.Text = strings.TrimSpace(query.Text)
 	query.TrackQuery = query.TrackQuery && query.Text != "" && query.Offset == 0
 
@@ -274,9 +277,13 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 			filter.Type = fields[code].Type
 			normalized.Attributes[code] = filter
 		}
-		for _, a := range fields {
-			if a.Facet {
-				normalized.FacetFields = append(normalized.FacetFields, a)
+		if normalized.AttributeFacets != nil && !*normalized.AttributeFacets {
+			normalized.FacetFields = []taxonomy.Attribute{}
+		} else {
+			for _, a := range fields {
+				if a.Facet {
+					normalized.FacetFields = append(normalized.FacetFields, a)
+				}
 			}
 		}
 		sort.Slice(normalized.FacetFields, func(i, j int) bool {

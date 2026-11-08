@@ -2,6 +2,7 @@ package fake
 
 import (
 	"encoding/json"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -59,6 +60,15 @@ func fakeFacets(candidates []ports.OfferDocument, query ports.OfferQuery) []port
 		{Code: "tenant", Name: "Магазин", Type: "enum"},
 		{Code: "price", Name: "Цена", Type: "number"},
 		{Code: "inStock", Name: "Наличие", Type: "boolean"},
+	}
+	if query.Facets != nil {
+		selected := definitions[:0]
+		for _, definition := range definitions {
+			if slices.Contains(*query.Facets, ports.FacetCode(definition.Code)) {
+				selected = append(selected, definition)
+			}
+		}
+		definitions = selected
 	}
 	for _, a := range query.FacetFields {
 		a.Code = "attr." + a.Code
