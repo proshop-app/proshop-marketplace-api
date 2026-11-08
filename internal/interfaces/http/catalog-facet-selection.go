@@ -1,12 +1,31 @@
 package http
 
 import (
+	"context"
 	"net/url"
 	"strings"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
+
+// Счётчики результата позволяют измерить долю выдач без фасетов по журналу,
+// не записывая поисковый текст, значения фильтров или персональные профили.
+func rememberCatalogFacets(ctx context.Context, facets []ports.Facet) {
+	facts, _ := ctx.Value(keyFacts).(*requestFacts)
+	if facts == nil {
+		return
+	}
+	counts := &catalogFacetFacts{
+		total: len(facets),
+	}
+	for _, facet := range facets {
+		if strings.HasPrefix(facet.Code, "attr.") {
+			counts.attributes++
+		}
+	}
+	facts.catalogFacets = counts
+}
 
 func parseOfferFacetSelection(values url.Values, query *ports.OfferQuery) error {
 	if raw, present := values["facets"]; present {

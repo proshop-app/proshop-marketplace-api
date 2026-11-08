@@ -36,7 +36,13 @@ const (
 // requestFacts — что обработчики узнали о запросе; observe дописывает это
 // в строку журнала запроса.
 type requestFacts struct {
-	buyerID ids.UUID
+	buyerID       ids.UUID
+	catalogFacets *catalogFacetFacts
+}
+
+type catalogFacetFacts struct {
+	total      int
+	attributes int
 }
 
 type statusRecorder struct {
@@ -139,6 +145,12 @@ func observe(logger *slog.Logger, metrics *httpMetrics, next http.Handler) http.
 			}
 			if facts.buyerID != "" {
 				attrs = append(attrs, slog.String("buyerId", string(facts.buyerID)))
+			}
+			if facts.catalogFacets != nil {
+				attrs = append(attrs,
+					slog.Int("catalogFacetCount", facts.catalogFacets.total),
+					slog.Int("catalogAttributeFacetCount", facts.catalogFacets.attributes),
+				)
 			}
 
 			requestLogger.Info("http", attrs...)

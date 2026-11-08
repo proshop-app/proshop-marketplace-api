@@ -1,13 +1,18 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
@@ -85,8 +90,14 @@ func TestCatalogFacetSelectionHTTP(t *testing.T) {
 		},
 	} {
 		t.Run(tc.query, func(t *testing.T) {
+			var logs bytes.Buffer
+			handler := observe(
+				slog.New(slog.NewJSONHandler(&logs, nil)),
+				newHTTPMetrics(prometheus.NewRegistry()),
+				http.HandlerFunc(h.list),
+			)
 			response := httptest.NewRecorder()
-			h.list(response, httptest.NewRequest(http.MethodGet, "/offers"+tc.query, nil))
+			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/offers"+tc.query, nil))
 			if response.Code != http.StatusOK {
 				t.Fatal(response.Code, response.Body.String())
 			}
@@ -100,6 +111,23 @@ func TestCatalogFacetSelectionHTTP(t *testing.T) {
 			}
 			if !reflect.DeepEqual(codes, tc.codes) || page.Total != 1 || len(page.Items) != 1 {
 				t.Fatalf("неверная выдача/выбор фасетов: %s", response.Body.String())
+			}
+			var record struct {
+				Total      *int `json:"catalogFacetCount"`
+				Attributes *int `json:"catalogAttributeFacetCount"`
+			}
+			if err := json.Unmarshal(logs.Bytes(), &record); err != nil {
+				t.Fatal(err)
+			}
+			attributes := 0
+			for _, code := range codes {
+				if strings.HasPrefix(code, "attr.") {
+					attributes++
+				}
+			}
+			if record.Total == nil || record.Attributes == nil ||
+				*record.Total != len(codes) || *record.Attributes != attributes {
+				t.Fatalf("журнал не отражает фактические фасеты ответа: %s", logs.String())
 			}
 		})
 	}
