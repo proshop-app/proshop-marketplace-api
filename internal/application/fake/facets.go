@@ -70,9 +70,11 @@ func fakeFacets(candidates []ports.OfferDocument, query ports.OfferQuery) []port
 		}
 		definitions = selected
 	}
-	for _, a := range query.FacetFields {
-		a.Code = "attr." + a.Code
-		definitions = append(definitions, a)
+	if query.WantsFacet(ports.FacetAttributes) {
+		for _, a := range query.FacetFields {
+			a.Code = "attr." + a.Code
+			definitions = append(definitions, a)
+		}
 	}
 	out := []ports.Facet{}
 	for _, a := range definitions {

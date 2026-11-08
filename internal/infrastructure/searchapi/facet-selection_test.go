@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -18,14 +19,23 @@ import (
 func TestFacetSelectionWireContract51(t *testing.T) {
 	empty := []ports.FacetCode{}
 	var nilCodes []ports.FacetCode
-	partial := []ports.FacetCode{ports.FacetCategory, ports.FacetTenant}
+	partial := []ports.FacetCode{ports.FacetCategory, ports.FacetTenant, ports.FacetAttributes}
+	attributes := []ports.FacetCode{ports.FacetAttributes}
+	baseOnly := []ports.FacetCode{ports.FacetCategory}
 	for _, tc := range []struct {
 		name   string
 		facets *[]ports.FacetCode
 		wire   string
+		fields string
 	}{
 		{
-			name: "прежний запрос без нового поля",
+			name:   "прежний запрос без нового поля",
+			fields: `[{"code":"a1","name":"Поле","type":"enum"}]`,
+		},
+		{
+			name:   "базовый список очищает даже старые FacetFields",
+			facets: &baseOnly,
+			wire:   `["category"]`,
 		},
 		{
 			name:   "явно пустой список",
@@ -38,7 +48,14 @@ func TestFacetSelectionWireContract51(t *testing.T) {
 			wire:   `[]`,
 		},
 		{
+			name:   "только attributes не уходит кодом движку",
+			fields: `[{"code":"a1","name":"Поле","type":"enum"}]`,
+			facets: &attributes,
+			wire:   `[]`,
+		},
+		{
 			name:   "частичный список",
+			fields: `[{"code":"a1","name":"Поле","type":"enum"}]`,
 			facets: &partial,
 			wire:   `["category","tenant"]`,
 		},
@@ -68,6 +85,7 @@ func TestFacetSelectionWireContract51(t *testing.T) {
 			} {
 				_, err := client.Search(context.Background(), ports.OfferQuery{
 					Facets:        tc.facets,
+					FacetFields:   []taxonomy.Attribute{{Code: "a1", Name: "Поле", Type: "enum"}},
 					PriceContexts: contexts,
 				})
 				if err != nil {
@@ -80,7 +98,11 @@ func TestFacetSelectionWireContract51(t *testing.T) {
 				if string(request["facets"]) != tc.wire {
 					t.Fatalf("facets=%s, ожидалось %q", request["facets"], tc.wire)
 				}
-				if string(request["facetFields"]) != "[]" {
+				wantFields := tc.fields
+				if wantFields == "" {
+					wantFields = "[]"
+				}
+				if string(request["facetFields"]) != wantFields {
 					t.Fatalf("пустые атрибутные фасеты: %s", request["facetFields"])
 				}
 				want := "null"

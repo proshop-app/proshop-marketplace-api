@@ -103,7 +103,7 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 		return OfferList{}, err
 	}
 	list := OfferList{
-		Facets: visibleFacets(page.Facets, page.Total),
+		Facets: visibleFacets(page.Facets, page.Total, normalized),
 		Total:  page.Total,
 		Items:  make([]OfferCard, 0, len(page.Items)),
 	}
@@ -277,9 +277,9 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 			filter.Type = fields[code].Type
 			normalized.Attributes[code] = filter
 		}
-		if normalized.AttributeFacets != nil && !*normalized.AttributeFacets {
-			normalized.FacetFields = []taxonomy.Attribute{}
-		} else {
+		// Поля берутся заново из таксономии, повторная подготовка не дублирует фасеты.
+		normalized.FacetFields = []taxonomy.Attribute{}
+		if normalized.WantsFacet(ports.FacetAttributes) {
 			for _, a := range fields {
 				if a.Facet {
 					normalized.FacetFields = append(normalized.FacetFields, a)
