@@ -1859,7 +1859,9 @@ paths:
         либо точное значение. Неизвестный код, неверный тип/словарь/диапазон — 400.
         Пример: ?category=c1&attr.a1=v1&attr.a1=v2&attr.a2.min=1.5&attr.a2.max=10.
         Фасеты считаются до пагинации со всеми фильтрами, кроме собственного; category — со всеми. Атрибутные —
-        только при facet=true и покрытии >=20%; category, tenant, price, inStock — всегда.
+        только при facet=true и покрытии >=20%; без селекторов category, tenant, price, inStock — всегда.
+        facets выбирает базовые фасеты; attributeFacets=false отключает атрибутные.
+        Размер страницы не определяет выбор фасетов. Фильтры и total от селекторов не меняются.
         Числа: min/max; остальные: до 256 наиболее частых значений с count.
         При пустой выдаче фасеты могут содержать варианты после снятия собственного фильтра.
       operationId: listOffers
@@ -1892,6 +1894,24 @@ paths:
         - { name: priceMin, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
         - { name: priceMax, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
         - { name: inStock, in: query, schema: { type: boolean } }
+        - name: facets
+          in: query
+          style: form
+          explode: false
+          allowEmptyValue: true
+          schema:
+            type: array
+            uniqueItems: true
+            items:
+              type: string
+              enum: [category, tenant, inStock, price]
+          description: >-
+            Один список через запятую без пробелов. Без параметра — все базовые фасеты;
+            facets= — ни одного. Неизвестный код, повтор кода или параметра — 400.
+        - name: attributeFacets
+          in: query
+          schema: { type: boolean, default: true }
+          description: Только true или false, один раз. false отключает атрибутные фасеты.
         - name: sort
           in: query
           schema: { type: string, enum: [relevance, price_asc, price_desc, newest, rating], default: relevance }

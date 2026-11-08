@@ -108,15 +108,19 @@ type OfferQuery struct {
 	InStockSet    bool
 	Attributes    map[string]AttributeFilter
 	FacetFields   []taxonomy.Attribute
-	Text          string
-	TenantIDs     []string
-	CategoryID    string
-	PriceMin      *int64
-	PriceMax      *int64
-	InStock       bool
-	Sort          OfferSort
-	Offset        int
-	Limit         int
+	// nil сохраняет все базовые фасеты; указатель на пустой список отключает их.
+	Facets *[]FacetCode
+	// nil сохраняет автоматический выбор атрибутных фасетов из таксономии.
+	AttributeFacets *bool
+	Text            string
+	TenantIDs       []string
+	CategoryID      string
+	PriceMin        *int64
+	PriceMax        *int64
+	InStock         bool
+	Sort            OfferSort
+	Offset          int
+	Limit           int
 }
 
 // OfferPage — страница выдачи.

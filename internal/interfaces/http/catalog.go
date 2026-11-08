@@ -180,6 +180,9 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 		CategoryID: values.Get("category"),
 		Sort:       ports.OfferSort(values.Get("sort")),
 	}
+	if err := parseOfferFacetSelection(values, &query); err != nil {
+		return query, err
+	}
 
 	if tracks, present := values["track"]; present {
 		if len(tracks) != 1 || (tracks[0] != "true" && tracks[0] != "1") {
