@@ -193,3 +193,32 @@ func TestEmptyAssetsAreArray(t *testing.T) {
 		t.Fatalf("%s: %v", raw, err)
 	}
 }
+
+func TestTrackQueryContract(t *testing.T) {
+	for _, track := range []bool{false, true} {
+		client, err := New(Config{
+			URL:     "http://search.test",
+			Token:   strings.Repeat("m", 32),
+			Timeout: time.Second,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		client.client.Transport = featureTransport(func(r *http.Request) (*http.Response, error) {
+			var query map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
+				t.Fatal(err)
+			}
+			if query["trackQuery"] != track {
+				t.Fatalf("trackQuery=%v: %+v", track, query)
+			}
+			w := httptest.NewRecorder()
+			_, _ = w.Write([]byte(`{"items":[],"facets":[],"total":0}`))
+			return w.Result(), nil
+		})
+		query := ports.OfferQuery{Text: "Товар", TrackQuery: track}
+		if _, err := client.Search(context.Background(), query); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

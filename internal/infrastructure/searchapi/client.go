@@ -202,6 +202,7 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 		http.MethodPost,
 		"/search",
 		offerQuery{
+			TrackQuery:    query.TrackQuery,
 			PriceContexts: wirePriceContexts(query.PriceContexts),
 			Attributes:    query.Attributes,
 			FacetFields:   wireFacetFields(query.FacetFields),

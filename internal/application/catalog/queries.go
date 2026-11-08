@@ -153,6 +153,7 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UU
 
 func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 	query.Text = strings.TrimSpace(query.Text)
+	query.TrackQuery = query.TrackQuery && query.Text != "" && query.Offset == 0
 
 	if utf8.RuneCountInString(query.Text) > MaxQueryLength {
 		return query, ErrInvalidQuery.WithMessage("строка поиска длиннее 200 символов")

@@ -201,6 +201,13 @@ func TestTaxonomyHTTP(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 
+	for _, raw := range []string{"", "false", "0", "bad"} {
+		w := call(http.MethodGet, "/api/v1/catalog/offers?track="+raw, "", "", "")
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("track=%s: %d %s", raw, w.Code, w.Body.String())
+		}
+	}
+
 	if w := call(http.MethodGet, "/api/v1/catalog/offers?attr.a1=v3", "", "", ""); w.Code != 400 {
 		t.Fatal(w.Code)
 	}
@@ -254,5 +261,21 @@ func seedHTTPDictionary(t *testing.T, store *fake.Store) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTrackQueryParsing(t *testing.T) {
+	for _, suffix := range []string{"", "&track=true", "&track=1"} {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/offers?q=test"+suffix, nil)
+		query, err := parseOfferQuery(r)
+		if err != nil || query.TrackQuery != (suffix != "") {
+			t.Fatalf("%s: %+v %v", suffix, query, err)
+		}
+	}
+	for _, raw := range []string{"", "false", "0", "TRUE", "yes", "true&track=1"} {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/offers?track="+raw, nil)
+		if _, err := parseOfferQuery(r); err == nil {
+			t.Fatalf("принят track=%s", raw)
+		}
 	}
 }

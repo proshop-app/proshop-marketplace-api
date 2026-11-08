@@ -181,6 +181,13 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 		Sort:       ports.OfferSort(values.Get("sort")),
 	}
 
+	if tracks, present := values["track"]; present {
+		if len(tracks) != 1 || (tracks[0] != "true" && tracks[0] != "1") {
+			return query, appcatalog.ErrInvalidQuery.WithMessage("track — true или 1")
+		}
+		query.TrackQuery = true
+	}
+
 	query.Attributes = map[string]ports.AttributeFilter{}
 	for key, values := range values {
 		if !strings.HasPrefix(key, "attr.") {

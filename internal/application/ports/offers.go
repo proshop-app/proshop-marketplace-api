@@ -101,6 +101,7 @@ const (
 
 // OfferQuery — поиск по выдаче каталога.
 type OfferQuery struct {
+	TrackQuery    bool
 	GroupID       string
 	BuyerID       ids.UUID
 	PriceContexts map[ids.TenantID]string

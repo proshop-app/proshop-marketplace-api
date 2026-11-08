@@ -111,3 +111,36 @@ func TestTenantFilterDeduplicates(t *testing.T) {
 		t.Fatalf("%+v %v", query, err)
 	}
 }
+
+func TestSearchTrackQuery(t *testing.T) {
+	cases := []struct {
+		name  string
+		query ports.OfferQuery
+		want  bool
+	}{
+		{name: "отправка", query: ports.OfferQuery{Text: " Товар ", TrackQuery: true}, want: true},
+		{name: "подсказка", query: ports.OfferQuery{Text: "Товар"}},
+		{name: "пустой текст", query: ports.OfferQuery{TrackQuery: true}},
+		{name: "пробелы", query: ports.OfferQuery{Text: " \t\n", TrackQuery: true}},
+		{name: "следующая страница", query: ports.OfferQuery{Text: "Товар", TrackQuery: true, Offset: 20}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			index := &fake.PromotionIndex{}
+			queries := appcatalog.NewQueries(
+				fake.NewStore(),
+				index,
+				fake.NewPlatform(),
+				nil,
+				nil,
+				fake.NewClock(time.Time{}),
+			)
+			if _, err := queries.Search(context.Background(), tc.query); err != nil {
+				t.Fatal(err)
+			}
+			if index.Query.TrackQuery != tc.want {
+				t.Fatalf("флаг поиска: %+v", index.Query)
+			}
+		})
+	}
+}

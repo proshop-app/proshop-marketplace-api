@@ -1872,6 +1872,14 @@ paths:
           in: query
           schema: { type: string }
           description: Код ISO 3166-2 RU из ПВЗ.
+        - name: track
+          in: query
+          schema: { type: string, enum: ['true', '1'] }
+          description: >-
+            Учесть отправленный поиск в популярных запросах площадки. Передавать только при
+            отправке поиска, не для подсказок или изменения фасетов. Без параметра учёт выключен.
+            Учитывается только при непустом q и offset=0; иначе игнорируется.
+            Любое значение, кроме true и 1, — 400.
         - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Строка поиска }
         - name: tenant
           in: query

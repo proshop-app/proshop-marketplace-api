@@ -64,6 +64,7 @@ type attribute struct {
 }
 
 type offerQuery struct {
+	TrackQuery    bool                             `json:"trackQuery"`
 	GroupID       string                           `json:"groupId,omitempty"`
 	PriceContexts map[string]string                `json:"priceContexts"`
 	Attributes    map[string]ports.AttributeFilter `json:"attributes"`
