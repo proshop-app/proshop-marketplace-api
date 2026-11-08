@@ -2,11 +2,7 @@
   "profile": {
     "name": "Кандидат",
     "logo": null,
-    "color": null,
-    "showcase": {
-      "mode": "auto",
-      "productIds": []
-    }
+    "color": null
   },
   "card": {
     "ready": false,

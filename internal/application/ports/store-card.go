@@ -16,15 +16,6 @@ type StoreCategory struct {
 	Count int    `json:"count"`
 }
 
-// StoreProduct — снимок товара витрины с действующей ценой.
-type StoreProduct struct {
-	OfferID   string  `json:"offerId"`
-	ProductID string  `json:"productId"`
-	Name      string  `json:"name"`
-	Price     int64   `json:"price"`
-	Image     *string `json:"image"`
-}
-
 // StoreSummary — статистика из проекции, независимая от поискового индекса.
 type StoreSummary struct {
 	VisibleOffers  int                      `json:"-"`
@@ -33,7 +24,6 @@ type StoreSummary struct {
 	FromPrice      *int64                   `json:"fromPrice"`
 	Categories     []StoreCategory          `json:"categories"`
 	Uncategorized  int                      `json:"uncategorized"`
-	Showcase       []StoreProduct           `json:"showcase"`
 	Hidden         []participant.CardHidden `json:"hidden"`
 	Rating         *catalog.Rating          `json:"rating"`
 	Badge          *string                  `json:"badge"`
@@ -57,13 +47,6 @@ type ShopHeader struct {
 	Offers     int             `json:"offers"`
 	Categories []StoreCategory `json:"categories"`
 	IsNew      bool            `json:"isNew"`
-	Showcase   []ShopImage     `json:"showcase"`
-}
-
-// ShopImage — ограничивает поля товара в списке магазинов.
-type ShopImage struct {
-	OfferID string  `json:"offerId"`
-	Image   *string `json:"image"`
 }
 
 // ShopCategory — категория отбора или крупнейший корневой узел магазина.
@@ -84,7 +67,6 @@ type ShopCard struct {
 	MoreCategories int             `json:"moreCategories"`
 	Offers         int             `json:"offers"`
 	FromPrice      *int64          `json:"fromPrice"`
-	Showcase       []ShopImage     `json:"showcase"`
 	Rating         *catalog.Rating `json:"rating"`
 	IsNew          bool            `json:"isNew"`
 }

@@ -13,9 +13,6 @@ const (
 	// CardLogo — ключ логотипа в постмодерации.
 	CardLogo = "logo"
 
-	// ShowcasePinned — режим с закреплёнными товарами и автоматическим дополнением.
-	ShowcasePinned = "pinned"
-
 	// ActionCardHide — запись журнала о скрытии пункта карточки.
 	ActionCardHide = "card_hide"
 
@@ -38,10 +35,9 @@ type Returns struct {
 
 // Profile — профиль принадлежит серверу, маркетплейс хранит его снимок.
 type Profile struct {
-	Name     string      `json:"name"`
-	Logo     *string     `json:"logo"`
-	Color    *BrandColor `json:"color"`
-	Showcase Showcase    `json:"showcase"`
+	Name  string      `json:"name"`
+	Logo  *string     `json:"logo"`
+	Color *BrandColor `json:"color"`
 }
 
 // BrandColor — содержит готовый цвет карточки, чтобы не пересчитывать контраст.
@@ -49,12 +45,6 @@ type BrandColor struct {
 	Value    string      `json:"value"`
 	Card     string      `json:"card"`
 	Contrast json.Number `json:"contrast"`
-}
-
-// Showcase — сохраняет порядок закреплений магазина.
-type Showcase struct {
-	Mode       string   `json:"mode"`
-	ProductIDs []string `json:"productIds"`
 }
 
 // CardReadiness — серверный чеклист без повторного вычисления на площадке.
@@ -80,7 +70,6 @@ type StoreCard struct {
 
 // Clone отделяет изменяемые списки от снимка агрегата.
 func (c StoreCard) Clone() StoreCard {
-	c.Profile.Showcase.ProductIDs = slices.Clone(c.Profile.Showcase.ProductIDs)
 	if c.Profile.Color != nil {
 		color := *c.Profile.Color
 		c.Profile.Color = &color

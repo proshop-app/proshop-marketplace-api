@@ -159,15 +159,12 @@ func readBundle(t *testing.T, name string, target any) {
 	}
 }
 
-func TestOpenAPIShopShowcaseAndOrderSeller(t *testing.T) {
+func TestOpenAPIOrderSeller(t *testing.T) {
 	doc, _ := loadSpec(t)
 	schemas := doc.Components["schemas"]
-	for _, name := range []string{"ShopHeader", "CartLine", "CheckoutGroup"} {
+	for _, name := range []string{"CartLine", "CheckoutGroup"} {
 		field := "seller"
 		ref := "#/components/schemas/OrderSeller"
-		if name == "ShopHeader" {
-			field = "showcase"
-		}
 		schema := schemas[name].(map[string]any)
 		required := schema["required"].([]any)
 		found := false
@@ -178,13 +175,6 @@ func TestOpenAPIShopShowcaseAndOrderSeller(t *testing.T) {
 			t.Fatalf("%s: поле %s обязательно", name, field)
 		}
 		property := schema["properties"].(map[string]any)[field].(map[string]any)
-		if field == "showcase" {
-			if property["type"] != "array" || property["maxItems"] != 3 {
-				t.Fatal(property)
-			}
-			property = property["items"].(map[string]any)
-			ref = "#/components/schemas/ShopImage"
-		}
 		if property["$ref"] != ref {
 			t.Fatal(property)
 		}
@@ -231,7 +221,7 @@ func TestOpenAPIBuyerContractFields(t *testing.T) {
 	schemas := doc.Components["schemas"]
 	header := schemas["ShopHeader"].(map[string]any)
 	required := header["required"].([]any)
-	for _, name := range []string{"rating", "showcase", "subscribers"} {
+	for _, name := range []string{"rating", "subscribers"} {
 		if !slices.Contains(required, any(name)) {
 			t.Fatalf("ShopHeader.required: нет %s", name)
 		}
@@ -280,6 +270,23 @@ func TestOpenAPIBuyerContractFields(t *testing.T) {
 		operation := doc.Paths[path][method].(map[string]any)
 		if operation["responses"].(map[string]any)["503"] == nil {
 			t.Fatal(path, "нет 503")
+		}
+	}
+}
+
+func TestOpenAPIStoreCardsWithoutShowcase(t *testing.T) {
+	doc, _ := loadSpec(t)
+	schemas := doc.Components["schemas"]
+	for _, name := range []string{"StoreSummary", "ShopHeader", "ShopCard"} {
+		schema := schemas[name].(map[string]any)
+		if slices.Contains(schema["required"].([]any), any("showcase")) ||
+			schema["properties"].(map[string]any)["showcase"] != nil {
+			t.Fatalf("%s содержит удалённое поле showcase", name)
+		}
+	}
+	for _, name := range []string{"StoreProduct", "ShopImage"} {
+		if schemas[name] != nil {
+			t.Fatalf("осталась неиспользуемая схема %s", name)
 		}
 	}
 }
