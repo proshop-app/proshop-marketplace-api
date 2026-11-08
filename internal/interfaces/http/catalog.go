@@ -175,7 +175,7 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 	values := r.URL.Query()
 	query := ports.OfferQuery{
 		Text:       values.Get("q"),
-		TenantID:   values.Get("tenant"),
+		TenantIDs:  values["tenant"],
 		GroupID:    values.Get("groupId"),
 		CategoryID: values.Get("category"),
 		Sort:       ports.OfferSort(values.Get("sort")),

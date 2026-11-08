@@ -108,7 +108,7 @@ type OfferQuery struct {
 	Attributes    map[string]AttributeFilter
 	FacetFields   []taxonomy.Attribute
 	Text          string
-	TenantID      string
+	TenantIDs     []string
 	CategoryID    string
 	PriceMin      *int64
 	PriceMax      *int64

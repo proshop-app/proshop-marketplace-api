@@ -226,13 +226,13 @@ func TestSearchRelevanceAndRotation(t *testing.T) {
 	e.store.SeedPromotion(second)
 	e.clock.Advance(72 * time.Hour)
 	e.index.Result = ports.OfferPage{Items: []ports.OfferDocument{{ID: second.Target.OfferID.String()}}}
-	query := ports.OfferQuery{Text: "Товар", TenantID: "t1", CategoryID: "c1", InStock: true, Limit: 20}
+	query := ports.OfferQuery{Text: "Товар", TenantIDs: []string{"t1"}, CategoryID: "c1", InStock: true, Limit: 20}
 	rows, err := e.service.Sponsored(ctx, query)
 	if err != nil || len(rows) != 1 || rows[0].PromotionID != second.ID {
 		t.Fatal(rows, err)
 	}
 	if e.index.Query.Limit != 100 || e.index.Query.Offset != 0 || e.index.Query.CategoryID != query.CategoryID ||
-		e.index.Query.TenantID != "t1" || !e.index.Query.InStock {
+		len(e.index.Query.TenantIDs) != 1 || e.index.Query.TenantIDs[0] != "t1" || !e.index.Query.InStock {
 		t.Fatal(e.index.Query)
 	}
 	query.Offset = 20

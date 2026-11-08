@@ -70,7 +70,7 @@ type offerQuery struct {
 	FacetFields   []facetField                     `json:"facetFields"`
 	InStockSet    bool                             `json:"inStockSet"`
 	Text          string                           `json:"text"`
-	TenantID      string                           `json:"tenantId"`
+	TenantIDs     []string                         `json:"tenantIds"`
 	CategoryID    string                           `json:"categoryId"`
 	PriceMin      *int64                           `json:"priceMin"`
 	PriceMax      *int64                           `json:"priceMax"`

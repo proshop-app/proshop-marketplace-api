@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	contractVersion = 4
+	contractVersion = 5
 	apiPath         = "/api/v1/internal/marketplace"
 	batchLimit      = 200
 	requestLimit    = 4 << 20
@@ -207,7 +207,7 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 			FacetFields:   wireFacetFields(query.FacetFields),
 			InStockSet:    query.InStockSet,
 			Text:          query.Text,
-			TenantID:      query.TenantID,
+			TenantIDs:     query.TenantIDs,
 			GroupID:       query.GroupID,
 			CategoryID:    query.CategoryID,
 			PriceMin:      query.PriceMin,

@@ -33,6 +33,13 @@ func TestPriceBucketsAndRatingContract(t *testing.T) {
 				if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
 					t.Error(err)
 				}
+				if _, legacy := query["tenantId"]; legacy {
+					t.Error("передан старый tenantId")
+				}
+				tenants, ok := query["tenantIds"].([]any)
+				if !ok || len(tenants) != 2 || tenants[0] != "t1" || tenants[1] != "t2" {
+					t.Error(query)
+				}
 				if query["sort"] != "rating" {
 					t.Error(query)
 				}
@@ -48,11 +55,15 @@ func TestPriceBucketsAndRatingContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			client.client.Transport = transport
-			page, err := client.Search(context.Background(), ports.OfferQuery{Sort: ports.SortRating, Limit: 20})
+			page, err := client.Search(context.Background(), ports.OfferQuery{
+				TenantIDs: []string{"t1", "t2"},
+				Sort:      ports.SortRating,
+				Limit:     20,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(page.Facets) != 1 {
+			if page.Total != 1 || len(page.Facets) != 1 || page.Facets[0].Count != 5 {
 				t.Fatal(page)
 			}
 			buckets := page.Facets[0].Buckets
@@ -71,7 +82,7 @@ func TestPriceBucketsAndRatingContract(t *testing.T) {
 	}
 }
 
-func TestVersionFourDocumentContract(t *testing.T) {
+func TestVersionFiveDocumentContract(t *testing.T) {
 	raw, err := os.ReadFile("testdata/search_buckets.json")
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +108,7 @@ func TestVersionFourDocumentContract(t *testing.T) {
 	client.client.Transport = featureTransport(func(r *http.Request) (*http.Response, error) {
 		w := httptest.NewRecorder()
 		if strings.HasSuffix(r.URL.Path, "/status") {
-			_, _ = w.Write([]byte(`{"contractVersion":4,"ready":true}`))
+			_, _ = w.Write([]byte(`{"contractVersion":5,"ready":true}`))
 			return w.Result(), nil
 		}
 		var body struct {
@@ -150,7 +161,7 @@ func TestDocumentNormalizesRating(t *testing.T) {
 	}
 }
 
-func TestStatusVersionThreeRejected(t *testing.T) {
+func TestStatusVersionFourRejected(t *testing.T) {
 	client, err := New(Config{
 		URL:     "http://search.test",
 		Token:   strings.Repeat("m", 32),
@@ -164,7 +175,7 @@ func TestStatusVersionThreeRejected(t *testing.T) {
 			t.Error("ожидался /status", r.URL.Path)
 		}
 		w := httptest.NewRecorder()
-		_, _ = w.Write([]byte(`{"contractVersion":3,"ready":true}`))
+		_, _ = w.Write([]byte(`{"contractVersion":4,"ready":true}`))
 		return w.Result(), nil
 	})
 	if err := client.Ping(context.Background()); !errors.Is(err, ErrUnavailable) {

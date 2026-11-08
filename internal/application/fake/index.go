@@ -90,7 +90,7 @@ func (x *Index) Search(_ context.Context, query ports.OfferQuery) (ports.OfferPa
 	x.mu.Lock()
 	defer x.mu.Unlock()
 
-	var hits []ports.OfferDocument
+	var hits, candidates []ports.OfferDocument
 
 	for _, doc := range x.generations[x.active] {
 		key := catalog.DefaultPriceProfile
@@ -103,7 +103,8 @@ func (x *Index) Search(_ context.Context, query ports.OfferQuery) (ports.OfferPa
 		}
 		doc.Price = profile.EffectivePrice.Kopecks()
 		doc.BasePrice = profile.Price.Kopecks()
-		if matches(doc, query) {
+		candidates = append(candidates, doc)
+		if matches(doc, query, "") {
 			hits = append(hits, doc)
 		}
 	}
@@ -137,7 +138,7 @@ func (x *Index) Search(_ context.Context, query ports.OfferQuery) (ports.OfferPa
 
 		return hits[i].ID < hits[j].ID
 	})
-	page := ports.OfferPage{Facets: fakeFacets(hits, query.FacetFields), Total: len(hits)}
+	page := ports.OfferPage{Facets: fakeFacets(candidates, query), Total: len(hits)}
 	if x.Facets != nil {
 		page.Facets = x.Facets
 	}
@@ -148,29 +149,33 @@ func (x *Index) Search(_ context.Context, query ports.OfferQuery) (ports.OfferPa
 	return page, nil
 }
 
-func matches(doc ports.OfferDocument, query ports.OfferQuery) bool {
+func matches(doc ports.OfferDocument, query ports.OfferQuery, except string) bool {
 	if !doc.Listed {
 		return false
 	}
 	if query.Text != "" && !strings.Contains(strings.ToLower(doc.Name), strings.ToLower(query.Text)) {
 		return false
 	}
-	if query.TenantID != "" && doc.TenantID != query.TenantID {
+	if except != "tenant" && len(query.TenantIDs) > 0 && !contains(query.TenantIDs, doc.TenantID) {
 		return false
 	}
-	if (query.InStockSet || query.InStock) && doc.InStock != query.InStock {
+	if except != "inStock" && (query.InStockSet || query.InStock) && doc.InStock != query.InStock {
 		return false
 	}
-	if query.PriceMin != nil && doc.Price < *query.PriceMin {
+	if except != "price" && query.PriceMin != nil && doc.Price < *query.PriceMin {
 		return false
 	}
-	if query.PriceMax != nil && doc.Price > *query.PriceMax {
+	if except != "price" && query.PriceMax != nil && doc.Price > *query.PriceMax {
 		return false
 	}
 	for code, filter := range query.Attributes {
-		if !attributeMatches(doc.Attributes[code], filter) {
+		if except != "attr."+code && !attributeMatches(doc.Attributes[code], filter) {
 			return false
 		}
+	}
+	if query.GroupID != "" && (doc.VariantsID != query.GroupID ||
+		len(query.TenantIDs) != 1 || doc.TenantID != query.TenantIDs[0]) {
+		return false
 	}
 	if query.CategoryID != "" && !contains(doc.CategoryPath, query.CategoryID) {
 		return false

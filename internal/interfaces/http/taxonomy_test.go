@@ -197,6 +197,10 @@ func TestTaxonomyHTTP(t *testing.T) {
 	if w.Code != 200 || page.Total != 1 || len(page.Facets) != 5 || string(page.Items[0].Attributes["a1"]) != `"v1"` {
 		t.Fatalf("%d %s", w.Code, w.Body.String())
 	}
+	if w := call(http.MethodGet, "/api/v1/catalog/offers?tenant=t1&tenant=t2&groupId=g1", "", "", ""); w.Code != 400 {
+		t.Fatal(w.Code)
+	}
+
 	if w := call(http.MethodGet, "/api/v1/catalog/offers?attr.a1=v3", "", "", ""); w.Code != 400 {
 		t.Fatal(w.Code)
 	}
@@ -205,10 +209,13 @@ func TestTaxonomyHTTP(t *testing.T) {
 func TestAttributeQueryParsing(t *testing.T) {
 	r := httptest.NewRequest(
 		http.MethodGet,
-		"/api/v1/catalog/offers?attr.a1=v1&attr.a1=v2&attr.a2.min=1.5&attr.a2.max=3",
+		"/api/v1/catalog/offers?tenant=t1&tenant=t2&attr.a1=v1&attr.a1=v2&attr.a2.min=1.5&attr.a2.max=3",
 		nil,
 	)
 	q, err := parseOfferQuery(r)
+	if len(q.TenantIDs) != 2 || q.TenantIDs[0] != "t1" || q.TenantIDs[1] != "t2" {
+		t.Fatal(q.TenantIDs)
+	}
 	if err != nil || len(q.Attributes["a1"].Values) != 2 || q.Attributes["a2"].Min != "1.5" {
 		t.Fatalf("%+v %v", q, err)
 	}

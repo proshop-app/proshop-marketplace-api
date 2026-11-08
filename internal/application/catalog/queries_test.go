@@ -41,7 +41,7 @@ func TestSearchDefaultsAndFilters(t *testing.T) {
 		t.Fatalf("в выдаче только предложения видимых участников: %+v, %v", list, err)
 	}
 
-	list, err = queries.Search(ctx, ports.OfferQuery{TenantID: "t1", Limit: 1})
+	list, err = queries.Search(ctx, ports.OfferQuery{TenantIDs: []string{"t1"}, Limit: 1})
 	if err != nil || list.Total != 2 || len(list.Items) != 1 {
 		t.Fatalf("страница: %+v, %v", list, err)
 	}
@@ -56,15 +56,19 @@ func TestSearchValidation(t *testing.T) {
 		long[i] = 'а'
 	}
 	cases := map[string]ports.OfferQuery{
-		"длинный запрос":    {Text: string(long)},
-		"лимит больше 100":  {Limit: 101},
-		"отрицательный":     {Limit: -1},
-		"глубокая страница": {Offset: 9990, Limit: 20},
-		"смещение меньше 0": {Offset: -1},
-		"цена меньше 0":     {PriceMin: &negative},
-		"границы наоборот":  {PriceMin: &low, PriceMax: &high},
-		"порядок":           {Sort: "random"},
-		"магазин":           {TenantID: "bad id"},
+		"длинный запрос":        {Text: string(long)},
+		"лимит больше 100":      {Limit: 101},
+		"отрицательный":         {Limit: -1},
+		"глубокая страница":     {Offset: 9990, Limit: 20},
+		"смещение меньше 0":     {Offset: -1},
+		"цена меньше 0":         {PriceMin: &negative},
+		"границы наоборот":      {PriceMin: &low, PriceMax: &high},
+		"порядок":               {Sort: "random"},
+		"магазин":               {TenantIDs: []string{"bad id"}},
+		"пустой магазин":        {TenantIDs: []string{""}},
+		"много магазинов":       {TenantIDs: make([]string, appcatalog.MaxTenants+1)},
+		"группа без магазина":   {GroupID: "g1"},
+		"группа двух магазинов": {GroupID: "g1", TenantIDs: []string{"t1", "t2"}},
 	}
 
 	for name, query := range cases {
@@ -94,5 +98,16 @@ func TestOfferCard(t *testing.T) {
 	_, err = queries.Offer(ctx, ids.OfferID{Tenant: "t9", Product: "p9"}, "")
 	if !errors.Is(err, catalog.ErrOfferNotFound) {
 		t.Fatalf("нет предложения: ожидалось ErrOfferNotFound, получено %v", err)
+	}
+}
+
+func TestTenantFilterDeduplicates(t *testing.T) {
+	_, queries := indexed(t)
+	query, err := queries.PrepareQuery(context.Background(), ports.OfferQuery{
+		TenantIDs: []string{"t1", "t1"},
+		GroupID:   "g1",
+	})
+	if err != nil || len(query.TenantIDs) != 1 || query.TenantIDs[0] != "t1" {
+		t.Fatalf("%+v %v", query, err)
 	}
 }
