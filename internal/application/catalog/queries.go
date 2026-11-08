@@ -28,6 +28,8 @@ const (
 	MaxWindow = 10000
 	// MaxQueryLength — длина строки поиска в символах.
 	MaxQueryLength = 200
+	// MaxTenants — предел магазинов в фильтре каталога.
+	MaxTenants = 100
 )
 
 // ErrInvalidQuery — параметры выдачи некорректны.
@@ -151,17 +153,28 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UU
 
 func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 	query.Text = strings.TrimSpace(query.Text)
+	query.TrackQuery = query.TrackQuery && query.Text != "" && query.Offset == 0
 
 	if utf8.RuneCountInString(query.Text) > MaxQueryLength {
 		return query, ErrInvalidQuery.WithMessage("строка поиска длиннее 200 символов")
 	}
-	if query.GroupID != "" && (query.TenantID == "" || len(query.GroupID) > 128) {
-		return query, ErrInvalidQuery.WithMessage("группа требует магазин и корректный идентификатор")
+	if len(query.TenantIDs) > MaxTenants {
+		return query, ErrInvalidQuery.WithMessage("слишком много магазинов")
 	}
-	if query.TenantID != "" {
-		if _, err := ids.ParseTenantID(query.TenantID); err != nil {
+	tenants := make([]string, 0, len(query.TenantIDs))
+	seen := make(map[string]bool, len(query.TenantIDs))
+	for _, tenant := range query.TenantIDs {
+		if _, err := ids.ParseTenantID(tenant); err != nil {
 			return query, ErrInvalidQuery.WithMessage("некорректный магазин")
 		}
+		if !seen[tenant] {
+			tenants = append(tenants, tenant)
+			seen[tenant] = true
+		}
+	}
+	query.TenantIDs = tenants
+	if query.GroupID != "" && (len(query.TenantIDs) != 1 || len(query.GroupID) > 128) {
+		return query, ErrInvalidQuery.WithMessage("группа требует ровно один магазин и корректный идентификатор")
 	}
 	if query.Limit == 0 {
 		query.Limit = DefaultLimit
@@ -273,7 +286,12 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 	}); err != nil {
 		return ports.OfferQuery{}, err
 	}
-	normalized.PriceContexts, err = q.priceContexts(ctx, normalized.BuyerID, normalized.TenantID)
+	// Фасету магазинов нужны ценовые контексты и невыбранных продавцов.
+	tenantFilter := ""
+	if normalized.GroupID != "" {
+		tenantFilter = normalized.TenantIDs[0]
+	}
+	normalized.PriceContexts, err = q.priceContexts(ctx, normalized.BuyerID, tenantFilter)
 	if err != nil {
 		return ports.OfferQuery{}, err
 	}

@@ -175,10 +175,17 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 	values := r.URL.Query()
 	query := ports.OfferQuery{
 		Text:       values.Get("q"),
-		TenantID:   values.Get("tenant"),
+		TenantIDs:  values["tenant"],
 		GroupID:    values.Get("groupId"),
 		CategoryID: values.Get("category"),
 		Sort:       ports.OfferSort(values.Get("sort")),
+	}
+
+	if tracks, present := values["track"]; present {
+		if len(tracks) != 1 || (tracks[0] != "true" && tracks[0] != "1") {
+			return query, appcatalog.ErrInvalidQuery.WithMessage("track — true или 1")
+		}
+		query.TrackQuery = true
 	}
 
 	query.Attributes = map[string]ports.AttributeFilter{}

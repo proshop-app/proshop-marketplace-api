@@ -64,13 +64,14 @@ type attribute struct {
 }
 
 type offerQuery struct {
+	TrackQuery    bool                             `json:"trackQuery"`
 	GroupID       string                           `json:"groupId,omitempty"`
 	PriceContexts map[string]string                `json:"priceContexts"`
 	Attributes    map[string]ports.AttributeFilter `json:"attributes"`
 	FacetFields   []facetField                     `json:"facetFields"`
 	InStockSet    bool                             `json:"inStockSet"`
 	Text          string                           `json:"text"`
-	TenantID      string                           `json:"tenantId"`
+	TenantIDs     []string                         `json:"tenantIds"`
 	CategoryID    string                           `json:"categoryId"`
 	PriceMin      *int64                           `json:"priceMin"`
 	PriceMax      *int64                           `json:"priceMax"`

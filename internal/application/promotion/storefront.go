@@ -30,6 +30,8 @@ type Event struct {
 
 // Sponsored содержит выбранную карточку и обязательную маркировку.
 func (s *Service) Sponsored(ctx context.Context, query ports.OfferQuery) ([]Sponsored, error) {
+	// Рекламный подбор не является отправкой пользовательского поиска.
+	query.TrackQuery = false
 	result := []Sponsored{}
 	if query.Offset != 0 || (query.Text == "" && query.CategoryID == "") {
 		return result, nil

@@ -1858,10 +1858,10 @@ paths:
         разные коды — AND. Для number: attr.<код>.min и attr.<код>.max (включительно),
         либо точное значение. Неизвестный код, неверный тип/словарь/диапазон — 400.
         Пример: ?category=c1&attr.a1=v1&attr.a1=v2&attr.a2.min=1.5&attr.a2.max=10.
-        Фасеты считаются по всей отфильтрованной выдаче до пагинации. Атрибутные —
+        Фасеты считаются до пагинации со всеми фильтрами, кроме собственного; category — со всеми. Атрибутные —
         только при facet=true и покрытии >=20%; category, tenant, price, inStock — всегда.
         Числа: min/max; остальные: до 256 наиболее частых значений с count.
-        Для пустой выдачи универсальные фасеты пусты, атрибутные отсутствуют.
+        При пустой выдаче фасеты могут содержать варианты после снятия собственного фильтра.
       operationId: listOffers
       parameters:
         - name: deliveryCarrier
@@ -1872,9 +1872,22 @@ paths:
           in: query
           schema: { type: string }
           description: Код ISO 3166-2 RU из ПВЗ.
+        - name: track
+          in: query
+          schema: { type: string, enum: ['true', '1'] }
+          description: >-
+            Учесть отправленный поиск в популярных запросах площадки. Передавать только при
+            отправке поиска, не для подсказок или изменения фасетов. Без параметра учёт выключен.
+            Учитывается только при непустом q и offset=0; иначе игнорируется.
+            Любое значение, кроме true и 1, — 400.
         - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Строка поиска }
-        - { name: tenant, in: query, schema: { type: string }, description: Магазин }
-        - { name: groupId, in: query, schema: { type: string }, description: Группа вариантов; требует tenant }
+        - name: tenant
+          in: query
+          style: form
+          explode: true
+          schema: { type: array, maxItems: 100, items: { type: string } }
+          description: Магазины (ИЛИ); повторы удаляются.
+        - { name: groupId, in: query, schema: { type: string }, description: Группа вариантов; требует ровно один tenant }
         - { name: category, in: query, schema: { type: string }, description: Категория площадки с потомками }
         - { name: priceMin, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
         - { name: priceMax, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
@@ -4050,14 +4063,19 @@ paths:
         description: Строка поиска
       - name: tenant
         in: query
+        style: form
+        explode: true
         schema:
-          type: string
-        description: Магазин
+          type: array
+          maxItems: 100
+          items:
+            type: string
+        description: Магазины (ИЛИ); повторы удаляются.
       - name: groupId
         in: query
         schema:
           type: string
-        description: Группа вариантов; требует tenant
+        description: Группа вариантов; требует ровно один tenant
       - name: category
         in: query
         schema:
@@ -5990,6 +6008,10 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Offer" }
         facets:
+          description: >-
+            Счётчики и min/max учитывают все фильтры, кроме собственного фильтра фасета.
+            category учитывает все фильтры. Значения внутри фасета объединяются через ИЛИ,
+            разные фасеты — через И. total и items учитывают все фильтры.
           type: array
           items: { $ref: "#/components/schemas/Facet" }
         total: { type: integer }

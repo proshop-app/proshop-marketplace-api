@@ -1,1 +1,1 @@
-{"facets":[{"code":"price","name":"Цена","type":"number","count":5,"values":[],"min":0,"max":20000}],"total":5,"items":[{"tenantId":"t1","productId":"p1","assets":[],"rating":null}]}
+{"facets":[{"code":"price","name":"Цена","type":"number","count":5,"values":[],"min":0,"max":20000}],"total":1,"items":[{"tenantId":"t1","productId":"p1","assets":[],"rating":null}]}

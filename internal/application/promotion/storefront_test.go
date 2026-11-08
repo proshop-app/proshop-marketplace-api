@@ -41,6 +41,13 @@ func TestSponsoredPrepareQueryAndPrices(t *testing.T) {
 		Random:      fake.Random{},
 		Catalog:     appcatalog.NewQueries(e.store, e.index, nil, nil, nil, fake.NewClock(time.Time{})),
 	})
+	if _, err := service.Sponsored(ctx, ports.OfferQuery{Text: "Товар", TrackQuery: true}); err != nil {
+		t.Fatal(err)
+	}
+	if e.index.Query.TrackQuery || e.index.Query.Text != "Товар" {
+		t.Fatalf("рекламный поиск после PrepareQuery: %+v", e.index.Query)
+	}
+
 	if _, err := service.Sponsored(ctx, ports.OfferQuery{CategoryID: "unknown"}); err == nil {
 		t.Fatal("PrepareQuery должен отклонить неизвестную категорию")
 	}

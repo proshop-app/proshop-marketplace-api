@@ -117,6 +117,17 @@ func TestCanonicalFiltersAndCoverage(t *testing.T) {
 	if err != nil || page.Total != 1 {
 		t.Fatalf("boolean false: %+v %v", page, err)
 	}
+	page, err = q.Search(ctx, ports.OfferQuery{
+		Attributes: map[string]ports.AttributeFilter{
+			"a2": {Min: "50"},
+		},
+	})
+	if err != nil || page.Total != 0 {
+		t.Fatalf("пустая выдача с альтернативами: %+v %v", page, err)
+	}
+	if facet := findFacet(t, page.Facets, "attr.a2"); facet.Count != 10 || facet.Max.String() != "9" {
+		t.Fatalf("собственный фильтр скрыл альтернативы: %+v", facet)
+	}
 	page, err = q.Search(ctx, ports.OfferQuery{Text: "нет совпадений"})
 	if err != nil || page.Total != 0 || len(page.Facets) != 4 {
 		t.Fatalf("пустая выдача: %+v %v", page, err)

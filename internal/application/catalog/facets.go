@@ -15,9 +15,10 @@ import (
 const FacetCoveragePercent = 20
 
 func visibleFacets(facets []ports.Facet, total int) []ports.Facet {
+	// При total=0 снятие собственного фильтра ещё может вернуть варианты.
 	out := []ports.Facet{}
 	for _, f := range facets {
-		if !strings.HasPrefix(f.Code, "attr.") || (total > 0 && f.Count*100 >= total*FacetCoveragePercent) {
+		if !strings.HasPrefix(f.Code, "attr.") || (f.Count > 0 && f.Count*100 >= total*FacetCoveragePercent) {
 			out = append(out, f)
 		}
 	}

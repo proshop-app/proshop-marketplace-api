@@ -53,14 +53,14 @@ func attributeMatches(raw json.RawMessage, filter ports.AttributeFilter) bool {
 	return false
 }
 
-func fakeFacets(hits []ports.OfferDocument, fields []taxonomy.Attribute) []ports.Facet {
+func fakeFacets(candidates []ports.OfferDocument, query ports.OfferQuery) []ports.Facet {
 	definitions := []taxonomy.Attribute{
 		{Code: "category", Name: "Категория площадки", Type: "enum"},
 		{Code: "tenant", Name: "Магазин", Type: "enum"},
 		{Code: "price", Name: "Цена", Type: "number"},
 		{Code: "inStock", Name: "Наличие", Type: "boolean"},
 	}
-	for _, a := range fields {
+	for _, a := range query.FacetFields {
 		a.Code = "attr." + a.Code
 		definitions = append(definitions, a)
 	}
@@ -68,7 +68,10 @@ func fakeFacets(hits []ports.OfferDocument, fields []taxonomy.Attribute) []ports
 	for _, a := range definitions {
 		f := ports.Facet{Code: a.Code, Name: a.Name, Type: a.Type, Unit: a.Unit, Values: []ports.FacetBucket{}}
 		counts := map[string]int{}
-		for _, doc := range hits {
+		for _, doc := range candidates {
+			if !matches(doc, query, a.Code) {
+				continue
+			}
 			var value string
 			switch a.Code {
 			case "category":
