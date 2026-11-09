@@ -15,10 +15,10 @@
   "profile": {
     "name": "Магазин",
     "logo": null,
-    "color": {
-      "value": "#2F5D8A",
-      "card": "#2F5D8A",
-      "contrast": 6.8
+    "appearance": {
+      "background": "#125F67",
+      "logoBackground": "#E9EEE7",
+      "textColor": "white"
     }
   },
   "card": {

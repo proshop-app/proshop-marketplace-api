@@ -120,7 +120,8 @@ func TestMarketplaceSettings(t *testing.T) {
 	if err != nil || settings.Subsidy.Type != participant.SubsidyPercent ||
 		settings.Subsidy.Value != 50 ||
 		settings.Subsidy.MaxAmount.Kopecks() != 30000 || settings.Profile.Name != "Магазин" ||
-		!settings.Card.Ready || settings.Returns == nil || settings.Profile.Color.Card != "#2F5D8A" {
+		!settings.Card.Ready || settings.Returns == nil ||
+		settings.Profile.Appearance != participant.DefaultCardAppearance() {
 		t.Fatalf("настройки: %+v %v", settings, err)
 	}
 }
@@ -195,8 +196,9 @@ func TestCandidateProfileWithoutDelivery(t *testing.T) {
 		http.StatusOK,
 	)
 	settings, err := client.MarketplaceSettings(context.Background(), "t1")
-	if err != nil || settings.Profile.Name != "Кандидат" || settings.Card.Ready || len(settings.Card.Missing) != 4 ||
-		settings.Profile.Color != nil || settings.Returns != nil || settings.Delivery.Validate() == nil {
+	if err != nil || settings.Profile.Name != "Кандидат" || settings.Card.Ready || len(settings.Card.Missing) != 3 ||
+		settings.Profile.Appearance != participant.DefaultCardAppearance() || settings.Returns != nil ||
+		settings.Delivery.Validate() == nil {
 		t.Fatal(settings, err)
 	}
 }

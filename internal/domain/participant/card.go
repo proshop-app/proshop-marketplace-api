@@ -1,7 +1,6 @@
 package participant
 
 import (
-	"encoding/json"
 	"reflect"
 	"slices"
 	"strings"
@@ -21,9 +20,6 @@ const (
 
 	// ActorSystem — автоматическое решение при изменении скрытого значения.
 	ActorSystem = "system"
-
-	// NeutralCardColor — запасной цвет, если сервер не прислал фирменный.
-	NeutralCardColor = "#333333"
 )
 
 // Returns — условия возврата в снимке настроек.
@@ -35,16 +31,9 @@ type Returns struct {
 
 // Profile — профиль принадлежит серверу, маркетплейс хранит его снимок.
 type Profile struct {
-	Name  string      `json:"name"`
-	Logo  *string     `json:"logo"`
-	Color *BrandColor `json:"color"`
-}
-
-// BrandColor — содержит готовый цвет карточки, чтобы не пересчитывать контраст.
-type BrandColor struct {
-	Value    string      `json:"value"`
-	Card     string      `json:"card"`
-	Contrast json.Number `json:"contrast"`
+	Name       string         `json:"name"`
+	Logo       *string        `json:"logo"`
+	Appearance CardAppearance `json:"appearance"`
 }
 
 // CardReadiness — серверный чеклист без повторного вычисления на площадке.
@@ -70,10 +59,6 @@ type StoreCard struct {
 
 // Clone отделяет изменяемые списки от снимка агрегата.
 func (c StoreCard) Clone() StoreCard {
-	if c.Profile.Color != nil {
-		color := *c.Profile.Color
-		c.Profile.Color = &color
-	}
 	if c.Profile.Logo != nil {
 		logo := *c.Profile.Logo
 		c.Profile.Logo = &logo
@@ -94,6 +79,11 @@ func (p *Participant) ApplyStoreCard(
 	returns *Returns,
 	now time.Time,
 ) (bool, error) {
+	appearance, err := profile.Appearance.Normalize()
+	if err != nil {
+		return false, err
+	}
+	profile.Appearance = appearance
 	if name, err := normalizeName(profile.Name); err == nil {
 		profile.Name = name
 	} else {

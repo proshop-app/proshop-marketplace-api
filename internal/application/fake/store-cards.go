@@ -19,6 +19,8 @@ func (r storeCards) Save(_ context.Context, record ports.StoreRecord) error {
 	previous := r.d.storeCards[record.Header.TenantID]
 	if previous.ProfileVersion > record.ProfileVersion {
 		record.Header.Logo, record.Card.Logo = previous.Header.Logo, previous.Card.Logo
+		record.Header.Appearance = previous.Header.Appearance
+		record.Card.Appearance = previous.Card.Appearance
 		record.Summary.Hidden = previous.Summary.Hidden
 		record.ProfileVersion = previous.ProfileVersion
 	}

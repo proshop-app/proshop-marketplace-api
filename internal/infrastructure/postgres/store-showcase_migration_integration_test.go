@@ -138,7 +138,7 @@ func TestRemoveStoreShowcaseMigration(t *testing.T) {
 	}
 
 	for pass := range 2 {
-		if err := postgres.Migrate(ctx, pool); err != nil {
+		if err := migrateUpTo(ctx, pool, 44); err != nil {
 			t.Fatal(err)
 		}
 		for i, item := range cases {

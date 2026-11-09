@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"strings"
-	"unicode"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
@@ -25,9 +23,6 @@ type StoreCategory = ports.StoreCategory
 
 // StoreSummary — внутренняя статистика магазина.
 type StoreSummary = ports.StoreSummary
-
-// ShopColor — цвет публичной карточки с контрастом, рассчитанным сервером.
-type ShopColor = ports.ShopColor
 
 // ShopHeader — публичный профиль с учётом постмодерации.
 type ShopHeader = ports.ShopHeader
@@ -194,16 +189,9 @@ func summarizeStore(ctx context.Context, tx ports.Tx, p *participant.Participant
 
 func shopHeader(p *participant.Participant, summary StoreSummary) ShopHeader {
 	profile := p.PublicProfile()
-	initial := ""
-	for _, letter := range p.Name() {
-		if unicode.IsLetter(letter) || unicode.IsNumber(letter) {
-			initial = strings.ToUpper(string(letter))
-			break
-		}
-	}
-	color := participant.NeutralCardColor
-	if profile.Color != nil && profile.Color.Card != "" {
-		color = profile.Color.Card
+	appearance, err := profile.Appearance.Normalize()
+	if err != nil {
+		appearance = participant.DefaultCardAppearance()
 	}
 	return ShopHeader{
 		Rating:     summary.Rating,
@@ -211,8 +199,7 @@ func shopHeader(p *participant.Participant, summary StoreSummary) ShopHeader {
 		Slug:       p.Slug(),
 		Name:       p.Name(),
 		Logo:       profile.Logo,
-		Initial:    initial,
-		Color:      ShopColor{Card: color},
+		Appearance: appearance,
 		Offers:     summary.Offers,
 		Categories: summary.Categories,
 		IsNew:      true,
@@ -250,8 +237,7 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 			Slug:           h.Slug,
 			Name:           h.Name,
 			Logo:           h.Logo,
-			Initial:        h.Initial,
-			Color:          h.Color,
+			Appearance:     h.Appearance,
 			Offers:         h.Offers,
 			FromPrice:      summary.FromPrice,
 			MoreCategories: max(len(h.Categories)-1, 0),

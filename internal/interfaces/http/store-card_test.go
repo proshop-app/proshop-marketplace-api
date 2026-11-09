@@ -54,8 +54,8 @@ func TestStoreCardHTTP(t *testing.T) {
 		Card:      catalog.Card{Name: "Товар", Visible: true, Publication: taxonomy.Publication{Published: true}},
 		PriceProfiles: []catalog.PriceProfile{{
 			Key:            catalog.DefaultPriceProfile,
-			Price:          money.FromKopecks(100),
-			EffectivePrice: money.FromKopecks(100),
+			Price:          money.FromKopecks(19999),
+			EffectivePrice: money.FromKopecks(19999),
 		}},
 	})
 	store.SeedVerdict(moderation.VerdictState{TenantID: "t1", ProductID: "p1", Status: moderation.Allowed})
@@ -106,6 +106,9 @@ func TestStoreCardHTTP(t *testing.T) {
 	if err := json.Unmarshal(responseSummary.Body.Bytes(), &summaryBody); err != nil {
 		t.Fatal(err)
 	}
+	if string(summaryBody["fromPrice"]) != "19999" {
+		t.Fatal("служебная сводка должна сохранять копейки", string(summaryBody["fromPrice"]))
+	}
 	keys := []string{}
 	for key := range summaryBody {
 		keys = append(keys, key)
@@ -137,11 +140,31 @@ func TestStoreCardHTTP(t *testing.T) {
 		t.Fatal(member)
 	}
 	refresh()
+	expectedAppearance := `"appearance":{"background":"#125F67","logoBackground":"#E9EEE7",` +
+		`"textColor":"white"}`
 	for _, path := range []string{"/api/v1/shops", "/api/v1/shops/shop"} {
 		response := call("GET", path, "", "", http.StatusOK)
 		body := response.Body.String()
-		if !strings.Contains(body, `"logo":null`) || strings.Contains(body, `"showcase":`) {
+		if !strings.Contains(body, `"logo":null`) || strings.Contains(body, `"showcase":`) ||
+			strings.Contains(body, `"initial":`) || strings.Contains(body, `"color":`) ||
+			!strings.Contains(body, expectedAppearance) {
 			t.Fatal(body)
+		}
+		if response.Header().Get("X-Marketplace-Money-Unit") != "RUB" {
+			t.Fatal(response.Header())
+		}
+		if path == "/api/v1/shops" {
+			var page struct {
+				Items []struct {
+					FromPrice json.Number `json:"fromPrice"`
+				} `json:"items"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+				t.Fatal(err)
+			}
+			if len(page.Items) != 1 || page.Items[0].FromPrice.String() != "199.99" {
+				t.Fatal("публичная карточка должна возвращать дробные рубли", page)
+			}
 		}
 		if response.Header().Get("Cache-Control") != "public, max-age=0, must-revalidate" {
 			t.Fatal(response.Header())
@@ -171,7 +194,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	headerKeys := "categories color initial isNew logo name offers rating slug subscribers tenantId"
+	headerKeys := "appearance categories isNew logo name offers rating slug subscribers tenantId"
 	wantKeys = strings.Fields(headerKeys)
 	if !reflect.DeepEqual(keys, wantKeys) {
 		t.Fatal(keys)

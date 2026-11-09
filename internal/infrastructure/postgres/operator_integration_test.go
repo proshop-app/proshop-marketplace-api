@@ -172,9 +172,9 @@ func TestISORegionMigrationInvalidatesLegacyDelivery(t *testing.T) {
 		regions  []string
 		carriers []string
 	}{
-		{"t1", true, 2, []string{"cdek:81"}, []string{"cdek"}},
-		{"t2", true, 8, []string{"yandex:1", "RU-MOW"}, []string{"yandex"}},
-		{"t3", false, 4, []string{"RU-MOW"}, []string{"cdek"}},
+		{"t1", true, 3, []string{"cdek:81"}, []string{"cdek"}},
+		{"t2", true, 9, []string{"yandex:1", "RU-MOW"}, []string{"yandex"}},
+		{"t3", false, 5, []string{"RU-MOW"}, []string{"cdek"}},
 	} {
 		t.Run(tc.tenant, func(t *testing.T) {
 			var coverageValid, enabled bool
@@ -227,11 +227,11 @@ func TestISORegionMigrationInvalidatesLegacyDelivery(t *testing.T) {
 	rollback()
 	var restored int
 	restoredQuery := `SELECT count(*) FROM participants
- WHERE (tenant_id = 't1' AND shop_enabled AND status = 'connected' AND NOT enabled AND version = 3
+ WHERE (tenant_id = 't1' AND shop_enabled AND status = 'connected' AND NOT enabled AND version = 4
   AND delivery_settings = '{"regions":["cdek:81"],"carriers":["cdek"]}'::jsonb)
- OR (tenant_id = 't2' AND NOT shop_enabled AND status = 'onboarding' AND NOT enabled AND version = 9
+ OR (tenant_id = 't2' AND NOT shop_enabled AND status = 'onboarding' AND NOT enabled AND version = 10
   AND delivery_settings = '{"regions":["yandex:1","RU-MOW"],"carriers":["yandex"]}'::jsonb)
- OR (tenant_id = 't3' AND NOT shop_enabled AND status = 'onboarding' AND NOT enabled AND version = 4
+ OR (tenant_id = 't3' AND NOT shop_enabled AND status = 'onboarding' AND NOT enabled AND version = 5
   AND delivery_settings = '{"regions":["RU-MOW"],"carriers":["cdek"]}'::jsonb)`
 	if err := pool.QueryRow(ctx, restoredQuery).Scan(&restored); err != nil || restored != 3 {
 		t.Fatal("откат до 21: доставка и архивные решения восстановлены, участие выключено", restored, err)

@@ -290,3 +290,26 @@ func TestOpenAPIStoreCardsWithoutShowcase(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenAPIStoreCardAppearance(t *testing.T) {
+	doc, _ := loadSpec(t)
+	schemas := doc.Components["schemas"]
+	for _, name := range []string{"ShopHeader", "ShopCard"} {
+		schema := schemas[name].(map[string]any)
+		properties := schema["properties"].(map[string]any)
+		if properties["initial"] != nil || properties["color"] != nil ||
+			!slices.Contains(schema["required"].([]any), any("appearance")) {
+			t.Fatal(name, schema)
+		}
+		appearance := properties["appearance"].(map[string]any)
+		if appearance["$ref"] != "#/components/schemas/StoreCardAppearance" {
+			t.Fatal(name, appearance)
+		}
+	}
+	appearance := schemas["StoreCardAppearance"].(map[string]any)
+	for _, key := range []string{"background", "logoBackground", "textColor"} {
+		if !slices.Contains(appearance["required"].([]any), any(key)) {
+			t.Fatal(key, appearance)
+		}
+	}
+}

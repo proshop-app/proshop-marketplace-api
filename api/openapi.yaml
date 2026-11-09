@@ -4561,9 +4561,18 @@ components:
         rating: { $ref: "#/components/schemas/Rating" }
         badge: { type: "null" }
         rank: { type: "null" }
+    StoreCardAppearance:
+      type: object
+      additionalProperties: false
+      required: [background, logoBackground, textColor]
+      description: Два независимых фона; контраст текста основной части не ниже 4,5 к 1.
+      properties:
+        background: { type: string, pattern: '^#[0-9A-F]{6}$', default: '#125F67' }
+        logoBackground: { type: string, pattern: '^#[0-9A-F]{6}$', default: '#E9EEE7' }
+        textColor: { type: string, enum: [black, white], default: white }
     ShopHeader:
       type: object
-      required: [tenantId, slug, name, logo, initial, color, offers, isNew, categories, rating, subscribers]
+      required: [tenantId, slug, name, logo, appearance, offers, isNew, categories, rating, subscribers]
       properties:
         rating: { $ref: "#/components/schemas/Rating" }
         subscribers: { type: integer, minimum: 0 }
@@ -4572,8 +4581,7 @@ components:
         slug: { type: string }
         name: { type: string }
         logo: { type: [string, "null"] }
-        initial: { type: string }
-        color: { type: object, required: [card], properties: { card: { type: string } } }
+        appearance: { $ref: "#/components/schemas/StoreCardAppearance" }
         offers: { type: integer, minimum: 0 }
         isNew: { type: boolean, const: true }
         categories: { type: array, items: { $ref: "#/components/schemas/StoreCategory" } }
@@ -4584,8 +4592,7 @@ components:
       - slug
       - name
       - logo
-      - initial
-      - color
+      - appearance
       - offers
       - isNew
       - category
@@ -4603,15 +4610,8 @@ components:
           type:
           - string
           - 'null'
-        initial:
-          type: string
-        color:
-          type: object
-          required:
-          - card
-          properties:
-            card:
-              type: string
+        appearance:
+          $ref: '#/components/schemas/StoreCardAppearance'
         offers:
           type: integer
           minimum: 0

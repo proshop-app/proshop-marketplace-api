@@ -30,23 +30,17 @@ type StoreSummary struct {
 	Rank           *int                     `json:"rank"`
 }
 
-// ShopColor — публикует только рассчитанный сервером цвет карточки.
-type ShopColor struct {
-	Card string `json:"card"`
-}
-
 // ShopHeader — публичный профиль после применения постмодерации.
 type ShopHeader struct {
-	Rating     *catalog.Rating `json:"rating"`
-	TenantID   ids.TenantID    `json:"tenantId"`
-	Slug       string          `json:"slug"`
-	Name       string          `json:"name"`
-	Logo       *string         `json:"logo"`
-	Initial    string          `json:"initial"`
-	Color      ShopColor       `json:"color"`
-	Offers     int             `json:"offers"`
-	Categories []StoreCategory `json:"categories"`
-	IsNew      bool            `json:"isNew"`
+	Rating     *catalog.Rating            `json:"rating"`
+	TenantID   ids.TenantID               `json:"tenantId"`
+	Slug       string                     `json:"slug"`
+	Name       string                     `json:"name"`
+	Logo       *string                    `json:"logo"`
+	Appearance participant.CardAppearance `json:"appearance"`
+	Offers     int                        `json:"offers"`
+	Categories []StoreCategory            `json:"categories"`
+	IsNew      bool                       `json:"isNew"`
 }
 
 // ShopCategory — категория отбора или крупнейший корневой узел магазина.
@@ -57,18 +51,17 @@ type ShopCategory struct {
 
 // ShopCard — публичная карточка готового магазина с предложениями.
 type ShopCard struct {
-	TenantID       ids.TenantID    `json:"tenantId"`
-	Slug           string          `json:"slug"`
-	Name           string          `json:"name"`
-	Logo           *string         `json:"logo"`
-	Initial        string          `json:"initial"`
-	Color          ShopColor       `json:"color"`
-	Category       *ShopCategory   `json:"category"`
-	MoreCategories int             `json:"moreCategories"`
-	Offers         int             `json:"offers"`
-	FromPrice      *int64          `json:"fromPrice"`
-	Rating         *catalog.Rating `json:"rating"`
-	IsNew          bool            `json:"isNew"`
+	TenantID       ids.TenantID               `json:"tenantId"`
+	Slug           string                     `json:"slug"`
+	Name           string                     `json:"name"`
+	Logo           *string                    `json:"logo"`
+	Appearance     participant.CardAppearance `json:"appearance"`
+	Category       *ShopCategory              `json:"category"`
+	MoreCategories int                        `json:"moreCategories"`
+	Offers         int                        `json:"offers"`
+	FromPrice      *int64                     `json:"fromPrice"`
+	Rating         *catalog.Rating            `json:"rating"`
+	IsNew          bool                       `json:"isNew"`
 }
 
 // ShopPage — сохраняет общее число результатов до пагинации.

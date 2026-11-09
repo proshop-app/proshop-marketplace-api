@@ -265,7 +265,7 @@ func TestStoreSummaryCandidateSkipsMissingDefaultPrice(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if record.Header.Initial != "М" || record.Header.Color.Card != participant.NeutralCardColor {
+		if record.Header.Appearance != participant.DefaultCardAppearance() {
 			t.Fatal(record.Header)
 		}
 		return nil

@@ -2,15 +2,18 @@
   "profile": {
     "name": "Кандидат",
     "logo": null,
-    "color": null
+    "appearance": {
+      "background": "#125F67",
+      "logoBackground": "#E9EEE7",
+      "textColor": "white"
+    }
   },
   "card": {
     "ready": false,
     "missing": [
       "requisites",
       "contacts",
-      "terms",
-      "brandColor"
+      "terms"
     ]
   },
   "returns": null,

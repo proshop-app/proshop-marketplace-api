@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -101,8 +102,14 @@ type errorJSON struct {
 	} `json:"items"`
 }
 
+type settingsProfileJSON struct {
+	Name       string                      `json:"name"`
+	Logo       *string                     `json:"logo"`
+	Appearance *participant.CardAppearance `json:"appearance"`
+}
+
 type settingsJSON struct {
-	Profile          *participant.Profile          `json:"profile"`
+	Profile          *settingsProfileJSON          `json:"profile"`
 	Card             *participant.CardReadiness    `json:"card"`
 	Returns          *participant.Returns          `json:"returns"`
 	FreeDeliveryFrom *int64                        `json:"freeDeliveryFrom"`
@@ -182,7 +189,30 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 	if answer.Profile == nil || answer.Card == nil {
 		return ports.ShopSettings{}, ports.ErrInvalidSettings
 	}
-	settings := ports.ShopSettings{Profile: *answer.Profile, Card: *answer.Card, Returns: answer.Returns}
+	settings := ports.ShopSettings{
+		Profile: participant.Profile{Name: answer.Profile.Name, Logo: answer.Profile.Logo},
+		Card:    *answer.Card,
+		Returns: answer.Returns,
+	}
+	if answer.Profile.Appearance != nil {
+		if *answer.Profile.Appearance == (participant.CardAppearance{}) {
+			return ports.ShopSettings{}, ports.ErrInvalidSettings
+		}
+		settings.Profile.Appearance = *answer.Profile.Appearance
+	}
+
+	appearance, err := settings.Profile.Appearance.Normalize()
+	if err != nil {
+		return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
+	}
+	settings.Profile.Appearance = appearance
+	// Старый сервер ещё может прислать удалённое требование; другие признаки готовности не пересчитываем.
+	if slices.Contains(settings.Card.Missing, "brandColor") {
+		settings.Card.Missing = slices.DeleteFunc(settings.Card.Missing, func(key string) bool {
+			return key == "brandColor"
+		})
+		settings.Card.Ready = len(settings.Card.Missing) == 0
+	}
 
 	if answer.FreeDeliveryFrom != nil {
 		if *answer.FreeDeliveryFrom < 0 {

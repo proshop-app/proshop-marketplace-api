@@ -56,7 +56,7 @@ func TestOrderSettingsMigrationDisablesLegacyParticipation(t *testing.T) {
 		}
 		state := p.State()
 		visibility := participant.VisibilityOf(p, tenant)
-		if p.Version() != 2 || p.Enabled() || p.Stage() != participant.StageCandidate || !state.AwaitingReview ||
+		if p.Version() != 3 || p.Enabled() || p.Stage() != participant.StageCandidate || !state.AwaitingReview ||
 			p.DeliveryValid() || visibility.Visible || visibility.CheckoutAvailable {
 			return fmt.Errorf("старое согласие без обязательных настроек выключено: %+v %+v", state, visibility)
 		}

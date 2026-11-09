@@ -121,7 +121,7 @@ func TestRemoveStoreSloganMigration(t *testing.T) {
 	}
 
 	for pass := range 2 {
-		if err := postgres.Migrate(ctx, pool); err != nil {
+		if err := migrateUpTo(ctx, pool, 43); err != nil {
 			t.Fatal(err)
 		}
 		for i, item := range cases {
@@ -192,7 +192,7 @@ func TestRemoveStoreSloganMigrationSurvivesStaleRefresh(t *testing.T) {
 	if _, err := pool.Exec(ctx, seed); err != nil {
 		t.Fatal(err)
 	}
-	if err := postgres.Migrate(ctx, pool); err != nil {
+	if err := migrateUpTo(ctx, pool, 43); err != nil {
 		t.Fatal(err)
 	}
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {

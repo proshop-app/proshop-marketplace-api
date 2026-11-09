@@ -3,6 +3,12 @@ package participant
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrInvalidCardAppearance запрещает нечитаемое оформление карточки магазина.
+	ErrInvalidCardAppearance = errs.New(
+		errs.Invalid,
+		"participant.invalid_card_appearance",
+		"некорректное оформление карточки магазина",
+	)
 	// ErrCardNotReady запрещает подключение до заполнения карточки.
 	ErrCardNotReady = errs.New(errs.Conflict, "participant.card_not_ready", "карточка магазина не готова")
 	// ErrInvalidCardKey ограничивает постмодерацию разрешёнными пунктами.
