@@ -36,6 +36,7 @@ func operatorCall(t *testing.T, e *env, method, path, body, cookie, origin strin
 	if cookie != "" {
 		req.Header.Set("Cookie", cookie)
 	}
+	req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	raw, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

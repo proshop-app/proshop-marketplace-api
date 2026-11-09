@@ -18,7 +18,7 @@ JWT identity-hub, что корзина. Идентификатор берётс
   GET принимает limit (1–500, по умолчанию 20) и offset (от 0).
   У снятого предложения сохраняется снимок, listed=false, inStock=false, checkoutAvailable=false, available=0.
 - `GET/PUT/DELETE /api/v1/buyer/price-watches[/{offerId}]`: отдельный список,
-  лимит 500. PUT принимает `{}` либо `{targetPrice: <копейки>}`. Повтор сохраняет
+  лимит 500. PUT принимает `{}` либо `{targetPrice: <рубли>}`. Повтор сохраняет
   исходную цену наблюдения и меняет цель; отсутствие цели/null очищает её.
   dropped означает currentPrice < priceAtWatch, при цели дополнительно currentPrice <= targetPrice.
   У снятого предложения currentPrice=null и dropped=false. Счётчик профиля

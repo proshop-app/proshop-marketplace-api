@@ -12,24 +12,29 @@ import (
 )
 
 type cartLineJSON struct {
-	Seller    *participant.Seller `json:"seller"`
-	OfferID   string              `json:"offerId"`
-	TenantID  string              `json:"tenantId"`
-	ProductID string              `json:"productId"`
-	Name      string              `json:"name"`
-	Quantity  int                 `json:"quantity"`
-	Price     int64               `json:"price"`
-	Amount    int64               `json:"amount"`
-	Issue     *string             `json:"issue"`
-	AddedAt   time.Time           `json:"addedAt"`
+	Seller          *participant.Seller `json:"seller"`
+	OfferID         string              `json:"offerId"`
+	TenantID        string              `json:"tenantId"`
+	ProductID       string              `json:"productId"`
+	Name            string              `json:"name"`
+	Quantity        int                 `json:"quantity"`
+	Price           rubles              `json:"price"`
+	Amount          rubles              `json:"amount"`
+	BaseAmount      rubles              `json:"baseAmount"`
+	Discount        rubles              `json:"discount"`
+	DiscountPercent int                 `json:"discountPercent"`
+	Issue           *string             `json:"issue"`
+	AddedAt         time.Time           `json:"addedAt"`
 }
 
-// cartJSON — корзина; суммы — копейки.
+// cartJSON — проверенный сервером снимок корзины; суммы — рубли.
 type cartJSON struct {
 	Groups    []cartGroupJSON `json:"groups"`
 	ID        string          `json:"id"`
 	Lines     []cartLineJSON  `json:"lines"`
-	Total     int64           `json:"total"`
+	Total     rubles          `json:"total"`
+	BaseTotal rubles          `json:"baseTotal"`
+	Discount  rubles          `json:"discount"`
 	Version   int64           `json:"version"`
 	ExpiresAt time.Time       `json:"expiresAt"`
 }
@@ -61,13 +66,23 @@ func toCartJSON(state cart.State) (cartJSON, error) {
 		return cartJSON{}, err
 	}
 
-	out.Total = total.Kopecks()
+	out.Total = rubles(total.Kopecks())
 
 	for _, line := range state.Lines {
 		amount, err := cart.LineAmount(line)
 		if err != nil {
 			return cartJSON{}, err
 		}
+
+		baseAmount, discount, percent, err := lineBreakdown(line.Price, line.Quantity, amount)
+		if err != nil {
+			return cartJSON{}, err
+		}
+		baseTotal, err := money.FromKopecks(int64(out.BaseTotal)).Add(baseAmount)
+		if err != nil {
+			return cartJSON{}, err
+		}
+		out.BaseTotal = rubles(baseTotal.Kopecks())
 
 		var issue *string
 		if line.Issue != cart.IssueNone {
@@ -76,17 +91,26 @@ func toCartJSON(state cart.State) (cartJSON, error) {
 		}
 
 		out.Lines = append(out.Lines, cartLineJSON{
-			OfferID:   line.Offer.String(),
-			TenantID:  string(line.Offer.Tenant),
-			ProductID: string(line.Offer.Product),
-			Name:      line.Name,
-			Quantity:  line.Quantity,
-			Price:     line.Price.Kopecks(),
-			Amount:    amount.Kopecks(),
-			Issue:     issue,
-			AddedAt:   line.AddedAt.UTC(),
+			OfferID:         line.Offer.String(),
+			TenantID:        string(line.Offer.Tenant),
+			ProductID:       string(line.Offer.Product),
+			Name:            line.Name,
+			Quantity:        line.Quantity,
+			Price:           rubles(line.Price.Kopecks()),
+			Amount:          rubles(amount.Kopecks()),
+			BaseAmount:      rubles(baseAmount.Kopecks()),
+			Discount:        rubles(discount.Kopecks()),
+			DiscountPercent: percent,
+			Issue:           issue,
+			AddedAt:         line.AddedAt.UTC(),
 		})
 	}
+
+	discount, err := money.FromKopecks(int64(out.BaseTotal)).Sub(total)
+	if err != nil {
+		return cartJSON{}, err
+	}
+	out.Discount = rubles(discount.Kopecks())
 
 	for _, group := range cart.Restore(state).Groups() {
 		g := cartGroupJSON{TenantID: string(group.TenantID), PromoCode: cartPromoResponse(group.PromoCode)}
@@ -96,12 +120,26 @@ func toCartJSON(state cart.State) (cartJSON, error) {
 			if err != nil {
 				return cartJSON{}, err
 			}
+			base, _, _, err := lineBreakdown(line.Price, line.Quantity, amount)
+			if err != nil {
+				return cartJSON{}, err
+			}
+			baseTotal, err := money.FromKopecks(int64(g.BaseTotal)).Add(base)
+			if err != nil {
+				return cartJSON{}, err
+			}
+			g.BaseTotal = rubles(baseTotal.Kopecks())
 			total, err = total.Add(amount)
 			if err != nil {
 				return cartJSON{}, err
 			}
 		}
-		g.Total = total.Kopecks()
+		g.Total = rubles(total.Kopecks())
+		discount, err := money.FromKopecks(int64(g.BaseTotal)).Sub(total)
+		if err != nil {
+			return cartJSON{}, err
+		}
+		g.Discount = rubles(discount.Kopecks())
 		out.Groups = append(out.Groups, g)
 	}
 	return out, nil

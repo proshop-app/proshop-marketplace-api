@@ -56,6 +56,7 @@ func TestCatalogFeaturesHTTP(t *testing.T) {
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			r.Header.Set("X-Marketplace-Money-Unit", "RUB")
 			r.SetPathValue("offerId", "t1~p1")
 			w := httptest.NewRecorder()
 			tc.handler(w, r)
@@ -66,6 +67,7 @@ func TestCatalogFeaturesHTTP(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/reviews", nil)
+	r.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	r.SetPathValue("offerId", "t1~p1")
 	h.reviews(w, r)
 	if w.Header().Get("Cache-Control") != "public, max-age=30" {
@@ -87,7 +89,7 @@ func TestCatalogFeaturesHTTP(t *testing.T) {
 	if err := json.Unmarshal(list.Body.Bytes(), &offers); err != nil || len(offers.Items) != 1 {
 		t.Fatal(list.Body.String(), err)
 	}
-	if !strings.Contains(list.Body.String(), `"buckets":[{"from":0,"to":1000,"count":1}]`) {
+	if !strings.Contains(list.Body.String(), `"buckets":[{"from":0.00,"to":10.00,"count":1}]`) {
 		t.Fatal(list.Body.String())
 	}
 	rating := offers.Items[0].Rating
@@ -107,6 +109,7 @@ func TestRecommendationsPrivateResponse(t *testing.T) {
 	h := catalogHandlers{queries: queries}
 	for _, buyer := range []ids.UUID{"", "buyer"} {
 		request := httptest.NewRequest(http.MethodGet, "/recommendations?context=home", nil)
+		request.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		request = request.WithContext(context.WithValue(request.Context(), keyBuyer, buyer))
 		response := httptest.NewRecorder()
 		h.recommendations(response, request)
@@ -125,6 +128,7 @@ func TestReviewsHiddenAndUnavailable(t *testing.T) {
 	store, index, platform := fake.NewStore(), fake.NewIndex(), fake.NewPlatform()
 	h := catalogHandlers{queries: appcatalog.NewQueries(store, index, platform, nil, nil, fake.NewClock(time.Time{}))}
 	request := httptest.NewRequest(http.MethodGet, "/reviews", nil)
+	request.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	request.SetPathValue("offerId", "t1~p1")
 	hidden := ports.OfferDocument{ID: "t1~p1", Visible: false, Version: 1}
 	if err := index.Put(context.Background(), []ports.OfferDocument{hidden}); err != nil {

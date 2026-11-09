@@ -50,6 +50,7 @@ func TestEveryOperatorRouteChecksServerRole(t *testing.T) {
 		t.Run(route.method+" "+route.path, func(t *testing.T) {
 			path := strings.NewReplacer("{tenantId}", "t1", "{eventId}", "1", "{offerId}", "t1~p1").Replace(route.path)
 			request := httptest.NewRequest(route.method, path, strings.NewReader(`{}`))
+			request.Header.Set("X-Marketplace-Money-Unit", "RUB")
 			request.AddCookie(&http.Cookie{Name: operatorCookie, Value: access.Token})
 			request.AddCookie(&http.Cookie{Name: operatorKeyCookie, Value: access.Key})
 			request.Header.Set("Content-Type", "application/json")

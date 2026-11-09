@@ -11,13 +11,15 @@ import (
 type cartPromoJSON struct {
 	Code     string  `json:"code"`
 	Valid    bool    `json:"valid"`
-	Discount int64   `json:"discount"`
+	Discount rubles  `json:"discount"`
 	Message  *string `json:"message"`
 }
 
 type cartGroupJSON struct {
 	TenantID  string         `json:"tenantId"`
-	Total     int64          `json:"total"`
+	Total     rubles         `json:"total"`
+	BaseTotal rubles         `json:"baseTotal"`
+	Discount  rubles         `json:"discount"`
 	PromoCode *cartPromoJSON `json:"promoCode"`
 }
 
@@ -53,7 +55,7 @@ func cartPromoResponse(promo *cart.PromoCode) *cartPromoJSON {
 	return &cartPromoJSON{
 		Code:     promo.Code,
 		Valid:    promo.Valid,
-		Discount: promo.Discount.Kopecks(),
+		Discount: rubles(promo.Discount.Kopecks()),
 		Message:  promo.Message,
 	}
 }

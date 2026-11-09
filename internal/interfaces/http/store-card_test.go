@@ -79,6 +79,7 @@ func TestStoreCardHTTP(t *testing.T) {
 	call := func(method, path, body, bearer string, status int) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		if bearer != "" {
 			req.Header.Set("Authorization", "Bearer "+bearer)
 		}
@@ -146,6 +147,7 @@ func TestStoreCardHTTP(t *testing.T) {
 			t.Fatal(response.Header())
 		}
 		cached := httptest.NewRequest(http.MethodGet, path, nil)
+		cached.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		cached.Header.Set("If-None-Match", response.Header().Get("ETag"))
 		cachedResponse := httptest.NewRecorder()
 		handler.ServeHTTP(cachedResponse, cached)

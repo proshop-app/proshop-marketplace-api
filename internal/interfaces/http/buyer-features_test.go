@@ -243,17 +243,20 @@ func TestBuyerPublicShopCacheAndHiddenSubscriptions(t *testing.T) {
 	for _, token := range []string{"", "invalid"} {
 		result = e.session(t, http.MethodGet, "/api/v1/shops/shop", "", token)
 		if result.status != http.StatusOK || !strings.Contains(result.header.Get("Cache-Control"), "public") ||
-			result.header.Get("ETag") == "" || result.header.Get("Vary") != "Cookie, Authorization" {
+			result.header.Get("ETag") == "" ||
+			!strings.Contains(strings.Join(result.header.Values("Vary"), ","), "Cookie, Authorization") {
 			t.Fatal(result)
 		}
 		etag := result.header.Get("ETag")
 		cached := e.session(t, http.MethodGet, "/api/v1/shops/shop", "", token, "If-None-Match", etag)
-		if cached.status != http.StatusNotModified || cached.header.Get("Vary") != "Cookie, Authorization" {
+		if cached.status != http.StatusNotModified ||
+			!strings.Contains(strings.Join(cached.header.Values("Vary"), ","), "Cookie, Authorization") {
 			t.Fatal(cached)
 		}
 	}
 	result = e.session(t, http.MethodGet, "/api/v1/shops/shop", "", cookie)
-	if result.header.Get("Vary") != "Cookie, Authorization" || result.body["subscribed"] != true {
+	if !strings.Contains(strings.Join(result.header.Values("Vary"), ","), "Cookie, Authorization") ||
+		result.body["subscribed"] != true {
 		t.Fatal(result)
 	}
 	e.clock.Advance(6 * time.Minute)

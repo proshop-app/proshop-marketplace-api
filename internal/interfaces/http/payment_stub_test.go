@@ -105,6 +105,7 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 
 func (e paymentTestEnv) call(method, path, cookie, origin string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, "https://market.example"+path, nil)
+	request.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	if cookie != "" {
 		request.AddCookie(&http.Cookie{Name: SessionCookie, Value: cookie})
 	}

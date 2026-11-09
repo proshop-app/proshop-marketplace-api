@@ -263,9 +263,9 @@ func assertCatalogOfferCounters(t *testing.T, registry *prometheus.Registry, sel
 	}
 }
 
-func TestCatalogFacetLegacyResponseBytes(t *testing.T) {
-	// Фикстура снята тем же fake-сценарием с master 5ae2d7a, до изменения селектора.
-	want, err := os.ReadFile("testdata/catalog-offers-legacy-5ae2d7a.json")
+func TestCatalogFacetResponseBytesAfterRublesMigration(t *testing.T) {
+	// Исходная фикстура master 5ae2d7a сохранена; новая отличается только денежными единицами.
+	want, err := os.ReadFile("testdata/catalog-offers-rubles.json")
 	if err != nil {
 		t.Fatal(err)
 	}

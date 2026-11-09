@@ -1,10 +1,14 @@
 openapi: 3.1.0
 info:
   title: Proshop Marketplace API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     API федеративного маркетплейса для витрины (Nuxt 4) и панели оператора
-    (Vue 3). Все суммы — целые копейки. Время — RFC 3339 в UTC. Ошибка —
+    (Vue 3). Публичные денежные поля и priceMin/priceMax — JSON-числа рублей с максимум двумя
+    знаками после точки, от 0 до 9999999999999.99. Внутренние /api/v1/internal и межсервисные
+    контракты сохраняют целые копейки. Публичный ответ /api/v1 содержит заголовок
+    X-Marketplace-Money-Unit: RUB; денежные маршруты требуют его также в запросе,
+    иначе 409 api.money_unit_required до выполнения операции. Время — RFC 3339 в UTC. Ошибка —
     `{"error": {"code": "<ключ>", "message": "<текст>"}}`; код ответа
     выбирается по классу ошибки: invalid → 400, unauthorized → 401, forbidden → 403,
     not_found → 404, conflict → 409, too_many_requests → 429,
@@ -96,6 +100,7 @@ paths:
       summary: Страница избранных предложений
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 500, default: 20 }
@@ -103,6 +108,7 @@ paths:
           in: query
           schema: { type: integer, minimum: 0, default: 0 }
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200":
           description: Ответ; Cache-Control private, no-store
           content:
@@ -115,11 +121,14 @@ paths:
         "503": { $ref: "#/components/responses/Error" }
   /api/v1/buyer/price-watches:
     get:
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
       tags: [buyer]
       operationId: listBuyerPriceWatches
       summary: Наблюдения за ценами
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200":
           description: Ответ; Cache-Control private, no-store
           content:
@@ -131,11 +140,14 @@ paths:
         "503": { $ref: "#/components/responses/Error" }
   /api/v1/buyer/subscriptions/shops:
     get:
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
       tags: [buyer]
       operationId: listBuyerShopSubscriptions
       summary: Публичные магазины в подписках
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200":
           description: Ответ; Cache-Control private, no-store
           content:
@@ -189,6 +201,7 @@ paths:
       summary: Следить за ценой или изменить цель
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - name: offerId
           in: path
           required: true
@@ -270,10 +283,12 @@ paths:
       summary: Магазины с готовой карточкой
       security: []
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - { name: category, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200":
           description: Карточка магазина
           headers:
@@ -350,6 +365,7 @@ paths:
       summary: Скрыть пункт карточки с причиной
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - { $ref: "#/components/parameters/TenantId" }
       requestBody:
         required: true
@@ -378,6 +394,7 @@ paths:
       summary: Снять скрытие пункта карточки
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - { $ref: "#/components/parameters/TenantId" }
         - { name: key, in: path, required: true, schema: { type: string, enum: [logo] } }
       responses:
@@ -397,6 +414,7 @@ paths:
       operationId: returnParticipant
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - { $ref: "#/components/parameters/TenantId" }
       requestBody:
         required: true
@@ -504,6 +522,7 @@ paths:
         '500':
           $ref: '#/components/responses/Error'
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - &id005
         name: limit
         in: query
@@ -553,6 +572,8 @@ paths:
         in: query
         schema: {type: string}
     post:
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
       tags:
       - moderation
       summary: Открыть дело вручную
@@ -632,6 +653,7 @@ paths:
         '500':
           $ref: '#/components/responses/Error'
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: caseId
         in: path
         required: true
@@ -669,6 +691,7 @@ paths:
         '500':
           $ref: '#/components/responses/Error'
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: caseId
         in: path
         required: true
@@ -727,6 +750,7 @@ paths:
         '500':
           $ref: '#/components/responses/Error'
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: caseId
         in: path
         required: true
@@ -770,6 +794,7 @@ paths:
         '500':
           $ref: '#/components/responses/Error'
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: offerId
         in: path
         required: true
@@ -816,6 +841,7 @@ paths:
         '500':
           $ref: '#/components/responses/Error'
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - *id005
       - *id006
       - name: status
@@ -1103,6 +1129,7 @@ paths:
         '500':
           $ref: '#/components/responses/Error'
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: tenantId
         in: path
         required: true
@@ -1343,6 +1370,7 @@ paths:
         '503':
           $ref: '#/components/responses/Error'
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: tenantId
         in: path
         required: true
@@ -1821,6 +1849,7 @@ paths:
         deliveryRegion ограничивает все виды рекомендаций; неизвестный регион — 400.
         Для гостя и вошедшего Cache-Control: private, no-store.
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - name: context
           in: query
           required: true
@@ -1836,6 +1865,7 @@ paths:
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200":
           description: Предложения и причина рекомендации.
           content:
@@ -1868,6 +1898,7 @@ paths:
         При пустой выдаче фасеты могут содержать варианты после снятия собственного фильтра.
       operationId: listOffers
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - name: deliveryCarrier
           in: query
           schema: { type: string }
@@ -1893,8 +1924,8 @@ paths:
           description: Магазины (ИЛИ); повторы удаляются.
         - { name: groupId, in: query, schema: { type: string }, description: Группа вариантов; требует ровно один tenant }
         - { name: category, in: query, schema: { type: string }, description: Категория площадки с потомками }
-        - { name: priceMin, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
-        - { name: priceMax, in: query, schema: { type: integer, format: int64, minimum: 0 }, description: Копейки }
+        - { name: priceMin, in: query, schema: { type: number, multipleOf: 0.01, minimum: 0, maximum: 9999999999999.99 }, description: Рубли }
+        - { name: priceMax, in: query, schema: { type: number, multipleOf: 0.01, minimum: 0, maximum: 9999999999999.99 }, description: Рубли }
         - { name: inStock, in: query, schema: { type: boolean } }
         - name: facets
           in: query
@@ -1931,6 +1962,7 @@ paths:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 }, description: "offset + limit ≤ 10000" }
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200":
           description: Страница выдачи
           content:
@@ -1943,6 +1975,7 @@ paths:
       summary: Карточка предложения
       operationId: getOffer
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - name: deliveryCarrier
           in: query
           schema: { type: string }
@@ -1953,6 +1986,7 @@ paths:
           description: Код ISO 3166-2 RU из ПВЗ.
         - $ref: "#/components/parameters/OfferId"
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200":
           description: Карточка с описанием
           content:
@@ -2080,6 +2114,8 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
   /api/v1/cart:
     get:
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
       tags: [cart]
       summary: Корзина покупателя
       description: >-
@@ -2094,6 +2130,8 @@ paths:
         "503": { $ref: "#/components/responses/Error" }
   /api/v1/cart/lines:
     post:
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
       tags: [cart]
       summary: Положить предложение
       description: То же предложение складывает количества; остаток сверяется с каталогом.
@@ -2124,6 +2162,7 @@ paths:
       operationId: setCartLineQuantity
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/OfferId"
       requestBody:
         required: true
@@ -2148,6 +2187,7 @@ paths:
       operationId: removeCartLine
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/OfferId"
       responses:
         "200": { $ref: "#/components/responses/Cart" }
@@ -2162,6 +2202,7 @@ paths:
       description: Неверный код возвращается как valid=false с причиной; Cache-Control private, no-store.
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/TenantId"
       requestBody:
         required: true
@@ -2186,6 +2227,7 @@ paths:
       summary: Удалить промокод группы магазина
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/TenantId"
       responses:
         "200": { $ref: "#/components/responses/Cart" }
@@ -2196,6 +2238,8 @@ paths:
         "503": { $ref: "#/components/responses/Error" }
   /api/v1/cart/verify:
     post:
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
       tags: [cart]
       summary: Перепроверить у магазинов
       description: Цена и наличие спрашиваются у каждого магазина; строки получают пометку issue.
@@ -2264,6 +2308,7 @@ paths:
       operationId: createCheckout
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - name: Idempotency-Key
           in: header
           required: true
@@ -2285,8 +2330,10 @@ paths:
       operationId: getCheckout
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/CheckoutId"
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200": { $ref: "#/components/responses/Checkout" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
@@ -2302,6 +2349,7 @@ paths:
       operationId: quoteCheckoutDelivery
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/CheckoutId"
       requestBody:
         required: true
@@ -2333,6 +2381,7 @@ paths:
       operationId: confirmCheckout
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/CheckoutId"
       responses:
         "200": { $ref: "#/components/responses/Checkout" }
@@ -2348,12 +2397,14 @@ paths:
       operationId: listParticipants
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - { name: trust, in: query, schema: { type: string, enum: [probation, trusted] } }
         - { name: stage, in: query, schema: { $ref: "#/components/schemas/ParticipationStage" } }
         - { name: queue, in: query, schema: { type: boolean }, description: Кандидаты с awaitingReview и валидной доставкой }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 200 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200":
           description: Страница участников
           content:
@@ -2362,6 +2413,8 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
     post:
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
       tags: [operator]
       summary: Завести участника
       description: Магазин должен быть в зеркале реестра платформы. Новый участник скрыт.
@@ -2390,8 +2443,10 @@ paths:
       operationId: getParticipant
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/TenantId"
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200": { $ref: "#/components/responses/Participant" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
@@ -2404,6 +2459,7 @@ paths:
       description: Любой переход в connected без готовой карточки — 409 participant.card_not_ready.
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/TenantId"
       requestBody:
         required: false
@@ -2427,6 +2483,7 @@ paths:
       operationId: disableParticipant
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/TenantId"
       requestBody:
         required: true
@@ -2459,6 +2516,7 @@ paths:
       operationId: createCheckoutOrders
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - $ref: "#/components/parameters/CheckoutId"
       requestBody:
         required: true
@@ -2633,10 +2691,12 @@ paths:
       operationId: listBuyerOrders
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - name: after
           in: query
           schema: { type: string, format: uuid }
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200":
           description: До 100 покупок; next — последний ID для следующей страницы
           content:
@@ -2651,6 +2711,7 @@ paths:
       operationId: listOperatorCheckouts
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
         - name: after
           in: query
           schema: { type: string, format: uuid }
@@ -2658,6 +2719,7 @@ paths:
           in: query
           schema: { type: boolean }
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         "200":
           description: До 100 покупок; next — последний ID
           content:
@@ -3017,6 +3079,7 @@ paths:
       - operatorToken: []
       - operatorSession: []
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         '200':
           description: Успешно
           content:
@@ -3030,6 +3093,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: from
         in: query
         required: true
@@ -3051,6 +3115,7 @@ paths:
       - operatorToken: []
       - operatorSession: []
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         '200':
           description: Успешно
           content:
@@ -3064,6 +3129,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: productId
         in: query
         schema: {type: string}
@@ -3105,6 +3171,8 @@ paths:
         schema:
           type: integer
     post:
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
       summary: 'Продвижение: create'
       security:
       - operatorToken: []
@@ -3153,6 +3221,7 @@ paths:
       - operatorToken: []
       - operatorSession: []
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         '200':
           description: Успешно
           content:
@@ -3166,6 +3235,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: id
         in: path
         required: true
@@ -3209,6 +3279,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: id
         in: path
         required: true
@@ -3273,6 +3344,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: id
         in: path
         required: true
@@ -3354,11 +3426,14 @@ paths:
           format: date
   /api/v1/operator/promotion/placements:
     get:
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
       summary: 'Продвижение: placements'
       security:
       - operatorToken: []
       - operatorSession: []
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         '200':
           description: Успешно
           content:
@@ -3411,6 +3486,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: code
         in: path
         required: true
@@ -3480,7 +3556,7 @@ paths:
                 properties:
                   items:
                     type: array
-                    items: {$ref: "#/components/schemas/PromotionPlacement"}
+                    items: {$ref: "#/components/schemas/InternalPromotionPlacement"}
                   nextMonday:
                     type: string
                     format: date
@@ -3490,25 +3566,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '401':
           description: Нет доступа
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '404':
           description: Не найдено или машинный API выключен
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '409':
           description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
       parameters:
       - name: tenantId
         in: path
@@ -3532,25 +3608,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '401':
           description: Нет доступа
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '404':
           description: Не найдено или машинный API выключен
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '409':
           description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
       parameters:
       - name: tenantId
         in: path
@@ -3595,31 +3671,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PromotionCampaignPage"
+                $ref: "#/components/schemas/InternalPromotionCampaignPage"
         '400':
           description: Некорректные параметры
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '401':
           description: Нет доступа
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '404':
           description: Не найдено или машинный API выключен
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '409':
           description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
       parameters:
       - name: tenantId
         in: path
@@ -3654,31 +3730,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PromotionCampaign"
+                $ref: "#/components/schemas/InternalPromotionCampaign"
         '400':
           description: Некорректные параметры
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '401':
           description: Нет доступа
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '404':
           description: Не найдено или машинный API выключен
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '409':
           description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
       parameters:
       - name: tenantId
         in: path
@@ -3702,31 +3778,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PromotionCampaign"
+                $ref: "#/components/schemas/InternalPromotionCampaign"
         '400':
           description: Некорректные параметры
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '401':
           description: Нет доступа
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '404':
           description: Не найдено или машинный API выключен
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '409':
           description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
       parameters:
       - name: tenantId
         in: path
@@ -3749,31 +3825,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PromotionCampaign"
+                $ref: "#/components/schemas/InternalPromotionCampaign"
         '400':
           description: Некорректные параметры
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '401':
           description: Нет доступа
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '404':
           description: Не найдено или машинный API выключен
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '409':
           description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
       parameters:
       - name: tenantId
         in: path
@@ -3822,31 +3898,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PromotionCampaign"
+                $ref: "#/components/schemas/InternalPromotionCampaign"
         '400':
           description: Некорректные параметры
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '401':
           description: Нет доступа
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '404':
           description: Не найдено или машинный API выключен
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '409':
           description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
       parameters:
       - name: tenantId
         in: path
@@ -3876,31 +3952,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PromotionCampaign"
+                $ref: "#/components/schemas/InternalPromotionCampaign"
         '400':
           description: Некорректные параметры
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '401':
           description: Нет доступа
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '404':
           description: Не найдено или машинный API выключен
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '409':
           description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
       parameters:
       - name: tenantId
         in: path
@@ -3930,31 +4006,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PromotionCampaign"
+                $ref: "#/components/schemas/InternalPromotionCampaign"
         '400':
           description: Некорректные параметры
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '401':
           description: Нет доступа
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '404':
           description: Не найдено или машинный API выключен
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '409':
           description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
       parameters:
       - name: tenantId
         in: path
@@ -3992,25 +4068,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '401':
           description: Нет доступа
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '404':
           description: Не найдено или машинный API выключен
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
         '409':
           description: Версия изменена или нет свободных недель
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/InternalError"
       parameters:
       - name: tenantId
         in: path
@@ -4078,6 +4154,7 @@ paths:
       summary: Спонсорские карточки первой страницы
       security: []
       parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
       - name: deliveryCarrier
         in: query
         schema:
@@ -4117,17 +4194,19 @@ paths:
       - name: priceMin
         in: query
         schema:
-          type: integer
-          format: int64
+          type: number
+          multipleOf: 0.01
           minimum: 0
-        description: Копейки
+          maximum: 9999999999999.99
+        description: Рубли
       - name: priceMax
         in: query
         schema:
-          type: integer
-          format: int64
+          type: number
+          multipleOf: 0.01
           minimum: 0
-        description: Копейки
+          maximum: 9999999999999.99
+        description: Рубли
       - name: inStock
         in: query
         schema:
@@ -4158,6 +4237,7 @@ paths:
           default: 0
         description: offset + limit ≤ 10000
       responses:
+        "409": { $ref: "#/components/responses/Error" }
         '200':
           description: По одной карточке на позицию
           content:
@@ -4194,6 +4274,12 @@ components:
         REFERENCE_READ_TOKEN — только чтение реестра (snapshot, resolve, entries);
         прав оператора площадки не даёт.
   parameters:
+    MoneyUnit:
+      name: X-Marketplace-Money-Unit
+      in: header
+      required: true
+      description: Обязательный RUB; без него 409 api.money_unit_required до чтения денег и изменения состояния.
+      schema: { type: string, enum: [RUB] }
     TaxonomyCache:
       name: If-None-Match
       in: header
@@ -4392,19 +4478,44 @@ components:
       type: object
       additionalProperties: false
       properties:
-        targetPrice: { type: [integer, "null"], format: int64, minimum: 0 }
+        targetPrice:
+          type:
+          - number
+          - 'null'
+          minimum: 0
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
     BuyerPriceWatch:
       type: object
-      required: [offer, priceAtWatch, currentPrice, dropped]
+      required:
+      - offer
+      - priceAtWatch
+      - currentPrice
+      - dropped
       properties:
         offer:
-          $ref: "#/components/schemas/Offer"
-        priceAtWatch: { type: integer, format: int64, minimum: 0 }
+          $ref: '#/components/schemas/Offer'
+        priceAtWatch:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
         currentPrice:
-          type: [integer, "null"]
-          format: int64
+          type:
+          - number
+          - 'null'
           description: null у снятого предложения; dropped тогда false
-        targetPrice: { type: integer, format: int64, minimum: 0 }
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        targetPrice:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
         dropped:
           type: boolean
           description: Текущая цена ниже priceAtWatch и, при заданной цели, не выше targetPrice.
@@ -4468,20 +4579,70 @@ components:
         categories: { type: array, items: { $ref: "#/components/schemas/StoreCategory" } }
     ShopCard:
       type: object
-      required: [tenantId, slug, name, logo, initial, color, offers, isNew, category, moreCategories, fromPrice, rating]
+      required:
+      - tenantId
+      - slug
+      - name
+      - logo
+      - initial
+      - color
+      - offers
+      - isNew
+      - category
+      - moreCategories
+      - fromPrice
+      - rating
       properties:
-        tenantId: { type: string }
-        slug: { type: string }
-        name: { type: string }
-        logo: { type: [string, "null"] }
-        initial: { type: string }
-        color: { type: object, required: [card], properties: { card: { type: string } } }
-        offers: { type: integer, minimum: 0 }
-        isNew: { type: boolean, const: true }
-        category: { type: [object, "null"], required: [id, name], properties: { id: { type: string }, name: { type: string } } }
-        moreCategories: { type: integer, minimum: 0 }
-        fromPrice: { type: [integer, "null"], format: int64, minimum: 0 }
-        rating: { $ref: "#/components/schemas/Rating" }
+        tenantId:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        logo:
+          type:
+          - string
+          - 'null'
+        initial:
+          type: string
+        color:
+          type: object
+          required:
+          - card
+          properties:
+            card:
+              type: string
+        offers:
+          type: integer
+          minimum: 0
+        isNew:
+          type: boolean
+          const: true
+        category:
+          type:
+          - object
+          - 'null'
+          required:
+          - id
+          - name
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+        moreCategories:
+          type: integer
+          minimum: 0
+        fromPrice:
+          type:
+          - number
+          - 'null'
+          minimum: 0
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
+        rating:
+          $ref: '#/components/schemas/Rating'
     ShopPage:
       type: object
       required: [items, total, limit, offset]
@@ -4583,13 +4744,17 @@ components:
           type: string
     PromotionRefund:
       type: object
-      required: [amountKopecks, 'on']
+      required:
+      - amountRubles
+      - 'on'
       description: Ручная запись возврата для stopped или finished; сумма не больше оплаты.
       properties:
-        amountKopecks:
-          type: integer
-          format: int64
-          minimum: 1
+        amountRubles:
+          type: number
+          minimum: 0.01
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
         'on':
           type: string
           format: date
@@ -4603,7 +4768,7 @@ components:
       - status
       properties:
         refund:
-          $ref: "#/components/schemas/PromotionRefund"
+          $ref: '#/components/schemas/PromotionRefund'
         status:
           type: string
           enum:
@@ -4612,10 +4777,12 @@ components:
         paidOn:
           type: string
           format: date
-        amountKopecks:
-          type: integer
-          format: int64
+        amountRubles:
+          type: number
           minimum: 0
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
         document:
           type: string
         note:
@@ -4696,7 +4863,7 @@ components:
       - expectedVersion
       properties:
         action:
-          $ref: "#/components/schemas/PromotionAction"
+          $ref: '#/components/schemas/PromotionAction'
         expectedVersion:
           type: integer
         note:
@@ -4704,17 +4871,19 @@ components:
         erid:
           type: string
         refund:
-          $ref: "#/components/schemas/PromotionRefund"
+          $ref: '#/components/schemas/PromotionRefund'
         payment:
           type: object
           required:
-          - amountKopecks
+          - amountRubles
           - paidOn
           properties:
-            amountKopecks:
-              type: integer
-              format: int64
+            amountRubles:
+              type: number
               minimum: 0
+              multipleOf: 0.01
+              maximum: 9999999999999.99
+              description: Сумма в рублях
             paidOn:
               type: string
               format: date
@@ -4775,7 +4944,7 @@ components:
       - positions
       - slotLimit
       - positionPrices
-      - defaultPriceKopecks
+      - defaultPriceRubles
       - active
       - scope
       - version
@@ -4805,13 +4974,17 @@ components:
         positionPrices:
           type: object
           additionalProperties:
-            type: integer
-            format: int64
+            type: number
             minimum: 0
-        defaultPriceKopecks:
-          type: integer
-          format: int64
+            multipleOf: 0.01
+            maximum: 9999999999999.99
+            description: Сумма в рублях
+        defaultPriceRubles:
+          type: number
           minimum: 0
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
         active:
           type: boolean
         scope:
@@ -4826,23 +4999,29 @@ components:
       required:
       - expectedVersion
       - slotLimit
-      - defaultPriceKopecks
+      - defaultPriceRubles
       - active
       properties:
-        expectedVersion: {type: integer, minimum: 1}
+        expectedVersion:
+          type: integer
+          minimum: 1
         slotLimit:
           type: integer
           minimum: 1
-        defaultPriceKopecks:
-          type: integer
-          format: int64
+        defaultPriceRubles:
+          type: number
           minimum: 0
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
         positionPrices:
           type: object
           additionalProperties:
-            type: integer
-            format: int64
+            type: number
             minimum: 0
+            multipleOf: 0.01
+            maximum: 9999999999999.99
+            description: Сумма в рублях
         active:
           type: boolean
     PromotionCalendarPosition:
@@ -5017,7 +5196,7 @@ components:
       - position
       - target
       - period
-      - priceKopecks
+      - priceRubles
       - marking
       - id
       - tenantName
@@ -5036,31 +5215,32 @@ components:
         tenantId:
           type: string
         kind:
-          $ref: "#/components/schemas/PromotionKind"
+          $ref: '#/components/schemas/PromotionKind'
         placementCode:
           type: string
         position:
           type: integer
         target:
-          $ref: "#/components/schemas/PromotionTarget"
+          $ref: '#/components/schemas/PromotionTarget'
         period:
-          $ref: "#/components/schemas/PromotionPeriod"
-        priceKopecks:
-          type: integer
-          format: int64
+          $ref: '#/components/schemas/PromotionPeriod'
+        priceRubles:
+          type: number
           minimum: 0
           description: Снимок прайса. При создании и правке вычисляется сервером.
+          multipleOf: 0.01
+          maximum: 9999999999999.99
         marking:
-          $ref: "#/components/schemas/PromotionMarking"
+          $ref: '#/components/schemas/PromotionMarking'
         id:
           type: string
           format: uuid
         tenantName:
           type: string
         payment:
-          $ref: "#/components/schemas/PromotionPayment"
+          $ref: '#/components/schemas/PromotionPayment'
         status:
-          $ref: "#/components/schemas/PromotionStatus"
+          $ref: '#/components/schemas/PromotionStatus'
         version:
           type: integer
         createdAt:
@@ -5070,7 +5250,7 @@ components:
           type: string
           format: date-time
         stats:
-          $ref: "#/components/schemas/PromotionStatsSummary"
+          $ref: '#/components/schemas/PromotionStatsSummary'
     PromotionCampaignPage:
       type: object
       required:
@@ -5163,7 +5343,7 @@ components:
       type: object
       required:
       - period
-      - revenueKopecks
+      - revenueRubles
       - activeCampaigns
       - totalCampaigns
       - fill
@@ -5173,11 +5353,13 @@ components:
       - trafficByDay
       properties:
         period:
-          $ref: "#/components/schemas/PromotionPeriod"
-        revenueKopecks:
-          type: integer
-          format: int64
+          $ref: '#/components/schemas/PromotionPeriod'
+        revenueRubles:
+          type: number
           minimum: 0
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
         activeCampaigns:
           type: integer
         totalCampaigns:
@@ -5218,15 +5400,17 @@ components:
             type: object
             required:
             - day
-            - kopecks
+            - rubles
             properties:
               day:
                 type: string
                 format: date
-              kopecks:
-                type: integer
-                format: int64
+              rubles:
+                type: number
                 minimum: 0
+                multipleOf: 0.01
+                maximum: 9999999999999.99
+                description: Сумма в рублях
         trafficByDay:
           type: array
           items:
@@ -5310,24 +5494,40 @@ components:
       properties:
         offer:
           type: object
-          required: [name, image, price]
+          required:
+          - name
+          - image
+          - price
           properties:
-            name: {type: string}
-            image: {type: string}
-            price: {type: integer, format: int64, description: Цена в копейках}
+            name:
+              type: string
+            image:
+              type: string
+            price:
+              type: number
+              description: Цена в рублях
+              multipleOf: 0.01
+              minimum: 0
+              maximum: 9999999999999.99
         seller:
           type: object
-          required: [slug, name]
+          required:
+          - slug
+          - name
           properties:
-            slug: {type: string}
-            name: {type: string}
+            slug:
+              type: string
+            name:
+              type: string
         id:
           type: string
           format: uuid
         offerId: &id001
           type: string
-        tenantId: *id001
-        productId: *id001
+        tenantId:
+          type: string
+        productId:
+          type: string
         revision: &id002
           type: integer
           format: int64
@@ -5351,9 +5551,12 @@ components:
             - key
             - message
             properties:
-              key: *id001
-              message: *id001
-        note: *id001
+              key:
+                type: string
+              message:
+                type: string
+        note:
+          type: string
         openedAt:
           type: string
           format: date-time
@@ -5362,7 +5565,9 @@ components:
           - string
           - 'null'
           format: date-time
-        version: *id002
+        version:
+          type: integer
+          format: int64
     ModerationVerdict:
       type: object
       required:
@@ -5383,49 +5588,98 @@ components:
       properties:
         offer:
           type: object
-          required: [name, image, price]
+          required:
+          - name
+          - image
+          - price
           properties:
-            name: {type: string}
-            image: {type: string}
-            price: {type: integer, format: int64, description: Цена в копейках}
+            name:
+              type: string
+            image:
+              type: string
+            price:
+              type: number
+              description: Цена в рублях
+              multipleOf: 0.01
+              minimum: 0
+              maximum: 9999999999999.99
         seller:
           type: object
-          required: [slug, name]
+          required:
+          - slug
+          - name
           properties:
-            slug: {type: string}
-            name: {type: string}
-        rulesRevision: {type: integer, format: int64}
-        taxonomyVersion: {type: integer, format: int64}
+            slug:
+              type: string
+            name:
+              type: string
+        rulesRevision:
+          type: integer
+          format: int64
+        taxonomyVersion:
+          type: integer
+          format: int64
         operator:
           type: object
-          required: [id, name]
+          required:
+          - id
+          - name
           properties:
-            id: {type: string}
-            name: {type: string}
+            id:
+              type: string
+            name:
+              type: string
         decision:
           anyOf:
           - type: 'null'
           - type: object
-            required: [action, reason, note, at]
+            required:
+            - action
+            - reason
+            - note
+            - at
             properties:
-              action: {type: string, enum: [allow, reject]}
+              action:
+                type: string
+                enum:
+                - allow
+                - reject
               reason:
                 anyOf:
                 - $ref: '#/components/schemas/ModerationReason'
                 - type: 'null'
-              note: {type: string}
-              at: {type: string, format: date-time}
-        offerId: *id001
-        tenantId: *id001
-        productId: *id001
-        revision: *id002
+              note:
+                type: string
+              at:
+                type: string
+                format: date-time
+        offerId:
+          type: string
+        tenantId:
+          type: string
+        productId:
+          type: string
+        revision:
+          type: integer
+          format: int64
         status:
           type: string
           enum:
           - allowed
           - pending
           - rejected
-        reasons: *id003
+        reasons:
+          type: array
+          items:
+            type: object
+            required:
+            - key
+            - message
+            properties:
+              key:
+                type: string
+              message:
+                type: string
         decidedBy:
           type: string
           enum:
@@ -5448,15 +5702,30 @@ components:
       - seller
       - publication
       properties:
-        name: *id001
-        description: *id001
-        image: *id001
-        price: *id002
-        basePrice: *id002
-        categoryId: *id001
+        name:
+          type: string
+        description:
+          type: string
+        image:
+          type: string
+        price:
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+          description: Сумма в рублях
+        basePrice:
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+          description: Сумма в рублях
+        categoryId:
+          type: string
         categoryPath:
           type: array
-          items: *id001
+          items:
+            type: string
         attributes:
           $ref: '#/components/schemas/CanonicalAttributes'
         seller:
@@ -5465,8 +5734,10 @@ components:
           - slug
           - name
           properties:
-            slug: *id001
-            name: *id001
+            slug:
+              type: string
+            name:
+              type: string
         publication:
           $ref: '#/components/schemas/Publication'
     ModerationHistory:
@@ -5879,35 +6150,75 @@ components:
               createdAt: { type: string, format: date-time }
     Facet:
       type: object
-      required: [code, name, type, count, values]
+      required:
+      - code
+      - name
+      - type
+      - count
+      - values
       properties:
         buckets:
           type: array
           maxItems: 20
-          description: Только price; границы в копейках, круглые суммы из движка. Без поддержки поле отсутствует.
+          description: Только price; from/to в рублях, круглые границы движка. Без поддержки поле отсутствует.
           items:
             type: object
-            required: [from, to, count]
+            required:
+            - from
+            - to
+            - count
             properties:
-              from: { type: integer, format: int64, minimum: 0 }
-              to: { type: integer, format: int64, minimum: 0 }
-              count: { type: integer, minimum: 0 }
-        code: { type: string, description: 'category, tenant, price, inStock или attr.<код>' }
-        name: { type: string }
-        type: { type: string, enum: [enum, number, string, boolean] }
-        unit: { type: string }
-        count: { type: integer, description: Число предложений с полем до пагинации }
-        min: { type: number }
-        max: { type: number }
+              from:
+                type: number
+                minimum: 0
+                multipleOf: 0.01
+                maximum: 9999999999999.99
+                description: Сумма в рублях
+              to:
+                type: number
+                minimum: 0
+                multipleOf: 0.01
+                maximum: 9999999999999.99
+                description: Сумма в рублях
+              count:
+                type: integer
+                minimum: 0
+        code:
+          type: string
+          description: category, tenant, price, inStock или attr.<код>
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+          - enum
+          - number
+          - string
+          - boolean
+        unit:
+          type: string
+        count:
+          type: integer
+          description: Число предложений с полем до пагинации
+        min:
+          type: number
+          description: Для price — рубли; для атрибута — его собственная единица.
+        max:
+          type: number
+          description: Для price — рубли; для атрибута — его собственная единица.
         values:
           type: array
           maxItems: 256
           items:
             type: object
-            required: [value, count]
+            required:
+            - value
+            - count
             properties:
-              value: { type: string }
-              count: { type: integer }
+              value:
+                type: string
+              count:
+                type: integer
     Error:
       type: object
       required: [error]
@@ -5935,12 +6246,24 @@ components:
           additionalProperties: { type: string, enum: [ok, fail] }
     Seller:
       type: object
-      required: [slug, name, delivery, freeDeliveryFrom]
+      required:
+      - slug
+      - name
+      - delivery
+      - freeDeliveryFrom
       properties:
-        delivery: { $ref: "#/components/schemas/ParticipantDelivery" }
-        freeDeliveryFrom: { type: integer, format: int64, minimum: 0 }
-        slug: { type: string }
-        name: { type: string }
+        delivery:
+          $ref: '#/components/schemas/ParticipantDelivery'
+        freeDeliveryFrom:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
+        slug:
+          type: string
+        name:
+          type: string
     Category:
       type: object
       required: [id, name]
@@ -5949,72 +6272,165 @@ components:
         name: { type: string }
         url: { type: string }
     Offer:
-      description: При паре deliveryCarrier и deliveryRegion возвращает deliveryAvailable; вне зон товар виден, доставка недоступна.
+      description: При паре deliveryCarrier и deliveryRegion возвращает deliveryAvailable; вне зон товар виден, доставка
+        недоступна.
       type: object
-      required: [id, tenantId, productId, seller, name, categoryId, attributes, categories, price, basePrice, available, inStock, checkoutAvailable, updatedAt, rating]
+      required:
+      - id
+      - tenantId
+      - productId
+      - seller
+      - name
+      - categoryId
+      - attributes
+      - categories
+      - price
+      - basePrice
+      - available
+      - inStock
+      - checkoutAvailable
+      - updatedAt
+      - rating
       properties:
-        rating: { $ref: "#/components/schemas/Rating" }
-        deliveryAvailable: { type: boolean }
-        categoryId: { type: string, description: Категория площадки }
-        attributes: { $ref: "#/components/schemas/CanonicalAttributes" }
-        id: { type: string, examples: ["t1~p1"] }
-        tenantId: { type: string }
-        productId: { type: string }
-        seller: { $ref: "#/components/schemas/Seller" }
-        name: { type: string }
-        description: { type: string, description: Только в карточке }
-        variants: { $ref: "#/components/schemas/OfferVariants", description: Только в карточке; один продавец и ценовой контекст }
-        image: { type: string }
+        rating:
+          $ref: '#/components/schemas/Rating'
+        deliveryAvailable:
+          type: boolean
+        categoryId:
+          type: string
+          description: Категория площадки
+        attributes:
+          $ref: '#/components/schemas/CanonicalAttributes'
+        id:
+          type: string
+          examples:
+          - t1~p1
+        tenantId:
+          type: string
+        productId:
+          type: string
+        seller:
+          $ref: '#/components/schemas/Seller'
+        name:
+          type: string
+        description:
+          type: string
+          description: Только в карточке
+        variants:
+          $ref: '#/components/schemas/OfferVariants'
+          description: Только в карточке; один продавец и ценовой контекст
+        image:
+          type: string
         assets:
           type: array
           maxItems: 20
           uniqueItems: true
-          description: >
-            Только в карточке товара; всегда массив. Ключи бакета без хоста и /images/,
-            сегменты не кодированы. Порядок магазина, первый совпадает с image.
-            Каждый ключ — не больше 512 байт.
-          items: { type: string, maxLength: 512 }
-        url: { type: string }
-        sku: { type: string }
+          description: 'Только в карточке товара; всегда массив. Ключи бакета без хоста и /images/, сегменты не кодированы.
+            Порядок магазина, первый совпадает с image. Каждый ключ — не больше 512 байт.
+
+            '
+          items:
+            type: string
+            maxLength: 512
+        url:
+          type: string
+        sku:
+          type: string
         categories:
           type: array
-          items: { $ref: "#/components/schemas/Category" }
-        price: { type: integer, format: int64, description: Цена продажи в копейках }
-        basePrice: { type: integer, format: int64, description: Прайс магазина в копейках }
-        available: { type: integer }
-        inStock: { type: boolean }
-        checkoutAvailable: { type: boolean, description: Продавец принимает оплату через маркетплейс }
-        updatedAt: { type: string, format: date-time }
+          items:
+            $ref: '#/components/schemas/Category'
+        price:
+          type: number
+          description: Цена продажи в рублях
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        basePrice:
+          type: number
+          description: Прайс магазина в рублях
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        available:
+          type: integer
+        inStock:
+          type: boolean
+        checkoutAvailable:
+          type: boolean
+          description: Продавец принимает оплату через маркетплейс
+        updatedAt:
+          type: string
+          format: date-time
     OfferVariants:
       type: object
-      required: [groupId, axis, items, truncated]
+      required:
+      - groupId
+      - axis
+      - items
+      - truncated
       properties:
-        groupId: { type: string }
+        groupId:
+          type: string
         axis:
           type: object
-          required: [key, code, name]
+          required:
+          - key
+          - code
+          - name
           properties:
-            key: { type: string }
-            code: { type: string }
-            name: { type: string }
-        truncated: { type: boolean }
+            key:
+              type: string
+            code:
+              type: string
+            name:
+              type: string
+        truncated:
+          type: boolean
         items:
           type: array
           maxItems: 200
           items:
             type: object
-            required: [id, current, value, position, price, basePrice, available, inStock]
+            required:
+            - id
+            - current
+            - value
+            - position
+            - price
+            - basePrice
+            - available
+            - inStock
             properties:
-              id: { type: string }
-              current: { type: boolean }
-              value: { type: string }
-              position: { type: integer, minimum: 0 }
-              price: { type: integer, format: int64 }
-              basePrice: { type: integer, format: int64 }
-              available: { type: integer }
-              inStock: { type: boolean }
-              image: { type: string }
-              duplicate: { type: boolean }
+              id:
+                type: string
+              current:
+                type: boolean
+              value:
+                type: string
+              position:
+                type: integer
+                minimum: 0
+              price:
+                type: number
+                multipleOf: 0.01
+                minimum: 0
+                maximum: 9999999999999.99
+                description: Сумма в рублях
+              basePrice:
+                type: number
+                multipleOf: 0.01
+                minimum: 0
+                maximum: 9999999999999.99
+                description: Сумма в рублях
+              available:
+                type: integer
+              inStock:
+                type: boolean
+              image:
+                type: string
+              duplicate:
+                type: boolean
     OfferPage:
       type: object
       required: [items, total, limit, offset, facets]
@@ -6064,42 +6480,137 @@ components:
         name: { type: string }
     CartLine:
       type: object
-      required: [offerId, tenantId, productId, name, quantity, price, amount, issue, addedAt, seller]
+      required:
+      - offerId
+      - tenantId
+      - productId
+      - name
+      - quantity
+      - price
+      - amount
+      - issue
+      - addedAt
+      - seller
+      - baseAmount
+      - discount
+      - discountPercent
       properties:
-        seller: { $ref: "#/components/schemas/OrderSeller" }
-        offerId: { type: string }
-        tenantId: { type: string }
-        productId: { type: string }
-        name: { type: string }
-        quantity: { type: integer, minimum: 1, maximum: 999 }
-        price: { type: integer, format: int64, description: Снимок цены в копейках }
-        amount: { type: integer, format: int64, description: Сумма после скидок в копейках }
+        seller:
+          $ref: '#/components/schemas/OrderSeller'
+        offerId:
+          type: string
+        tenantId:
+          type: string
+        productId:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 999
+        price:
+          type: number
+          description: Снимок цены в рублях
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        amount:
+          type: number
+          description: Сумма после скидок в рублях
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
         issue:
-          type: [string, "null"]
-          enum: [price_changed, not_enough_stock, unavailable, null]
+          type:
+          - string
+          - 'null'
+          enum:
+          - price_changed
+          - not_enough_stock
+          - unavailable
+          - null
           description: Пометка после перепроверки у магазина
-        addedAt: { type: string, format: date-time }
+        addedAt:
+          type: string
+          format: date-time
+        baseAmount:
+          description: Цена снимка × количество до скидок строки, в рублях
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        discount:
+          description: Применённая сервером скидка строки, в рублях
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        discountPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Округлённый процент только для подписи; платёж определяется amount
     PromoCode:
-      description: >-
-        Непроверенный код имеет valid=false, discount=0, message=null; Create проверяет его у сервера.
-        Отвергнутый код имеет valid=false и причину в message, в покупку не переносится.
-        Возврат группы сохраняет код покупателя непроверенным, при отказе кода — отвергнутым.
-      type: [object, "null"]
+      description: Непроверенный код имеет valid=false, discount=0, message=null; Create проверяет его у сервера. Отвергнутый
+        код имеет valid=false и причину в message, в покупку не переносится. Возврат группы сохраняет код покупателя
+        непроверенным, при отказе кода — отвергнутым.
+      type:
+      - object
+      - 'null'
       additionalProperties: false
-      required: [code, valid, discount, message]
+      required:
+      - code
+      - valid
+      - discount
+      - message
       properties:
-        code: { type: string }
-        valid: { type: boolean }
-        discount: { type: integer, format: int64, minimum: 0, description: Скидка промокода в копейках }
-        message: { type: [string, "null"] }
+        code:
+          type: string
+        valid:
+          type: boolean
+        discount:
+          type: number
+          minimum: 0
+          description: Скидка промокода в рублях
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+        message:
+          type:
+          - string
+          - 'null'
     CartGroup:
       type: object
       additionalProperties: false
-      required: [tenantId, total, promoCode]
+      required:
+      - tenantId
+      - total
+      - promoCode
+      - baseTotal
+      - discount
       properties:
-        tenantId: { type: string }
-        total: { type: integer, format: int64, description: Сумма после скидок в копейках }
-        promoCode: { $ref: "#/components/schemas/PromoCode" }
+        tenantId:
+          type: string
+        total:
+          type: number
+          description: Сумма после скидок в рублях
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        promoCode:
+          $ref: '#/components/schemas/PromoCode'
+        baseTotal:
+          description: Сумма price × quantity из того же снимка до скидок строк
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        discount:
+          description: Сумма применённых скидок строк; промокод отдельно не вычитается
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
     OrderTracking:
       type: [object, "null"]
       additionalProperties: false
@@ -6110,19 +6621,52 @@ components:
         url: { type: string, format: uri }
     Cart:
       type: object
-      required: [id, lines, groups, total, version, expiresAt]
+      required:
+      - id
+      - lines
+      - groups
+      - total
+      - version
+      - expiresAt
+      - baseTotal
+      - discount
       properties:
         groups:
           type: array
-          items: { $ref: "#/components/schemas/CartGroup" }
-        id: { type: string, format: uuid }
+          items:
+            $ref: '#/components/schemas/CartGroup'
+        id:
+          type: string
+          format: uuid
         lines:
           type: array
           maxItems: 100
-          items: { $ref: "#/components/schemas/CartLine" }
-        total: { type: integer, format: int64, description: Сумма после скидок в копейках }
-        version: { type: integer, format: int64 }
-        expiresAt: { type: string, format: date-time }
+          items:
+            $ref: '#/components/schemas/CartLine'
+        total:
+          type: number
+          description: Сумма после скидок в рублях
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        version:
+          type: integer
+          format: int64
+        expiresAt:
+          type: string
+          format: date-time
+        baseTotal:
+          description: Сумма price × quantity из того же снимка до скидок строк
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        discount:
+          description: Сумма применённых скидок строк; промокод отдельно не вычитается
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
     Carrier:
       type: object
       required: [code, name]
@@ -6149,34 +6693,113 @@ components:
         refreshedAt: { type: string, format: date-time }
     Quote:
       type: object
-      required: [status, cost, subsidy, buyerCost, minDays, maxDays, expiresAt]
+      required:
+      - status
+      - cost
+      - subsidy
+      - buyerCost
+      - minDays
+      - maxDays
+      - expiresAt
       properties:
-        status: { type: string, enum: [available, unavailable] }
+        status:
+          type: string
+          enum:
+          - available
+          - unavailable
         reason:
           type: string
-          enum: [carrier_not_connected, pickup_point_unavailable, no_rate, seller_unreachable]
-          description: |
-            Только при status unavailable. Закрытый словарь docs/server-contract.md:
+          enum:
+          - carrier_not_connected
+          - pickup_point_unavailable
+          - no_rate
+          - seller_unreachable
+          description: 'Только при status unavailable. Закрытый словарь docs/server-contract.md:
+
             carrier_not_connected — у продавца нет этого перевозчика;
+
             pickup_point_unavailable — перевозчик не везёт в этот пункт;
+
             no_rate — тариф не рассчитан (вес, габариты, зона);
+
             seller_unreachable — продавец не ответил, повтор при подтверждении.
-        cost: { type: integer, format: int64, description: Стоимость по договору продавца }
-        subsidy: { type: integer, format: int64, description: Сколько оплачивает продавец }
-        buyerCost: { type: integer, format: int64, description: Доля покупателя }
-        minDays: { type: integer }
-        maxDays: { type: integer }
-        expiresAt: { type: string, format: date-time }
+
+            '
+        cost:
+          type: number
+          description: Стоимость по договору продавца
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        subsidy:
+          type: number
+          description: Сколько оплачивает продавец
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        buyerCost:
+          type: number
+          description: Доля покупателя
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        minDays:
+          type: integer
+        maxDays:
+          type: integer
+        expiresAt:
+          type: string
+          format: date-time
     CheckoutLine:
       type: object
-      required: [offerId, productId, name, quantity, price, amount]
+      required:
+      - offerId
+      - productId
+      - name
+      - quantity
+      - price
+      - amount
+      - baseAmount
+      - discount
+      - discountPercent
       properties:
-        offerId: { type: string }
-        productId: { type: string }
-        name: { type: string }
-        quantity: { type: integer }
-        price: { type: integer, format: int64 }
-        amount: { type: integer, format: int64, description: Сумма после скидок в копейках }
+        offerId:
+          type: string
+        productId:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+          description: Сумма в рублях
+        amount:
+          type: number
+          description: Сумма после скидок в рублях
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        baseAmount:
+          description: Цена снимка × количество до скидок строки, в рублях
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        discount:
+          description: Применённая сервером скидка строки, в рублях
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        discountPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Округлённый процент только для подписи; платёж определяется amount
     CheckoutGroup:
       type: object
       required:
@@ -6194,49 +6817,126 @@ components:
       - createExhausted
       - seller
       - tracking
+      - baseTotal
+      - discount
+      - total
       properties:
-        seller: { $ref: "#/components/schemas/OrderSeller" }
-        tracking: { $ref: "#/components/schemas/OrderTracking" }
-        tenantId: { type: string }
+        seller:
+          $ref: '#/components/schemas/OrderSeller'
+        tracking:
+          $ref: '#/components/schemas/OrderTracking'
+        tenantId:
+          type: string
         status:
           type: string
-          enum: ["", creating_order, awaiting_payment, paid, cancelled, shipped, delivered, returned, seller_unreachable, price_changed, delivery_unavailable]
-        orderId: { type: string }
-        expiresAt: { type: string, format: date-time }
-        deliveryPrice: { type: integer, format: int64, minimum: 0, description: Доставка группы в составе единого платежа; 0 — строка доставки скрыта }
-        reason: { type: string }
-        returnFailed: { type: boolean }
-        returnReason: { type: string }
+          enum:
+          - ''
+          - creating_order
+          - awaiting_payment
+          - paid
+          - cancelled
+          - shipped
+          - delivered
+          - returned
+          - seller_unreachable
+          - price_changed
+          - delivery_unavailable
+        orderId:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        deliveryPrice:
+          type: number
+          minimum: 0
+          description: Доставка группы в составе единого платежа; 0 — строка доставки скрыта
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+        reason:
+          type: string
+        returnFailed:
+          type: boolean
+        returnReason:
+          type: string
         returnRemaining:
           type: array
           items:
             type: object
-            required: [offerId, quantity]
+            required:
+            - offerId
+            - quantity
             properties:
-              offerId: { type: string }
-              quantity: { type: integer, minimum: 1 }
-        pollFailures: { type: integer, minimum: 0, maximum: 5 }
-        nextPollAt: { type: string, format: date-time }
-        createFailures: { type: integer, minimum: 0, maximum: 5 }
-        createExhausted: { type: boolean }
-        lastErrorCode: { type: string }
+              offerId:
+                type: string
+              quantity:
+                type: integer
+                minimum: 1
+        pollFailures:
+          type: integer
+          minimum: 0
+          maximum: 5
+        nextPollAt:
+          type: string
+          format: date-time
+        createFailures:
+          type: integer
+          minimum: 0
+          maximum: 5
+        createExhausted:
+          type: boolean
+        lastErrorCode:
+          type: string
         currentPrices:
           type: array
           items:
             type: object
-            required: [productId, price]
+            required:
+            - productId
+            - price
             properties:
-              productId: { type: string }
-              price: { type: integer, format: int64, minimum: 0 }
-        externalCheckoutId: { type: string, description: "<checkoutId>:<tenantId> — ключ заказа у магазина" }
+              productId:
+                type: string
+              price:
+                type: number
+                minimum: 0
+                multipleOf: 0.01
+                maximum: 9999999999999.99
+                description: Сумма в рублях
+        externalCheckoutId:
+          type: string
+          description: <checkoutId>:<tenantId> — ключ заказа у магазина
         lines:
           type: array
-          items: { $ref: "#/components/schemas/CheckoutLine" }
-        goods: { type: integer, format: int64 }
+          items:
+            $ref: '#/components/schemas/CheckoutLine'
+        goods:
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+          description: Сумма в рублях
         quote:
           oneOf:
-            - $ref: "#/components/schemas/Quote"
-            - type: "null"
+          - $ref: '#/components/schemas/Quote'
+          - type: 'null'
+        baseTotal:
+          description: Сумма price × quantity из того же снимка до скидок строк
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        discount:
+          description: Сумма применённых скидок строк; промокод отдельно не вычитается
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        total:
+          description: Товары группы после скидок плюс подтверждённая доставка группы
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
     Selection:
       type: object
       required: [carrier, pickupPointCode, city, address]
@@ -6247,65 +6947,231 @@ components:
         address: { type: string }
     Checkout:
       type: object
-      required: [id, status, groups, delivery, goodsTotal, deliveryTotal, total, version, createdAt, updatedAt, confirmedAt]
+      required:
+      - id
+      - status
+      - groups
+      - delivery
+      - goodsTotal
+      - deliveryTotal
+      - total
+      - version
+      - createdAt
+      - updatedAt
+      - confirmedAt
+      - baseTotal
+      - discount
+      - paidTotal
       properties:
-        id: { type: string, format: uuid }
-        status: { type: string, enum: [draft, confirmed, creating_orders, awaiting_payment, partially_paid, paid, cancelled] }
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - draft
+          - confirmed
+          - creating_orders
+          - awaiting_payment
+          - partially_paid
+          - paid
+          - cancelled
         groups:
           type: array
-          items: { $ref: "#/components/schemas/CheckoutGroup" }
+          items:
+            $ref: '#/components/schemas/CheckoutGroup'
         delivery:
           oneOf:
-            - $ref: "#/components/schemas/Selection"
-            - type: "null"
-        goodsTotal: { type: integer, format: int64 }
-        deliveryTotal: { type: integer, format: int64 }
-        total: { type: integer, format: int64 }
-        version: { type: integer, format: int64 }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-        confirmedAt: { type: [string, "null"], format: date-time }
+          - $ref: '#/components/schemas/Selection'
+          - type: 'null'
+        goodsTotal:
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+          description: Сумма в рублях
+        deliveryTotal:
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+          description: Сумма в рублях
+        total:
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+          description: Сумма в рублях
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        confirmedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        baseTotal:
+          description: Сумма price × quantity из того же снимка до скидок строк
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        discount:
+          description: Сумма применённых скидок строк; промокод отдельно не вычитается
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        paidTotal:
+          description: Сумма total групп со статусом paid, shipped или delivered
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
     Subsidy:
       type: object
-      required: [enabled, value, maxAmount]
+      required:
+      - enabled
+      - value
+      - maxAmount
       properties:
-        enabled: { type: boolean }
-        type: { type: string, enum: [fixed, percent] }
-        value: { type: integer, format: int64, description: Копейки для fixed, процент для percent }
-        maxAmount: { type: integer, format: int64, description: Потолок в копейках; 0 — без потолка }
+        enabled:
+          type: boolean
+        type:
+          type: string
+          enum:
+          - fixed
+          - percent
+        value:
+          description: Рубли для fixed; целый процент от 0 до 100 для percent
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+        maxAmount:
+          type: number
+          description: Потолок в рублях; 0 — без потолка
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
     Participant:
       type: object
-      required: [card, cardReady, cardMissing, trust, probationOffers, approvedOffers, tenantId, slug, name, stage, awaitingReview, lastDecision, deliveryValid, enabled, freeDeliveryFrom, delivery, subsidy, settingsSyncedAt, tenantStatus, visible, checkoutAvailable, version, createdAt, updatedAt]
+      required:
+      - card
+      - cardReady
+      - cardMissing
+      - trust
+      - probationOffers
+      - approvedOffers
+      - tenantId
+      - slug
+      - name
+      - stage
+      - awaitingReview
+      - lastDecision
+      - deliveryValid
+      - enabled
+      - freeDeliveryFrom
+      - delivery
+      - subsidy
+      - settingsSyncedAt
+      - tenantStatus
+      - visible
+      - checkoutAvailable
+      - version
+      - createdAt
+      - updatedAt
       properties:
         card:
           type: object
-          required: [logo, hidden]
+          required:
+          - logo
+          - hidden
           properties:
-            logo: { type: [string, "null"] }
-            hidden: { type: array, items: { $ref: "#/components/schemas/StoreHidden" } }
-        cardReady: { type: boolean }
-        cardMissing: { type: array, items: { type: string } }
-        trust: { type: string, enum: [probation, trusted] }
-        probationOffers: { type: integer, minimum: 0 }
-        approvedOffers: { type: integer, minimum: 0 }
-        tenantId: { type: string }
-        slug: { type: string }
-        name: { type: string }
-        stage: { $ref: "#/components/schemas/ParticipationStage" }
-        awaitingReview: { type: boolean }
-        deliveryValid: { type: boolean }
-        lastDecision: { $ref: "#/components/schemas/ParticipationDecision" }
-        enabled: { type: boolean, description: Включён оператором }
-        freeDeliveryFrom: { type: integer, format: int64, minimum: 0 }
-        delivery: { $ref: "#/components/schemas/ParticipantDelivery" }
-        subsidy: { $ref: "#/components/schemas/Subsidy" }
-        settingsSyncedAt: { type: [string, "null"], format: date-time }
-        tenantStatus: { type: string, enum: [creating, active, suspended, deleting, deleted] }
-        visible: { type: boolean }
-        checkoutAvailable: { type: boolean }
-        version: { type: integer, format: int64 }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
+            logo:
+              type:
+              - string
+              - 'null'
+            hidden:
+              type: array
+              items:
+                $ref: '#/components/schemas/StoreHidden'
+        cardReady:
+          type: boolean
+        cardMissing:
+          type: array
+          items:
+            type: string
+        trust:
+          type: string
+          enum:
+          - probation
+          - trusted
+        probationOffers:
+          type: integer
+          minimum: 0
+        approvedOffers:
+          type: integer
+          minimum: 0
+        tenantId:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        stage:
+          $ref: '#/components/schemas/ParticipationStage'
+        awaitingReview:
+          type: boolean
+        deliveryValid:
+          type: boolean
+        lastDecision:
+          $ref: '#/components/schemas/ParticipationDecision'
+        enabled:
+          type: boolean
+          description: Включён оператором
+        freeDeliveryFrom:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          maximum: 9999999999999.99
+          description: Сумма в рублях
+        delivery:
+          $ref: '#/components/schemas/ParticipantDelivery'
+        subsidy:
+          $ref: '#/components/schemas/Subsidy'
+        settingsSyncedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        tenantStatus:
+          type: string
+          enum:
+          - creating
+          - active
+          - suspended
+          - deleting
+          - deleted
+        visible:
+          type: boolean
+        checkoutAvailable:
+          type: boolean
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     ParticipantList:
       type: object
       required: [items, total, limit, offset]
@@ -6489,3 +7355,457 @@ components:
           maxItems: 1000
           items: { type: string }
         truncated: { type: boolean }
+    InternalCheckout:
+      type: object
+      required:
+      - id
+      - status
+      - groups
+      - delivery
+      - goodsTotal
+      - deliveryTotal
+      - total
+      - version
+      - createdAt
+      - updatedAt
+      - confirmedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - draft
+          - confirmed
+          - creating_orders
+          - awaiting_payment
+          - partially_paid
+          - paid
+          - cancelled
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalCheckoutGroup'
+        delivery:
+          oneOf:
+          - $ref: '#/components/schemas/Selection'
+          - type: 'null'
+        goodsTotal:
+          type: integer
+          format: int64
+        deliveryTotal:
+          type: integer
+          format: int64
+        total:
+          type: integer
+          format: int64
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        confirmedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    InternalCheckoutGroup:
+      type: object
+      required:
+      - tenantId
+      - externalCheckoutId
+      - lines
+      - goods
+      - quote
+      - status
+      - deliveryPrice
+      - returnFailed
+      - pollFailures
+      - nextPollAt
+      - createFailures
+      - createExhausted
+      - seller
+      - tracking
+      properties:
+        seller:
+          $ref: '#/components/schemas/OrderSeller'
+        tracking:
+          $ref: '#/components/schemas/OrderTracking'
+        tenantId:
+          type: string
+        status:
+          type: string
+          enum:
+          - ''
+          - creating_order
+          - awaiting_payment
+          - paid
+          - cancelled
+          - shipped
+          - delivered
+          - returned
+          - seller_unreachable
+          - price_changed
+          - delivery_unavailable
+        orderId:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        deliveryPrice:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Доставка группы в составе единого платежа; 0 — строка доставки скрыта
+        reason:
+          type: string
+        returnFailed:
+          type: boolean
+        returnReason:
+          type: string
+        returnRemaining:
+          type: array
+          items:
+            type: object
+            required:
+            - offerId
+            - quantity
+            properties:
+              offerId:
+                type: string
+              quantity:
+                type: integer
+                minimum: 1
+        pollFailures:
+          type: integer
+          minimum: 0
+          maximum: 5
+        nextPollAt:
+          type: string
+          format: date-time
+        createFailures:
+          type: integer
+          minimum: 0
+          maximum: 5
+        createExhausted:
+          type: boolean
+        lastErrorCode:
+          type: string
+        currentPrices:
+          type: array
+          items:
+            type: object
+            required:
+            - productId
+            - price
+            properties:
+              productId:
+                type: string
+              price:
+                type: integer
+                format: int64
+                minimum: 0
+        externalCheckoutId:
+          type: string
+          description: <checkoutId>:<tenantId> — ключ заказа у магазина
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalCheckoutLine'
+        goods:
+          type: integer
+          format: int64
+        quote:
+          oneOf:
+          - $ref: '#/components/schemas/InternalQuote'
+          - type: 'null'
+    InternalCheckoutLine:
+      type: object
+      required:
+      - offerId
+      - productId
+      - name
+      - quantity
+      - price
+      - amount
+      properties:
+        offerId:
+          type: string
+        productId:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: integer
+          format: int64
+        amount:
+          type: integer
+          format: int64
+          description: Сумма после скидок в копейках
+    InternalError:
+      type: object
+      required:
+      - error
+      properties:
+        weeks:
+          type: array
+          description: Занятые понедельники при promotion.no_capacity.
+          items:
+            type: string
+            format: date
+        checkout:
+          $ref: '#/components/schemas/InternalCheckout'
+          description: Новый снимок при DELIVERY_CHANGED; требуется подтверждение.
+        error:
+          type: object
+          required:
+          - code
+          - message
+          properties:
+            code:
+              type: string
+              examples:
+              - catalog.offer_not_found
+            message:
+              type: string
+    InternalPromotionCampaign:
+      type: object
+      required:
+      - title
+      - tenantId
+      - kind
+      - placementCode
+      - position
+      - target
+      - period
+      - priceKopecks
+      - marking
+      - id
+      - tenantName
+      - payment
+      - status
+      - version
+      - createdAt
+      - updatedAt
+      - stats
+      properties:
+        rejectionReason:
+          type: string
+          description: Причина отказа; очищается при revise.
+        title:
+          type: string
+        tenantId:
+          type: string
+        kind:
+          $ref: '#/components/schemas/PromotionKind'
+        placementCode:
+          type: string
+        position:
+          type: integer
+        target:
+          $ref: '#/components/schemas/PromotionTarget'
+        period:
+          $ref: '#/components/schemas/PromotionPeriod'
+        priceKopecks:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Снимок прайса. При создании и правке вычисляется сервером.
+        marking:
+          $ref: '#/components/schemas/PromotionMarking'
+        id:
+          type: string
+          format: uuid
+        tenantName:
+          type: string
+        payment:
+          $ref: '#/components/schemas/InternalPromotionPayment'
+        status:
+          $ref: '#/components/schemas/PromotionStatus'
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        stats:
+          $ref: '#/components/schemas/PromotionStatsSummary'
+    InternalPromotionCampaignPage:
+      type: object
+      required:
+      - counts
+      - items
+      - total
+      - limit
+      - offset
+      properties:
+        counts:
+          $ref: '#/components/schemas/PromotionCounts'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalPromotionCampaign'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+    InternalPromotionPayment:
+      type: object
+      required:
+      - status
+      properties:
+        refund:
+          $ref: '#/components/schemas/InternalPromotionRefund'
+        status:
+          type: string
+          enum:
+          - pending
+          - paid
+        paidOn:
+          type: string
+          format: date
+        amountKopecks:
+          type: integer
+          format: int64
+          minimum: 0
+        document:
+          type: string
+        note:
+          type: string
+    InternalPromotionPlacement:
+      type: object
+      required:
+      - code
+      - surface
+      - title
+      - positions
+      - slotLimit
+      - positionPrices
+      - defaultPriceKopecks
+      - active
+      - scope
+      - version
+      properties:
+        code:
+          type: string
+        surface:
+          type: string
+          enum:
+          - category_slot
+          - search_slot
+          - home_top_banner
+          - home_feed_banner
+          - category_banner
+          - home_stores
+          - store_card_slot
+          - showcase
+        title:
+          type: string
+        positions:
+          type: array
+          items:
+            type: integer
+        slotLimit:
+          type: integer
+          minimum: 1
+        positionPrices:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+            minimum: 0
+        defaultPriceKopecks:
+          type: integer
+          format: int64
+          minimum: 0
+        active:
+          type: boolean
+        scope:
+          type: string
+          enum:
+          - category
+          - global
+        version:
+          type: integer
+    InternalPromotionRefund:
+      type: object
+      required:
+      - amountKopecks
+      - 'on'
+      description: Ручная запись возврата для stopped или finished; сумма не больше оплаты.
+      properties:
+        amountKopecks:
+          type: integer
+          format: int64
+          minimum: 1
+        'on':
+          type: string
+          format: date
+        document:
+          type: string
+        note:
+          type: string
+    InternalQuote:
+      type: object
+      required:
+      - status
+      - cost
+      - subsidy
+      - buyerCost
+      - minDays
+      - maxDays
+      - expiresAt
+      properties:
+        status:
+          type: string
+          enum:
+          - available
+          - unavailable
+        reason:
+          type: string
+          enum:
+          - carrier_not_connected
+          - pickup_point_unavailable
+          - no_rate
+          - seller_unreachable
+          description: 'Только при status unavailable. Закрытый словарь docs/server-contract.md:
+
+            carrier_not_connected — у продавца нет этого перевозчика;
+
+            pickup_point_unavailable — перевозчик не везёт в этот пункт;
+
+            no_rate — тариф не рассчитан (вес, габариты, зона);
+
+            seller_unreachable — продавец не ответил, повтор при подтверждении.
+
+            '
+        cost:
+          type: integer
+          format: int64
+          description: Стоимость по договору продавца
+        subsidy:
+          type: integer
+          format: int64
+          description: Сколько оплачивает продавец
+        buyerCost:
+          type: integer
+          format: int64
+          description: Доля покупателя
+        minDays:
+          type: integer
+        maxDays:
+          type: integer
+        expiresAt:
+          type: string
+          format: date-time

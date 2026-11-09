@@ -32,8 +32,13 @@ func (e *env) session(t *testing.T, method, path, body, cookie string, headers .
 	if cookie != "" {
 		request.AddCookie(&http.Cookie{Name: transport.SessionCookie, Value: cookie})
 	}
+	request.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	for i := 0; i+1 < len(headers); i += 2 {
-		request.Header.Set(headers[i], headers[i+1])
+		if headers[i+1] == "" {
+			request.Header.Del(headers[i])
+		} else {
+			request.Header.Set(headers[i], headers[i+1])
+		}
 	}
 
 	raw, err := http.DefaultClient.Do(request)
@@ -246,7 +251,7 @@ func TestCartDeliveryCheckout(t *testing.T) {
 		t.Fatalf("корзина только с сессией: %+v", r)
 	}
 	added := e.session(t, http.MethodPost, "/api/v1/cart/lines", `{"offerId":"t1~p1","quantity":2}`, token)
-	if added.status != http.StatusOK || added.body["total"] != float64(398000) {
+	if added.status != http.StatusOK || added.body["total"] != float64(3980) {
 		t.Fatalf("добавление: %+v", added)
 	}
 	r := e.session(t, http.MethodPost, "/api/v1/cart/lines", `{"offerId":"t1~p1","quantity":5}`, token)
@@ -255,7 +260,7 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	}
 
 	r = e.session(t, http.MethodPut, "/api/v1/cart/lines/t1~p1", `{"quantity":1}`, token)
-	if r.status != http.StatusOK || r.body["total"] != float64(199000) {
+	if r.status != http.StatusOK || r.body["total"] != float64(1990) {
 		t.Fatalf("количество: %+v", r)
 	}
 	if r := e.session(t, http.MethodPost, "/api/v1/cart/verify", "", token); r.status != http.StatusOK {
@@ -292,7 +297,7 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	}
 	created := e.session(t, http.MethodPost, "/api/v1/checkout", "", token, "Idempotency-Key", "checkout-key-0001")
 	if created.status != http.StatusCreated || created.body["status"] != "draft" ||
-		created.body["goodsTotal"] != float64(199000) {
+		created.body["goodsTotal"] != float64(1990) {
 		t.Fatalf("покупка: %+v", created)
 	}
 	id := created.body["id"].(string)
@@ -313,9 +318,23 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	}
 	confirmed := e.session(t, http.MethodPost, "/api/v1/checkout/"+id+"/confirm", "", token)
 	if confirmed.status != http.StatusOK || confirmed.body["status"] != "confirmed" ||
-		confirmed.body["total"] != float64(199000) ||
+		confirmed.body["total"] != float64(1990) ||
 		confirmed.body["confirmedAt"] == nil {
 		t.Fatalf("подтверждение: %+v", confirmed)
+	}
+
+	returned := e.session(
+		t,
+		http.MethodGet,
+		"/api/v1/checkout/"+id+"/return",
+		"",
+		token,
+		"X-Marketplace-Money-Unit",
+		"",
+	)
+	if returned.status != http.StatusOK || returned.body["status"] != "checking_payment" ||
+		returned.header.Get("X-Marketplace-Money-Unit") != "RUB" {
+		t.Fatalf("возврат браузера без денежного заголовка: %+v", returned)
 	}
 
 	r = e.session(t, http.MethodGet, "/api/v1/checkout/"+id, "", token)

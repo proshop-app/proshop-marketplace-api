@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 type trackingJSON struct {
@@ -20,47 +21,58 @@ type trackingJSON struct {
 }
 
 type checkoutLineJSON struct {
-	OfferID   string `json:"offerId"`
-	ProductID string `json:"productId"`
-	Name      string `json:"name"`
-	Quantity  int    `json:"quantity"`
-	Price     int64  `json:"price"`
-	Amount    int64  `json:"amount"`
+	OfferID         string `json:"offerId"`
+	ProductID       string `json:"productId"`
+	Name            string `json:"name"`
+	Quantity        int    `json:"quantity"`
+	Price           rubles `json:"price"`
+	Amount          rubles `json:"amount"`
+	BaseAmount      rubles `json:"baseAmount"`
+	Discount        rubles `json:"discount"`
+	DiscountPercent int    `json:"discountPercent"`
 }
 
 type quoteJSON struct {
 	Status    string    `json:"status"`
 	Reason    string    `json:"reason,omitempty"`
-	Cost      int64     `json:"cost"`
-	Subsidy   int64     `json:"subsidy"`
-	BuyerCost int64     `json:"buyerCost"`
+	Cost      rubles    `json:"cost"`
+	Subsidy   rubles    `json:"subsidy"`
+	BuyerCost rubles    `json:"buyerCost"`
 	MinDays   int       `json:"minDays"`
 	MaxDays   int       `json:"maxDays"`
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
 type checkoutGroupJSON struct {
-	Seller             *participant.Seller    `json:"seller"`
-	Tracking           *trackingJSON          `json:"tracking"`
-	TenantID           string                 `json:"tenantId"`
-	ExternalCheckoutID string                 `json:"externalCheckoutId"`
-	Lines              []checkoutLineJSON     `json:"lines"`
-	Goods              int64                  `json:"goods"`
-	Quote              *quoteJSON             `json:"quote"`
-	Status             checkout.GroupStatus   `json:"status"`
-	OrderID            string                 `json:"orderId,omitempty"`
-	ExpiresAt          *time.Time             `json:"expiresAt,omitempty"`
-	DeliveryPrice      int64                  `json:"deliveryPrice"`
-	Reason             string                 `json:"reason,omitempty"`
-	CurrentPrices      []checkout.PriceChange `json:"currentPrices,omitempty"`
-	ReturnFailed       bool                   `json:"returnFailed"`
-	ReturnReason       string                 `json:"returnReason,omitempty"`
-	ReturnRemaining    []returnLineJSON       `json:"returnRemaining,omitempty"`
-	PollFailures       int                    `json:"pollFailures"`
-	NextPollAt         time.Time              `json:"nextPollAt"`
-	LastErrorCode      string                 `json:"lastErrorCode,omitempty"`
-	CreateFailures     int                    `json:"createFailures"`
-	CreateExhausted    bool                   `json:"createExhausted"`
+	Seller             *participant.Seller  `json:"seller"`
+	Tracking           *trackingJSON        `json:"tracking"`
+	TenantID           string               `json:"tenantId"`
+	ExternalCheckoutID string               `json:"externalCheckoutId"`
+	Lines              []checkoutLineJSON   `json:"lines"`
+	BaseTotal          rubles               `json:"baseTotal"`
+	Discount           rubles               `json:"discount"`
+	Total              rubles               `json:"total"`
+	Goods              rubles               `json:"goods"`
+	Quote              *quoteJSON           `json:"quote"`
+	Status             checkout.GroupStatus `json:"status"`
+	OrderID            string               `json:"orderId,omitempty"`
+	ExpiresAt          *time.Time           `json:"expiresAt,omitempty"`
+	DeliveryPrice      rubles               `json:"deliveryPrice"`
+	Reason             string               `json:"reason,omitempty"`
+	CurrentPrices      []priceChangeJSON    `json:"currentPrices,omitempty"`
+	ReturnFailed       bool                 `json:"returnFailed"`
+	ReturnReason       string               `json:"returnReason,omitempty"`
+	ReturnRemaining    []returnLineJSON     `json:"returnRemaining,omitempty"`
+	PollFailures       int                  `json:"pollFailures"`
+	NextPollAt         time.Time            `json:"nextPollAt"`
+	LastErrorCode      string               `json:"lastErrorCode,omitempty"`
+	CreateFailures     int                  `json:"createFailures"`
+	CreateExhausted    bool                 `json:"createExhausted"`
+}
+
+type priceChangeJSON struct {
+	ProductID ids.ProductID `json:"productId"`
+	Price     rubles        `json:"price"`
 }
 
 type selectionJSON struct {
@@ -70,15 +82,18 @@ type selectionJSON struct {
 	Address         string `json:"address"`
 }
 
-// checkoutJSON — покупка; суммы — копейки.
+// checkoutJSON — покупка; суммы — рубли из согласованного снимка.
 type checkoutJSON struct {
 	ID            string              `json:"id"`
 	Status        string              `json:"status"`
 	Groups        []checkoutGroupJSON `json:"groups"`
 	Delivery      *selectionJSON      `json:"delivery"`
-	GoodsTotal    int64               `json:"goodsTotal"`
-	DeliveryTotal int64               `json:"deliveryTotal"`
-	Total         int64               `json:"total"`
+	BaseTotal     rubles              `json:"baseTotal"`
+	Discount      rubles              `json:"discount"`
+	PaidTotal     rubles              `json:"paidTotal"`
+	GoodsTotal    rubles              `json:"goodsTotal"`
+	DeliveryTotal rubles              `json:"deliveryTotal"`
+	Total         rubles              `json:"total"`
 	Version       int64               `json:"version"`
 	CreatedAt     time.Time           `json:"createdAt"`
 	UpdatedAt     time.Time           `json:"updatedAt"`
@@ -104,9 +119,9 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 		ID:            string(state.ID),
 		Status:        string(state.Status),
 		Groups:        make([]checkoutGroupJSON, 0, len(state.Groups)),
-		GoodsTotal:    state.GoodsTotal.Kopecks(),
-		DeliveryTotal: state.DeliveryTotal.Kopecks(),
-		Total:         state.Total.Kopecks(),
+		GoodsTotal:    rubles(state.GoodsTotal.Kopecks()),
+		DeliveryTotal: rubles(state.DeliveryTotal.Kopecks()),
+		Total:         rubles(state.Total.Kopecks()),
 		Version:       state.Version,
 		CreatedAt:     state.CreatedAt.UTC(),
 		UpdatedAt:     state.UpdatedAt.UTC(),
@@ -131,13 +146,12 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 			TenantID:           string(group.TenantID),
 			ExternalCheckoutID: group.ExternalCheckoutID,
 			Lines:              make([]checkoutLineJSON, 0, len(group.Lines)),
-			Goods:              group.Goods.Kopecks(),
+			Goods:              rubles(group.Goods.Kopecks()),
 			Status:             group.Status,
 			OrderID:            group.OrderID,
-			DeliveryPrice:      group.DeliveryPrice.Kopecks(),
+			DeliveryPrice:      rubles(group.DeliveryPrice.Kopecks()),
 			Reason:             group.Reason,
 			Tracking:           trackingResponse(group.Tracking),
-			CurrentPrices:      group.CurrentPrices,
 			ReturnFailed:       group.ReturnFailed,
 			ReturnReason:       group.ReturnReason,
 			PollFailures:       group.PollFailures,
@@ -145,6 +159,13 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 			CreateFailures:     group.CreateFailures,
 			LastErrorCode:      group.LastErrorCode,
 			CreateExhausted:    group.CreateExhausted,
+		}
+
+		for _, change := range group.CurrentPrices {
+			g.CurrentPrices = append(g.CurrentPrices, priceChangeJSON{
+				ProductID: change.ProductID,
+				Price:     rubles(change.Price.Kopecks()),
+			})
 		}
 
 		for _, remaining := range group.ReturnRemaining {
@@ -163,13 +184,26 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 				return checkoutJSON{}, err
 			}
 
+			base, discount, percent, err := lineBreakdown(line.Price, line.Quantity, amount)
+			if err != nil {
+				return checkoutJSON{}, err
+			}
+			baseTotal, err := money.FromKopecks(int64(g.BaseTotal)).Add(base)
+			if err != nil {
+				return checkoutJSON{}, err
+			}
+			g.BaseTotal = rubles(baseTotal.Kopecks())
+
 			g.Lines = append(g.Lines, checkoutLineJSON{
-				OfferID:   line.Offer.String(),
-				ProductID: string(line.Offer.Product),
-				Name:      line.Name,
-				Quantity:  line.Quantity,
-				Price:     line.Price.Kopecks(),
-				Amount:    amount.Kopecks(),
+				OfferID:         line.Offer.String(),
+				ProductID:       string(line.Offer.Product),
+				Name:            line.Name,
+				Quantity:        line.Quantity,
+				Price:           rubles(line.Price.Kopecks()),
+				Amount:          rubles(amount.Kopecks()),
+				BaseAmount:      rubles(base.Kopecks()),
+				Discount:        rubles(discount.Kopecks()),
+				DiscountPercent: percent,
 			})
 		}
 
@@ -177,18 +211,52 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 			g.Quote = &quoteJSON{
 				Status:    string(q.Status),
 				Reason:    q.Reason,
-				Cost:      q.Cost.Kopecks(),
-				Subsidy:   q.Subsidy.Kopecks(),
-				BuyerCost: q.BuyerCost.Kopecks(),
+				Cost:      rubles(q.Cost.Kopecks()),
+				Subsidy:   rubles(q.Subsidy.Kopecks()),
+				BuyerCost: rubles(q.BuyerCost.Kopecks()),
 				MinDays:   q.MinDays,
 				MaxDays:   q.MaxDays,
 				ExpiresAt: q.ExpiresAt.UTC(),
 			}
 		}
 
+		discount, err := money.FromKopecks(int64(g.BaseTotal)).Sub(group.Goods)
+		if err != nil {
+			return checkoutJSON{}, err
+		}
+		if discount.IsNegative() {
+			return checkoutJSON{}, money.ErrInvalid
+		}
+		g.Discount = rubles(discount.Kopecks())
+		groupTotal, err := group.Goods.Add(group.DeliveryPrice)
+		if err != nil {
+			return checkoutJSON{}, err
+		}
+		g.Total = rubles(groupTotal.Kopecks())
+		status := group.EffectiveStatus()
+		if status == checkout.GroupPaid || status == checkout.GroupShipped || status == checkout.GroupDelivered {
+			paidTotal, err := money.FromKopecks(int64(out.PaidTotal)).Add(groupTotal)
+			if err != nil {
+				return checkoutJSON{}, err
+			}
+			out.PaidTotal = rubles(paidTotal.Kopecks())
+		}
+		baseTotal, err := money.FromKopecks(int64(out.BaseTotal)).Add(money.FromKopecks(int64(g.BaseTotal)))
+		if err != nil {
+			return checkoutJSON{}, err
+		}
+		out.BaseTotal = rubles(baseTotal.Kopecks())
 		out.Groups = append(out.Groups, g)
 	}
 
+	discount, err := money.FromKopecks(int64(out.BaseTotal)).Sub(state.GoodsTotal)
+	if err != nil {
+		return checkoutJSON{}, err
+	}
+	if discount.IsNegative() {
+		return checkoutJSON{}, money.ErrInvalid
+	}
+	out.Discount = rubles(discount.Kopecks())
 	return out, nil
 }
 

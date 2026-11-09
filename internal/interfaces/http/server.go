@@ -322,7 +322,7 @@ func NewHandler(deps Deps) http.Handler {
 	mux := http.NewServeMux()
 
 	for _, r := range routes(deps) {
-		mux.HandleFunc(r.method+" "+r.path, r.handler)
+		mux.HandleFunc(r.method+" "+r.path, moneyContract(r.path, r.handler))
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeError(w, r, ErrRouteNotFound) })

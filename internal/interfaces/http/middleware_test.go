@@ -35,6 +35,7 @@ func TestEveryCodeHasStatus(t *testing.T) {
 func TestUnavailableMapsTo503(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Header.Set("X-Marketplace-Money-Unit", "RUB")
 
 	writeError(recorder, request, errs.New(errs.Unavailable, "storage.unavailable", "хранилище недоступно"))
 

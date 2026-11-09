@@ -20,6 +20,19 @@ type shopHeaderJSON struct {
 	Subscribed  *bool `json:"subscribed,omitempty"`
 }
 
+// shopCardJSON отделяет денежный контракт витрины от служебной карточки магазина.
+type shopCardJSON struct {
+	ports.ShopCard
+	FromPrice *rubles `json:"fromPrice"`
+}
+
+type shopPageJSON struct {
+	Items  []shopCardJSON `json:"items"`
+	Total  int            `json:"total"`
+	Limit  int            `json:"limit"`
+	Offset int            `json:"offset"`
+}
+
 type hideCardJSON struct {
 	Key    string `json:"key"`
 	Reason string `json:"reason"`
@@ -73,7 +86,7 @@ func (h *participantHandlers) moderateCard(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *participantHandlers) shop(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Vary", "Cookie, Authorization")
+	w.Header().Add("Vary", "Cookie, Authorization")
 	header, err := h.service.Shop(r.Context(), r.PathValue("slug"))
 	if err != nil {
 		writeError(w, r, err)
@@ -112,7 +125,21 @@ func (h *participantHandlers) shops(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeShopJSON(w, r, result)
+	body := shopPageJSON{
+		Items:  shopCardResponses(result.Items),
+		Total:  result.Total,
+		Limit:  result.Limit,
+		Offset: result.Offset,
+	}
+	writeShopJSON(w, r, body)
+}
+
+func shopCardResponses(cards []ports.ShopCard) []shopCardJSON {
+	result := make([]shopCardJSON, 0, len(cards))
+	for _, card := range cards {
+		result = append(result, shopCardJSON{ShopCard: card, FromPrice: rublesPointer(card.FromPrice)})
+	}
+	return result
 }
 
 // writeShopJSON разрешает публичный кэш с проверкой актуальности готовой сводки.

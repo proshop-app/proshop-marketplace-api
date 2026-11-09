@@ -296,7 +296,7 @@ offer.Visible = seller.Visible && card.Visible && publication.Published && verdi
 {"reason": {"code": "counterfeit", "text": "…"}}
 ```
 
-`offer` — карточка так, как её увидел бы покупатель: цены в копейках,
+`offer` — карточка так, как её увидел бы покупатель: цены в рублях,
 категория площадки путём имён, канонические атрибуты из `Publication`.
 `Idempotency-Key` для `allow` и `reject` — по образцу решений по
 отравленным событиям: ключ ограничен оператором, запрос (дело, действие,

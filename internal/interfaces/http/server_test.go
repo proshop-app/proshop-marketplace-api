@@ -250,6 +250,7 @@ func (e *env) call(t *testing.T, method, path, body string, authorized bool) res
 	}
 	request.Header.Set("X-Request-Id", "req-1")
 
+	request.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	raw, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -397,7 +398,7 @@ func TestCatalog(t *testing.T) {
 
 	first, _ := items[0].(map[string]any)
 	seller, _ := first["seller"].(map[string]any)
-	if first["id"] != "t1~p2" || first["price"] != float64(50000) || seller["slug"] != "shop-one" ||
+	if first["id"] != "t1~p2" || first["price"] != float64(500) || seller["slug"] != "shop-one" ||
 		first["checkoutAvailable"] != true {
 		t.Fatalf("предложение в выдаче: %+v", first)
 	}
@@ -410,7 +411,7 @@ func TestCatalog(t *testing.T) {
 	invalid := []string{
 		"limit=101",
 		"limit=x",
-		"priceMin=1.5",
+		"priceMin=1.001",
 		"inStock=maybe",
 		"sort=random",
 		"priceMin=10&priceMax=1",
