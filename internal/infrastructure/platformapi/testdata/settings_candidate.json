@@ -3,9 +3,7 @@
     "name": "Кандидат",
     "logo": null,
     "appearance": {
-      "background": "#125F67",
-      "logoBackground": "#E9EEE7",
-      "textColor": "white"
+      "color": "#125F67"
     }
   },
   "card": {

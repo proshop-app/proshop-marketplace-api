@@ -307,9 +307,39 @@ func TestOpenAPIStoreCardAppearance(t *testing.T) {
 		}
 	}
 	appearance := schemas["StoreCardAppearance"].(map[string]any)
-	for _, key := range []string{"background", "logoBackground", "textColor"} {
+	properties := appearance["properties"].(map[string]any)
+	if len(properties) != 1 || properties["color"] == nil {
+		t.Fatal("оформление должно содержать только выбранный цвет", appearance)
+	}
+	for _, key := range []string{"color"} {
 		if !slices.Contains(appearance["required"].([]any), any(key)) {
 			t.Fatal(key, appearance)
 		}
+	}
+}
+
+func TestOpenAPIStoreCardProducts(t *testing.T) {
+	doc, _ := loadSpec(t)
+	schemas := doc.Components["schemas"]
+	for _, name := range []string{"ShopCard", "StoreSummary"} {
+		schema := schemas[name].(map[string]any)
+		properties := schema["properties"].(map[string]any)
+		if !slices.Contains(schema["required"].([]any), any("products")) {
+			t.Fatal(name, "products не является обязательным списком")
+		}
+		products := properties["products"].(map[string]any)
+		if products["maxItems"] != 3 ||
+			products["items"].(map[string]any)["$ref"] != "#/components/schemas/StoreCardProduct" {
+			t.Fatal(name, products)
+		}
+	}
+	header := schemas["ShopHeader"].(map[string]any)
+	if header["properties"].(map[string]any)["products"] != nil {
+		t.Fatal("шапка магазина не содержит товары", header)
+	}
+	product := schemas["StoreCardProduct"].(map[string]any)
+	fields := product["properties"].(map[string]any)
+	if len(fields) != 4 || fields["price"] != nil {
+		t.Fatal("публичные элементы карточки не содержат цены", fields)
 	}
 }

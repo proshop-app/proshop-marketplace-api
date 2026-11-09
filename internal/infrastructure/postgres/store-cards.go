@@ -11,12 +11,14 @@ import (
 )
 
 const (
-	batchPublicCards = `SELECT card FROM store_cards WHERE tenant_id = ANY($1) AND page_public
+	getStoreCardCacheVersion = `SELECT version FROM store_card_cache_generation WHERE id = 1`
+	batchPublicCards         = `SELECT card FROM store_cards WHERE tenant_id = ANY($1) AND page_public
 		ORDER BY array_position($1::text[], tenant_id)`
 	lockStoreSummary = `SELECT pg_advisory_xact_lock(hashtextextended($1, 38))`
 	saveStoreSummary = `
 		INSERT INTO store_cards (
-		 tenant_id, slug, name, offers, from_price, public, summary, header, card, profile_version, page_public
+		 tenant_id, slug, name, offers, from_price, public, summary, header, card, profile_version, page_public,
+         cache_signature
 		)
 		VALUES (
 		$1,
@@ -29,7 +31,8 @@ const (
 		$8,
 		$9,
 		$10,
-		$11
+		$11,
+		$12
 		)
 		ON CONFLICT (tenant_id) DO UPDATE
 		SET
@@ -38,6 +41,7 @@ const (
 		offers = EXCLUDED.offers,
 		from_price = EXCLUDED.from_price,
 		public = EXCLUDED.public,
+		cache_signature = EXCLUDED.cache_signature,
 		page_public = EXCLUDED.page_public,
 		summary = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
 		THEN jsonb_set(EXCLUDED.summary, '{hidden}', store_cards.summary->'hidden') ELSE EXCLUDED.summary END,
@@ -97,6 +101,13 @@ const (
 // StoreCards хранит сводку и категории атомарно в транзакции пересчёта.
 type StoreCards struct{ q querier }
 
+// CacheVersion читается из той же базы, что и проекция: отказ Redis не скрывает обновления.
+func (r *StoreCards) CacheVersion(ctx context.Context) (int64, error) {
+	var version int64
+	err := r.q.QueryRow(ctx, getStoreCardCacheVersion).Scan(&version)
+	return version, err
+}
+
 // Lock сериализует пересчёты магазина до чтения источников в READ COMMITTED.
 func (r *StoreCards) Lock(ctx context.Context, tenant ids.TenantID) error {
 	_, err := r.q.Exec(ctx, lockStoreSummary, string(tenant))
@@ -132,6 +143,7 @@ func (r *StoreCards) Save(ctx context.Context, record ports.StoreRecord) error {
 		string(card),
 		record.ProfileVersion,
 		record.PagePublic,
+		record.CacheSignature,
 	)
 	if err != nil {
 		return fmt.Errorf("сводка магазина %s: %w", h.TenantID, err)
@@ -226,8 +238,10 @@ func (r *StoreCards) UpdateProfile(ctx context.Context, p *participant.Participa
 		return err
 	}
 	empty, err := json.Marshal(ports.StoreSummary{
-		Categories: []ports.StoreCategory{},
-		Hidden:     append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
+		Categories:       []ports.StoreCategory{},
+		Products:         []ports.StoreCardProduct{},
+		SelectedProducts: []ports.StoreCardProduct{},
+		Hidden:           append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
 	})
 	if err != nil {
 		return err

@@ -52,6 +52,7 @@ type CardHidden struct {
 // StoreCard — хранит исходные значения отдельно от операторского скрытия.
 type StoreCard struct {
 	Profile   Profile       `json:"profile"`
+	Products  *CardProducts `json:"products"`
 	Readiness CardReadiness `json:"card"`
 	Returns   *Returns      `json:"returns"`
 	Hidden    []CardHidden  `json:"hidden"`
@@ -59,6 +60,10 @@ type StoreCard struct {
 
 // Clone отделяет изменяемые списки от снимка агрегата.
 func (c StoreCard) Clone() StoreCard {
+	if c.Products != nil {
+		products := c.ProductSettings()
+		c.Products = &products
+	}
 	if c.Profile.Logo != nil {
 		logo := *c.Profile.Logo
 		c.Profile.Logo = &logo
@@ -89,7 +94,13 @@ func (p *Participant) ApplyStoreCard(
 	} else {
 		profile.Name = p.Name()
 	}
-	next := StoreCard{Profile: profile, Readiness: card, Returns: returns, Hidden: p.state.StoreCard.Hidden}
+	next := StoreCard{
+		Profile:   profile,
+		Products:  p.state.StoreCard.Products,
+		Readiness: card,
+		Returns:   returns,
+		Hidden:    p.state.StoreCard.Hidden,
+	}
 	next = next.Clone()
 	next.Hidden = slices.DeleteFunc(next.Hidden, func(h CardHidden) bool {
 		return h.Key == CardLogo && !reflect.DeepEqual(profile.Logo, p.state.StoreCard.Profile.Logo)

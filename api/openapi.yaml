@@ -344,6 +344,48 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/internal/tenants/{tenantId}/store-card/products:
+    get:
+      tags: [internal]
+      operationId: getStoreCardProductCandidates
+      summary: Опубликованные доступные товары своего магазина для закреплений
+      description: Без кэша; применяет текущую видимость, модерацию и принадлежность магазину.
+      security: [{ serverApiToken: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - name: query
+          in: query
+          description: Поиск по названию или ID без учёта регистра; несовместим с ids.
+          schema: { type: string, maxLength: 200 }
+        - name: ids
+          in: query
+          description: От одного до трёх различных ID через запятую; порядок сохраняется, недоступные исключаются.
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 20, default: 20 }
+      responses:
+        "200":
+          description: Страница товаров без цен
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, page, limit]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 20
+                    items: { $ref: "#/components/schemas/StoreCardProduct" }
+                  total: { type: integer, minimum: 0 }
+                  page: { type: integer, minimum: 1 }
+                  limit: { type: integer, minimum: 1, maximum: 20 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/internal/tenants/{tenantId}/settings/sync:
     post:
       tags: [internal]
@@ -4549,9 +4591,18 @@ components:
         key: { type: string, enum: [logo] }
         reason: { type: string }
         at: { type: string, format: date-time }
+    StoreCardProduct:
+      type: object
+      additionalProperties: false
+      required: [productId, offerId, name, image]
+      properties:
+        productId: { type: string }
+        offerId: { type: string }
+        name: { type: string }
+        image: { type: [string, "null"] }
     StoreSummary:
       type: object
-      required: [offers, fromPrice, categories, uncategorized, hidden, rating, badge, rank]
+      required: [offers, fromPrice, categories, uncategorized, hidden, rating, badge, rank, products, selectedProducts]
       properties:
         offers: { type: integer, minimum: 0 }
         fromPrice: { type: [integer, "null"], format: int64, minimum: 0 }
@@ -4561,15 +4612,23 @@ components:
         rating: { $ref: "#/components/schemas/Rating" }
         badge: { type: "null" }
         rank: { type: "null" }
+        products:
+          type: array
+          maxItems: 3
+          description: Автоматические три публичных товара, независимо от закреплений и выключателя.
+          items: { $ref: "#/components/schemas/StoreCardProduct" }
+        selectedProducts:
+          type: array
+          maxItems: 3
+          description: Публичные сохранённые закрепления в порядке магазина.
+          items: { $ref: "#/components/schemas/StoreCardProduct" }
     StoreCardAppearance:
       type: object
       additionalProperties: false
-      required: [background, logoBackground, textColor]
-      description: Два независимых фона; контраст текста основной части не ниже 4,5 к 1.
+      required: [color]
+      description: Выбранный цвет магазина; бледный фон и читаемые оттенки вычисляет витрина.
       properties:
-        background: { type: string, pattern: '^#[0-9A-F]{6}$', default: '#125F67' }
-        logoBackground: { type: string, pattern: '^#[0-9A-F]{6}$', default: '#E9EEE7' }
-        textColor: { type: string, enum: [black, white], default: white }
+        color: { type: string, pattern: '^#[0-9A-F]{6}$', default: '#125F67' }
     ShopHeader:
       type: object
       required: [tenantId, slug, name, logo, appearance, offers, isNew, categories, rating, subscribers]
@@ -4593,6 +4652,7 @@ components:
       - name
       - logo
       - appearance
+      - products
       - offers
       - isNew
       - category
@@ -4600,6 +4660,11 @@ components:
       - fromPrice
       - rating
       properties:
+        products:
+          type: array
+          maxItems: 3
+          description: Закрепления магазина с автоматическим заполнением свободных мест; выключено — пустой список.
+          items: { $ref: "#/components/schemas/StoreCardProduct" }
         tenantId:
           type: string
         slug:

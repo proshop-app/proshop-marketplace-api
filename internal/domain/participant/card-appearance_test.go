@@ -10,32 +10,25 @@ import (
 func TestCardAppearance(t *testing.T) {
 	for _, appearance := range []participant.CardAppearance{
 		{},
-		{Background: "#125f67", LogoBackground: "#e9eee7", TextColor: "white"},
+		{Color: "#125f67"},
 	} {
 		actual, err := appearance.Normalize()
 		if err != nil || actual != participant.DefaultCardAppearance() {
 			t.Fatal(actual, err)
 		}
 	}
-	valid := participant.CardAppearance{Background: "#FFFFFF", LogoBackground: "#FFFFFF", TextColor: "black"}
-	if actual, err := valid.Normalize(); err != nil || actual != valid {
-		t.Fatal(actual, err)
-	}
-	// Зона логотипа не ограничивает цвет текста основной части.
-	valid.LogoBackground = "#000000"
-	if _, err := valid.Normalize(); err != nil {
-		t.Fatal(err)
+	// Светлый и насыщенный цвет допустимы: читаемые оттенки вычисляет витрина.
+	for _, color := range []string{"#FFFFFF", "#000000", "#FF0000", "#FFFF00"} {
+		appearance := participant.CardAppearance{Color: color}
+		if actual, err := appearance.Normalize(); err != nil || actual != appearance {
+			t.Fatal(actual, err)
+		}
 	}
 }
 
-func TestCardAppearanceRejectsUnreadableOrIncomplete(t *testing.T) {
-	for _, appearance := range []participant.CardAppearance{
-		{Background: "#FFFFFF", LogoBackground: "#FFFFFF", TextColor: "white"},
-		{Background: "#000000", LogoBackground: "#FFFFFF", TextColor: "black"},
-		{Background: "#125F67", LogoBackground: "#E9EEE7", TextColor: "red"},
-		{Background: "#125F67", TextColor: "white"},
-		{Background: "#123", LogoBackground: "#E9EEE7", TextColor: "white"},
-	} {
+func TestCardAppearanceRejectsIncompleteHex(t *testing.T) {
+	for _, color := range []string{"#123", "#12345678", "red", "#12FG67", " "} {
+		appearance := participant.CardAppearance{Color: color}
 		if _, err := appearance.Normalize(); !errors.Is(err, participant.ErrInvalidCardAppearance) {
 			t.Fatal(appearance, err)
 		}

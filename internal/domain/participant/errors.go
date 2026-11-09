@@ -3,7 +3,13 @@ package participant
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
-	// ErrInvalidCardAppearance запрещает нечитаемое оформление карточки магазина.
+	// ErrInvalidCardProducts ограничивает закрепления тремя разными товарами.
+	ErrInvalidCardProducts = errs.New(
+		errs.Invalid,
+		"participant.invalid_card_products",
+		"некорректный список товаров карточки магазина",
+	)
+	// ErrInvalidCardAppearance запрещает неполный или некорректный цвет карточки магазина.
 	ErrInvalidCardAppearance = errs.New(
 		errs.Invalid,
 		"participant.invalid_card_appearance",

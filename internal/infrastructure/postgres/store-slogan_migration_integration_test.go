@@ -14,6 +14,12 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+const (
+	legacySloganSummary = `UPDATE store_cards SET summary = jsonb_set(summary, '{hidden}',
+ '[{"key":"slogan","reason":"Причина"}]') WHERE tenant_id = 't1'`
+	migratedSloganProfileVersion = `SELECT profile_version FROM store_cards WHERE tenant_id = 't1'`
+)
+
 func TestRemoveStoreSloganMigration(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
@@ -175,15 +181,13 @@ func TestRemoveStoreSloganMigration(t *testing.T) {
 func TestRemoveStoreSloganMigrationSurvivesStaleRefresh(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
+	uow := postgres.NewUnitOfWork(pool)
+	stale := seedStoredCard(t, uow)
 	if err := postgres.MigrateDownTo(ctx, pool, 42); err != nil {
 		t.Fatal(err)
 	}
-	uow := postgres.NewUnitOfWork(pool)
-	stale := seedStoredCard(t, uow)
 	stale.Summary.Hidden = []participant.CardHidden{{Key: "slogan", Reason: "Причина", At: at(0)}}
-	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		return tx.StoreCards().Save(ctx, stale)
-	}); err != nil {
+	if _, err := pool.Exec(ctx, legacySloganSummary); err != nil {
 		t.Fatal(err)
 	}
 	seed := `UPDATE participants
@@ -192,7 +196,12 @@ func TestRemoveStoreSloganMigrationSurvivesStaleRefresh(t *testing.T) {
 	if _, err := pool.Exec(ctx, seed); err != nil {
 		t.Fatal(err)
 	}
-	if err := migrateUpTo(ctx, pool, 43); err != nil {
+	// Текущий репозиторий требует текущую схему, историческую очистку отдельно проверяет тест выше.
+	if err := postgres.Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	var profileVersion int64
+	if err := pool.QueryRow(ctx, migratedSloganProfileVersion).Scan(&profileVersion); err != nil {
 		t.Fatal(err)
 	}
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -205,7 +214,7 @@ func TestRemoveStoreSloganMigrationSurvivesStaleRefresh(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if len(record.Summary.Hidden) != 0 || record.ProfileVersion != 2 || record.Header.Logo == nil {
+		if len(record.Summary.Hidden) != 0 || record.ProfileVersion != profileVersion || record.Header.Logo == nil {
 			return fmt.Errorf("старый пересчёт изменил очищенную карточку: %+v", record)
 		}
 		return nil

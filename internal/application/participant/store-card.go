@@ -2,7 +2,10 @@ package participant
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -16,6 +19,7 @@ const (
 	storeDefaultLimit = 20
 	storeMaxLimit     = 100
 	storeBatchSize    = 200
+	storeProductsSize = 3
 )
 
 // StoreCategory — счётчик корневой категории магазина.
@@ -42,6 +46,11 @@ type storeOffer struct {
 	root    StoreCategory
 }
 
+type storeProductSignature struct {
+	Product    ports.StoreCardProduct
+	CategoryID string
+}
+
 // StoreSummary читает статистику даже для ещё не подключённого кандидата.
 func (s *Service) StoreSummary(ctx context.Context, tenant ids.TenantID) (StoreSummary, error) {
 	var summary StoreSummary
@@ -53,8 +62,10 @@ func (s *Service) StoreSummary(ctx context.Context, tenant ids.TenantID) (StoreS
 				return participantErr
 			}
 			summary = StoreSummary{
-				Categories: []StoreCategory{},
-				Hidden:     append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
+				Categories:       []StoreCategory{},
+				Products:         []ports.StoreCardProduct{},
+				SelectedProducts: []ports.StoreCardProduct{},
+				Hidden:           append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
 			}
 			return nil
 		}
@@ -81,8 +92,10 @@ func categoryRoots(nodes []taxonomy.Category) map[string]StoreCategory {
 
 func summarizeStore(ctx context.Context, tx ports.Tx, p *participant.Participant) (StoreSummary, error) {
 	result := StoreSummary{
-		Categories: []StoreCategory{},
-		Hidden:     append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
+		Categories:       []StoreCategory{},
+		Products:         []ports.StoreCardProduct{},
+		SelectedProducts: []ports.StoreCardProduct{},
+		Hidden:           append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
 	}
 	definition, err := tx.Taxonomy().Current(ctx)
 	if err != nil {
@@ -91,47 +104,11 @@ func summarizeStore(ctx context.Context, tx ports.Tx, p *participant.Participant
 	roots := categoryRoots(definition.Categories)
 	paths := categoryPaths(definition.Categories)
 	result.CategoryCounts = map[string]StoreCategory{}
-	var visible, candidates []storeOffer
-	for after := ids.ProductID(""); ; {
-		states, err := tx.Offers().StoreCardOffers(ctx, p.TenantID(), after, storeBatchSize)
-		if err != nil {
-			return result, err
-		}
-		for _, state := range states {
-			product := state.Product.State()
-			after = product.ProductID
-			if product.Deleted {
-				continue
-			}
-			card := product.Card
-			if card.Marketplace != nil && card.Marketplace.Published {
-				if _, ok := roots[card.Marketplace.CategoryID]; !ok {
-					result.Uncategorized++
-				}
-			}
-			visibility := participant.VisibilityOf(p, state.Tenant)
-			seller := catalog.Seller{
-				Slug:              p.Slug(),
-				Name:              p.Name(),
-				Visible:           visibility.Visible,
-				CheckoutAvailable: visibility.CheckoutAvailable,
-			}
-			offer := catalog.ComposeOffer(state.Product, state.Signals, seller, state.Verdict)
-			if _, ok := catalog.SelectPrice(product.PriceProfiles, catalog.DefaultPriceProfile); !ok {
-				continue
-			}
-			item := storeOffer{product: product, offer: offer, root: roots[card.Publication.CategoryID]}
-			if offer.Visible {
-				visible = append(visible, item)
-			}
-			if card.Publication.Published {
-				candidates = append(candidates, item)
-			}
-		}
-		if len(states) < storeBatchSize {
-			break
-		}
+	visible, candidates, uncategorized, err := storeOffers(ctx, tx, p, roots)
+	if err != nil {
+		return result, err
 	}
+	result.Uncategorized = uncategorized
 	var weighted float64
 	var ratings int64
 	groups := map[string]bool{}
@@ -184,7 +161,164 @@ func summarizeStore(ctx context.Context, tx ports.Tx, p *participant.Participant
 		}
 		return a.ID < b.ID
 	})
-	return result, nil
+	result.Products = automaticStoreProducts(visible)
+	result.SelectedProducts = pinnedStoreProducts(visible, p.State().StoreCard.ProductSettings().ProductIDs)
+	result.CacheSignature, err = storeCardSignature(visible, p.State().StoreCard.ProductSettings())
+	return result, err
+}
+
+// storeOffers отделяет публичные предложения от кандидатов, используемых только в статистике.
+func storeOffers(
+	ctx context.Context,
+	tx ports.Tx,
+	p *participant.Participant,
+	roots map[string]StoreCategory,
+) ([]storeOffer, []storeOffer, int, error) {
+	var visible, candidates []storeOffer
+	var uncategorized int
+	for after := ids.ProductID(""); ; {
+		states, err := tx.Offers().StoreCardOffers(ctx, p.TenantID(), after, storeBatchSize)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		for _, state := range states {
+			product := state.Product.State()
+			after = product.ProductID
+			if product.Deleted || product.TenantID != p.TenantID() {
+				continue
+			}
+			card := product.Card
+			if card.Marketplace != nil && card.Marketplace.Published {
+				if _, ok := roots[card.Marketplace.CategoryID]; !ok {
+					uncategorized++
+				}
+			}
+			visibility := participant.VisibilityOf(p, state.Tenant)
+			seller := catalog.Seller{
+				Slug:              p.Slug(),
+				Name:              p.Name(),
+				Visible:           visibility.Visible,
+				CheckoutAvailable: visibility.CheckoutAvailable,
+			}
+			offer := catalog.ComposeOffer(state.Product, state.Signals, seller, state.Verdict)
+			if _, ok := catalog.SelectPrice(product.PriceProfiles, catalog.DefaultPriceProfile); !ok {
+				continue
+			}
+			item := storeOffer{product: product, offer: offer, root: roots[card.Publication.CategoryID]}
+			if offer.Visible {
+				visible = append(visible, item)
+			}
+			if card.Publication.Published {
+				candidates = append(candidates, item)
+			}
+		}
+		if len(states) < storeBatchSize {
+			break
+		}
+	}
+	return visible, candidates, uncategorized, nil
+}
+
+func automaticStoreProducts(items []storeOffer) []ports.StoreCardProduct {
+	sortStoreOffers(items)
+	products := []ports.StoreCardProduct{}
+	for _, item := range items {
+		if len(products) == storeProductsSize {
+			break
+		}
+		products = append(products, storeProduct(item))
+	}
+	return products
+}
+
+func sortStoreOffers(items []storeOffer) {
+	sort.Slice(items, func(i, j int) bool {
+		a, b := items[i].product, items[j].product
+		if a.SalesCount != b.SalesCount {
+			return a.SalesCount > b.SalesCount
+		}
+		if (a.Card.Image != "") != (b.Card.Image != "") {
+			return a.Card.Image != ""
+		}
+		if !a.ProjectedAt.Equal(b.ProjectedAt) {
+			return a.ProjectedAt.After(b.ProjectedAt)
+		}
+		if a.Revision != b.Revision {
+			return a.Revision > b.Revision
+		}
+		return a.ProductID < b.ProductID
+	})
+}
+
+func pinnedStoreProducts(items []storeOffer, ids []string) []ports.StoreCardProduct {
+	products := []ports.StoreCardProduct{}
+	used := map[string]bool{}
+	for _, id := range ids {
+		if used[id] || len(products) == storeProductsSize {
+			continue
+		}
+		for _, item := range items {
+			if string(item.product.ProductID) == id {
+				products = append(products, storeProduct(item))
+				used[id] = true
+				break
+			}
+		}
+	}
+	return products
+}
+
+func storeProduct(item storeOffer) ports.StoreCardProduct {
+	var image *string
+	if item.product.Card.Image != "" {
+		value := item.product.Card.Image
+		image = &value
+	}
+	return ports.StoreCardProduct{
+		ProductID: string(item.product.ProductID),
+		OfferID:   item.offer.ID.String(),
+		Name:      item.product.Card.Name,
+		Image:     image,
+	}
+}
+
+func selectedStoreProducts(summary StoreSummary, enabled bool) []ports.StoreCardProduct {
+	result := []ports.StoreCardProduct{}
+	if !enabled {
+		return result
+	}
+	used := map[string]bool{}
+	for _, product := range append(summary.SelectedProducts, summary.Products...) {
+		if used[product.ProductID] || len(result) == storeProductsSize {
+			continue
+		}
+		result = append(result, product)
+		used[product.ProductID] = true
+	}
+	return result
+}
+
+// Ранги и цены исключены: они обновляются по TTL, а состав публичных товаров — немедленно.
+func storeCardSignature(items []storeOffer, settings participant.CardProducts) (string, error) {
+	products := make([]storeProductSignature, 0, len(items))
+	for _, item := range items {
+		products = append(products, storeProductSignature{
+			Product:    storeProduct(item),
+			CategoryID: item.product.Card.Publication.CategoryID,
+		})
+	}
+	sort.Slice(products, func(i, j int) bool {
+		return products[i].Product.ProductID < products[j].Product.ProductID
+	})
+	value := struct {
+		Products []storeProductSignature
+		Settings participant.CardProducts
+	}{Products: products, Settings: settings}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(raw)), nil
 }
 
 func shopHeader(p *participant.Participant, summary StoreSummary) ShopHeader {
@@ -232,6 +366,7 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 		}
 		h := shopHeader(p, summary)
 		card := ShopCard{
+			Products:       selectedStoreProducts(summary, p.State().StoreCard.ProductSettings().Enabled),
 			Rating:         h.Rating,
 			TenantID:       h.TenantID,
 			Slug:           h.Slug,
@@ -250,6 +385,7 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 		pagePublic := participant.VisibilityOf(p, tenant).Visible && summary.VisibleOffers > 0
 		return tx.StoreCards().Save(ctx, ports.StoreRecord{
 			ProfileVersion: p.Version(),
+			CacheSignature: summary.CacheSignature,
 			Summary:        summary,
 			Header:         h,
 			Card:           card,

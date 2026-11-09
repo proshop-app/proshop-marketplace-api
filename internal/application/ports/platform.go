@@ -46,6 +46,7 @@ type QuoteRequest struct {
 
 // ShopSettings — настройки магазина для маркетплейса.
 type ShopSettings struct {
+	Products         participant.CardProducts
 	Profile          participant.Profile
 	Card             participant.CardReadiness
 	Returns          *participant.Returns

@@ -39,6 +39,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/storecache"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
@@ -136,7 +137,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	cfg := s.cfg
 	now := clock.System{}
 	identities := random.IDs{}
-	uow := postgres.NewUnitOfWork(s.store.pool)
+	uow := storecache.NewUnitOfWork(postgres.NewUnitOfWork(s.store.pool), redis.NewStoreCardCache(s.cache, keyPrefix))
 	platform := platformapi.New(platformapi.Config{
 		BaseURL: cfg.Platform.URL,
 		Token:   cfg.Platform.Token,

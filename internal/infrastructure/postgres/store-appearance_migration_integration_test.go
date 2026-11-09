@@ -101,7 +101,7 @@ func TestStoreCardAppearanceMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 2 {
-		if err := postgres.Migrate(ctx, pool); err != nil {
+		if err := migrateUpTo(ctx, pool, 45); err != nil {
 			t.Fatal(err)
 		}
 		for i, item := range cases {

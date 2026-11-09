@@ -131,6 +131,11 @@ func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, er
 		var cardChanged bool
 		if validCard {
 			cardChanged, err = p.ApplyStoreCard(settings.Profile, settings.Card, settings.Returns, now)
+			if err == nil {
+				var productsChanged bool
+				productsChanged, err = p.ApplyCardProducts(settings.Products, now)
+				cardChanged = cardChanged || productsChanged
+			}
 		}
 		if err != nil {
 			return err

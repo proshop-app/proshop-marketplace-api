@@ -147,6 +147,11 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/shops/{slug}", publicBuyer(deps.Auth, participants.shop)},
 		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/store-card", machine(participants.storeCard)},
 		{
+			http.MethodGet,
+			"/api/v1/internal/tenants/{tenantId}/store-card/products",
+			machine(participants.cardCandidates),
+		},
+		{
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/settings/sync",
 			machine(participants.syncSettings),

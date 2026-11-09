@@ -114,7 +114,8 @@ func TestStoreCardHTTP(t *testing.T) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	wantKeys := strings.Fields("badge categories fromPrice hidden offers rank rating uncategorized")
+	summaryKeys := "badge categories fromPrice hidden offers products rank rating selectedProducts uncategorized"
+	wantKeys := strings.Fields(summaryKeys)
 	if !reflect.DeepEqual(keys, wantKeys) {
 		t.Fatal(keys)
 	}
@@ -140,13 +141,12 @@ func TestStoreCardHTTP(t *testing.T) {
 		t.Fatal(member)
 	}
 	refresh()
-	expectedAppearance := `"appearance":{"background":"#125F67","logoBackground":"#E9EEE7",` +
-		`"textColor":"white"}`
+	expectedAppearance := `"appearance":{"color":"#125F67"}`
 	for _, path := range []string{"/api/v1/shops", "/api/v1/shops/shop"} {
 		response := call("GET", path, "", "", http.StatusOK)
 		body := response.Body.String()
 		if !strings.Contains(body, `"logo":null`) || strings.Contains(body, `"showcase":`) ||
-			strings.Contains(body, `"initial":`) || strings.Contains(body, `"color":`) ||
+			strings.Contains(body, `"initial":`) ||
 			!strings.Contains(body, expectedAppearance) {
 			t.Fatal(body)
 		}
@@ -156,15 +156,20 @@ func TestStoreCardHTTP(t *testing.T) {
 		if path == "/api/v1/shops" {
 			var page struct {
 				Items []struct {
-					FromPrice json.Number `json:"fromPrice"`
+					FromPrice json.Number              `json:"fromPrice"`
+					Color     json.RawMessage          `json:"color"`
+					Products  []ports.StoreCardProduct `json:"products"`
 				} `json:"items"`
 			}
 			if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
 				t.Fatal(err)
 			}
-			if len(page.Items) != 1 || page.Items[0].FromPrice.String() != "199.99" {
+			if len(page.Items) != 1 || page.Items[0].FromPrice.String() != "199.99" || page.Items[0].Color != nil {
 				t.Fatal("публичная карточка должна возвращать дробные рубли", page)
 			}
+		}
+		if path == "/api/v1/shops" && !strings.Contains(body, `"products":[{"productId":`) {
+			t.Fatal("публичная карточка не содержит фактический товар", body)
 		}
 		if response.Header().Get("Cache-Control") != "public, max-age=0, must-revalidate" {
 			t.Fatal(response.Header())
