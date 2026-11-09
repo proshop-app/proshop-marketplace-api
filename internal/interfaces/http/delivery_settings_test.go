@@ -33,6 +33,7 @@ func TestPublicDeliverySettings(t *testing.T) {
 		})
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/api/v1/delivery/settings", nil)
+		request.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		handler.ServeHTTP(response, request)
 		var body struct {
 			Percent int `json:"deliverySubsidyMinPercent"`

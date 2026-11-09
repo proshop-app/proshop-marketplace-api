@@ -188,9 +188,15 @@ func newRequestID() string {
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
+	raw, err := json.Marshal(body)
+	if err != nil {
+		// Ошибка транспорта не должна отдавать 200 или частичный денежный ответ.
+		status = http.StatusInternalServerError
+		raw = []byte(`{"error":{"code":"internal","message":"внутренняя ошибка"}}`)
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
+	_, _ = w.Write(append(raw, '\n'))
 }
 
 // readJSON разбирает тело строго: неизвестные поля и мусор после объекта — ошибка.

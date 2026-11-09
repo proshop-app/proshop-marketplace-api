@@ -100,6 +100,7 @@ func newModerationEnv(t *testing.T) moderationEnv {
 func (e moderationEnv) request(t *testing.T, method, path, body, key string, status int) *httptest.ResponseRecorder {
 	t.Helper()
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	request.Header.Set("Authorization", "Bearer token")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", key)
@@ -200,7 +201,17 @@ func TestModerationQueriesHTTP(t *testing.T) {
 		e.request(t, "GET", moderationURL+path, "", "", 400)
 	}
 	card := e.request(t, "GET", moderationURL+"/cases/"+e.caseID, "", "", 200)
-	if !strings.Contains(card.Body.String(), `"price":19999`) ||
+	var details map[string]any
+	if err := json.Unmarshal(card.Body.Bytes(), &details); err != nil {
+		t.Fatal(err)
+	}
+	offer := details["offer"].(map[string]any)
+	nestedCase := details["case"].(map[string]any)
+	summary := nestedCase["offer"].(map[string]any)
+	if offer["price"] != 199.99 || offer["basePrice"] != 199.99 || summary["price"] != 199.99 {
+		t.Fatalf("единицы цены в деталях дела расходятся: %s", card.Body.String())
+	}
+	if !strings.Contains(card.Body.String(), `"price":199.99`) ||
 		!strings.Contains(card.Body.String(), `"categoryPath":["Категория"]`) {
 		t.Fatal(card.Body.String())
 	}

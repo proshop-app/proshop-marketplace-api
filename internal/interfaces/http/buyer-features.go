@@ -40,14 +40,14 @@ type favoriteJSON struct {
 
 type watchJSON struct {
 	Offer        offerJSON `json:"offer"`
-	PriceAtWatch int64     `json:"priceAtWatch"`
-	CurrentPrice *int64    `json:"currentPrice"`
-	TargetPrice  *int64    `json:"targetPrice,omitempty"`
+	PriceAtWatch rubles    `json:"priceAtWatch"`
+	CurrentPrice *rubles   `json:"currentPrice"`
+	TargetPrice  *rubles   `json:"targetPrice,omitempty"`
 	Dropped      bool      `json:"dropped"`
 }
 
 type targetPriceJSON struct {
-	TargetPrice *int64 `json:"targetPrice"`
+	TargetPrice *rubles `json:"targetPrice"`
 }
 
 func privateBuyer(next http.HandlerFunc) http.HandlerFunc {
@@ -175,9 +175,9 @@ func (h *buyerFeatureHandlers) watches(w http.ResponseWriter, r *http.Request) {
 	for _, item := range items {
 		result.Items = append(result.Items, watchJSON{
 			Offer:        toOfferJSON(appcatalog.OfferCard{Offer: item.Offer}, false),
-			PriceAtWatch: item.PriceAtWatch,
-			CurrentPrice: item.CurrentPrice,
-			TargetPrice:  item.TargetPrice,
+			PriceAtWatch: rubles(item.PriceAtWatch),
+			CurrentPrice: rublesPointer(item.CurrentPrice),
+			TargetPrice:  rublesPointer(item.TargetPrice),
 			Dropped:      item.Dropped,
 		})
 	}
@@ -200,7 +200,7 @@ func (h *buyerFeatureHandlers) putSaved(kind ports.SavedKind) http.HandlerFunc {
 				return
 			}
 			if body.TargetPrice != nil {
-				v := money.FromKopecks(*body.TargetPrice)
+				v := money.FromKopecks(int64(*body.TargetPrice))
 				target = &v
 			}
 		}
@@ -234,8 +234,8 @@ func (h *buyerFeatureHandlers) subscriptions(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	result := struct {
-		Items []ports.ShopCard `json:"items"`
-	}{Items: items}
+		Items []shopCardJSON `json:"items"`
+	}{Items: shopCardResponses(items)}
 	writeJSON(w, http.StatusOK, result)
 }
 

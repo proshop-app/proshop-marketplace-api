@@ -76,6 +76,7 @@ func TestSellerResponsesBatchAndNull(t *testing.T) {
 		{Offer: ids.OfferID{Tenant: "missing", Product: "p1"}, Quantity: 1},
 	}}
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/cart", nil)
+	request.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	response := httptest.NewRecorder()
 	(&cartHandlers{carts: carts}).respond(response, request, state, nil)
 	var body struct {

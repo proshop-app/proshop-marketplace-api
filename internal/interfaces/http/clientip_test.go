@@ -93,6 +93,7 @@ func TestClientIP(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest("GET", "/api/v1/auth/call", nil)
+			r.Header.Set("X-Marketplace-Money-Unit", "RUB")
 			r.RemoteAddr = tc.remote
 			for _, line := range tc.forwarded {
 				r.Header.Add("X-Forwarded-For", line)

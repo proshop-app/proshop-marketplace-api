@@ -44,6 +44,7 @@ func TestCartPromoHTTP(t *testing.T) {
 	)}
 	for _, method := range []string{http.MethodPut, http.MethodDelete} {
 		req := httptest.NewRequest(method, "/api/v1/cart/groups/t1/promo-code", strings.NewReader(`{"code":"BAD"}`))
+		req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		req.SetPathValue("tenantId", "t1")
 		req = req.WithContext(context.WithValue(req.Context(), keyBuyer, buyer))
 		response := httptest.NewRecorder()
@@ -120,6 +121,7 @@ func TestPromoValidationHTTP(t *testing.T) {
 			t.Fatal(err)
 		}
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/cart/groups/t1/promo-code", strings.NewReader(string(body)))
+		req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		req.SetPathValue("tenantId", "t1")
 		response := httptest.NewRecorder()
 		handler.promo(response, req)
@@ -166,6 +168,7 @@ func TestGetCartVerifiesAllGroups(t *testing.T) {
 		time.Hour,
 	)}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/cart", nil)
+	req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	req = req.WithContext(context.WithValue(req.Context(), keyBuyer, buyer))
 	response := httptest.NewRecorder()
 	handler.get(response, req)

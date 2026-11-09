@@ -315,7 +315,7 @@ func (h *promotionHandlers) campaign(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	body := promotionResponse(state)
+	body := campaignMoneyResponse(r, state)
 	writeJSON(w, http.StatusOK, body)
 }
 
@@ -341,7 +341,7 @@ func (h *promotionHandlers) create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	result := promotionResponse(state)
+	result := campaignMoneyResponse(r, state)
 	writeJSON(w, http.StatusCreated, result)
 }
 
@@ -398,7 +398,7 @@ func (h *promotionHandlers) edit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	result := promotionResponse(state)
+	result := campaignMoneyResponse(r, state)
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -408,8 +408,8 @@ func (h *promotionHandlers) decide(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	var body promotionDecisionInput
-	if err := readJSON(w, r, &body); err != nil {
+	body, err := readPromotionDecision(w, r)
+	if err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -447,7 +447,7 @@ func (h *promotionHandlers) decide(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	result := promotionResponse(state)
+	result := campaignMoneyResponse(r, state)
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -481,9 +481,9 @@ func (h *promotionHandlers) list(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	items := []campaignJSON{}
+	items := []any{}
 	for _, state := range page.Items {
-		body := promotionResponse(state)
+		body := campaignMoneyResponse(r, state)
 		items = append(items, body)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -549,9 +549,9 @@ func (h *promotionHandlers) placements(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	items := []promotionPlacementJSON{}
+	items := []any{}
 	for _, state := range states {
-		items = append(items, placementResponse(state))
+		items = append(items, placementMoneyResponse(r, state))
 	}
 	if promotionAccess(r).TenantID != "" {
 		writeJSON(w, http.StatusOK, map[string]any{"items": items, "nextMonday": h.service.NextMonday()})
@@ -561,20 +561,20 @@ func (h *promotionHandlers) placements(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *promotionHandlers) configure(w http.ResponseWriter, r *http.Request) {
-	var body promotionPlacementJSON
+	var body promotionPlacementRublesJSON
 	if err := readJSON(w, r, &body); err != nil {
 		writeError(w, r, err)
 		return
 	}
 	prices := map[int]money.Money{}
 	for position, value := range body.PositionPrices {
-		prices[position] = money.FromKopecks(value)
+		prices[position] = money.FromKopecks(int64(value))
 	}
 	state, err := h.service.ConfigurePlacement(
 		r.Context(),
 		r.PathValue("code"),
 		body.SlotLimit,
-		money.FromKopecks(body.DefaultPriceKopecks),
+		money.FromKopecks(int64(body.DefaultPriceRubles)),
 		prices,
 		body.Active,
 		body.ExpectedVersion,
@@ -583,7 +583,7 @@ func (h *promotionHandlers) configure(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, placementResponse(state))
+	writeJSON(w, http.StatusOK, placementMoneyResponse(r, state))
 }
 
 func (h *promotionHandlers) calendar(w http.ResponseWriter, r *http.Request) {
@@ -603,7 +603,7 @@ func (h *promotionHandlers) overview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, overviewMoneyResponse(result))
 }
 
 func (h *promotionHandlers) availability(w http.ResponseWriter, r *http.Request) {

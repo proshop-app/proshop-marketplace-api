@@ -42,6 +42,7 @@ func TestParticipationMachineAndReturn(t *testing.T) {
 	call := func(method, path, body, bearer string, status int) string {
 		t.Helper()
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		if bearer != "" {
 			req.Header.Set("Authorization", "Bearer "+bearer)
 		}

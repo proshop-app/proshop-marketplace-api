@@ -41,6 +41,7 @@ func TestPromotionMachineTokenAndTenant(t *testing.T) {
 		{"secret", "Bearer secret", "t1", 200},
 	} {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		req.SetPathValue("id", id)
 		req.SetPathValue("tenantId", test.tenant)
 		req.Header.Set("Authorization", test.header)
@@ -69,6 +70,7 @@ func TestPromotionPauseAndBatch(t *testing.T) {
 	)
 	h := &promotionHandlers{service: service}
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"action":"pause","expectedVersion":1}`))
+	req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	req.SetPathValue("id", "00000000-0000-0000-0000-000000000001")
 	recorder := httptest.NewRecorder()
 	h.decide(recorder, req)
@@ -116,6 +118,7 @@ func TestPromotionReviseAndRefundHTTP(t *testing.T) {
 	})
 	h := &promotionHandlers{service: service}
 	req := httptest.NewRequest(http.MethodPost, "/revise", strings.NewReader(`{"expectedVersion":1}`))
+	req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	req.SetPathValue("id", string(state.ID))
 	req.SetPathValue("tenantId", "t1")
 	recorder := httptest.NewRecorder()
@@ -126,12 +129,12 @@ func TestPromotionReviseAndRefundHTTP(t *testing.T) {
 	state.Status = promotion.Stopped
 	state.Payment.Amount = money.FromKopecks(700)
 	store.SeedPromotion(state)
-	body := `{"action":"refund","expectedVersion":1,"refund":{"amountKopecks":300,"on":"2026-11-06"}}`
+	body := `{"action":"refund","expectedVersion":1,"refund":{"amountRubles":3.00,"on":"2026-11-06"}}`
 	req = httptest.NewRequest(http.MethodPost, "/decisions", strings.NewReader(body))
 	req.SetPathValue("id", string(state.ID))
 	recorder = httptest.NewRecorder()
 	h.decide(recorder, req)
-	if recorder.Code != 200 || !strings.Contains(recorder.Body.String(), `"refund":{"amountKopecks":300`) {
+	if recorder.Code != 200 || !strings.Contains(recorder.Body.String(), `"refund":{"amountRubles":3.00`) {
 		t.Fatal(recorder.Code, recorder.Body.String())
 	}
 }

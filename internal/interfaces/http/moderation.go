@@ -21,7 +21,13 @@ type moderationCaseJSON struct {
 type moderationOfferSummary struct {
 	Name  string `json:"name"`
 	Image string `json:"image"`
-	Price int64  `json:"price"`
+	Price rubles `json:"price"`
+}
+
+type moderationOfferJSON struct {
+	moderation.ReviewCard
+	Price     rubles `json:"price"`
+	BasePrice rubles `json:"basePrice"`
 }
 
 type moderationRequest struct {
@@ -45,7 +51,7 @@ func caseJSON(c moderation.CaseState) moderationCaseJSON {
 		OfferID:   ids.OfferID{Tenant: c.TenantID, Product: c.ProductID}.String(),
 	}
 	if card != nil {
-		result.Offer = moderationOfferSummary{Name: card.Name, Image: card.Image, Price: card.Price}
+		result.Offer = moderationOfferSummary{Name: card.Name, Image: card.Image, Price: rubles(card.Price)}
 		result.Seller = card.Seller
 	}
 	return result
@@ -62,7 +68,7 @@ func verdictJSON(v *moderation.VerdictState) any {
 	var offer moderationOfferSummary
 	var seller moderation.ReviewSeller
 	if v.Card != nil {
-		offer = moderationOfferSummary{Name: v.Card.Name, Image: v.Card.Image, Price: v.Card.Price}
+		offer = moderationOfferSummary{Name: v.Card.Name, Image: v.Card.Image, Price: rubles(v.Card.Price)}
 		seller = v.Card.Seller
 	}
 	return map[string]any{
@@ -190,7 +196,7 @@ func (h *moderationHandlers) getCase(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"case":     caseJSON(view.Case),
-		"offer":    view.Offer,
+		"offer":    moderationOfferResponse(view.Offer),
 		"decision": decisionJSON(view.Decision),
 		"history":  decisionHistory(view.History),
 	})
@@ -270,7 +276,7 @@ func (h *moderationHandlers) offer(w http.ResponseWriter, r *http.Request) {
 		c = &value
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"offer":       view.Offer,
+		"offer":       moderationOfferResponse(view.Offer),
 		"participant": view.Participant,
 		"verdicts":    verdictHistory(view.Verdicts),
 		"verdict":     verdictJSON(view.Verdict),
@@ -403,4 +409,12 @@ func verdictHistory(history []moderation.VerdictState) []any {
 		})
 	}
 	return result
+}
+
+func moderationOfferResponse(card moderation.ReviewCard) moderationOfferJSON {
+	return moderationOfferJSON{
+		ReviewCard: card,
+		Price:      rubles(card.Price),
+		BasePrice:  rubles(card.BasePrice),
+	}
 }

@@ -14,7 +14,7 @@ func TestM5HTTP(t *testing.T) {
 		e.request(t, "GET", moderationURL+path, "", "", 400)
 	}
 	response := e.request(t, "GET", moderationURL+"/cases?order=oldest&reason=moderation.probation", "", "", 200)
-	for _, field := range []string{`"offer":`, `"seller":`, `"name":"Товар"`, `"price":19999`} {
+	for _, field := range []string{`"offer":`, `"seller":`, `"name":"Товар"`, `"price":199.99`} {
 		if !strings.Contains(response.Body.String(), field) {
 			t.Fatal(response.Body.String())
 		}

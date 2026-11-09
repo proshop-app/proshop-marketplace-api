@@ -16,7 +16,7 @@ import (
 
 type sellerJSON struct {
 	Delivery         participant.DeliverySettings `json:"delivery"`
-	FreeDeliveryFrom int64                        `json:"freeDeliveryFrom"`
+	FreeDeliveryFrom rubles                       `json:"freeDeliveryFrom"`
 	Slug             string                       `json:"slug"`
 	Name             string                       `json:"name"`
 }
@@ -27,11 +27,11 @@ type categoryJSON struct {
 	URL  string `json:"url,omitempty"`
 }
 
-// offerJSON — предложение в ответе. Суммы — целые копейки.
+// offerJSON — предложение в ответе. Суммы — числовые рубли.
 type offerJSON struct {
 	Assets            *[]string                  `json:"assets,omitempty"`
 	Rating            *catalog.Rating            `json:"rating"`
-	Variants          *appcatalog.VariantBlock   `json:"variants,omitempty"`
+	Variants          *variantBlockJSON          `json:"variants,omitempty"`
 	DeliveryAvailable *bool                      `json:"deliveryAvailable,omitempty"`
 	CategoryID        string                     `json:"categoryId"`
 	Attributes        map[string]json.RawMessage `json:"attributes"`
@@ -45,8 +45,8 @@ type offerJSON struct {
 	URL               string                     `json:"url,omitempty"`
 	SKU               string                     `json:"sku,omitempty"`
 	Categories        []categoryJSON             `json:"categories"`
-	Price             int64                      `json:"price"`
-	BasePrice         int64                      `json:"basePrice"`
+	Price             rubles                     `json:"price"`
+	BasePrice         rubles                     `json:"basePrice"`
 	Available         int                        `json:"available"`
 	InStock           bool                       `json:"inStock"`
 	CheckoutAvailable bool                       `json:"checkoutAvailable"`
@@ -54,11 +54,11 @@ type offerJSON struct {
 }
 
 type offerPageJSON struct {
-	Facets []ports.Facet `json:"facets"`
-	Items  []offerJSON   `json:"items"`
-	Total  int           `json:"total"`
-	Limit  int           `json:"limit"`
-	Offset int           `json:"offset"`
+	Facets []facetJSON `json:"facets"`
+	Items  []offerJSON `json:"items"`
+	Total  int         `json:"total"`
+	Limit  int         `json:"limit"`
+	Offset int         `json:"offset"`
 }
 
 type catalogHandlers struct {
@@ -78,15 +78,15 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 			Slug:             doc.SellerSlug,
 			Name:             doc.SellerName,
 			Delivery:         doc.Delivery.Clone(),
-			FreeDeliveryFrom: doc.FreeDeliveryFrom,
+			FreeDeliveryFrom: rubles(doc.FreeDeliveryFrom),
 		},
 		Name:              doc.Name,
 		Image:             doc.Image,
 		URL:               doc.URL,
 		SKU:               doc.SKU,
 		Categories:        make([]categoryJSON, 0, len(doc.Categories)),
-		Price:             doc.Price,
-		BasePrice:         doc.BasePrice,
+		Price:             rubles(doc.Price),
+		BasePrice:         rubles(doc.BasePrice),
 		Available:         doc.Available,
 		InStock:           doc.InStock,
 		CheckoutAvailable: doc.CheckoutAvailable,
@@ -99,7 +99,7 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 		assets := append([]string{}, doc.Assets...)
 		out.Assets = &assets
 		out.Description = doc.Description
-		out.Variants = card.Variants
+		out.Variants = variantResponse(card.Variants)
 	}
 	for _, c := range doc.Categories {
 		out.Categories = append(out.Categories, categoryJSON{ID: c.ID, Name: c.Name, URL: c.URL})
@@ -129,8 +129,13 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 	if limit == 0 {
 		limit = appcatalog.DefaultLimit
 	}
+	facets, err := facetResponses(list.Facets)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	body := offerPageJSON{
-		Facets: list.Facets,
+		Facets: facets,
 		Items:  make([]offerJSON, 0, len(list.Items)),
 		Total:  list.Total,
 		Limit:  limit,
@@ -229,11 +234,11 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 	if query.Offset, err = intParam(values.Get("offset")); err != nil {
 		return query, appcatalog.ErrInvalidQuery.WithMessage("offset — целое число")
 	}
-	if query.PriceMin, err = kopecksParam(values.Get("priceMin")); err != nil {
-		return query, appcatalog.ErrInvalidQuery.WithMessage("priceMin — целое число копеек")
+	if query.PriceMin, err = rublesParam(values.Get("priceMin")); err != nil {
+		return query, appcatalog.ErrInvalidQuery.WithMessage("priceMin — рубли, не больше двух знаков после точки")
 	}
-	if query.PriceMax, err = kopecksParam(values.Get("priceMax")); err != nil {
-		return query, appcatalog.ErrInvalidQuery.WithMessage("priceMax — целое число копеек")
+	if query.PriceMax, err = rublesParam(values.Get("priceMax")); err != nil {
+		return query, appcatalog.ErrInvalidQuery.WithMessage("priceMax — рубли, не больше двух знаков после точки")
 	}
 
 	if raw := values.Get("inStock"); raw != "" {
@@ -254,16 +259,17 @@ func intParam(raw string) (int, error) {
 	return strconv.Atoi(raw)
 }
 
-func kopecksParam(raw string) (*int64, error) {
+func rublesParam(raw string) (*int64, error) {
 	if raw == "" {
 		return nil, nil
 	}
 
-	value, err := strconv.ParseInt(raw, 10, 64)
+	amount, err := parseRubles(raw)
 	if err != nil {
 		return nil, err
 	}
 
+	value := amount.Kopecks()
 	return &value, nil
 }
 

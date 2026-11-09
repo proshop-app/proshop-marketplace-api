@@ -71,6 +71,7 @@ func promotionHTTPFixture() (*promotionHandlers, *fake.Store, *fake.Clock) {
 
 func promotionRequest(h http.HandlerFunc, method, path, body, tenant, id string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	req.SetPathValue("tenantId", tenant)
 	req.SetPathValue("id", id)
 	req.SetPathValue("code", "category_slot")
@@ -127,7 +128,7 @@ func TestPromotionM12HTTPFlow(t *testing.T) {
 	if placements.Code != 200 || !strings.Contains(placements.Body.String(), `"nextMonday":"2026-11-09"`) {
 		t.Fatal(placements.Body.String())
 	}
-	config := `{"slotLimit":2,"defaultPriceKopecks":700,"active":true,"expectedVersion":1}`
+	config := `{"slotLimit":2,"defaultPriceRubles":7.00,"active":true,"expectedVersion":1}`
 	configured := promotionRequest(h.configure, "PUT", "/", config, "", "")
 	if configured.Code != 200 {
 		t.Fatal(configured.Code, configured.Body.String())
@@ -167,6 +168,7 @@ func TestPromotionM12SessionEventsAndSponsored(t *testing.T) {
 	for i, visitor := range []string{"first", "second", "third"} {
 		raw := `{"visitorId":"` + visitor + `","events":[{"promotionId":"` + string(id) + `","kind":"click"}]}`
 		req := httptest.NewRequest("POST", "/", strings.NewReader(raw))
+		req.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		req = req.WithContext(context.WithValue(req.Context(), keyBuyer, ids.UUID("buyer")))
 		result := httptest.NewRecorder()
 		h.events(result, req)

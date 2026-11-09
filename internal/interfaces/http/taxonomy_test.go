@@ -67,6 +67,7 @@ func TestTaxonomyHTTP(t *testing.T) {
 	})
 	call := func(method, path, body, token, etag string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		if token != "" {
 			r.Header.Set("Authorization", "Bearer "+token)
 		}
@@ -219,6 +220,7 @@ func TestAttributeQueryParsing(t *testing.T) {
 		"/api/v1/catalog/offers?tenant=t1&tenant=t2&attr.a1=v1&attr.a1=v2&attr.a2.min=1.5&attr.a2.max=3",
 		nil,
 	)
+	r.Header.Set("X-Marketplace-Money-Unit", "RUB")
 	q, err := parseOfferQuery(r)
 	if len(q.TenantIDs) != 2 || q.TenantIDs[0] != "t1" || q.TenantIDs[1] != "t2" {
 		t.Fatal(q.TenantIDs)
@@ -267,6 +269,7 @@ func seedHTTPDictionary(t *testing.T, store *fake.Store) {
 func TestTrackQueryParsing(t *testing.T) {
 	for _, suffix := range []string{"", "&track=true", "&track=1"} {
 		r := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/offers?q=test"+suffix, nil)
+		r.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		query, err := parseOfferQuery(r)
 		if err != nil || query.TrackQuery != (suffix != "") {
 			t.Fatalf("%s: %+v %v", suffix, query, err)
@@ -274,6 +277,7 @@ func TestTrackQueryParsing(t *testing.T) {
 	}
 	for _, raw := range []string{"", "false", "0", "TRUE", "yes", "true&track=1"} {
 		r := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/offers?track="+raw, nil)
+		r.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		if _, err := parseOfferQuery(r); err == nil {
 			t.Fatalf("принят track=%s", raw)
 		}
