@@ -17,7 +17,9 @@ type NewTask struct {
 	// DedupKey склеивает ещё не взятые задачи с одним ключом: пачка событий по
 	// одному товару даёт одну синхронизацию.
 	DedupKey string
-	Payload  []byte
+	// ReplacePayload заменяет полезную нагрузку ожидающей задачи; вызывающий сериализует версии.
+	ReplacePayload bool
+	Payload        []byte
 	// At — время постановки; задача созревает сразу.
 	At time.Time
 }

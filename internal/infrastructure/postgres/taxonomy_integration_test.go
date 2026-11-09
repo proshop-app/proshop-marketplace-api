@@ -54,7 +54,7 @@ func TestTaxonomyVersionsAndProjection(t *testing.T) {
 	uow := postgres.NewUnitOfWork(pool)
 	ctx := context.Background()
 	now := clock.System{}
-	service := apptaxonomy.NewService(uow, now, nil)
+	service := apptaxonomy.NewService(uow, now, nil, 0)
 	for i := 0; i < 2; i++ {
 		if err := applyDefinition(ctx, service, testTaxonomy(1)); err != nil {
 			t.Fatal(err)
@@ -105,6 +105,13 @@ func TestTaxonomyVersionsAndProjection(t *testing.T) {
 	})
 	next.Schemas["s1"] = taxonomy.Schema{Attributes: []string{"a1", "a2"}}
 	if err := applyDefinition(ctx, service, next); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.HandleTask(ctx, ports.Task{
+		Kind:    apptaxonomy.TaskRevalidate,
+		Payload: []byte(`{"version":2}`),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if p := read(); p.Published || p.Issues[0].Code != "taxonomy.required" || p.Version != 2 {
@@ -160,7 +167,8 @@ func TestTaxonomySharedLockSerializesLoad(t *testing.T) {
 	}
 	limited, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
-	if err := applyDefinition(limited, apptaxonomy.NewService(uow, clock.System{}, nil), testTaxonomy(1)); err == nil {
+	service := apptaxonomy.NewService(uow, clock.System{}, nil, 0)
+	if err := applyDefinition(limited, service, testTaxonomy(1)); err == nil {
 		t.Fatal("загрузка обошла разделяемую блокировку приёма карточки")
 	}
 }

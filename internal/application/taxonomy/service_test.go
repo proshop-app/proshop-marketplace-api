@@ -50,11 +50,12 @@ func TestLoadAndRevalidate(t *testing.T) {
 	store := fake.NewStore()
 	seedValues(t, store, "v1")
 	clock := fake.NewClock(time.Now())
-	service := apptaxonomy.NewService(store, clock, nil)
+	service := apptaxonomy.NewService(store, clock, nil, 0)
 	projector := appcatalog.NewProjector(store, clock, nil)
 	if err := applyDefinition(ctx, service, schema(1)); err != nil {
 		t.Fatal(err)
 	}
+	runRevalidation(t, service, 1)
 	event := appcatalog.ProductEvent{
 		EventID: "e1",
 		Snapshot: catalog.Snapshot{
@@ -102,11 +103,12 @@ func TestLoadAndRevalidate(t *testing.T) {
 	if err := applyDefinition(ctx, service, next); err != nil {
 		t.Fatal(err)
 	}
+	runRevalidation(t, service, 2)
 	p, _ = store.Product("t1", "p1")
 	if p.Card.Publication.Published || p.Card.Publication.Issues[0].Code != "taxonomy.enum_value" {
 		t.Fatalf("ошибка должна скрыть карточку: %+v", p)
 	}
-	if len(store.OutboxRows()) != 2 || !store.Processed("e1") {
+	if len(store.OutboxRows()) != 3 || !store.Processed("e1") {
 		t.Fatal("нет атомарных outbox/inbox")
 	}
 	if err := applyDefinition(ctx, service, schema(1)); !errors.Is(err, taxonomy.ErrReleaseConflict) {
@@ -120,6 +122,7 @@ func TestLoadAndRevalidate(t *testing.T) {
 	if err := applyDefinition(ctx, service, schema(3)); err != nil {
 		t.Fatal(err)
 	}
+	runRevalidation(t, service, 3)
 	p, _ = store.Product("t1", "p1")
 	if !p.Card.Publication.Published || p.Card.Publication.Version != 3 {
 		t.Fatalf("%+v", p)
@@ -188,16 +191,19 @@ func TestRevalidationPagesIncludeNonParticipants(t *testing.T) {
 			Card:      catalog.Card{Name: "Товар", Visible: true},
 		})
 	}
-	if err := applyDefinition(context.Background(), apptaxonomy.NewService(store, clock, nil), schema(1)); err != nil {
+	service := apptaxonomy.NewService(store, clock, nil, 0)
+	if err := applyDefinition(context.Background(), service, schema(1)); err != nil {
 		t.Fatal(err)
 	}
+	runRevalidation(t, apptaxonomy.NewService(store, clock, nil, 0), 1)
+	runRevalidation(t, apptaxonomy.NewService(store, clock, nil, 0), 1)
 	for i := 0; i < 205; i++ {
 		p, _ := store.Product("t1", ids.ProductID(fmt.Sprintf("p%03d", i)))
 		if p.Version != 2 || p.Card.Publication.Version != 1 || p.Card.Publication.Published {
 			t.Fatalf("товар пропущен при перепроверке: %+v", p)
 		}
 	}
-	if len(store.OutboxRows()) != 410 {
+	if len(store.OutboxRows()) != 412 {
 		t.Fatal(len(store.OutboxRows()))
 	}
 }
@@ -252,6 +258,17 @@ func seedValues(t *testing.T, store *fake.Store, values ...string) {
 		return tx.Reference().Save(ctx, entries, old)
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func runRevalidation(t *testing.T, service *apptaxonomy.Service, version int64) {
+	t.Helper()
+	payload := []byte(fmt.Sprintf(`{"version":%d}`, version))
+	if err := service.HandleTask(context.Background(), ports.Task{
+		Kind:    apptaxonomy.TaskRevalidate,
+		Payload: payload,
+	}); err != nil {
 		t.Fatal(err)
 	}
 }

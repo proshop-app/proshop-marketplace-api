@@ -20,7 +20,7 @@ func TestPartPublicationFreezesDictionary(t *testing.T) {
 	store := fake.NewStore()
 	store.SeedTaxonomy(schema(1))
 	seedValues(t, store, "v1", "v2")
-	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
+	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil, 0)
 	input := schema(1)
 	input.Attributes[0].Values = []string{"forged"}
 	store.FailCommit = errors.New("сбой фиксации")
@@ -74,7 +74,7 @@ func TestDictionaryFailuresDoNotPublish(t *testing.T) {
 				input.Attributes[0].Values = nil
 				input.Attributes[0].ValuesMeta = map[string]taxonomy.ValueMeta{"v1": {Hex: "#FFFFFF"}}
 			}
-			service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
+			service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil, 0)
 			_, err := service.LoadPart(context.Background(), "attributes", input, 1)
 			if !errors.Is(err, taxonomy.ErrInvalid) {
 				t.Fatal("неверный словарь принят", err)
@@ -94,7 +94,7 @@ func TestOpenDictionaryDoesNotRestrictStrings(t *testing.T) {
 	input.Attributes[0].Values = nil
 	store.SeedTaxonomy(input)
 	store.SeedReferenceDictionary(reference.DictionaryState{Code: "a1", Kind: reference.KindOpen})
-	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
+	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil, 0)
 	if _, err := service.LoadPart(context.Background(), "attributes", input, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestConcurrentPartsHaveOneWinner(t *testing.T) {
 	store := fake.NewStore()
 	store.SeedTaxonomy(schema(1))
 	seedValues(t, store, "v1")
-	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
+	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil, 0)
 	results := make(chan error, 2)
 	var group sync.WaitGroup
 	for _, part := range []string{"categories", "schemas"} {
@@ -144,7 +144,7 @@ func TestRollbackRejectsOldFormat(t *testing.T) {
 		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория", Slug: "c1"}},
 	})
 	seedValues(t, store, "v1")
-	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
+	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil, 0)
 	next := schema(2)
 	release := taxonomy.Release{
 		Version:         4,
@@ -171,7 +171,7 @@ func TestRollbackRestoresFrozenValues(t *testing.T) {
 	store := fake.NewStore()
 	store.SeedTaxonomy(schema(1))
 	seedValues(t, store, "v2")
-	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
+	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil, 0)
 	next := schema(2)
 	release := taxonomy.Release{
 		Version:         4,
@@ -220,7 +220,7 @@ func TestOnlyConfirmedValuesArePublished(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
+	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil, 0)
 	if _, err := service.LoadPart(ctx, "categories", schema(1), 1); err != nil {
 		t.Fatal(err)
 	}

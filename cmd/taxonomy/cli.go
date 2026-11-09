@@ -12,9 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
-
 	app "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
@@ -74,16 +71,9 @@ func run(args []string, output, diagnostics io.Writer) int {
 		return failure(diagnostics, "не удалось подключиться к PostgreSQL", 1)
 	}
 	defer pool.Close()
-	moderationConfig, err := config.LoadModeration(os.LookupEnv)
-	if err != nil {
-		return failure(diagnostics, err.Error(), 2)
-	}
 	uow := postgres.NewUnitOfWork(pool)
-	evaluator := appmoderation.NewService(uow, clock.System{}, random.IDs{}, appmoderation.Config{
-		ProbationOffers: moderationConfig.ProbationOffers,
-		RequireImage:    moderationConfig.RequireImage,
-	})
-	service := app.NewService(uow, clock.System{}, evaluator)
+	// CLI только публикует; задержку сводок задаёт сервер, исполняющий outbox.
+	service := app.NewService(uow, clock.System{}, nil, 0)
 	operation := service.Apply
 	if args[0] == "rollback" {
 		operation = service.Rollback

@@ -267,7 +267,7 @@ func TestTaxonomyAndMissingVerdict(t *testing.T) {
 	e := setup()
 	e.project(t, "p1", 1)
 	ctx := context.Background()
-	service := apptaxonomy.NewService(e.store, e.clock, e.service)
+	service := apptaxonomy.NewService(e.store, e.clock, e.service, 0)
 	// Поставка проходит полную проверку набора: листу нужна схема, схеме — атрибут.
 	definition := taxonomy.Definition{
 		Version:    2,
@@ -288,6 +288,12 @@ func TestTaxonomyAndMissingVerdict(t *testing.T) {
 		ExpectedVersion: 1,
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.HandleTask(ctx, ports.Task{
+		Kind:    apptaxonomy.TaskRevalidate,
+		Payload: []byte(`{"version":2}`),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if e.view(t, "p1").Verdict.Status != moderation.Rejected {

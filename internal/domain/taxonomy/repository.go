@@ -4,6 +4,8 @@ import "context"
 
 // Repository — снимки таксономии в транзакции. Пустое хранилище имеет версию 0.
 type Repository interface {
+	// Version читает неизменяемый снимок; версия 0 — пустая таксономия.
+	Version(context.Context, int64) (Definition, error)
 	LatestRelease(ctx context.Context) (*ReleaseRecord, error)
 	RecordRelease(ctx context.Context, release Release, version int64, previous Definition) error
 	MarkRollback(ctx context.Context, release int64, version int64) error

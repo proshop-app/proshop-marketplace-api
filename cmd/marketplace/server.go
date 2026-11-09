@@ -256,6 +256,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 	)
 
+	taxonomyService := apptaxonomy.NewService(uow, now, moderation, cfg.Settings.StoreCardRefreshDelay)
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(s.store.pool),
 		now,
@@ -265,6 +266,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			Lease:     cfg.Outbox.Lease,
 		},
 		map[string]messaging.Handler{
+			apptaxonomy.TaskRevalidate:       taxonomyService.HandleTask,
 			appmoderation.TaskReevaluate:     moderation.HandleTask,
 			messaging.TaskReplay:             events.HandleTask,
 			appcatalog.TaskSyncOffer:         indexer.HandleTask,
@@ -308,7 +310,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		moderation:        moderation,
 		operatorAuth:      operatorAuth,
 		events:            events,
-		taxonomy:          apptaxonomy.NewService(uow, now, moderation),
+		taxonomy:          taxonomyService,
 		projector:         projector,
 		indexer:           indexer,
 		queries:           queries,

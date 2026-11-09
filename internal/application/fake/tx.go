@@ -232,6 +232,9 @@ func (o outbox) Enqueue(_ context.Context, task ports.NewTask) error {
 	if task.DedupKey != "" {
 		for i, row := range o.d.outbox {
 			if row.DedupKey == task.DedupKey && row.DoneAt == nil && row.Attempts == 0 {
+				if task.ReplacePayload {
+					o.d.outbox[i].Payload = append([]byte(nil), task.Payload...)
+				}
 				if task.At.Before(row.NextAt) {
 					o.d.outbox[i].NextAt = task.At
 				}
@@ -454,3 +457,5 @@ func (o offers) Batch(_ context.Context, keys []ids.OfferID) ([]ports.OfferState
 	}
 	return result, nil
 }
+
+func (t *tx) TaxonomyRevalidation() ports.TaxonomyRevalidation { return taxonomies{t.data} }
