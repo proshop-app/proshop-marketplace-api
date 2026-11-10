@@ -29,13 +29,14 @@ type Event struct {
 
 // session — одна мутация словаря под блокировкой его строки.
 type session struct {
-	repo    reference.Repository
-	tx      ports.Tx
-	dict    *reference.Dictionary
-	from    int64
-	now     time.Time
-	dirty   bool
-	effects reference.Effects
+	repo      reference.Repository
+	tx        ports.Tx
+	dict      *reference.Dictionary
+	from      int64
+	now       time.Time
+	dirty     bool
+	truncated bool
+	effects   reference.Effects
 }
 
 // mutate открывает транзакцию мутации словаря: блокировка строки словаря,
@@ -123,6 +124,15 @@ func (m *session) record(
 	}
 	m.dirty = true
 	m.effects = m.effects.Join(change.Effects())
+	// Для события достаточно ограниченных списков и признака: полная дельта остаётся в журнале.
+	if len(m.effects.Entries) > maxEventList {
+		m.effects.Entries = m.effects.Entries[:maxEventList]
+		m.truncated = true
+	}
+	if len(m.effects.Keys) > maxEventList {
+		m.effects.Keys = m.effects.Keys[:maxEventList]
+		m.truncated = true
+	}
 	return true, nil
 }
 
@@ -164,6 +174,7 @@ func (m *session) enqueue(ctx context.Context) error {
 		EntryIDs:      m.effects.Entries,
 		Kinds:         m.effects.Kinds,
 		AffectedKeys:  m.effects.Keys,
+		Truncated:     m.truncated,
 	}
 	if len(event.EntryIDs) > maxEventList {
 		event.EntryIDs, event.Truncated = event.EntryIDs[:maxEventList], true

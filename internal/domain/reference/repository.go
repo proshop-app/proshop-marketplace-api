@@ -55,6 +55,8 @@ type Repository interface {
 
 	Entry(ctx context.Context, dictionary string, id ids.UUID) (*Entry, error)
 	Entries(ctx context.Context, dictionary string, entries []ids.UUID) ([]*Entry, error)
+	// CandidateEntryIDs возвращает не более limit кандидатов, исключая список, в порядке id.
+	CandidateEntryIDs(ctx context.Context, dictionary string, excluded []ids.UUID, limit int) ([]ids.UUID, error)
 	AllEntries(ctx context.Context, dictionary string) ([]*Entry, error)
 	List(ctx context.Context, dictionary string, filter ListFilter) ([]*Entry, int, error)
 	// MergedInto — записи, объединённые в id: при новом объединении они переносятся дальше.

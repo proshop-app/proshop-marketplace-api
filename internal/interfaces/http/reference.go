@@ -349,6 +349,8 @@ func (h *referenceHandlers) list(w http.ResponseWriter, r *http.Request) {
 	for _, entry := range page.Entries {
 		body.Entries = append(body.Entries, entryOf(entry))
 	}
+	w.Header().Set("ETag", dictionaryRevisionETag(page.Revision))
+	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, body)
 }
 

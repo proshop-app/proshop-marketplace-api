@@ -2950,6 +2950,10 @@ paths:
           schema: { type: integer, minimum: 0, default: 0 }
       responses:
         "200":
+          headers:
+            ETag:
+              description: 'Голова словаря для массового решения: "reference-N"'
+              schema: { type: string }
           description: Страница записей
           content:
             application/json:
@@ -2957,6 +2961,49 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/operator/reference/{dict}/entries/review:
+    post:
+      tags: [reference]
+      summary: Атомарно подтвердить или отклонить выбранных кандидатов словаря
+      operationId: operatorReferenceReview
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - name: If-Match
+          in: header
+          required: true
+          description: 'Один строгий ETag головы словаря из списка записей: "reference-N", N >= 0; не ревизия записи'
+          schema: { type: string, pattern: '^"reference-(0|[1-9][0-9]*)"$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReferenceReviewRequest" }
+      responses:
+        "200":
+          description: Все выбранные кандидаты обработаны одной транзакцией; пустой allCandidates не меняет ревизию
+          headers:
+            ETag:
+              description: 'Новая голова словаря: "reference-N"'
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceReviewResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+      description: >-
+        Только candidate → confirmed или rejected. ids адресует точный выбор; allCandidates выбирает всех
+        кандидатов текущего словаря за вычетом excludedIds, не загружая весь набор в браузер.
+        Чужой, отсутствующий или уже не candidate id, в том числе в исключениях, отклоняет весь запрос с 409.
+        Устаревшая голова — 409 reference.dictionary_changed. Не более 10000 фактических целей и 10000 id/исключений;
+        превышение — 400 reference.limit_exceeded целиком, без обрезки. Тело до 512 КиБ, общий бюджет 25 секунд,
+        включая ожидание блокировки. Ошибка или отмена откатывает все пачки, журнал и outbox.
+        После сетевой ошибки или 503 перечитать список; автоматически повторять решение нельзя.
 
   /api/v1/operator/reference/{dict}/entries/{id}:
     get:
@@ -7674,6 +7721,55 @@ components:
         entry: { $ref: "#/components/schemas/ReferenceEntry" }
         resolved: { $ref: "#/components/schemas/ReferenceEntry" }
         alias: { $ref: "#/components/schemas/ReferenceAlias" }
+    ReferenceReviewIDsSelection:
+      type: object
+      additionalProperties: false
+      required: [mode, ids]
+      properties:
+        mode: { type: string, const: ids }
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    ReferenceReviewAllCandidatesSelection:
+      type: object
+      additionalProperties: false
+      required: [mode, excludedIds]
+      properties:
+        mode: { type: string, const: allCandidates }
+        excludedIds:
+          type: array
+          maxItems: 10000
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    ReferenceReviewSelection:
+      oneOf:
+        - { $ref: "#/components/schemas/ReferenceReviewIDsSelection" }
+        - { $ref: "#/components/schemas/ReferenceReviewAllCandidatesSelection" }
+      discriminator:
+        propertyName: mode
+        mapping:
+          ids: "#/components/schemas/ReferenceReviewIDsSelection"
+          allCandidates: "#/components/schemas/ReferenceReviewAllCandidatesSelection"
+    ReferenceReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [status, selection]
+      properties:
+        status: { type: string, enum: [confirmed, rejected] }
+        selection: { $ref: "#/components/schemas/ReferenceReviewSelection" }
+        reason: { type: string }
+    ReferenceReviewResult:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, dictionary, revision, changed]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        dictionary: { type: string }
+        revision: { type: integer, format: int64, minimum: 0 }
+        changed: { type: integer, minimum: 0, maximum: 10000 }
     ReferenceEntryPage:
       type: object
       required: [schemaVersion, revision, total, entries]
