@@ -1,0 +1,213 @@
+{
+    "schemaVersion": 1,
+    "definition": {
+        "version": 1,
+        "attributes": [
+            {
+                "code": "a1",
+                "name": "Поле 1",
+                "type": "string",
+                "dictionary": "d0",
+                "facet": true
+            },
+            {
+                "code": "a2",
+                "name": "Поле 2",
+                "type": "string",
+                "facet": false
+            },
+            {
+                "code": "a3",
+                "name": "Число",
+                "type": "number",
+                "facet": false
+            }
+        ],
+        "schemas": {
+            "s1": {
+                "attributes": [
+                    "a1",
+                    "a2",
+                    "a3"
+                ]
+            },
+            "s2": {
+                "attributes": [
+                    "a1",
+                    "a2"
+                ]
+            }
+        },
+        "categories": [
+            {
+                "id": "c1",
+                "name": "Раздел 1",
+                "slug": "c1",
+                "children": [
+                    {
+                        "id": "c1.a",
+                        "name": "Ветка 1",
+                        "slug": "c1-a",
+                        "children": [
+                            {
+                                "id": "c1.a.x",
+                                "name": "Лист 1",
+                                "slug": "c1-a-x",
+                                "schema": "s1"
+                            },
+                            {
+                                "id": "c1.a.y",
+                                "name": "Лист 2",
+                                "slug": "c1-a-y",
+                                "schema": "s1"
+                            }
+                        ]
+                    },
+                    {
+                        "id": "c1.b",
+                        "name": "Лист 3",
+                        "slug": "c1-b",
+                        "schema": "s1"
+                    }
+                ]
+            },
+            {
+                "id": "c2",
+                "name": "Раздел 2",
+                "slug": "c2",
+                "schema": "s2"
+            }
+        ],
+        "dictionaryBindings": [
+            {
+                "attributeCode": "a1",
+                "mode": "extend",
+                "dictionaries": [
+                    "d1",
+                    "d0"
+                ]
+            },
+            {
+                "categoryId": "c1",
+                "attributeCode": "a1",
+                "mode": "extend",
+                "dictionaries": [
+                    "d2",
+                    "d1"
+                ]
+            },
+            {
+                "categoryId": "c1.a",
+                "attributeCode": "a1",
+                "mode": "replace",
+                "dictionaries": [
+                    "d3"
+                ]
+            },
+            {
+                "categoryId": "c1.a.x",
+                "attributeCode": "a1",
+                "mode": "extend",
+                "dictionaries": [
+                    "d4",
+                    "d3"
+                ]
+            },
+            {
+                "categoryId": "c1.a.y",
+                "attributeCode": "a1",
+                "mode": "replace",
+                "dictionaries": []
+            },
+            {
+                "categoryId": "c1.b",
+                "attributeCode": "a2",
+                "mode": "extend",
+                "dictionaries": [
+                    "d5"
+                ]
+            }
+        ]
+    },
+    "cases": [
+        {
+            "attributeCode": "a1",
+            "expected": [
+                "d0",
+                "d1"
+            ]
+        },
+        {
+            "attributeCode": "a2",
+            "expected": []
+        },
+        {
+            "categoryId": "c1",
+            "attributeCode": "a1",
+            "expected": [
+                "d0",
+                "d1",
+                "d2"
+            ]
+        },
+        {
+            "categoryId": "c1.a",
+            "attributeCode": "a1",
+            "expected": [
+                "d3"
+            ]
+        },
+        {
+            "categoryId": "c1.a.x",
+            "attributeCode": "a1",
+            "expected": [
+                "d3",
+                "d4"
+            ]
+        },
+        {
+            "categoryId": "c1.a.y",
+            "attributeCode": "a1",
+            "expected": []
+        },
+        {
+            "categoryId": "c1.b",
+            "attributeCode": "a1",
+            "expected": [
+                "d0",
+                "d1",
+                "d2"
+            ]
+        },
+        {
+            "categoryId": "c2",
+            "attributeCode": "a1",
+            "expected": [
+                "d0",
+                "d1"
+            ]
+        },
+        {
+            "categoryId": "c1",
+            "attributeCode": "a2",
+            "expected": []
+        },
+        {
+            "categoryId": "c1.b",
+            "attributeCode": "a2",
+            "expected": [
+                "d5"
+            ]
+        },
+        {
+            "categoryId": "c2",
+            "attributeCode": "a2",
+            "expected": []
+        },
+        {
+            "categoryId": "c1.a.x",
+            "attributeCode": "a3",
+            "expected": []
+        }
+    ]
+}

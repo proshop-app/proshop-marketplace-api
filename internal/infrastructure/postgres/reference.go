@@ -16,6 +16,11 @@ import (
 )
 
 const (
+	insertReferenceDictionary = `
+		INSERT INTO reference.dictionaries (code, kind, identity, alias_kinds, limits)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (code) DO NOTHING`
+
 	dictionaryColumns = `code, kind, identity, alias_kinds, limits, revision, entries`
 
 	// lockDictionary сериализует мутации словаря: ревизии одного словаря
@@ -183,6 +188,32 @@ type saveCheck struct {
 	insert bool
 	// key — ключ варианта: нарушение уникальности значит занятое написание.
 	key string
+}
+
+// CreateDictionary создаёт заголовок, не меняя настройки уже существующего словаря.
+func (r *References) CreateDictionary(ctx context.Context, state reference.DictionaryState) (bool, error) {
+	limits, err := json.Marshal(state.Limits)
+	if err != nil {
+		return false, err
+	}
+	kinds := make([]string, 0, len(state.AliasKinds))
+	for _, kind := range state.AliasKinds {
+		kinds = append(kinds, string(kind))
+	}
+	result, err := execSQL(
+		ctx,
+		r.db,
+		insertReferenceDictionary,
+		state.Code,
+		string(state.Kind),
+		state.Identity,
+		kinds,
+		string(limits),
+	)
+	if err != nil {
+		return false, err
+	}
+	return result == 1, nil
 }
 
 // LockDictionary — словарь с блокировкой строки до конца транзакции.

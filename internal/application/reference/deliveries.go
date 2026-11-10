@@ -24,33 +24,43 @@ func (s *Service) Apply(ctx context.Context, d reference.Delivery) (reference.De
 	}
 	meta := reference.Meta{Actor: "delivery:" + strconv.FormatInt(d.Version, 10), Source: reference.SourceSeed}
 	revision, err := s.mutate(ctx, d.Dictionary, func(ctx context.Context, m *session) error {
-		latest, err := m.repo.LatestDelivery(ctx, d.Dictionary)
-		if err != nil {
-			return err
-		}
-		apply, err := reference.PlanDelivery(latest, d)
-		if err != nil || !apply {
-			return err
-		}
-		from := m.dict.Revision()
-		for start := 0; start < len(d.Entries); start += deliveryBatch {
-			batch := d.Entries[start:min(start+deliveryBatch, len(d.Entries))]
-			if err := s.deliver(ctx, m, batch, meta, &result); err != nil {
-				return err
-			}
-		}
-		result.Changed = true
-		return m.repo.RecordDelivery(ctx, reference.DeliveryRecord{
-			Dictionary:   d.Dictionary,
-			Version:      d.Version,
-			Checksum:     d.Checksum,
-			RevisionFrom: from,
-			RevisionTo:   m.dict.Revision(),
-			AppliedAt:    m.now,
-		})
+		return s.applyDelivery(ctx, m, d, meta, &result)
 	})
 	result.Revision = revision
 	return result, err
+}
+
+func (s *Service) applyDelivery(
+	ctx context.Context,
+	m *session,
+	d reference.Delivery,
+	meta reference.Meta,
+	result *reference.DeliveryResult,
+) error {
+	latest, err := m.repo.LatestDelivery(ctx, d.Dictionary)
+	if err != nil {
+		return err
+	}
+	apply, err := reference.PlanDelivery(latest, d)
+	if err != nil || !apply {
+		return err
+	}
+	from := m.dict.Revision()
+	for start := 0; start < len(d.Entries); start += deliveryBatch {
+		batch := d.Entries[start:min(start+deliveryBatch, len(d.Entries))]
+		if err := s.deliver(ctx, m, batch, meta, result); err != nil {
+			return err
+		}
+	}
+	result.Changed = true
+	return m.repo.RecordDelivery(ctx, reference.DeliveryRecord{
+		Dictionary:   d.Dictionary,
+		Version:      d.Version,
+		Checksum:     d.Checksum,
+		RevisionFrom: from,
+		RevisionTo:   m.dict.Revision(),
+		AppliedAt:    m.now,
+	})
 }
 
 // Rollback откатывает последнюю поставку обратными образами её ревизий, пока

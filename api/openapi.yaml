@@ -1636,6 +1636,93 @@ paths:
       description: Только из parked при совпадении expectedVersion; устаревший запрос без сохранённого ключа — 409 с текущим event.
         Аудит автора/времени/заметки. Retry атомарно ставит outbox с версией решения и отдельным бюджетом попыток;
         queued не означает успех, после ошибки событие возвращается в parked.
+  /api/v1/taxonomy/dictionary-bindings:
+    get:
+      tags: [taxonomy]
+      summary: Источники открытых подсказок одной версии таксономии
+      operationId: taxonomyDictionaryBindings
+      parameters:
+        - { $ref: "#/components/parameters/TaxonomyCache" }
+      responses:
+        "200":
+          description: Все правила; отсутствие правил представлено пустым массивом
+          headers:
+            ETag: { schema: { type: string } }
+            X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyDictionaryBindings" }
+        "304": { description: Версия не изменилась }
+  /api/v1/operator/taxonomy/dictionary-bindings/{attributeCode}:
+    put:
+      parameters:
+        - name: attributeCode
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        - name: categoryId
+          in: query
+          description: Категория и её потомки; отсутствие означает глобальное правило
+          schema: { type: string, pattern: '^[a-z][a-z0-9_.-]{0,127}$' }
+        - name: If-Match
+          in: header
+          required: true
+          description: 'Текущая версия: "taxonomy-5"; при конфликте автоматического повтора нет'
+          schema: { type: string }
+      tags: [operator]
+      summary: Создать или заменить одно правило подсказок без изменения атрибутов
+      operationId: operatorPutTaxonomyDictionaryBinding
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxonomyDictionaryBindingInput" }
+      responses:
+        "200":
+          description: Версия таксономии; семантически одинаковое правило не создаёт новую версию
+          headers:
+            ETag: { schema: { type: string } }
+            X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyVersion" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    delete:
+      parameters:
+        - name: attributeCode
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        - name: categoryId
+          in: query
+          description: Категория и её потомки; отсутствие означает глобальное правило
+          schema: { type: string, pattern: '^[a-z][a-z0-9_.-]{0,127}$' }
+        - name: If-Match
+          in: header
+          required: true
+          description: 'Текущая версия: "taxonomy-5"; при конфликте автоматического повтора нет'
+          schema: { type: string }
+      tags: [operator]
+      summary: Удалить одно правило и восстановить наследование подсказок
+      operationId: operatorDeleteTaxonomyDictionaryBinding
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      responses:
+        "200":
+          description: Версия таксономии; удаление отсутствующего правила не меняет версию
+          headers:
+            ETag: { schema: { type: string } }
+            X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyVersion" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/taxonomy/categories:
     get:
       tags: [taxonomy]
@@ -1759,7 +1846,7 @@ paths:
         - name: part
           in: path
           required: true
-          schema: { type: string, enum: [categories, attributes, schemas] }
+          schema: { type: string, enum: [categories, attributes, schemas, dictionary-bindings] }
         - { $ref: "#/components/parameters/TaxonomyCache" }
       responses:
         "200":
@@ -2793,6 +2880,128 @@ paths:
                     default: 30
                     description: DELIVERY_SUBSIDY_MIN_PERCENT; действующая субсидия — max настройки с потолком и процента cost.
 
+  /api/v1/operator/reference:
+    get:
+      tags: [reference]
+      summary: Словари с количеством записей и кандидатов
+      operationId: operatorReferenceDictionaries
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      responses:
+        "200":
+          description: Список словарей
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceDictionaryList" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/reference/import:
+    post:
+      tags: [reference]
+      summary: Создать словари и применить пакет JSON/YAML одной транзакцией
+      operationId: operatorReferenceImport
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      description: |
+        Тело до 32 МиБ; 1000 словарей и 100000 записей. Загрузка и обработка
+        имеют общий бюджет 120 секунд; на ответ после отмены оставлено ещё 5 секунд. Неизвестные и повторные
+        ключи, якоря, ссылки и несколько YAML-документов запрещены. Один пакет
+        либо применяется целиком, либо полностью откатывается. Повтор релиза с
+        той же канонической суммой — no-op; изменение данных того же релиза,
+        понижение релиза, другой kind или normalizer — 409. Правки оператора,
+        rejected/deprecated и непустая metadata сохраняются правилами поставки.
+        taxonomy bindings и публикация taxonomy не меняются. Для cookie нужны
+        Origin и X-Requested-With: KvazarOperator, как на других операторских мутациях.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReferenceImportPackage" }
+          application/yaml:
+            schema: { type: string, description: YAML-документ ReferenceImportPackage }
+          text/yaml:
+            schema: { type: string, description: YAML-документ ReferenceImportPackage }
+      responses:
+        "200":
+          description: Пакет применён или уже применялся
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceImportResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/reference/{dict}/entries:
+    get:
+      tags: [reference]
+      summary: Страница записей; очередь кандидатов — status=candidate
+      operationId: operatorReferenceEntries
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      description: Порядок — по частоте встреч, затем по ключу.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/ReferenceStatus" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Страница записей
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferenceEntryPage" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/operator/reference/{dict}/entries/{id}:
+    get:
+      tags: [reference]
+      summary: Запись по id; объединённая отдаётся вместе с выжившей
+      operationId: operatorReferenceEntry
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - { $ref: "#/components/parameters/ReferenceEntryId" }
+      responses:
+        "200": { $ref: "#/components/responses/ReferenceEntry" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [reference]
+      summary: Переименовать, сменить статус или свободные поля по ревизии
+      operationId: operatorReferenceUpdateEntry
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      description: |
+        Переходы статуса: candidate → confirmed | rejected, confirmed → deprecated.
+        Прежнее каноническое написание остаётся вариантом. Устаревший If-Match —
+        409 REFERENCE_ENTRY_CHANGED.
+      parameters:
+        - { $ref: "#/components/parameters/ReferenceDictionary" }
+        - { $ref: "#/components/parameters/ReferenceEntryId" }
+        - { $ref: "#/components/parameters/ReferenceIfMatch" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                canonical: { type: string, maxLength: 120 }
+                status: { type: string, enum: [confirmed, rejected, deprecated] }
+                metadata: { $ref: "#/components/schemas/ReferenceMetadata" }
+                reason: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/ReferenceEntry" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /internal/reference:
     get:
       tags: [reference]
@@ -6071,11 +6280,61 @@ components:
       required: [version]
       properties:
         version: { type: integer, format: int64, minimum: 0 }
+    TaxonomyDictionaryBindingInput:
+      type: object
+      additionalProperties: false
+      required: [mode, dictionaries]
+      properties:
+        mode:
+          type: string
+          enum: [extend, replace]
+          description: extend объединяет с унаследованными; replace заменяет, пустой replace отключает подсказки
+        dictionaries:
+          type: array
+          maxItems: 16
+          uniqueItems: true
+          items: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+          description: Только существующие open словари; extend требует хотя бы один. Порядок не задаёт приоритет.
+    TaxonomyDictionaryBinding:
+      type: object
+      additionalProperties: false
+      required: [attributeCode, mode, dictionaries]
+      properties:
+        categoryId:
+          type: string
+          pattern: '^[a-z][a-z0-9_.-]{0,127}$'
+          description: Отсутствие означает глобальное правило; иначе категория и потомки
+        attributeCode: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        mode: { type: string, enum: [extend, replace] }
+        dictionaries:
+          type: array
+          maxItems: 16
+          uniqueItems: true
+          items: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+      description: >-
+        Только string атрибут, существующий в области категории. Источники разрешаются:
+        Attribute.dictionary, глобальное правило, затем путь от корня к выбранной категории.
+        extend — объединение, replace — замена; replace [] отключает. Дубликаты удаляются
+        в порядке первого появления без семантического приоритета. Не более 16 итоговых источников.
+    TaxonomyDictionaryBindings:
+      type: object
+      additionalProperties: false
+      required: [version, dictionaryBindings]
+      properties:
+        version: { type: integer, format: int64, minimum: 0 }
+        dictionaryBindings:
+          type: array
+          maxItems: 4096
+          items: { $ref: "#/components/schemas/TaxonomyDictionaryBinding" }
     TaxonomyDefinition:
       type: object
       additionalProperties: false
       required: [version, attributes, schemas, categories]
       properties:
+        dictionaryBindings:
+          type: array
+          maxItems: 4096
+          items: { $ref: "#/components/schemas/TaxonomyDictionaryBinding" }
         version: { type: integer, format: int64, minimum: 0 }
         attributes:
           type: array
@@ -7248,6 +7507,110 @@ components:
         limit: { type: integer }
         offset: { type: integer }
 
+    ReferenceDictionarySummary:
+      type: object
+      additionalProperties: false
+      required: [code, kind, revision, entries, candidates]
+      properties:
+        code: { type: string }
+        kind: { type: string, enum: [open, closed] }
+        revision: { type: integer, format: int64, minimum: 0 }
+        entries: { type: integer, format: int64, minimum: 0 }
+        candidates: { type: integer, format: int64, minimum: 0 }
+    ReferenceDictionaryList:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, dictionaries]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        dictionaries:
+          type: array
+          items: { $ref: "#/components/schemas/ReferenceDictionarySummary" }
+    ReferenceImportSource:
+      type: object
+      additionalProperties: false
+      required: [id, url, license]
+      properties:
+        id: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$' }
+        url: { type: string, format: uri, pattern: '^https://', maxLength: 2048 }
+        license: { type: string, minLength: 1, maxLength: 256 }
+        version: { type: string, maxLength: 256 }
+    ReferenceImportAlias:
+      type: object
+      additionalProperties: false
+      required: [text]
+      description: Существующий DeliveryAlias; kind по умолчанию spelling, source=seed.
+      properties:
+        text: { type: string, minLength: 1, maxLength: 120 }
+        kind: { $ref: "#/components/schemas/ReferenceAliasKind" }
+        locale: { type: string }
+    ReferenceImportEntry:
+      type: object
+      additionalProperties: false
+      required: [canonical]
+      properties:
+        canonical: { type: string, minLength: 1, maxLength: 120, description: Не больше 8 слов }
+        status: { type: string, enum: [candidate, confirmed], default: candidate }
+        aliases:
+          type: array
+          maxItems: 49
+          items: { $ref: "#/components/schemas/ReferenceImportAlias" }
+        metadata:
+          type: object
+          additionalProperties: true
+          description: До 4 КиБ вместе с provenance. sourceId обязателен при нескольких sources.
+    ReferenceImportDictionary:
+      type: object
+      additionalProperties: false
+      required: [code, kind, release, entries]
+      properties:
+        code: { type: string, pattern: '^[a-z][a-z0-9_]{0,31}$' }
+        kind: { type: string, enum: [open, closed] }
+        release: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        entries:
+          type: array
+          minItems: 1
+          maxItems: 100000
+          items: { $ref: "#/components/schemas/ReferenceImportEntry" }
+    ReferenceImportPackage:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, sources, dictionaries]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        sources:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items: { $ref: "#/components/schemas/ReferenceImportSource" }
+        dictionaries:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items: { $ref: "#/components/schemas/ReferenceImportDictionary" }
+    ReferenceImportDictionaryResult:
+      type: object
+      additionalProperties: false
+      required: [code, created, release, revision, changed, createdEntries, updatedEntries, skippedEntries]
+      properties:
+        code: { type: string }
+        created: { type: boolean }
+        release: { type: integer, format: int64 }
+        revision: { type: integer, format: int64 }
+        changed: { type: boolean }
+        createdEntries: { type: integer, minimum: 0 }
+        updatedEntries: { type: integer, minimum: 0 }
+        skippedEntries: { type: integer, minimum: 0 }
+    ReferenceImportResult:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, dictionaries]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        dictionaries:
+          type: array
+          items: { $ref: "#/components/schemas/ReferenceImportDictionaryResult" }
+
     ReferenceStatus:
       type: string
       enum: [candidate, confirmed, merged, deprecated, rejected]
@@ -7256,6 +7619,7 @@ components:
       enum: [spelling, translit, abbreviation, former, locale]
     ReferenceMetadata:
       type: object
+      additionalProperties: true
       description: Свободные поля записи до 4 КиБ; directions — подсказка направлений, только массив строк.
       properties:
         directions:

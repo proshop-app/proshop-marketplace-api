@@ -52,6 +52,7 @@
 - code: fragrance
   name: Аромат
   type: string
+  dictionary: fragrance
   facet: true
 - code: ingredients
   name: Состав продукта
@@ -60,14 +61,17 @@
 - code: skin_type
   name: Тип кожи
   type: string
+  dictionary: skin_type
   facet: true
 - code: hair_type
   name: Тип волос
   type: string
+  dictionary: hair_type
   facet: true
 - code: skin_effect
   name: Действие средства
   type: string
+  dictionary: skin_effect
   facet: true
 - code: food_flavor
   name: Вкус
@@ -76,6 +80,7 @@
 - code: food_storage
   name: Условия хранения
   type: string
+  dictionary: food_storage
   facet: true
 - code: pet_breed
   name: Порода животного
@@ -88,26 +93,32 @@
 - code: target_species
   name: Вид животного
   type: string
+  dictionary: target_species
   facet: true
 - code: processor
   name: Процессор
   type: string
+  dictionary: processor
   facet: true
 - code: gpu
   name: Графический процессор
   type: string
+  dictionary: gpu
   facet: true
 - code: chipset
   name: Чипсет
   type: string
+  dictionary: chipset
   facet: true
 - code: cpu_socket
   name: Сокет процессора
   type: string
+  dictionary: cpu_socket
   facet: true
 - code: os
   name: Операционная система
   type: string
+  dictionary: os
   facet: true
 - code: interfaces
   name: Интерфейсы подключения
@@ -116,10 +127,12 @@
 - code: memory_type
   name: Тип памяти
   type: string
+  dictionary: memory_type
   facet: true
 - code: resolution
   name: Разрешение экрана
   type: string
+  dictionary: resolution
   facet: true
 - code: camera_resolution
   name: Разрешение камеры
@@ -128,14 +141,17 @@
 - code: video_format
   name: Формат видеозаписи
   type: string
+  dictionary: video_format
   facet: true
 - code: lens_mount
   name: Байонет объектива
   type: string
+  dictionary: lens_mount
   facet: true
 - code: sensor_format
   name: Формат матрицы
   type: string
+  dictionary: sensor_format
   facet: true
 - code: focal_length
   name: Фокусное расстояние
@@ -148,18 +164,22 @@
 - code: connector
   name: Разъём
   type: string
+  dictionary: connector
   facet: true
 - code: network_standard
   name: Стандарт связи
   type: string
+  dictionary: network_standard
   facet: true
 - code: supported_platform
   name: Игровая платформа
   type: string
+  dictionary: supported_platform
   facet: true
 - code: switch_type
   name: Тип переключателей
   type: string
+  dictionary: switch_type
   facet: true
 - code: keyboard_layout
   name: Раскладка клавиатуры
@@ -168,86 +188,107 @@
 - code: drive_interface
   name: Интерфейс накопителя
   type: string
+  dictionary: drive_interface
   facet: true
 - code: drive_form_factor
   name: Форм-фактор накопителя
   type: string
+  dictionary: drive_form_factor
   facet: true
 - code: print_technology
   name: Технология печати
   type: string
+  dictionary: print_technology
   facet: true
 - code: paper_format
   name: Формат бумаги
   type: string
+  dictionary: paper_format
   facet: true
 - code: print_color
   name: Цветность печати
   type: string
+  dictionary: print_color
   facet: true
 - code: furniture_style
   name: Стиль мебели
   type: string
+  dictionary: furniture_style
   facet: true
 - code: upholstery
   name: Материал обивки
   type: string
+  dictionary: upholstery
   facet: true
 - code: furniture_frame
   name: Материал каркаса мебели
   type: string
+  dictionary: furniture_frame
   facet: true
 - code: mattress_filling
   name: Наполнитель матраса
   type: string
+  dictionary: mattress_filling
   facet: true
 - code: fabric_composition
   name: Состав ткани
   type: string
+  dictionary: fabric_composition
   facet: true
 - code: clothing_fit
   name: Посадка одежды
   type: string
+  dictionary: clothing_fit
   facet: true
 - code: clothing_fastener
   name: Застёжка одежды
   type: string
+  dictionary: clothing_fastener
   facet: true
 - code: shoe_upper
   name: Материал верха обуви
   type: string
+  dictionary: shoe_upper
   facet: true
 - code: shoe_lining
   name: Материал подкладки обуви
   type: string
+  dictionary: shoe_lining
   facet: true
 - code: shoe_sole
   name: Материал подошвы
   type: string
+  dictionary: shoe_sole
   facet: true
 - code: shoe_fastener
   name: Застёжка обуви
   type: string
+  dictionary: shoe_fastener
   facet: true
 - code: jewelry_insert
   name: Вставка украшения
   type: string
+  dictionary: jewelry_insert
   facet: true
 - code: jewelry_sample
   name: Проба металла
   type: string
+  dictionary: jewelry_sample
   facet: true
 - code: appliance_installation
   name: Способ установки техники
   type: string
+  dictionary: appliance_installation
   facet: true
 - code: energy_class
   name: Класс энергопотребления
   type: string
+  dictionary: energy_class
   facet: true
 - code: power_source
   name: Источник питания
   type: string
+  dictionary: power_source
   facet: true
 - code: tool_mount
   name: Тип крепления оснастки
@@ -260,10 +301,12 @@
 - code: thread_size
   name: Размер резьбы
   type: string
+  dictionary: thread_size
   facet: true
 - code: paint_base
   name: Основа лакокрасочного материала
   type: string
+  dictionary: paint_base
   facet: true
 - code: surface_type
   name: Тип поверхности
@@ -272,6 +315,7 @@
 - code: auto_make
   name: Марка автомобиля
   type: string
+  dictionary: auto_make
   facet: true
 - code: auto_model
   name: Модель автомобиля
@@ -280,30 +324,37 @@
 - code: auto_engine
   name: Тип двигателя
   type: string
+  dictionary: auto_engine
   facet: true
 - code: auto_position
   name: Место установки детали
   type: string
+  dictionary: auto_position
   facet: true
 - code: oil_viscosity
   name: Вязкость масла
   type: string
+  dictionary: oil_viscosity
   facet: true
 - code: oil_specification
   name: Допуски масла
   type: string
+  dictionary: oil_specification
   facet: true
 - code: tire_season
   name: Сезонность шин
   type: string
+  dictionary: tire_season
   facet: true
 - code: tire_load_index
   name: Индекс нагрузки шины
   type: string
+  dictionary: tire_load_index
   facet: true
 - code: tire_speed_index
   name: Индекс скорости шины
   type: string
+  dictionary: tire_speed_index
   facet: true
 - code: wheel_bolt_pattern
   name: Разболтовка диска
@@ -320,10 +371,12 @@
 - code: planting_period
   name: Срок посадки
   type: string
+  dictionary: planting_period
   facet: true
 - code: flowering_period
   name: Период цветения
   type: string
+  dictionary: flowering_period
   facet: true
 - code: fertilizer_composition
   name: Состав удобрения
@@ -332,14 +385,17 @@
 - code: sport
   name: Вид спорта
   type: string
+  dictionary: sport
   facet: true
 - code: bike_frame
   name: Материал рамы велосипеда
   type: string
+  dictionary: bike_frame
   facet: true
 - code: bike_brake
   name: Тип тормозов велосипеда
   type: string
+  dictionary: bike_brake
   facet: true
 - code: fishing_test
   name: Тест удилища
@@ -348,14 +404,17 @@
 - code: fishing_action
   name: Строй удилища
   type: string
+  dictionary: fishing_action
   facet: true
 - code: book_author
   name: Автор книги
   type: string
+  dictionary: book_author
   facet: true
 - code: book_publisher
   name: Издательство
   type: string
+  dictionary: book_publisher
   facet: true
 - code: book_isbn
   name: ISBN
@@ -368,6 +427,7 @@
 - code: book_genre
   name: Жанр издания
   type: string
+  dictionary: book_genre
   facet: true
 - code: book_series
   name: Серия издания
@@ -376,18 +436,22 @@
 - code: instrument_key
   name: Тональность инструмента
   type: string
+  dictionary: instrument_key
   facet: true
 - code: instrument_tuning
   name: Строй инструмента
   type: string
+  dictionary: instrument_tuning
   facet: true
 - code: art_technique
   name: Художественная техника
   type: string
+  dictionary: art_technique
   facet: true
 - code: craft_theme
   name: Тематика творчества
   type: string
+  dictionary: craft_theme
   facet: true
 - code: industrial_standard
   name: Стандарт изделия
@@ -400,10 +464,12 @@
 - code: filter_type
   name: Тип фильтра
   type: string
+  dictionary: filter_type
   facet: true
 - code: food_category
   name: Вид пищевого продукта
   type: string
+  dictionary: food_category
   facet: true
 - code: food_diet
   name: Особенности питания

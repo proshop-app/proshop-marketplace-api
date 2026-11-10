@@ -25,17 +25,29 @@ func (r taxonomies) Current(context.Context) (taxonomy.Definition, error) {
 
 func (r taxonomies) Lock(context.Context) error { return nil }
 
+func (r taxonomies) Version(_ context.Context, version int64) (taxonomy.Definition, error) {
+	d, exists := r.d.taxonomyVersions[version]
+	if !exists {
+		return taxonomy.Definition{}, taxonomy.ErrInvalid.WithMessage("неизвестная версия таксономии")
+	}
+	return cloneTaxonomy(d), nil
+}
+
 func (r taxonomies) Save(_ context.Context, d taxonomy.Definition, expected int64) error {
 	if r.d.taxonomy.Version != expected {
 		return taxonomy.ErrConflict
 	}
 	r.d.taxonomy = cloneTaxonomy(d)
+	r.d.taxonomyVersions[d.Version] = cloneTaxonomy(d)
 	return nil
 }
 
 // SeedTaxonomy задаёт схему для тестов сценариев.
 func (s *Store) SeedTaxonomy(d taxonomy.Definition) {
-	s.read(func(data *data) { data.taxonomy = cloneTaxonomy(d) })
+	s.read(func(data *data) {
+		data.taxonomy = cloneTaxonomy(d)
+		data.taxonomyVersions[d.Version] = cloneTaxonomy(d)
+	})
 }
 
 func (r products) Page(

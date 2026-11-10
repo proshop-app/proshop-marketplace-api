@@ -31,3 +31,29 @@ func TestTaxonomyCommandFailsWithoutExposingCredentials(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoveHintRequiresNarrowExplicitCASAndHistoricalProof(t *testing.T) {
+	t.Setenv("DATABASE_URL", "invalid://user:secret-value@host/database")
+	for _, args := range [][]string{
+		{"remove-hint"},
+		{"remove-hint", "--attribute", "a1", "--dictionary", "d1", "--previous-version", "4"},
+		{
+			"remove-hint",
+			"--attribute",
+			"a1",
+			"--dictionary",
+			"d1",
+			"--previous-version",
+			"5",
+			"--expected-version",
+			"5",
+		},
+		{"apply", "--attribute", "a1"},
+	} {
+		var output, diagnostics bytes.Buffer
+		code := run(args, &output, &diagnostics)
+		if code != 2 || strings.Contains(diagnostics.String(), "secret-value") {
+			t.Fatal(args, code, diagnostics.String())
+		}
+	}
+}

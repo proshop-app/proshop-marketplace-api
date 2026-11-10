@@ -37,6 +37,8 @@ type Presence struct {
 // LockDictionary: изменения одного словаря идут по одной, поэтому его
 // ревизии видны потребителю в порядке фиксации и дельта since ничего не теряет.
 type Repository interface {
+	// CreateDictionary не меняет существующие настройки; true — заголовок создан этой транзакцией.
+	CreateDictionary(ctx context.Context, state DictionaryState) (bool, error)
 	LockDictionary(ctx context.Context, code string) (*Dictionary, error)
 	Dictionary(ctx context.Context, code string) (*Dictionary, error)
 	Dictionaries(ctx context.Context) ([]*Dictionary, error)

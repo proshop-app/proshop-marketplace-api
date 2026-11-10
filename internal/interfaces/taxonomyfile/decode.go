@@ -57,6 +57,11 @@ func partTarget(d *taxonomy.Definition, part string) (any, error) {
 		return &d.Schemas, nil
 	case "categories":
 		return &d.Categories, nil
+	case "dictionary-bindings":
+		if d.DictionaryBindings == nil {
+			d.DictionaryBindings = []taxonomy.DictionaryBinding{}
+		}
+		return &d.DictionaryBindings, nil
 	default:
 		return nil, taxonomy.ErrInvalid.WithMessage("неизвестная часть таксономии")
 	}

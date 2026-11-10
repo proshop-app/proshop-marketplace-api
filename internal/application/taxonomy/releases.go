@@ -57,6 +57,9 @@ func (s *Service) changeRelease(
 			return err
 		}
 		next := release.Definition()
+		if release.DictionaryBindings == nil {
+			next.DictionaryBindings = current.DictionaryBindings
+		}
 		if rollback {
 			next = latest.Previous
 			if len(next.Schemas) == 0 {
@@ -72,7 +75,11 @@ func (s *Service) changeRelease(
 				return err
 			}
 		}
-		if err := next.CheckEvolution(current); err != nil {
+		checkEvolution := next.CheckEvolution
+		if rollback {
+			checkEvolution = next.CheckRollbackEvolution
+		}
+		if err := checkEvolution(current); err != nil {
 			return err
 		}
 		if err := repository.Save(ctx, next, current.Version); err != nil {

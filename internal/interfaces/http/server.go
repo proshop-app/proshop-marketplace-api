@@ -241,6 +241,15 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/health", health(deps.Checks)},
 		{http.MethodGet, "/metrics", metrics},
 
+		{http.MethodGet, "/api/v1/taxonomy/dictionary-bindings", taxonomy.dictionaryBindings},
+		{
+			http.MethodPut,
+			"/api/v1/operator/taxonomy/dictionary-bindings/{attributeCode}",
+			operator(taxonomy.putDictionaryBinding)},
+		{
+			http.MethodDelete,
+			"/api/v1/operator/taxonomy/dictionary-bindings/{attributeCode}",
+			operator(taxonomy.deleteDictionaryBinding)},
 		{http.MethodGet, "/api/v1/taxonomy/categories", taxonomy.categories},
 		{http.MethodGet, "/api/v1/taxonomy/categories/{id}/schema", taxonomy.schema},
 		{http.MethodGet, "/api/v1/taxonomy/version", taxonomy.version},
@@ -306,6 +315,11 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
 		{http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},
 
+		{http.MethodGet, "/api/v1/operator/reference", operator(registry.summaries)},
+		{http.MethodPost, "/api/v1/operator/reference/import", operator(referenceImportBudget(registry.importPackage))},
+		{http.MethodGet, "/api/v1/operator/reference/{dict}/entries", operator(registry.list)},
+		{http.MethodGet, "/api/v1/operator/reference/{dict}/entries/{id}", operator(registry.get)},
+		{http.MethodPatch, "/api/v1/operator/reference/{dict}/entries/{id}", operator(registry.update)},
 		{http.MethodGet, "/internal/reference", reader(registry.discovery)},
 		{http.MethodGet, "/api/v1/internal/reference", reader(registry.discovery)},
 		{http.MethodGet, "/api/v1/internal/reference/{dict}/snapshot", reader(registry.snapshot)},

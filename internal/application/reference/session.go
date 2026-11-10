@@ -48,31 +48,44 @@ func (s *Service) mutate(
 ) (int64, error) {
 	var revision int64
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		repo := tx.Reference()
-		dict, err := repo.LockDictionary(ctx, code)
-		if err != nil {
-			return err
-		}
-		if err := dict.CheckNormalizer(); err != nil {
-			return err
-		}
-		m := &session{repo: repo, tx: tx, dict: dict, from: dict.Revision(), now: s.clock.Now()}
-		if err := fn(ctx, m); err != nil {
-			return err
-		}
-		revision = dict.Revision()
-		if !m.dirty {
-			return nil
-		}
-		if err := repo.SaveDictionary(ctx, dict); err != nil {
-			return err
-		}
-		return m.enqueue(ctx)
+		var err error
+		revision, err = s.mutateInTransaction(ctx, tx, code, fn)
+		return err
 	})
 	if err != nil {
 		return 0, err
 	}
 	return revision, nil
+}
+
+// mutateInTransaction сохраняет тот же журнал и outbox внутри общей транзакции пакета.
+func (s *Service) mutateInTransaction(
+	ctx context.Context,
+	tx ports.Tx,
+	code string,
+	fn func(ctx context.Context, m *session) error,
+) (int64, error) {
+	repo := tx.Reference()
+	dict, err := repo.LockDictionary(ctx, code)
+	if err != nil {
+		return 0, err
+	}
+	if err := dict.CheckNormalizer(); err != nil {
+		return 0, err
+	}
+	m := &session{repo: repo, tx: tx, dict: dict, from: dict.Revision(), now: s.clock.Now()}
+	if err := fn(ctx, m); err != nil {
+		return 0, err
+	}
+	if m.dirty {
+		if err := repo.SaveDictionary(ctx, dict); err != nil {
+			return 0, err
+		}
+		if err := m.enqueue(ctx); err != nil {
+			return 0, err
+		}
+	}
+	return dict.Revision(), nil
 }
 
 // record пишет изменение: запись журнала первой, затем занятость ключей,

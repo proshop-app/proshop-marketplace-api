@@ -78,6 +78,11 @@ func (s *statusRecorder) WriteHeader(status int) {
 	s.ResponseWriter.WriteHeader(status)
 }
 
+// Unwrap сохраняет доступ ResponseController к дедлайнам соединения под наблюдением.
+func (s *statusRecorder) Unwrap() http.ResponseWriter {
+	return s.ResponseWriter
+}
+
 func newHTTPMetrics(registerer prometheus.Registerer) *httpMetrics {
 	m := &httpMetrics{
 		catalogOffers: prometheus.NewCounterVec(

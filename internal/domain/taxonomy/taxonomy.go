@@ -77,10 +77,11 @@ type CategorySchema struct {
 
 // Definition — неизменяемый снимок версии таксономии.
 type Definition struct {
-	Version    int64             `json:"version" yaml:"version"`
-	Attributes []Attribute       `json:"attributes" yaml:"attributes"`
-	Schemas    map[string]Schema `json:"schemas" yaml:"schemas"`
-	Categories []Category        `json:"categories" yaml:"categories"`
+	DictionaryBindings []DictionaryBinding `json:"dictionaryBindings,omitempty" yaml:"dictionaryBindings,omitempty"`
+	Version            int64               `json:"version" yaml:"version"`
+	Attributes         []Attribute         `json:"attributes" yaml:"attributes"`
+	Schemas            map[string]Schema   `json:"schemas" yaml:"schemas"`
+	Categories         []Category          `json:"categories" yaml:"categories"`
 }
 
 // Card — отдельный блок площадки в проекции магазина.
@@ -184,7 +185,7 @@ func (d Definition) Validate() error {
 	if len(ids) > MaxCategories || len(codes) > MaxAttributes {
 		return ErrInvalid.WithMessage("слишком много категорий или кодов атрибутов")
 	}
-	return nil
+	return d.validateDictionaryBindings(codes)
 }
 
 func (a Attribute) validate() error {
@@ -264,6 +265,16 @@ func (d Definition) Fields() map[string]Attribute {
 // CheckEvolution сохраняет адреса ссылок и типы существующих динамических полей.
 // Глобальные коды сохраняются даже вне схем, чтобы их нельзя было переиспользовать.
 func (d Definition) CheckEvolution(old Definition) error {
+	return d.checkEvolution(old, false)
+}
+
+// CheckRollbackEvolution восстанавливает сохранённый снимок последней поставки.
+// Удаление строковой подсказки разрешено только этому пути; смена словаря запрещена.
+func (d Definition) CheckRollbackEvolution(old Definition) error {
+	return d.checkEvolution(old, true)
+}
+
+func (d Definition) checkEvolution(old Definition, rollback bool) error {
 	previousSlugs := old.categorySlugs()
 	nextSlugs := d.categorySlugs()
 	owners := map[string]string{}
@@ -283,8 +294,11 @@ func (d Definition) CheckEvolution(old Definition) error {
 	fields := d.Fields()
 	for code, previous := range old.Fields() {
 		next, ok := fields[code]
+		// Строка остаётся свободной: вид нового словаря проверяет публикация.
+		hintAdded := previous.Type == "string" && previous.Dictionary == "" && next.Dictionary != ""
+		hintRemoved := rollback && previous.Type == "string" && previous.Dictionary != "" && next.Dictionary == ""
 		if !ok || next.Type != previous.Type || next.Unit != previous.Unit ||
-			next.Dictionary != previous.Dictionary {
+			(next.Dictionary != previous.Dictionary && !hintAdded && !hintRemoved) {
 			return ErrConflict.WithMessage("нельзя удалить код или изменить тип, единицу, словарь: " + code)
 		}
 	}
