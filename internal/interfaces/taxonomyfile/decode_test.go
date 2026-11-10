@@ -39,3 +39,19 @@ func TestStrictYAML(t *testing.T) {
 		t.Fatal("неизвестная часть")
 	}
 }
+
+func TestHintRulesYAMLRoundTripPreservesExplicitDisable(t *testing.T) {
+	body := "- categoryId: c1\n  attributeCode: a1\n  mode: replace\n  dictionaries: []\n"
+	d, err := taxonomyfile.DecodePart(strings.NewReader(body), "dictionary-bindings")
+	if err != nil || len(d.DictionaryBindings) != 1 || d.DictionaryBindings[0].Dictionaries == nil {
+		t.Fatal(d, err)
+	}
+	encoded, err := taxonomyfile.EncodePart(d, "dictionary-bindings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := taxonomyfile.DecodePart(strings.NewReader(string(encoded)), "dictionary-bindings")
+	if err != nil || back.DictionaryBindings[0].Mode != "replace" || back.DictionaryBindings[0].Dictionaries == nil {
+		t.Fatal(back, err)
+	}
+}

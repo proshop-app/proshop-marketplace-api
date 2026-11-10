@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	selectTaxonomy = `SELECT definition FROM taxonomy_head WHERE singleton FOR SHARE`
-	lockTaxonomy   = `SELECT version FROM taxonomy_head WHERE singleton FOR UPDATE`
-	updateTaxonomy = `UPDATE taxonomy_head
+	selectTaxonomy        = `SELECT definition FROM taxonomy_head WHERE singleton FOR SHARE`
+	selectTaxonomyVersion = `SELECT definition FROM taxonomy_versions WHERE version = $1`
+	lockTaxonomy          = `SELECT version FROM taxonomy_head WHERE singleton FOR UPDATE`
+	updateTaxonomy        = `UPDATE taxonomy_head
 		SET version = $1,
 			definition = $2
 		WHERE singleton AND version = $3`
@@ -36,6 +37,21 @@ func (r *Taxonomy) Current(ctx context.Context) (taxonomy.Definition, error) {
 	}
 	var d taxonomy.Definition
 	err := json.Unmarshal(raw, &d)
+	return d, err
+}
+
+// Version читает неизменяемое доказательство прежней привязки, не восстанавливая снимок целиком.
+func (r *Taxonomy) Version(ctx context.Context, version int64) (taxonomy.Definition, error) {
+	var raw []byte
+	err := rawSQL(ctx, r.db, selectTaxonomyVersion, version).Row().Scan(&raw)
+	if notFound(err) {
+		return taxonomy.Definition{}, taxonomy.ErrInvalid.WithMessage("неизвестная версия таксономии")
+	}
+	if err != nil {
+		return taxonomy.Definition{}, err
+	}
+	var d taxonomy.Definition
+	err = json.Unmarshal(raw, &d)
 	return d, err
 }
 

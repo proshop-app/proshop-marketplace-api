@@ -1,9 +1,9 @@
-release: 6
-checksum: fe8a12a89b3ac5b4c9c8672c7bbd9f8459cd063f1539ff9ab8fe45f439ce94b8
+release: 7
+checksum: decda65915fef151263a07f57be16b7ac9a32e866b4f533e6b1920e4b8f261d5
 coverage:
     directions: 29
     categories: 1282
     leaves: 1085
     schemas: 142
     attributes: 219
-    dictionaries: 19
+    dictionaries: 85

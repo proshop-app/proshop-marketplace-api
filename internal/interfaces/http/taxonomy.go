@@ -104,7 +104,7 @@ func (h *taxonomyHandlers) download(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *taxonomyHandlers) readPart(w http.ResponseWriter, r *http.Request, part string, asYAML bool) {
-	if part != "attributes" && part != "schemas" && part != "categories" {
+	if part != "attributes" && part != "schemas" && part != "categories" && part != "dictionary-bindings" {
 		writeError(w, r, taxonomy.ErrInvalid.WithMessage("неизвестная часть таксономии"))
 		return
 	}
@@ -135,6 +135,8 @@ func (h *taxonomyHandlers) readPart(w http.ResponseWriter, r *http.Request, part
 		value = d.Schemas
 	case "categories":
 		value = d.Categories
+	case "dictionary-bindings":
+		value = d.DictionaryBindings
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"version": d.Version, part: value})
 }

@@ -26,11 +26,12 @@ var (
 
 // Release — неизменяемая поставка; её номер независим от версии публикации.
 type Release struct {
-	Version    int64
-	Checksum   string
-	Categories []Category
-	Attributes []Attribute
-	Schemas    map[string]Schema
+	DictionaryBindings []DictionaryBinding
+	Version            int64
+	Checksum           string
+	Categories         []Category
+	Attributes         []Attribute
+	Schemas            map[string]Schema
 	// ExpectedVersion разрешает явное обновление проверенного операторского снимка.
 	ExpectedVersion int64
 }
@@ -127,9 +128,10 @@ func PlanTaxonomyRollback(
 // Definition отделяет номер поставки от номера опубликованного снимка.
 func (r Release) Definition() Definition {
 	return Definition{
-		Version:    r.Version,
-		Attributes: r.Attributes,
-		Schemas:    r.Schemas,
-		Categories: r.Categories,
+		DictionaryBindings: r.DictionaryBindings,
+		Version:            r.Version,
+		Attributes:         r.Attributes,
+		Schemas:            r.Schemas,
+		Categories:         r.Categories,
 	}
 }

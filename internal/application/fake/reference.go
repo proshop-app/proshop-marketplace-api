@@ -98,6 +98,14 @@ func (s *Store) ReferencePresence(id ids.UUID) []reference.Presence {
 	return out
 }
 
+func (r references) CreateDictionary(_ context.Context, state reference.DictionaryState) (bool, error) {
+	if _, exists := r.d.reference.dictionaries[state.Code]; exists {
+		return false, nil
+	}
+	r.d.reference.dictionaries[state.Code] = reference.RestoreDictionary(state).State()
+	return true, nil
+}
+
 func (r references) LockDictionary(ctx context.Context, code string) (*reference.Dictionary, error) {
 	return r.Dictionary(ctx, code)
 }

@@ -29,6 +29,11 @@ func resolveDictionaries(ctx context.Context, registry ports.TaxonomyDictionarie
 			codes[a.Dictionary] = true
 		}
 	}
+	for _, binding := range d.DictionaryBindings {
+		for _, code := range binding.Dictionaries {
+			codes[code] = true
+		}
+	}
 	sorted := make([]string, 0, len(codes))
 	for code := range codes {
 		sorted = append(sorted, code)
@@ -97,6 +102,13 @@ func resolveDictionaries(ctx context.Context, registry ports.TaxonomyDictionarie
 			a.Values = values[a.Dictionary]
 			if len(a.Values) == 0 {
 				return taxonomy.ErrInvalid.WithMessage("нет подтверждённых значений: " + a.Dictionary)
+			}
+		}
+	}
+	for _, binding := range d.DictionaryBindings {
+		for _, code := range binding.Dictionaries {
+			if kinds[code] != reference.KindOpen {
+				return taxonomy.ErrInvalid.WithMessage("источник подсказок должен быть open: " + code)
 			}
 		}
 	}
