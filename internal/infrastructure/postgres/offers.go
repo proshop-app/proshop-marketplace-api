@@ -2,11 +2,12 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
@@ -59,7 +60,7 @@ const (
 
 // Offers — чтение проекции для индекса.
 type Offers struct {
-	q querier
+	db *gorm.DB
 }
 
 // offerRow — строка предложения: товар и всё, что к нему присоединено.
@@ -134,16 +135,18 @@ func (r *Offers) ChangedSince(
 }
 
 func (r *Offers) query(ctx context.Context, sql string, args ...any) ([]ports.OfferState, error) {
-	rows, err := r.q.Query(ctx, sql, args...)
+	rows, err := rawSQL(ctx, r.db, sql, args...).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("предложения: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	return collectOffers(rows)
 }
 
-func collectOffers(rows pgx.Rows) ([]ports.OfferState, error) {
+func collectOffers(rows *sql.Rows) ([]ports.OfferState, error) {
 	var states []ports.OfferState
 
 	for rows.Next() {

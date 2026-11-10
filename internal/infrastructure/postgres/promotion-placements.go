@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -27,7 +29,7 @@ const (
 // LockPlacement сериализует проверку ёмкости и запись заявки.
 func (r *Promotions) LockPlacement(ctx context.Context, code string) error {
 	var found string
-	err := r.q.QueryRow(ctx, promotionLock, code).Scan(&found)
+	err := rawSQL(ctx, r.db, promotionLock, code).Row().Scan(&found)
 	if notFound(err) {
 		return promotion.ErrNotFound
 	}
@@ -42,7 +44,7 @@ func scanPromotionPlacement(row rowScanner) (*promotion.Placement, error) {
 		&s.Code,
 		&s.Surface,
 		&s.Title,
-		&s.Positions,
+		pgtype.NewMap().SQLScanner(&s.Positions),
 		&s.SlotLimit,
 		&price,
 		&raw,
@@ -70,16 +72,18 @@ func scanPromotionPlacement(row rowScanner) (*promotion.Placement, error) {
 
 // Placement читает исходный снимок прайса.
 func (r *Promotions) Placement(ctx context.Context, code string) (*promotion.Placement, error) {
-	return scanPromotionPlacement(r.q.QueryRow(ctx, promotionPlacement, code))
+	return scanPromotionPlacement(rawSQL(ctx, r.db, promotionPlacement, code).Row())
 }
 
 // Placements возвращает прайс с фильтром доступных мест.
 func (r *Promotions) Placements(ctx context.Context) ([]promotion.PlacementState, error) {
-	rows, err := r.q.Query(ctx, promotionPlacements)
+	rows, err := rawSQL(ctx, r.db, promotionPlacements).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []promotion.PlacementState{}
 	for rows.Next() {
 		p, err := scanPromotionPlacement(rows)
@@ -102,8 +106,9 @@ func (r *Promotions) SavePlacement(ctx context.Context, p *promotion.Placement) 
 	if err != nil {
 		return err
 	}
-	tag, err := r.q.Exec(
+	tag, err := execSQL(
 		ctx,
+		r.db,
 		promotionPlacementUpdate,
 		s.Code,
 		s.SlotLimit,
@@ -116,7 +121,7 @@ func (r *Promotions) SavePlacement(ctx context.Context, p *promotion.Placement) 
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	if tag == 0 {
 		return promotion.ErrConflict
 	}
 	p.MarkSaved()

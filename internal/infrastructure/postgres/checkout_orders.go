@@ -8,10 +8,13 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 )
 
-const listCheckouts = `
- SELECT id::text
+const (
+	listCheckouts = `
+ SELECT ` + checkoutColumns + `
  FROM checkouts c
- WHERE ($1 = '' OR buyer_id::text = $1) AND id::text > $2
+ WHERE `
+
+	listCheckoutFilters = `
   AND (NOT $3 OR status NOT IN ('draft', 'confirmed'))
   AND ($4::timestamptz IS NULL OR EXISTS (
    SELECT 1 FROM checkout_groups g
@@ -33,8 +36,15 @@ const listCheckouts = `
     AND (g.order_progress->>'NextPollAt')::timestamptz <= $6)
   )
  ))
- ORDER BY id::text
+ ORDER BY id
  LIMIT $5`
+
+	// Отдельные формы сохраняют индексные условия и при generic prepared plan.
+	listAllCheckouts        = listCheckouts + `$1::uuid IS NULL AND $2::uuid IS NULL` + listCheckoutFilters
+	listBuyerCheckouts      = listCheckouts + `buyer_id = $1 AND $2::uuid IS NULL` + listCheckoutFilters
+	listCheckoutsAfter      = listCheckouts + `$1::uuid IS NULL AND id > $2` + listCheckoutFilters
+	listBuyerCheckoutsAfter = listCheckouts + `buyer_id = $1 AND id > $2` + listCheckoutFilters
+)
 
 type checkoutOrderContext struct {
 	Contact      checkout.Contact
@@ -57,40 +67,62 @@ func encodeOrderProgress(g checkout.Group) string {
 
 // List выбирает страницу покупок для кабинета, панели или фоновой саги.
 func (r *Checkouts) List(ctx context.Context, f checkout.Filter) ([]*checkout.Checkout, error) {
-	rows, err := r.q.Query(
+	buyerID, err := checkoutFilterUUID(f.BuyerID)
+	if err != nil {
+		return nil, err
+	}
+
+	afterID, err := checkoutFilterUUID(f.AfterID)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := rawSQL(
 		ctx,
-		listCheckouts,
-		string(f.BuyerID),
-		string(f.AfterID),
+		r.db,
+		checkoutListSQL(f),
+		buyerID,
+		afterID,
 		f.OrdersOnly,
 		nullTime(f.AwaitingBefore),
 		f.Limit,
 		nullTime(f.WorkDueAt),
-	)
+	).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("список покупок: %w", err)
 	}
-	defer rows.Close()
-	var ids []string
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var states []checkout.State
+
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return nil, err
+		var row checkoutRow
+		if err := rows.Scan(row.targets()...); err != nil {
+			return nil, fmt.Errorf("список покупок: %w", err)
 		}
-		ids = append(ids, id)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	result := make([]*checkout.Checkout, 0, len(ids))
-	for _, id := range ids {
-		c, err := r.one(ctx, `id::text = $1`, id)
+
+		state, err := row.checkout()
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, c)
+
+		states = append(states, state)
 	}
+	_ = rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := r.listGroups(ctx, states); err != nil {
+		return nil, err
+	}
+
+	result := make([]*checkout.Checkout, 0, len(states))
+	for _, state := range states {
+		result = append(result, checkout.Restore(state))
+	}
+
 	return result, nil
 }

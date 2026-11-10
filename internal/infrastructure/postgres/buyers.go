@@ -2,66 +2,52 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 const (
-	selectBuyer = `
-		SELECT id, phone, created_at
-		FROM buyers
-		WHERE `
-
-	insertBuyer = `
-		INSERT INTO buyers (id, phone, created_at)
-		VALUES ($1, $2, $3)`
-
-	challengeColumns = `
-		id, phone, provider_ref, call_phone, call_phone_pretty, status, checks,
-		last_checked_at, expires_at, created_at, updated_at, version`
-
-	selectChallenge = `SELECT ` + challengeColumns + ` FROM phone_challenges WHERE `
-
-	insertChallenge = `
-		INSERT INTO phone_challenges (` + challengeColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
-
-	updateChallenge = `
-		UPDATE phone_challenges
-		SET status = $4,
-			checks = $5,
-			last_checked_at = $6,
-			updated_at = $7,
-			version = $8
-		WHERE id = $1 AND status = $2 AND version = $3`
+	buyerByPhone           = "phone = ?"
+	buyerByID              = "id = ?"
+	challengeByID          = "id = ?"
+	challengeByProviderRef = "provider_ref = ?"
+	challengeByOrigin      = "id = ? AND status = ? AND version = ?"
 )
 
 // Buyers — покупатели в PostgreSQL.
 type Buyers struct {
-	q querier
+	db *gorm.DB
 }
 
 // Challenges — проверки входа в PostgreSQL.
 type Challenges struct {
-	q querier
+	db *gorm.DB
 }
 
 // FindByPhone — покупатель по телефону.
 func (r *Buyers) FindByPhone(ctx context.Context, phone buyer.Phone) (buyer.Buyer, error) {
-	return r.one(ctx, `phone = $1`, string(phone))
+	return r.one(ctx, buyerByPhone, string(phone))
 }
 
 // Get — покупатель.
 func (r *Buyers) Get(ctx context.Context, id ids.UUID) (buyer.Buyer, error) {
-	return r.one(ctx, `id = $1`, string(id))
+	return r.one(ctx, buyerByID, string(id))
 }
 
 // Add заводит покупателя.
 func (r *Buyers) Add(ctx context.Context, b buyer.Buyer) error {
-	_, err := r.q.Exec(ctx, insertBuyer, string(b.ID), string(b.Phone), b.CreatedAt)
+	record := buyerRecord{
+		ID:        string(b.ID),
+		Phone:     string(b.Phone),
+		CreatedAt: b.CreatedAt,
+	}
+
+	err := r.db.WithContext(ctx).Create(&record).Error
 
 	switch {
 	case isUnique(err, "buyers_phone_key"):
@@ -74,55 +60,34 @@ func (r *Buyers) Add(ctx context.Context, b buyer.Buyer) error {
 }
 
 func (r *Buyers) one(ctx context.Context, where string, arg any) (buyer.Buyer, error) {
-	var (
-		found     buyer.Buyer
-		id, phone string
-	)
+	var record buyerRecord
 
-	err := r.q.QueryRow(ctx, selectBuyer+where, arg).Scan(&id, &phone, &found.CreatedAt)
-	if notFound(err) {
+	err := r.db.WithContext(ctx).Where(where, arg).Take(&record).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return buyer.Buyer{}, buyer.ErrNotFound
 	}
 	if err != nil {
 		return buyer.Buyer{}, fmt.Errorf("покупатель: %w", err)
 	}
 
-	found.ID = ids.UUID(id)
-	found.Phone = buyer.Phone(phone)
-
-	return found, nil
+	return record.buyer(), nil
 }
 
 // Get — проверка.
 func (r *Challenges) Get(ctx context.Context, id ids.UUID) (*buyer.Challenge, error) {
-	return r.one(ctx, `id = $1`, string(id))
+	return r.one(ctx, challengeByID, string(id))
 }
 
 // FindByProviderRef — проверка по идентификатору шлюза.
 func (r *Challenges) FindByProviderRef(ctx context.Context, ref string) (*buyer.Challenge, error) {
-	return r.one(ctx, `provider_ref = $1`, ref)
+	return r.one(ctx, challengeByProviderRef, ref)
 }
 
 // Add сохраняет новую проверку.
 func (r *Challenges) Add(ctx context.Context, c *buyer.Challenge) error {
-	s := c.State()
+	record := newChallengeRecord(c.State())
 
-	_, err := r.q.Exec(
-		ctx,
-		insertChallenge,
-		string(s.ID),
-		string(s.Phone),
-		s.ProviderRef,
-		s.CallPhone,
-		s.CallPhonePretty,
-		string(s.Status),
-		s.Checks,
-		nullTime(s.LastCheckedAt),
-		s.ExpiresAt,
-		s.CreatedAt,
-		s.UpdatedAt,
-		s.Version,
-	)
+	err := r.db.WithContext(ctx).Create(&record).Error
 	if err != nil {
 		return fmt.Errorf("новая проверка входа: %w", err)
 	}
@@ -134,25 +99,23 @@ func (r *Challenges) Add(ctx context.Context, c *buyer.Challenge) error {
 
 // Update сохраняет условно по исходным статусу и версии.
 func (r *Challenges) Update(ctx context.Context, c *buyer.Challenge) error {
-	s := c.State()
+	record := newChallengeRecord(c.State())
 	status, version := c.Origin()
 
-	tag, err := r.q.Exec(
-		ctx,
-		updateChallenge,
-		string(s.ID),
-		string(status),
-		version,
-		string(s.Status),
-		s.Checks,
-		nullTime(s.LastCheckedAt),
-		s.UpdatedAt,
-		s.Version,
-	)
-	if err != nil {
-		return fmt.Errorf("проверка входа %s: %w", s.ID, err)
+	result := r.db.WithContext(ctx).
+		Model(&challengeRecord{}).
+		Where(challengeByOrigin, record.ID, string(status), version).
+		Updates(map[string]any{
+			"status":          record.Status,
+			"checks":          record.Checks,
+			"last_checked_at": record.LastCheckedAt,
+			"updated_at":      record.UpdatedAt,
+			"version":         record.Version,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("проверка входа %s: %w", record.ID, result.Error)
 	}
-	if tag.RowsAffected() == 0 {
+	if result.RowsAffected == 0 {
 		return buyer.ErrChallengeConflict
 	}
 
@@ -162,40 +125,15 @@ func (r *Challenges) Update(ctx context.Context, c *buyer.Challenge) error {
 }
 
 func (r *Challenges) one(ctx context.Context, where string, arg any) (*buyer.Challenge, error) {
-	var (
-		state             buyer.ChallengeState
-		id, phone, status string
-		lastChecked       *time.Time
-	)
+	var record challengeRecord
 
-	err := r.q.QueryRow(ctx, selectChallenge+where, arg).Scan(
-		&id,
-		&phone,
-		&state.ProviderRef,
-		&state.CallPhone,
-		&state.CallPhonePretty,
-		&status,
-		&state.Checks,
-		&lastChecked,
-		&state.ExpiresAt,
-		&state.CreatedAt,
-		&state.UpdatedAt,
-		&state.Version,
-	)
-	if notFound(err) {
+	err := r.db.WithContext(ctx).Where(where, arg).Take(&record).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, buyer.ErrChallengeNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("проверка входа: %w", err)
 	}
 
-	state.ID = ids.UUID(id)
-	state.Phone = buyer.Phone(phone)
-	state.Status = buyer.ChallengeStatus(status)
-
-	if lastChecked != nil {
-		state.LastCheckedAt = *lastChecked
-	}
-
-	return buyer.RestoreChallenge(state), nil
+	return buyer.RestoreChallenge(record.state()), nil
 }

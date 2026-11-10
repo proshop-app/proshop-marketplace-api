@@ -79,9 +79,15 @@ func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
 		outcome.Lag = finished.Sub(task.CreatedAt)
 
 		if outcome.Err == nil {
-			err = d.queue.Complete(ctx, task.ID, finished)
+			err = d.queue.Complete(ctx, task.ID, task.Attempts, finished)
 		} else {
-			err = d.queue.Retry(ctx, task.ID, finished.Add(Backoff(task.Attempts)), outcome.Err.Error())
+			err = d.queue.Retry(
+				ctx,
+				task.ID,
+				task.Attempts,
+				finished.Add(Backoff(task.Attempts)),
+				outcome.Err.Error(),
+			)
 		}
 		if err != nil {
 			return outcomes, err

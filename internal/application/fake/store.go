@@ -311,33 +311,39 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Ta
 }
 
 // Complete отмечает задачу выполненной.
-func (s *Store) Complete(_ context.Context, id int64, at time.Time) error {
+func (s *Store) Complete(_ context.Context, id int64, attempts int, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for i := range s.data.outbox {
-		if s.data.outbox[i].ID == id {
-			done := at
-			s.data.outbox[i].DoneAt = &done
+		row := &s.data.outbox[i]
+		if row.ID == id && row.Attempts == attempts && attempts > 0 && row.DoneAt == nil {
+			row.DoneAt = &at
+			row.LastError = ""
+
+			return nil
 		}
 	}
 
-	return nil
+	return ports.ErrTaskClaimConflict
 }
 
 // Retry откладывает задачу.
-func (s *Store) Retry(_ context.Context, id int64, nextAt time.Time, reason string) error {
+func (s *Store) Retry(_ context.Context, id int64, attempts int, nextAt time.Time, reason string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for i := range s.data.outbox {
-		if s.data.outbox[i].ID == id {
-			s.data.outbox[i].NextAt = nextAt
-			s.data.outbox[i].LastError = reason
+		row := &s.data.outbox[i]
+		if row.ID == id && row.Attempts == attempts && attempts > 0 && row.DoneAt == nil {
+			row.NextAt = nextAt
+			row.LastError = reason
+
+			return nil
 		}
 	}
 
-	return nil
+	return ports.ErrTaskClaimConflict
 }
 
 // Purge удаляет служебные записи старше границ.

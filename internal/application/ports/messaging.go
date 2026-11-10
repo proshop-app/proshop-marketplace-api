@@ -5,8 +5,15 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/event"
-
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+)
+
+// ErrTaskClaimConflict — задачу уже взял другой обработчик или она завершена.
+var ErrTaskClaimConflict = errs.New(
+	errs.Conflict,
+	"messaging.task_claim_conflict",
+	"задача больше не принадлежит обработчику",
 )
 
 // NewTask — задача для outbox. Пишется в той же транзакции, что и изменение,
@@ -24,10 +31,11 @@ type NewTask struct {
 
 // Task — задача, взятая из outbox на разбор.
 type Task struct {
-	ID        int64
-	Kind      string
-	TenantID  ids.TenantID
-	Payload   []byte
+	ID       int64
+	Kind     string
+	TenantID ids.TenantID
+	Payload  []byte
+	// Attempts растёт при каждом Claim и служит токеном владельца для Complete и Retry.
 	Attempts  int
 	CreatedAt time.Time
 }
@@ -51,10 +59,11 @@ type TaskQueue interface {
 	// Claim берёт созревшие задачи, не больше PerTenant на магазин: шумный
 	// магазин не задерживает чужие задачи.
 	Claim(ctx context.Context, request ClaimRequest) ([]Task, error)
-	// Complete отмечает задачу выполненной.
-	Complete(ctx context.Context, id int64, at time.Time) error
-	// Retry откладывает задачу до nextAt с причиной.
-	Retry(ctx context.Context, id int64, nextAt time.Time, reason string) error
+	// Complete отмечает задачу выполненной, только если attempts соответствует текущему Claim.
+	// Отсутствующая, завершённая или взятая другим обработчиком задача — ErrTaskClaimConflict.
+	Complete(ctx context.Context, id int64, attempts int, at time.Time) error
+	// Retry откладывает задачу до nextAt с причиной; проверяет владельца, как Complete.
+	Retry(ctx context.Context, id int64, attempts int, nextAt time.Time, reason string) error
 }
 
 // Inbox — учёт обработанных событий для дедупа.

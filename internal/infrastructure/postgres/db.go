@@ -1,4 +1,4 @@
-// Package postgres — хранилище маркетплейса в PostgreSQL на pgx: миграции,
+// Package postgres — хранилище маркетплейса в PostgreSQL через GORM: миграции,
 // UnitOfWork поверх транзакции и репозитории.
 package postgres
 
@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
@@ -124,11 +125,19 @@ func runGoose(ctx context.Context, pool *pgxpool.Pool, run func(*goose.Provider)
 
 // logDeliveryMigrationReport читает сохранённый отчёт после фиксации миграции.
 func logDeliveryMigrationReport(ctx context.Context, pool *pgxpool.Pool) error {
-	rows, err := pool.Query(ctx, selectDeliveryMigrationReport)
+	return newConnectionSource(pool).withConnection(ctx, func(db *gorm.DB) error {
+		return readDeliveryMigrationReport(ctx, db)
+	})
+}
+
+func readDeliveryMigrationReport(ctx context.Context, db *gorm.DB) error {
+	rows, err := rawSQL(ctx, db, selectDeliveryMigrationReport).Rows()
 	if err != nil {
 		return fmt.Errorf("отчёт миграции доставки: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	for rows.Next() {
 		var tenant, status string
 		var enabled bool

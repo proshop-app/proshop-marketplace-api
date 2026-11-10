@@ -2,11 +2,10 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/event"
@@ -37,20 +36,33 @@ const (
 
 // Get читает исходное сообщение вместе с текущим решением.
 func (p *Parked) Get(ctx context.Context, id int64) (ports.ParkedEvent, error) {
-	return scanOperatorEvent(p.q.QueryRow(ctx, selectOperatorEvent, id))
+	return scanOperatorEvent(rawSQL(ctx, p.db, selectOperatorEvent, id).Row())
 }
 
 // List — страницы в порядке убывания неизменяемого id.
 func (p *Parked) List(ctx context.Context, f ports.EventFilter) ([]ports.ParkedEvent, int, error) {
 	var total int
-	if err := p.q.QueryRow(ctx, countOperatorEvents, f.TenantID, f.Status, f.Topic, f.Reason).Scan(&total); err != nil {
+	row := rawSQL(ctx, p.db, countOperatorEvents, f.TenantID, f.Status, f.Topic, f.Reason).Row()
+	if err := row.Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("число событий: %w", err)
 	}
-	rows, err := p.q.Query(ctx, selectOperatorEvents, f.TenantID, f.Status, f.Topic, f.Reason, f.Limit, f.Offset)
+	rows, err := rawSQL(
+		ctx,
+		p.db,
+		selectOperatorEvents,
+		f.TenantID,
+		f.Status,
+		f.Topic,
+		f.Reason,
+		f.Limit,
+		f.Offset,
+	).Rows()
 	if err != nil {
 		return nil, 0, fmt.Errorf("список событий: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	items := []ports.ParkedEvent{}
 	for rows.Next() {
 		item, err := scanOperatorEvent(rows)
@@ -65,8 +77,9 @@ func (p *Parked) List(ctx context.Context, f ports.EventFilter) ([]ports.ParkedE
 // Update сохраняет переход и аудит при совпадении исходных статуса и версии.
 func (p *Parked) Update(ctx context.Context, aggregate *event.Event, failure string, attempts int) error {
 	state, origin := aggregate.State(), aggregate.Origin()
-	tag, err := p.q.Exec(
+	affected, err := execSQL(
 		ctx,
+		p.db,
 		updateOperatorEvent,
 		state.Status,
 		state.Version,
@@ -82,11 +95,12 @@ func (p *Parked) Update(ctx context.Context, aggregate *event.Event, failure str
 	if err != nil {
 		return fmt.Errorf("решение по событию: %w", err)
 	}
-	if tag.RowsAffected() != 1 {
+	if affected != 1 {
 		return event.ErrConflict
 	}
-	_, err = p.q.Exec(
+	_, err = execSQL(
 		ctx,
+		p.db,
 		insertEventDecision,
 		state.ID,
 		state.Version,
@@ -102,7 +116,7 @@ func (p *Parked) Update(ctx context.Context, aggregate *event.Event, failure str
 	return nil
 }
 
-func scanOperatorEvent(row pgx.Row) (ports.ParkedEvent, error) {
+func scanOperatorEvent(row rowScanner) (ports.ParkedEvent, error) {
 	var value ports.ParkedEvent
 	var headers []byte
 	err := row.Scan(
@@ -125,7 +139,7 @@ func scanOperatorEvent(row pgx.Row) (ports.ParkedEvent, error) {
 		&value.Control.OperatorID,
 		&value.Control.UpdatedAt,
 	)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return value, event.ErrNotFound
 	}
 	if err != nil {

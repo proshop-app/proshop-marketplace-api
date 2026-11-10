@@ -3,11 +3,10 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -79,10 +78,10 @@ const (
 
 // Participants — участники в PostgreSQL.
 type Participants struct {
-	q querier
+	db *gorm.DB
 }
 
-// rowScanner — общее у pgx.Row и pgx.Rows для разбора одной строки.
+// rowScanner объединяет чтение одной строки и набора строк database/sql.
 type rowScanner interface {
 	Scan(dest ...any) error
 }
@@ -97,7 +96,7 @@ type subsidyJSON struct {
 
 // Get — участник.
 func (r *Participants) Get(ctx context.Context, tenantID ids.TenantID) (*participant.Participant, error) {
-	p, err := scanParticipant(r.q.QueryRow(ctx, selectParticipant, string(tenantID)))
+	p, err := scanParticipant(rawSQL(ctx, r.db, selectParticipant, string(tenantID)).Row())
 	if notFound(err) {
 		return nil, participant.ErrNotFound
 	}
@@ -112,23 +111,26 @@ func (r *Participants) Get(ctx context.Context, tenantID ids.TenantID) (*partici
 func (r *Participants) List(ctx context.Context, page participant.Page) ([]*participant.Participant, int, error) {
 	var total int
 	args := []any{page.Trust, page.Stage, page.Queue}
-	if err := r.q.QueryRow(ctx, countParticipants, args...).Scan(&total); err != nil {
+	if err := rawSQL(ctx, r.db, countParticipants, args...).Row().Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("число участников: %w", err)
 	}
 
-	rows, err := r.q.Query(
+	rows, err := rawSQL(
 		ctx,
+		r.db,
 		listParticipants,
 		page.Limit,
 		page.Offset,
 		page.Trust,
 		page.Stage,
 		page.Queue,
-	)
+	).Rows()
 	if err != nil {
 		return nil, 0, fmt.Errorf("список участников: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	items := make([]*participant.Participant, 0, page.Limit)
 
@@ -162,8 +164,9 @@ func (r *Participants) Add(ctx context.Context, p *participant.Participant) erro
 		return fmt.Errorf("карточка участника %s: %w", s.TenantID, err)
 	}
 
-	tag, err := r.q.Exec(
+	affected, err := execSQL(
 		ctx,
+		r.db,
 		insertParticipant,
 		string(s.TenantID),
 		s.Slug,
@@ -187,7 +190,7 @@ func (r *Participants) Add(ctx context.Context, p *participant.Participant) erro
 	)
 
 	switch {
-	case err == nil && tag.RowsAffected() == 0:
+	case err == nil && affected == 0:
 		return r.insertConflict(ctx, s)
 	case isForeignKey(err):
 		return participant.ErrTenantUnknown
@@ -216,8 +219,9 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 		return fmt.Errorf("карточка участника %s: %w", s.TenantID, err)
 	}
 
-	tag, err := r.q.Exec(
+	affected, err := execSQL(
 		ctx,
+		r.db,
 		updateParticipant,
 		string(s.TenantID),
 		string(origin.Stage),
@@ -246,7 +250,7 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 		return participant.ErrSlugTaken
 	case err != nil:
 		return fmt.Errorf("участник %s: %w", s.TenantID, err)
-	case tag.RowsAffected() == 0:
+	case affected == 0:
 		return participant.ErrConflict
 	}
 
@@ -367,7 +371,7 @@ func encodeLastDecision(d *participant.LastDecision) any {
 func (r *Participants) Count(ctx context.Context, page participant.Page) (int, error) {
 	var total int
 	args := []any{page.Trust, page.Stage, page.Queue}
-	err := r.q.QueryRow(ctx, countParticipants, args...).Scan(&total)
+	err := rawSQL(ctx, r.db, countParticipants, args...).Row().Scan(&total)
 	return total, err
 }
 
@@ -379,10 +383,10 @@ func (r *Participants) Count(ctx context.Context, page participant.Page) (int, e
 func (r *Participants) insertConflict(ctx context.Context, s participant.State) error {
 	var sameTenant bool
 
-	err := r.q.QueryRow(ctx, selectInsertConflict, string(s.TenantID), s.Slug).Scan(&sameTenant)
+	err := rawSQL(ctx, r.db, selectInsertConflict, string(s.TenantID), s.Slug).Row().Scan(&sameTenant)
 
 	switch {
-	case errors.Is(err, pgx.ErrNoRows):
+	case notFound(err):
 		return fmt.Errorf("новый участник %s: вставка не выполнена, конфликтующей строки нет", s.TenantID)
 	case err != nil:
 		return fmt.Errorf("новый участник %s: %w", s.TenantID, err)

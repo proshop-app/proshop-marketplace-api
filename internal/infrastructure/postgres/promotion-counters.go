@@ -26,17 +26,19 @@ const (
 
 // AddDecision добавляет запись аудита в транзакции перехода.
 func (r *Promotions) AddDecision(ctx context.Context, id ids.UUID, d promotion.Decision) error {
-	_, err := r.q.Exec(ctx, promotionDecisionAdd, id, d.At, d.Actor, d.Action, d.Note)
+	_, err := execSQL(ctx, r.db, promotionDecisionAdd, id, d.At, d.Actor, d.Action, d.Note)
 	return err
 }
 
 // Decisions возвращает журнал в порядке решений.
 func (r *Promotions) Decisions(ctx context.Context, id ids.UUID) ([]promotion.Decision, error) {
-	rows, err := r.q.Query(ctx, promotionDecisions, id)
+	rows, err := rawSQL(ctx, r.db, promotionDecisions, id).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []promotion.Decision{}
 	for rows.Next() {
 		var d promotion.Decision
@@ -63,14 +65,14 @@ func (r *Promotions) Count(
 	default:
 		return false, promotion.ErrInvalid
 	}
-	tag, err := r.q.Exec(ctx, promotionView, s.ID, day, visitor, kind)
+	tag, err := execSQL(ctx, r.db, promotionView, s.ID, day, visitor, kind)
 	if err != nil {
 		return false, err
 	}
-	if tag.RowsAffected() == 0 {
+	if tag == 0 {
 		return false, nil
 	}
-	if _, err := r.q.Exec(ctx, promotionCount, s.ID, day, s.Position, views, clicks); err != nil {
+	if _, err := execSQL(ctx, r.db, promotionCount, s.ID, day, s.Position, views, clicks); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -78,11 +80,13 @@ func (r *Promotions) Count(
 
 // Stats читает суточные счётчики за указанный период.
 func (r *Promotions) Stats(ctx context.Context, id ids.UUID, from, to string) ([]promotion.Counter, error) {
-	rows, err := r.q.Query(ctx, promotionStats, id, from, to)
+	rows, err := rawSQL(ctx, r.db, promotionStats, id, from, to).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []promotion.Counter{}
 	for rows.Next() {
 		var c promotion.Counter

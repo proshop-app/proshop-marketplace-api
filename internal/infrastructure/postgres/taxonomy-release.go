@@ -3,9 +3,6 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"errors"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
@@ -31,14 +28,14 @@ const (
 func (r *Taxonomy) LatestRelease(ctx context.Context) (*taxonomy.ReleaseRecord, error) {
 	var record taxonomy.ReleaseRecord
 	var raw []byte
-	err := r.q.QueryRow(ctx, lastRelease).Scan(
+	err := rawSQL(ctx, r.db, lastRelease).Row().Scan(
 		&record.Version,
 		&record.Checksum,
 		&record.PublishedVersion,
 		&record.RolledBackVersion,
 		&raw,
 	)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if notFound(err) {
 		return nil, nil
 	}
 	if err != nil {
@@ -61,12 +58,12 @@ func (r *Taxonomy) RecordRelease(
 	if err != nil {
 		return err
 	}
-	_, err = r.q.Exec(ctx, insertRelease, release.Version, release.Checksum, version, raw)
+	_, err = execSQL(ctx, r.db, insertRelease, release.Version, release.Checksum, version, raw)
 	return err
 }
 
 // MarkRollback сохраняет версию восстановленного снимка в той же транзакции.
 func (r *Taxonomy) MarkRollback(ctx context.Context, release, version int64) error {
-	_, err := r.q.Exec(ctx, markTaxonomyRollback, release, version)
+	_, err := execSQL(ctx, r.db, markTaxonomyRollback, release, version)
 	return err
 }

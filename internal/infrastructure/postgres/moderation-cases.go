@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -52,11 +54,13 @@ const (
 )
 
 // ModerationCases сохраняет дела условно по исходной версии и статусу.
-type ModerationCases struct{ q querier }
+type ModerationCases struct {
+	db *gorm.DB
+}
 
 // Get читает исходное состояние для условного сохранения.
 func (r *ModerationCases) Get(ctx context.Context, id ids.UUID) (*moderation.Case, error) {
-	return scanModerationCase(r.q.QueryRow(ctx, selectModerationCase, id))
+	return scanModerationCase(rawSQL(ctx, r.db, selectModerationCase, id).Row())
 }
 
 func scanModerationCase(row rowScanner) (*moderation.Case, error) {
@@ -126,14 +130,14 @@ func (r *ModerationCases) Save(ctx context.Context, value *moderation.Case) erro
 		query = updateModerationCase
 		args = append(args, value.Origin().Version, value.Origin().Status)
 	}
-	tag, err := r.q.Exec(ctx, query, args...)
+	affected, err := execSQL(ctx, r.db, query, args...)
 	if isUnique(err, "moderation_case_open") {
 		return moderation.ErrCaseConflict
 	}
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	if affected == 0 {
 		current, err := r.Get(ctx, s.ID)
 		if errors.Is(err, moderation.ErrNotFound) {
 			current, err = r.Open(ctx, s.TenantID, s.ProductID)
@@ -153,12 +157,13 @@ func (r *ModerationCases) Save(ctx context.Context, value *moderation.Case) erro
 // List ограничивает объём чтения для операторского сценария.
 func (r *ModerationCases) List(ctx context.Context, f moderation.Filter) ([]moderation.CaseState, int, error) {
 	var total int
-	row := r.q.QueryRow(ctx, countModerationCases, f.Status, f.TenantID, f.Source, f.Reason)
+	row := rawSQL(ctx, r.db, countModerationCases, f.Status, f.TenantID, f.Source, f.Reason).Row()
 	if err := row.Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := r.q.Query(
+	rows, err := rawSQL(
 		ctx,
+		r.db,
 		listModerationCases,
 		f.Status,
 		f.TenantID,
@@ -167,11 +172,13 @@ func (r *ModerationCases) List(ctx context.Context, f moderation.Filter) ([]mode
 		f.Order,
 		f.Limit,
 		f.Offset,
-	)
+	).Rows()
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	items := []moderation.CaseState{}
 	for rows.Next() {
 		value, err := scanModerationCase(rows)
@@ -189,16 +196,18 @@ func (r *ModerationCases) Open(
 	tenant ids.TenantID,
 	product ids.ProductID,
 ) (*moderation.Case, error) {
-	return scanModerationCase(r.q.QueryRow(ctx, openModerationCase, tenant, product))
+	return scanModerationCase(rawSQL(ctx, r.db, openModerationCase, tenant, product).Row())
 }
 
 // OpenStats не загружает сами дела для подсчёта очереди.
 func (r *ModerationCases) OpenStats(ctx context.Context) ([]moderation.OpenStat, error) {
-	rows, err := r.q.Query(ctx, moderationOpenStats)
+	rows, err := rawSQL(ctx, r.db, moderationOpenStats).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []moderation.OpenStat{}
 	for rows.Next() {
 		var stat moderation.OpenStat

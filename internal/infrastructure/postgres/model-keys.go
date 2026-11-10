@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
@@ -58,13 +59,13 @@ const (
 
 // ModelKeyStats предоставляет статистику опубликованных ключей модели.
 type ModelKeyStats struct {
-	pool *pgxpool.Pool
+	source *connectionSource
 }
 
 // NewModelKeyStats создаёт источник статистики ключей модели.
 func NewModelKeyStats(pool *pgxpool.Pool) *ModelKeyStats {
 	return &ModelKeyStats{
-		pool: pool,
+		source: newConnectionSource(pool),
 	}
 }
 
@@ -74,15 +75,26 @@ func (s *ModelKeyStats) Report(ctx context.Context, samples bool) (ports.ModelKe
 		Counts:  []ports.ModelKeyCount{},
 		Samples: []ports.ModelKeySample{},
 	}
-	rows, err := s.pool.Query(ctx, modelKeyCounts)
+
+	err := s.source.withConnection(ctx, func(db *gorm.DB) error {
+		return loadModelKeyReport(ctx, db, samples, &report)
+	})
+
+	return report, err
+}
+
+func loadModelKeyReport(ctx context.Context, db *gorm.DB, samples bool, report *ports.ModelKeyReport) error {
+	rows, err := rawSQL(ctx, db, modelKeyCounts).Rows()
 	if err != nil {
-		return report, err
+		return err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	for rows.Next() {
 		var count ports.ModelKeyCount
 		if err := rows.Scan(&count.Direction, &count.Source, &count.Offers, &count.Shared); err != nil {
-			return report, err
+			return err
 		}
 		report.Counts = append(report.Counts, count)
 	}
@@ -97,21 +109,23 @@ func (s *ModelKeyStats) Report(ctx context.Context, samples bool) (ports.ModelKe
 		}
 	}
 	if err := rows.Err(); err != nil || !samples {
-		return report, err
+		return err
 	}
-	rows.Close()
-	records, err := s.pool.Query(ctx, modelKeySamples)
+	_ = rows.Close()
+	records, err := rawSQL(ctx, db, modelKeySamples).Rows()
 	if err != nil {
-		return report, err
+		return err
 	}
-	defer records.Close()
+	defer func() {
+		_ = records.Close()
+	}()
 	for records.Next() {
 		var sample ports.ModelKeySample
 		if err := records.Scan(&sample.ModelKey, &sample.Source, &sample.Offers); err != nil {
-			return report, err
+			return err
 		}
 		report.Samples = append(report.Samples, sample)
 	}
 
-	return report, records.Err()
+	return records.Err()
 }

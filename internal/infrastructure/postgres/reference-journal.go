@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -59,8 +61,9 @@ func (r *References) Append(ctx context.Context, change reference.Change) (int64
 		reverts = change.Reverts
 	}
 	var revision int64
-	err = r.q.QueryRow(
+	err = rawSQL(
 		ctx,
+		r.db,
 		insertChange,
 		change.Dictionary,
 		string(change.EntryID),
@@ -73,7 +76,7 @@ func (r *References) Append(ctx context.Context, change reference.Change) (int64
 		string(forward),
 		string(inverse),
 		change.At,
-	).Scan(&revision)
+	).Row().Scan(&revision)
 	if err != nil {
 		return 0, fmt.Errorf("журнал %s: %w", change.Dictionary, err)
 	}
@@ -82,11 +85,13 @@ func (r *References) Append(ctx context.Context, change reference.Change) (int64
 
 // Changes — записи журнала словаря в (from, to].
 func (r *References) Changes(ctx context.Context, dictionary string, from, to int64) ([]reference.Change, error) {
-	rows, err := r.q.Query(ctx, selectChanges, dictionary, from, to)
+	rows, err := rawSQL(ctx, r.db, selectChanges, dictionary, from, to).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("журнал %s: %w", dictionary, err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	var out []reference.Change
 	for rows.Next() {
 		var (
@@ -100,7 +105,7 @@ func (r *References) Changes(ctx context.Context, dictionary string, from, to in
 			&change.Revision,
 			&change.Dictionary,
 			&entry,
-			&entries,
+			pgtype.NewMap().SQLScanner(&entries),
 			&kind,
 			&change.Meta.Actor,
 			&source,
@@ -131,11 +136,13 @@ func (r *References) Changes(ctx context.Context, dictionary string, from, to in
 
 // ChangedEntries — записи, затронутые ревизиями (since, until].
 func (r *References) ChangedEntries(ctx context.Context, dictionary string, since, until int64) ([]ids.UUID, error) {
-	rows, err := r.q.Query(ctx, selectChangedEntries, dictionary, since, until)
+	rows, err := rawSQL(ctx, r.db, selectChangedEntries, dictionary, since, until).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("дельта %s: %w", dictionary, err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	var out []ids.UUID
 	for rows.Next() {
 		var id string
@@ -150,7 +157,7 @@ func (r *References) ChangedEntries(ctx context.Context, dictionary string, sinc
 // Horizon — последняя ревизия словаря старше before.
 func (r *References) Horizon(ctx context.Context, dictionary string, before time.Time) (int64, error) {
 	var revision int64
-	if err := r.q.QueryRow(ctx, selectHorizon, dictionary, before).Scan(&revision); err != nil {
+	if err := rawSQL(ctx, r.db, selectHorizon, dictionary, before).Row().Scan(&revision); err != nil {
 		return 0, fmt.Errorf("горизонт журнала %s: %w", dictionary, err)
 	}
 	return revision, nil

@@ -41,7 +41,7 @@ const (
 // LatestDelivery — последняя по номеру поставка словаря; nil — поставок не было.
 func (r *References) LatestDelivery(ctx context.Context, dictionary string) (*reference.DeliveryRecord, error) {
 	var record reference.DeliveryRecord
-	err := r.q.QueryRow(ctx, selectLatestDelivery, dictionary).Scan(
+	err := rawSQL(ctx, r.db, selectLatestDelivery, dictionary).Row().Scan(
 		&record.Dictionary,
 		&record.Version,
 		&record.Checksum,
@@ -62,8 +62,9 @@ func (r *References) LatestDelivery(ctx context.Context, dictionary string) (*re
 
 // RecordDelivery фиксируется той же транзакцией, что и записи поставки.
 func (r *References) RecordDelivery(ctx context.Context, record reference.DeliveryRecord) error {
-	_, err := r.q.Exec(
+	_, err := execSQL(
 		ctx,
+		r.db,
 		insertDelivery,
 		record.Dictionary,
 		record.Version,
@@ -83,11 +84,11 @@ func (r *References) RecordDelivery(ctx context.Context, record reference.Delive
 
 // MarkDeliveryRollback отмечает откат той же транзакцией, что и обратные ревизии.
 func (r *References) MarkDeliveryRollback(ctx context.Context, dictionary string, version, revision int64) error {
-	tag, err := r.q.Exec(ctx, markDeliveryRollback, dictionary, version, revision)
+	tag, err := execSQL(ctx, r.db, markDeliveryRollback, dictionary, version, revision)
 	if err != nil {
 		return fmt.Errorf("откат поставки %s/%d: %w", dictionary, version, err)
 	}
-	if tag.RowsAffected() == 0 {
+	if tag == 0 {
 		return reference.ErrDeliveryConflict
 	}
 	return nil
@@ -100,7 +101,7 @@ func (r *References) ReplacePresence(
 	rows []reference.Presence,
 	at time.Time,
 ) error {
-	if _, err := r.q.Exec(ctx, deletePresence, string(entry)); err != nil {
+	if _, err := execSQL(ctx, r.db, deletePresence, string(entry)); err != nil {
 		return fmt.Errorf("присутствие %s: %w", entry, err)
 	}
 	if len(rows) == 0 {
@@ -114,7 +115,7 @@ func (r *References) ReplacePresence(
 		offers = append(offers, int32(row.Offers))    //nolint:gosec // счётчик предложений меньше int32
 		sellers = append(sellers, int32(row.Sellers)) //nolint:gosec // счётчик продавцов меньше int32
 	}
-	_, err := r.q.Exec(ctx, insertPresence, string(entry), categories, offers, sellers, at)
+	_, err := execSQL(ctx, r.db, insertPresence, string(entry), categories, offers, sellers, at)
 	if isForeignKey(err) {
 		return reference.ErrEntryNotFound
 	}

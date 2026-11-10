@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -75,7 +77,7 @@ const (
 
 // Products — проекция товаров в PostgreSQL.
 type Products struct {
-	q querier
+	db *gorm.DB
 }
 
 // cardJSON — карточка товара в колонке jsonb.
@@ -123,7 +125,7 @@ type productRow struct {
 // Get — товар проекции.
 func (r *Products) Get(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) (*catalog.Product, error) {
 	var row productRow
-	err := r.q.QueryRow(ctx, selectProduct, string(tenantID), string(productID)).Scan(row.targets()...)
+	err := rawSQL(ctx, r.db, selectProduct, string(tenantID), string(productID)).Row().Scan(row.targets()...)
 	if notFound(err) {
 		return nil, catalog.ErrProductNotFound
 	}
@@ -177,14 +179,14 @@ func (r *Products) Save(ctx context.Context, product *catalog.Product) error {
 	}
 
 	if product.OriginVersion() == 0 {
-		_, err := r.q.Exec(ctx, insertProduct, args...)
+		_, err := execSQL(ctx, r.db, insertProduct, args...)
 		conflict := isUnique(err, "catalog_products_pkey")
 
 		return saved(err, conflict, product.MarkSaved, "товар", s.TenantID, s.ProductID)
 	}
 
-	tag, err := r.q.Exec(ctx, updateProduct, append(args, product.OriginVersion())...)
-	conflict := err == nil && tag.RowsAffected() == 0
+	affected, err := execSQL(ctx, r.db, updateProduct, append(args, product.OriginVersion())...)
+	conflict := err == nil && affected == 0
 
 	return saved(err, conflict, product.MarkSaved, "товар", s.TenantID, s.ProductID)
 }

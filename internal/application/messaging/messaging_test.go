@@ -9,6 +9,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -87,6 +88,53 @@ func TestDispatcherLimitsPerTenant(t *testing.T) {
 	}
 	if seen["noisy"] != 2 || seen["quiet"] != 1 {
 		t.Fatalf("шумный магазин не занимает всю пачку: %+v", seen)
+	}
+}
+
+func TestDispatcherRejectsStaleClaim(t *testing.T) {
+	for _, failure := range []error{nil, errors.New("сбой устаревшего обработчика")} {
+		name := "complete"
+		if failure != nil {
+			name = "retry"
+		}
+		t.Run(name, func(t *testing.T) {
+			store, clock := fake.NewStore(), fake.NewClock(t0)
+			ctx := context.Background()
+			enqueue(t, store, "test", "t1", "k1", t0)
+			var current ports.Task
+
+			dispatcher := messaging.NewDispatcher(store, clock, config(), map[string]messaging.Handler{
+				"test": func(ctx context.Context, stale ports.Task) error {
+					clock.Advance(2 * time.Minute)
+					tasks, err := store.Claim(ctx, ports.ClaimRequest{
+						Now:        clock.Now(),
+						Limit:      1,
+						PerTenant:  1,
+						LeaseUntil: clock.Now().Add(time.Minute),
+					})
+					if err != nil || len(tasks) != 1 || tasks[0].ID != stale.ID ||
+						tasks[0].Attempts != stale.Attempts+1 {
+						t.Fatalf("задачу должен взять другой обработчик: %+v, %v", tasks, err)
+					}
+					current = tasks[0]
+
+					return failure
+				},
+			})
+
+			outcomes, err := dispatcher.RunOnce(ctx)
+			if !errors.Is(err, ports.ErrTaskClaimConflict) || errs.CodeOf(err) != errs.Conflict || len(outcomes) != 0 {
+				t.Fatalf("устаревший результат должен вернуть конфликт: %+v, %v", outcomes, err)
+			}
+			row := store.OutboxRows()[0]
+			if row.DoneAt != nil || row.LastError != "" || row.Attempts != current.Attempts ||
+				!row.NextAt.Equal(clock.Now().Add(time.Minute)) {
+				t.Fatalf("устаревший результат изменил задачу текущего владельца: %+v", row)
+			}
+			if err := store.Complete(ctx, current.ID, current.Attempts, clock.Now()); err != nil {
+				t.Fatalf("текущий владелец должен завершить задачу: %v", err)
+			}
+		})
 	}
 }
 

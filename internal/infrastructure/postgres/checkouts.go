@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
@@ -78,7 +80,7 @@ const (
 
 // Checkouts — покупки в PostgreSQL.
 type Checkouts struct {
-	q querier
+	db *gorm.DB
 }
 
 // lineJSON — позиция снимка в колонке jsonb; цена — копейки.
@@ -141,8 +143,9 @@ func (r *Checkouts) Add(ctx context.Context, c *checkout.Checkout) error {
 		return err
 	}
 
-	_, err = r.q.Exec(
+	_, err = execSQL(
 		ctx,
+		r.db,
 		insertCheckout,
 		string(s.ID),
 		string(s.BuyerID),
@@ -186,8 +189,9 @@ func (r *Checkouts) Update(ctx context.Context, c *checkout.Checkout) error {
 		return err
 	}
 
-	tag, err := r.q.Exec(
+	affected, err := execSQL(
 		ctx,
+		r.db,
 		updateCheckout,
 		string(s.ID),
 		string(status),
@@ -207,7 +211,7 @@ func (r *Checkouts) Update(ctx context.Context, c *checkout.Checkout) error {
 	if err != nil {
 		return fmt.Errorf("покупка %s: %w", s.ID, err)
 	}
-	if tag.RowsAffected() == 0 {
+	if affected == 0 {
 		return checkout.ErrConflict
 	}
 
@@ -223,7 +227,7 @@ func (r *Checkouts) Update(ctx context.Context, c *checkout.Checkout) error {
 func (r *Checkouts) one(ctx context.Context, where string, args ...any) (*checkout.Checkout, error) {
 	var row checkoutRow
 
-	err := r.q.QueryRow(ctx, selectCheckout+where, args...).Scan(row.targets()...)
+	err := rawSQL(ctx, r.db, selectCheckout+where, args...).Row().Scan(row.targets()...)
 	if notFound(err) {
 		return nil, checkout.ErrNotFound
 	}
@@ -244,11 +248,13 @@ func (r *Checkouts) one(ctx context.Context, where string, args ...any) (*checko
 }
 
 func (r *Checkouts) groups(ctx context.Context, checkoutID string, version int64) ([]checkout.Group, error) {
-	rows, err := r.q.Query(ctx, selectCheckoutGroups, checkoutID, version)
+	rows, err := rawSQL(ctx, r.db, selectCheckoutGroups, checkoutID, version).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("группы покупки: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var groups []checkout.Group
 
@@ -284,7 +290,7 @@ func (r *Checkouts) writeGroups(ctx context.Context, sql string, s checkout.Stat
 			return err
 		}
 
-		if _, err := r.q.Exec(ctx, sql, append([]any{string(s.ID)}, args...)...); err != nil {
+		if _, err := execSQL(ctx, r.db, sql, append([]any{string(s.ID)}, args...)...); err != nil {
 			return fmt.Errorf("группа покупки %s: %w", s.ID, err)
 		}
 	}

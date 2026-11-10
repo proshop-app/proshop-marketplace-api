@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 const (
@@ -24,29 +25,38 @@ const (
 
 // Leases — аренда фоновых задач по часам базы.
 type Leases struct {
-	pool *pgxpool.Pool
+	source *connectionSource
 }
 
 // NewLeases — аренда поверх пула.
 func NewLeases(pool *pgxpool.Pool) *Leases {
-	return &Leases{pool: pool}
+	return &Leases{source: newConnectionSource(pool)}
 }
 
 // Acquire берёт свободную, истёкшую или свою аренду.
 func (l *Leases) Acquire(ctx context.Context, name, holder string, ttl time.Duration) (bool, error) {
-	tag, err := l.pool.Exec(ctx, acquireLease, name, holder, ttl.Seconds())
-	if err != nil {
-		return false, fmt.Errorf("аренда %s: %w", name, err)
-	}
+	var acquired bool
 
-	return tag.RowsAffected() == 1, nil
+	err := l.source.withConnection(ctx, func(db *gorm.DB) error {
+		affected, err := execSQL(ctx, db, acquireLease, name, holder, ttl.Seconds())
+		if err != nil {
+			return fmt.Errorf("аренда %s: %w", name, err)
+		}
+
+		acquired = affected == 1
+		return nil
+	})
+
+	return acquired, err
 }
 
 // Release отпускает свою аренду.
 func (l *Leases) Release(ctx context.Context, name, holder string) error {
-	if _, err := l.pool.Exec(ctx, releaseLease, name, holder); err != nil {
-		return fmt.Errorf("аренда %s: %w", name, err)
-	}
+	return l.source.withConnection(ctx, func(db *gorm.DB) error {
+		if _, err := execSQL(ctx, db, releaseLease, name, holder); err != nil {
+			return fmt.Errorf("аренда %s: %w", name, err)
+		}
 
-	return nil
+		return nil
+	})
 }

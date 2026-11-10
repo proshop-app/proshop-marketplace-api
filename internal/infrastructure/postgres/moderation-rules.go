@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 )
 
@@ -15,19 +17,23 @@ const (
 )
 
 // ModerationRules сериализует правки словаря общей строкой ревизии.
-type ModerationRules struct{ q querier }
+type ModerationRules struct {
+	db *gorm.DB
+}
 
 // Current согласует список фраз с ревизией правил.
 func (r *ModerationRules) Current(ctx context.Context) (moderation.Rules, error) {
 	rules := moderation.Rules{Phrases: []moderation.StopPhrase{}}
-	if err := r.q.QueryRow(ctx, readModerationRules).Scan(&rules.Revision); err != nil {
+	if err := rawSQL(ctx, r.db, readModerationRules).Row().Scan(&rules.Revision); err != nil {
 		return rules, err
 	}
-	rows, err := r.q.Query(ctx, listModerationPhrases)
+	rows, err := rawSQL(ctx, r.db, listModerationPhrases).Rows()
 	if err != nil {
 		return rules, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	for rows.Next() {
 		var p moderation.StopPhrase
 		if err := rows.Scan(&p.Key, &p.Text, &p.Operator.ID, &p.Operator.Name, &p.CreatedAt); err != nil {

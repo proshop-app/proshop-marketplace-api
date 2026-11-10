@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -88,39 +89,48 @@ const (
 )
 
 // CatalogFeatures читает интересы и рекомендации из локальной проекции.
-type CatalogFeatures struct{ q querier }
+type CatalogFeatures struct {
+	source *connectionSource
+}
 
 // NewCatalogFeatures подключает чтение без дополнительных вызовов на каждый товар.
-func NewCatalogFeatures(pool *pgxpool.Pool) *CatalogFeatures { return &CatalogFeatures{q: pool} }
+func NewCatalogFeatures(pool *pgxpool.Pool) *CatalogFeatures {
+	return &CatalogFeatures{source: newConnectionSource(pool)}
+}
 
 // Interests использует избранное, корзину и заказы, включая оформление.
 func (r *CatalogFeatures) Interests(ctx context.Context, buyer ids.UUID) (ports.BuyerInterestSet, error) {
 	result := ports.BuyerInterestSet{Categories: []string{}, Purchased: []ids.OfferID{}}
-	rows, err := r.q.Query(ctx, selectBuyerInterests, string(buyer))
-	if err != nil {
-		return result, err
-	}
-	defer rows.Close()
-	categories := map[string]bool{}
-	for rows.Next() {
-		var category, offer string
-		var purchased bool
-		if err := rows.Scan(&category, &offer, &purchased); err != nil {
-			return result, err
+	err := r.source.withConnection(ctx, func(db *gorm.DB) error {
+		rows, err := rawSQL(ctx, db, selectBuyerInterests, string(buyer)).Rows()
+		if err != nil {
+			return err
 		}
-		if category != "" && !categories[category] {
-			categories[category] = true
-			result.Categories = append(result.Categories, category)
-		}
-		if purchased {
-			id, err := ids.ParseOfferID(offer)
-			if err != nil {
-				return result, err
+		defer func() {
+			_ = rows.Close()
+		}()
+		categories := map[string]bool{}
+		for rows.Next() {
+			var category, offer string
+			var purchased bool
+			if err := rows.Scan(&category, &offer, &purchased); err != nil {
+				return err
 			}
-			result.Purchased = append(result.Purchased, id)
+			if category != "" && !categories[category] {
+				categories[category] = true
+				result.Categories = append(result.Categories, category)
+			}
+			if purchased {
+				id, err := ids.ParseOfferID(offer)
+				if err != nil {
+					return err
+				}
+				result.Purchased = append(result.Purchased, id)
+			}
 		}
-	}
-	return result, rows.Err()
+		return rows.Err()
+	})
+	return result, err
 }
 
 // Recommend отбирает видимые предложения, цены и исключения до LIMIT.
@@ -157,6 +167,12 @@ func (r *CatalogFeatures) Recommend(
 		args[0] = categories
 		args = append(args, filter.Limit*recommendationCandidateMultiplier)
 	}
-	reader := Offers{q: r.q}
-	return reader.query(ctx, query, args...)
+	var result []ports.OfferState
+	err := r.source.withConnection(ctx, func(db *gorm.DB) error {
+		reader := Offers{db: db}
+		var err error
+		result, err = reader.query(ctx, query, args...)
+		return err
+	})
+	return result, err
 }

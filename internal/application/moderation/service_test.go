@@ -347,17 +347,13 @@ func TestOperatorCaseRejectAndNewRevision(t *testing.T) {
 		t.Fatal("чистая карточка скрыта")
 	}
 	initial := statusTask(t, e, moderationstatus.TaskOffer)
-	if err := e.store.Complete(ctx, initial.ID, e.clock.Now()); err != nil {
-		t.Fatal(err)
-	}
+	completeStatusTask(t, e, initial)
 	c, err := e.service.OpenCase(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, "Проверка", moderation.Actor{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	task := statusTask(t, e, moderationstatus.TaskOffer)
-	if err := e.store.Complete(ctx, task.ID, e.clock.Now()); err != nil {
-		t.Fatal(err)
-	}
+	completeStatusTask(t, e, task)
 	if e.document(t).Visible || c.Source != moderation.Operator {
 		t.Fatal(c)
 	}

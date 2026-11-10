@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -38,12 +40,12 @@ const (
 
 // Registry — зеркало реестра магазинов в PostgreSQL.
 type Registry struct {
-	q querier
+	db *gorm.DB
 }
 
 // Get — запись реестра.
 func (r *Registry) Get(ctx context.Context, tenantID ids.TenantID) (*participant.Tenant, error) {
-	tenant, err := scanTenant(r.q.QueryRow(ctx, selectTenant, string(tenantID)))
+	tenant, err := scanTenant(rawSQL(ctx, r.db, selectTenant, string(tenantID)).Row())
 	if notFound(err) {
 		return nil, participant.ErrTenantNotFound
 	}
@@ -55,13 +57,15 @@ func (r *Registry) Get(ctx context.Context, tenantID ids.TenantID) (*participant
 
 func scanTenant(row rowScanner) (*participant.Tenant, error) {
 	var state participant.TenantState
+	var plan, hosts []byte
+
 	err := row.Scan(
 		&state.TenantID,
 		&state.Slug,
 		&state.Status,
 		&state.Cell,
-		&state.Plan,
-		&state.Hosts,
+		&plan,
+		&hosts,
 		&state.EventAt,
 		&state.Version,
 		&state.UpdatedAt,
@@ -70,6 +74,8 @@ func scanTenant(row rowScanner) (*participant.Tenant, error) {
 	if err != nil {
 		return nil, err
 	}
+	state.Plan, state.Hosts = plan, hosts
+
 	return participant.RestoreTenant(state), nil
 }
 
@@ -90,7 +96,7 @@ func (r *Registry) Save(ctx context.Context, tenant *participant.Tenant) error {
 	}
 
 	if tenant.OriginVersion() == 0 {
-		_, err := r.q.Exec(ctx, insertTenant, args...)
+		_, err := execSQL(ctx, r.db, insertTenant, args...)
 		if isUnique(err, "tenants_pkey") {
 			return participant.ErrTenantConflict
 		}
@@ -103,11 +109,11 @@ func (r *Registry) Save(ctx context.Context, tenant *participant.Tenant) error {
 		return nil
 	}
 
-	tag, err := r.q.Exec(ctx, updateTenant, append(args, tenant.OriginVersion())...)
+	affected, err := execSQL(ctx, r.db, updateTenant, append(args, tenant.OriginVersion())...)
 	if err != nil {
 		return fmt.Errorf("запись реестра %s: %w", s.TenantID, err)
 	}
-	if tag.RowsAffected() == 0 {
+	if affected == 0 {
 		return participant.ErrTenantConflict
 	}
 
@@ -118,11 +124,13 @@ func (r *Registry) Save(ctx context.Context, tenant *participant.Tenant) error {
 
 // List обходит активный реестр по устойчивому ключу.
 func (r *Registry) List(ctx context.Context, after ids.TenantID, limit int) ([]*participant.Tenant, error) {
-	rows, err := r.q.Query(ctx, listActiveTenants, after, limit)
+	rows, err := rawSQL(ctx, r.db, listActiveTenants, after, limit).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []*participant.Tenant{}
 	for rows.Next() {
 		tenant, err := scanTenant(rows)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -48,7 +50,9 @@ const (
 )
 
 // Promotions связывает репозитории продвижения одной транзакцией PostgreSQL.
-type Promotions struct{ q querier }
+type Promotions struct {
+	db *gorm.DB
+}
 
 func scanPromotion(row rowScanner) (*promotion.Campaign, error) {
 	var stored storedCampaignState
@@ -71,21 +75,23 @@ func scanPromotion(row rowScanner) (*promotion.Campaign, error) {
 
 // Get читает размещение с проверкой области доступа.
 func (r *Promotions) Get(ctx context.Context, id ids.UUID) (*promotion.Campaign, error) {
-	return scanPromotion(r.q.QueryRow(ctx, promotionGet, id))
+	return scanPromotion(rawSQL(ctx, r.db, promotionGet, id).Row())
 }
 
 // List возвращает страницу размещений и полное число совпадений.
 func (r *Promotions) List(ctx context.Context, f promotion.Filter) ([]promotion.CampaignState, int, error) {
 	args := []any{f.Status, f.Kind, f.TenantID, f.PlacementCode, f.From, f.To, f.ProductID}
 	var total int
-	if err := r.q.QueryRow(ctx, promotionTotal, args...).Scan(&total); err != nil {
+	if err := rawSQL(ctx, r.db, promotionTotal, args...).Row().Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := r.q.Query(ctx, promotionList, append(args, f.Limit, f.Offset)...)
+	rows, err := rawSQL(ctx, r.db, promotionList, append(args, f.Limit, f.Offset)...).Rows()
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []promotion.CampaignState{}
 	for rows.Next() {
 		campaign, err := scanPromotion(rows)
@@ -127,11 +133,11 @@ func (r *Promotions) Save(ctx context.Context, c *promotion.Campaign) error {
 		query = promotionUpdate
 		args = append(args, c.Origin().Version, c.Origin().Status)
 	}
-	tag, err := r.q.Exec(ctx, query, args...)
+	tag, err := execSQL(ctx, r.db, query, args...)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	if tag == 0 {
 		return promotion.ErrConflict
 	}
 	c.MarkSaved()
@@ -146,8 +152,9 @@ func (r *Promotions) Occupancy(
 	weeks []string,
 	exclude ids.UUID,
 ) ([]promotion.Week, error) {
-	rows, err := r.q.Query(
+	rows, err := rawSQL(
 		ctx,
+		r.db,
 		promotionOccupancy,
 		weeks,
 		s.PlacementCode,
@@ -155,11 +162,13 @@ func (r *Promotions) Occupancy(
 		scope,
 		s.Target.CategoryID,
 		exclude,
-	)
+	).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []promotion.Week{}
 	for rows.Next() {
 		var week promotion.Week

@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -18,12 +20,15 @@ const (
 )
 
 // ModerationDecisions не предоставляет операций изменения истории.
-type ModerationDecisions struct{ q querier }
+type ModerationDecisions struct {
+	db *gorm.DB
+}
 
 // Add добавляет решение без изменения прежних записей.
 func (r *ModerationDecisions) Add(ctx context.Context, d moderation.Decision) error {
-	_, err := r.q.Exec(
+	_, err := execSQL(
 		ctx,
+		r.db,
 		insertModerationDecision,
 		d.ID,
 		d.CaseID,
@@ -45,11 +50,13 @@ func (r *ModerationDecisions) List(
 	tenant ids.TenantID,
 	product ids.ProductID,
 ) ([]moderation.Decision, error) {
-	rows, err := r.q.Query(ctx, listModerationDecisions, tenant, product)
+	rows, err := rawSQL(ctx, r.db, listModerationDecisions, tenant, product).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []moderation.Decision{}
 	for rows.Next() {
 		var d moderation.Decision

@@ -60,7 +60,7 @@ func TestSettingsSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, task := range tasks {
-		if err := store.Complete(ctx, task.ID, clock.Now()); err != nil {
+		if err := store.Complete(ctx, task.ID, task.Attempts, clock.Now()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -100,7 +100,7 @@ func TestSettingsSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, task := range tasks {
-		if err := store.Complete(ctx, task.ID, clock.Now()); err != nil {
+		if err := store.Complete(ctx, task.ID, task.Attempts, clock.Now()); err != nil {
 			t.Fatal(err)
 		}
 	}

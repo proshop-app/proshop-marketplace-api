@@ -30,11 +30,11 @@ func (r *Promotions) Delete(ctx context.Context, c *promotion.Campaign) error {
 	if c.State().Status != promotion.Draft {
 		return promotion.ErrConflict
 	}
-	tag, err := r.q.Exec(ctx, promotionDelete, c.State().ID, c.Origin().Version)
+	tag, err := execSQL(ctx, r.db, promotionDelete, c.State().ID, c.Origin().Version)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	if tag == 0 {
 		return promotion.ErrConflict
 	}
 	return nil
@@ -43,11 +43,13 @@ func (r *Promotions) Delete(ctx context.Context, c *promotion.Campaign) error {
 // Counts считает все совпадения фильтра без пагинации.
 func (r *Promotions) Counts(ctx context.Context, f promotion.Filter) (map[promotion.Status]int, error) {
 	args := []any{f.Status, f.Kind, f.TenantID, f.PlacementCode, f.From, f.To, f.ProductID}
-	rows, err := r.q.Query(ctx, promotionCounts, args...)
+	rows, err := rawSQL(ctx, r.db, promotionCounts, args...).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := map[promotion.Status]int{}
 	for rows.Next() {
 		var status promotion.Status
@@ -62,11 +64,13 @@ func (r *Promotions) Counts(ctx context.Context, f promotion.Filter) (map[promot
 
 // Summaries агрегирует счётчики страницы одним запросом вместе с именами магазинов.
 func (r *Promotions) Summaries(ctx context.Context, campaignIDs []ids.UUID) (map[ids.UUID]promotion.Summary, error) {
-	rows, err := r.q.Query(ctx, promotionSummaries, campaignIDs)
+	rows, err := rawSQL(ctx, r.db, promotionSummaries, campaignIDs).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := map[ids.UUID]promotion.Summary{}
 	for rows.Next() {
 		var id ids.UUID
@@ -81,11 +85,13 @@ func (r *Promotions) Summaries(ctx context.Context, campaignIDs []ids.UUID) (map
 
 // Traffic агрегирует трафик всех кампаний по дням.
 func (r *Promotions) Traffic(ctx context.Context, from, to string) ([]promotion.Counter, error) {
-	rows, err := r.q.Query(ctx, promotionTraffic, from, to)
+	rows, err := rawSQL(ctx, r.db, promotionTraffic, from, to).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []promotion.Counter{}
 	for rows.Next() {
 		var row promotion.Counter
@@ -99,11 +105,13 @@ func (r *Promotions) Traffic(ctx context.Context, from, to string) ([]promotion.
 
 // ReportGroups сводит размещения без загрузки jsonb и отдельных кампаний.
 func (r *Promotions) ReportGroups(ctx context.Context, from, to string) ([]promotion.ReportGroup, error) {
-	rows, err := r.q.Query(ctx, promotionReportGroups, from, to)
+	rows, err := rawSQL(ctx, r.db, promotionReportGroups, from, to).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []promotion.ReportGroup{}
 	for rows.Next() {
 		var group promotion.ReportGroup

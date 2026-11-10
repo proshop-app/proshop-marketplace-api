@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -22,12 +24,14 @@ const (
 )
 
 // Taxonomy — версии схем в PostgreSQL, блокировка головы согласует приём и загрузку.
-type Taxonomy struct{ q querier }
+type Taxonomy struct {
+	db *gorm.DB
+}
 
 // Current читает голову с разделяемой блокировкой до фиксации транзакции.
 func (r *Taxonomy) Current(ctx context.Context) (taxonomy.Definition, error) {
 	var raw []byte
-	if err := r.q.QueryRow(ctx, selectTaxonomy).Scan(&raw); err != nil {
+	if err := rawSQL(ctx, r.db, selectTaxonomy).Row().Scan(&raw); err != nil {
 		return taxonomy.Definition{}, err
 	}
 	var d taxonomy.Definition
@@ -38,7 +42,7 @@ func (r *Taxonomy) Current(ctx context.Context) (taxonomy.Definition, error) {
 // Lock блокирует загрузчиков и приём карточек на время замены схемы.
 func (r *Taxonomy) Lock(ctx context.Context) error {
 	var version int64
-	return r.q.QueryRow(ctx, lockTaxonomy).Scan(&version)
+	return rawSQL(ctx, r.db, lockTaxonomy).Row().Scan(&version)
 }
 
 // Save условно заменяет голову и сохраняет неизменяемую версию.
@@ -47,14 +51,14 @@ func (r *Taxonomy) Save(ctx context.Context, d taxonomy.Definition, expected int
 	if err != nil {
 		return err
 	}
-	tag, err := r.q.Exec(ctx, updateTaxonomy, d.Version, string(raw), expected)
+	tag, err := execSQL(ctx, r.db, updateTaxonomy, d.Version, string(raw), expected)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() != 1 {
+	if tag != 1 {
 		return taxonomy.ErrConflict
 	}
-	_, err = r.q.Exec(ctx, insertTaxonomy, d.Version, string(raw))
+	_, err = execSQL(ctx, r.db, insertTaxonomy, d.Version, string(raw))
 	return err
 }
 
@@ -65,11 +69,13 @@ func (r *Products) Page(
 	product ids.ProductID,
 	limit int,
 ) ([]*catalog.Product, error) {
-	rows, err := r.q.Query(ctx, pageProducts, tenant, product, limit)
+	rows, err := rawSQL(ctx, r.db, pageProducts, tenant, product, limit).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	out := []*catalog.Product{}
 	for rows.Next() {
 		var row productRow

@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -169,7 +171,7 @@ const (
 
 // References — реестр справочных сущностей в схеме reference.
 type References struct {
-	q querier
+	db *gorm.DB
 }
 
 // saveCheck — чего ждать от оператора пачки сохранения.
@@ -195,11 +197,13 @@ func (r *References) Dictionary(ctx context.Context, code string) (*reference.Di
 
 // Dictionaries — все словари по коду.
 func (r *References) Dictionaries(ctx context.Context) ([]*reference.Dictionary, error) {
-	rows, err := r.q.Query(ctx, selectDictionaries)
+	rows, err := rawSQL(ctx, r.db, selectDictionaries).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("словари реестра: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	var out []*reference.Dictionary
 	for rows.Next() {
 		dict, err := scanDictionary(rows)
@@ -214,7 +218,7 @@ func (r *References) Dictionaries(ctx context.Context) ([]*reference.Dictionary,
 // SaveDictionary переносит голову журнала и счётчик записей; строка уже заблокирована.
 func (r *References) SaveDictionary(ctx context.Context, dict *reference.Dictionary) error {
 	state := dict.State()
-	if _, err := r.q.Exec(ctx, updateDictionary, state.Code, state.Revision, state.Entries); err != nil {
+	if _, err := execSQL(ctx, r.db, updateDictionary, state.Code, state.Revision, state.Entries); err != nil {
 		return fmt.Errorf("словарь %s: %w", state.Code, err)
 	}
 	return nil
@@ -256,7 +260,7 @@ func (r *References) List(
 ) ([]*reference.Entry, int, error) {
 	var total int
 	status := string(filter.Status)
-	if err := r.q.QueryRow(ctx, countReferenceEntries, dictionary, status).Scan(&total); err != nil {
+	if err := rawSQL(ctx, r.db, countReferenceEntries, dictionary, status).Row().Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("записи %s: %w", dictionary, err)
 	}
 	entries, err := r.entries(ctx, listReferenceEntries, dictionary, status, filter.Limit, filter.Offset)
@@ -285,11 +289,13 @@ func (r *References) EntryByAlias(ctx context.Context, dictionary string, alias 
 
 // KeyOwners — владельцы занятых ключей.
 func (r *References) KeyOwners(ctx context.Context, dictionary string, keys []string) (map[string]ids.UUID, error) {
-	rows, err := r.q.Query(ctx, selectKeyOwners, dictionary, keys)
+	rows, err := rawSQL(ctx, r.db, selectKeyOwners, dictionary, keys).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("ключи %s: %w", dictionary, err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	owners := map[string]ids.UUID{}
 	for rows.Next() {
 		var key, owner string
@@ -307,11 +313,13 @@ func (r *References) Candidates(
 	dictionary, key string,
 	limit int,
 ) ([]reference.Candidate, error) {
-	rows, err := r.q.Query(ctx, selectCandidates, dictionary, key, likePrefix(key), limit)
+	rows, err := rawSQL(ctx, r.db, selectCandidates, dictionary, key, likePrefix(key), limit).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("кандидаты %s: %w", dictionary, err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	var out []reference.Candidate
 	for rows.Next() {
 		var (
@@ -334,7 +342,7 @@ func (r *References) Candidates(
 // CountStatus — записей словаря в статусе.
 func (r *References) CountStatus(ctx context.Context, dictionary string, status reference.Status) (int64, error) {
 	var count int64
-	if err := r.q.QueryRow(ctx, countReferenceStatus, dictionary, string(status)).Scan(&count); err != nil {
+	if err := rawSQL(ctx, r.db, countReferenceStatus, dictionary, string(status)).Row().Scan(&count); err != nil {
 		return 0, fmt.Errorf("записи %s в статусе %s: %w", dictionary, status, err)
 	}
 	return count, nil
@@ -368,18 +376,20 @@ func (r *References) Save(ctx context.Context, saved, deleted []*reference.Entry
 	if len(expected) == 0 {
 		return nil
 	}
-	results := r.q.SendBatch(ctx, batch)
-	for _, check := range expected {
-		tag, err := results.Exec()
-		if err == nil && check.conditional && tag.RowsAffected() == 0 {
-			err = reference.ErrEntryChanged
+	err := sendBatch(ctx, r.db, batch, func(results pgx.BatchResults) error {
+		for _, check := range expected {
+			tag, err := results.Exec()
+			if err == nil && check.conditional && tag.RowsAffected() == 0 {
+				err = reference.ErrEntryChanged
+			}
+			if err != nil {
+				return check.failure(err)
+			}
 		}
-		if err != nil {
-			_ = results.Close()
-			return check.failure(err)
-		}
-	}
-	if err := results.Close(); err != nil {
+
+		return nil
+	})
+	if err != nil {
 		return fmt.Errorf("записи реестра: %w", err)
 	}
 	for _, e := range saved {
@@ -491,7 +501,7 @@ func queueAliases(batch *pgx.Batch, e *reference.Entry) []saveCheck {
 }
 
 func (r *References) dictionary(ctx context.Context, query, code string) (*reference.Dictionary, error) {
-	dict, err := scanDictionary(r.q.QueryRow(ctx, query, code))
+	dict, err := scanDictionary(rawSQL(ctx, r.db, query, code).Row())
 	if notFound(err) {
 		return nil, reference.ErrDictionaryNotFound
 	}
@@ -500,20 +510,23 @@ func (r *References) dictionary(ctx context.Context, query, code string) (*refer
 
 // entries — записи по запросу с entryColumns и их варианты вторым запросом.
 func (r *References) entries(ctx context.Context, query string, args ...any) ([]*reference.Entry, error) {
-	rows, err := r.q.Query(ctx, query, args...)
+	rows, err := rawSQL(ctx, r.db, query, args...).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("записи реестра: %w", err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
 	var states []reference.EntryState
 	for rows.Next() {
 		state, err := scanEntry(rows)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		states = append(states, state)
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("записи реестра: %w", err)
 	}
@@ -540,11 +553,13 @@ func (r *References) aliases(
 	for _, state := range states {
 		list = append(list, string(state.ID))
 	}
-	rows, err := r.q.Query(ctx, selectEntryAliases, list)
+	rows, err := rawSQL(ctx, r.db, selectEntryAliases, list).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("варианты реестра: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	out := map[ids.UUID][]reference.AliasState{}
 	for rows.Next() {
 		var (
@@ -568,7 +583,15 @@ func scanDictionary(row rowScanner) (*reference.Dictionary, error) {
 		kinds  []string
 		limits []byte
 	)
-	err := row.Scan(&state.Code, &kind, &state.Identity, &kinds, &limits, &state.Revision, &state.Entries)
+	err := row.Scan(
+		&state.Code,
+		&kind,
+		&state.Identity,
+		pgtype.NewMap().SQLScanner(&kinds),
+		&limits,
+		&state.Revision,
+		&state.Entries,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -19,15 +21,18 @@ const (
 )
 
 // ParticipantDecisions не предоставляет операций изменения истории.
-type ParticipantDecisions struct{ q querier }
+type ParticipantDecisions struct {
+	db *gorm.DB
+}
 
 // Add добавляет решение без изменения прежних записей.
 func (r *ParticipantDecisions) Add(ctx context.Context, d participant.DecisionRecord) error {
 	if d.Actor == "" {
 		d.Actor = "operator"
 	}
-	_, err := r.q.Exec(
+	_, err := execSQL(
 		ctx,
+		r.db,
 		insertParticipantDecision,
 		d.ID,
 		d.TenantID,
@@ -52,14 +57,16 @@ func (r *ParticipantDecisions) List(
 	page participant.Page,
 ) ([]participant.DecisionRecord, int, error) {
 	var total int
-	if err := r.q.QueryRow(ctx, countParticipantDecisions, tenant).Scan(&total); err != nil {
+	if err := rawSQL(ctx, r.db, countParticipantDecisions, tenant).Row().Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := r.q.Query(ctx, listParticipantDecisions, tenant, page.Limit, page.Offset)
+	rows, err := rawSQL(ctx, r.db, listParticipantDecisions, tenant, page.Limit, page.Offset).Rows()
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []participant.DecisionRecord{}
 	for rows.Next() {
 		var d participant.DecisionRecord

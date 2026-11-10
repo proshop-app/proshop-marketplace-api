@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -54,25 +55,25 @@ const (
 
 	completeTask = `
 		UPDATE outbox
-		SET done_at = $2,
+		SET done_at = $3,
 			last_error = NULL
-		WHERE id = $1`
+		WHERE id = $1 AND attempts = $2 AND attempts > 0 AND done_at IS NULL`
 
 	retryTask = `
 		UPDATE outbox
-		SET next_at = $2,
-			last_error = $3
-		WHERE id = $1 AND done_at IS NULL`
+		SET next_at = $3,
+			last_error = $4
+		WHERE id = $1 AND attempts = $2 AND attempts > 0 AND done_at IS NULL`
 )
 
 // Outbox — запись задач в транзакции изменения.
 type Outbox struct {
-	q querier
+	db *gorm.DB
 }
 
 // TaskQueue — разбор outbox вне транзакций изменения.
 type TaskQueue struct {
-	pool *pgxpool.Pool
+	source *connectionSource
 }
 
 // Enqueue ставит задачу; невзятая задача с тем же ключом склеивает повтор.
@@ -82,8 +83,9 @@ func (o *Outbox) Enqueue(ctx context.Context, task ports.NewTask) error {
 		dedup = task.DedupKey
 	}
 
-	_, err := o.q.Exec(
+	_, err := execSQL(
 		ctx,
+		o.db,
 		insertTask,
 		task.Kind,
 		string(task.TenantID),
@@ -100,25 +102,40 @@ func (o *Outbox) Enqueue(ctx context.Context, task ports.NewTask) error {
 
 // NewTaskQueue — очередь задач поверх пула.
 func NewTaskQueue(pool *pgxpool.Pool) *TaskQueue {
-	return &TaskQueue{pool: pool}
+	return &TaskQueue{source: newConnectionSource(pool)}
 }
 
 // Claim берёт созревшие задачи: не больше PerTenant на магазин, всего не больше
 // Limit, занятые другим процессом пропускаются. Взятие продлевает срок до
 // конца аренды и считает попытку.
 func (q *TaskQueue) Claim(ctx context.Context, request ports.ClaimRequest) ([]ports.Task, error) {
-	rows, err := q.pool.Query(
+	var tasks []ports.Task
+
+	err := q.source.withConnection(ctx, func(db *gorm.DB) error {
+		var err error
+		tasks, err = claimOutboxTasks(ctx, db, request)
+		return err
+	})
+
+	return tasks, err
+}
+
+func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimRequest) ([]ports.Task, error) {
+	rows, err := rawSQL(
 		ctx,
+		db,
 		claimTasks,
 		request.Now,
 		request.Limit,
 		request.PerTenant,
 		request.LeaseUntil,
-	)
+	).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("взятие задач: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var tasks []ports.Task
 
@@ -154,19 +171,31 @@ func (q *TaskQueue) Claim(ctx context.Context, request ports.ClaimRequest) ([]po
 }
 
 // Complete отмечает задачу выполненной.
-func (q *TaskQueue) Complete(ctx context.Context, id int64, at time.Time) error {
-	if _, err := q.pool.Exec(ctx, completeTask, id, at); err != nil {
-		return fmt.Errorf("задача %d: %w", id, err)
-	}
+func (q *TaskQueue) Complete(ctx context.Context, id int64, attempts int, at time.Time) error {
+	return q.source.withConnection(ctx, func(db *gorm.DB) error {
+		affected, err := execSQL(ctx, db, completeTask, id, attempts, at)
+		if err != nil {
+			return fmt.Errorf("задача %d: %w", id, err)
+		}
+		if affected == 0 {
+			return ports.ErrTaskClaimConflict
+		}
 
-	return nil
+		return nil
+	})
 }
 
 // Retry откладывает задачу с причиной.
-func (q *TaskQueue) Retry(ctx context.Context, id int64, nextAt time.Time, reason string) error {
-	if _, err := q.pool.Exec(ctx, retryTask, id, nextAt, reason); err != nil {
-		return fmt.Errorf("задача %d: %w", id, err)
-	}
+func (q *TaskQueue) Retry(ctx context.Context, id int64, attempts int, nextAt time.Time, reason string) error {
+	return q.source.withConnection(ctx, func(db *gorm.DB) error {
+		affected, err := execSQL(ctx, db, retryTask, id, attempts, nextAt, reason)
+		if err != nil {
+			return fmt.Errorf("задача %d: %w", id, err)
+		}
+		if affected == 0 {
+			return ports.ErrTaskClaimConflict
+		}
 
-	return nil
+		return nil
+	})
 }

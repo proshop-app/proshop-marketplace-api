@@ -2,11 +2,10 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 )
@@ -27,12 +26,12 @@ func (p *ModerationDecisions) Cached(
 	now time.Time,
 ) (moderation.CachedDecision, bool, error) {
 	var value moderation.CachedDecision
-	if _, err := p.q.Exec(ctx, lockModerationDecision, key); err != nil {
+	if _, err := execSQL(ctx, p.db, lockModerationDecision, key); err != nil {
 		return value, false, err
 	}
 	var raw []byte
-	err := p.q.QueryRow(ctx, selectModerationDecision, key, now).Scan(&raw)
-	if errors.Is(err, pgx.ErrNoRows) {
+	err := rawSQL(ctx, p.db, selectModerationDecision, key, now).Row().Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
 		return value, false, nil
 	}
 	if err != nil {
@@ -48,6 +47,6 @@ func (p *ModerationDecisions) Cache(ctx context.Context, key string, decision mo
 	if err != nil {
 		return err
 	}
-	_, err = p.q.Exec(ctx, saveModerationDecision, key, raw, decision.ExpiresAt)
+	_, err = execSQL(ctx, p.db, saveModerationDecision, key, raw, decision.ExpiresAt)
 	return err
 }

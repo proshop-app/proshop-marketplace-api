@@ -2,11 +2,10 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
@@ -23,12 +22,12 @@ const (
 // Decision сериализует повторы до проверки версии и удерживает блокировку до commit.
 func (p *Parked) Decision(ctx context.Context, key string, now time.Time) (ports.EventDecision, bool, error) {
 	var value ports.EventDecision
-	if _, err := p.q.Exec(ctx, lockEventDecision, key); err != nil {
+	if _, err := execSQL(ctx, p.db, lockEventDecision, key); err != nil {
 		return value, false, err
 	}
 	var raw []byte
-	err := p.q.QueryRow(ctx, selectEventDecision, key, now).Scan(&raw)
-	if errors.Is(err, pgx.ErrNoRows) {
+	err := rawSQL(ctx, p.db, selectEventDecision, key, now).Row().Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
 		return value, false, nil
 	}
 	if err != nil {
@@ -44,6 +43,6 @@ func (p *Parked) SaveDecision(ctx context.Context, key string, decision ports.Ev
 	if err != nil {
 		return err
 	}
-	_, err = p.q.Exec(ctx, saveEventDecision, key, raw, decision.ExpiresAt)
+	_, err = execSQL(ctx, p.db, saveEventDecision, key, raw, decision.ExpiresAt)
 	return err
 }

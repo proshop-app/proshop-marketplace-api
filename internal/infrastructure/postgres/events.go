@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
@@ -26,22 +28,22 @@ const (
 
 // Inbox — отметки обработанных событий.
 type Inbox struct {
-	q querier
+	db *gorm.DB
 }
 
 // Parked — отравленные сообщения.
 type Parked struct {
-	q querier
+	db *gorm.DB
 }
 
 // MarkProcessed отмечает событие; false — уже было.
 func (i *Inbox) MarkProcessed(ctx context.Context, eventID string, at time.Time) (bool, error) {
-	tag, err := i.q.Exec(ctx, insertProcessedEvent, eventID, at)
+	affected, err := execSQL(ctx, i.db, insertProcessedEvent, eventID, at)
 	if err != nil {
 		return false, fmt.Errorf("отметка события %s: %w", eventID, err)
 	}
 
-	return tag.RowsAffected() == 1, nil
+	return affected == 1, nil
 }
 
 // Park сохраняет сообщение; повтор той же позиции ничего не меняет.
@@ -56,8 +58,9 @@ func (p *Parked) Park(ctx context.Context, event ports.ParkedEvent) error {
 		tenant = event.TenantID
 	}
 
-	_, err = p.q.Exec(
+	_, err = execSQL(
 		ctx,
+		p.db,
 		insertParkedEvent,
 		event.Topic,
 		event.Partition,

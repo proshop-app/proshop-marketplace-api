@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
@@ -38,12 +39,12 @@ const (
 
 // Retention — чистка служебных записей пачками, чтобы не держать долгих блокировок.
 type Retention struct {
-	pool *pgxpool.Pool
+	source *connectionSource
 }
 
 // NewRetention — чистка поверх пула.
 func NewRetention(pool *pgxpool.Pool) *Retention {
-	return &Retention{pool: pool}
+	return &Retention{source: newConnectionSource(pool)}
 }
 
 // Purge удаляет записи старше границ.
@@ -66,26 +67,30 @@ func (r *Retention) Purge(ctx context.Context, request ports.PurgeRequest) (port
 		{sql: purgePromotionViews, before: request.PromotionBefore, count: &result.PromotionViews},
 	}
 
-	for _, step := range steps {
-		if *step.count, err = r.purge(ctx, step.sql, step.before, request.Batch); err != nil {
-			return result, err
+	err = r.source.withConnection(ctx, func(db *gorm.DB) error {
+		for _, step := range steps {
+			if *step.count, err = r.purge(ctx, db, step.sql, step.before, request.Batch); err != nil {
+				return err
+			}
 		}
-	}
 
-	return result, nil
+		return nil
+	})
+
+	return result, err
 }
 
-func (r *Retention) purge(ctx context.Context, sql string, before time.Time, batch int) (int64, error) {
+func (r *Retention) purge(ctx context.Context, db *gorm.DB, sql string, before time.Time, batch int) (int64, error) {
 	var total int64
 
 	for {
-		tag, err := r.pool.Exec(ctx, sql, before, batch)
+		affected, err := execSQL(ctx, db, sql, before, batch)
 		if err != nil {
 			return total, fmt.Errorf("чистка: %w", err)
 		}
 
-		total += tag.RowsAffected()
-		if tag.RowsAffected() < int64(batch) {
+		total += affected
+		if affected < int64(batch) {
 			return total, nil
 		}
 	}

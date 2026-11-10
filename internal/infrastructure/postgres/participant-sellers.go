@@ -19,11 +19,13 @@ func (r *Participants) Sellers(
 	if len(tenants) == 0 {
 		return result, nil
 	}
-	rows, err := r.q.Query(ctx, selectParticipantSellers, tenants)
+	rows, err := rawSQL(ctx, r.db, selectParticipantSellers, tenants).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("продавцы: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	for rows.Next() {
 		var tenant ids.TenantID
 		var seller participant.Seller

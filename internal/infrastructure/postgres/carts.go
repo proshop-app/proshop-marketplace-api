@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -50,7 +52,7 @@ const (
 
 // Carts — корзины в PostgreSQL.
 type Carts struct {
-	q querier
+	db *gorm.DB
 }
 
 // ByBuyer — корзина покупателя со строками по порядку добавления.
@@ -61,7 +63,7 @@ func (r *Carts) ByBuyer(ctx context.Context, buyerID ids.UUID) (*cart.Cart, erro
 		promos      []byte
 	)
 
-	err := r.q.QueryRow(ctx, selectCart, string(buyerID)).
+	err := rawSQL(ctx, r.db, selectCart, string(buyerID)).Row().
 		Scan(&id, &buyerFK, &state.Version, &state.CreatedAt, &state.UpdatedAt, &state.ExpiresAt, &promos)
 	if notFound(err) {
 		return nil, cart.ErrNotFound
@@ -101,8 +103,9 @@ func (r *Carts) Save(ctx context.Context, c *cart.Cart) error {
 		if err != nil {
 			return err
 		}
-		_, err = r.q.Exec(
+		_, err = execSQL(
 			ctx,
+			r.db,
 			insertCartLine,
 			string(s.ID),
 			string(line.Offer.Tenant),
@@ -128,12 +131,12 @@ func (r *Carts) Save(ctx context.Context, c *cart.Cart) error {
 
 // DeleteExpired удаляет просроченные корзины пачкой.
 func (r *Carts) DeleteExpired(ctx context.Context, before time.Time, limit int) (int64, error) {
-	tag, err := r.q.Exec(ctx, deleteExpiredCarts, before, limit)
+	affected, err := execSQL(ctx, r.db, deleteExpiredCarts, before, limit)
 	if err != nil {
 		return 0, fmt.Errorf("чистка корзин: %w", err)
 	}
 
-	return tag.RowsAffected(), nil
+	return affected, nil
 }
 
 func (r *Carts) insert(ctx context.Context, s cart.State) error {
@@ -141,8 +144,9 @@ func (r *Carts) insert(ctx context.Context, s cart.State) error {
 	if err != nil {
 		return err
 	}
-	_, err = r.q.Exec(
+	_, err = execSQL(
 		ctx,
+		r.db,
 		insertCart,
 		string(s.ID),
 		string(s.BuyerID),
@@ -169,8 +173,9 @@ func (r *Carts) update(ctx context.Context, s cart.State, origin int64) error {
 	if err != nil {
 		return err
 	}
-	tag, err := r.q.Exec(
+	affected, err := execSQL(
 		ctx,
+		r.db,
 		updateCart,
 		string(s.ID),
 		origin,
@@ -182,11 +187,11 @@ func (r *Carts) update(ctx context.Context, s cart.State, origin int64) error {
 	if err != nil {
 		return fmt.Errorf("корзина %s: %w", s.ID, err)
 	}
-	if tag.RowsAffected() == 0 {
+	if affected == 0 {
 		return cart.ErrConflict
 	}
 
-	if _, err := r.q.Exec(ctx, deleteCartLines, string(s.ID)); err != nil {
+	if _, err := execSQL(ctx, r.db, deleteCartLines, string(s.ID)); err != nil {
 		return fmt.Errorf("строки корзины %s: %w", s.ID, err)
 	}
 
@@ -194,11 +199,13 @@ func (r *Carts) update(ctx context.Context, s cart.State, origin int64) error {
 }
 
 func (r *Carts) lines(ctx context.Context, cartID string) ([]cart.Line, error) {
-	rows, err := r.q.Query(ctx, selectCartLines, cartID)
+	rows, err := rawSQL(ctx, r.db, selectCartLines, cartID).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("строки корзины: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var lines []cart.Line
 

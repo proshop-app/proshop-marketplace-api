@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 )
 
@@ -60,7 +62,7 @@ const (
 
 // PickupPoints — справочник пунктов выдачи в PostgreSQL.
 type PickupPoints struct {
-	q querier
+	db *gorm.DB
 }
 
 // pointColumnsBatch — пачка пунктов по колонкам для вставки через unnest.
@@ -87,8 +89,9 @@ func (r *PickupPoints) Upsert(ctx context.Context, points []delivery.PickupPoint
 
 	batch := newPointColumnsBatch(points)
 
-	_, err := r.q.Exec(
+	_, err := execSQL(
 		ctx,
+		r.db,
 		upsertPoints,
 		batch.carriers,
 		batch.codes,
@@ -112,17 +115,17 @@ func (r *PickupPoints) Upsert(ctx context.Context, points []delivery.PickupPoint
 
 // DeactivateStale закрывает пункты, не пришедшие в обновлении, начатом в since.
 func (r *PickupPoints) DeactivateStale(ctx context.Context, carrier delivery.Carrier, since time.Time) (int64, error) {
-	tag, err := r.q.Exec(ctx, deactivateStalePoints, string(carrier), since)
+	affected, err := execSQL(ctx, r.db, deactivateStalePoints, string(carrier), since)
 	if err != nil {
 		return 0, fmt.Errorf("закрытие пунктов %s: %w", carrier, err)
 	}
 
-	return tag.RowsAffected(), nil
+	return affected, nil
 }
 
 // Get — пункт.
 func (r *PickupPoints) Get(ctx context.Context, carrier delivery.Carrier, code string) (delivery.PickupPoint, error) {
-	p, err := scanPoint(r.q.QueryRow(ctx, selectPoint, string(carrier), code))
+	p, err := scanPoint(rawSQL(ctx, r.db, selectPoint, string(carrier), code).Row())
 	if notFound(err) {
 		return delivery.PickupPoint{}, delivery.ErrPickupPointNotFound
 	}
@@ -140,11 +143,13 @@ func (r *PickupPoints) Page(
 	after string,
 	limit int,
 ) ([]delivery.PickupPoint, error) {
-	rows, err := r.q.Query(ctx, selectPointsPage, string(carrier), after, limit)
+	rows, err := rawSQL(ctx, r.db, selectPointsPage, string(carrier), after, limit).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("пункты выдачи %s: %w", carrier, err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var page []delivery.PickupPoint
 

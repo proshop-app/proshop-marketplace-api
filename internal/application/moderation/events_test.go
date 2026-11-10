@@ -31,6 +31,32 @@ func statusTask(t *testing.T, e environment, kind string) ports.Task {
 	return found[0]
 }
 
+func completeStatusTask(t *testing.T, e environment, task ports.Task) {
+	t.Helper()
+
+	ctx := context.Background()
+	tasks, err := e.store.Claim(ctx, ports.ClaimRequest{
+		Now:        e.clock.Now(),
+		Limit:      100,
+		PerTenant:  100,
+		LeaseUntil: e.clock.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, claimed := range tasks {
+		if claimed.ID == task.ID {
+			if err := e.store.Complete(ctx, claimed.ID, claimed.Attempts, e.clock.Now()); err != nil {
+				t.Fatal(err)
+			}
+
+			return
+		}
+	}
+
+	t.Fatalf("задача %d не взята для завершения", task.ID)
+}
+
 func TestStatusEvents(t *testing.T) {
 	e := setup()
 	ctx := context.Background()
@@ -55,9 +81,7 @@ func TestStatusEvents(t *testing.T) {
 	if pending.At != e.clock.Now().UTC().Format(time.RFC3339) {
 		t.Fatal(pending.At)
 	}
-	if err := e.store.Complete(ctx, task.ID, e.clock.Now()); err != nil {
-		t.Fatal(err)
-	}
+	completeStatusTask(t, e, task)
 	c := e.view(t, "p1").Case
 	cmd := appmoderation.DecisionCommand{
 		CaseID:          c.ID,

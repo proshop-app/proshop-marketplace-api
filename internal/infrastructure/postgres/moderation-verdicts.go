@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -47,7 +49,9 @@ const (
 )
 
 // ModerationVerdicts сохраняет вердикты условно по исходной версии.
-type ModerationVerdicts struct{ q querier }
+type ModerationVerdicts struct {
+	db *gorm.DB
+}
 
 // Get читает исходное состояние для условного сохранения.
 func (r *ModerationVerdicts) Get(
@@ -55,7 +59,7 @@ func (r *ModerationVerdicts) Get(
 	tenant ids.TenantID,
 	product ids.ProductID,
 ) (*moderation.Verdict, error) {
-	return scanModerationVerdict(r.q.QueryRow(ctx, selectModerationVerdict, tenant, product))
+	return scanModerationVerdict(rawSQL(ctx, r.db, selectModerationVerdict, tenant, product).Row())
 }
 
 func scanModerationVerdict(row rowScanner) (*moderation.Verdict, error) {
@@ -126,14 +130,14 @@ func (r *ModerationVerdicts) Save(ctx context.Context, value *moderation.Verdict
 		query = updateModerationVerdict
 		args = append(args, value.Origin().Version, value.Origin().Status)
 	}
-	tag, err := r.q.Exec(ctx, query, args...)
+	affected, err := execSQL(ctx, r.db, query, args...)
 	if isUnique(err, "moderation_case_open") {
 		return moderation.ErrConflict
 	}
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	if affected == 0 {
 		return moderation.ErrConflict
 	}
 	value.MarkSaved()
@@ -143,14 +147,17 @@ func (r *ModerationVerdicts) Save(ctx context.Context, value *moderation.Verdict
 // List ограничивает объём чтения для операторского сценария.
 func (r *ModerationVerdicts) List(ctx context.Context, f moderation.Filter) ([]moderation.VerdictState, int, error) {
 	var total int
-	if err := r.q.QueryRow(ctx, countModerationVerdicts, f.Status, f.TenantID, f.DecidedBy).Scan(&total); err != nil {
+	row := rawSQL(ctx, r.db, countModerationVerdicts, f.Status, f.TenantID, f.DecidedBy).Row()
+	if err := row.Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := r.q.Query(ctx, listModerationVerdicts, f.Status, f.TenantID, f.DecidedBy, f.Limit, f.Offset)
+	rows, err := rawSQL(ctx, r.db, listModerationVerdicts, f.Status, f.TenantID, f.DecidedBy, f.Limit, f.Offset).Rows()
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	items := []moderation.VerdictState{}
 	for rows.Next() {
 		value, err := scanModerationVerdict(rows)
@@ -168,11 +175,13 @@ func (r *ModerationVerdicts) History(
 	tenant ids.TenantID,
 	product ids.ProductID,
 ) ([]moderation.VerdictState, error) {
-	rows, err := r.q.Query(ctx, historyModerationVerdicts, tenant, product)
+	rows, err := rawSQL(ctx, r.db, historyModerationVerdicts, tenant, product).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []moderation.VerdictState{}
 	for rows.Next() {
 		v, err := scanModerationVerdict(rows)

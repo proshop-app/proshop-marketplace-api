@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -36,7 +38,7 @@ const (
 
 // Signals — проекция остатков и цен в PostgreSQL.
 type Signals struct {
-	q querier
+	db *gorm.DB
 }
 
 // signalsRow — строка сигналов; в модели чтения предложений её может не быть вовсе.
@@ -54,7 +56,7 @@ type signalsRow struct {
 func (r *Signals) Get(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) (*catalog.Signals, error) {
 	var row signalsRow
 
-	err := r.q.QueryRow(ctx, selectSignals, string(tenantID), string(productID)).Scan(row.targets()...)
+	err := rawSQL(ctx, r.db, selectSignals, string(tenantID), string(productID)).Row().Scan(row.targets()...)
 	if notFound(err) {
 		return nil, catalog.ErrSignalsNotFound
 	}
@@ -93,14 +95,14 @@ func (r *Signals) Save(ctx context.Context, signals *catalog.Signals) error {
 	}
 
 	if signals.OriginVersion() == 0 {
-		_, err := r.q.Exec(ctx, insertSignals, args...)
+		_, err := execSQL(ctx, r.db, insertSignals, args...)
 		conflict := isUnique(err, "offers_pkey")
 
 		return saved(err, conflict, signals.MarkSaved, "сигналы", s.TenantID, s.ProductID)
 	}
 
-	tag, err := r.q.Exec(ctx, updateSignals, append(args, signals.OriginVersion())...)
-	conflict := err == nil && tag.RowsAffected() == 0
+	affected, err := execSQL(ctx, r.db, updateSignals, append(args, signals.OriginVersion())...)
+	conflict := err == nil && affected == 0
 
 	return saved(err, conflict, signals.MarkSaved, "сигналы", s.TenantID, s.ProductID)
 }

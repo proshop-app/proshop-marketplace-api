@@ -11,44 +11,37 @@ import (
 )
 
 const (
-	promotionLockName          = "uno:marketplace:promotion"
-	indexRebuildLockName       = "uno:marketplace:offer-index-rebuild"
-	acquireIndexRebuildLock    = "SELECT pg_try_advisory_lock(hashtextextended($1, 0))"
-	indexRebuildProbeInterval  = time.Second
-	indexRebuildCleanupTimeout = 5 * time.Second
+	promotionLockName         = "uno:marketplace:promotion"
+	indexRebuildLockName      = "uno:marketplace:offer-index-rebuild"
+	acquireIndexRebuildLock   = "SELECT pg_try_advisory_lock(hashtextextended($1, 0))"
+	indexRebuildProbeInterval = time.Second
 )
 
 // IndexRebuildLock — общая именованная advisory lock для CLI и фоновых процессов.
 // Выделенное соединение закрывается, поэтому session lock не остаётся в пуле.
 type IndexRebuildLock struct {
-	name string
-	pool *pgxpool.Pool
+	name   string
+	source *connectionSource
 }
 
 // NewIndexRebuildLock привязывает владение к выделенному соединению PostgreSQL.
 func NewIndexRebuildLock(pool *pgxpool.Pool) *IndexRebuildLock {
 	return &IndexRebuildLock{
-		pool: pool,
-		name: indexRebuildLockName,
+		source: newConnectionSource(pool),
+		name:   indexRebuildLockName,
 	}
 }
 
 // WithLock не ждёт занятую блокировку: фоновый цикл повторит попытку позже.
 func (l *IndexRebuildLock) WithLock(ctx context.Context, run func(context.Context) error) error {
-	pooled, err := l.pool.Acquire(ctx)
-
+	connection, err := l.source.openDedicated(ctx)
 	if err != nil {
 		return err
 	}
-	connection := pooled.Hijack()
-	defer func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), indexRebuildCleanupTimeout)
-		defer cancel()
-		_ = connection.Close(cleanup)
-	}()
+	defer connection.close()
 
 	var acquired bool
-	err = connection.QueryRow(ctx, acquireIndexRebuildLock, l.name).
+	err = rawSQL(ctx, connection.orm, acquireIndexRebuildLock, l.name).Row().
 		Scan(&acquired)
 
 	if err != nil {
@@ -77,7 +70,7 @@ func (l *IndexRebuildLock) WithLock(ctx context.Context, run func(context.Contex
 				return
 			case <-ticker.C:
 				probe, stop := context.WithTimeout(work, indexRebuildProbeInterval)
-				err := connection.Ping(probe)
+				err := connection.connection.PingContext(probe)
 				stop()
 
 				if err != nil {
@@ -97,5 +90,5 @@ func (l *IndexRebuildLock) WithLock(ctx context.Context, run func(context.Contex
 
 // NewPromotionLock отделяет цикл продвижения от долгой пересборки индекса.
 func NewPromotionLock(pool *pgxpool.Pool) *IndexRebuildLock {
-	return &IndexRebuildLock{pool: pool, name: promotionLockName}
+	return &IndexRebuildLock{source: newConnectionSource(pool), name: promotionLockName}
 }

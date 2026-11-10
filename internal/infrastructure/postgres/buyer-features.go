@@ -3,9 +3,8 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"errors"
 
-	"github.com/jackc/pgx/v5"
+	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
@@ -70,14 +69,16 @@ const (
 )
 
 // BuyerFeatures — транзакционное хранилище покупательских данных.
-type BuyerFeatures struct{ q querier }
+type BuyerFeatures struct {
+	db *gorm.DB
+}
 
 // BuyerFeatures возвращает репозиторий текущей транзакции.
-func (s *scope) BuyerFeatures() ports.BuyerFeatures { return &BuyerFeatures{q: s.q} }
+func (s *scope) BuyerFeatures() ports.BuyerFeatures { return &BuyerFeatures{db: s.db} }
 
 // Lock — сериализует изменения списков одного покупателя.
 func (r *BuyerFeatures) Lock(ctx context.Context, id ids.UUID) error {
-	_, err := r.q.Exec(ctx, lockBuyerFeatures, string(id))
+	_, err := execSQL(ctx, r.db, lockBuyerFeatures, string(id))
 	return err
 }
 
@@ -85,8 +86,8 @@ func (r *BuyerFeatures) Lock(ctx context.Context, id ids.UUID) error {
 func (r *BuyerFeatures) Profile(ctx context.Context, id ids.UUID) (*buyer.Profile, error) {
 	var raw []byte
 	var state buyer.ProfileState
-	err := r.q.QueryRow(ctx, getBuyerProfile, string(id)).Scan(&raw, &state.Version)
-	if errors.Is(err, pgx.ErrNoRows) {
+	err := rawSQL(ctx, r.db, getBuyerProfile, string(id)).Row().Scan(&raw, &state.Version)
+	if notFound(err) {
 		return buyer.RestoreProfile(state), nil
 	}
 	if err != nil {
@@ -111,11 +112,11 @@ func (r *BuyerFeatures) SaveProfile(ctx context.Context, id ids.UUID, profile *b
 		query = insertBuyerProfile
 		args = args[:3]
 	}
-	tag, err := r.q.Exec(ctx, query, args...)
+	affected, err := execSQL(ctx, r.db, query, args...)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() != 1 {
+	if affected != 1 {
 		return buyer.ErrProfileConflict
 	}
 	profile.MarkSaved()
@@ -124,11 +125,13 @@ func (r *BuyerFeatures) SaveProfile(ctx context.Context, id ids.UUID, profile *b
 
 // Saved — читает наблюдения покупателя.
 func (r *BuyerFeatures) Saved(ctx context.Context, id ids.UUID) ([]ports.SavedOffer, error) {
-	rows, err := r.q.Query(ctx, getBuyerSaved, string(id))
+	rows, err := rawSQL(ctx, r.db, getBuyerSaved, string(id)).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []ports.SavedOffer{}
 	for rows.Next() {
 		var item ports.SavedOffer
@@ -167,7 +170,7 @@ func (r *BuyerFeatures) PutSaved(
 		return err
 	}
 	if kind == ports.Favorites {
-		_, err := r.q.Exec(ctx, putBuyerFavorite, string(id), string(key.Tenant), string(key.Product), raw)
+		_, err := execSQL(ctx, r.db, putBuyerFavorite, string(id), string(key.Tenant), string(key.Product), raw)
 		return err
 	}
 	var target *int64
@@ -175,8 +178,9 @@ func (r *BuyerFeatures) PutSaved(
 		value := item.TargetPrice.Kopecks()
 		target = &value
 	}
-	_, err = r.q.Exec(
+	_, err = execSQL(
 		ctx,
+		r.db,
 		putBuyerSaved,
 		string(id),
 		string(key.Tenant),
@@ -198,17 +202,19 @@ func (r *BuyerFeatures) DeleteSaved(ctx context.Context, id ids.UUID, kind ports
 	if kind == ports.Favorites {
 		query = deleteBuyerFavorite
 	}
-	_, err = r.q.Exec(ctx, query, string(id), string(key.Tenant), string(key.Product))
+	_, err = execSQL(ctx, r.db, query, string(id), string(key.Tenant), string(key.Product))
 	return err
 }
 
 // Subscriptions — возвращает подписки покупателя.
 func (r *BuyerFeatures) Subscriptions(ctx context.Context, id ids.UUID) ([]ids.TenantID, error) {
-	rows, err := r.q.Query(ctx, getBuyerSubscriptions, string(id))
+	rows, err := rawSQL(ctx, r.db, getBuyerSubscriptions, string(id)).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []ids.TenantID{}
 	for rows.Next() {
 		var tenant string
@@ -231,7 +237,7 @@ func (r *BuyerFeatures) Subscribe(
 	if !enabled {
 		query = deleteBuyerSubscription
 	}
-	_, err := r.q.Exec(ctx, query, string(id), string(tenant))
+	_, err := execSQL(ctx, r.db, query, string(id), string(tenant))
 	return err
 }
 
@@ -239,9 +245,9 @@ func (r *BuyerFeatures) Subscribe(
 func (r *BuyerFeatures) Subscribers(ctx context.Context, tenant ids.TenantID, id ids.UUID) (int, bool, error) {
 	var count int
 	var subscribed bool
-	err := r.q.QueryRow(ctx, getShopSubscribers, string(tenant)).Scan(&count)
+	err := rawSQL(ctx, r.db, getShopSubscribers, string(tenant)).Row().Scan(&count)
 	if err == nil && id != "" {
-		err = r.q.QueryRow(ctx, isShopSubscriber, string(tenant), string(id)).Scan(&subscribed)
+		err = rawSQL(ctx, r.db, isShopSubscriber, string(tenant), string(id)).Row().Scan(&subscribed)
 	}
 	return count, subscribed, err
 }
@@ -253,14 +259,16 @@ func (r *BuyerFeatures) FavoritesPage(
 	limit, offset int,
 ) ([]ports.SavedOffer, int, error) {
 	var total int
-	if err := r.q.QueryRow(ctx, countBuyerFavorites, string(id)).Scan(&total); err != nil {
+	if err := rawSQL(ctx, r.db, countBuyerFavorites, string(id)).Row().Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := r.q.Query(ctx, getBuyerFavoritesPage, string(id), limit, offset)
+	rows, err := rawSQL(ctx, r.db, getBuyerFavoritesPage, string(id), limit, offset).Rows()
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	result := []ports.SavedOffer{}
 	for rows.Next() {
 		var raw []byte
@@ -283,7 +291,7 @@ func (r *BuyerFeatures) PriceDrops(ctx context.Context, id ids.UUID, contexts ma
 	if err != nil {
 		return 0, err
 	}
-	err = r.q.QueryRow(ctx, countBuyerPriceDrops, string(id), raw, catalog.DefaultPriceProfile).Scan(&count)
+	err = rawSQL(ctx, r.db, countBuyerPriceDrops, string(id), raw, catalog.DefaultPriceProfile).Row().Scan(&count)
 	return count, err
 }
 
@@ -300,7 +308,7 @@ func (r *BuyerFeatures) SavedStats(
 	}
 	var count int
 	var exists bool
-	err := r.q.QueryRow(ctx, query, string(id), string(offer.Tenant), string(offer.Product)).Scan(&count, &exists)
+	err := rawSQL(ctx, r.db, query, string(id), string(offer.Tenant), string(offer.Product)).Row().Scan(&count, &exists)
 	return count, exists, err
 }
 
@@ -320,17 +328,19 @@ func (r *BuyerFeatures) UpdateTarget(
 		value := target.Kopecks()
 		price = &value
 	}
-	_, err := r.q.Exec(ctx, updateWatchTarget, string(id), string(offer.Tenant), string(offer.Product), price)
+	_, err := execSQL(ctx, r.db, updateWatchTarget, string(id), string(offer.Tenant), string(offer.Product), price)
 	return err
 }
 
 // WatchTenants читает только магазины наблюдений, без снимков товаров.
 func (r *BuyerFeatures) WatchTenants(ctx context.Context, id ids.UUID) ([]ids.TenantID, error) {
-	rows, err := r.q.Query(ctx, getBuyerWatchTenants, string(id))
+	rows, err := rawSQL(ctx, r.db, getBuyerWatchTenants, string(id)).Rows()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	tenants := []ids.TenantID{}
 	for rows.Next() {
 		var tenant string

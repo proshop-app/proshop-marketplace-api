@@ -1,12 +1,12 @@
 package postgres
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
@@ -48,7 +48,7 @@ func isForeignKey(err error) bool {
 }
 
 func notFound(err error) bool {
-	return errors.Is(err, pgx.ErrNoRows)
+	return errors.Is(err, sql.ErrNoRows)
 }
 
 // jsonArg — сырой JSON как параметр jsonb; пусто — NULL.

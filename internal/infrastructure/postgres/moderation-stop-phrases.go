@@ -15,30 +15,39 @@ const (
 // AddPhrase увеличивает ревизию только после добавления уникального ключа.
 func (r *ModerationRules) AddPhrase(ctx context.Context, p moderation.StopPhrase) error {
 	var revision int64
-	if err := r.q.QueryRow(ctx, lockModerationRules).Scan(&revision); err != nil {
+	if err := rawSQL(ctx, r.db, lockModerationRules).Row().Scan(&revision); err != nil {
 		return err
 	}
-	tag, err := r.q.Exec(ctx, insertModerationPhrase, p.Key, p.Text, p.Operator.ID, p.Operator.Name, p.CreatedAt)
+	affected, err := execSQL(
+		ctx,
+		r.db,
+		insertModerationPhrase,
+		p.Key,
+		p.Text,
+		p.Operator.ID,
+		p.Operator.Name,
+		p.CreatedAt,
+	)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	if affected == 0 {
 		return moderation.ErrPhraseExists
 	}
-	_, err = r.q.Exec(ctx, bumpModerationRules)
+	_, err = execSQL(ctx, r.db, bumpModerationRules)
 	return err
 }
 
 // RemovePhrase увеличивает ревизию только после фактического удаления.
 func (r *ModerationRules) RemovePhrase(ctx context.Context, key string) (bool, error) {
 	var revision int64
-	if err := r.q.QueryRow(ctx, lockModerationRules).Scan(&revision); err != nil {
+	if err := rawSQL(ctx, r.db, lockModerationRules).Row().Scan(&revision); err != nil {
 		return false, err
 	}
-	tag, err := r.q.Exec(ctx, deleteModerationPhrase, key)
-	if err != nil || tag.RowsAffected() == 0 {
+	affected, err := execSQL(ctx, r.db, deleteModerationPhrase, key)
+	if err != nil || affected == 0 {
 		return false, err
 	}
-	_, err = r.q.Exec(ctx, bumpModerationRules)
+	_, err = execSQL(ctx, r.db, bumpModerationRules)
 	return true, err
 }

@@ -55,7 +55,7 @@ func TestOutboxDedupClaimLease(t *testing.T) {
 		t.Fatalf("после взятия новое изменение ставит новую задачу, взятая — в аренде: %+v, %v", again, err)
 	}
 
-	if err := queue.Complete(ctx, again[0].ID, at(5)); err != nil {
+	if err := queue.Complete(ctx, again[0].ID, again[0].Attempts, at(5)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,7 +64,7 @@ func TestOutboxDedupClaimLease(t *testing.T) {
 		t.Fatalf("после аренды задачу берёт другой обработчик: %+v, %v", expired, err)
 	}
 
-	if err := queue.Retry(ctx, expired[0].ID, at(30), "сбой"); err != nil {
+	if err := queue.Retry(ctx, expired[0].ID, expired[0].Attempts, at(30), "сбой"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -213,7 +213,7 @@ func TestInboxParkedRetention(t *testing.T) {
 
 	enqueue(t, uow, "t1", "a", 0)
 	tasks, _ := queue.Claim(ctx, ports.ClaimRequest{Now: at(1), Limit: 1, PerTenant: 1, LeaseUntil: at(2)})
-	if err := queue.Complete(ctx, tasks[0].ID, at(1)); err != nil {
+	if err := queue.Complete(ctx, tasks[0].ID, tasks[0].Attempts, at(1)); err != nil {
 		t.Fatal(err)
 	}
 	enqueue(t, uow, "t1", "b", 0)
