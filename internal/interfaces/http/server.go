@@ -318,6 +318,7 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/operator/reference", operator(registry.summaries)},
 		{http.MethodPost, "/api/v1/operator/reference/import", operator(referenceImportBudget(registry.importPackage))},
 		{http.MethodGet, "/api/v1/operator/reference/{dict}/entries", operator(registry.list)},
+		{http.MethodPost, "/api/v1/operator/reference/{dict}/entries/review", operator(registry.review)},
 		{http.MethodGet, "/api/v1/operator/reference/{dict}/entries/{id}", operator(registry.get)},
 		{http.MethodPatch, "/api/v1/operator/reference/{dict}/entries/{id}", operator(registry.update)},
 		{http.MethodGet, "/internal/reference", reader(registry.discovery)},

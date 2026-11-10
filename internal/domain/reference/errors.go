@@ -32,6 +32,18 @@ var (
 	ErrKeyTaken = errs.New(errs.Conflict, "reference.key_taken", "написание уже принадлежит другой записи словаря")
 	// ErrEntryChanged — запись изменилась после прочтения: ревизия If-Match или версия расходятся.
 	ErrEntryChanged = errs.New(errs.Conflict, "reference.entry_changed", "запись изменена, перечитайте её")
+	// ErrDictionaryChanged — решение основано на прежнем составе словаря.
+	ErrDictionaryChanged = errs.New(
+		errs.Conflict,
+		"reference.dictionary_changed",
+		"словарь изменён, перечитайте кандидатов и выберите записи заново",
+	)
+	// ErrSelectionChanged — выбранная или исключённая запись уже не кандидат этого словаря.
+	ErrSelectionChanged = errs.New(
+		errs.Conflict,
+		"reference.selection_changed",
+		"выбор содержит отсутствующую запись или не кандидата этого словаря",
+	)
 	// ErrNormalizer — словарь построен другой версией нормализации; нужна миграция пересчёта.
 	ErrNormalizer = errs.New(
 		errs.Conflict,
