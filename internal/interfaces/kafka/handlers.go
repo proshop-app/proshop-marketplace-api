@@ -122,23 +122,9 @@ func productProjected(ctx context.Context, projections Projections, envelope Env
 	if err != nil {
 		return err
 	}
-	snapshot := catalog.Snapshot{TenantID: tenant, ProductID: product, Revision: event.Revision, At: at}
-
-	switch event.Operation {
-	case "delete":
-		if event.Product != nil {
-			return ErrInvalidPayload.WithMessage("удаление со снимком товара")
-		}
-		snapshot.Deleted = true
-	case "upsert":
-		if event.Product == nil || event.Product.ID != event.ProductID {
-			return ErrInvalidPayload.WithMessage("снимок товара не совпадает с конвертом")
-		}
-		if err := fillSnapshot(&snapshot, event.Product); err != nil {
-			return err
-		}
-	default:
-		return ErrInvalidPayload.WithMessage("неизвестная операция проекции: " + event.Operation)
+	snapshot, err := projectionSnapshot(event, tenant, product, at)
+	if err != nil {
+		return err
 	}
 
 	return projections.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: envelope.EventID, Snapshot: snapshot})

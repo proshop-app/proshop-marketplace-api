@@ -168,6 +168,14 @@ func (r registry) Save(_ context.Context, tenant *participant.Tenant) error {
 	return nil
 }
 
+func (r products) GetForUpdate(
+	ctx context.Context,
+	tenant ids.TenantID,
+	product ids.ProductID,
+) (*catalog.Product, error) {
+	return r.Get(ctx, tenant, product)
+}
+
 func (r products) Get(_ context.Context, tenant ids.TenantID, product ids.ProductID) (*catalog.Product, error) {
 	state, ok := r.d.products[productKey{tenant, product}]
 	if !ok {

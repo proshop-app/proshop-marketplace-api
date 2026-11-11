@@ -36,6 +36,7 @@ const (
 		SELECT ` + productColumns + `
 		FROM catalog_products p
 		WHERE p.tenant_id = $1 AND p.product_id = $2`
+	selectProductForUpdate = selectProduct + ` FOR UPDATE`
 
 	insertProduct = `
 		INSERT INTO catalog_products (
@@ -124,8 +125,26 @@ type productRow struct {
 
 // Get — товар проекции.
 func (r *Products) Get(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) (*catalog.Product, error) {
+	return r.get(ctx, selectProduct, tenantID, productID)
+}
+
+// GetForUpdate не даёт событию изменить источник между проверкой и переносом решения.
+func (r *Products) GetForUpdate(
+	ctx context.Context,
+	tenantID ids.TenantID,
+	productID ids.ProductID,
+) (*catalog.Product, error) {
+	return r.get(ctx, selectProductForUpdate, tenantID, productID)
+}
+
+func (r *Products) get(
+	ctx context.Context,
+	query string,
+	tenantID ids.TenantID,
+	productID ids.ProductID,
+) (*catalog.Product, error) {
 	var row productRow
-	err := rawSQL(ctx, r.db, selectProduct, string(tenantID), string(productID)).Row().Scan(row.targets()...)
+	err := rawSQL(ctx, r.db, query, string(tenantID), string(productID)).Row().Scan(row.targets()...)
 	if notFound(err) {
 		return nil, catalog.ErrProductNotFound
 	}

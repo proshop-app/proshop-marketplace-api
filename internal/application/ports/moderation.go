@@ -12,7 +12,7 @@ import (
 
 // ModerationEvaluator исключает зависимость каталога от реализации сценария модерации.
 type ModerationEvaluator interface {
-	Evaluate(context.Context, Tx, *catalog.Product, *participant.Participant, time.Time) error
+	Evaluate(context.Context, Tx, *catalog.Product, *participant.Participant, *catalog.ProductState, time.Time) error
 }
 
 // ModerationMetrics отделяет наблюдение сценариев от библиотеки Prometheus.

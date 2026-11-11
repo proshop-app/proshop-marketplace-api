@@ -130,7 +130,7 @@ func (s *Service) revalidate(ctx context.Context, tx ports.Tx, d taxonomy.Defini
 				}
 			}
 			if s.evaluator != nil {
-				if err := s.evaluator.Evaluate(ctx, tx, p, nil, s.clock.Now()); err != nil {
+				if err := s.evaluator.Evaluate(ctx, tx, p, nil, nil, s.clock.Now()); err != nil {
 					return err
 				}
 			}

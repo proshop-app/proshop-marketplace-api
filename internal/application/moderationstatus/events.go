@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -247,15 +248,19 @@ func currentDecision(
 		return nil, nil, nil
 	}
 	v := verdict.State()
-	if v.DecidedBy != moderation.Operator || v.Status == moderation.Pending || v.Revision != revision {
+	if v.DecidedBy != moderation.Operator || v.Status == moderation.Pending ||
+		v.Revision != revision || v.Decision == nil {
 		return nil, nil, nil
 	}
 	history, err := tx.ModerationDecisions().List(ctx, p.TenantID, p.ProductID)
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, d := range history {
-		if d.Revision == revision && d.At.Equal(v.UpdatedAt) {
+	if len(history) > 0 {
+		d := history[0]
+		if d.Revision <= revision && d.Action == v.Decision.Action && d.Operator == v.Operator &&
+			d.At.Equal(v.Decision.At) && d.Note == v.Decision.Note &&
+			reflect.DeepEqual(moderation.DecisionReason(d.Reason, d.ReasonMessage), v.Decision.Reason) {
 			var reasons []moderation.Reason
 			if d.Action == moderation.Reject {
 				c, err := tx.ModerationCases().Get(ctx, d.CaseID)

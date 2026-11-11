@@ -40,6 +40,7 @@ func (s *Service) Evaluate(
 	tx ports.Tx,
 	product *catalog.Product,
 	member *participant.Participant,
+	previous *catalog.ProductState,
 	now time.Time,
 ) error {
 	p := product.State()
@@ -79,10 +80,40 @@ func (s *Service) Evaluate(
 		Image:       p.Card.Image,
 		Probation:   member.State().Trust == participant.Probation,
 	}
-	changed := verdict.Evaluate(p.Revision, definition.Version, rules, input, now)
+	changed := false
+	if previous != nil && previous.Revision == verdict.State().Revision &&
+		catalog.IdenticalProjectionContent(*previous, p) {
+		changed, err = s.carryReviewedProjection(
+			ctx,
+			tx,
+			verdict,
+			verdict.State(),
+			p.Revision,
+			definition,
+			rules,
+			input,
+			now,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	if !changed {
+		changed = verdict.Evaluate(p.Revision, definition.Version, rules, input, now)
+	}
 	if !changed {
 		return nil
 	}
+	return s.saveEvaluation(ctx, tx, p, verdict, now)
+}
+
+func (s *Service) saveEvaluation(
+	ctx context.Context,
+	tx ports.Tx,
+	p catalog.ProductState,
+	verdict *moderation.Verdict,
+	now time.Time,
+) error {
 	if err := tx.ModerationVerdicts().Save(ctx, verdict); err != nil {
 		return err
 	}

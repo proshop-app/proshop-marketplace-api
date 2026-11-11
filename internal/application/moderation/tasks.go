@@ -81,7 +81,7 @@ func (s *Service) Reevaluate(ctx context.Context, tenant ids.TenantID) error {
 			}
 			count = len(states)
 			for _, state := range states {
-				if err := s.Evaluate(ctx, tx, state.Product, state.Participant, s.clock.Now()); err != nil {
+				if err := s.Evaluate(ctx, tx, state.Product, state.Participant, nil, s.clock.Now()); err != nil {
 					return err
 				}
 				after = state.Product.State().ProductID

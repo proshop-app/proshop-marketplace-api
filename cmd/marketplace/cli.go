@@ -17,12 +17,13 @@ type command func(ctx context.Context, cfg config.Config, logger *slog.Logger) e
 
 // commands — команды по имени; без имени — serve.
 var commands = map[string]command{
-	"moderation":            moderationReevaluate,
-	"serve":                 serve,
-	"reindex":               reindex,
-	"refresh-pickup-points": refreshPickupPoints,
-	"reference":             referenceDelivery,
-	"model-keys":            modelKeysReport,
+	projectionRecoveryCommand: recoverProjectionReview,
+	"moderation":              moderationReevaluate,
+	"serve":                   serve,
+	"reindex":                 reindex,
+	"refresh-pickup-points":   refreshPickupPoints,
+	"reference":               referenceDelivery,
+	"model-keys":              modelKeysReport,
 }
 
 // run проверяет окружение и выполняет команду до сигнала остановки; результат — код выхода.
@@ -58,8 +59,17 @@ func run() int {
 	return 0
 }
 
-// Поставка справочников работает только с PostgreSQL; секреты HTTP и Kafka ей не нужны.
+// Maintenance-команды читают только нужные настройки и не требуют секретов HTTP и Kafka.
 func commandConfig(name string, env func(string) (string, bool)) (config.Config, error) {
+	if name == projectionRecoveryCommand {
+		database, err := config.LoadDatabase(env)
+		if err != nil {
+			return config.Config{}, err
+		}
+		moderation, err := config.LoadModeration(env)
+
+		return config.Config{Database: database, Moderation: moderation, LogLevel: "info"}, err
+	}
 	if name == "reference" {
 		database, err := config.LoadDatabase(env)
 		return config.Config{Database: database, LogLevel: "info"}, err

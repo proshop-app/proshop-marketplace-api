@@ -74,11 +74,14 @@ func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error 
 
 		product, err := tx.Products().Get(ctx, snapshot.TenantID, snapshot.ProductID)
 		changed := true
+		var previous *catalog.ProductState
 
 		switch {
 		case errors.Is(err, catalog.ErrProductNotFound):
 			product, err = catalog.NewProduct(snapshot, now)
 		case err == nil:
+			state := product.State()
+			previous = &state
 			changed, err = product.Apply(snapshot, now)
 		}
 		if err != nil || !changed {
@@ -91,7 +94,7 @@ func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error 
 		}
 
 		if p.evaluator != nil {
-			if err := p.evaluator.Evaluate(ctx, tx, product, nil, now); err != nil {
+			if err := p.evaluator.Evaluate(ctx, tx, product, nil, previous, now); err != nil {
 				return err
 			}
 		}
