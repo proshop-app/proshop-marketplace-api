@@ -1,5 +1,5 @@
-release: 7
-checksum: decda65915fef151263a07f57be16b7ac9a32e866b4f533e6b1920e4b8f261d5
+release: 8
+checksum: 52f7e5303a1f8f6de5b7971a387b32caff7f83e516d356dc8d26568673066031
 coverage:
     directions: 29
     categories: 1282

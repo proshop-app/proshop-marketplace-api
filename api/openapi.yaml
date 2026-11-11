@@ -6424,6 +6424,22 @@ components:
         unit: { type: string, description: Единица только для number }
         facet: { type: boolean, default: false }
         valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
+        searchTermsByValue: { $ref: "#/components/schemas/TaxonomySearchTermsByValue" }
+    TaxonomySearchTermsByValue:
+      type: object
+      maxProperties: 256
+      description: >-
+        Только enum и boolean. Ключ — точное каноническое значение снимка values
+        либо строка true/false. Пустой список отключает выражения этого значения.
+        Выражения без управляющих символов, с одиночными обычными пробелами;
+        дубли без учёта регистра и ё/е запрещены. Это контекст поиска, не фасеты.
+      additionalProperties:
+        $ref: "#/components/schemas/TaxonomySearchTerms"
+    TaxonomySearchTerms:
+      type: array
+      maxItems: 8
+      uniqueItems: true
+      items: { type: string, minLength: 1, maxLength: 128 }
     TaxonomyValuesMeta:
       type: object
       additionalProperties:
@@ -6451,6 +6467,7 @@ components:
         required: { type: boolean }
         values: { type: array, items: { type: string } }
         valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
+        searchTermsByValue: { $ref: "#/components/schemas/TaxonomySearchTermsByValue" }
     TaxonomyCategorySchema:
       type: object
       required: [id, name, slug, attributes]
@@ -6485,6 +6502,11 @@ components:
         categoryName: { type: string }
         categoryPath: { type: [array, "null"], items: { type: string } }
         attributes: { $ref: "#/components/schemas/CanonicalAttributes" }
+        attributeSearchTerms:
+          type: object
+          readOnly: true
+          description: Вычисленные выражения только фактических проверенных атрибутов опубликованной карточки.
+          additionalProperties: { $ref: "#/components/schemas/TaxonomySearchTerms" }
         published: { type: boolean }
         issues:
           type: array

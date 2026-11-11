@@ -92,13 +92,14 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc := ports.OfferDocument{
-		ID:               "t1~p1",
-		TenantID:         "t1",
-		ProductID:        "p1",
-		CategoryID:       "c2",
-		CategoryPath:     []string{"c1", "c2"},
-		Price:            price,
-		FreeDeliveryFrom: price,
+		AttributeSearchTerms: map[string][]string{"a1": {"первый"}, "a3": {"выключенный"}},
+		ID:                   "t1~p1",
+		TenantID:             "t1",
+		ProductID:            "p1",
+		CategoryID:           "c2",
+		CategoryPath:         []string{"c1", "c2"},
+		Price:                price,
+		FreeDeliveryFrom:     price,
 		Delivery: participant.DeliverySettings{
 			Regions:  []string{},
 			Carriers: []string{"cdek"},
@@ -155,6 +156,9 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 		!reflect.DeepEqual(got.PriceProfiles, doc.PriceProfiles) || !reflect.DeepEqual(got.Delivery, doc.Delivery) ||
 		!reflect.DeepEqual(got.CategoryPath, doc.CategoryPath) {
 		t.Fatalf("изменились данные после HTTP-передачи: %+v", got)
+	}
+	if !reflect.DeepEqual(got.AttributeSearchTerms, doc.AttributeSearchTerms) {
+		t.Fatalf("поисковые выражения потеряны после HTTP-передачи: %+v", got.AttributeSearchTerms)
 	}
 }
 

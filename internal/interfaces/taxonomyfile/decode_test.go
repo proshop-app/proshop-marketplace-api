@@ -55,3 +55,24 @@ func TestHintRulesYAMLRoundTripPreservesExplicitDisable(t *testing.T) {
 		t.Fatal(back, err)
 	}
 }
+
+func TestSearchTermsYAMLRoundTrip(t *testing.T) {
+	body := "- code: a1\n  name: Поле\n  type: boolean\n" +
+		"  searchTermsByValue:\n    'true': [включённый]\n    'false': []\n"
+	d, err := taxonomyfile.DecodePart(strings.NewReader(body), "attributes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := taxonomyfile.EncodePart(d, "attributes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := taxonomyfile.DecodePart(strings.NewReader(string(encoded)), "attributes")
+	if err != nil || back.Attributes[0].SearchTermsByValue["true"][0] != "включённый" {
+		t.Fatal(back, err)
+	}
+	terms, ok := back.Attributes[0].SearchTermsByValue["false"]
+	if !ok || terms == nil || len(terms) != 0 {
+		t.Fatal("явный пустой список потерян", back)
+	}
+}

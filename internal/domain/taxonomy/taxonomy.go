@@ -34,14 +34,15 @@ type ValueMeta struct {
 
 // Attribute — скалярное поле; код имеет один тип и единицу во всей площадке.
 type Attribute struct {
-	ValuesMeta map[string]ValueMeta `json:"valuesMeta,omitempty" yaml:"valuesMeta,omitempty"`
-	Code       string               `json:"code" yaml:"code"`
-	Name       string               `json:"name" yaml:"name"`
-	Type       string               `json:"type" yaml:"type"`
-	Dictionary string               `json:"dictionary,omitempty" yaml:"dictionary,omitempty"`
-	Values     []string             `json:"values,omitempty" yaml:"-"`
-	Unit       string               `json:"unit,omitempty" yaml:"unit,omitempty"`
-	Facet      bool                 `json:"facet" yaml:"facet"`
+	SearchTermsByValue map[string][]string  `json:"searchTermsByValue,omitempty" yaml:"searchTermsByValue,omitempty"`
+	ValuesMeta         map[string]ValueMeta `json:"valuesMeta,omitempty" yaml:"valuesMeta,omitempty"`
+	Code               string               `json:"code" yaml:"code"`
+	Name               string               `json:"name" yaml:"name"`
+	Type               string               `json:"type" yaml:"type"`
+	Dictionary         string               `json:"dictionary,omitempty" yaml:"dictionary,omitempty"`
+	Values             []string             `json:"values,omitempty" yaml:"-"`
+	Unit               string               `json:"unit,omitempty" yaml:"unit,omitempty"`
+	Facet              bool                 `json:"facet" yaml:"facet"`
 }
 
 // Category ссылается на схему только в листе, чтобы дерево не дублировало атрибуты.
@@ -98,15 +99,16 @@ type Issue struct {
 	Attribute string `json:"attribute,omitempty"`
 }
 
-// Publication — результат проверки; только Attributes попадают в поиск.
+// Publication — результат проверки и доверенный контекст поисковой проекции.
 type Publication struct {
-	CategoryName string                     `json:"categoryName"`
-	Version      int64                      `json:"version"`
-	CategoryID   string                     `json:"categoryId"`
-	CategoryPath []string                   `json:"categoryPath"`
-	Attributes   map[string]json.RawMessage `json:"attributes"`
-	Issues       []Issue                    `json:"issues"`
-	Published    bool                       `json:"published"`
+	AttributeSearchTerms map[string][]string        `json:"attributeSearchTerms,omitempty"`
+	CategoryName         string                     `json:"categoryName"`
+	Version              int64                      `json:"version"`
+	CategoryID           string                     `json:"categoryId"`
+	CategoryPath         []string                   `json:"categoryPath"`
+	Attributes           map[string]json.RawMessage `json:"attributes"`
+	Issues               []Issue                    `json:"issues"`
+	Published            bool                       `json:"published"`
 }
 
 // FullName сохраняет самостоятельное имя для публикации и поискового фасета.
@@ -196,6 +198,9 @@ func (a Attribute) validate() error {
 		return ErrInvalid.WithMessage("словарь допустим только у enum и string")
 	}
 	if err := a.validateValuesMeta(); err != nil {
+		return err
+	}
+	if err := a.validateSearchTerms(); err != nil {
 		return err
 	}
 	switch a.Type {
@@ -349,9 +354,10 @@ func (d Definition) Category(id string) (CategorySchema, []string, bool) {
 // Check проверяет все поля, собирая ошибки в детерминированном порядке.
 func (d Definition) Check(card *Card) Publication {
 	p := Publication{
-		Version:    d.Version,
-		Attributes: map[string]json.RawMessage{},
-		Issues:     []Issue{},
+		Version:              d.Version,
+		Attributes:           map[string]json.RawMessage{},
+		AttributeSearchTerms: map[string][]string{},
+		Issues:               []Issue{},
 	}
 	if card == nil {
 		p.Issues = append(p.Issues, Issue{Code: "taxonomy.card_missing"})
@@ -380,6 +386,9 @@ func (d Definition) Check(card *Card) Publication {
 			p.Issues = append(p.Issues, Issue{Code: issue, Attribute: a.Code})
 		} else {
 			p.Attributes[a.Code] = append(json.RawMessage(nil), raw...)
+			if terms := a.searchTerms(raw); len(terms) > 0 {
+				p.AttributeSearchTerms[a.Code] = terms
+			}
 		}
 	}
 	for code := range card.Attributes {
@@ -394,6 +403,7 @@ func (d Definition) Check(card *Card) Publication {
 	p.Published = card.Published && len(p.Issues) == 0
 	if !p.Published {
 		p.Attributes = map[string]json.RawMessage{}
+		p.AttributeSearchTerms = map[string][]string{}
 	}
 	return p
 }

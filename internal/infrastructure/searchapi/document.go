@@ -3,6 +3,7 @@ package searchapi
 import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -12,6 +13,13 @@ func toDocument(doc ports.OfferDocument) (offerDocument, error) {
 
 	if err != nil {
 		return offerDocument{}, err
+	}
+	for index := range attributes {
+		terms := doc.AttributeSearchTerms[attributes[index].Key]
+		if err := taxonomy.ValidateSearchTerms(terms); err != nil {
+			return offerDocument{}, ErrInvalid.Wrap(err)
+		}
+		attributes[index].SearchTerms = append([]string(nil), terms...)
 	}
 	if doc.Rating != nil {
 		rating, err := catalog.NormalizeRating(doc.Rating.Value, doc.Rating.Count)
@@ -69,41 +77,46 @@ func fromDocument(doc offerDocument) (ports.OfferDocument, error) {
 	if err != nil {
 		return ports.OfferDocument{}, err
 	}
+	terms, err := attributeSearchTerms(doc.Attributes)
+	if err != nil {
+		return ports.OfferDocument{}, err
+	}
 	identity := ids.OfferID{
 		Tenant:  ids.TenantID(doc.TenantID),
 		Product: ids.ProductID(doc.ProductID),
 	}
 	out := ports.OfferDocument{
-		Rating:            doc.Rating,
-		CategoryID:        doc.CategoryID,
-		CategoryPath:      doc.CategoryPath,
-		Attributes:        attributes,
-		ID:                identity.String(),
-		TenantID:          doc.TenantID,
-		ProductID:         doc.ProductID,
-		SellerSlug:        doc.SellerSlug,
-		SellerName:        doc.SellerName,
-		Delivery:          doc.Delivery.Clone(),
-		FreeDeliveryFrom:  doc.FreeDeliveryFrom,
-		Name:              doc.Name,
-		Description:       doc.Description,
-		Image:             doc.Image,
-		Assets:            append([]string{}, doc.Assets...),
-		URL:               doc.URL,
-		SKU:               doc.SKU,
-		VariantsID:        doc.VariantsID,
-		Variants:          doc.Variants,
-		ModelKey:          doc.ModelKey,
-		ModelKeySource:    doc.ModelKeySource,
-		Price:             doc.Price,
-		BasePrice:         doc.BasePrice,
-		Available:         doc.Available,
-		InStock:           doc.InStock,
-		Visible:           doc.Visible,
-		Listed:            doc.Listed,
-		CheckoutAvailable: doc.CheckoutAvailable,
-		UpdatedAt:         doc.UpdatedAt,
-		Version:           doc.Version,
+		AttributeSearchTerms: terms,
+		Rating:               doc.Rating,
+		CategoryID:           doc.CategoryID,
+		CategoryPath:         doc.CategoryPath,
+		Attributes:           attributes,
+		ID:                   identity.String(),
+		TenantID:             doc.TenantID,
+		ProductID:            doc.ProductID,
+		SellerSlug:           doc.SellerSlug,
+		SellerName:           doc.SellerName,
+		Delivery:             doc.Delivery.Clone(),
+		FreeDeliveryFrom:     doc.FreeDeliveryFrom,
+		Name:                 doc.Name,
+		Description:          doc.Description,
+		Image:                doc.Image,
+		Assets:               append([]string{}, doc.Assets...),
+		URL:                  doc.URL,
+		SKU:                  doc.SKU,
+		VariantsID:           doc.VariantsID,
+		Variants:             doc.Variants,
+		ModelKey:             doc.ModelKey,
+		ModelKeySource:       doc.ModelKeySource,
+		Price:                doc.Price,
+		BasePrice:            doc.BasePrice,
+		Available:            doc.Available,
+		InStock:              doc.InStock,
+		Visible:              doc.Visible,
+		Listed:               doc.Listed,
+		CheckoutAvailable:    doc.CheckoutAvailable,
+		UpdatedAt:            doc.UpdatedAt,
+		Version:              doc.Version,
 	}
 
 	for _, profile := range doc.PriceProfiles {

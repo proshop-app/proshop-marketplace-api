@@ -535,6 +535,10 @@
   type: enum
   facet: true
   dictionary: season
+  searchTermsByValue:
+    Зима: [зимний]
+    Лето: [летний]
+    Демисезон: [демисезонный]
 - code: body_material
   name: Материал корпуса
   type: enum
@@ -1039,6 +1043,8 @@
   name: Утепление
   type: boolean
   facet: true
+  searchTermsByValue:
+    'true': [тёплый, утеплённый]
 - code: studded
   name: Шипованная шина
   type: boolean

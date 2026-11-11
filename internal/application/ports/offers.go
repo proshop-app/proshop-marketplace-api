@@ -47,37 +47,38 @@ type OfferStates interface {
 
 // OfferDocument — предложение в индексе поиска. Суммы — в копейках.
 type OfferDocument struct {
-	Rating            *catalog.Rating
-	Variants          *catalog.Variants
-	ModelKey          string
-	ModelKeySource    string
-	PriceProfiles     []catalog.PriceProfile
-	CategoryID        string
-	CategoryPath      []string
-	Attributes        map[string]json.RawMessage
-	ID                string
-	TenantID          string
-	ProductID         string
-	SellerSlug        string
-	SellerName        string
-	Delivery          participant.DeliverySettings
-	FreeDeliveryFrom  int64
-	Name              string
-	Description       string
-	Image             string
-	Assets            []string
-	URL               string
-	SKU               string
-	Categories        []catalog.Category
-	VariantsID        string
-	Price             int64
-	BasePrice         int64
-	Available         int
-	InStock           bool
-	Visible           bool
-	Listed            bool
-	CheckoutAvailable bool
-	UpdatedAt         time.Time
+	AttributeSearchTerms map[string][]string
+	Rating               *catalog.Rating
+	Variants             *catalog.Variants
+	ModelKey             string
+	ModelKeySource       string
+	PriceProfiles        []catalog.PriceProfile
+	CategoryID           string
+	CategoryPath         []string
+	Attributes           map[string]json.RawMessage
+	ID                   string
+	TenantID             string
+	ProductID            string
+	SellerSlug           string
+	SellerName           string
+	Delivery             participant.DeliverySettings
+	FreeDeliveryFrom     int64
+	Name                 string
+	Description          string
+	Image                string
+	Assets               []string
+	URL                  string
+	SKU                  string
+	Categories           []catalog.Category
+	VariantsID           string
+	Price                int64
+	BasePrice            int64
+	Available            int
+	InStock              bool
+	Visible              bool
+	Listed               bool
+	CheckoutAvailable    bool
+	UpdatedAt            time.Time
 	// Version растёт с каждым изменением любой части предложения; индекс не
 	// принимает документ с версией меньше записанной.
 	Version int64

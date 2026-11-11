@@ -72,9 +72,10 @@ func (s *Service) LoadPart(
 
 		next := current
 		next.Version++
+		frozenValues := false
 		switch part {
 		case "attributes":
-			next.Attributes = input.Attributes
+			next.Attributes, frozenValues = searchTermsAttributeUpdate(current.Attributes, input.Attributes)
 		case "schemas":
 			next.Schemas = input.Schemas
 		case "categories":
@@ -88,8 +89,10 @@ func (s *Service) LoadPart(
 		if err := next.CheckEvolution(current); err != nil {
 			return err
 		}
-		if err := resolveDictionaries(ctx, tx.Reference(), &next); err != nil {
-			return err
+		if !frozenValues {
+			if err := resolveDictionaries(ctx, tx.Reference(), &next); err != nil {
+				return err
+			}
 		}
 		if err := r.Save(ctx, next, current.Version); err != nil {
 			return err

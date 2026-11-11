@@ -57,6 +57,7 @@ type offerDocument struct {
 }
 
 type attribute struct {
+	SearchTerms  []string `json:"searchTerms,omitempty"`
 	Type         string   `json:"type,omitempty"`
 	Key          string   `json:"key"`
 	Value        string   `json:"value"`
