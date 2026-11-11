@@ -123,9 +123,16 @@ type OfferQuery struct {
 
 // OfferPage — страница выдачи.
 type OfferPage struct {
-	Facets []Facet
-	Total  int
-	Items  []OfferDocument
+	Correction *OfferCorrection
+	Facets     []Facet
+	Total      int
+	Items      []OfferDocument
+}
+
+// OfferCorrection объясняет, по какому запросу найдены предложения после исправления или расширения.
+type OfferCorrection struct {
+	Query string
+	Kind  string
 }
 
 // OfferGroup содержит ограниченную выборку вариантов продавца.

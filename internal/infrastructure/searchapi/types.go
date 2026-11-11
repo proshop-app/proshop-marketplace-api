@@ -83,9 +83,15 @@ type offerQuery struct {
 }
 
 type offerPage struct {
-	Facets []ports.Facet   `json:"facets"`
-	Total  int             `json:"total"`
-	Items  []offerDocument `json:"items"`
+	Correction *offerCorrection `json:"correction,omitempty"`
+	Facets     []ports.Facet    `json:"facets"`
+	Total      int              `json:"total"`
+	Items      []offerDocument  `json:"items"`
+}
+
+type offerCorrection struct {
+	Query string `json:"query"`
+	Kind  string `json:"kind"`
 }
 
 type offerBatch struct {

@@ -225,10 +225,15 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 	if err != nil {
 		return ports.OfferPage{}, err
 	}
+	correction, err := fromCorrection(result.Correction)
+	if err != nil {
+		return ports.OfferPage{}, err
+	}
 	page := ports.OfferPage{
-		Facets: result.Facets,
-		Total:  result.Total,
-		Items:  make([]ports.OfferDocument, 0, len(result.Items)),
+		Correction: correction,
+		Facets:     result.Facets,
+		Total:      result.Total,
+		Items:      make([]ports.OfferDocument, 0, len(result.Items)),
 	}
 
 	for _, doc := range result.Items {

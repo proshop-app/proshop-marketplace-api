@@ -1,0 +1,43 @@
+{
+    "normal": {
+        "total": 1,
+        "facets": [],
+        "items": [{ "tenantId": "t1", "productId": "p1", "price": 19999, "basePrice": 29999 }]
+    },
+    "typo": {
+        "correction": { "query": "товар", "kind": "typo" },
+        "total": 1,
+        "facets": [],
+        "items": [{ "tenantId": "t1", "productId": "p1", "price": 19999, "basePrice": 29999 }]
+    },
+    "layout": {
+        "correction": { "query": "товар", "kind": "layout" },
+        "total": 1,
+        "facets": [],
+        "items": [{ "tenantId": "t1", "productId": "p1", "price": 19999, "basePrice": 29999 }]
+    },
+    "translit": {
+        "correction": { "query": "товар", "kind": "translit" },
+        "total": 1,
+        "facets": [],
+        "items": [{ "tenantId": "t1", "productId": "p1", "price": 19999, "basePrice": 29999 }]
+    },
+    "partial": {
+        "correction": { "query": "товар", "kind": "partial" },
+        "total": 1,
+        "facets": [],
+        "items": [{ "tenantId": "t1", "productId": "p1", "price": 19999, "basePrice": 29999 }]
+    },
+    "unknown": {
+        "correction": { "query": "товар", "kind": "unknown" },
+        "total": 1,
+        "facets": [],
+        "items": []
+    },
+    "empty": {
+        "correction": { "query": " \t ", "kind": "typo" },
+        "total": 1,
+        "facets": [],
+        "items": []
+    }
+}

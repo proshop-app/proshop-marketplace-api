@@ -43,9 +43,10 @@ type OfferCard struct {
 
 // OfferList — страница выдачи и фасеты.
 type OfferList struct {
-	Facets []ports.Facet
-	Total  int
-	Items  []OfferCard
+	Correction *ports.OfferCorrection
+	Facets     []ports.Facet
+	Total      int
+	Items      []OfferCard
 }
 
 // Queries — чтение выдачи и карточек.
@@ -103,9 +104,10 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 		return OfferList{}, err
 	}
 	list := OfferList{
-		Facets: visibleFacets(page.Facets, page.Total, normalized),
-		Total:  page.Total,
-		Items:  make([]OfferCard, 0, len(page.Items)),
+		Correction: page.Correction,
+		Facets:     visibleFacets(page.Facets, page.Total, normalized),
+		Total:      page.Total,
+		Items:      make([]OfferCard, 0, len(page.Items)),
 	}
 	for _, doc := range page.Items {
 		list.Items = append(

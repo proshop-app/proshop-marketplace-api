@@ -54,11 +54,17 @@ type offerJSON struct {
 }
 
 type offerPageJSON struct {
-	Facets []facetJSON `json:"facets"`
-	Items  []offerJSON `json:"items"`
-	Total  int         `json:"total"`
-	Limit  int         `json:"limit"`
-	Offset int         `json:"offset"`
+	Correction *offerCorrectionJSON `json:"correction,omitempty"`
+	Facets     []facetJSON          `json:"facets"`
+	Items      []offerJSON          `json:"items"`
+	Total      int                  `json:"total"`
+	Limit      int                  `json:"limit"`
+	Offset     int                  `json:"offset"`
+}
+
+type offerCorrectionJSON struct {
+	Query string `json:"query"`
+	Kind  string `json:"kind"`
 }
 
 type catalogHandlers struct {
@@ -140,6 +146,12 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		Total:  list.Total,
 		Limit:  limit,
 		Offset: query.Offset,
+	}
+	if list.Correction != nil {
+		body.Correction = &offerCorrectionJSON{
+			Query: list.Correction.Query,
+			Kind:  list.Correction.Kind,
+		}
 	}
 	for _, card := range list.Items {
 		item := toOfferJSON(card, false)

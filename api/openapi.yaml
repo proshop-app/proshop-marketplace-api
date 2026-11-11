@@ -6806,6 +6806,8 @@ components:
       type: object
       required: [items, total, limit, offset, facets]
       properties:
+        correction:
+          $ref: "#/components/schemas/OfferCorrection"
         items:
           type: array
           items: { $ref: "#/components/schemas/Offer" }
@@ -6820,6 +6822,20 @@ components:
         total: { type: integer }
         limit: { type: integer }
         offset: { type: integer }
+    OfferCorrection:
+      type: object
+      required: [query, kind]
+      description: >-
+        Присутствует, когда выдача найдена по исправленному или расширенному запросу.
+        query — фактически использованный запрос; при partial найдена только часть слов исходного запроса.
+      properties:
+        query:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum: [typo, layout, translit, partial]
+          description: Опечатка, раскладка клавиатуры, транслитерация или поиск по части слов.
     Challenge:
       type: object
       required: [challengeId, status, expiresAt]
