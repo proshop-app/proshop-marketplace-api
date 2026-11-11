@@ -103,6 +103,17 @@ func (m *session) record(
 	if !ok {
 		return false, nil
 	}
+	// Восстановление из журнала также не должно обходить политику canonical.
+	for _, image := range change.Forward {
+		if image.State == nil || reference.CanonicalLanguageAllowed(m.dict.Code(), image.State.CanonicalName) {
+			continue
+		}
+
+		if _, _, err := m.dict.CanonicalSpelling(image.State.CanonicalName); err != nil {
+			return false, err
+		}
+	}
+
 	change.Reverts = reverts
 	revision, err := m.repo.Append(ctx, change)
 	if err != nil {

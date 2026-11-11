@@ -140,7 +140,7 @@ func NewEntry(dict *Dictionary, input NewEntryInput, now time.Time) (*Entry, err
 	if input.Status != StatusCandidate && input.Status != StatusConfirmed {
 		return nil, ErrTransition.WithMessage("новая запись — кандидат или подтверждённая")
 	}
-	name, key, err := dict.Spelling(input.Name)
+	name, key, err := dict.CanonicalSpelling(input.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func (e *Entry) Rename(dict *Dictionary, name string, aliasID ids.UUID, now time
 	if err := e.editable(); err != nil {
 		return false, err
 	}
-	clean, key, err := dict.Spelling(name)
+	clean, key, err := dict.CanonicalSpelling(name)
 	if err != nil {
 		return false, err
 	}

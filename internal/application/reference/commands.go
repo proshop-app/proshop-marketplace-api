@@ -16,7 +16,7 @@ import (
 func (s *Service) Create(ctx context.Context, cmd CreateCommand) (EntryResult, error) {
 	var result EntryResult
 	revision, err := s.mutate(ctx, cmd.Dictionary, func(ctx context.Context, m *session) error {
-		_, key, err := m.dict.Spelling(cmd.Name)
+		_, key, err := m.dict.CanonicalSpelling(cmd.Name)
 		if err != nil {
 			return err
 		}

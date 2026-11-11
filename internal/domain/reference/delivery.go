@@ -102,6 +102,9 @@ func ValidateDelivery(d Delivery) error {
 		if _, err := CleanMetadata(entry.Metadata); err != nil {
 			return ErrInvalidDelivery.WithMessage(place + ": " + messageOf(err))
 		}
+		if _, _, err := dict.CanonicalSpelling(entry.Canonical); err != nil {
+			return ErrInvalidDelivery.WithMessage(place + ": " + messageOf(err))
+		}
 		texts := []string{entry.Canonical}
 		if len(entry.Aliases)+1 > dict.Limits().MaxAliases {
 			return ErrInvalidDelivery.WithMessage(place + ": слишком много вариантов")

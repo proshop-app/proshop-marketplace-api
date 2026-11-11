@@ -11,6 +11,13 @@ import (
 )
 
 func (s *Service) createCandidates(ctx context.Context, code string, items []ports.AttributeValue) (int, error) {
+	eligible := make([]ports.AttributeValue, 0, len(items))
+	for _, item := range items {
+		if reference.CanonicalLanguageAllowed(code, item.Value) {
+			eligible = append(eligible, item)
+		}
+	}
+	items = eligible
 	keys := make([]string, 0, len(items))
 	for _, item := range items {
 		keys = append(keys, reference.Key(item.Value))

@@ -55,16 +55,21 @@ func (s *Service) LoadPart(
 	var version int64
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		r := tx.Taxonomy()
+
 		if err := r.Lock(ctx); err != nil {
 			return err
 		}
+
 		current, err := r.Current(ctx)
+
 		if err != nil {
 			return err
 		}
+
 		if expected != current.Version || current.Version >= taxonomy.MaxTaxonomyVersion {
 			return taxonomy.ErrConflict
 		}
+
 		next := current
 		next.Version++
 		switch part {
@@ -109,11 +114,14 @@ func (s *Service) revalidate(ctx context.Context, tx ports.Tx, d taxonomy.Defini
 		for _, p := range items {
 			state := p.State()
 			tenant, product = state.TenantID, state.ProductID
+
 			if p.Revalidate(d, s.clock.Now()) {
 				if err := tx.Products().Save(ctx, p); err != nil {
 					return err
 				}
+
 				statusTask := moderationstatus.OfferTask(tenant, product, s.clock.Now())
+
 				if err := tx.Outbox().Enqueue(ctx, statusTask); err != nil {
 					return err
 				}

@@ -107,7 +107,7 @@ func (s *Service) deliver(
 ) error {
 	keys := make([]string, 0, len(items))
 	for _, item := range items {
-		_, key, err := m.dict.Spelling(item.Canonical)
+		_, key, err := m.dict.CanonicalSpelling(item.Canonical)
 		if err != nil {
 			return err
 		}
