@@ -19,6 +19,9 @@ const MaxBackoff = 10 * time.Minute
 // Handler выполняет задачу; ошибка откладывает её на повтор.
 type Handler func(ctx context.Context, task ports.Task) error
 
+// BatchHandler возвращает ошибки в порядке задач; nil означает успех всей пачки.
+type BatchHandler func(context.Context, []ports.Task) []error
+
 // Outcome — итог одной задачи для журналов и метрик.
 type Outcome struct {
 	Task ports.Task
@@ -40,6 +43,7 @@ type Dispatcher struct {
 	queue    ports.TaskQueue
 	clock    ports.Clock
 	handlers map[string]Handler
+	batches  map[string]BatchHandler
 	config   DispatcherConfig
 }
 
@@ -53,7 +57,34 @@ func NewDispatcher(
 	return &Dispatcher{queue: queue, clock: clock, handlers: handlers, config: config}
 }
 
-// RunOnce разбирает одну пачку. Пачка неполная — очередь пуста.
+// RegisterBatch подключает групповой обработчик до запуска диспетчера.
+func (d *Dispatcher) RegisterBatch(kind string, handler BatchHandler) {
+	if d.batches == nil {
+		d.batches = map[string]BatchHandler{}
+	}
+	d.batches[kind] = handler
+}
+
+// ReadyCounts возвращает глубину готовой очереди по видам задач.
+func (d *Dispatcher) ReadyCounts(ctx context.Context) (map[string]int64, error) {
+	counts, err := d.queue.ReadyCounts(ctx, d.clock.Now())
+	if err != nil {
+		return nil, err
+	}
+	for kind := range d.handlers {
+		if _, ok := counts[kind]; !ok {
+			counts[kind] = 0
+		}
+	}
+	for kind := range d.batches {
+		if _, ok := counts[kind]; !ok {
+			counts[kind] = 0
+		}
+	}
+	return counts, nil
+}
+
+// RunOnce разбирает одну справедливо выбранную пачку.
 func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
 	now := d.clock.Now()
 
@@ -68,35 +99,67 @@ func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
 	}
 
 	outcomes := make([]Outcome, 0, len(tasks))
-
-	for _, task := range tasks {
+	for len(tasks) > 0 {
 		if ctx.Err() != nil {
 			return outcomes, ctx.Err()
 		}
-
-		outcome := Outcome{Task: task, Err: d.run(ctx, task)}
-		finished := d.clock.Now()
-		outcome.Lag = finished.Sub(task.CreatedAt)
-
-		if outcome.Err == nil {
-			err = d.queue.Complete(ctx, task.ID, task.Attempts, finished)
+		group := tasks[:1]
+		var failures []error
+		if handler, ok := d.batches[tasks[0].Kind]; ok {
+			group, tasks = takeKind(tasks, tasks[0].Kind)
+			failures = handler(ctx, group)
 		} else {
-			err = d.queue.Retry(
-				ctx,
-				task.ID,
-				task.Attempts,
-				finished.Add(Backoff(task.Attempts)),
-				outcome.Err.Error(),
-			)
+			failures = []error{d.run(ctx, tasks[0])}
+			tasks = tasks[1:]
 		}
-		if err != nil {
+		results := make([]Outcome, 0, len(group))
+		resolutions := make([]ports.TaskResolution, 0, len(group))
+		for n, task := range group {
+			finished := d.clock.Now()
+			outcome := Outcome{Task: task, Lag: finished.Sub(task.CreatedAt)}
+			if len(failures) > 0 {
+				outcome.Err = failures[n]
+			}
+			resolution := ports.TaskResolution{ID: task.ID, Attempts: task.Attempts, At: finished}
+			if outcome.Err != nil {
+				next := finished.Add(Backoff(task.Attempts))
+				resolution.NextAt = &next
+				resolution.Error = outcome.Err.Error()
+			}
+			results = append(results, outcome)
+			resolutions = append(resolutions, resolution)
+		}
+		if err := d.resolve(ctx, resolutions); err != nil {
 			return outcomes, err
 		}
-
-		outcomes = append(outcomes, outcome)
+		outcomes = append(outcomes, results...)
 	}
-
 	return outcomes, nil
+}
+
+func (d *Dispatcher) resolve(ctx context.Context, results []ports.TaskResolution) error {
+	if len(results) != 1 {
+		return d.queue.Resolve(ctx, results)
+	}
+	// Одиночным обработчикам не нужны сериализация пачки и дополнительная транзакция.
+	result := results[0]
+	if result.NextAt != nil {
+		return d.queue.Retry(ctx, result.ID, result.Attempts, *result.NextAt, result.Error)
+	}
+	return d.queue.Complete(ctx, result.ID, result.Attempts, result.At)
+}
+
+func takeKind(tasks []ports.Task, kind string) ([]ports.Task, []ports.Task) {
+	group := make([]ports.Task, 0, len(tasks))
+	rest := make([]ports.Task, 0, len(tasks))
+	for _, task := range tasks {
+		if task.Kind == kind {
+			group = append(group, task)
+		} else {
+			rest = append(rest, task)
+		}
+	}
+	return group, rest
 }
 
 func (d *Dispatcher) run(ctx context.Context, task ports.Task) error {

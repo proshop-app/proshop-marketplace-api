@@ -295,6 +295,8 @@ func (s *server) services(ctx context.Context) (services, error) {
 			moderationstatus.TaskParticipant: statuses.HandleTask,
 		},
 	)
+	indexer.SetBatchObserver(telemetry.NewOfferBatches(s.metrics))
+	dispatcher.RegisterBatch(appcatalog.TaskSyncOffer, indexer.HandleOfferBatch)
 	janitor := messaging.NewJanitor(postgres.NewRetention(s.store.pool), now, messaging.RetentionPolicy{
 		ProcessedEvents: cfg.Retention.ProcessedEvents,
 		OutboxDone:      cfg.Retention.OutboxDone,
@@ -453,7 +455,7 @@ func (s *server) jobs() []func(context.Context) error {
 		).Run,
 		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
-		jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, cfg.Outbox.Batch, s.logger, s.metrics).Run,
+		jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics).Run,
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
 		jobs.NewPickupRefreshRunner(s.app.directory, cfg.Delivery.RefreshInterval, s.logger, s.metrics).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).Run,

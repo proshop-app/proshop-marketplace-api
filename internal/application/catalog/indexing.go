@@ -18,13 +18,14 @@ const CatchUpMargin = 5 * time.Minute
 // Indexer переносит предложения из проекции в индекс. Источник истины —
 // проекция: индекс всегда можно собрать заново.
 type Indexer struct {
-	models       *ModelKeys
-	uow          ports.UnitOfWork
-	index        ports.OfferIndex
-	clock        ports.Clock
-	batch        int
-	refreshDelay time.Duration
-	lock         ports.IndexRebuildLock
+	batchObserver ports.OfferBatchObserver
+	models        *ModelKeys
+	uow           ports.UnitOfWork
+	index         ports.OfferIndex
+	clock         ports.Clock
+	batch         int
+	refreshDelay  time.Duration
+	lock          ports.IndexRebuildLock
 }
 
 // RebuildResult — итог перестроения.

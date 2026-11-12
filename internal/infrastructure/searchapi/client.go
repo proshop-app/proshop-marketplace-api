@@ -149,7 +149,11 @@ func (x *Index) put(ctx context.Context, path string, docs []ports.OfferDocument
 			return err
 		}
 
-		if _, err := x.request(ctx, http.MethodPost, path, batch, nil); err != nil {
+		status, err := x.request(ctx, http.MethodPost, path, batch, nil)
+		if status == http.StatusBadRequest || status == http.StatusRequestEntityTooLarge {
+			return ErrInvalid.WithMessage(fmt.Sprintf("поиск отверг предложения: HTTP %d", status))
+		}
+		if err != nil {
 			return err
 		}
 		offset += len(batch.Offers)

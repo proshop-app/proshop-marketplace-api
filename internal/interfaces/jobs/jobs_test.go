@@ -57,6 +57,10 @@ func (d *dispatcher) RunOnce(context.Context) ([]messaging.Outcome, error) {
 	return round, nil
 }
 
+func (d *dispatcher) ReadyCounts(context.Context) (map[string]int64, error) {
+	return map[string]int64{"a": 3}, nil
+}
+
 func outcome(kind string, err error) messaging.Outcome {
 	return messaging.Outcome{Task: ports.Task{Kind: kind, TenantID: "t1"}, Err: err, Lag: time.Second}
 }
@@ -65,9 +69,10 @@ func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
 	d := &dispatcher{rounds: [][]messaging.Outcome{
 		{outcome("a", nil), outcome("a", errors.New("сбой"))},
 		{outcome("a", nil)},
+		{},
 	}}
 	registry := prometheus.NewRegistry()
-	runner := jobs.NewOutboxRunner(d, time.Hour, 2, quiet, registry)
+	runner := jobs.NewOutboxRunner(d, time.Hour, quiet, registry)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -80,7 +85,7 @@ func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
 		calls := d.calls
 		d.mu.Unlock()
 
-		if calls >= 2 || time.Now().After(deadline) {
+		if calls >= 3 || time.Now().After(deadline) {
 			break
 		}
 
@@ -97,8 +102,8 @@ func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
 	calls := d.calls
 	d.mu.Unlock()
 
-	if calls != 2 {
-		t.Fatalf("полная пачка — сразу следующая, неполная — пауза: %d вызовов", calls)
+	if calls != 3 {
+		t.Fatalf("следующая пачка сразу, пустая очередь — пауза: %d вызовов", calls)
 	}
 
 	totals := map[string]float64{}
@@ -118,6 +123,19 @@ func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
 
 	if totals["done"] != 2 || totals["retry"] != 1 {
 		t.Fatalf("метрики задач: %+v", totals)
+	}
+}
+
+func TestOutboxRunnerEmptyQueueWaits(t *testing.T) {
+	d := &dispatcher{rounds: [][]messaging.Outcome{{}}}
+	runner := jobs.NewOutboxRunner(d, time.Hour, quiet, prometheus.NewRegistry())
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := runner.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if d.calls != 1 {
+		t.Fatalf("пустая очередь должна ждать опроса, вызовов: %d", d.calls)
 	}
 }
 

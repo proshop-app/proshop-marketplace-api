@@ -269,8 +269,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		},
 		Outbox: Outbox{
 			PollInterval: r.duration("OUTBOX_POLL_INTERVAL", time.Second),
-			Batch:        r.positive("OUTBOX_BATCH", 100),
-			PerTenant:    r.positive("OUTBOX_PER_TENANT", 20),
+			Batch:        r.positive("OUTBOX_BATCH", 200),
+			PerTenant:    r.positive("OUTBOX_PER_TENANT", 200),
 			Lease:        r.duration("OUTBOX_LEASE", time.Minute),
 		},
 		Retention: Retention{
@@ -392,6 +392,15 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	}
 	if cfg.Outbox.PerTenant > cfg.Outbox.Batch {
 		r.fail("OUTBOX_PER_TENANT", "не больше OUTBOX_BATCH")
+	}
+	if cfg.Outbox.Batch > 200 {
+		r.fail("OUTBOX_BATCH", "не больше 200: предел служебного API поиска")
+	}
+	if cfg.Outbox.PollInterval > time.Minute {
+		r.fail("OUTBOX_POLL_INTERVAL", "не больше минуты")
+	}
+	if cfg.Outbox.Lease <= cfg.Search.Timeout {
+		r.fail("OUTBOX_LEASE", "должна превышать SEARCH_TIMEOUT")
 	}
 	if cfg.SmsRu.Mode == SmsRuLive && cfg.SmsRu.APIID == "" {
 		r.fail("SMSRU_API_ID", "обязательна при SMSRU_MODE=live")
