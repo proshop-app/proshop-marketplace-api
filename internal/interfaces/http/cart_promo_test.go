@@ -137,7 +137,7 @@ func TestPromoValidationHTTP(t *testing.T) {
 	}
 }
 
-func TestGetCartVerifiesAllGroups(t *testing.T) {
+func TestGetCartSnapshotAndExplicitVerification(t *testing.T) {
 	store, platform := fake.NewStore(), fake.NewPlatform()
 	now := time.Now()
 	buyer := ids.UUID("buyer")
@@ -173,6 +173,14 @@ func TestGetCartVerifiesAllGroups(t *testing.T) {
 	response := httptest.NewRecorder()
 	handler.get(response, req)
 	var body cartJSON
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusOK || body.Total != 200 || len(platform.ItemCheckCalls()) != 0 {
+		t.Fatal(response.Code, body, platform.ItemCheckCalls())
+	}
+	response = httptest.NewRecorder()
+	handler.verify(response, req)
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}

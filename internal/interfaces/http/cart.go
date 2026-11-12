@@ -27,7 +27,7 @@ type cartLineJSON struct {
 	AddedAt         time.Time           `json:"addedAt"`
 }
 
-// cartJSON — проверенный сервером снимок корзины; суммы — рубли.
+// cartJSON — последний сохранённый снимок корзины; суммы — рубли.
 type cartJSON struct {
 	Groups    []cartGroupJSON `json:"groups"`
 	ID        string          `json:"id"`
@@ -171,7 +171,7 @@ func (h *cartHandlers) respond(w http.ResponseWriter, r *http.Request, state car
 }
 
 func (h *cartHandlers) get(w http.ResponseWriter, r *http.Request) {
-	state, err := h.carts.Verify(r.Context(), BuyerID(r.Context()))
+	state, err := h.carts.Get(r.Context(), BuyerID(r.Context()))
 	h.respond(w, r, state, err)
 }
 

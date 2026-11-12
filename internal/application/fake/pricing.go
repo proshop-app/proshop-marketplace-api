@@ -17,10 +17,13 @@ type ItemCheckCall struct {
 
 // PriceContexts возвращает выбор профиля независимо для каждого покупателя и магазина.
 func (p *Platform) PriceContexts(
-	_ context.Context,
+	ctx context.Context,
 	buyerID ids.UUID,
 	tenants []ids.TenantID,
 ) (map[ids.TenantID]string, error) {
+	if err := p.platformCall(ctx, "price_contexts"); err != nil {
+		return nil, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

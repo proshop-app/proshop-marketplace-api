@@ -86,7 +86,13 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `HTTP_TRUST_PROXY` | | `0` | сколько прокси перед сервисом дописывают `X-Forwarded-For`; `0` — адрес соединения, заголовок не читается |
 | `PLATFORM_API_URL` | да | — | внутренний API сервера установки |
 | `SERVICE_TOKEN_MARKETPLACE` | да | — | токен маркетплейса к API сервера, ≥ 32 символов |
-| `PLATFORM_API_TIMEOUT` | | `5s` | ожидание ответа сервера |
+| `PLATFORM_API_TIMEOUT` | | `5s` | ожидание строгого ответа сервера |
+| `PLATFORM_READ_TIMEOUT` | | `300ms` | бюджет необязательных витринных блоков |
+| `PLATFORM_CACHE_TTL` / `PLATFORM_STALE_TTL` | | `30s` / `5m` | свежесть и окно stale |
+| `PLATFORM_CACHE_SIZE` | | `1024` | предел записей кэша контекстов и отзывов |
+| `PLATFORM_MAX_CONCURRENT` | | `16` | общий лимит обращений к ячейке |
+| `PLATFORM_FAILURE_THRESHOLD` | | `5` | число отказов до открытия предохранителя |
+| `PLATFORM_OPEN_INTERVAL` / `PLATFORM_LOG_INTERVAL` | | `5s` / `30s` | пауза предохранителя и журнала |
 | `CART_TTL` | | `720h` | срок жизни корзины без изменений |
 | `QUOTE_TTL`, `QUOTE_TIMEOUT` | | `30m`, `5s` | наибольший срок расчёта доставки, ожидание магазина |
 | `CDEK_CLIENT_ID`, `CDEK_CLIENT_SECRET` | | — | задаются парой; без них СДЭК не подключён |
@@ -515,3 +521,5 @@ API таксономии, её PostgreSQL-таблицы и поставка д�
 Витрина не подмешивает `catalog.basePrice` из другого снимка, не прогнозирует денежный итог
 при изменении количества и не отправляет собственные суммы корзины. Дополнительных запросов
 цены по товару для этих полей нет.
+
+Зависимости страниц от cell-api, деградация, кэш и метрики: [platform-dependency](docs/platform-dependency.md).

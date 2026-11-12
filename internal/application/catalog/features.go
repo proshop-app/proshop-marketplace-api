@@ -90,6 +90,9 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 			return result, catalog.ErrOfferNotFound
 		}
 		key := priceProfileKey(contexts, request.OfferID.Tenant)
+		if request.BuyerID != "" && key == "" {
+			return result, nil
+		}
 		profile, ok := catalog.SelectPrice(doc.PriceProfiles, key)
 		if !ok {
 			return result, catalog.ErrOfferNotFound

@@ -24,6 +24,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/application/platformguard"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
@@ -138,11 +139,28 @@ func (s *server) services(ctx context.Context) (services, error) {
 	now := clock.System{}
 	identities := random.IDs{}
 	uow := storecache.NewUnitOfWork(postgres.NewUnitOfWork(s.store.pool), redis.NewStoreCardCache(s.cache, keyPrefix))
-	platform := platformapi.New(platformapi.Config{
+	upstream := platformapi.New(platformapi.Config{
 		BaseURL: cfg.Platform.URL,
 		Token:   cfg.Platform.Token,
 		Timeout: cfg.Platform.Timeout,
 	})
+	platform := platformguard.New(
+		upstream,
+		platformguard.Config{
+			ReadTimeout:      cfg.Platform.ReadTimeout,
+			StrictTimeout:    cfg.Platform.Timeout,
+			CacheTTL:         cfg.Platform.CacheTTL,
+			StaleTTL:         cfg.Platform.StaleTTL,
+			CacheSize:        cfg.Platform.CacheSize,
+			MaxConcurrent:    cfg.Platform.MaxConcurrent,
+			FailureThreshold: cfg.Platform.FailureThreshold,
+			OpenInterval:     cfg.Platform.OpenInterval,
+			LogInterval:      cfg.Platform.LogInterval,
+		},
+		now,
+		telemetry.NewPlatform(s.metrics),
+		s.logger,
+	)
 	// корзина и покупка узнают об отказе участия первыми — по нему сверка настроек внеочередная
 	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
 	settings := appparticipant.NewSettings(uow, platform, now, identities)

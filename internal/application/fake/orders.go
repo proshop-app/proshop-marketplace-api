@@ -17,10 +17,13 @@ import (
 
 // CreateOrder сохраняет уникальный заказ до возврата ответа приложению.
 func (p *Platform) CreateOrder(
-	_ context.Context,
+	ctx context.Context,
 	tenant ids.TenantID,
 	request ports.CreateOrderRequest,
 ) (checkout.SellerOrder, error) {
+	if err := p.platformCall(ctx, "create_order"); err != nil {
+		return checkout.SellerOrder{}, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	key := string(tenant) + ":" + request.ExternalCheckoutID + ":" + string(request.GroupID)
@@ -109,7 +112,10 @@ func (p *Platform) CreateOrder(
 }
 
 // GetOrder отдаёт заданный тестом статус заказа этого магазина.
-func (p *Platform) GetOrder(_ context.Context, tenant ids.TenantID, id string) (checkout.SellerOrder, error) {
+func (p *Platform) GetOrder(ctx context.Context, tenant ids.TenantID, id string) (checkout.SellerOrder, error) {
+	if err := p.platformCall(ctx, "get_order"); err != nil {
+		return checkout.SellerOrder{}, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.pollCalls[tenant]++
@@ -261,7 +267,10 @@ func sameDiscounts(expected, actual []cart.Discount) bool {
 }
 
 // StubPayment моделирует идемпотентное подтверждение серверного заказа.
-func (p *Platform) StubPayment(_ context.Context, tenant ids.TenantID, id string, amount money.Money) error {
+func (p *Platform) StubPayment(ctx context.Context, tenant ids.TenantID, id string, amount money.Money) error {
+	if err := p.platformCall(ctx, "stub_payment"); err != nil {
+		return err
+	}
 	p.mu.Lock()
 	var after func()
 	defer func() {

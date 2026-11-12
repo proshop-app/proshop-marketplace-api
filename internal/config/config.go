@@ -92,9 +92,17 @@ type Login struct {
 
 // Platform — внутренний API сервера установки.
 type Platform struct {
-	URL     string
-	Token   string
-	Timeout time.Duration
+	URL              string
+	Token            string
+	Timeout          time.Duration
+	ReadTimeout      time.Duration
+	CacheTTL         time.Duration
+	StaleTTL         time.Duration
+	CacheSize        int
+	MaxConcurrent    int
+	FailureThreshold int
+	OpenInterval     time.Duration
+	LogInterval      time.Duration
 }
 
 // Cart — корзины.
@@ -300,9 +308,17 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			IPLimit:       r.limit("LOGIN_IP_LIMIT", Limit{Count: 20, Window: time.Hour}),
 		},
 		Platform: Platform{
-			URL:     r.httpURL("PLATFORM_API_URL"),
-			Token:   r.required("SERVICE_TOKEN_MARKETPLACE"),
-			Timeout: r.duration("PLATFORM_API_TIMEOUT", 5*time.Second),
+			URL:              r.httpURL("PLATFORM_API_URL"),
+			Token:            r.required("SERVICE_TOKEN_MARKETPLACE"),
+			Timeout:          r.duration("PLATFORM_API_TIMEOUT", 5*time.Second),
+			ReadTimeout:      r.duration("PLATFORM_READ_TIMEOUT", 300*time.Millisecond),
+			CacheTTL:         r.duration("PLATFORM_CACHE_TTL", 30*time.Second),
+			StaleTTL:         r.duration("PLATFORM_STALE_TTL", 5*time.Minute),
+			CacheSize:        r.positive("PLATFORM_CACHE_SIZE", 1024),
+			MaxConcurrent:    r.positive("PLATFORM_MAX_CONCURRENT", 16),
+			FailureThreshold: r.positive("PLATFORM_FAILURE_THRESHOLD", 5),
+			OpenInterval:     r.duration("PLATFORM_OPEN_INTERVAL", 5*time.Second),
+			LogInterval:      r.duration("PLATFORM_LOG_INTERVAL", 30*time.Second),
 		},
 		Cart: Cart{TTL: r.duration("CART_TTL", 30*24*time.Hour)},
 		Checkout: Checkout{
@@ -387,6 +403,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		r.fail("CDEK_CLIENT_ID", "задаётся вместе с CDEK_CLIENT_SECRET")
 	}
 
+	r.validatePlatform(cfg.Platform)
 	r.validatePromotion(cfg)
 	r.validateReference(cfg)
 	r.validateOperator(cfg.Operator)
