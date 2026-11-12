@@ -28,7 +28,7 @@ func TestScopedHintsAtomicHistoryAndLegacyCorrection(t *testing.T) {
 	ctx := context.Background()
 	uow := postgres.NewUnitOfWork(pool)
 	registry := appreference.NewService(uow, clock.System{}, random.IDs{}, nil, appreference.Config{})
-	_, err := registry.Import(ctx, reference.ImportPackage{
+	_, err := registry.Import(ctx, "", reference.ImportPackage{
 		SchemaVersion: 1,
 		Sources:       []reference.ImportSource{{ID: "s1", URL: "https://example.org/data", License: "CC0-1.0"}},
 		Dictionaries: []reference.ImportDictionary{

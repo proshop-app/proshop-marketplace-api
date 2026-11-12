@@ -53,7 +53,7 @@ func TestHintImportBindingReviewAndRollbackPreserveFreeStrings(t *testing.T) {
 	if !reflect.DeepEqual(before, original) || len(store.OutboxRows()) != 0 {
 		t.Fatal("неудачная публикация изменила снимок или события")
 	}
-	_, err := registry.Import(ctx, reference.ImportPackage{
+	_, err := registry.Import(ctx, "", reference.ImportPackage{
 		SchemaVersion: 1,
 		Sources:       []reference.ImportSource{{ID: "s1", URL: "https://example.org/data", License: "CC0-1.0"}},
 		Dictionaries: []reference.ImportDictionary{

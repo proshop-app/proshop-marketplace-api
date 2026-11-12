@@ -42,7 +42,7 @@ func TestReferenceImportCreatesAndReplaysMixedDictionaries(t *testing.T) {
 	clock := &referenceClock{now: time.Now().UTC()}
 	service := appreference.NewService(postgres.NewUnitOfWork(pool), clock, random.IDs{}, nil, appreference.Config{})
 	input := referenceImportFixture()
-	results, err := service.Import(context.Background(), input)
+	results, err := service.Import(context.Background(), "", input)
 	if err != nil || len(results) != 2 || !results[0].Created || !results[1].Created {
 		t.Fatal(results, err)
 	}
@@ -51,7 +51,7 @@ func TestReferenceImportCreatesAndReplaysMixedDictionaries(t *testing.T) {
 		snapshot.Entries[0].Status != reference.StatusCandidate {
 		t.Fatal(snapshot, err)
 	}
-	again, err := service.Import(context.Background(), input)
+	again, err := service.Import(context.Background(), "", input)
 	if err != nil || again[0].Changed || again[1].Changed || again[0].Revision != results[0].Revision {
 		t.Fatal(again, err)
 	}
@@ -63,7 +63,7 @@ func TestReferenceImportFailureRollsBackNewDictionaryAndJournal(t *testing.T) {
 	service := appreference.NewService(postgres.NewUnitOfWork(pool), clock, random.IDs{}, nil, appreference.Config{})
 	input := referenceImportFixture()
 	input.Dictionaries = input.Dictionaries[1:]
-	if _, err := service.Import(context.Background(), input); err != nil {
+	if _, err := service.Import(context.Background(), "", input); err != nil {
 		t.Fatal(err)
 	}
 	before, err := service.Snapshot(context.Background(), "c1", nil)
@@ -75,7 +75,7 @@ func TestReferenceImportFailureRollsBackNewDictionaryAndJournal(t *testing.T) {
 	input.Dictionaries[1].Entries = []reference.DeliveryEntry{
 		{Canonical: "Третье", Aliases: []reference.DeliveryAlias{{Text: "Второе"}}},
 	}
-	if _, err := service.Import(context.Background(), input); !errors.Is(err, reference.ErrKeyTaken) {
+	if _, err := service.Import(context.Background(), "", input); !errors.Is(err, reference.ErrKeyTaken) {
 		t.Fatal(err)
 	}
 	if _, err := service.Snapshot(context.Background(), "a1", nil); !errors.Is(err, reference.ErrDictionaryNotFound) {

@@ -31,7 +31,8 @@ type DictionarySummary struct {
 
 // Import создаёт отсутствующие словари и применяет все поставки одной транзакцией.
 // Сортировка кодов в PrepareImport задаёт единый порядок блокировок пакетов.
-func (s *Service) Import(ctx context.Context, input reference.ImportPackage) ([]ImportResult, error) {
+// Без оператора автором в журнале остаётся поставка.
+func (s *Service) Import(ctx context.Context, actor string, input reference.ImportPackage) ([]ImportResult, error) {
 	prepared, err := reference.PrepareImport(input)
 	if err != nil {
 		return nil, err
@@ -39,7 +40,7 @@ func (s *Service) Import(ctx context.Context, input reference.ImportPackage) ([]
 	results := make([]ImportResult, 0, len(prepared))
 	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		for _, item := range prepared {
-			result, err := s.importDictionary(ctx, tx, item)
+			result, err := s.importDictionary(ctx, tx, item, actor)
 			if err != nil {
 				return err
 			}
@@ -57,6 +58,7 @@ func (s *Service) importDictionary(
 	ctx context.Context,
 	tx ports.Tx,
 	item reference.PreparedImport,
+	actor string,
 ) (ImportResult, error) {
 	d := item.Delivery
 	created, err := tx.Reference().CreateDictionary(ctx, reference.DictionaryState{
@@ -70,6 +72,9 @@ func (s *Service) importDictionary(
 	}
 	result := reference.DeliveryResult{Dictionary: d.Dictionary, Release: d.Version}
 	meta := reference.Meta{Actor: "delivery:" + strconv.FormatInt(d.Version, 10), Source: reference.SourceSeed}
+	if actor != "" {
+		meta.Actor = actor
+	}
 	revision, err := s.mutateInTransaction(ctx, tx, d.Dictionary, func(ctx context.Context, m *session) error {
 		if m.dict.State().Kind != item.Kind {
 			return reference.ErrDeliveryConflict.WithMessage("нельзя изменить вид словаря: " + d.Dictionary)

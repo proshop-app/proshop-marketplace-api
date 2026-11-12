@@ -1,6 +1,10 @@
 package taxonomy
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
+)
 
 // Ограничения правил и допустимые режимы источников подсказок.
 const (
@@ -90,8 +94,11 @@ func (d Definition) validateDictionaryBindings(fields map[string]Attribute) erro
 		}
 		seen := map[string]bool{}
 		for _, code := range binding.Dictionaries {
-			if !ValidCode(code) || seen[code] {
-				return ErrInvalid.WithMessage("неверный или повторный код источника подсказок")
+			if !reference.ValidCode(code) {
+				return ErrInvalid.WithMessage("код словаря: 1–32 символа a-z/0-9/_, первый — буква")
+			}
+			if seen[code] {
+				return ErrInvalid.WithMessage("повторный код источника подсказок")
 			}
 			seen[code] = true
 		}

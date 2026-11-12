@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 )
 
 const (
@@ -194,7 +196,10 @@ func (a Attribute) validate() error {
 	if !ValidCode(a.Code) || strings.TrimSpace(a.Name) == "" || utf8.RuneCountInString(a.Name) > 256 {
 		return ErrInvalid.WithMessage("неверный код или имя атрибута")
 	}
-	if a.Dictionary != "" && (!ValidCode(a.Dictionary) || (a.Type != "enum" && a.Type != "string")) {
+	if a.Dictionary != "" && !reference.ValidCode(a.Dictionary) {
+		return ErrInvalid.WithMessage("код словаря: 1–32 символа a-z/0-9/_, первый — буква")
+	}
+	if a.Dictionary != "" && a.Type != "enum" && a.Type != "string" {
 		return ErrInvalid.WithMessage("словарь допустим только у enum и string")
 	}
 	if err := a.validateValuesMeta(); err != nil {

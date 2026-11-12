@@ -1,10 +1,16 @@
 package http
 
 import (
+	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 )
 
@@ -13,6 +19,27 @@ const referenceImportJSONFixture = `{
     "sources":[{"id":"s1","url":"https://example.org/data","license":"CC0-1.0"}],
     "dictionaries":[{"code":"d1","kind":"open","release":1,"entries":[{"canonical":"Значение"}]}]
 }`
+
+func TestReferenceImportRecordsRequestPrincipal(t *testing.T) {
+	store := fake.NewStore()
+	clock := fake.NewClock(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
+	service := appreference.NewService(store, clock, &fake.IDs{}, nil, appreference.Config{})
+	handler := referenceHandlers{service: service}
+	for _, actor := range []string{"op1", "op2"} {
+		request := httptest.NewRequest(http.MethodPost, "/import", strings.NewReader(referenceImportJSONFixture))
+		request.Header.Set("Content-Type", "application/json")
+		ctx := context.WithValue(request.Context(), keyOperator, operator.Principal{ID: actor})
+		recorder := httptest.NewRecorder()
+		handler.importPackage(recorder, request.WithContext(ctx))
+		if recorder.Code != http.StatusOK {
+			t.Fatal(recorder.Code, recorder.Body.String())
+		}
+		changes := store.ReferenceChanges()
+		if len(changes) != 1 || changes[0].Meta.Actor != "op1" || changes[0].Meta.Source != reference.SourceSeed {
+			t.Fatal("импорт потерял автора или повтор переписал журнал", changes)
+		}
+	}
+}
 
 func TestReferenceImportStrictJSONAndYAML(t *testing.T) {
 	yamlBody := "schemaVersion: 1\nsources:\n  - id: s1\n    url: https://example.org/data\n" +

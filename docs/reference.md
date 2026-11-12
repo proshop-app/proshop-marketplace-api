@@ -292,13 +292,14 @@ go run ./cmd/marketplace reference rollback --dir path/to/delivery
   не на уникальность ключа.
 - Операторского отката произвольной ревизии через API. Механизм обратных
   образов есть и используется откатом поставки.
-- Закрытых словарей: перечисления таксономии переносятся отдельным этапом.
 
 ## Поставка словарей и потребители (5 ноября 2026)
 
 Площадка владеет реестром и его пополнением; proshop-server и proshop-search —
 потребители снимков. Миграция `00030_reference_dictionaries.sql` добавляет
-18 словарей к `brand`.
+18 словарей к открытому `brand`, созданному миграцией `00027`.
+Состав после миграции `00030` по коду:
+
 Открытые словари: `brand`, `country`, `material`. Закрытые:
 `color`, `gender`, `season`, `body_material`, `cookware_material`,
 `textile_material`, `jewelry_metal`, `book_binding`, `storage_type`,

@@ -61,7 +61,7 @@ func (h *referenceHandlers) importPackage(w http.ResponseWriter, r *http.Request
 		writeReferenceImportError(w, r, err)
 		return
 	}
-	results, err := h.service.Import(r.Context(), input)
+	results, err := h.service.Import(r.Context(), principalFrom(r).ID, input)
 	if err != nil {
 		writeReferenceImportError(w, r, err)
 		return

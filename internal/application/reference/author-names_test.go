@@ -94,7 +94,7 @@ func TestAuthorImportRejectsForeignCanonicalAtomically(t *testing.T) {
 	input.Dictionaries[1].Kind = reference.KindOpen
 	input.Dictionaries[1].Entries[0].Canonical = "Foreign Author"
 
-	if result, err := h.service.Import(ctx, input); result != nil || !errors.Is(err, reference.ErrInvalidDelivery) {
+	if result, err := h.service.Import(ctx, "", input); result != nil || !errors.Is(err, reference.ErrInvalidDelivery) {
 		t.Fatal("иноязычный canonical импортирован", result, err)
 	}
 
@@ -112,7 +112,7 @@ func TestAuthorImportRejectsForeignCanonicalAtomically(t *testing.T) {
 			Locale: "en",
 		},
 	}
-	result, err := h.service.Import(ctx, input)
+	result, err := h.service.Import(ctx, "", input)
 
 	if err != nil || len(result) != 2 {
 		t.Fatal("допустимый импорт отклонён", result, err)
@@ -162,7 +162,7 @@ func TestAuthorCandidateImportAddsAliasWithoutChangingConfirmedEntry(t *testing.
 			},
 		},
 	}
-	imported, err := h.service.Import(ctx, input)
+	imported, err := h.service.Import(ctx, "", input)
 
 	if err != nil || len(imported) != 1 || !imported[0].Changed || imported[0].Created ||
 		imported[0].CreatedEntries != 0 || imported[0].UpdatedEntries != 1 {
@@ -212,7 +212,7 @@ func TestAuthorCandidateImportAddsAliasWithoutChangingConfirmedEntry(t *testing.
 
 	events := h.events(t)
 	changes := len(h.store.ReferenceChanges())
-	repeated, err := h.service.Import(ctx, input)
+	repeated, err := h.service.Import(ctx, "", input)
 
 	if err != nil || len(repeated) != 1 || repeated[0].Changed || repeated[0].Created ||
 		repeated[0].CreatedEntries != 0 || repeated[0].UpdatedEntries != 0 ||

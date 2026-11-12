@@ -6340,7 +6340,7 @@ components:
           type: array
           maxItems: 16
           uniqueItems: true
-          items: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+          items: { type: string, maxLength: 32, pattern: '^[a-z][a-z0-9_]{0,31}$' }
           description: Только существующие open словари; extend требует хотя бы один. Порядок не задаёт приоритет.
     TaxonomyDictionaryBinding:
       type: object
@@ -6357,7 +6357,7 @@ components:
           type: array
           maxItems: 16
           uniqueItems: true
-          items: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+          items: { type: string, maxLength: 32, pattern: '^[a-z][a-z0-9_]{0,31}$' }
       description: >-
         Только string атрибут, существующий в области категории. Источники разрешаются:
         Attribute.dictionary, глобальное правило, затем путь от корня к выбранной категории.
@@ -6419,7 +6419,11 @@ components:
         code: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
         name: { type: string, minLength: 1, maxLength: 256 }
         type: { type: string, enum: [enum, number, string, boolean] }
-        dictionary: { type: string, description: Для enum — closed, для string — open }
+        dictionary:
+          type: string
+          maxLength: 32
+          pattern: '^[a-z][a-z0-9_]{0,31}$'
+          description: Для enum — closed, для string — open
         values: { type: array, items: { type: string }, readOnly: true, description: Снимок confirmed закрытого словаря }
         unit: { type: string, description: Единица только для number }
         facet: { type: boolean, default: false }
@@ -6462,7 +6466,7 @@ components:
         name: { type: string }
         type: { type: string, enum: [enum, string, number, boolean] }
         unit: { type: string }
-        dictionary: { type: string }
+        dictionary: { type: string, maxLength: 32, pattern: '^[a-z][a-z0-9_]{0,31}$' }
         facet: { type: boolean }
         required: { type: boolean }
         values: { type: array, items: { type: string } }
