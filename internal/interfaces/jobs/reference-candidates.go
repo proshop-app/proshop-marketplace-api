@@ -20,6 +20,7 @@ type ReferenceCandidatesRunner struct {
 	logger   *slog.Logger
 	created  *prometheus.CounterVec
 	failures prometheus.Counter
+	skipped  prometheus.Counter
 }
 
 // NewReferenceCandidatesRunner регистрирует метрики сбора кандидатов.
@@ -46,8 +47,12 @@ func NewReferenceCandidatesRunner(
 			Name: "marketplace_reference_candidates_failures_total",
 			Help: "Сбои сбора кандидатов из каталога.",
 		}),
+		skipped: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "marketplace_reference_candidates_skipped_total",
+			Help: "Области сбора, пропущенные из-за ограничения фильтров поиска.",
+		}),
 	}
-	registerer.MustRegister(r.created, r.failures)
+	registerer.MustRegister(r.created, r.failures, r.skipped)
 	return r
 }
 
@@ -62,8 +67,18 @@ func (r *ReferenceCandidatesRunner) RunOnce(ctx context.Context) {
 		if dict.Kind != reference.KindOpen {
 			continue
 		}
-		count, err := r.service.CollectCandidates(ctx, dict.Code, r.search)
-		r.created.WithLabelValues(dict.Code).Add(float64(count))
+		result, err := r.service.CollectCandidates(ctx, dict.Code, r.search)
+		r.created.WithLabelValues(dict.Code).Add(float64(result.Created))
+		for _, scope := range result.Skipped {
+			r.skipped.Inc()
+			r.logger.Warn(
+				"реестр: область сбора превышает лимит исключений поиска",
+				slog.String("dictionary", dict.Code),
+				slog.String("attribute", scope.Attribute),
+				slog.Any("categories", scope.Categories),
+				slog.Int("exclusions", len(scope.ExcludeCategories)),
+			)
+		}
 		if err != nil {
 			r.failed(dict.Code, err)
 		}

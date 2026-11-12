@@ -26,18 +26,33 @@ func NewCandidates(cfg Config) (*Candidates, error) {
 // AttributeValues читает страницу; сбои не повторяются до следующего обхода.
 func (c *Candidates) AttributeValues(
 	ctx context.Context,
-	code string,
-	size int,
-	after string,
+	query ports.AttributeValuesQuery,
 ) (ports.AttributeValuesPage, error) {
 	var page ports.AttributeValuesPage
-	if size < 1 || size > 500 {
+	if query.Size < 1 || query.Size > 500 ||
+		len(query.Categories) > ports.MaxCandidateCategories ||
+		len(query.ExcludeCategories) > ports.MaxCandidateCategories {
 		return page, ErrInvalid
 	}
-	query := url.Values{"key": {code}, "size": {strconv.Itoa(size)}, "after": {after}}
-	status, err := c.index.request(ctx, http.MethodGet, "/attribute-values?"+query.Encode(), nil, &page)
+	values := candidateQueryValues(query)
+	status, err := c.index.request(ctx, http.MethodGet, "/attribute-values?"+values.Encode(), nil, &page)
 	if status == http.StatusBadRequest {
 		return page, ErrInvalid
 	}
 	return page, err
+}
+
+func candidateQueryValues(query ports.AttributeValuesQuery) url.Values {
+	values := url.Values{
+		"key":   {query.Attribute},
+		"size":  {strconv.Itoa(query.Size)},
+		"after": {query.After},
+	}
+	for _, category := range query.Categories {
+		values.Add("categoryId", category)
+	}
+	for _, category := range query.ExcludeCategories {
+		values.Add("excludeCategoryId", category)
+	}
+	return values
 }

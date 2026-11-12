@@ -2,6 +2,18 @@ package ports
 
 import "context"
 
+// MaxCandidateCategories — ограничение каждого фильтра разделов в контракте поиска.
+const MaxCandidateCategories = 32
+
+// AttributeValuesQuery сохраняется между страницами, меняется только After.
+type AttributeValuesQuery struct {
+	Attribute         string
+	Categories        []string
+	ExcludeCategories []string
+	Size              int
+	After             string
+}
+
 // AttributeValue — наблюдение значения в текущем поколении каталога.
 type AttributeValue struct {
 	Value     string `json:"value"`
@@ -18,5 +30,5 @@ type AttributeValuesPage struct {
 
 // ReferenceCandidates — чтение значений каталога отдельным служебным токеном.
 type ReferenceCandidates interface {
-	AttributeValues(context.Context, string, int, string) (AttributeValuesPage, error)
+	AttributeValues(context.Context, AttributeValuesQuery) (AttributeValuesPage, error)
 }

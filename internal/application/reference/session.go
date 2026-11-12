@@ -71,6 +71,17 @@ func (s *Service) mutateInTransaction(
 	if err != nil {
 		return 0, err
 	}
+	return s.mutateLockedDictionary(ctx, tx, dict, fn)
+}
+
+// mutateLockedDictionary позволяет пакету заранее блокировать источники в общем порядке.
+func (s *Service) mutateLockedDictionary(
+	ctx context.Context,
+	tx ports.Tx,
+	dict *reference.Dictionary,
+	fn func(ctx context.Context, m *session) error,
+) (int64, error) {
+	repo := tx.Reference()
 	if err := dict.CheckNormalizer(); err != nil {
 		return 0, err
 	}

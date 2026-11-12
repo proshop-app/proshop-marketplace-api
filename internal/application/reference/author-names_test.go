@@ -10,6 +10,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
 const authorDictionary = "book_author"
@@ -230,6 +231,13 @@ func TestAuthorCandidateImportAddsAliasWithoutChangingConfirmedEntry(t *testing.
 func TestAuthorCollectorSkipsForeignObservationsAndContinuesPages(t *testing.T) {
 	h := newAuthorHarness(t)
 	ctx := context.Background()
+	h.store.SeedTaxonomy(taxonomy.Definition{
+		Version: 1,
+		Attributes: []taxonomy.Attribute{
+			{Code: authorDictionary, Type: "string", Dictionary: authorDictionary},
+			{Code: testDict, Type: "string", Dictionary: testDict},
+		},
+	})
 	search := &fake.ReferenceCandidates{
 		Pages: map[string]map[string]ports.AttributeValuesPage{
 			authorDictionary: {
@@ -277,7 +285,7 @@ func TestAuthorCollectorSkipsForeignObservationsAndContinuesPages(t *testing.T) 
 	}
 	created, err := h.service.CollectCandidates(ctx, authorDictionary, search)
 
-	if err != nil || created != 2 {
+	if err != nil || created.Created != 2 {
 		t.Fatal("наблюдения остановили сбор", created, err)
 	}
 
@@ -290,13 +298,13 @@ func TestAuthorCollectorSkipsForeignObservationsAndContinuesPages(t *testing.T) 
 
 	created, err = h.service.CollectCandidates(ctx, authorDictionary, search)
 
-	if err != nil || created != 0 || len(search.Calls) != 4 {
+	if err != nil || created.Created != 0 || len(search.Calls) != 4 {
 		t.Fatal("повтор сбора изменил число кандидатов или пагинацию", created, search.Calls, err)
 	}
 
 	created, err = h.service.CollectCandidates(ctx, testDict, search)
 
-	if err != nil || created != 1 {
+	if err != nil || created.Created != 1 {
 		t.Fatal("наблюдение другого словаря потеряно", created, err)
 	}
 }
