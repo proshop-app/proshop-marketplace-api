@@ -2,6 +2,7 @@ package taxonomydata
 
 import (
 	"io/fs"
+	"slices"
 	"testing"
 	"testing/fstest"
 
@@ -23,6 +24,33 @@ func TestBundledTaxonomy(t *testing.T) {
 	}
 	for _, direction := range release.Categories {
 		assertCategorySchemas(t, release.Definition(), direction)
+	}
+}
+
+func TestBundledGenderSearchTerms(t *testing.T) {
+	release, _, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gender, ok := release.Definition().Fields()["gender"]
+	if !ok {
+		t.Fatal("нет атрибута gender")
+	}
+	if len(gender.SearchTermsByValue) != 2 {
+		t.Fatalf("выражения должны быть только у Мужской и Женский: %+v", gender.SearchTermsByValue)
+	}
+	for value, want := range map[string][]string{
+		"Мужской":       {"мужчина"},
+		"Женский":       {"женщина"},
+		"Унисекс":       nil,
+		"Для девочек":   nil,
+		"Для мальчиков": nil,
+	} {
+		t.Run(value, func(t *testing.T) {
+			if got := gender.SearchTermsByValue[value]; !slices.Equal(got, want) {
+				t.Fatalf("выражения %q: %v, ожидаются %v", value, got, want)
+			}
+		})
 	}
 }
 

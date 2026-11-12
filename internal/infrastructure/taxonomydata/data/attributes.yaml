@@ -530,6 +530,9 @@
   type: enum
   facet: true
   dictionary: gender
+  searchTermsByValue:
+    Мужской: [мужчина]
+    Женский: [женщина]
 - code: season
   name: Сезон
   type: enum
