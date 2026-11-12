@@ -102,6 +102,8 @@ const (
 
 // OfferQuery — поиск по выдаче каталога.
 type OfferQuery struct {
+	// Exact запрещает исправления опечаток, раскладки и транслита, сохраняя остальные правила поиска.
+	Exact         bool
 	TrackQuery    bool
 	GroupID       string
 	BuyerID       ids.UUID

@@ -65,6 +65,7 @@ type attribute struct {
 }
 
 type offerQuery struct {
+	Exact         bool                             `json:"exact,omitempty"`
 	TrackQuery    bool                             `json:"trackQuery"`
 	GroupID       string                           `json:"groupId,omitempty"`
 	PriceContexts map[string]string                `json:"priceContexts"`

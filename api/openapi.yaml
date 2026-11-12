@@ -2070,6 +2070,14 @@ paths:
             Учитывается только при непустом q и offset=0; иначе игнорируется.
             Любое значение, кроме true и 1, — 400.
         - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Строка поиска }
+        - name: exact
+          in: query
+          schema: { type: boolean, default: false }
+          description: >-
+            Искать как набрано: без исправления опечаток, раскладки и транслита.
+            Словари, стоп-слова, контекст разделов, partial, фильтры, фасеты и сортировка сохраняются.
+            Только true или false, один раз; пустое и любое другое значение — 400 catalog.invalid_query.
+            Без параметра или при false поведение прежнее; служебное поле движку отправляется только при true.
         - name: tenant
           in: query
           style: form
