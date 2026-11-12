@@ -1636,6 +1636,31 @@ paths:
       description: Только из parked при совпадении expectedVersion; устаревший запрос без сохранённого ключа — 409 с текущим event.
         Аудит автора/времени/заметки. Retry атомарно ставит outbox с версией решения и отдельным бюджетом попыток;
         queued не означает успех, после ошибки событие возвращается в parked.
+  /api/v1/taxonomy/dictionary-sources:
+    get:
+      tags: [taxonomy]
+      summary: Готовые источники строковых подсказок одной версии таксономии
+      operationId: taxonomyDictionarySources
+      description: >-
+        Итог свёртки Attribute.dictionary, глобального правила и правил от корня к разделу.
+        Только string атрибуты из схемы раздела или схем его потомков с непустым набором источников.
+        Потребители используют карту вместо самостоятельной свёртки dictionary-bindings.
+      parameters:
+        - { $ref: "#/components/parameters/TaxonomyCache" }
+      responses:
+        "200":
+          description: Карта раздел → атрибут → словари; при отсутствии пар dictionarySources равен {}
+          headers:
+            ETag: { schema: { type: string }, description: 'Общая версия снимка, например "taxonomy-42"' }
+            X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyDictionarySources" }
+        "304":
+          description: Версия не изменилась
+          headers:
+            ETag: { schema: { type: string } }
+            X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
   /api/v1/taxonomy/dictionary-bindings:
     get:
       tags: [taxonomy]
@@ -6363,6 +6388,31 @@ components:
         Attribute.dictionary, глобальное правило, затем путь от корня к выбранной категории.
         extend — объединение, replace — замена; replace [] отключает. Дубликаты удаляются
         в порядке первого появления без семантического приоритета. Не более 16 итоговых источников.
+    TaxonomyDictionarySources:
+      type: object
+      additionalProperties: false
+      required: [version, dictionarySources]
+      properties:
+        version: { type: integer, format: int64, minimum: 0 }
+        dictionarySources:
+          type: object
+          maxProperties: 4096
+          description: >-
+            Ключи — id разделов, вложенные ключи — коды string атрибутов из их области.
+            Пустые наборы и разделы без пар отсутствуют; объект присутствует всегда.
+          additionalProperties:
+            type: object
+            minProperties: 1
+            maxProperties: 256
+            additionalProperties:
+              type: array
+              minItems: 1
+              maxItems: 16
+              uniqueItems: true
+              items: { type: string, maxLength: 32, pattern: '^[a-z][a-z0-9_]{0,31}$' }
+              description: >-
+                Порядок свёртки: словарь атрибута, глобальное правило, правила от корня к разделу;
+                extend добавляет без дублей, replace заменяет. Порядок не задаёт приоритет выдачи.
     TaxonomyDictionaryBindings:
       type: object
       additionalProperties: false

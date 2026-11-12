@@ -242,6 +242,7 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/metrics", metrics},
 
 		{http.MethodGet, "/api/v1/taxonomy/dictionary-bindings", taxonomy.dictionaryBindings},
+		{http.MethodGet, "/api/v1/taxonomy/dictionary-sources", taxonomy.dictionarySources},
 		{
 			http.MethodPut,
 			"/api/v1/operator/taxonomy/dictionary-bindings/{attributeCode}",
