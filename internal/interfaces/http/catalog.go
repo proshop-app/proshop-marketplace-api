@@ -54,6 +54,7 @@ type offerJSON struct {
 }
 
 type offerPageJSON struct {
+	Pricing    string               `json:"pricing,omitempty"`
 	Correction *offerCorrectionJSON `json:"correction,omitempty"`
 	Facets     []facetJSON          `json:"facets"`
 	Items      []offerJSON          `json:"items"`
@@ -141,11 +142,12 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := offerPageJSON{
-		Facets: facets,
-		Items:  make([]offerJSON, 0, len(list.Items)),
-		Total:  list.Total,
-		Limit:  limit,
-		Offset: query.Offset,
+		Pricing: list.Pricing,
+		Facets:  facets,
+		Items:   make([]offerJSON, 0, len(list.Items)),
+		Total:   list.Total,
+		Limit:   limit,
+		Offset:  query.Offset,
 	}
 	if list.Correction != nil {
 		body.Correction = &offerCorrectionJSON{

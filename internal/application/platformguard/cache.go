@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"maps"
-	"slices"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -22,21 +20,6 @@ type cacheEntry struct {
 	loaded  time.Time
 	used    uint64
 	loading bool
-}
-
-// PriceContexts кэширует выбор отдельно для покупателя и набора магазинов; холодный отказ скрывает цены.
-func (c *Client) PriceContexts(
-	ctx context.Context,
-	buyer ids.UUID,
-	tenants []ids.TenantID,
-) (map[ids.TenantID]string, error) {
-	ordered := slices.Clone(tenants)
-	slices.Sort(ordered)
-	key := newCacheKey("price_contexts", []any{buyer, ordered})
-	value := cached(ctx, c, key, map[ids.TenantID]string{}, func(ctx context.Context) (map[ids.TenantID]string, error) {
-		return c.upstream.PriceContexts(ctx, buyer, ordered)
-	})
-	return maps.Clone(value), nil
 }
 
 // ProductReviews при отказе сохраняет доступность карточки и отдаёт старую или пустую страницу.

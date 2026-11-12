@@ -29,29 +29,30 @@ type DaData struct {
 
 // Config — настройки процесса маркетплейса.
 type Config struct {
-	DaData     DaData
-	Promotion  Promotion
-	Moderation Moderation
-	ModelKeys  bool
-	Identity   Identity
-	HTTP       HTTP
-	Database   Database
-	OpenSearch OpenSearch
-	Search     Search
-	Kafka      Kafka
-	Outbox     Outbox
-	Retention  Retention
-	Operator   Operator
-	Redis      Redis
-	SmsRu      SmsRu
-	Login      Login
-	Platform   Platform
-	Cart       Cart
-	Checkout   Checkout
-	Delivery   Delivery
-	Settings   Settings
-	Reference  Reference
-	LogLevel   string
+	PriceContexts PriceContexts
+	DaData        DaData
+	Promotion     Promotion
+	Moderation    Moderation
+	ModelKeys     bool
+	Identity      Identity
+	HTTP          HTTP
+	Database      Database
+	OpenSearch    OpenSearch
+	Search        Search
+	Kafka         Kafka
+	Outbox        Outbox
+	Retention     Retention
+	Operator      Operator
+	Redis         Redis
+	SmsRu         SmsRu
+	Login         Login
+	Platform      Platform
+	Cart          Cart
+	Checkout      Checkout
+	Delivery      Delivery
+	Settings      Settings
+	Reference     Reference
+	LogLevel      string
 }
 
 // Redis — сессии покупателей и лимиты частоты.
@@ -235,8 +236,9 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	r := reader{env: env}
 
 	cfg := Config{
-		Promotion: r.promotion(),
-		Identity:  r.identity(),
+		PriceContexts: r.priceContexts(),
+		Promotion:     r.promotion(),
+		Identity:      r.identity(),
 		HTTP: HTTP{
 			Addr:            r.str("HTTP_ADDR", ":8080"),
 			ShutdownTimeout: r.duration("SHUTDOWN_TIMEOUT", 20*time.Second),

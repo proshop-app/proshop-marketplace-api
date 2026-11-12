@@ -43,6 +43,7 @@ type OfferCard struct {
 
 // OfferList — страница выдачи и фасеты.
 type OfferList struct {
+	Pricing    string
 	Correction *ports.OfferCorrection
 	Facets     []ports.Facet
 	Total      int
@@ -104,6 +105,7 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 		return OfferList{}, err
 	}
 	list := OfferList{
+		Pricing:    pricingMode(normalized.BuyerID, normalized.PriceContexts),
 		Correction: page.Correction,
 		Facets:     visibleFacets(page.Facets, page.Total, normalized),
 		Total:      page.Total,

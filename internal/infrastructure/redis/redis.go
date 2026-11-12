@@ -46,6 +46,15 @@ type Limiter struct {
 	prefix string
 }
 
+// NewClient проверяет адрес без подключения: временный отказ Redis не блокирует запуск публичного API.
+func NewClient(url string) (*goredis.Client, error) {
+	options, err := goredis.ParseURL(url)
+	if err != nil {
+		return nil, fmt.Errorf("адрес Redis: %w", err)
+	}
+	return goredis.NewClient(options), nil
+}
+
 // Open — клиент с проверкой связи; prefix отделяет ключи маркетплейса.
 func Open(ctx context.Context, url string) (*goredis.Client, error) {
 	options, err := goredis.ParseURL(url)

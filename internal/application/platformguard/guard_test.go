@@ -122,40 +122,19 @@ func strictCall(c *Client, operation string) error {
 	}
 }
 
-func TestCacheStaleExpiryIsolationAndCapacity(t *testing.T) {
+func TestContextLoadNeverRenewsStaleValue(t *testing.T) {
 	ctx := context.Background()
-	clock := fake.NewClock(time.Now())
 	upstream := fake.NewPlatform()
-	metrics := &fake.PlatformMetrics{}
-	c := New(upstream, testConfig(), clock, metrics, nil)
+	c := New(upstream, testConfig(), fake.NewClock(time.Now()), nil, nil)
 	upstream.SetBuyerProfile("b1", "t1", "marketplace:buyer")
-	got, _ := c.PriceContexts(ctx, "b1", []ids.TenantID{"t1"})
-	got["t1"] = "испорчено"
-	got, _ = c.PriceContexts(ctx, "b1", []ids.TenantID{"t1"})
-	if got["t1"] != "marketplace:buyer" || metrics.Count("price_contexts", "ok") != 1 {
-		t.Fatal(got)
+	got, err := c.PriceContexts(ctx, "b1", []ids.TenantID{"t1"})
+	if err != nil || got["t1"] != "marketplace:buyer" {
+		t.Fatal(got, err)
 	}
 	upstream.Fail("t1", errors.New("недоступен"))
-	clock.Advance(2 * time.Second)
-	got, _ = c.PriceContexts(ctx, "b1", []ids.TenantID{"t1"})
-	if got["t1"] != "marketplace:buyer" || metrics.Count("price_contexts", "stale") != 1 {
-		t.Fatal(got)
-	}
-	other, _ := c.PriceContexts(ctx, "b2", []ids.TenantID{"t1"})
-	if len(other) != 0 {
-		t.Fatal("чужой персональный профиль", other)
-	}
-	clock.Advance(2 * time.Minute)
-	got, _ = c.PriceContexts(ctx, "b1", []ids.TenantID{"t1"})
-	if len(got) != 0 {
-		t.Fatal("просроченный stale", got)
-	}
-	for i := 0; i < 30; i++ {
-		_, _ = c.PriceContexts(ctx, ids.UUID(fmt.Sprint(i)), []ids.TenantID{"t1"})
-		_, _ = c.ProductReviews(ctx, "t1", ids.ProductID(fmt.Sprint(i)), 20, 0)
-		if len(c.cache) > c.cfg.CacheSize {
-			t.Fatal("кэш превысил предел", len(c.cache))
-		}
+	got, err = c.PriceContexts(ctx, "b1", []ids.TenantID{"t1"})
+	if err == nil || len(got) != 0 {
+		t.Fatal("устаревший контекст выдан как подтверждённая новая загрузка", got, err)
 	}
 }
 
@@ -274,9 +253,9 @@ func TestConcurrentCacheLoadsDoNotWaitAndRemainBounded(t *testing.T) {
 			return ctx.Err()
 		}
 	}
-	first := make(chan map[ids.TenantID]string, 1)
+	first := make(chan ports.ReviewPage, 1)
 	go func() {
-		value, _ := c.PriceContexts(context.Background(), "b1", []ids.TenantID{"t1"})
+		value, _ := c.ProductReviews(context.Background(), "t1", "p1", 20, 0)
 		first <- value
 	}()
 	<-started
@@ -285,18 +264,18 @@ func TestConcurrentCacheLoadsDoNotWaitAndRemainBounded(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			got, err := c.PriceContexts(context.Background(), "b1", []ids.TenantID{"t1"})
-			if err != nil || len(got) != 0 {
+			got, err := c.ProductReviews(context.Background(), "t1", "p1", 20, 0)
+			if err != nil || len(got.Items) != 0 {
 				t.Error(got, err)
 			}
 		}()
 	}
 	wg.Wait()
 	close(release)
-	if got := <-first; got["t1"] == "" {
+	if got := <-first; got.Items == nil {
 		t.Fatal(got)
 	}
-	if calls.Load() != 1 || metrics.Count("price_contexts", "short_circuit") != 20 {
+	if calls.Load() != 1 || metrics.Count("reviews", "short_circuit") != 20 {
 		t.Fatal("общая загрузка не ограничила обращения", calls.Load())
 	}
 	upstream.CallHook = nil
@@ -304,7 +283,7 @@ func TestConcurrentCacheLoadsDoNotWaitAndRemainBounded(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, _ = c.PriceContexts(context.Background(), ids.UUID(fmt.Sprint(i)), []ids.TenantID{"t1"})
+			_, _ = c.ProductReviews(context.Background(), "t1", ids.ProductID(fmt.Sprint(i)), 20, 0)
 			c.mu.Lock()
 			defer c.mu.Unlock()
 			if len(c.cache) > cfg.CacheSize {

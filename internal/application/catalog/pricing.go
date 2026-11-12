@@ -5,11 +5,16 @@ import (
 	"slices"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 const priceContextBatchSize = 100
+
+type batchedPricing struct {
+	pricing ports.CatalogPricing
+}
 
 func (q *Queries) priceContexts(
 	ctx context.Context,
@@ -66,10 +71,28 @@ func PriceContexts(
 	if err != nil {
 		return nil, err
 	}
+	return pricing.PriceContexts(ctx, buyerID, tenants)
+}
+
+// LoadPriceContexts ограничивает пачку внутреннего API; показ читает единый снимок без разбиения.
+func LoadPriceContexts(
+	ctx context.Context,
+	uow ports.UnitOfWork,
+	pricing ports.CatalogPricing,
+	buyer ids.UUID,
+) (map[ids.TenantID]string, error) {
+	return PriceContexts(ctx, uow, batchedPricing{pricing: pricing}, buyer, nil)
+}
+
+func (p batchedPricing) PriceContexts(
+	ctx context.Context,
+	buyerID ids.UUID,
+	tenants []ids.TenantID,
+) (map[ids.TenantID]string, error) {
 	contexts := make(map[ids.TenantID]string, len(tenants))
 	for start := 0; start < len(tenants); start += priceContextBatchSize {
 		end := min(start+priceContextBatchSize, len(tenants))
-		batch, err := pricing.PriceContexts(ctx, buyerID, tenants[start:end])
+		batch, err := p.pricing.PriceContexts(ctx, buyerID, tenants[start:end])
 		if err != nil {
 			return nil, err
 		}
@@ -78,4 +101,16 @@ func PriceContexts(
 		}
 	}
 	return contexts, nil
+}
+
+func pricingMode(buyer ids.UUID, profiles map[ids.TenantID]string) string {
+	if buyer == "" {
+		return ""
+	}
+	for _, profile := range profiles {
+		if profile != "" && profile != catalog.DefaultPriceProfile {
+			return "personal"
+		}
+	}
+	return "public"
 }

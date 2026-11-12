@@ -6900,6 +6900,13 @@ components:
       type: object
       required: [items, total, limit, offset, facets]
       properties:
+        pricing:
+          type: string
+          enum: [personal, public]
+          description: >-
+            Только для вошедшего покупателя. personal — применён персональный профиль хотя бы одного продавца;
+            public — использованы публичные профили, в том числе при ещё не загруженном контексте.
+            Поле отсутствует у гостя. Ответ покупателя private, no-store.
         correction:
           $ref: "#/components/schemas/OfferCorrection"
         items:
