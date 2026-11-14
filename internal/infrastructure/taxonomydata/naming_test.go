@@ -153,14 +153,19 @@ func TestEveryClothingAndFootwearLeafRequiresMarkedSize(t *testing.T) {
 				continue
 			}
 			leaf, _, found := definition.Category(category.ID)
+			markedSize := code
+			if category.Schema == "headwear" {
+				// Профессиональный колпак маркируется размером головного убора, а не тела.
+				markedSize = "headwear_size_label"
+			}
 			required := false
 			for _, field := range leaf.Attributes {
-				if field.Code == code && field.Required {
+				if field.Code == markedSize && field.Required {
 					required = true
 				}
 			}
 			if !found || !required {
-				t.Errorf("лист потерял обязательную размерную маркировку: %s.%s", category.ID, code)
+				t.Errorf("лист потерял обязательную размерную маркировку: %s.%s", category.ID, markedSize)
 			}
 		}
 	}

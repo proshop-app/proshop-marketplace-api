@@ -4195,3 +4195,75 @@
   multiple: false
   variant: false
   dictionary: greeting_occasion
+- code: maternity
+  name: Для беременных
+  type: boolean
+  facet: true
+  description: Крой предусматривает изменение объёмов тела во время беременности.
+  example: 'true'
+  dictionaryNote: Логический признак; конечный словарь true/false задаётся типом.
+  multiple: false
+  variant: false
+- code: nursing_access
+  name: Доступ для кормления
+  type: boolean
+  facet: true
+  description: В одежде предусмотрен конструктивный доступ к груди для кормления без снятия предмета.
+  example: 'true'
+  dictionaryNote: Логический признак; конечный словарь true/false задаётся типом.
+  multiple: false
+  variant: false
+- code: soil_ph_min
+  name: Нижняя граница измерения кислотности грунта
+  type: number
+  unit: pH
+  facet: true
+  description: Нижняя граница заявленного изготовителем диапазона измерения кислотности грунта.
+  example: '3'
+  dictionaryNote: Числовая величина из паспорта прибора; словарь не применяется.
+  multiple: false
+  variant: false
+- code: soil_ph_max
+  name: Верхняя граница измерения кислотности грунта
+  type: number
+  unit: pH
+  facet: true
+  description: Верхняя граница заявленного изготовителем диапазона измерения кислотности грунта.
+  example: '9'
+  dictionaryNote: Числовая величина из паспорта прибора; словарь не применяется.
+  multiple: false
+  variant: false
+- code: soil_moisture_min
+  name: Нижняя граница измерения объёмной влажности грунта
+  type: number
+  unit: '%'
+  facet: true
+  description: Нижняя граница измеряемой прибором объёмной доли воды в грунте в процентах.
+  example: '0'
+  dictionaryNote: Проценты объёмной доли воды из паспорта; массовую долю и условную шкалу прибора не пересчитывать
+    догадкой.
+  multiple: false
+  variant: false
+- code: soil_moisture_max
+  name: Верхняя граница измерения объёмной влажности грунта
+  type: number
+  unit: '%'
+  facet: true
+  description: Верхняя граница измеряемой прибором объёмной доли воды в грунте в процентах.
+  example: '100'
+  dictionaryNote: Проценты объёмной доли воды из паспорта; массовую долю и условную шкалу прибора не пересчитывать
+    догадкой.
+  multiple: false
+  variant: false
+- code: ac_output_w
+  name: Номинальная выходная мощность инвертора
+  type: number
+  unit: Вт
+  facet: true
+  description: Продолжительная номинальная выходная мощность переменного тока инвертора, не пиковая и не потребляемая
+    при зарядке.
+  example: '500'
+  dictionaryNote: Числовая характеристика из паспорта; словарь не применяется.
+  requiredReason: Без допустимой продолжительной нагрузки нельзя выбрать аккумуляторную электростанцию.
+  multiple: false
+  variant: false

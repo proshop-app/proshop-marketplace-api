@@ -7763,13 +7763,20 @@ components:
       type: object
       additionalProperties: false
       required: [code, kind, release, entries]
+      description: Пустой entries допустим только для open; closed требует хотя бы одну запись.
+      if:
+        properties:
+          kind: { const: closed }
+      then:
+        properties:
+          entries: { minItems: 1 }
       properties:
         code: { type: string, pattern: '^[a-z][a-z0-9_]{0,31}$' }
         kind: { type: string, enum: [open, closed] }
         release: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
         entries:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 100000
           items: { $ref: "#/components/schemas/ReferenceImportEntry" }
     ReferenceImportPackage:

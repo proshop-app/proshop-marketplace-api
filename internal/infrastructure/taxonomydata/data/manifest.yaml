@@ -1,10 +1,10 @@
 replaceCategories: true
 release: 10
-checksum: f71bb469848d759476860739e4d6b714062167e1100727e8b70500f37068000e
+checksum: e0b0788645c21e0b101f3164ae9e4e74d2fe0a12c5b3e43de7fbd9d7bd29b70f
 coverage:
-    directions: 29
-    categories: 3523
-    leaves: 3132
-    schemas: 432
-    attributes: 425
-    dictionaries: 178
+  directions: 29
+  categories: 3974
+  leaves: 3555
+  schemas: 468
+  attributes: 432
+  dictionaries: 178

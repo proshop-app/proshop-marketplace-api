@@ -121,3 +121,38 @@ func TestReferenceImportJSONAndYAMLShareDefaultedChecksum(t *testing.T) {
 		t.Fatal("эквивалентный YAML/default status имеет другую сумму", fromJSON, fromYAML, err)
 	}
 }
+
+func TestReferenceImportEmptyDictionaryHTTP(t *testing.T) {
+	for _, kind := range []string{"open", "closed"} {
+		t.Run(kind, func(t *testing.T) {
+			store := fake.NewStore()
+			clock := fake.NewClock(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
+			service := appreference.NewService(store, clock, &fake.IDs{}, nil, appreference.Config{})
+			handler := referenceHandlers{service: service}
+			body := strings.ReplaceAll(
+				referenceImportJSONFixture,
+				`"entries":[{"canonical":"Значение"}]`,
+				`"entries":[]`,
+			)
+			body = strings.ReplaceAll(body, `"kind":"open"`, `"kind":"`+kind+`"`)
+			for range 2 {
+				request := httptest.NewRequest(http.MethodPost, "/import", strings.NewReader(body))
+				request.Header.Set("Content-Type", "application/json")
+				recorder := httptest.NewRecorder()
+				handler.importPackage(recorder, request)
+				expected := http.StatusOK
+				if kind == "closed" {
+					expected = http.StatusBadRequest
+				}
+				if recorder.Code != expected {
+					t.Fatal(recorder.Code, recorder.Body.String())
+				}
+			}
+			dictionaries, err := service.DictionarySummaries(context.Background())
+			if err != nil || (kind == "open" && (len(dictionaries) != 1 || dictionaries[0].Entries != 0)) ||
+				(kind == "closed" && len(dictionaries) != 0) || len(store.OutboxRows()) != 0 {
+				t.Fatal(dictionaries, err)
+			}
+		})
+	}
+}

@@ -6137,15 +6137,11 @@ common_footwear:
   - size_standard
 common_textile:
   abstract: true
-  extends: durable
+  extends: common_textile_material
   attributes:
-  - textile_material
-  - fabric_composition
   - length
   - width
   optional:
-  - textile_material
-  - fabric_composition
   - length
   - width
 common_geometry:
@@ -6603,3 +6599,384 @@ massage_chair:
   - height
   - load_kg
   - color
+women_clothing:
+  extends: clothing
+  attributes:
+  - maternity
+  - nursing_access
+  optional:
+  - maternity
+  - nursing_access
+women_upper_clothing:
+  extends: upper_clothing
+  attributes:
+  - maternity
+  - nursing_access
+  optional:
+  - maternity
+  - nursing_access
+women_lower_clothing:
+  extends: lower_clothing
+  attributes:
+  - maternity
+  optional:
+  - maternity
+women_outerwear:
+  extends: outerwear
+  attributes:
+  - maternity
+  optional:
+  - maternity
+women_underwear:
+  extends: underwear
+  attributes:
+  - maternity
+  optional:
+  - maternity
+women_swimwear:
+  extends: swimwear
+  attributes:
+  - maternity
+  - nursing_access
+  optional:
+  - maternity
+  - nursing_access
+uniform:
+  extends: common_clothing
+  attributes:
+  - textile_material
+  - clothing_use
+  - clothing_fastener
+  - count
+  - audience_age_group
+  optional:
+  - textile_material
+  - clothing_use
+  - clothing_fastener
+  - count
+  - audience_age_group
+work_clothing:
+  extends: uniform
+  attributes:
+  - ppe_standard
+  - season
+  optional:
+  - ppe_standard
+  - season
+jewelry_finding:
+  extends: durable
+  attributes:
+  - material
+  - jewelry_metal
+  - length
+  - width
+  - count
+  - compatible_model
+  optional:
+  - material
+  - jewelry_metal
+  - length
+  - width
+  - count
+  - compatible_model
+portable_detector:
+  extends: durable
+  attributes:
+  - power_source
+  - weight
+  - length
+  - ip_rating
+  optional:
+  - power_source
+  - weight
+  - length
+  - ip_rating
+pressure_washer:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - voltage
+  - pressure
+  optional:
+  - power
+  - power_source
+  - voltage
+  - pressure
+craft_raw_material:
+  extends: identity
+  attributes:
+  - ingredients
+  - net_weight
+  - volume
+  - fragrance
+  - color
+  optional:
+  - ingredients
+  - net_weight
+  - volume
+  - fragrance
+  - color
+soil_meter:
+  extends: durable
+  attributes:
+  - power_source
+  - soil_ph_min
+  - soil_ph_max
+  - soil_moisture_min
+  - soil_moisture_max
+  optional:
+  - power_source
+  - soil_ph_min
+  - soil_ph_max
+  - soil_moisture_min
+  - soil_moisture_max
+car_inner_tube:
+  extends: durable
+  attributes:
+  - tire_width
+  - tire_profile
+  - rim_diameter
+  - material
+  optional:
+  - tire_width
+  - tire_profile
+  - rim_diameter
+  - material
+car_wheel_assembly:
+  extends: wheel
+  attributes:
+  - tire_width
+  - tire_profile
+  - tire_season
+  - tire_load_index
+  - tire_speed_index
+  - studded
+  optional:
+  - tire_width
+  - tire_profile
+  - tire_season
+  - tire_load_index
+  - tire_speed_index
+  - studded
+digital_fabrication:
+  extends: common_geometry
+  attributes:
+  - power
+  - power_source
+  - voltage
+  - connector
+  - weight
+  optional:
+  - power
+  - power_source
+  - voltage
+  - connector
+  - weight
+stage_effect:
+  extends: common_geometry
+  attributes:
+  - power
+  - voltage
+  - capacity_l
+  optional:
+  - power
+  - voltage
+  - capacity_l
+arcade_machine:
+  extends: common_geometry
+  attributes:
+  - power
+  - voltage
+  - weight
+  - min_age
+  - max_age
+  optional:
+  - power
+  - voltage
+  - weight
+  - min_age
+  - max_age
+midi_device:
+  extends: durable
+  attributes:
+  - connector
+  - connection
+  - power_source
+  - voltage
+  optional:
+  - connector
+  - connection
+  - power_source
+  - voltage
+marine_part:
+  extends: common_geometry
+  attributes:
+  - compatible_model
+  - part_number
+  - material
+  optional:
+  - compatible_model
+  - part_number
+  - material
+rod_part:
+  extends: common_geometry
+  attributes:
+  - compatible_model
+  - material
+  - weight
+  optional:
+  - compatible_model
+  - material
+  - weight
+aroma_device:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - voltage
+  - capacity_l
+  optional:
+  - power
+  - power_source
+  - voltage
+  - capacity_l
+printer_refill_station:
+  extends: physical_accessory
+  attributes:
+  - compatible_model
+  optional:
+  - compatible_model
+small_engine:
+  extends: common_geometry
+  attributes:
+  - engine_volume_cm3
+  - weight
+  - compatible_model
+  optional:
+  - weight
+  - compatible_model
+wrap_clothing:
+  extends: common_clothing
+  attributes:
+  - textile_material
+  - length
+  - width
+  - audience_age_group
+  optional:
+  - textile_material
+  - length
+  - width
+  - audience_age_group
+gaiter:
+  extends: wrap_clothing
+  attributes:
+  - clothing_fastener
+  optional:
+  - clothing_fastener
+ppe_insert:
+  extends: physical_accessory
+  attributes:
+  - ppe_standard
+  optional:
+  - ppe_standard
+automatic_feeder:
+  extends: durable
+  attributes:
+  - power_source
+  - voltage
+  - capacity_l
+  - material
+  optional:
+  - power_source
+  - voltage
+  - capacity_l
+  - material
+heated_textile:
+  extends: common_textile_material
+  attributes:
+  - length
+  - width
+  - power
+  - voltage
+  optional:
+  - power
+  - voltage
+women_nursing_underwear:
+  extends: women_underwear
+  attributes:
+  - nursing_access
+  optional:
+  - nursing_access
+women_maternity_clothing:
+  extends: clothing
+  attributes:
+  - maternity
+  optional:
+  - maternity
+portable_power_station:
+  extends: durable
+  attributes:
+  - battery_energy
+  - ac_output_w
+  - voltage
+  - power
+  - weight
+  optional:
+  - voltage
+  - power
+  - weight
+canning_autoclave:
+  extends: common_geometry
+  attributes:
+  - cookware_material
+  - capacity_l
+  - pressure
+  optional:
+  - cookware_material
+  - pressure
+car_audio_driver:
+  abstract: true
+  extends: durable
+  attributes:
+  - compatible_model
+  - material
+  - color
+  - speaker_sensitivity
+  - audio_frequency_min
+  - audio_frequency_max
+  optional:
+  - compatible_model
+  - material
+  - color
+  - speaker_sensitivity
+  - audio_frequency_min
+  - audio_frequency_max
+car_speaker:
+  extends: car_audio_driver
+  attributes:
+  - speaker_impedance
+car_subwoofer:
+  extends: car_audio_driver
+  attributes:
+  - speaker_impedance
+  - voltage
+  optional:
+  - speaker_impedance
+  - voltage
+car_amplifier:
+  extends: auto_accessory
+  attributes:
+  - audio_output_w
+  - audio_channels
+  optional:
+  - audio_channels
+common_textile_material:
+  abstract: true
+  extends: durable
+  attributes:
+  - textile_material
+  - fabric_composition
+  optional:
+  - textile_material
+  - fabric_composition

@@ -49,8 +49,10 @@ mappings:
 - from: electronics.powerbanks
   to:
   - electronics.powerbanks
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - electronics.portable-power-stations
+  action: split
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: electronics.phone-holders
   to:
   - electronics.phone-holders
@@ -690,8 +692,14 @@ mappings:
 - from: appliances.heaters
   to:
   - appliances.heaters
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - appliances.convectors
+  - appliances.fan-heaters
+  - appliances.oil-heaters
+  - appliances.infrared-heaters
+  - appliances.heat-guns
+  action: split
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: appliances.fans
   to:
   - appliances.fans
@@ -705,8 +713,11 @@ mappings:
 - from: appliances.air-purifiers
   to:
   - appliances.air-purifiers
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - appliances.ozonizers
+  - appliances.air-ionizers
+  action: split
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: appliances.dehumidifiers
   to:
   - appliances.dehumidifiers
@@ -818,13 +829,18 @@ mappings:
 - from: kitchen.plates
   to:
   - kitchen.plates
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - kitchen.saucers
+  action: split
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: kitchen.bowls
   to:
   - kitchen.bowls
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - kitchen.dessert-bowls
+  - kitchen.candy-dishes
+  action: split
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: kitchen.cups
   to:
   - kitchen.cups
@@ -855,8 +871,11 @@ mappings:
 - from: kitchen.serving-dishes
   to:
   - kitchen.serving-dishes
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - kitchen.divided-serving-dishes
+  - kitchen.tiered-serving-stands
+  action: split
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: kitchen.knives
   to:
   - kitchen.knives
@@ -1358,14 +1377,19 @@ mappings:
   - clothing.women-trousers
   - clothing.women-cargo-trousers
   - clothing.women-sport-trousers
+  - clothing.women-breeches
+  - clothing.women-capri
+  - clothing.women-jeggings
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.women-jeans
   to:
   - clothing.women-jeans
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - clothing.women-jeggings
+  action: split
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.women-shorts
   to:
   - clothing.women-shorts
@@ -1489,8 +1513,10 @@ mappings:
 - from: clothing.women-pajamas
   to:
   - clothing.women-pajamas
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - clothing.women-kigurumi
+  action: split
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.women-bathrobes
   to:
   - clothing.women-bathrobes
@@ -1518,9 +1544,10 @@ mappings:
   to:
   - clothing.women-leggings
   - clothing.women-thermal-bottoms
+  - clothing.women-jeggings
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.women-sports-tshirts
   to:
   - clothing.women-tshirts
@@ -1553,9 +1580,12 @@ mappings:
   - clothing.women-cargo-trousers
   - clothing.women-sport-trousers
   - clothing.women-jumpsuits
+  - clothing.women-breeches
+  - clothing.women-capri
+  - clothing.women-jeggings
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.women-sports-jackets
   to:
   - clothing.women-jackets
@@ -1590,65 +1620,46 @@ mappings:
   reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
 - from: clothing.women-work-jackets
   to:
-  - clothing.women-jackets
-  - clothing.women-down-jackets
-  - clothing.women-parkas
-  - clothing.women-windbreakers
-  - clothing.women-bombers
-  - clothing.women-fur-coats
-  - clothing.women-shearling-coats
-  - clothing.women-insulated-vests
-  - clothing.women-trench-coats
-  - clothing.women-anoraks
-  - clothing.women-biker-jackets
-  - clothing.women-winter-overalls
-  - clothing.rain-ponchos
+  - clothing.work-jackets
+  - clothing.signal-jackets
+  - clothing.chef-jackets
+  - clothing.uniform-jackets
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.women-work-trousers
   to:
-  - clothing.women-trousers
-  - clothing.women-cargo-trousers
-  - clothing.women-sport-trousers
+  - clothing.work-trousers
+  - clothing.signal-trousers
+  - clothing.medical-trousers
+  - clothing.chef-trousers
+  - clothing.uniform-trousers
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.women-work-overalls
   to:
-  - clothing.women-jumpsuits
-  action: merge
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  - clothing.work-coveralls
+  - clothing.work-bib-overalls
+  action: split
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.women-work-gowns
   to:
-  - clothing.women-bathrobes
-  action: merge
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  - clothing.work-coats
+  - clothing.medical-coats
+  action: split
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.women-high-visibility
   to:
-  - clothing.women-jackets
-  - clothing.women-down-jackets
-  - clothing.women-parkas
-  - clothing.women-windbreakers
-  - clothing.women-bombers
-  - clothing.women-fur-coats
-  - clothing.women-shearling-coats
-  - clothing.women-insulated-vests
-  - clothing.women-trench-coats
-  - clothing.women-anoraks
-  - clothing.women-biker-jackets
-  - clothing.women-winter-overalls
-  - clothing.rain-ponchos
-  - clothing.women-trousers
-  - clothing.women-cargo-trousers
-  - clothing.women-sport-trousers
-  - clothing.women-vests
-  - clothing.women-jumpsuits
+  - clothing.signal-vests
+  - clothing.signal-jackets
+  - clothing.signal-trousers
+  - clothing.signal-sets
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.men-shirts
   to:
   - clothing.men-shirts
@@ -1736,8 +1747,10 @@ mappings:
 - from: clothing.men-pajamas
   to:
   - clothing.men-pajamas
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - clothing.men-kigurumi
+  action: split
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.men-bathrobes
   to:
   - clothing.men-bathrobes
@@ -1833,9 +1846,11 @@ mappings:
   - clothing.men-cargo-trousers
   - clothing.men-sport-trousers
   - clothing.men-jumpsuits
+  - clothing.men-breeches
+  - clothing.men-capri
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.men-sports-jackets
   to:
   - clothing.men-jackets
@@ -1874,9 +1889,11 @@ mappings:
   - clothing.men-trousers
   - clothing.men-cargo-trousers
   - clothing.men-sport-trousers
+  - clothing.men-breeches
+  - clothing.men-capri
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.men-jeans
   to:
   - clothing.men-jeans
@@ -1889,94 +1906,84 @@ mappings:
   reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
 - from: clothing.men-work-jackets
   to:
-  - clothing.men-jackets
-  - clothing.men-down-jackets
-  - clothing.men-parkas
-  - clothing.men-windbreakers
-  - clothing.men-bombers
-  - clothing.men-fur-coats
-  - clothing.men-shearling-coats
-  - clothing.men-insulated-vests
-  - clothing.men-trench-coats
-  - clothing.men-anoraks
-  - clothing.men-biker-jackets
-  - clothing.men-winter-overalls
-  - clothing.rain-ponchos
+  - clothing.work-jackets
+  - clothing.signal-jackets
+  - clothing.chef-jackets
+  - clothing.uniform-jackets
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.men-work-trousers
   to:
-  - clothing.men-trousers
-  - clothing.men-cargo-trousers
-  - clothing.men-sport-trousers
+  - clothing.work-trousers
+  - clothing.signal-trousers
+  - clothing.medical-trousers
+  - clothing.chef-trousers
+  - clothing.uniform-trousers
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.men-work-overalls
   to:
-  - clothing.men-jumpsuits
-  action: renamed
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  - clothing.work-coveralls
+  - clothing.work-bib-overalls
+  action: split
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.men-work-gowns
   to:
-  - clothing.men-bathrobes
-  action: merge
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  - clothing.work-coats
+  - clothing.medical-coats
+  action: split
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.men-high-visibility
   to:
-  - clothing.men-jackets
-  - clothing.men-down-jackets
-  - clothing.men-parkas
-  - clothing.men-windbreakers
-  - clothing.men-bombers
-  - clothing.men-fur-coats
-  - clothing.men-shearling-coats
-  - clothing.men-insulated-vests
-  - clothing.men-trench-coats
-  - clothing.men-anoraks
-  - clothing.men-biker-jackets
-  - clothing.men-winter-overalls
-  - clothing.rain-ponchos
-  - clothing.men-trousers
-  - clothing.men-cargo-trousers
-  - clothing.men-sport-trousers
-  - clothing.men-vests
-  - clothing.men-jumpsuits
+  - clothing.signal-vests
+  - clothing.signal-jackets
+  - clothing.signal-trousers
+  - clothing.signal-sets
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.girls-dresses
   to:
   - clothing.girls-dresses
   - clothing.girls-sundresses
+  - clothing.girls-school-dresses
+  - clothing.girls-school-sundresses
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.school-uniform
   to:
-  - clothing.women-suits-kind
-  - clothing.men-suits-kind
-  - clothing.girls-suits
-  - clothing.boys-suits
-  - clothing.women-tracksuits-kind
-  - clothing.men-tracksuits-kind
-  - clothing.girls-tracksuits
-  - clothing.boys-tracksuits
-  - clothing.baby-tracksuits
-  - clothing.women-home-suits
-  - clothing.men-home-suits
-  - clothing.girls-home-suits
-  - clothing.boys-home-suits
-  - clothing.baby-home-suits
   - clothing.girls-school-uniform-sets
+  - clothing.girls-school-shirts
+  - clothing.girls-school-trousers
+  - clothing.girls-school-blazers
+  - clothing.girls-school-vests
+  - clothing.girls-school-blouses
+  - clothing.girls-school-skirts
+  - clothing.girls-school-sundresses
+  - clothing.girls-school-dresses
   - clothing.boys-school-uniform-sets
-  - clothing.workwear-sets
+  - clothing.boys-school-shirts
+  - clothing.boys-school-trousers
+  - clothing.boys-school-blazers
+  - clothing.boys-school-vests
+  - clothing.girls-school-jumpers
+  - clothing.girls-school-pullovers
+  - clothing.girls-school-cardigans
+  - clothing.girls-school-polos
+  - clothing.girls-school-turtlenecks
+  - clothing.boys-school-jumpers
+  - clothing.boys-school-pullovers
+  - clothing.boys-school-cardigans
+  - clothing.boys-school-polos
+  - clothing.boys-school-turtlenecks
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Общий предмет разделён по объявленной изготовителем школьной форме; обычная рекомендация школьного дресс-кода
+    не меняет вид.
 - from: clothing.baby-bodysuits
   to:
   - clothing.baby-bodysuits
@@ -2075,9 +2082,14 @@ mappings:
   - clothing.baby-pajamas
   - clothing.women-pajamas
   - clothing.men-pajamas
+  - clothing.girls-kigurumi
+  - clothing.boys-kigurumi
+  - clothing.baby-kigurumi
+  - clothing.women-kigurumi
+  - clothing.men-kigurumi
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.kids-bathrobes
   to:
   - clothing.girls-bathrobes
@@ -2210,9 +2222,11 @@ mappings:
   - clothing.boys-thermal-bottoms
   - clothing.women-thermal-bottoms
   - clothing.men-thermal-bottoms
+  - clothing.girls-jeggings
+  - clothing.women-jeggings
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.kids-sports-tshirts
   to:
   - clothing.girls-tshirts
@@ -2311,9 +2325,21 @@ mappings:
   - clothing.baby-jumpsuits
   - clothing.women-jumpsuits
   - clothing.men-jumpsuits
+  - clothing.girls-breeches
+  - clothing.girls-capri
+  - clothing.girls-jeggings
+  - clothing.girls-school-trousers
+  - clothing.boys-breeches
+  - clothing.boys-capri
+  - clothing.boys-school-trousers
+  - clothing.women-breeches
+  - clothing.women-capri
+  - clothing.women-jeggings
+  - clothing.men-breeches
+  - clothing.men-capri
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.kids-sports-jackets
   to:
   - clothing.girls-jackets
@@ -2379,9 +2405,11 @@ mappings:
   - clothing.boys-shirts
   - clothing.women-shirts
   - clothing.men-shirts
+  - clothing.girls-school-shirts
+  - clothing.boys-school-shirts
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.kids-tshirts
   to:
   - clothing.girls-tshirts
@@ -2411,9 +2439,21 @@ mappings:
   - clothing.boys-sport-trousers
   - clothing.women-sport-trousers
   - clothing.men-sport-trousers
+  - clothing.girls-breeches
+  - clothing.girls-capri
+  - clothing.girls-jeggings
+  - clothing.girls-school-trousers
+  - clothing.boys-breeches
+  - clothing.boys-capri
+  - clothing.boys-school-trousers
+  - clothing.women-breeches
+  - clothing.women-capri
+  - clothing.women-jeggings
+  - clothing.men-breeches
+  - clothing.men-capri
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.kids-jeans
   to:
   - clothing.girls-jeans
@@ -2421,9 +2461,11 @@ mappings:
   - clothing.baby-jeans
   - clothing.women-jeans
   - clothing.men-jeans
+  - clothing.girls-jeggings
+  - clothing.women-jeggings
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Уточнены канонические виды и исключены синонимы в доработке 9 поставки 10; выбрать предмет по заявлению
+    изготовителя.
 - from: clothing.kids-shorts
   to:
   - clothing.girls-shorts
@@ -2449,9 +2491,13 @@ mappings:
   - clothing.boys-pullovers
   - clothing.women-pullovers
   - clothing.men-pullovers
+  - clothing.girls-school-jumpers
+  - clothing.boys-school-jumpers
+  - clothing.girls-school-pullovers
+  - clothing.boys-school-pullovers
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Общий предмет разделён по объявленной изготовителем школьной форме; обычная рекомендация школьного дресс-кода
+    не меняет вид.
 - from: clothing.kids-hoodies
   to:
   - clothing.girls-hoodies
@@ -4096,9 +4142,10 @@ mappings:
 - from: food.sports-nutrition
   to:
   - food.nutrition-powders
-  action: renamed
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  - food.energy-gels
+  action: split
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: sports.football-balls
   to:
   - sports.football-balls
@@ -4281,9 +4328,10 @@ mappings:
   - kitchen.cutlery-sets
   - kitchen.plates
   - kitchen.cups
+  - kitchen.saucers
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: outdoors.camping-stoves
   to:
   - outdoors.camping-stoves
@@ -4448,8 +4496,11 @@ mappings:
 - from: outdoors.inflatable-boats
   to:
   - outdoors.inflatable-boats
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - outdoors.kayaks
+  - outdoors.catamarans
+  action: split
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: outdoors.inflatable-mattresses
   to:
   - outdoors.inflatable-mattresses
@@ -5794,9 +5845,10 @@ mappings:
   - food.dumplings
   - food.ready-meals
   - food.ice-cream
+  - food.main-dishes
   action: split
-  reason: Выбор по виду и основной заявленной аудитории либо явному каноническому разделу продавца; неделимые виды
-    общие.
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: food.chocolate
   to:
   - food.chocolate
@@ -5993,8 +6045,10 @@ mappings:
 - from: food.ready-meals
   to:
   - food.ready-meals
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - food.main-dishes
+  action: split
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: food.ice-cream
   to:
   - food.ice-cream
@@ -6748,8 +6802,11 @@ mappings:
 - from: home.home-fragrances
   to:
   - home.home-fragrances
-  action: unchanged
-  reason: Сохранён смысл вида; путь и набор обязательных полей могли измениться.
+  - appliances.aroma-diffusers
+  - home.aroma-lamps
+  action: split
+  reason: Из прежнего общего листа выделены именованные виды; выбрать по конструкции и назначению карточки, не по
+    первому адресу списка.
 - from: home.artificial-plants
   to:
   - home.artificial-plants

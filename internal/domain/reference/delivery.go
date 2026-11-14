@@ -87,9 +87,14 @@ func DefaultLimits() Limits {
 // ValidateDelivery проверяет поставку без хранилища: номер, сумму, статусы,
 // лимиты по умолчанию и то, что ни один ключ не встречается у двух записей.
 func ValidateDelivery(d Delivery) error {
+	return validateDelivery(d, false)
+}
+
+func validateDelivery(d Delivery, allowEmpty bool) error {
 	checksum, err := hex.DecodeString(d.Checksum)
 	if !ValidCode(d.Dictionary) || d.Version < 1 || d.Version > MaxDeliveryVersion || err != nil ||
-		len(checksum) != checksumSize || d.Checksum != strings.ToLower(d.Checksum) || len(d.Entries) == 0 {
+		len(checksum) != checksumSize || d.Checksum != strings.ToLower(d.Checksum) ||
+		(!allowEmpty && len(d.Entries) == 0) {
 		return ErrInvalidDelivery
 	}
 	dict := RestoreDictionary(DictionaryState{Code: d.Dictionary, AliasKinds: AliasKinds, Limits: DefaultLimits()})
