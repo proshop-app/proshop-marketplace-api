@@ -33,7 +33,7 @@ func visibleFacets(facets []ports.Facet, total int, query ports.OfferQuery) []po
 }
 
 func validateAttributeFilters(filters map[string]ports.AttributeFilter, fields map[string]taxonomy.Attribute) error {
-	if len(filters) > taxonomy.MaxAttributes {
+	if len(filters) > ports.MaxSearchAttributes {
 		return ErrInvalidQuery
 	}
 	for code, filter := range filters {

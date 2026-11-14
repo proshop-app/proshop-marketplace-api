@@ -23,6 +23,10 @@ import (
 func TestPrepareFacetSelectionPreservesDefaultsAndFilters(t *testing.T) {
 	store := fake.NewStore()
 	store.SeedTaxonomy(taxonomy.Definition{
+		Schemas: map[string]taxonomy.Schema{
+			"s1": {Attributes: []string{"a1"}},
+		},
+		Categories: []taxonomy.Category{{ID: "c1", Schema: "s1"}},
 		Attributes: []taxonomy.Attribute{{
 			Code:   "a1",
 			Type:   "enum",
@@ -110,6 +114,10 @@ func TestFacetSelectionPreservesCardsPricesSortAndPagination(t *testing.T) {
 		platform.SetBuyerProfile("buyer", tenant, "marketplace:buyer")
 	}
 	store.SeedTaxonomy(taxonomy.Definition{
+		Schemas: map[string]taxonomy.Schema{
+			"s1": {Attributes: []string{"a1"}},
+		},
+		Categories: []taxonomy.Category{{ID: "c1", Schema: "s1"}},
 		Attributes: []taxonomy.Attribute{{
 			Code:   "a1",
 			Type:   "enum",
@@ -201,6 +209,10 @@ func TestFacetSelectionPreservesCardsPricesSortAndPagination(t *testing.T) {
 func TestFacetSelectionAlwaysValidatesTaxonomy(t *testing.T) {
 	store := fake.NewStore()
 	store.SeedTaxonomy(taxonomy.Definition{
+		Schemas: map[string]taxonomy.Schema{
+			"s1": {Attributes: []string{"a1"}},
+		},
+		Categories: []taxonomy.Category{{ID: "c1", Schema: "s1"}},
 		Attributes: []taxonomy.Attribute{{
 			Code:   "a1",
 			Type:   "enum",

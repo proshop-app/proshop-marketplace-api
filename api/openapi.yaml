@@ -2058,9 +2058,12 @@ paths:
         либо точное значение. Неизвестный код, неверный тип/словарь/диапазон — 400.
         Пример: ?category=c1&attr.a1=v1&attr.a1=v2&attr.a2.min=1.5&attr.a2.max=10.
         Фасеты считаются до пагинации со всеми фильтрами, кроме собственного; category — со всеми. Атрибутные —
-        только при facet=true и покрытии >=20%; без селекторов category, tenant, price, inStock — всегда.
+        только общие для всех листьев области поля с facet=true (без deprecated), при покрытии >=20%.
+        Максимум 32 поля: выбранные общие фильтры первыми, далее по коду; ответ упорядочен по коду.
+        Не более 256 фильтров атрибутов; превышение — 400. Базовые фасеты не входят в бюджет;
+        без селекторов category, tenant, price, inStock — всегда.
         facets=none отключает все фасеты; список выбирает только перечисленные базовые,
-        attributes добавляет атрибутные фасеты таксономии. Без селекторов ответ прежний.
+        attributes добавляет общие атрибутные фасеты области по указанному правилу.
         API обновляется раньше витрины: предыдущая версия отклоняет новые none/attributes/повторы.
         Размер страницы не определяет выбор фасетов. Фильтры и total от селекторов не меняются.
         Числа: min/max; остальные: до 256 наиболее частых значений с count.
@@ -2101,6 +2104,10 @@ paths:
           description: Магазины (ИЛИ); повторы удаляются.
         - { name: groupId, in: query, schema: { type: string }, description: Группа вариантов; требует ровно один tenant }
         - { name: category, in: query, schema: { type: string }, description: Категория площадки с потомками }
+        - name: categoryId
+          in: query
+          schema: { type: string }
+          description: Псевдоним category. Повторы или разные значения двух имён — 400.
         - { name: priceMin, in: query, schema: { type: number, multipleOf: 0.01, minimum: 0, maximum: 9999999999999.99 }, description: Рубли }
         - { name: priceMax, in: query, schema: { type: number, multipleOf: 0.01, minimum: 0, maximum: 9999999999999.99 }, description: Рубли }
         - { name: inStock, in: query, schema: { type: boolean } }

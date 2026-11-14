@@ -217,6 +217,17 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 		CategoryID: values.Get("category"),
 		Sort:       ports.OfferSort(values.Get("sort")),
 	}
+	for _, key := range []string{"category", "categoryId"} {
+		if len(values[key]) > 1 {
+			return query, appcatalog.ErrInvalidQuery.WithMessage("категория должна быть указана один раз")
+		}
+	}
+	if alias, present := values["categoryId"]; present {
+		if _, canonical := values["category"]; canonical && query.CategoryID != alias[0] {
+			return query, appcatalog.ErrInvalidQuery.WithMessage("category и categoryId противоречат друг другу")
+		}
+		query.CategoryID = alias[0]
+	}
 	if err := parseOfferFacetSelection(values, &query); err != nil {
 		return query, err
 	}

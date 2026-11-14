@@ -17,6 +17,8 @@ const (
 	// MaxAttributes ограничивает глобальный каталог свойств, а не число полей одной карточки.
 	// Поисковый контракт передаёт характеристики списком проверенных скаляров.
 	MaxAttributes = 512
+	// MaxSchemaAttributes согласован с максимумом характеристик документа в sc-search v5.
+	MaxSchemaAttributes = 256
 	// MaxCategories ограничивает размер операторского дерева.
 	MaxCategories = 4096
 	// MaxDepth ограничивает глубину дерева.
@@ -266,8 +268,9 @@ func (d Definition) validateSchemas() (map[string]Attribute, error) {
 		fields[a.Code] = a
 	}
 	for key, schema := range d.Schemas {
-		if !ValidCode(key) || len(schema.Attributes) == 0 || schema.Extends != "" || schema.Abstract {
-			return nil, ErrInvalid.WithMessage("пустая или неверная схема")
+		if !ValidCode(key) || len(schema.Attributes) == 0 || len(schema.Attributes) > MaxSchemaAttributes ||
+			schema.Extends != "" || schema.Abstract {
+			return nil, ErrInvalid.WithMessage("пустая, слишком большая или неверная схема")
 		}
 		seen := map[string]bool{}
 		for _, code := range schema.Attributes {
