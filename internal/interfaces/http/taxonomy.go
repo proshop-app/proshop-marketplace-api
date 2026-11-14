@@ -60,6 +60,12 @@ func (h *taxonomyHandlers) version(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *taxonomyHandlers) load(w http.ResponseWriter, r *http.Request) {
+	replace := r.URL.Query().Get("replaceCategories")
+	if values, exists := r.URL.Query()["replaceCategories"]; exists &&
+		(len(values) != 1 || replace != "true" && replace != "false" || r.PathValue("part") != "categories") {
+		writeError(w, r, taxonomy.ErrInvalid.WithMessage("replaceCategories: нужен boolean только для categories"))
+		return
+	}
 	match := r.Header.Get("If-Match")
 	expected, err := strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(match, `"taxonomy-`), `"`), 10, 64)
 	if err != nil || expected < 0 || match != `"taxonomy-`+strconv.FormatInt(expected, 10)+`"` {
@@ -69,7 +75,13 @@ func (h *taxonomyHandlers) load(w http.ResponseWriter, r *http.Request) {
 	d, err := taxonomyfile.DecodePart(http.MaxBytesReader(w, r.Body, maxTaxonomyBody), r.PathValue("part"))
 	var version int64
 	if err == nil {
-		version, err = h.service.LoadPart(r.Context(), r.PathValue("part"), d, expected)
+		version, err = h.service.LoadPartWithOptions(
+			r.Context(),
+			r.PathValue("part"),
+			d,
+			expected,
+			apptaxonomy.LoadOptions{ReplaceCategories: replace == "true"},
+		)
 	}
 	if err != nil {
 		writeError(w, r, err)

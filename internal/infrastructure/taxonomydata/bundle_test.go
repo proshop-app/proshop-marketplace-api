@@ -165,6 +165,12 @@ func TestManifestRequiresNewRelease(t *testing.T) {
 	if _, err := PrepareManifest(files, current.Release, true); err == nil {
 		t.Fatal("перезапись выпущенного номера")
 	}
+	var migration CategoryMigration
+	if err := yaml.Unmarshal(files["data/category-migration.yaml"].Data, &migration); err != nil {
+		t.Fatal(err)
+	}
+	migration.ToRelease = current.Release + 1
+	files["data/category-migration.yaml"].Data, _ = yaml.Marshal(migration)
 	next, err := PrepareManifest(files, current.Release+1, true)
 	if err != nil || next.Checksum == current.Checksum || next.Coverage != current.Coverage {
 		t.Fatal(next, err)

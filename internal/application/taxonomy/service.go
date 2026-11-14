@@ -20,6 +20,11 @@ type Service struct {
 	clock     ports.Clock
 }
 
+// LoadOptions требует отдельного подтверждения ломающей замены дерева оператором.
+type LoadOptions struct {
+	ReplaceCategories bool
+}
+
 // NewService собирает сценарии поверх транзакций и часов.
 func NewService(uow ports.UnitOfWork, clock ports.Clock, evaluator ports.ModerationEvaluator) *Service {
 	return &Service{uow: uow, clock: clock, evaluator: evaluator}
@@ -52,6 +57,20 @@ func (s *Service) LoadPart(
 	input taxonomy.Definition,
 	expected int64,
 ) (int64, error) {
+	return s.LoadPartWithOptions(ctx, part, input, expected, LoadOptions{})
+}
+
+// LoadPartWithOptions сохраняет CAS и проверку атрибутов при подтверждённой замене категорий.
+func (s *Service) LoadPartWithOptions(
+	ctx context.Context,
+	part string,
+	input taxonomy.Definition,
+	expected int64,
+	options LoadOptions,
+) (int64, error) {
+	if options.ReplaceCategories && part != "categories" {
+		return 0, taxonomy.ErrInvalid.WithMessage("replaceCategories допустим только для categories")
+	}
 	var version int64
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		r := tx.Taxonomy()
@@ -78,6 +97,10 @@ func (s *Service) LoadPart(
 			next.Attributes, frozenValues = searchTermsAttributeUpdate(current.Attributes, input.Attributes)
 		case "schemas":
 			next.Schemas = input.Schemas
+			next.Schemas, err = next.ExpandSchemaSource()
+			if err != nil {
+				return err
+			}
 		case "categories":
 			next.Categories = input.Categories
 		default:
@@ -86,7 +109,13 @@ func (s *Service) LoadPart(
 		if err := next.Validate(); err != nil {
 			return err
 		}
-		if err := next.CheckEvolution(current); err != nil {
+		checkEvolution := next.CheckEvolution
+		if options.ReplaceCategories {
+			checkEvolution = next.CheckCategoryReplacementEvolution
+		} else if part == "categories" && removesCategoryLeaves(current.Categories, next.Categories) {
+			return taxonomy.ErrConflict.WithMessage("удаление листьев требует replaceCategories=true")
+		}
+		if err := checkEvolution(current); err != nil {
 			return err
 		}
 		if !frozenValues {
@@ -104,6 +133,30 @@ func (s *Service) LoadPart(
 		return nil
 	})
 	return version, err
+}
+
+func removesCategoryLeaves(previous, next []taxonomy.Category) bool {
+	leaves := map[string]bool{}
+	var collect func([]taxonomy.Category)
+	collect = func(nodes []taxonomy.Category) {
+		for _, node := range nodes {
+			if len(node.Children) == 0 {
+				leaves[node.ID] = true
+			}
+			collect(node.Children)
+		}
+	}
+	collect(next)
+	var missing func([]taxonomy.Category) bool
+	missing = func(nodes []taxonomy.Category) bool {
+		for _, node := range nodes {
+			if len(node.Children) == 0 && !leaves[node.ID] || missing(node.Children) {
+				return true
+			}
+		}
+		return false
+	}
+	return missing(previous)
 }
 
 func (s *Service) revalidate(ctx context.Context, tx ports.Tx, d taxonomy.Definition) error {

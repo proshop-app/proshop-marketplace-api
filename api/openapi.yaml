@@ -1899,11 +1899,21 @@ paths:
           in: header
           required: true
           schema: { type: string, pattern: '^"taxonomy-[0-9]+"$' }
+        - name: replaceCategories
+          in: query
+          schema: { type: boolean, default: false }
+          description: Явное подтверждение замены кодов и адресов; допустимо только для categories
       description: |
         Один строгий YAML-документ до 2 МиБ. Якоря, ссылки и неизвестные поля запрещены.
         Часть соединяется с двумя текущими; проверяются все ссылки и словари реестра.
         Новая версия равна текущей + 1. Устаревший If-Match — 409; отсутствующий или неверный — 400.
-        Код нельзя удалить, type, unit и dictionary неизменны.
+        Коды атрибутов нельзя удалить; type, unit и существующий dictionary неизменны.
+        Строке без словаря можно добавить открытый словарь.
+        Удаление листьев, изменение и передача slug требуют replaceCategories=true (иначе 409).
+        Флаг не переносит карточки и не отменяет совместимость атрибутов.
+        schemas принимает extends и abstract (TaxonomySchemaSource); API возвращает развёрнутые схемы.
+        Для перехода 9 → 10 порядок: attributes, schemas, categories с подтверждением.
+        Это три независимые транзакции и версии, без записи истории CLI-поставок.
         Значения confirmed закрытых словарей сохраняются в снимке.
         Ошибочные карточки скрываются, индекс обновляется через outbox.
       requestBody:
@@ -6476,6 +6486,9 @@ components:
         title: { type: string, minLength: 1, maxLength: 256 }
         slug: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 128 }
         schema: { type: string, description: Только у листа; ключ схемы набора }
+        axis: { type: string, description: Ось деления узла среди его соседей }
+        nameScope: { type: boolean, description: Отдельная область уникальности коротких имён в разделе аудитории }
+        definition: { type: string, maxLength: 1024, description: Граница вида изделия }
         children:
           type: [array, "null"]
           items: { $ref: "#/components/schemas/TaxonomyCategory" }
@@ -6496,6 +6509,13 @@ components:
         unit: { type: string, description: Единица только для number }
         facet: { type: boolean, default: false }
         valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
+        description: { type: string, maxLength: 1024, description: Определение свойства и объекта измерения }
+        dictionaryNote: { type: string, maxLength: 512, description: Причина отсутствия словаря }
+        example: { type: string, maxLength: 256, description: "Пример формата, не словарное значение" }
+        requiredReason: { type: string, maxLength: 512, description: Исключение для обязательного свободного текста }
+        multiple: { type: boolean, const: false, description: Контракт карточки скалярный }
+        variant: { type: boolean, description: Подходит для оси варианта SKU }
+        deprecated: { type: boolean, description: "Исторический код, не использовать в новых схемах" }
         searchTermsByValue: { $ref: "#/components/schemas/TaxonomySearchTermsByValue" }
     TaxonomySearchTermsByValue:
       type: object
@@ -6526,6 +6546,15 @@ components:
       properties:
         attributes: { type: array, minItems: 1, uniqueItems: true, items: { type: string } }
         optional: { type: array, uniqueItems: true, items: { type: string }, description: Подмножество attributes }
+    TaxonomySchemaSource:
+      type: object
+      additionalProperties: false
+      description: Исходник schemas.yaml; extends разворачивается сервером, abstract не выдаётся в API
+      properties:
+        extends: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        abstract: { type: boolean, default: false }
+        attributes: { type: array, uniqueItems: true, items: { type: string } }
+        optional: { type: array, uniqueItems: true, items: { type: string }, description: Включая унаследованные поля }
     TaxonomySchemaAttribute:
       type: object
       required: [code, name, type, required]
@@ -6539,6 +6568,13 @@ components:
         required: { type: boolean }
         values: { type: array, items: { type: string } }
         valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
+        description: { type: string, maxLength: 1024, description: Определение свойства и объекта измерения }
+        dictionaryNote: { type: string, maxLength: 512, description: Причина отсутствия словаря }
+        example: { type: string, maxLength: 256, description: "Пример формата, не словарное значение" }
+        requiredReason: { type: string, maxLength: 512, description: Исключение для обязательного свободного текста }
+        multiple: { type: boolean, const: false, description: Контракт карточки скалярный }
+        variant: { type: boolean, description: Подходит для оси варианта SKU }
+        deprecated: { type: boolean, description: "Исторический код, не использовать в новых схемах" }
         searchTermsByValue: { $ref: "#/components/schemas/TaxonomySearchTermsByValue" }
     TaxonomyCategorySchema:
       type: object

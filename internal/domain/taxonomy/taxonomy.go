@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	// MaxAttributes ограничивает число динамических полей индекса.
-	MaxAttributes = 256
+	// MaxAttributes ограничивает глобальный каталог свойств, а не число полей одной карточки.
+	// Поисковый контракт передаёт характеристики списком проверенных скаляров.
+	MaxAttributes = 512
 	// MaxCategories ограничивает размер операторского дерева.
 	MaxCategories = 4096
 	// MaxDepth ограничивает глубину дерева.
@@ -45,16 +46,28 @@ type Attribute struct {
 	Values             []string             `json:"values,omitempty" yaml:"-"`
 	Unit               string               `json:"unit,omitempty" yaml:"unit,omitempty"`
 	Facet              bool                 `json:"facet" yaml:"facet"`
+	Description        string               `json:"description,omitempty" yaml:"description,omitempty"`
+	DictionaryNote     string               `json:"dictionaryNote,omitempty" yaml:"dictionaryNote,omitempty"`
+	Example            string               `json:"example,omitempty" yaml:"example,omitempty"`
+	RequiredReason     string               `json:"requiredReason,omitempty" yaml:"requiredReason,omitempty"`
+	Multiple           bool                 `json:"multiple,omitempty" yaml:"multiple,omitempty"`
+	Variant            bool                 `json:"variant,omitempty" yaml:"variant,omitempty"`
+	Deprecated         bool                 `json:"deprecated,omitempty" yaml:"deprecated,omitempty"`
 }
 
 // Category ссылается на схему только в листе, чтобы дерево не дублировало атрибуты.
 type Category struct {
-	Icon   string `json:"icon,omitempty" yaml:"icon,omitempty"`
-	ID     string `json:"id" yaml:"id"`
-	Name   string `json:"name" yaml:"name"`
-	Title  string `json:"title,omitempty" yaml:"title,omitempty"`
-	Slug   string `json:"slug" yaml:"slug"`
-	Schema string `json:"schema,omitempty" yaml:"schema,omitempty"`
+	Axis string `json:"axis,omitempty" yaml:"axis,omitempty"`
+	// NameScope ограничивает редакционную уникальность имён разделом аудитории.
+	NameScope bool `json:"nameScope,omitempty" yaml:"nameScope,omitempty"`
+	// Definition задаёт границу вида изделия, а не поисковые синонимы.
+	Definition string `json:"definition,omitempty" yaml:"definition,omitempty"`
+	Icon       string `json:"icon,omitempty" yaml:"icon,omitempty"`
+	ID         string `json:"id" yaml:"id"`
+	Name       string `json:"name" yaml:"name"`
+	Title      string `json:"title,omitempty" yaml:"title,omitempty"`
+	Slug       string `json:"slug" yaml:"slug"`
+	Schema     string `json:"schema,omitempty" yaml:"schema,omitempty"`
 	// Moderation — политика допуска узла: auto, manual или forbidden; пусто — наследуется.
 	Moderation string     `json:"moderation,omitempty" yaml:"moderation,omitempty"`
 	Children   []Category `json:"children,omitempty" yaml:"children,omitempty"`
@@ -62,6 +75,8 @@ type Category struct {
 
 // Schema хранит порядок полей и исключения из обязательности по умолчанию.
 type Schema struct {
+	Extends    string   `json:"extends,omitempty" yaml:"extends,omitempty"`
+	Abstract   bool     `json:"abstract,omitempty" yaml:"abstract,omitempty"`
 	Attributes []string `json:"attributes" yaml:"attributes"`
 	Optional   []string `json:"optional,omitempty" yaml:"optional,omitempty"`
 }
@@ -143,6 +158,9 @@ func (d Definition) Validate() error {
 		}
 		names := map[string]bool{}
 		for _, c := range categories {
+			if c.Axis != "" && !ValidCode(c.Axis) || utf8.RuneCountInString(c.Definition) > 1024 {
+				return ErrInvalid.WithMessage("неверная ось или длинное определение вида изделия")
+			}
 			if c.Icon != "" && (depth != 1 || !ValidIcon(c.Icon)) {
 				return ErrInvalid.WithMessage("недопустимая иконка категории")
 			}
@@ -196,6 +214,12 @@ func (a Attribute) validate() error {
 	if !ValidCode(a.Code) || strings.TrimSpace(a.Name) == "" || utf8.RuneCountInString(a.Name) > 256 {
 		return ErrInvalid.WithMessage("неверный код или имя атрибута")
 	}
+	// Карточка хранит скаляр: метаданные не должны обещать неподдерживаемый массив.
+	if a.Multiple || utf8.RuneCountInString(a.Description) > 1024 ||
+		utf8.RuneCountInString(a.DictionaryNote) > 512 || utf8.RuneCountInString(a.Example) > 256 ||
+		utf8.RuneCountInString(a.RequiredReason) > 512 {
+		return ErrInvalid.WithMessage("неверные пояснения или множественность атрибута")
+	}
 	if a.Dictionary != "" && !reference.ValidCode(a.Dictionary) {
 		return ErrInvalid.WithMessage("код словаря: 1–32 символа a-z/0-9/_, первый — буква")
 	}
@@ -242,7 +266,7 @@ func (d Definition) validateSchemas() (map[string]Attribute, error) {
 		fields[a.Code] = a
 	}
 	for key, schema := range d.Schemas {
-		if !ValidCode(key) || len(schema.Attributes) == 0 {
+		if !ValidCode(key) || len(schema.Attributes) == 0 || schema.Extends != "" || schema.Abstract {
 			return nil, ErrInvalid.WithMessage("пустая или неверная схема")
 		}
 		seen := map[string]bool{}
@@ -282,6 +306,13 @@ func (d Definition) CheckEvolution(old Definition) error {
 // Удаление строковой подсказки разрешено только этому пути; смена словаря запрещена.
 func (d Definition) CheckRollbackEvolution(old Definition) error {
 	return d.checkEvolution(old, true)
+}
+
+// CheckCategoryReplacementEvolution допускает замену адресов только явной ломающей поставкой.
+// Совместимость глобальных атрибутов остаётся обязательной.
+func (d Definition) CheckCategoryReplacementEvolution(old Definition) error {
+	old.Categories = nil
+	return d.checkEvolution(old, false)
 }
 
 func (d Definition) checkEvolution(old Definition, rollback bool) error {

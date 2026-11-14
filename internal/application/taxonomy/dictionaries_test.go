@@ -229,3 +229,31 @@ func TestOnlyConfirmedValuesArePublished(t *testing.T) {
 		t.Fatal(current.Attributes)
 	}
 }
+
+func TestSchemaImportExpandsInheritanceBeforeSnapshot(t *testing.T) {
+	store := fake.NewStore()
+	original := schema(1)
+	store.SeedTaxonomy(original)
+	seedValues(t, store, "v1")
+	input := schema(1)
+	var name string
+	for key := range input.Schemas {
+		name = key
+		break
+	}
+	base := input.Schemas[name]
+	base.Abstract = true
+	input.Schemas = map[string]taxonomy.Schema{
+		"base": base,
+		name:   {Extends: "base"},
+	}
+	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
+	if _, err := service.LoadPart(context.Background(), "schemas", input, 1); err != nil {
+		t.Fatal(err)
+	}
+	current, err := service.Current(context.Background())
+	if err != nil || len(current.Schemas) != 1 || current.Schemas[name].Extends != "" ||
+		len(current.Schemas[name].Attributes) == 0 {
+		t.Fatal("API получил исходник вместо развёрнутой схемы", current.Schemas, err)
+	}
+}

@@ -57,3 +57,12 @@ func TestRemoveHintRequiresNarrowExplicitCASAndHistoricalProof(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyRequiresCategoryReplacementAcknowledgementBeforeDatabase(t *testing.T) {
+	t.Setenv("DATABASE_URL", "")
+	var output, diagnostics bytes.Buffer
+	if code := run([]string{"apply"}, &output, &diagnostics); code != 2 ||
+		!strings.Contains(diagnostics.String(), "--confirm-category-replacement") {
+		t.Fatal(code, diagnostics.String())
+	}
+}

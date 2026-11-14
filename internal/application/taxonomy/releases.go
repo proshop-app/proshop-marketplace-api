@@ -76,6 +76,9 @@ func (s *Service) changeRelease(
 			}
 		}
 		checkEvolution := next.CheckEvolution
+		if release.ReplaceCategories && !rollback {
+			checkEvolution = next.CheckCategoryReplacementEvolution
+		}
 		if rollback {
 			checkEvolution = next.CheckRollbackEvolution
 		}
