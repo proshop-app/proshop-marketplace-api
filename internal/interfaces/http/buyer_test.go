@@ -189,11 +189,10 @@ func TestLoginIPLimitIgnoresForgedForwardedFor(t *testing.T) {
 	}
 }
 
-func TestCartDeliveryCheckout(t *testing.T) {
-	e := newEnv(t)
-	token := e.login(t)
+func (e *env) seedCartDelivery() {
 	ctx := context.Background()
 
+	e.store.SeedTenant(participant.TenantState{TenantID: "t1", Status: participant.TenantActive})
 	e.store.SeedParticipant(participant.State{
 		TenantID:  "t1",
 		Slug:      "s1",
@@ -235,17 +234,22 @@ func TestCartDeliveryCheckout(t *testing.T) {
 		"Город",
 		delivery.Location{Lat: 55.7, Lon: 37.6},
 		"Пн-Пт",
-		nil,
-		t0,
 	)
 	point.RegionCode = "RU-MOW"
-	e.store.SeedPickupPoint(point)
-	_ = e.pickups.Put(ctx, []delivery.PickupPoint{point})
+	e.pickups.Points = []delivery.PickupPoint{point}
+	e.platform.SetPickupPoints("t1", ports.PickupPoints{Available: true, Items: []delivery.PickupPoint{point}})
 	e.platform.SetItem(
 		"t1",
 		ports.ItemCheck{ProductID: "p1", Exists: true, Price: money.FromKopecks(199000), Available: 3},
 	)
 	e.platform.SetQuote("t1", delivery.Offered{Available: true, Cost: money.FromKopecks(30000), MinDays: 2, MaxDays: 4})
+
+}
+
+func TestCartDeliveryCheckout(t *testing.T) {
+	e := newEnv(t)
+	token := e.login(t)
+	e.seedCartDelivery()
 
 	if r := e.session(t, http.MethodGet, "/api/v1/cart", "", ""); r.status != http.StatusUnauthorized {
 		t.Fatalf("корзина только с сессией: %+v", r)
@@ -267,27 +271,27 @@ func TestCartDeliveryCheckout(t *testing.T) {
 		t.Fatalf("перепроверка: %+v", r)
 	}
 	carriers := e.session(t, http.MethodGet, "/api/v1/delivery/carriers", "", "")
-	if items, _ := carriers.body["items"].([]any); carriers.status != http.StatusOK || len(items) != 1 {
+	if items, _ := carriers.body["items"].([]any); carriers.status != http.StatusOK || len(items) != 2 {
 		t.Fatalf("перевозчики: %+v", carriers)
 	}
 	points := e.session(
 		t,
 		http.MethodGet,
-		"/api/v1/delivery/pickup-points?carrier=cdek&bbox=37.5,55.6,37.8,55.9",
+		"/api/v1/delivery/pickup-points?carrier=cdek&city=Город",
 		"",
 		"",
 	)
 	if items, _ := points.body["items"].([]any); points.status != http.StatusOK || len(items) != 1 {
-		t.Fatalf("пункты в области: %+v", points)
+		t.Fatalf("пункты города: %+v", points)
 	}
 
 	r = e.session(t, http.MethodGet, "/api/v1/delivery/pickup-points?carrier=cdek&bbox=1,2,3", "", "")
-	if r.status != http.StatusBadRequest || errorCode(r) != "delivery.invalid_area" {
+	if r.status != http.StatusBadRequest || errorCode(r) != "http.invalid_query" {
 		t.Fatalf("неверная область: %+v", r)
 	}
 
 	r = e.session(t, http.MethodGet, "/api/v1/delivery/pickup-points?carrier=ozon&city=Город", "", "")
-	if r.status != http.StatusNotFound || errorCode(r) != "delivery.unknown_carrier" {
+	if r.status != http.StatusOK || len(r.body["items"].([]any)) != 0 {
 		t.Fatalf("неподключённый перевозчик: %+v", r)
 	}
 
@@ -309,7 +313,7 @@ func TestCartDeliveryCheckout(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/api/v1/checkout/"+id+"/delivery/quotes",
-		`{"carrier":"cdek","pickupPointCode":"MSK1"}`,
+		`{"carrier":"cdek","pickupPointCode":"MSK1","city":"Город"}`,
 		token,
 	)
 	groups, _ := quoted.body["groups"].([]any)

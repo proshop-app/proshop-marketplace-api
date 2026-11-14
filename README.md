@@ -31,7 +31,6 @@ Kafka `29094`, Redis `26379`; любой меняется переменной
 | `make migrate` | миграции к `DATABASE_URL` (`go run ./cmd/migrate up`; ещё `down`, `status`) |
 | `make taxonomy-check` / `make taxonomy-manifest` | проверить поставку и манифест YAML без БД |
 | `make reindex` | перестроить индекс предложений из проекции |
-| `make refresh-pickup-points` | обновить справочники пунктов выдачи подключённых перевозчиков |
 | `make build` | `bin/marketplace`, `bin/migrate`, `bin/taxonomy` |
 | `make image` | образ: сборка на `golang:1.23.2-alpine`, запуск на `scratch` |
 | `make infra-up`, `make infra-down` | только инфраструктура |
@@ -54,10 +53,6 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `SEARCH_URL` | да | — | адрес общего `proshop-search` без `/api` |
 | `SEARCH_MARKETPLACE_TOKEN` | да | — | отдельный служебный токен поиска, ≥ 32 символов |
 | `SEARCH_TIMEOUT`, `SEARCH_MAINTENANCE_INTERVAL` | | `35s`, `1m` | срок HTTP-запроса и период проверки пересборки |
-| `OPENSEARCH_URLS` | да | — | адреса кластера геоиндекса пунктов выдачи через запятую |
-| `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD` | | — | задаются парой |
-| `OPENSEARCH_INSECURE_SKIP_VERIFY` | | `false` | самоподписанный сертификат локально |
-| `OPENSEARCH_SHARDS`, `OPENSEARCH_REPLICAS` | | `1`, `1` | геоиндекс пунктов выдачи |
 | `MARKETPLACE_PUBLIC_URL` | да | — | адрес витрины для возврата с кассы-заглушки |
 | `PAYMENT_STUB` | | `false` | тестовая оплата; без неё создание заказов и оплата недоступны (503) |
 | `ORDERS_SYNC_INTERVAL` | | `30s` | период фонового обхода покупок |
@@ -89,12 +84,8 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `PLATFORM_API_TIMEOUT` | | `5s` | ожидание ответа сервера |
 | `CART_TTL` | | `720h` | срок жизни корзины без изменений |
 | `QUOTE_TTL`, `QUOTE_TIMEOUT` | | `30m`, `5s` | наибольший срок расчёта доставки, ожидание магазина |
-| `CDEK_CLIENT_ID`, `CDEK_CLIENT_SECRET` | | — | задаются парой; без них СДЭК не подключён |
-| `CDEK_API_URL` | | `https://api.cdek.ru` | адрес API СДЭК |
-| `YANDEX_DELIVERY_TOKEN` | | — | без него Яндекс Доставка не подключена |
-| `YANDEX_DELIVERY_API_URL` | | `https://b2b-authproxy.taxi.yandex.net` | адрес API Яндекс Доставки |
-| `PICKUP_REFRESH_INTERVAL` | | `24h` | обновление справочников пунктов выдачи |
-| `OPENSEARCH_PICKUP_INDEX` | | `marketplace-pickup-points` | индекс пунктов выдачи |
+| `PICKUP_CACHE_TTL` | | `1h` | TTL непустого списка ПВЗ по службе и городу |
+| `PICKUP_MAX_ATTEMPTS` | | `3` | предел последовательных обращений к магазинам; каждому — `QUOTE_TIMEOUT` |
 | `SETTINGS_SYNC_INTERVAL` | | `5m` | сверка настроек участия магазинов с сервером |
 
 ## HTTP
@@ -106,7 +97,7 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 
 | Маршрут | Доступ | Что делает |
 |---|---|---|
-| `GET /health` | открыт | PostgreSQL, OpenSearch, Kafka: 200 или 503 |
+| `GET /health` | открыт | PostgreSQL, API поиска, Redis, Kafka: 200 или 503 |
 | `GET /metrics` | открыт | метрики Prometheus |
 | `GET /api/v1/catalog/offers` | открыт | выдача: `q`, `tenant`, `category`, `tag`, `priceMin`, `priceMax`, `inStock`, `sort` (`relevance`, `price_asc`, `price_desc`, `newest`), `limit` ≤ 100, `offset` |
 | `GET /api/v1/catalog/offers/{offerId}` | открыт | карточка; `offerId` = `<tenantId>~<productId>` |
@@ -132,10 +123,10 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `DELETE /api/v1/cart/lines/{offerId}` | покупатель | убрать позицию |
 | `POST /api/v1/cart/verify` | покупатель | перепроверить цены и наличие у магазинов |
 | `GET /api/v1/delivery/carriers` | открыт | подключённые перевозчики |
-| `GET /api/v1/delivery/pickup-points` | открыт | пункты: `carrier` и `bbox=minLon,minLat,maxLon,maxLat` или `city`, `limit` |
+| `GET /api/v1/delivery/pickup-points` | открыт | пункты: обязательные `carrier` и `city`; список через магазин, кэш на час |
 | `POST /api/v1/checkout` | покупатель | покупка из корзины; заголовок `Idempotency-Key` |
 | `GET /api/v1/checkout/{checkoutId}` | покупатель | покупка |
-| `POST /api/v1/checkout/{checkoutId}/delivery/quotes` | покупатель | расчёт доставки у каждого продавца `{"carrier","pickupPointCode"}` |
+| `POST /api/v1/checkout/{checkoutId}/delivery/quotes` | покупатель | расчёт доставки у каждого продавца `{"carrier","pickupPointCode","city"}` |
 | `POST /api/v1/checkout/{checkoutId}/confirm` | покупатель | подтвердить: перепроверка цен, повтор расчёта у не ответивших |
 
 Полное описание — [api/openapi.yaml](api/openapi.yaml); тест сверяет его с
@@ -198,8 +189,8 @@ GET кассы при ошибке показывает HTML со ссылкой
 
 Выдача и карточка принимают `deliveryCarrier` вместе с `deliveryRegion`:
 `deliveryAvailable=false` оставляет товар видимым, но отмечает доставку недоступной.
-Код ISO 3166-2 RU доступен в `regionCode` ПВЗ (пусто при неизвестном соответствии). Обновлённая схема индекса каталога
-автоматически создаёт новое поколение; справочники ПВЗ обновляются на старте.
+Код ISO 3166-2 RU магазин возвращает в `regionCode` ПВЗ. Обновлённая схема индекса каталога
+автоматически создаёт новое поколение; списки ПВЗ запрашиваются у магазинов по требованию.
 Полный внутренний контракт: [docs/server-contract.md](docs/server-contract.md).
 
 ## Kafka
@@ -226,14 +217,13 @@ PostgreSQL, миграции goose в `internal/infrastructure/postgres/migratio
 `tenants` (зеркало реестра), `participants` (с настройками участия и
 субсидией доставки), `catalog_products`, `offers` (остатки и
 цены), `outbox`, `processed_events`, `parked_events`, `buyers`,
-`phone_challenges`, `carts`, `cart_lines`, `pickup_points`, `job_leases`
+`phone_challenges`, `carts`, `cart_lines`, `job_leases`
 (аренда фоновых задач), `checkouts`, `checkout_groups`. Индекс предложений —
 отдельный каталог общего `proshop-search`; восстанавливается из
 проекции через служебный HTTP API (`make reindex`, а при первом запуске или
 смене схемы — автоматически). Самостоятельного поискового алгоритма в backend
-маркетплейса больше нет. Пункты выдачи —
-индекс `OPENSEARCH_PICKUP_INDEX` с `geo_point`, наполняется из таблицы при
-обновлении справочников. Redis — сессии и лимиты входа.
+маркетплейса больше нет. Пункты выдачи получаем через магазины. Redis хранит
+сессии, лимиты и непустые списки ПВЗ по службе и городу.
 
 ## Сделано на неделе 1
 
@@ -246,7 +236,7 @@ PostgreSQL, миграции goose в `internal/infrastructure/postgres/migratio
 - Kafka: консьюмеры каталога, остатков, цен и реестра; магазин из ключа,
   тела или `x-tenant`; отравленные с метрикой; коммит после записи.
 - Общий `proshop-search`: индекс предложений, поиск и фильтры, карточка, перестроение
-  из проекции. Прямой OpenSearch остаётся у геоиндекса пунктов выдачи.
+  из проекции. Прямое подключение к OpenSearch больше не требуется.
 - HTTP: `/health`, `/metrics`, выдача и карточка, операторские ручки участников.
 - Сторож слоистости (тест и `depguard`), CI: линтер, юнит-тесты,
   интеграционные тесты на compose, сборка образа.
@@ -258,10 +248,8 @@ PostgreSQL, миграции goose в `internal/infrastructure/postgres/migratio
   лимиты в Redis, покупатель в контексте запроса и журналах.
 - `cart`: корзина в PostgreSQL со сроком жизни, остаток сверяется с
   проекцией, цена и наличие — с магазином через API сервера.
-- `delivery`: справочники пунктов выдачи СДЭК и Яндекс Доставки (таблица и
-  индекс с `geo_point`), обновление по расписанию и командой, поиск по
-  области или городу; расчёт доставки у каждого продавца с субсидией и сроком
-  цены.
+- `delivery`: ПВЗ выбранной службы через активные магазины, кэш Redis по службе и городу;
+  расчёт доставки у каждого продавца с субсидией и сроком цены.
 - `checkout` до `confirmed`: из корзины, по продавцам, с ключом
   идемпотентности; денег пока нет.
 - Настройки участия магазина с сервера: флаг участия — условие видимости,

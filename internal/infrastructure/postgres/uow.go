@@ -15,7 +15,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
@@ -122,10 +121,6 @@ func (s *scope) Challenges() buyer.ChallengeRepository { return &Challenges{db: 
 func (s *scope) Carts() cart.Repository { return &Carts{db: s.db} }
 
 func (s *scope) Checkouts() checkout.Repository { return &Checkouts{db: s.db} }
-
-func (s *scope) PickupPoints() delivery.PickupPointRepository {
-	return &PickupPoints{db: s.db}
-}
 
 func (s *scope) Taxonomy() taxonomy.Repository { return &Taxonomy{db: s.db} }
 

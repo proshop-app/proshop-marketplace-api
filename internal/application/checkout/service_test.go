@@ -31,6 +31,7 @@ var (
 )
 
 type env struct {
+	pickups  *appdelivery.Service
 	store    *fake.Store
 	index    *fake.Index
 	platform *fake.Platform
@@ -47,16 +48,11 @@ func setup(t *testing.T) *env {
 	t.Helper()
 	e := &env{store: fake.NewStore(), index: fake.NewIndex(), platform: fake.NewPlatform(), clock: fake.NewClock(t0)}
 	identities := &fake.IDs{}
-	pickups := fake.NewPickupIndex()
-	provider := &fake.PickupProvider{Info: delivery.CarrierInfo{Code: "cdek", Name: "СДЭК"}}
-	directory := appdelivery.NewDirectory(
-		e.store,
-		[]ports.PickupPointsProvider{provider},
-		pickups,
-		e.store,
-		e.clock,
-		"pod-1",
-	)
+	e.pickups = appdelivery.NewService(e.store, e.platform, fake.NewPickupCache(), appdelivery.Config{
+		Attempts:     3,
+		TTL:          time.Hour,
+		QuoteTimeout: time.Second,
+	})
 
 	e.carts = appcart.NewService(e.store, e.index, e.platform, identities, e.clock, 30*24*time.Hour)
 	e.verifier = &fake.CartVerifier{CartVerifier: e.carts}
@@ -64,7 +60,7 @@ func setup(t *testing.T) *env {
 		e.store,
 		e.index,
 		e.platform,
-		directory,
+		e.pickups,
 		e.verifier,
 		identities,
 		e.clock,
@@ -129,14 +125,15 @@ func setup(t *testing.T) *env {
 		"Город",
 		delivery.Location{Lat: 55.7, Lon: 37.6},
 		"",
-		nil,
-		t0,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	point.RegionCode = "RU-MOW"
-	e.store.SeedPickupPoint(point)
+	for _, tenant := range []ids.TenantID{"t1", "t2"} {
+		e.store.SeedTenant(participant.TenantState{TenantID: tenant, Status: participant.TenantActive})
+		e.platform.SetPickupPoints(tenant, ports.PickupPoints{Available: true, Items: []delivery.PickupPoint{point}})
+	}
 
 	e.store.SeedParticipant(participant.State{
 		TenantID:         "t1",
@@ -273,7 +270,7 @@ func TestQuote(t *testing.T) {
 	ctx := context.Background()
 	created, _ := e.service.Create(ctx, buyerID, key)
 
-	state, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1")
+	state, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1", "Город")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +291,7 @@ func TestQuote(t *testing.T) {
 		t.Fatalf("запрос магазину: %+v", request)
 	}
 
-	_, err = e.service.Quote(ctx, buyerID, created.ID, "cdek", "NOPE")
+	_, err = e.service.Quote(ctx, buyerID, created.ID, "cdek", "NOPE", "Город")
 	if !errors.Is(err, delivery.ErrPickupPointNotFound) {
 		t.Fatalf("неизвестный пункт: %v", err)
 	}
@@ -308,7 +305,7 @@ func TestQuoteMarksSellersWithoutCarrier(t *testing.T) {
 	e.platform.SetQuote("t2", delivery.Offered{Reason: "carrier_not_connected"})
 	e.platform.Fail("t1", errors.New("тайм-аут"))
 
-	state, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1")
+	state, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1", "Город")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +331,7 @@ func TestConfirm(t *testing.T) {
 		t.Fatalf("без доставки: %v", err)
 	}
 
-	if _, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1"); err != nil {
+	if _, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1", "Город"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -354,7 +351,8 @@ func TestConfirm(t *testing.T) {
 	if err != nil || again.Version != state.Version {
 		t.Fatalf("повтор подтверждения отдаёт ту же покупку: %v", err)
 	}
-	if _, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1"); !errors.Is(err, checkout.ErrNotDraft) {
+	_, err = e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1", "Город")
+	if !errors.Is(err, checkout.ErrNotDraft) {
 		t.Fatalf("подтверждённую не пересчитывают: %v", err)
 	}
 }
@@ -363,7 +361,7 @@ func TestConfirmReportsPriceChange(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	created, _ := e.service.Create(ctx, buyerID, key)
-	_, _ = e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1")
+	_, _ = e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1", "Город")
 
 	e.platform.SetItem(
 		"t1",
@@ -389,7 +387,7 @@ func TestConfirmRefusesMissingStock(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	created, _ := e.service.Create(ctx, buyerID, key)
-	_, _ = e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1")
+	_, _ = e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1", "Город")
 
 	e.platform.SetItem(
 		"t1",

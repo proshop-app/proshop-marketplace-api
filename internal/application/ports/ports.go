@@ -10,7 +10,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
@@ -54,6 +53,5 @@ type Tx interface {
 	Challenges() buyer.ChallengeRepository
 	Carts() cart.Repository
 	Checkouts() checkout.Repository
-	PickupPoints() delivery.PickupPointRepository
 	Reference() reference.Repository
 }

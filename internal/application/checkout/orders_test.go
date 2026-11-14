@@ -21,7 +21,7 @@ func confirmedPurchase(t *testing.T, e *env) checkout.State {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.Quote(ctx, buyerID, state.ID, "cdek", "MSK1"); err != nil {
+	if _, err := e.service.Quote(ctx, buyerID, state.ID, "cdek", "MSK1", "Город"); err != nil {
 		t.Fatal(err)
 	}
 	state, err = e.service.Confirm(ctx, buyerID, state.ID)
@@ -198,7 +198,7 @@ func TestDeliveryThresholdsAndRegions(t *testing.T) {
 	e.store.SeedParticipant(p)
 	ctx := context.Background()
 	c, _ := e.service.Create(ctx, buyerID, key)
-	quoted, err := e.service.Quote(ctx, buyerID, c.ID, "cdek", "MSK1")
+	quoted, err := e.service.Quote(ctx, buyerID, c.ID, "cdek", "MSK1", "Город")
 	if err != nil || quoted.Groups[0].Quote.Reason != "pickup_point_unavailable" {
 		t.Fatalf("регион: %+v %v", quoted, err)
 	}

@@ -34,10 +34,8 @@ func TestNewPickupPoint(t *testing.T) {
 		"Город",
 		delivery.Location{Lat: 55.7, Lon: 37.6},
 		"Пн-Пт 10-20",
-		nil,
-		t0,
 	)
-	if err != nil || point.Code != "MSK1" || point.Name != "ул. Примерная, 1" || !point.Active {
+	if err != nil || point.Code != "MSK1" || point.Name != "ул. Примерная, 1" {
 		t.Fatalf("пункт: %+v, %v", point, err)
 	}
 
@@ -51,17 +49,15 @@ func TestNewPickupPoint(t *testing.T) {
 				"c",
 				delivery.Location{Lat: 1, Lon: 1},
 				"",
-				nil,
-				t0,
 			)
 			return err
 		},
 		"без адреса": func() error {
-			_, err := delivery.NewPickupPoint("cdek", "x", "n", "", "c", delivery.Location{Lat: 1, Lon: 1}, "", nil, t0)
+			_, err := delivery.NewPickupPoint("cdek", "x", "n", "", "c", delivery.Location{Lat: 1, Lon: 1}, "")
 			return err
 		},
 		"нулевые координаты": func() error {
-			_, err := delivery.NewPickupPoint("cdek", "x", "n", "a", "c", delivery.Location{}, "", nil, t0)
+			_, err := delivery.NewPickupPoint("cdek", "x", "n", "a", "c", delivery.Location{}, "")
 			return err
 		},
 		"широта вне пределов": func() error {
@@ -73,8 +69,6 @@ func TestNewPickupPoint(t *testing.T) {
 				"c",
 				delivery.Location{Lat: 91, Lon: 1},
 				"",
-				nil,
-				t0,
 			)
 			return err
 		},
@@ -87,8 +81,6 @@ func TestNewPickupPoint(t *testing.T) {
 				"c",
 				delivery.Location{Lat: math.NaN(), Lon: 1},
 				"",
-				nil,
-				t0,
 			)
 			return err
 		},
@@ -97,31 +89,6 @@ func TestNewPickupPoint(t *testing.T) {
 	for name, run := range cases {
 		if err := run(); !errors.Is(err, delivery.ErrInvalidPickupPoint) {
 			t.Fatalf("%s: %v", name, err)
-		}
-	}
-}
-
-func TestArea(t *testing.T) {
-	valid := []delivery.Area{
-		{BBox: &delivery.BBox{MinLon: 37.5, MinLat: 55.6, MaxLon: 37.7, MaxLat: 55.8}},
-		{City: "Город"},
-	}
-	for _, area := range valid {
-		if err := area.Validate(); err != nil {
-			t.Fatalf("%+v: %v", area, err)
-		}
-	}
-
-	invalid := []delivery.Area{
-		{},
-		{City: "  "},
-		{City: "Город", BBox: &delivery.BBox{MaxLon: 1, MaxLat: 1}},
-		{BBox: &delivery.BBox{MinLon: 38, MinLat: 55, MaxLon: 37, MaxLat: 56}},
-		{BBox: &delivery.BBox{MinLon: 0, MinLat: -91, MaxLon: 1, MaxLat: 1}},
-	}
-	for _, area := range invalid {
-		if err := area.Validate(); !errors.Is(err, delivery.ErrInvalidArea) {
-			t.Fatalf("%+v должна быть отвергнута: %v", area, err)
 		}
 	}
 }

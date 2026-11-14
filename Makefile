@@ -36,7 +36,7 @@ export REDIS_URL PLATFORM_API_URL SERVICE_TOKEN_MARKETPLACE SMSRU_MODE SEARCH_UR
 IMAGE ?= proshop-marketplace:dev
 TAXONOMY_IMAGE ?= proshop-marketplace-taxonomy:dev
 
-.PHONY: dev infra-up infra-down migrate reindex refresh-pickup-points test test-integration lint build image
+.PHONY: dev infra-up infra-down migrate reindex test test-integration lint build image
 
 ## dev: инфраструктура в compose, миграции и сервис с перезапуском при правках
 dev: infra-up
@@ -60,10 +60,6 @@ migrate:
 ## reindex: перестроить индекс предложений из проекции
 reindex:
 	go run ./cmd/marketplace reindex
-
-## refresh-pickup-points: обновить справочники пунктов выдачи подключённых перевозчиков
-refresh-pickup-points:
-	go run ./cmd/marketplace refresh-pickup-points
 
 ## test: юнит-тесты домена, приложения, транспорта и сторож слоистости
 test:

@@ -158,7 +158,7 @@ func TestConfirmRepricesDiscountsAndLowerPrice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.Quote(ctx, buyerID, c.ID, "cdek", "MSK1"); err != nil {
+	if _, err := e.service.Quote(ctx, buyerID, c.ID, "cdek", "MSK1", "Город"); err != nil {
 		t.Fatal(err)
 	}
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{
@@ -236,7 +236,7 @@ func TestConfirmRejectsExpiredPromo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.Quote(ctx, buyerID, c.ID, "cdek", "MSK1"); err != nil {
+	if _, err := e.service.Quote(ctx, buyerID, c.ID, "cdek", "MSK1", "Город"); err != nil {
 		t.Fatal(err)
 	}
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{
@@ -265,7 +265,7 @@ func TestExpiredPromoRefreshesCartAndAllowsNewCheckout(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := e.service.Quote(ctx, buyerID, purchase.ID, "cdek", "MSK1"); err != nil {
+				if _, err := e.service.Quote(ctx, buyerID, purchase.ID, "cdek", "MSK1", "Город"); err != nil {
 					t.Fatal(err)
 				}
 			}

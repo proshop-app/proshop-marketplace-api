@@ -10,7 +10,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
@@ -64,10 +63,6 @@ func (t *tx) Challenges() buyer.ChallengeRepository { return challenges{t.data} 
 func (t *tx) Carts() cart.Repository { return carts{t.data} }
 
 func (t *tx) Checkouts() checkout.Repository { return checkouts{t.data} }
-
-func (t *tx) PickupPoints() delivery.PickupPointRepository {
-	return pickupPoints{t.data}
-}
 
 func (r participants) Get(_ context.Context, id ids.TenantID) (*participant.Participant, error) {
 	state, ok := r.d.participants[id]

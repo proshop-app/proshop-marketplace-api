@@ -45,7 +45,7 @@ type Deps struct {
 	Participants   *appparticipant.Service
 	Auth           *appbuyer.Auth
 	Carts          *appcart.Service
-	Directory      *appdelivery.Directory
+	Directory      *appdelivery.Service
 	Checkouts      *appcheckout.Service
 	Reference      *appreference.Service
 	OperatorToken  string

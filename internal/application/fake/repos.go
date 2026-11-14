@@ -8,7 +8,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -19,8 +18,6 @@ type challenges struct{ d *data }
 type carts struct{ d *data }
 
 type checkouts struct{ d *data }
-
-type pickupPoints struct{ d *data }
 
 func (r buyers) FindByPhone(_ context.Context, phone buyer.Phone) (buyer.Buyer, error) {
 	for _, b := range r.d.buyers {
@@ -181,60 +178,6 @@ func (r checkouts) Update(_ context.Context, c *checkout.Checkout) error {
 	c.MarkSaved()
 
 	return nil
-}
-
-func (r pickupPoints) Upsert(_ context.Context, points []delivery.PickupPoint) error {
-	for _, point := range points {
-		r.d.points[pointKey{point.Carrier, point.Code}] = point
-	}
-
-	return nil
-}
-
-func (r pickupPoints) DeactivateStale(_ context.Context, carrier delivery.Carrier, since time.Time) (int64, error) {
-	var closed int64
-
-	for key, point := range r.d.points {
-		if key.carrier == carrier && point.Active && point.RefreshedAt.Before(since) {
-			point.Active = false
-			r.d.points[key] = point
-			closed++
-		}
-	}
-
-	return closed, nil
-}
-
-func (r pickupPoints) Get(_ context.Context, carrier delivery.Carrier, code string) (delivery.PickupPoint, error) {
-	point, ok := r.d.points[pointKey{carrier, code}]
-	if !ok {
-		return delivery.PickupPoint{}, delivery.ErrPickupPointNotFound
-	}
-
-	return point, nil
-}
-
-func (r pickupPoints) Page(
-	_ context.Context,
-	carrier delivery.Carrier,
-	after string,
-	limit int,
-) ([]delivery.PickupPoint, error) {
-	var page []delivery.PickupPoint
-
-	for key, point := range r.d.points {
-		if key.carrier == carrier && key.code > after {
-			page = append(page, point)
-		}
-	}
-
-	sort.Slice(page, func(i, j int) bool { return page[i].Code < page[j].Code })
-
-	if len(page) > limit {
-		page = page[:limit]
-	}
-
-	return page, nil
 }
 
 func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Checkout, error) {

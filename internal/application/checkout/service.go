@@ -20,11 +20,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-// PointLookup — действующий пункт выдачи из справочника.
-type PointLookup interface {
-	Point(ctx context.Context, carrier delivery.Carrier, code string) (delivery.PickupPoint, error)
-}
-
 // Config — сроки расчётов.
 type Config struct {
 	// DeliverySubsidyMinPercent — нижняя граница субсидии продавца, 0–100.
@@ -46,7 +41,7 @@ type Service struct {
 	uow      ports.UnitOfWork
 	index    ports.OfferIndex
 	platform ports.PlatformAPI
-	points   PointLookup
+	points   ports.PickupLookup
 	ids      ports.IDs
 	clock    ports.Clock
 	config   Config
@@ -57,7 +52,7 @@ func NewService(
 	uow ports.UnitOfWork,
 	index ports.OfferIndex,
 	platform ports.PlatformAPI,
-	points PointLookup,
+	points ports.PickupLookup,
 	carts ports.CartVerifier,
 	identities ports.IDs,
 	clock ports.Clock,
@@ -187,8 +182,11 @@ func (s *Service) Quote(
 	ctx context.Context,
 	buyerID, checkoutID ids.UUID,
 	carrier delivery.Carrier,
-	pointCode string,
+	pointCode, city string,
 ) (checkout.State, error) {
+	if _, err := delivery.NormalizeCity(city); err != nil {
+		return checkout.State{}, err
+	}
 	c, err := s.load(ctx, buyerID, checkoutID)
 	if err != nil {
 		return checkout.State{}, err
@@ -197,7 +195,7 @@ func (s *Service) Quote(
 		return checkout.State{}, checkout.ErrNotDraft
 	}
 
-	point, err := s.points.Point(ctx, carrier, pointCode)
+	point, err := s.points.Point(ctx, carrier, pointCode, city)
 	if err != nil {
 		return checkout.State{}, err
 	}
@@ -609,6 +607,7 @@ func saveBuyerPickup(ctx context.Context, tx ports.Tx, c *checkout.Checkout) err
 		changed, err := profile.SelectPickup(buyer.Pickup{
 			Provider:   string(selection.Carrier),
 			Code:       selection.PickupPointCode,
+			City:       selection.City,
 			Address:    selection.Address,
 			RegionCode: selection.RegionCode,
 		})

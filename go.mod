@@ -4,7 +4,6 @@ go 1.23.0
 
 require (
 	github.com/jackc/pgx/v5 v5.7.6
-	github.com/opensearch-project/opensearch-go/v4 v4.4.0
 	github.com/pressly/goose/v3 v3.24.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.14.0

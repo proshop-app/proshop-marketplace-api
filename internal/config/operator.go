@@ -1,12 +1,9 @@
 package config
 
 import (
-	"encoding/json"
 	"net/mail"
 	"net/url"
 	"strings"
-
-	"github.com/proshop-app/proshop-marketplace/pkg/regions"
 )
 
 func (r *reader) validateOperator(cfg Operator) {
@@ -28,18 +25,4 @@ func (r *reader) validateOperator(cfg Operator) {
 	if cfg.SessionTTL.Hours() > 24 {
 		r.fail("OPERATOR_SESSION_TTL", "не больше 24h")
 	}
-}
-
-func (r *reader) regionCodes(name string) map[string]string {
-	raw := r.str(name, "{}")
-	var codes map[string]string
-	if err := json.Unmarshal([]byte(raw), &codes); err != nil {
-		r.fail(name, "нужен JSON-объект код зоны → ISO")
-	}
-	for key, value := range codes {
-		if key == "" || !regions.ValidRU(value) {
-			r.fail(name, "значения — существующие ISO 3166-2 RU")
-		}
-	}
-	return codes
 }

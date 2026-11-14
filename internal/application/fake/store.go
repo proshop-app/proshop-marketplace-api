@@ -12,7 +12,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -65,14 +64,8 @@ type data struct {
 	challenges       map[ids.UUID]buyer.ChallengeState
 	carts            map[ids.UUID]cart.State
 	checkouts        map[ids.UUID]checkout.State
-	points           map[pointKey]delivery.PickupPoint
 	leases           map[string]lease
 	reference        *referenceData
-}
-
-type pointKey struct {
-	carrier delivery.Carrier
-	code    string
 }
 
 type lease struct {
@@ -111,7 +104,6 @@ func (d *data) clone() *data {
 		challenges:       maps.Clone(d.challenges),
 		carts:            maps.Clone(d.carts),
 		checkouts:        maps.Clone(d.checkouts),
-		points:           maps.Clone(d.points),
 		leases:           maps.Clone(d.leases),
 		reference:        d.reference.clone(),
 	}
@@ -136,7 +128,6 @@ func NewStore() *Store {
 		challenges:       map[ids.UUID]buyer.ChallengeState{},
 		carts:            map[ids.UUID]cart.State{},
 		checkouts:        map[ids.UUID]checkout.State{},
-		points:           map[pointKey]delivery.PickupPoint{},
 		leases:           map[string]lease{},
 		reference:        newReferenceData(),
 	}}
@@ -424,23 +415,6 @@ func (s *Store) Release(_ context.Context, name, holder string) error {
 	}
 
 	return nil
-}
-
-// SeedPickupPoint кладёт пункт выдачи.
-func (s *Store) SeedPickupPoint(point delivery.PickupPoint) {
-	s.read(func(d *data) { d.points[pointKey{point.Carrier, point.Code}] = point })
-}
-
-// PickupPoint — пункт выдачи, если есть.
-func (s *Store) PickupPoint(carrier delivery.Carrier, code string) (delivery.PickupPoint, bool) {
-	var (
-		point delivery.PickupPoint
-		ok    bool
-	)
-
-	s.read(func(d *data) { point, ok = d.points[pointKey{carrier, code}] })
-
-	return point, ok
 }
 
 // SeedCart кладёт корзину.

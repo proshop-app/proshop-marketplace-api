@@ -21,7 +21,6 @@ var commands = map[string]command{
 	"moderation":              moderationReevaluate,
 	"serve":                   serve,
 	"reindex":                 reindex,
-	"refresh-pickup-points":   refreshPickupPoints,
 	"reference":               referenceDelivery,
 	"model-keys":              modelKeysReport,
 }
@@ -40,7 +39,7 @@ func run() int {
 
 	cmd, ok := commands[name]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "неизвестная команда %q: serve, reindex, refresh-pickup-points или reference\n", name)
+		fmt.Fprintf(os.Stderr, "неизвестная команда %q: serve, reindex или reference\n", name)
 
 		return 2
 	}

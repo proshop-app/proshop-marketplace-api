@@ -2,24 +2,17 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/cdek"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/dadata"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/opensearch"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/smsru"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/yandex"
 )
 
 const (
@@ -33,29 +26,14 @@ const (
 
 // storage — база и индексы процесса.
 type storage struct {
-	pool    *pgxpool.Pool
-	index   *searchapi.Index
-	pickups *opensearch.PickupIndex
+	pool  *pgxpool.Pool
+	index *searchapi.Index
 }
 
-// openStorage подключает PostgreSQL и OpenSearch.
+// openStorage подключает PostgreSQL и API поиска.
 func openStorage(ctx context.Context, cfg config.Config) (*storage, error) {
 	pool, err := postgres.Open(ctx, cfg.Database.URL, cfg.Database.MaxConns)
 	if err != nil {
-		return nil, err
-	}
-
-	geo, err := opensearch.New(opensearch.Config{
-		URLs:               cfg.OpenSearch.URLs,
-		Username:           cfg.OpenSearch.Username,
-		Password:           cfg.OpenSearch.Password,
-		InsecureSkipVerify: cfg.OpenSearch.InsecureSkipVerify,
-		Shards:             cfg.OpenSearch.Shards,
-		Replicas:           cfg.OpenSearch.Replicas,
-	})
-	if err != nil {
-		pool.Close()
-
 		return nil, err
 	}
 
@@ -70,51 +48,14 @@ func openStorage(ctx context.Context, cfg config.Config) (*storage, error) {
 	}
 
 	return &storage{
-		pool:    pool,
-		index:   index,
-		pickups: opensearch.NewPickupIndex(geo, cfg.Delivery.PickupIndex),
+		pool:  pool,
+		index: index,
 	}, nil
 }
 
 // close закрывает соединения с базой.
 func (s *storage) close() {
 	s.pool.Close()
-}
-
-// directory — справочники пунктов выдачи подключённых перевозчиков.
-func directory(store *storage, cfg config.Config) *appdelivery.Directory {
-	return appdelivery.NewDirectory(
-		postgres.NewUnitOfWork(store.pool),
-		carriers(cfg),
-		store.pickups,
-		postgres.NewLeases(store.pool),
-		clock.System{},
-		holder(),
-	)
-}
-
-// carriers — перевозчики, для которых в окружении есть учётная запись платформы.
-func carriers(cfg config.Config) []ports.PickupPointsProvider {
-	var providers []ports.PickupPointsProvider
-
-	if c := cfg.Delivery.CDEK; c.ClientID != "" {
-		providers = append(providers, cdek.New(cdek.Config{
-			BaseURL:      c.URL,
-			RegionCodes:  c.RegionCodes,
-			ClientID:     c.ClientID,
-			ClientSecret: c.ClientSecret,
-		}))
-	}
-
-	if y := cfg.Delivery.Yandex; y.Token != "" {
-		providers = append(providers, yandex.New(yandex.Config{
-			BaseURL:     y.URL,
-			RegionCodes: y.RegionCodes,
-			Token:       y.Token,
-		}))
-	}
-
-	return providers
 }
 
 // callCheck — шлюз проверки звонком: живой sms.ru или песочница для разработки.
@@ -138,16 +79,6 @@ func callCheck(ctx context.Context, cfg config.Config, logger *slog.Logger) port
 	}
 
 	return client
-}
-
-// holder — имя процесса для аренды фоновых задач.
-func holder() string {
-	host, err := os.Hostname()
-	if err != nil {
-		host = "marketplace"
-	}
-
-	return fmt.Sprintf("%s:%d", host, os.Getpid())
 }
 
 func (s *server) geoIP() ports.GeoIP {

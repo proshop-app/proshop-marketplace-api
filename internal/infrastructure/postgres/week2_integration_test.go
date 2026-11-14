@@ -4,7 +4,6 @@ package postgres_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -359,71 +358,9 @@ func TestCheckouts(t *testing.T) {
 	}
 }
 
-func TestPickupPointsAndLeases(t *testing.T) {
+func TestLeases(t *testing.T) {
 	pool := testPool(t)
-	uow := postgres.NewUnitOfWork(pool)
 	ctx := context.Background()
-
-	point := func(code string, refreshed time.Time) delivery.PickupPoint {
-		p, err := delivery.NewPickupPoint(
-			"cdek",
-			code,
-			"Пункт "+code,
-			"ул. Примерная, "+code,
-			"Город",
-			delivery.Location{Lat: 55.7, Lon: 37.6},
-			"Пн-Пт",
-			json.RawMessage(`{"code":"`+code+`"}`),
-			refreshed,
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		return p
-	}
-
-	err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
-		return tx.PickupPoints().
-			Upsert(ctx, []delivery.PickupPoint{point("A1", at(0)), point("A2", at(0)), point("A3", at(0))})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
-		updated := point("A1", at(10))
-		updated.Name = "Обновлённый"
-		if err := tx.PickupPoints().Upsert(ctx, []delivery.PickupPoint{updated}); err != nil {
-			return err
-		}
-
-		closed, err := tx.PickupPoints().DeactivateStale(ctx, "cdek", at(10))
-		if err != nil || closed != 2 {
-			return fmt.Errorf("закрытие непришедших: %d %w", closed, err)
-		}
-
-		p, err := tx.PickupPoints().Get(ctx, "cdek", "A1")
-		if err != nil || p.Name != "Обновлённый" || !p.Active || p.Location.Lat != 55.7 ||
-			string(p.Payload) != `{"code": "A1"}` {
-			return fmt.Errorf("пункт после хранения: %+v %w", p, err)
-		}
-
-		page, err := tx.PickupPoints().Page(ctx, "cdek", "A1", 10)
-		if err != nil || len(page) != 2 || page[0].Code != "A2" || page[0].Active {
-			return fmt.Errorf("страница с закрытыми: %+v %w", page, err)
-		}
-
-		if _, err := tx.PickupPoints().Get(ctx, "yandex", "A1"); !errors.Is(err, delivery.ErrPickupPointNotFound) {
-			return fmt.Errorf("чужой перевозчик: %w", err)
-		}
-
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	leases := postgres.NewLeases(pool)
 	if ok, err := leases.Acquire(ctx, "job", "pod-1", time.Minute); err != nil || !ok {
 		t.Fatalf("свободная аренда: %v %v", ok, err)

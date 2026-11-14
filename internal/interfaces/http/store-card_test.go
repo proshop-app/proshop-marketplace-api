@@ -69,7 +69,7 @@ func TestStoreCardHTTP(t *testing.T) {
 	}
 	refresh()
 	handler := transport.NewHandler(transport.Deps{
-		Features:       appbuyer.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter()),
+		Features:       appbuyer.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{}),
 		Registerer:     prometheus.NewRegistry(),
 		Logger:         slog.Default(),
 		Participants:   service,

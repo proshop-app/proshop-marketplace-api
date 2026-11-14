@@ -23,11 +23,11 @@ func TestPickupAndProfileCommitTogether(t *testing.T) {
 	}
 	failure := errors.New("отказ фиксации")
 	e.store.FailCommit = failure
-	if _, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1"); !errors.Is(err, failure) {
+	if _, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1", "Город"); !errors.Is(err, failure) {
 		t.Fatal(err)
 	}
 	e.store.FailCommit = nil
-	profiles := appbuyer.NewFeatures(e.store, nil, fake.NewPlatform(), fake.NewLimiter())
+	profiles := appbuyer.NewFeatures(e.store, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
 	profile, err := profiles.Profile(ctx, buyerID)
 	if err != nil || profile.PickupPoint != nil {
 		t.Fatal(profile, err)
@@ -36,7 +36,7 @@ func TestPickupAndProfileCommitTogether(t *testing.T) {
 	if !ok || state.Delivery != nil {
 		t.Fatal("оформление не откатилось")
 	}
-	if _, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1"); err != nil {
+	if _, err := e.service.Quote(ctx, buyerID, created.ID, "cdek", "MSK1", "Город"); err != nil {
 		t.Fatal(err)
 	}
 	profile, err = profiles.Profile(ctx, buyerID)

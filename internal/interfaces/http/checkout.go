@@ -105,6 +105,7 @@ type checkoutHandlers struct {
 }
 
 type quoteRequestJSON struct {
+	City            string `json:"city"`
 	Carrier         string `json:"carrier"`
 	PickupPointCode string `json:"pickupPointCode"`
 }
@@ -331,7 +332,18 @@ func (h *checkoutHandlers) quote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.checkouts.Quote(r.Context(), BuyerID(r.Context()), checkoutID, carrier, body.PickupPointCode)
+	if _, err := delivery.NormalizeCity(body.City); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	state, err := h.checkouts.Quote(
+		r.Context(),
+		BuyerID(r.Context()),
+		checkoutID,
+		carrier,
+		body.PickupPointCode,
+		body.City,
+	)
 	h.respond(w, r, http.StatusOK, state, err)
 }
 

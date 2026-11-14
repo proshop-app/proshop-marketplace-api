@@ -24,10 +24,8 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
-	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -51,7 +49,7 @@ type env struct {
 	clock      *fake.Clock
 	calls      *fake.Calls
 	platform   *fake.Platform
-	pickups    *fake.PickupIndex
+	pickups    *fake.PickupLookup
 	healthy    error
 }
 
@@ -74,7 +72,7 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 		clock:    fake.NewClock(t0),
 		calls:    fake.NewCalls(),
 		platform: fake.NewPlatform(),
-		pickups:  fake.NewPickupIndex(),
+		pickups:  &fake.PickupLookup{},
 	}
 	e.store.SeedTaxonomy(taxonomy.Definition{
 		Attributes: []taxonomy.Attribute{{Code: "a0", Name: "Поле", Type: "string"}},
@@ -84,17 +82,13 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 	})
 	registry := prometheus.NewRegistry()
 	identities := &fake.IDs{}
-	provider := &fake.PickupProvider{Info: delivery.CarrierInfo{Code: "cdek", Name: "СДЭК"}}
-	directory := appdelivery.NewDirectory(
-		e.store,
-		[]ports.PickupPointsProvider{provider},
-		e.pickups,
-		e.store,
-		e.clock,
-		"pod",
-	)
+	directory := appdelivery.NewService(e.store, e.platform, fake.NewPickupCache(), appdelivery.Config{
+		Attempts:     3,
+		TTL:          time.Hour,
+		QuoteTimeout: time.Second,
+	})
 	deps := transport.Deps{
-		Features:     appbuyer.NewFeatures(e.store, e.geo, e.platform, e.limiter),
+		Features:     appbuyer.NewFeatures(e.store, e.geo, e.platform, e.limiter, e.pickups),
 		Taxonomy:     apptaxonomy.NewService(e.store, e.clock, nil),
 		Catalog:      appcatalog.NewQueries(e.store, e.index, e.platform, nil, nil, fake.NewClock(time.Time{})),
 		Participants: appparticipant.NewService(e.store, e.clock, &fake.IDs{}),
@@ -122,7 +116,7 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 			e.store,
 			e.index,
 			e.platform,
-			directory,
+			e.pickups,
 			appcart.NewService(e.store, e.index, e.platform, identities, e.clock, time.Hour),
 			identities,
 			e.clock,
