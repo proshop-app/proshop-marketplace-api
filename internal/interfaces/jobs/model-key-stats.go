@@ -19,6 +19,8 @@ type ModelKeyStatsRunner struct {
 	offers     *prometheus.GaugeVec
 	shared     *prometheus.GaugeVec
 	directions *prometheus.GaugeVec
+	schemas    *prometheus.GaugeVec
+	incomplete *prometheus.GaugeVec
 }
 
 // NewModelKeyStatsRunner создаёт обновление метрик ключей модели.
@@ -28,6 +30,20 @@ func NewModelKeyStatsRunner(
 	registerer prometheus.Registerer,
 ) *ModelKeyStatsRunner {
 	runner := &ModelKeyStatsRunner{
+		schemas: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "marketplace_model_key_offers_by_schema",
+				Help: "Опубликованные предложения по схеме и источнику ключа.",
+			},
+			[]string{"schema", "source"},
+		),
+		incomplete: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "marketplace_identity_incomplete_share",
+				Help: "Доля опубликованных предложений с незаполненной идентичностью по схеме.",
+			},
+			[]string{"schema"},
+		),
 		stats:  stats,
 		logger: logger,
 		offers: prometheus.NewGaugeVec(
@@ -52,7 +68,7 @@ func NewModelKeyStatsRunner(
 			[]string{"direction", "source"},
 		),
 	}
-	registerer.MustRegister(runner.offers, runner.shared, runner.directions)
+	registerer.MustRegister(runner.offers, runner.shared, runner.directions, runner.schemas, runner.incomplete)
 
 	return runner
 }
@@ -67,15 +83,21 @@ func (r *ModelKeyStatsRunner) RunOnce(ctx context.Context) {
 	r.offers.Reset()
 	r.shared.Reset()
 	r.directions.Reset()
-	for _, source := range []string{"gtin", "mpn", "none"} {
+	r.schemas.Reset()
+	r.incomplete.Reset()
+	for _, source := range []string{"identity", "none"} {
 		r.offers.WithLabelValues(source).Set(0)
 		r.shared.WithLabelValues(source).Set(0)
 	}
 	for _, count := range report.Counts {
-		if count.Direction == "" {
+		switch {
+		case count.Schema != "":
+			r.schemas.WithLabelValues(count.Schema, count.Source).Set(float64(count.Offers))
+			r.incomplete.WithLabelValues(count.Schema).Add(count.IdentityIncompleteShare)
+		case count.Direction == "":
 			r.offers.WithLabelValues(count.Source).Set(float64(count.Offers))
 			r.shared.WithLabelValues(count.Source).Set(float64(count.Shared))
-		} else {
+		default:
 			r.directions.WithLabelValues(count.Direction, count.Source).Set(float64(count.Offers))
 		}
 	}

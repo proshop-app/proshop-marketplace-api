@@ -23,6 +23,7 @@ type Category struct {
 type Card struct {
 	ModelKey       string
 	ModelKeySource string
+	VariantKey     string
 	Variants       *Variants
 	Marketplace    *taxonomy.Card
 	Publication    taxonomy.Publication

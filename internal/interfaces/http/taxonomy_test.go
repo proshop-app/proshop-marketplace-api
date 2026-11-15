@@ -44,7 +44,12 @@ func TestTaxonomyHTTP(t *testing.T) {
 				Facet:      true,
 			},
 		},
-		Schemas: map[string]taxonomy.Schema{"s1": {Attributes: []string{"a1"}}},
+		Schemas: map[string]taxonomy.Schema{
+			"s1": {
+				Attributes: []string{"a1"},
+				Identity:   &taxonomy.SchemaIdentity{Model: []string{"a1"}, Axes: []string{}},
+			},
+		},
 		Categories: []taxonomy.Category{
 			{
 				ID:     "c1",
@@ -100,6 +105,11 @@ func TestTaxonomyHTTP(t *testing.T) {
 			(!strings.Contains(w.Body.String(), `"slug":"c1"`) ||
 				!strings.Contains(w.Body.String(), `"title":"Полное имя категории"`)) {
 			t.Fatalf("нет адреса или полного имени в API: %s", w.Body.String())
+		}
+		if strings.HasSuffix(path, "/schema") || strings.HasSuffix(path, "/schemas") {
+			if !strings.Contains(w.Body.String(), `"identity":{"model":["a1"],"axes":[]}`) {
+				t.Fatalf("нет identity в API: %s", w.Body.String())
+			}
 		}
 		w = call(http.MethodGet, path, "", "", `"other", W/"taxonomy-1"`)
 		if w.Code != 304 || w.Body.Len() != 0 {
@@ -280,6 +290,32 @@ func TestTrackQueryParsing(t *testing.T) {
 		r.Header.Set("X-Marketplace-Money-Unit", "RUB")
 		if _, err := parseOfferQuery(r); err == nil {
 			t.Fatalf("принят track=%s", raw)
+		}
+	}
+}
+
+func TestTaxonomyAttributeFormatHTTP(t *testing.T) {
+	store := fake.NewStore()
+	store.SeedTaxonomy(taxonomy.Definition{
+		Version:    1,
+		Attributes: []taxonomy.Attribute{{Code: "identifier", Name: "Идентификатор", Type: "string", Format: "isbn"}},
+		Schemas:    map[string]taxonomy.Schema{"s1": {Attributes: []string{"identifier"}}},
+		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория", Slug: "c1", Schema: "s1"}},
+	})
+	handler := NewHandler(Deps{
+		Registerer: prometheus.NewRegistry(),
+		Taxonomy:   apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	for _, path := range []string{"/api/v1/taxonomy/attributes", "/api/v1/taxonomy/categories/c1/schema"} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		var body struct {
+			Attributes []taxonomy.Attribute `json:"attributes"`
+		}
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &body) != nil ||
+			len(body.Attributes) != 1 || body.Attributes[0].Format != "isbn" {
+			t.Fatal(path, response.Code, response.Body.String())
 		}
 	}
 }

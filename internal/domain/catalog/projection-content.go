@@ -18,7 +18,9 @@ func projectionContent(state ProductState) ProductState {
 	state.UpdatedAt = time.Time{}
 	state.Card.ModelKey = ""
 	state.Card.ModelKeySource = ""
+	state.Card.VariantKey = ""
 	state.Card.Publication.Version = 0
+	state.Card.Publication.Schema = ""
 	state.Card.Publication.AttributeSearchTerms = nil
 	return state
 }

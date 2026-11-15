@@ -52,6 +52,7 @@ type OfferDocument struct {
 	Variants             *catalog.Variants
 	ModelKey             string
 	ModelKeySource       string
+	VariantKey           string
 	PriceProfiles        []catalog.PriceProfile
 	CategoryID           string
 	CategoryPath         []string
