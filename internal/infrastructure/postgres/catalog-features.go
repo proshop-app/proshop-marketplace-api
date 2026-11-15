@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	recommendationCandidateMultiplier = 10
-	selectBuyerInterests              = `
+	selectBuyerInterests = `
 		WITH interests AS (
 			SELECT tenant_id, product_id, false AS purchased
 			FROM buyer_favorites WHERE buyer_id = $1
@@ -36,56 +35,74 @@ const (
 		FROM interests i LEFT JOIN catalog_products p
 			ON p.tenant_id = i.tenant_id AND p.product_id = i.product_id`
 
-	recommendationStart = `
-		WITH top_candidates AS MATERIALIZED (
-			SELECT p.tenant_id, p.product_id, p.variant_group, p.sales_count
-			FROM catalog_products p
-			JOIN participants pa ON pa.tenant_id = p.tenant_id
-			JOIN tenants t ON t.tenant_id = p.tenant_id
-			JOIN moderation_verdicts mv ON mv.tenant_id = p.tenant_id AND mv.product_id = p.product_id
+	// Каждый магазин даёт не больше limit кандидатов до свёртки и оконного ранжирования.
+	selectRecommendations = `
+		WITH eligible AS MATERIALIZED (
+			SELECT candidate.*
+			FROM participants m
+			JOIN tenants t ON t.tenant_id = m.tenant_id
 			CROSS JOIN LATERAL (
-				SELECT CASE WHEN $7::jsonb IS NULL OR ($4::bigint IS NULL AND $5::bigint IS NULL)
-					THEN p.default_price ELSE
-					(SELECT (profile->>'effectivePrice')::bigint
-					 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.price_profiles) = 'array'
-					 THEN p.price_profiles ELSE '[]'::jsonb END) profile
-					 WHERE profile->>'key' = $7::jsonb->>p.tenant_id) END AS price
-			) pricing
-			WHERE p.on_sale AND pa.enabled AND pa.delivery_valid AND t.status = 'active'
-				AND mv.status = 'allowed' AND pricing.price IS NOT NULL
-				AND p.default_price IS NOT NULL
-				AND NOT EXISTS (
-					SELECT 1 FROM catalog_products excluded
-					WHERE excluded.tenant_id = p.tenant_id AND excluded.variant_group = p.variant_group
-						AND excluded.tenant_id || '~' || excluded.product_id = ANY($2::text[])
-				)
-				AND ($3 = '' OR pa.delivery_settings->'regions' ? $3)
-				AND ($4::bigint IS NULL OR pricing.price >= $4)
-				AND ($5::bigint IS NULL OR pricing.price <= $5)`
-
-	selectRecommendationsByCategory = recommendationStart + `
-				AND p.category_id = ANY($1::text[])` + recommendationOrder + `$9` + recommendationEnd
-	selectRecommendationsPopular = recommendationStart + recommendationOrder + `$1` + recommendationEnd
-
-	recommendationOrder = `
-			ORDER BY p.sales_count DESC, p.tenant_id, p.product_id
-			LIMIT `
-
-	recommendationEnd = `
+				SELECT p.tenant_id, p.product_id, p.variant_group, p.sales_count,
+					p.ratings_count, p.average_rating, p.updated_at,
+					md5(p.tenant_id || '~' || p.product_id) AS offer_key
+				FROM catalog_products p
+				JOIN moderation_verdicts mv ON mv.tenant_id = p.tenant_id AND mv.product_id = p.product_id
+				CROSS JOIN LATERAL (
+					SELECT CASE WHEN $7::jsonb IS NULL OR ($4::bigint IS NULL AND $5::bigint IS NULL)
+						THEN p.default_price ELSE
+						(SELECT (profile->>'effectivePrice')::bigint
+						 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.price_profiles) = 'array'
+						 THEN p.price_profiles ELSE '[]'::jsonb END) profile
+						 WHERE profile->>'key' = $7::jsonb->>p.tenant_id) END AS price
+				) pricing
+				WHERE p.tenant_id = m.tenant_id AND p.on_sale AND p.default_price IS NOT NULL
+					AND mv.status = 'allowed' AND pricing.price IS NOT NULL
+					AND NOT EXISTS (
+						SELECT 1 FROM catalog_products excluded
+						WHERE excluded.tenant_id = p.tenant_id AND excluded.variant_group = p.variant_group
+							AND excluded.tenant_id || '~' || excluded.product_id = ANY($2::text[])
+					)
+					AND ($4::bigint IS NULL OR pricing.price >= $4)
+					AND ($5::bigint IS NULL OR pricing.price <= $5)
+					AND (cardinality($1::text[]) = 0 OR p.category_id = ANY($1::text[]))
+				ORDER BY ` + recommendationRank + `
+				LIMIT $8
+			) candidate
+			WHERE m.enabled AND m.delivery_valid AND t.status = 'active'
+				AND ($3 = '' OR m.delivery_settings->'regions' ? $3)
 		), candidates AS (
-			SELECT DISTINCT ON (tenant_id, variant_group) tenant_id, product_id, sales_count
-			FROM top_candidates
-			ORDER BY tenant_id, variant_group, sales_count DESC, product_id
+			SELECT DISTINCT ON (tenant_id, variant_group) *
+			FROM eligible
+			ORDER BY tenant_id, variant_group, ` + recommendationRank + `
+		), ranked AS (
+			SELECT *, row_number() OVER (PARTITION BY tenant_id ORDER BY ` + recommendationRank + `) AS tenant_rank
+			FROM candidates
 		), selected AS (
-			SELECT * FROM candidates
-			ORDER BY CASE WHEN $6 = '' OR tenant_id <> $6 THEN 0 ELSE 1 END,
-				sales_count DESC, tenant_id, product_id
+			SELECT *, row_number() OVER (ORDER BY
+				CASE WHEN $6 = '' OR tenant_id <> $6 THEN 0 ELSE 1 END,
+				GREATEST(tenant_rank - (($8::int + 3) / 4), 0), ` + recommendationRank + `) AS position
+			FROM ranked
+			ORDER BY position
 			LIMIT $8
 		)
 		` + offerSelect + `
 		JOIN selected s ON s.tenant_id = p.tenant_id AND s.product_id = p.product_id
-		ORDER BY CASE WHEN $6 = '' OR p.tenant_id <> $6 THEN 0 ELSE 1 END,
-			p.sales_count DESC, p.tenant_id, p.product_id`
+		ORDER BY s.position`
+
+	recommendationRank = `sales_count DESC, ratings_count DESC, average_rating DESC,
+			updated_at DESC, offer_key, product_id`
+
+	selectViewedCategories = `
+		SELECT DISTINCT p.category_id
+		FROM unnest($1::text[], $2::text[]) AS viewed(tenant_id, product_id)
+		JOIN catalog_products p USING (tenant_id, product_id)
+		JOIN participants pa ON pa.tenant_id = p.tenant_id
+		JOIN tenants t ON t.tenant_id = p.tenant_id
+		JOIN moderation_verdicts mv ON mv.tenant_id = p.tenant_id AND mv.product_id = p.product_id
+		WHERE p.on_sale AND p.default_price IS NOT NULL
+			AND pa.enabled AND pa.delivery_valid AND t.status = 'active' AND mv.status = 'allowed'
+			AND p.category_id IS NOT NULL AND p.category_id <> ''
+		ORDER BY p.category_id`
 )
 
 // CatalogFeatures читает интересы и рекомендации из локальной проекции.
@@ -151,9 +168,8 @@ func (r *CatalogFeatures) Recommend(
 		}
 		contexts = string(raw)
 	}
-	query := selectRecommendationsPopular
 	args := []any{
-		filter.Limit * recommendationCandidateMultiplier,
+		categories,
 		excluded,
 		filter.Region,
 		filter.PriceMin,
@@ -162,17 +178,26 @@ func (r *CatalogFeatures) Recommend(
 		contexts,
 		filter.Limit,
 	}
-	if len(categories) > 0 {
-		query = selectRecommendationsByCategory
-		args[0] = categories
-		args = append(args, filter.Limit*recommendationCandidateMultiplier)
-	}
 	var result []ports.OfferState
 	err := r.source.withConnection(ctx, func(db *gorm.DB) error {
 		reader := Offers{db: db}
 		var err error
-		result, err = reader.query(ctx, query, args...)
+		result, err = reader.query(ctx, selectRecommendations, args...)
 		return err
 	})
 	return result, err
+}
+
+// ViewedCategories читает категории видимых просмотров одним запросом по ключам проекции.
+func (r *CatalogFeatures) ViewedCategories(ctx context.Context, viewed []ids.OfferID) ([]string, error) {
+	tenants, products := make([]string, 0, len(viewed)), make([]string, 0, len(viewed))
+	for _, id := range viewed {
+		tenants = append(tenants, string(id.Tenant))
+		products = append(products, string(id.Product))
+	}
+	var categories []string
+	err := r.source.withConnection(ctx, func(db *gorm.DB) error {
+		return rawSQL(ctx, db, selectViewedCategories, tenants, products).Scan(&categories).Error
+	})
+	return categories, err
 }

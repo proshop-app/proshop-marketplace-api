@@ -4,6 +4,8 @@ package postgres_test
 
 import (
 	"context"
+	"crypto/md5"
+	"fmt"
 	"testing"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
@@ -19,6 +21,20 @@ import (
 )
 
 const (
+	dominantRecommendationSales = `UPDATE catalog_products SET sales_count = 10000 WHERE tenant_id = 't1'`
+	equalRecommendationSignals  = `UPDATE catalog_products SET
+ sales_count = 0,
+ ratings_count = 0,
+ average_rating = 0,
+ updated_at = '2026-01-01'`
+
+	hideViewedProducts      = `UPDATE catalog_products SET deleted = true WHERE tenant_id = 't1'`
+	zeroRecommendationSales = `UPDATE catalog_products SET
+ sales_count = 0,
+ ratings_count = CASE WHEN tenant_id = 't4' THEN 100 ELSE 0 END,
+ average_rating = 0,
+ updated_at = '2026-01-01'`
+
 	updateInterestStatus = `UPDATE checkout_groups SET order_progress = jsonb_build_object('Status', $2::text)
  WHERE checkout_id = $1`
 
@@ -36,6 +52,11 @@ const (
 )
 
 func seedRecommendationTenant(t *testing.T, uow *postgres.UnitOfWork, tenant ids.TenantID) {
+	t.Helper()
+	seedRecommendationProducts(t, uow, tenant, 3)
+}
+
+func seedRecommendationProducts(t *testing.T, uow *postgres.UnitOfWork, tenant ids.TenantID, count int) {
 	t.Helper()
 	seedTenant(t, uow, tenant, string(tenant), participant.TenantActive)
 	if err := uow.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
@@ -55,15 +76,16 @@ func seedRecommendationTenant(t *testing.T, uow *postgres.UnitOfWork, tenant ids
 		if err := tx.Participants().Add(ctx, member); err != nil {
 			return err
 		}
-		for i, id := range []ids.ProductID{"p1", "p2", "p3"} {
+		for i := 0; i < count; i++ {
+			id := ids.ProductID(fmt.Sprintf("p%d", i+1))
 			snap := snapshot(tenant, id, 1, 0)
-			if id == "p3" {
+			if i >= 2 {
 				// p1 и p2 — варианты одной модели, p3 — сам по себе: выдача сворачивает группу до одного.
 				snap.Card.VariantsID = ""
 			}
 			snap.Card.Publication = taxonomy.Publication{Published: true, CategoryID: "c1"}
 			snap.AverageRating, snap.RatingsCount = 4.5, 12
-			snap.SalesCount = int64(10 - i)
+			snap.SalesCount = int64(1000 - i)
 			snap.PriceProfiles[0].EffectivePrice = money.FromKopecks(10000 + int64(i)*5000)
 			product, err := catalog.NewProduct(snap, at(0))
 			if err != nil {
@@ -253,7 +275,7 @@ func TestRecommendationsCollapseGroupsAndGeneratedColumns(t *testing.T) {
 	}
 	repository := postgres.NewCatalogFeatures(pool)
 	states, err := repository.Recommend(ctx, ports.RecommendationFilter{Categories: []string{"c2"}, Limit: 20})
-	if err != nil || len(states) != 1 || states[0].Product.State().ProductID != "p1" {
+	if err != nil || len(states) != 1 || states[0].Product.State().Card.VariantsID != "v1" {
 		t.Fatal(states, err)
 	}
 	states, err = repository.Recommend(ctx, ports.RecommendationFilter{
@@ -327,5 +349,138 @@ func TestFavoriteCategoryProducesPersonalRecommendations(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("избранное ошибочно исключено как купленное")
+	}
+}
+
+func TestRecommendationTenantDiversity(t *testing.T) {
+	for _, count := range []int{10, 2} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			pool := testPool(t)
+			uow := postgres.NewUnitOfWork(pool)
+			ctx := context.Background()
+			// Больше старого предварительного LIMIT: чужие магазины нельзя отрезать заранее.
+			seedRecommendationProducts(t, uow, "t1", 240)
+			for _, tenant := range []ids.TenantID{"t2", "t3", "t4"} {
+				seedRecommendationProducts(t, uow, tenant, count)
+			}
+			if _, err := pool.Exec(ctx, dominantRecommendationSales); err != nil {
+				t.Fatal(err)
+			}
+			repository := postgres.NewCatalogFeatures(pool)
+			for _, categories := range [][]string{nil, {"c1"}} {
+				states, err := repository.Recommend(ctx, ports.RecommendationFilter{Categories: categories, Limit: 20})
+				if err != nil || len(states) != 20 {
+					t.Fatal(len(states), err)
+				}
+				counts := map[ids.TenantID]int{}
+				for _, state := range states {
+					counts[state.Product.State().TenantID]++
+				}
+				want := 5
+				if count == 2 {
+					want = 1 // Два варианта образуют одну группу.
+				}
+				for _, tenant := range []ids.TenantID{"t2", "t3", "t4"} {
+					if counts[tenant] != want {
+						t.Fatal(counts)
+					}
+				}
+				if counts["t1"] != 20-3*want {
+					t.Fatal(counts)
+				}
+			}
+			if _, err := pool.Exec(ctx, zeroRecommendationSales); err != nil {
+				t.Fatal(err)
+			}
+			states, err := repository.Recommend(ctx, ports.RecommendationFilter{Limit: 20})
+			if err != nil || len(states) != 20 || states[0].Product.State().TenantID != "t4" {
+				t.Fatal(states, err)
+			}
+		})
+	}
+}
+
+func TestViewedCategoriesAndGuestRecommendations(t *testing.T) {
+	pool := testPool(t)
+	uow := postgres.NewUnitOfWork(pool)
+	ctx := context.Background()
+	seedRecommendationTenant(t, uow, "t1")
+	seedRecommendationTenant(t, uow, "t2")
+	repository := postgres.NewCatalogFeatures(pool)
+	viewed := []ids.OfferID{
+		{Tenant: "t1", Product: "p1"},
+		{Tenant: "missing", Product: "p1"},
+	}
+	categories, err := repository.ViewedCategories(ctx, viewed)
+	if err != nil || len(categories) != 1 || categories[0] != "c1" {
+		t.Fatal(categories, err)
+	}
+	q := appcatalog.NewQueries(uow, nil, fake.NewPlatform(), repository, repository, fake.NewClock(at(0)))
+	result, err := q.Recommend(ctx, appcatalog.RecommendationRequest{Context: "home", Viewed: viewed, Limit: 20})
+	if err != nil || result.Reason != "personal" || len(result.Items) != 3 {
+		t.Fatal(result, err)
+	}
+	for _, item := range result.Items {
+		if item.Offer.CategoryID != "c1" || item.Offer.ID == "t1~p1" || item.Offer.ID == "t1~p2" {
+			t.Fatal(item)
+		}
+	}
+	if _, err := pool.Exec(ctx, hideViewedProducts); err != nil {
+		t.Fatal(err)
+	}
+	categories, err = repository.ViewedCategories(ctx, viewed)
+	if err != nil || len(categories) != 0 {
+		t.Fatal(categories, err)
+	}
+}
+
+func TestRecommendationStableTieOrder(t *testing.T) {
+	pool := testPool(t)
+	uow := postgres.NewUnitOfWork(pool)
+	ctx := context.Background()
+	want, minimum := "", ""
+	for _, tenant := range []ids.TenantID{"t1", "t2", "t3", "t4"} {
+		seedRecommendationTenant(t, uow, tenant)
+		for _, product := range []string{"p1", "p2", "p3"} {
+			id := string(tenant) + "~" + product
+			key := fmt.Sprintf("%x", md5.Sum([]byte(id)))
+			if minimum == "" || key < minimum {
+				minimum, want = key, id
+			}
+		}
+	}
+	if _, err := pool.Exec(ctx, equalRecommendationSignals); err != nil {
+		t.Fatal(err)
+	}
+	repository := postgres.NewCatalogFeatures(pool)
+	for i := 0; i < 2; i++ {
+		states, err := repository.Recommend(ctx, ports.RecommendationFilter{Limit: 1})
+		if err != nil || len(states) != 1 {
+			t.Fatal(states, err)
+		}
+		state := states[0].Product.State()
+		if got := (ids.OfferID{Tenant: state.TenantID, Product: state.ProductID}).String(); got != want {
+			t.Fatal(got, want)
+		}
+	}
+}
+
+func TestRecommendationLimitsCandidatesBeforeVariantCollapse(t *testing.T) {
+	pool := testPool(t)
+	uow := postgres.NewUnitOfWork(pool)
+	seedRecommendationProducts(t, uow, "t1", 240)
+	repository := postgres.NewCatalogFeatures(pool)
+	for _, categories := range [][]string{nil, {"c1"}} {
+		states, err := repository.Recommend(context.Background(), ports.RecommendationFilter{
+			Categories: categories,
+			Limit:      3,
+		})
+		// В трёх лучших кандидатах p1 и p2 — варианты; p4 уже вне лимита магазина.
+		if err != nil || len(states) != 2 {
+			t.Fatal(states, err)
+		}
+		if states[0].Product.State().ProductID != "p1" || states[1].Product.State().ProductID != "p3" {
+			t.Fatal(states)
+		}
 	}
 }

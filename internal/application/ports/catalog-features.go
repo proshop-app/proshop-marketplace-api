@@ -46,5 +46,6 @@ type RecommendationFilter struct {
 
 // RecommendationOffers возвращает согласованные снимки кандидатов без N+1.
 type RecommendationOffers interface {
+	ViewedCategories(context.Context, []ids.OfferID) ([]string, error)
 	Recommend(context.Context, RecommendationFilter) ([]OfferState, error)
 }
