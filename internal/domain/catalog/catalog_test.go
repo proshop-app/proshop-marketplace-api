@@ -266,3 +266,32 @@ func TestProductCopiesAssets(t *testing.T) {
 		t.Fatal("восстановленная галерея разделяет срез")
 	}
 }
+
+func TestComposeOfferOnlyVariantListing(t *testing.T) {
+	cases := []struct {
+		name        string
+		variantsID  string
+		onlyVariant bool
+		listed      bool
+	}{
+		{name: "обычный товар", listed: true},
+		{name: "вариант группы", variantsID: "g1", listed: true},
+		{name: "только как вариант в группе", variantsID: "g1", onlyVariant: true, listed: false},
+		{name: "флаг без группы", onlyVariant: true, listed: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := snapshot(1, t1)
+			s.Card.VariantsID = c.variantsID
+			s.Card.OnlyVariant = c.onlyVariant
+			product, err := catalog.NewProduct(s, t1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			offer := catalog.ComposeOffer(product, nil, visibleSeller, allowedVerdict())
+			if !offer.Visible || offer.Listed != c.listed {
+				t.Fatalf("visible=%v listed=%v, ожидалось listed=%v", offer.Visible, offer.Listed, c.listed)
+			}
+		})
+	}
+}

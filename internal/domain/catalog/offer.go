@@ -74,7 +74,10 @@ func ComposeOffer(product *Product, signals *Signals, seller Seller, verdict *mo
 	offer.Available = available
 	offer.InStock = available > 0
 	offer.Visible = seller.Visible && state.Card.Visible && state.Card.Publication.Published && verdict.Allowed()
-	offer.Listed = offer.Visible
+	// «Только как вариант» прячет товар из выдачи, только если он состоит в группе вариантов:
+	// без группы его больше негде показать.
+	variantOnly := state.Card.OnlyVariant && state.Card.VariantsID != ""
+	offer.Listed = offer.Visible && !variantOnly
 	offer.CheckoutAvailable = offer.Visible && seller.CheckoutAvailable
 
 	return offer
