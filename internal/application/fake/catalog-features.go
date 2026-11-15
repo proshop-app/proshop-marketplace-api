@@ -13,6 +13,9 @@ type CatalogFeatures struct {
 	mu             sync.Mutex
 	RecommendHook  func(context.Context) error
 	CategoryStates map[string][]ports.OfferState
+	Viewed         []ids.OfferID
+	ViewedCalls    int
+	ViewCategories []string
 	BuyerInterests ports.BuyerInterestSet
 	States         []ports.OfferState
 	Filter         ports.RecommendationFilter
@@ -65,4 +68,13 @@ func (p *Platform) ProductReviews(
 		result.Items = append(result.Items, p.Reviews[offset:min(offset+limit, len(p.Reviews))]...)
 	}
 	return result, nil
+}
+
+// ViewedCategories фиксирует пакет просмотров.
+func (f *CatalogFeatures) ViewedCategories(_ context.Context, viewed []ids.OfferID) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Viewed = append([]ids.OfferID{}, viewed...)
+	f.ViewedCalls++
+	return f.ViewCategories, f.Err
 }

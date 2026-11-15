@@ -44,6 +44,18 @@ func (h *catalogHandlers) recommendations(w http.ResponseWriter, r *http.Request
 		BuyerID: BuyerID(r.Context()),
 		Region:  values.Get("deliveryRegion"),
 	}
+	if len(values["viewed"]) > appcatalog.MaxViewedOffers {
+		writeError(w, r, appcatalog.ErrInvalidQuery.WithMessage("viewed допускает не больше 20 предложений"))
+		return
+	}
+	for _, value := range values["viewed"] {
+		id, err := ids.ParseOfferID(value)
+		if err != nil {
+			writeError(w, r, appcatalog.ErrInvalidQuery.WithMessage("некорректный viewed"))
+			return
+		}
+		request.Viewed = append(request.Viewed, id)
+	}
 	var err error
 	request.Limit, err = intParam(values.Get("limit"))
 	if err != nil {

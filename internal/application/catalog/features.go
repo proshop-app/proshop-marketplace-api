@@ -14,6 +14,9 @@ import (
 )
 
 const (
+	// MaxViewedOffers ограничивает число переданных просмотров до удаления повторов.
+	MaxViewedOffers = 20
+
 	recommendationCacheCapacity = 512
 	recommendationCacheTTL      = time.Minute
 	recommendationLoadTimeout   = 5 * time.Second
@@ -22,6 +25,7 @@ const (
 // RecommendationRequest — контекст рекомендации и регион доставки.
 type RecommendationRequest struct {
 	Context string
+	Viewed  []ids.OfferID
 	OfferID ids.OfferID
 	BuyerID ids.UUID
 	Region  string
@@ -62,6 +66,11 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 		(request.Region != "" && !regions.ValidRU(request.Region)) {
 		return result, ErrInvalidQuery.WithMessage("неизвестный контекст или регион")
 	}
+	viewed, err := normalizeViewed(request.Viewed)
+	if err != nil {
+		return result, err
+	}
+	request.Viewed = viewed
 	query, err := normalize(ports.OfferQuery{Limit: request.Limit})
 	if err != nil {
 		return result, err
@@ -104,12 +113,10 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 		filter.Excluded = []ids.OfferID{request.OfferID}
 		filter.OtherTenant = request.OfferID.Tenant
 		result.Reason = "similar"
-	} else if request.BuyerID != "" {
-		interests, readErr := q.interests.Interests(ctx, request.BuyerID)
-		if readErr != nil {
-			return result, readErr
+	} else {
+		if err := q.homeInterests(ctx, request, &filter); err != nil {
+			return result, err
 		}
-		filter.Categories, filter.Excluded = interests.Categories, interests.Purchased
 		if len(filter.Categories) > 0 {
 			result.Reason = "personal"
 		}
@@ -222,4 +229,46 @@ func recommendationPriceBounds(price int64) (int64, int64) {
 		high = price + extra
 	}
 	return low, high
+}
+
+func normalizeViewed(viewed []ids.OfferID) ([]ids.OfferID, error) {
+	if len(viewed) > MaxViewedOffers {
+		return nil, ErrInvalidQuery.WithMessage("viewed допускает не больше 20 предложений")
+	}
+	result := make([]ids.OfferID, 0, len(viewed))
+	seen := make(map[ids.OfferID]bool, len(viewed))
+	for _, id := range viewed {
+		if parsed, err := ids.ParseOfferID(id.String()); err != nil || parsed != id {
+			return nil, ErrInvalidQuery.WithMessage("некорректный viewed")
+		}
+		if !seen[id] {
+			seen[id] = true
+			result = append(result, id)
+		}
+	}
+	return result, nil
+}
+
+func (q *Queries) homeInterests(
+	ctx context.Context,
+	request RecommendationRequest,
+	filter *ports.RecommendationFilter,
+) error {
+	if request.BuyerID != "" {
+		interests, err := q.interests.Interests(ctx, request.BuyerID)
+		if err != nil {
+			return err
+		}
+		filter.Categories = append(filter.Categories, interests.Categories...)
+		filter.Excluded = append(filter.Excluded, interests.Purchased...)
+	}
+	if len(request.Viewed) > 0 {
+		categories, err := q.recommendations.ViewedCategories(ctx, request.Viewed)
+		if err != nil {
+			return err
+		}
+		filter.Categories = append(filter.Categories, categories...)
+		filter.Excluded = append(filter.Excluded, request.Viewed...)
+	}
+	return nil
 }

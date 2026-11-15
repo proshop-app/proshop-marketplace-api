@@ -150,3 +150,33 @@ func TestReviewsHiddenAndUnavailable(t *testing.T) {
 		t.Fatal(response.Code, response.Body.String())
 	}
 }
+
+func TestRecommendationsViewedValidation(t *testing.T) {
+	features := &fake.CatalogFeatures{}
+	q := appcatalog.NewQueries(
+		fake.NewStore(),
+		fake.NewIndex(),
+		fake.NewPlatform(),
+		features,
+		features,
+		fake.NewClock(time.Time{}),
+	)
+	h := catalogHandlers{queries: q}
+	for _, query := range []string{"&viewed=bad", "&viewed=", strings.Repeat("&viewed=t1~p1", 21)} {
+		r := httptest.NewRequest(http.MethodGet, "/recommendations?context=home"+query, nil)
+		w := httptest.NewRecorder()
+		h.recommendations(w, r)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "catalog.invalid_query") {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	if features.Calls != 0 || features.ViewedCalls != 0 {
+		t.Fatal("невалидный запрос дошёл до проекции")
+	}
+	r := httptest.NewRequest(http.MethodGet, "/recommendations?context=home"+strings.Repeat("&viewed=t1~p1", 20), nil)
+	w := httptest.NewRecorder()
+	h.recommendations(w, r)
+	if w.Code != http.StatusOK || features.ViewedCalls != 1 || len(features.Viewed) != 1 {
+		t.Fatal(w.Code, w.Body.String(), features)
+	}
+}

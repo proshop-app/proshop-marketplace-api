@@ -307,3 +307,36 @@ func TestGuestRecommendationsShareMissAndDoNotCacheErrors(t *testing.T) {
 		t.Fatal(features.Calls)
 	}
 }
+
+func TestViewedRecommendationsForGuestAndBuyer(t *testing.T) {
+	for _, buyer := range []ids.UUID{"", "buyer"} {
+		store := fake.NewStore()
+		states := recommendationStates(t, store)
+		features := &fake.CatalogFeatures{
+			States:         states[1:2],
+			ViewCategories: []string{"c1"},
+			BuyerInterests: ports.BuyerInterestSet{Categories: []string{"c2"}},
+		}
+		q := app.NewQueries(store, fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(t0))
+		viewed := ids.OfferID{Tenant: "t1", Product: "p1"}
+		result, err := q.Recommend(context.Background(), app.RecommendationRequest{
+			Context: "home",
+			BuyerID: buyer,
+			Viewed:  []ids.OfferID{viewed, viewed},
+		})
+		if err != nil || result.Reason != "personal" || len(result.Items) != 1 {
+			t.Fatal(result, err)
+		}
+		if features.ViewedCalls != 1 || len(features.Viewed) != 1 ||
+			len(features.Filter.Excluded) != 1 || features.Filter.Excluded[0] != viewed {
+			t.Fatal(features)
+		}
+		wantCategories := 1
+		if buyer != "" {
+			wantCategories = 2
+		}
+		if len(features.Filter.Categories) != wantCategories || result.Items[0].Offer.ID == viewed.String() {
+			t.Fatal(features.Filter, result)
+		}
+	}
+}
