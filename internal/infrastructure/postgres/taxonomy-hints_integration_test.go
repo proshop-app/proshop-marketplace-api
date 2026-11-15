@@ -63,7 +63,7 @@ func TestScopedHintsAtomicHistoryAndLegacyCorrection(t *testing.T) {
 		t.Fatal(err)
 	}
 	d.Attributes[0].Dictionary = "d1"
-	if _, err := service.LoadPart(ctx, "attributes", d, 1); err != nil {
+	if _, err := service.LoadPartWithOptions(ctx, "attributes", d, 1, apptaxonomy.LoadOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	rule := taxonomy.DictionaryBinding{

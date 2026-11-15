@@ -49,7 +49,13 @@ func TestEmptyOpenImportPublicationLearningSnapshotAndQueue(t *testing.T) {
 	}
 	h.store.SeedTaxonomy(definition)
 	publication := apptaxonomy.NewService(h.store, h.clock, nil)
-	if _, err := publication.LoadPart(ctx, "attributes", definition, 1); err != nil {
+	if _, err := publication.LoadPartWithOptions(
+		ctx,
+		"attributes",
+		definition,
+		1,
+		apptaxonomy.LoadOptions{},
+	); err != nil {
 		t.Fatal("ссылка на пустой open не опубликована", err)
 	}
 	search := &fake.ReferenceCandidates{

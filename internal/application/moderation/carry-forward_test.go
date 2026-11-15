@@ -34,7 +34,13 @@ func TestReviewedProjectionReplayPreservesHistoricalApproval(t *testing.T) {
 	definition := reviewedProjectionTaxonomy(2)
 	definition.Attributes[0].SearchTermsByValue["true"] = []string{"новое выражение"}
 	taxonomies := apptaxonomy.NewService(e.store, e.clock, e.service)
-	if _, err := taxonomies.LoadPart(context.Background(), "attributes", definition, 1); err != nil {
+	if _, err := taxonomies.LoadPartWithOptions(
+		context.Background(),
+		"attributes",
+		definition,
+		1,
+		apptaxonomy.LoadOptions{},
+	); err != nil {
 		t.Fatal(err)
 	}
 	err = e.store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
@@ -263,7 +269,13 @@ func TestReviewedProjectionChangedCategoryPolicyRequiresEvaluation(t *testing.T)
 			definition := reviewedProjectionTaxonomy(2)
 			definition.Categories[0].Moderation = policy
 			taxonomies := apptaxonomy.NewService(e.store, e.clock, e.service)
-			if _, err := taxonomies.LoadPart(context.Background(), "categories", definition, 1); err != nil {
+			if _, err := taxonomies.LoadPartWithOptions(
+				context.Background(),
+				"categories",
+				definition,
+				1,
+				apptaxonomy.LoadOptions{},
+			); err != nil {
 				t.Fatal(err)
 			}
 			e.clock.Advance(time.Hour)

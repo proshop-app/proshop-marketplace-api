@@ -273,7 +273,7 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 			}
 			nodes = []taxonomy.Category{category.Category}
 		}
-		fields, common := scopeFields(d, nodes)
+		fields, common := scopeFields(d, nodes, normalized.CategoryID != "")
 		if normalized.CategoryID == "" {
 			fields = d.Fields()
 		}

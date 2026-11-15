@@ -50,16 +50,6 @@ func (s *Service) Current(ctx context.Context) (taxonomy.Definition, error) {
 	return d, err
 }
 
-// LoadPart соединяет часть с текущим снимком под той же блокировкой, что и публикация.
-func (s *Service) LoadPart(
-	ctx context.Context,
-	part string,
-	input taxonomy.Definition,
-	expected int64,
-) (int64, error) {
-	return s.LoadPartWithOptions(ctx, part, input, expected, LoadOptions{})
-}
-
 // LoadPartWithOptions сохраняет CAS и проверку атрибутов при подтверждённой замене категорий.
 func (s *Service) LoadPartWithOptions(
 	ctx context.Context,

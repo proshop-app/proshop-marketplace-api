@@ -135,7 +135,13 @@ func TestReleasePreservesOperatorChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	operator := testRelease(2, "b")
-	if _, err := repository.LoadPart(ctx, "categories", operator.Definition(), 1); err != nil {
+	if _, err := repository.LoadPartWithOptions(
+		ctx,
+		"categories",
+		operator.Definition(),
+		1,
+		app.LoadOptions{},
+	); err != nil {
 		t.Fatal(err)
 	}
 	if result, err := service.Apply(ctx, release); err != nil || result.Changed || result.SnapshotVersion != 2 {

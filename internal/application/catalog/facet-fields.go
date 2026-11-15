@@ -16,6 +16,7 @@ const MaxAttributeFacets = 32
 func scopeFields(
 	d taxonomy.Definition,
 	nodes []taxonomy.Category,
+	collectUnion bool,
 ) (map[string]taxonomy.Attribute, map[string]taxonomy.Attribute) {
 	fields := d.Fields()
 	union := map[string]taxonomy.Attribute{}
@@ -29,7 +30,9 @@ func scopeFields(
 			}
 			leaf := map[string]taxonomy.Attribute{}
 			for _, code := range d.Schemas[node.Schema].Attributes {
-				union[code] = fields[code]
+				if collectUnion {
+					union[code] = fields[code]
+				}
 				leaf[code] = fields[code]
 			}
 			if common == nil {

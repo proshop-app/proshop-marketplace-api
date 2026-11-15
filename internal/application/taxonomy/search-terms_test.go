@@ -57,7 +57,13 @@ func TestSearchTermsOnlyPublicationPreservesFrozenDictionaries(t *testing.T) {
 		input.Attributes[0].Values = nil
 		input.Attributes[0].ValuesMeta = original.Attributes[0].ValuesMeta
 		input.Attributes[0].SearchTermsByValue = terms
-		if _, err := service.LoadPart(ctx, "attributes", input, current.Version); err != nil {
+		if _, err := service.LoadPartWithOptions(
+			ctx,
+			"attributes",
+			input,
+			current.Version,
+			apptaxonomy.LoadOptions{},
+		); err != nil {
 			t.Fatal(err)
 		}
 		next, _ := service.Current(ctx)
@@ -81,7 +87,13 @@ func TestSearchTermsOnlyPublicationPreservesFrozenDictionaries(t *testing.T) {
 	input.Attributes[0].Values = nil
 	input.Attributes[0].ValuesMeta = original.Attributes[0].ValuesMeta
 	input.Attributes[0].SearchTermsByValue = map[string][]string{"v3": {"третий"}}
-	if _, err := service.LoadPart(ctx, "attributes", input, current.Version); !errors.Is(err, taxonomy.ErrInvalid) {
+	if _, err := service.LoadPartWithOptions(
+		ctx,
+		"attributes",
+		input,
+		current.Version,
+		apptaxonomy.LoadOptions{},
+	); !errors.Is(err, taxonomy.ErrInvalid) {
 		t.Fatalf("выражение вне frozen Values принято: %v", err)
 	}
 	next, _ := service.Current(ctx)

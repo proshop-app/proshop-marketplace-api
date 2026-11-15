@@ -127,7 +127,13 @@ func TestHintImportBindingReviewAndRollbackPreserveFreeStrings(t *testing.T) {
 	if err != nil || again.Changed || again.SnapshotVersion != 2 {
 		t.Fatal("повтор поставки изменил версию", again, err)
 	}
-	if _, err := service.LoadPart(ctx, "attributes", original, 2); !errors.Is(err, taxonomy.ErrConflict) {
+	if _, err := service.LoadPartWithOptions(
+		ctx,
+		"attributes",
+		original,
+		2,
+		apptaxonomy.LoadOptions{},
+	); !errors.Is(err, taxonomy.ErrConflict) {
 		t.Fatal("обычная загрузка удалила привязку", err)
 	}
 	rolledBack, err := service.Rollback(ctx, release)
@@ -165,7 +171,13 @@ func TestStringHintBindingRejectsClosedDictionaryAndProtectsOperatorEdit(t *test
 			service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
 			var err error
 			if operation == "part" {
-				_, err = service.LoadPart(ctx, "attributes", stringDefinition(2, "a1"), 1)
+				_, err = service.LoadPartWithOptions(
+					ctx,
+					"attributes",
+					stringDefinition(2, "a1"),
+					1,
+					apptaxonomy.LoadOptions{},
+				)
 			} else {
 				_, err = service.Apply(ctx, bindingRelease())
 			}
@@ -188,7 +200,7 @@ func TestStringHintBindingRejectsClosedDictionaryAndProtectsOperatorEdit(t *test
 		t.Fatal(err)
 	}
 	current, _ := service.Current(ctx)
-	if _, err := service.LoadPart(ctx, "schemas", current, 2); err != nil {
+	if _, err := service.LoadPartWithOptions(ctx, "schemas", current, 2, apptaxonomy.LoadOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.Rollback(ctx, release); !errors.Is(err, taxonomy.ErrReleaseConflict) {

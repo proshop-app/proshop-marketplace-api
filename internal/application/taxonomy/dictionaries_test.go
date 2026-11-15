@@ -24,7 +24,7 @@ func TestPartPublicationFreezesDictionary(t *testing.T) {
 	input := schema(1)
 	input.Attributes[0].Values = []string{"forged"}
 	store.FailCommit = errors.New("сбой фиксации")
-	if _, err := service.LoadPart(ctx, "attributes", input, 1); err == nil {
+	if _, err := service.LoadPartWithOptions(ctx, "attributes", input, 1, apptaxonomy.LoadOptions{}); err == nil {
 		t.Fatal("ошибка фиксации скрыта")
 	}
 	store.FailCommit = nil
@@ -32,7 +32,7 @@ func TestPartPublicationFreezesDictionary(t *testing.T) {
 	if before.Version != 1 {
 		t.Fatal("частичная публикация", before.Version)
 	}
-	version, err := service.LoadPart(ctx, "attributes", input, 1)
+	version, err := service.LoadPartWithOptions(ctx, "attributes", input, 1, apptaxonomy.LoadOptions{})
 	if err != nil || version != 2 {
 		t.Fatalf("%d %v", version, err)
 	}
@@ -45,10 +45,16 @@ func TestPartPublicationFreezesDictionary(t *testing.T) {
 	if !reflect.DeepEqual(current, unchanged) {
 		t.Fatal("реестр изменил опубликованный снимок")
 	}
-	if _, err := service.LoadPart(ctx, "schemas", input, 1); !errors.Is(err, taxonomy.ErrConflict) {
+	if _, err := service.LoadPartWithOptions(
+		ctx,
+		"schemas",
+		input,
+		1,
+		apptaxonomy.LoadOptions{},
+	); !errors.Is(err, taxonomy.ErrConflict) {
 		t.Fatal("устаревшая версия принята", err)
 	}
-	if _, err := service.LoadPart(ctx, "schemas", input, 2); err != nil {
+	if _, err := service.LoadPartWithOptions(ctx, "schemas", input, 2, apptaxonomy.LoadOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	current, _ = service.Current(ctx)
@@ -75,7 +81,13 @@ func TestDictionaryFailuresDoNotPublish(t *testing.T) {
 				input.Attributes[0].ValuesMeta = map[string]taxonomy.ValueMeta{"v1": {Hex: "#FFFFFF"}}
 			}
 			service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
-			_, err := service.LoadPart(context.Background(), "attributes", input, 1)
+			_, err := service.LoadPartWithOptions(
+				context.Background(),
+				"attributes",
+				input,
+				1,
+				apptaxonomy.LoadOptions{},
+			)
 			if !errors.Is(err, taxonomy.ErrInvalid) {
 				t.Fatal("неверный словарь принят", err)
 			}
@@ -95,7 +107,13 @@ func TestOpenDictionaryDoesNotRestrictStrings(t *testing.T) {
 	store.SeedTaxonomy(input)
 	store.SeedReferenceDictionary(reference.DictionaryState{Code: "a1", Kind: reference.KindOpen})
 	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
-	if _, err := service.LoadPart(context.Background(), "attributes", input, 1); err != nil {
+	if _, err := service.LoadPartWithOptions(
+		context.Background(),
+		"attributes",
+		input,
+		1,
+		apptaxonomy.LoadOptions{},
+	); err != nil {
 		t.Fatal(err)
 	}
 	current, _ := service.Current(context.Background())
@@ -115,7 +133,7 @@ func TestConcurrentPartsHaveOneWinner(t *testing.T) {
 		group.Add(1)
 		go func(part string) {
 			defer group.Done()
-			_, err := service.LoadPart(context.Background(), part, schema(1), 1)
+			_, err := service.LoadPartWithOptions(context.Background(), part, schema(1), 1, apptaxonomy.LoadOptions{})
 			results <- err
 		}(part)
 	}
@@ -221,7 +239,7 @@ func TestOnlyConfirmedValuesArePublished(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
-	if _, err := service.LoadPart(ctx, "categories", schema(1), 1); err != nil {
+	if _, err := service.LoadPartWithOptions(ctx, "categories", schema(1), 1, apptaxonomy.LoadOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	current, _ := service.Current(ctx)
@@ -248,7 +266,13 @@ func TestSchemaImportExpandsInheritanceBeforeSnapshot(t *testing.T) {
 		name:   {Extends: "base"},
 	}
 	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
-	if _, err := service.LoadPart(context.Background(), "schemas", input, 1); err != nil {
+	if _, err := service.LoadPartWithOptions(
+		context.Background(),
+		"schemas",
+		input,
+		1,
+		apptaxonomy.LoadOptions{},
+	); err != nil {
 		t.Fatal(err)
 	}
 	current, err := service.Current(context.Background())
