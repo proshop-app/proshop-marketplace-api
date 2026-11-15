@@ -27,6 +27,10 @@ func facetSelectionHandler(t *testing.T) catalogHandlers {
 	t.Helper()
 	store, index := fake.NewStore(), fake.NewIndex()
 	store.SeedTaxonomy(taxonomy.Definition{
+		Schemas: map[string]taxonomy.Schema{
+			"s1": {Attributes: []string{"a1"}},
+		},
+		Categories: []taxonomy.Category{{ID: "c1", Schema: "s1"}},
 		Attributes: []taxonomy.Attribute{{
 			Code:  "a1",
 			Type:  "enum",

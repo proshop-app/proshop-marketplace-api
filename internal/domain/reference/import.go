@@ -100,6 +100,9 @@ func importSources(input []ImportSource) (map[string]ImportSource, error) {
 }
 
 func prepareDictionary(input ImportDictionary, sources map[string]ImportSource) (PreparedImport, error) {
+	if input.Entries == nil {
+		return PreparedImport{}, ErrInvalidDelivery.WithMessage("entries — обязательный массив, не null")
+	}
 	entries := slices.Clone(input.Entries)
 	for i := range entries {
 		if entries[i].Status == "" {
@@ -122,7 +125,7 @@ func prepareDictionary(input ImportDictionary, sources map[string]ImportSource) 
 		Checksum:   hex.EncodeToString(checksum[:]),
 		Entries:    entries,
 	}
-	if err := ValidateDelivery(delivery); err != nil {
+	if err := validateDelivery(delivery, input.Kind == KindOpen); err != nil {
 		return PreparedImport{}, err
 	}
 	return PreparedImport{Kind: input.Kind, Delivery: delivery}, nil

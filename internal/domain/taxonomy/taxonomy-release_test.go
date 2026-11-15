@@ -122,3 +122,37 @@ func TestCategoryIDDoesNotRelaxAttributeCode(t *testing.T) {
 		t.Fatal("код атрибута допускает путь")
 	}
 }
+
+func TestCategoryReplacementRequiresExplicitConfirmation(t *testing.T) {
+	release := Release{
+		Version:           2,
+		ReplaceCategories: true,
+	}
+	current := Definition{Version: 1}
+	if _, err := PlanRelease(current, nil, release); !errors.Is(err, ErrReleaseConflict) {
+		t.Fatal("ломающая поставка без подтверждения", err)
+	}
+	release.ConfirmCategoryReplacement = true
+	if _, err := PlanRelease(current, nil, release); !errors.Is(err, ErrReleaseConflict) {
+		t.Fatal("подтверждение не должно обходить CAS", err)
+	}
+	release.ExpectedVersion = 1
+	if changed, err := PlanRelease(current, nil, release); err != nil || !changed {
+		t.Fatal(changed, err)
+	}
+	old := Definition{
+		Categories: []Category{{ID: "c1", Slug: "old"}},
+		Attributes: []Attribute{{Code: "a1", Type: "string"}},
+	}
+	next := Definition{
+		Categories: []Category{{ID: "c1", Slug: "new"}},
+		Attributes: []Attribute{{Code: "a1", Type: "string"}},
+	}
+	if next.CheckEvolution(old) == nil || next.CheckCategoryReplacementEvolution(old) != nil {
+		t.Fatal("подтверждённая замена должна допускать только эволюцию категорий")
+	}
+	next.Attributes[0].Type = "number"
+	if next.CheckCategoryReplacementEvolution(old) == nil {
+		t.Fatal("замена категорий разрешила смену типа атрибута")
+	}
+}

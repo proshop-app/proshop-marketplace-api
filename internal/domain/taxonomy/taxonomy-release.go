@@ -26,12 +26,14 @@ var (
 
 // Release — неизменяемая поставка; её номер независим от версии публикации.
 type Release struct {
-	DictionaryBindings []DictionaryBinding
-	Version            int64
-	Checksum           string
-	Categories         []Category
-	Attributes         []Attribute
-	Schemas            map[string]Schema
+	ReplaceCategories          bool
+	ConfirmCategoryReplacement bool
+	DictionaryBindings         []DictionaryBinding
+	Version                    int64
+	Checksum                   string
+	Categories                 []Category
+	Attributes                 []Attribute
+	Schemas                    map[string]Schema
 	// ExpectedVersion разрешает явное обновление проверенного операторского снимка.
 	ExpectedVersion int64
 }
@@ -76,6 +78,9 @@ func PlanRelease(
 	latest *ReleaseState,
 	release Release,
 ) (bool, error) {
+	if release.ReplaceCategories && !release.ConfirmCategoryReplacement {
+		return false, ErrReleaseConflict.WithMessage("нужно явное подтверждение замены категорий")
+	}
 	if latest == nil {
 		initial := current.Version == 0 && len(current.Categories) == 0
 		if (!initial && release.ExpectedVersion != current.Version) || current.Version >= MaxTaxonomyVersion ||

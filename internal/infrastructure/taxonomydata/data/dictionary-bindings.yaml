@@ -1,0 +1,95 @@
+- categoryId: electronics
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_electronics
+- categoryId: computers
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_computers
+- categoryId: appliances
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_appliances
+- categoryId: kitchen
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_kitchen
+- categoryId: furniture
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_furniture
+- categoryId: accessories
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_accessories
+- categoryId: jewelry
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_jewelry
+- categoryId: health
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_health
+- categoryId: baby
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_baby
+- categoryId: toys
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_toys
+- categoryId: outdoors
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_outdoors
+- categoryId: auto
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_auto
+- categoryId: tools
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_tools
+- categoryId: renovation
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_renovation
+- categoryId: garden
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_garden
+- categoryId: pets
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_pets
+- categoryId: music
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_music
+- categoryId: industry
+  attributeCode: compatible_model
+  mode: replace
+  dictionaries:
+  - compat_industry
+- categoryId: books
+  attributeCode: book_genre
+  mode: replace
+  dictionaries:
+  - book_genre

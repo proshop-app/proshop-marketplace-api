@@ -76,3 +76,19 @@ func TestSearchTermsYAMLRoundTrip(t *testing.T) {
 		t.Fatal("явный пустой список потерян", back)
 	}
 }
+
+func TestSchemaInheritanceYAMLUsesOperatorFormat(t *testing.T) {
+	body := "base:\n  abstract: true\n  attributes: [a1]\n  optional: [a1]\n" +
+		"s1:\n  extends: base\n  attributes: [a2]\n"
+	definition, err := taxonomyfile.DecodePart(strings.NewReader(body), "schemas")
+	if err != nil || !definition.Schemas["base"].Abstract || definition.Schemas["s1"].Extends != "base" {
+		t.Fatal(definition, err)
+	}
+	encoded, err := taxonomyfile.EncodePart(definition, "schemas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := taxonomyfile.DecodePart(strings.NewReader(string(encoded)), "schemas"); err != nil {
+		t.Fatal(err)
+	}
+}

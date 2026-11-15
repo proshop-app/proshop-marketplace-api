@@ -1,9 +1,10 @@
-release: 9
-checksum: 1f779e886910f916ea7463b160d37352f38e386f62c2f1c07af1a52d39621723
+replaceCategories: true
+release: 10
+checksum: e0b0788645c21e0b101f3164ae9e4e74d2fe0a12c5b3e43de7fbd9d7bd29b70f
 coverage:
-    directions: 29
-    categories: 1282
-    leaves: 1085
-    schemas: 142
-    attributes: 219
-    dictionaries: 85
+  directions: 29
+  categories: 3974
+  leaves: 3555
+  schemas: 468
+  attributes: 432
+  dictionaries: 178

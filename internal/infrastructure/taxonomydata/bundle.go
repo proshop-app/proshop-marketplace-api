@@ -36,11 +36,12 @@ type Coverage struct {
 	Dictionaries int `json:"dictionaries" yaml:"dictionaries"`
 }
 
-// Manifest связывает номер поставки с точными байтами трёх файлов.
+// Manifest связывает номер поставки с точными байтами файлов.
 type Manifest struct {
-	Release  int64    `json:"release" yaml:"release"`
-	Checksum string   `json:"checksum" yaml:"checksum"`
-	Coverage Coverage `json:"coverage" yaml:"coverage"`
+	ReplaceCategories bool     `json:"replaceCategories,omitempty" yaml:"replaceCategories,omitempty"`
+	Release           int64    `json:"release" yaml:"release"`
+	Checksum          string   `json:"checksum" yaml:"checksum"`
+	Coverage          Coverage `json:"coverage" yaml:"coverage"`
 }
 
 // Load проверяет встроенный комплект до подключения к БД.
@@ -56,6 +57,13 @@ func load(source fs.FS) (taxonomy.Release, Coverage, error) {
 		return release, coverage, err
 	}
 	release.Version = header.Release
+	migration, err := migrationFrom(source, release)
+	if err != nil || migration.ToRelease != 0 && migration.ToRelease != header.Release {
+		return taxonomy.Release{}, Coverage{}, ErrInvalidBundle
+	}
+	if release.ReplaceCategories != header.ReplaceCategories {
+		return taxonomy.Release{}, Coverage{}, ErrInvalidBundle
+	}
 	if release.Checksum != header.Checksum || coverage != header.Coverage {
 		return taxonomy.Release{}, Coverage{}, ErrInvalidBundle
 	}
@@ -74,12 +82,32 @@ func describe(source fs.FS) (taxonomy.Release, Coverage, error) {
 			return release, coverage, err
 		}
 	}
+	schemas, err := release.Definition().ExpandSchemaSource()
+	if err != nil {
+		return release, coverage, err
+	}
+	release.Schemas = schemas
+	if _, err := fs.Stat(source, dataDirectory+"dictionary-bindings.yaml"); err == nil {
+		if err := decodeFile(source, "dictionary-bindings.yaml", &release.DictionaryBindings); err != nil {
+			return release, coverage, err
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return release, coverage, err
+	}
+	migration, err := migrationFrom(source, release)
+	if err != nil {
+		return release, coverage, err
+	}
+	release.ReplaceCategories = migration.ToRelease != 0
 	checksum, err := bundleChecksum(source)
 	if err != nil {
 		return release, coverage, err
 	}
 	release.Checksum = checksum
 	if err := taxonomy.ValidateRelease(release); err != nil {
+		return release, coverage, err
+	}
+	if err := auditRelease(release); err != nil {
 		return release, coverage, err
 	}
 	for _, root := range release.Categories {
@@ -113,8 +141,17 @@ func describe(source fs.FS) (taxonomy.Release, Coverage, error) {
 		if a.Dictionary != "" {
 			coverage.Dictionaries++
 		}
+		// Исторический код сохраняется глобально, но не навязывается новым карточкам.
+		if a.Deprecated {
+			usedFields[a.Code] = true
+		}
 	}
-	if len(usedSchemas) != coverage.Schemas || len(usedFields) != coverage.Attributes {
+	for name := range release.Schemas {
+		if !usedSchemas[name] && sequentialImportSchemas[name] == "" {
+			return release, coverage, fmt.Errorf("%w: неиспользуемая схема %s", ErrInvalidBundle, name)
+		}
+	}
+	if len(usedFields) != coverage.Attributes {
 		return release, coverage, ErrInvalidBundle
 	}
 	return release, coverage, nil
@@ -157,8 +194,12 @@ func hasReferences(node *yaml.Node) bool {
 
 func bundleChecksum(source fs.FS) (string, error) {
 	hash := sha256.New()
-	for _, name := range dataFiles {
+	files := append(append([]string{}, dataFiles...), "dictionary-bindings.yaml", "category-migration.yaml")
+	for _, name := range files {
 		body, err := fs.ReadFile(source, dataDirectory+name)
+		if errors.Is(err, fs.ErrNotExist) && (name == "dictionary-bindings.yaml" || name == "category-migration.yaml") {
+			continue
+		}
 		if err != nil {
 			return "", err
 		}
@@ -181,7 +222,16 @@ func PrepareManifest(source fs.FS, version int64, write bool) (Manifest, error) 
 	if version == 0 {
 		version = current.Release
 	}
-	next := Manifest{Release: version, Checksum: release.Checksum, Coverage: coverage}
+	next := Manifest{
+		Release:           version,
+		Checksum:          release.Checksum,
+		Coverage:          coverage,
+		ReplaceCategories: release.ReplaceCategories,
+	}
+	migration, err := migrationFrom(source, release)
+	if err != nil || migration.ToRelease != 0 && migration.ToRelease != version {
+		return next, ErrInvalidBundle
+	}
 	if version < 1 || version > taxonomy.MaxTaxonomyVersion {
 		return next, ErrInvalidBundle
 	}

@@ -1899,11 +1899,21 @@ paths:
           in: header
           required: true
           schema: { type: string, pattern: '^"taxonomy-[0-9]+"$' }
+        - name: replaceCategories
+          in: query
+          schema: { type: boolean, default: false }
+          description: Явное подтверждение замены кодов и адресов; допустимо только для categories
       description: |
         Один строгий YAML-документ до 2 МиБ. Якоря, ссылки и неизвестные поля запрещены.
         Часть соединяется с двумя текущими; проверяются все ссылки и словари реестра.
         Новая версия равна текущей + 1. Устаревший If-Match — 409; отсутствующий или неверный — 400.
-        Код нельзя удалить, type, unit и dictionary неизменны.
+        Коды атрибутов нельзя удалить; type, unit и существующий dictionary неизменны.
+        Строке без словаря можно добавить открытый словарь.
+        Удаление листьев, изменение и передача slug требуют replaceCategories=true (иначе 409).
+        Флаг не переносит карточки и не отменяет совместимость атрибутов.
+        schemas принимает extends и abstract (TaxonomySchemaSource); API возвращает развёрнутые схемы.
+        Для перехода 9 → 10 порядок: attributes, schemas, categories с подтверждением.
+        Это три независимые транзакции и версии, без записи истории CLI-поставок.
         Значения confirmed закрытых словарей сохраняются в снимке.
         Ошибочные карточки скрываются, индекс обновляется через outbox.
       requestBody:
@@ -2048,9 +2058,12 @@ paths:
         либо точное значение. Неизвестный код, неверный тип/словарь/диапазон — 400.
         Пример: ?category=c1&attr.a1=v1&attr.a1=v2&attr.a2.min=1.5&attr.a2.max=10.
         Фасеты считаются до пагинации со всеми фильтрами, кроме собственного; category — со всеми. Атрибутные —
-        только при facet=true и покрытии >=20%; без селекторов category, tenant, price, inStock — всегда.
+        только общие для всех листьев области поля с facet=true (без deprecated), при покрытии >=20%.
+        Максимум 32 поля: выбранные общие фильтры первыми, далее по коду; ответ упорядочен по коду.
+        Не более 256 фильтров атрибутов; превышение — 400. Базовые фасеты не входят в бюджет;
+        без селекторов category, tenant, price, inStock — всегда.
         facets=none отключает все фасеты; список выбирает только перечисленные базовые,
-        attributes добавляет атрибутные фасеты таксономии. Без селекторов ответ прежний.
+        attributes добавляет общие атрибутные фасеты области по указанному правилу.
         API обновляется раньше витрины: предыдущая версия отклоняет новые none/attributes/повторы.
         Размер страницы не определяет выбор фасетов. Фильтры и total от селекторов не меняются.
         Числа: min/max; остальные: до 256 наиболее частых значений с count.
@@ -2091,6 +2104,10 @@ paths:
           description: Магазины (ИЛИ); повторы удаляются.
         - { name: groupId, in: query, schema: { type: string }, description: Группа вариантов; требует ровно один tenant }
         - { name: category, in: query, schema: { type: string }, description: Категория площадки с потомками }
+        - name: categoryId
+          in: query
+          schema: { type: string }
+          description: Псевдоним category. Повторы или разные значения двух имён — 400.
         - { name: priceMin, in: query, schema: { type: number, multipleOf: 0.01, minimum: 0, maximum: 9999999999999.99 }, description: Рубли }
         - { name: priceMax, in: query, schema: { type: number, multipleOf: 0.01, minimum: 0, maximum: 9999999999999.99 }, description: Рубли }
         - { name: inStock, in: query, schema: { type: boolean } }
@@ -6482,6 +6499,9 @@ components:
         title: { type: string, minLength: 1, maxLength: 256 }
         slug: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 128 }
         schema: { type: string, description: Только у листа; ключ схемы набора }
+        axis: { type: string, description: Ось деления узла среди его соседей }
+        nameScope: { type: boolean, description: Отдельная область уникальности коротких имён в разделе аудитории }
+        definition: { type: string, maxLength: 1024, description: Граница вида изделия }
         children:
           type: [array, "null"]
           items: { $ref: "#/components/schemas/TaxonomyCategory" }
@@ -6502,6 +6522,13 @@ components:
         unit: { type: string, description: Единица только для number }
         facet: { type: boolean, default: false }
         valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
+        description: { type: string, maxLength: 1024, description: Определение свойства и объекта измерения }
+        dictionaryNote: { type: string, maxLength: 512, description: Причина отсутствия словаря }
+        example: { type: string, maxLength: 256, description: "Пример формата, не словарное значение" }
+        requiredReason: { type: string, maxLength: 512, description: Исключение для обязательного свободного текста }
+        multiple: { type: boolean, const: false, description: Контракт карточки скалярный }
+        variant: { type: boolean, description: Подходит для оси варианта SKU }
+        deprecated: { type: boolean, description: "Исторический код, не использовать в новых схемах" }
         searchTermsByValue: { $ref: "#/components/schemas/TaxonomySearchTermsByValue" }
     TaxonomySearchTermsByValue:
       type: object
@@ -6532,6 +6559,15 @@ components:
       properties:
         attributes: { type: array, minItems: 1, uniqueItems: true, items: { type: string } }
         optional: { type: array, uniqueItems: true, items: { type: string }, description: Подмножество attributes }
+    TaxonomySchemaSource:
+      type: object
+      additionalProperties: false
+      description: Исходник schemas.yaml; extends разворачивается сервером, abstract не выдаётся в API
+      properties:
+        extends: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        abstract: { type: boolean, default: false }
+        attributes: { type: array, uniqueItems: true, items: { type: string } }
+        optional: { type: array, uniqueItems: true, items: { type: string }, description: Включая унаследованные поля }
     TaxonomySchemaAttribute:
       type: object
       required: [code, name, type, required]
@@ -6545,6 +6581,13 @@ components:
         required: { type: boolean }
         values: { type: array, items: { type: string } }
         valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
+        description: { type: string, maxLength: 1024, description: Определение свойства и объекта измерения }
+        dictionaryNote: { type: string, maxLength: 512, description: Причина отсутствия словаря }
+        example: { type: string, maxLength: 256, description: "Пример формата, не словарное значение" }
+        requiredReason: { type: string, maxLength: 512, description: Исключение для обязательного свободного текста }
+        multiple: { type: boolean, const: false, description: Контракт карточки скалярный }
+        variant: { type: boolean, description: Подходит для оси варианта SKU }
+        deprecated: { type: boolean, description: "Исторический код, не использовать в новых схемах" }
         searchTermsByValue: { $ref: "#/components/schemas/TaxonomySearchTermsByValue" }
     TaxonomyCategorySchema:
       type: object
@@ -7732,13 +7775,20 @@ components:
       type: object
       additionalProperties: false
       required: [code, kind, release, entries]
+      description: Пустой entries допустим только для open; closed требует хотя бы одну запись.
+      if:
+        properties:
+          kind: { const: closed }
+      then:
+        properties:
+          entries: { minItems: 1 }
       properties:
         code: { type: string, pattern: '^[a-z][a-z0-9_]{0,31}$' }
         kind: { type: string, enum: [open, closed] }
         release: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
         entries:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 100000
           items: { $ref: "#/components/schemas/ReferenceImportEntry" }
     ReferenceImportPackage:

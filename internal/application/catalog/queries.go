@@ -3,7 +3,6 @@ package catalog
 import (
 	"context"
 	"errors"
-	"sort"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -256,26 +255,6 @@ func (q *Queries) Publication(ctx context.Context, id ids.OfferID) (PublicationV
 	return publication, err
 }
 
-// categoryFields объединяет собранные схемы потомков для фасетов раздела.
-func categoryFields(d taxonomy.Definition, id string) map[string]taxonomy.Attribute {
-	fields := map[string]taxonomy.Attribute{}
-	var collect func(string)
-	collect = func(id string) {
-		category, _, found := d.Category(id)
-		if !found {
-			return
-		}
-		for _, attribute := range category.Attributes {
-			fields[attribute.Code] = attribute.Attribute
-		}
-		for _, child := range category.Children {
-			collect(child.ID)
-		}
-	}
-	collect(id)
-	return fields
-}
-
 // PrepareQuery сохраняет одинаковые фильтры и ценовой контекст для органики и рекламы.
 func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (ports.OfferQuery, error) {
 	normalized, err := normalize(query)
@@ -288,14 +267,17 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 		if err != nil {
 			return err
 		}
-		if query.CategoryID != "" {
-			if _, _, ok := d.Category(query.CategoryID); !ok {
+		nodes := d.Categories
+		if normalized.CategoryID != "" {
+			category, _, ok := d.Category(normalized.CategoryID)
+			if !ok {
 				return ErrInvalidQuery.WithMessage("неизвестная категория")
 			}
+			nodes = []taxonomy.Category{category.Category}
 		}
-		fields := d.Fields()
-		if query.CategoryID != "" {
-			fields = categoryFields(d, query.CategoryID)
+		fields, common := scopeFields(d, nodes)
+		if normalized.CategoryID == "" {
+			fields = d.Fields()
 		}
 		if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
 			return err
@@ -307,15 +289,8 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 		// Поля берутся заново из таксономии, повторная подготовка не дублирует фасеты.
 		normalized.FacetFields = []taxonomy.Attribute{}
 		if normalized.WantsFacet(ports.FacetAttributes) {
-			for _, a := range fields {
-				if a.Facet {
-					normalized.FacetFields = append(normalized.FacetFields, a)
-				}
-			}
+			normalized.FacetFields = selectFacetFields(common, normalized.Attributes)
 		}
-		sort.Slice(normalized.FacetFields, func(i, j int) bool {
-			return normalized.FacetFields[i].Code < normalized.FacetFields[j].Code
-		})
 		return nil
 	}); err != nil {
 		return ports.OfferQuery{}, err

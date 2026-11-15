@@ -100,6 +100,10 @@ const (
 	SortRating OfferSort = "rating"
 )
 
+// MaxSearchAttributes — число фильтров в запросе контракта sc-search v5.
+// Глобальный справочник таксономии имеет собственный, больший предел.
+const MaxSearchAttributes = 256
+
 // OfferQuery — поиск по выдаче каталога.
 type OfferQuery struct {
 	// Exact запрещает исправления опечаток, раскладки и транслита, сохраняя остальные правила поиска.

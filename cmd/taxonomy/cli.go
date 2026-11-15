@@ -17,6 +17,7 @@ import (
 
 	app "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
+	domaintaxonomy "github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
@@ -24,10 +25,17 @@ import (
 
 const commandTimeout = 2 * time.Minute
 
+type bundleExport struct {
+	Release    int64                     `json:"release"`
+	Checksum   string                    `json:"checksum"`
+	Definition domaintaxonomy.Definition `json:"definition"`
+}
+
 type bundleInfo struct {
-	Release  int64                 `json:"release"`
-	Checksum string                `json:"checksum"`
-	Coverage taxonomydata.Coverage `json:"coverage"`
+	ReplaceCategories bool                  `json:"replaceCategories"`
+	Release           int64                 `json:"release"`
+	Checksum          string                `json:"checksum"`
+	Coverage          taxonomydata.Coverage `json:"coverage"`
 }
 
 func run(args []string, output, diagnostics io.Writer) int {
@@ -41,6 +49,10 @@ func run(args []string, output, diagnostics io.Writer) int {
 	options := flag.NewFlagSet("taxonomy", flag.ContinueOnError)
 	options.SetOutput(diagnostics)
 	expected := options.Int64("expected-version", 0, "версия снимка для явного обновления после правок оператора")
+	export := options.Bool("export", false, "выгрузка проверенного развёрнутого определения в JSON")
+	review := options.Bool("review", false, "полный отчёт лист ↔ схема по направлениям")
+	direction := options.String("direction", "", "направление отчёта")
+	confirm := options.Bool("confirm-category-replacement", false, "подтверждение замены категорий")
 	attribute := options.String("attribute", "", "строковый атрибут для удаления добавленной подсказки")
 	dictionary := options.String("dictionary", "", "ожидаемый текущий словарь атрибута")
 	previous := options.Int64("previous-version", 0, "сохранённая версия, где атрибут ещё не имел словаря")
@@ -62,11 +74,40 @@ func run(args []string, output, diagnostics io.Writer) int {
 		return failure(diagnostics, err.Error(), 1)
 	}
 	release.ExpectedVersion = *expected
+	release.ConfirmCategoryReplacement = *confirm
+	if args[0] == "apply" && release.ReplaceCategories && !*confirm {
+		return failure(diagnostics, "нужен --confirm-category-replacement: товары требуют переназначения", 2)
+	}
+	if args[0] != "apply" && *confirm {
+		return failure(diagnostics, "подтверждение допустимо только для apply", 2)
+	}
+	if args[0] != "check" && (*review || *export || *direction != "") ||
+		*direction != "" && !*review || *export && *review {
+		return failure(diagnostics, "отчёт доступен в check --review", 2)
+	}
 	if args[0] == "check" {
+		if *export {
+			value := bundleExport{
+				Release:    release.Version,
+				Checksum:   release.Checksum,
+				Definition: release.Definition(),
+			}
+			if err := json.NewEncoder(output).Encode(value); err != nil {
+				return 1
+			}
+			return 0
+		}
+		if *review {
+			if err := taxonomydata.WriteReview(output, release, *direction); err != nil {
+				return failure(diagnostics, err.Error(), 1)
+			}
+			return 0
+		}
 		info := bundleInfo{
-			Release:  release.Version,
-			Checksum: release.Checksum,
-			Coverage: coverage,
+			ReplaceCategories: release.ReplaceCategories,
+			Release:           release.Version,
+			Checksum:          release.Checksum,
+			Coverage:          coverage,
 		}
 		if err := json.NewEncoder(output).Encode(info); err != nil {
 			return 1

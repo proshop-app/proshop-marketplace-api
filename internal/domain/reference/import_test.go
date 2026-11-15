@@ -112,3 +112,19 @@ func TestPrepareImportDoesNotTrustUndeclaredSourceVersion(t *testing.T) {
 		t.Fatal("версия источника взята из непроверенного поля записи", metadata)
 	}
 }
+
+func TestPrepareImportEmptyOnlyForOpen(t *testing.T) {
+	input := importFixture()
+	input.Dictionaries[0].Entries = []DeliveryEntry{}
+	prepared, err := PrepareImport(input)
+	if err != nil || len(prepared) != 1 || prepared[0].Delivery.Entries == nil {
+		t.Fatal("пустой open не принят", prepared, err)
+	}
+	if err := ValidateDelivery(prepared[0].Delivery); err == nil {
+		t.Fatal("старый импорт без kind не должен принимать пустую поставку")
+	}
+	input.Dictionaries[0].Kind = KindClosed
+	if _, err := PrepareImport(input); err == nil {
+		t.Fatal("пустой closed принят")
+	}
+}

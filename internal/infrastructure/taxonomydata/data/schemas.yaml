@@ -1,2144 +1,345 @@
-phone:
+identity:
+  abstract: true
   attributes:
   - brand
   - gtin
-  - model
-  - country
-  - color
-  - ram
-  - storage_capacity
-  - screen_diagonal
-  - resolution
-  - screen_matrix
-  - processor
-  - os
-  - battery_capacity
-  - camera_resolution
-  - network_standard
-  - nfc
-  - waterproof
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - ram
-  - resolution
-  - screen_matrix
-  - processor
-  - os
-  - battery_capacity
-  - camera_resolution
-  - network_standard
-  - nfc
-  - waterproof
-tablet:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - ram
-  - storage_capacity
-  - screen_diagonal
-  - resolution
-  - processor
-  - os
-  - battery_capacity
-  - network_standard
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - ram
-  - resolution
-  - processor
-  - os
-  - battery_capacity
-  - network_standard
-wearable:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - screen_diagonal
-  - os
-  - battery_capacity
-  - wireless
-  - waterproof
-  - compatibility
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - screen_diagonal
-  - os
-  - battery_capacity
-  - wireless
-  - waterproof
-phone_accessory:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - compatibility
-  - body_material
-  - connector
-  - wireless
-  - battery_capacity
-  - power
-  - cable_length
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - body_material
-  - connector
-  - wireless
-  - battery_capacity
-  - power
-  - cable_length
-headphone:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - connection
-  - connector
-  - wireless
-  - noise_level
-  - battery_capacity
-  - waterproof
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - connector
-  - wireless
-  - noise_level
-  - battery_capacity
-  - waterproof
-speaker:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - connection
-  - power
-  - audio_channels
-  - wireless
-  - battery_capacity
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - audio_channels
-  - wireless
-  - battery_capacity
-tv:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - screen_diagonal
-  - resolution
-  - screen_matrix
-  - refresh_rate
-  - os
-  - interfaces
-  - power
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - screen_matrix
-  - refresh_rate
-  - os
-  - interfaces
-  - power
-video:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - resolution
-  - video_format
-  - interfaces
-  - connection
-  - storage_capacity
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - resolution
-  - video_format
-  - connection
-  - storage_capacity
-camera:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - sensor_format
-  - camera_resolution
-  - video_format
-  - lens_mount
-  - interfaces
-  - battery_capacity
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - sensor_format
-  - video_format
-  - lens_mount
-  - interfaces
-  - battery_capacity
-lens:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - lens_mount
-  - focal_length
-  - compatibility
-  - sensor_format
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - compatibility
-  - sensor_format
-optics:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - body_material
-  - weight
-  - waterproof
-  - purpose
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - body_material
-  - weight
-  - waterproof
-gaming:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - supported_platform
-  - connection
-  - storage_capacity
-  - wireless
-  - color
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - connection
-  - storage_capacity
-  - wireless
-  - color
-drone:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - camera_resolution
-  - video_format
-  - battery_capacity
-  - weight
-  - wireless
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - camera_resolution
-  - video_format
-  - weight
-  - wireless
-electronic_accessory:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - compatibility
-  - connector
-  - connection
-  - color
-  - cable_length
-  - power
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - connector
-  - connection
-  - color
-  - cable_length
-  - power
-laptop:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - processor
-  - cpu_cores
-  - ram
-  - storage_type
-  - storage_capacity
-  - gpu
-  - gpu_memory
-  - screen_diagonal
-  - resolution
-  - os
-  - interfaces
-  - battery_energy
-  - backlight
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - cpu_cores
-  - storage_type
-  - gpu
-  - gpu_memory
-  - resolution
-  - os
-  - interfaces
-  - battery_energy
-  - backlight
-computer:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - processor
-  - cpu_cores
-  - ram
-  - storage_type
-  - storage_capacity
-  - gpu
-  - os
-  - interfaces
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - cpu_cores
-  - storage_type
-  - gpu
-  - os
-  - interfaces
-monitor:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - screen_diagonal
-  - resolution
-  - screen_matrix
-  - refresh_rate
-  - interfaces
-  - touchscreen
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - screen_matrix
-  - refresh_rate
-  - interfaces
-  - touchscreen
-cpu:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - cpu_socket
-  - cpu_cores
-  - cpu_frequency
-  - chipset
-  - power
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - cpu_frequency
-  - chipset
-  - power
-motherboard:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - cpu_socket
-  - chipset
-  - memory_type
-  - interfaces
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - memory_type
-  - interfaces
-ram_module:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - ram
-  - memory_type
-  - memory_frequency
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - memory_frequency
-gpu:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - gpu
-  - gpu_memory
-  - interfaces
-  - power
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - interfaces
-  - power
-drive:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - storage_type
-  - storage_capacity
-  - drive_interface
-  - drive_form_factor
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - storage_type
-  - drive_form_factor
-pc_case:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - body_material
-  - color
-  - length
-  - width
-  - height
-  - compatibility
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - body_material
-  - color
-  - length
-  - width
-  - height
-pc_power:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - voltage
-  - interfaces
-  - compatibility
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - voltage
-  - interfaces
-  - compatibility
-pc_cooling:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - compatibility
-  - power
-  - noise_level
-  - backlight
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - noise_level
-  - backlight
-keyboard:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - connection
-  - keyboard_layout
-  - switch_type
-  - wireless
-  - backlight
-  - color
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - switch_type
-  - wireless
-  - backlight
-  - color
-mouse:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - connection
-  - wireless
-  - color
-  - backlight
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - wireless
-  - color
-  - backlight
-printer:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - print_technology
-  - paper_format
-  - print_color
-  - connection
-  - interfaces
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - print_color
-  - connection
-  - interfaces
-printer_supply:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - compatibility
-  - print_color
-  - count
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - print_color
-  - count
-network:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - network_standard
-  - network_speed
-  - interfaces
-  - wireless
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - network_speed
-  - interfaces
-  - wireless
-cable:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - connector
-  - cable_length
-  - interfaces
-  - compatibility
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - interfaces
-  - compatibility
-ups:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - battery_energy
-  - voltage
-  - interfaces
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - battery_energy
-  - voltage
-  - interfaces
-fridge:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - capacity_l
-  - energy_class
-  - appliance_installation
-  - color
-  - length
-  - width
-  - height
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - energy_class
-  - color
-  - length
-  - width
-  - height
-washer:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - wash_load
-  - spin_speed
-  - energy_class
-  - appliance_installation
-  - noise_level
-  - width
-  - height
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - spin_speed
-  - energy_class
-  - noise_level
-  - width
-  - height
-dishwasher:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - place_settings
-  - energy_class
-  - appliance_installation
-  - width
-  - noise_level
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - energy_class
-  - width
-  - noise_level
-cooker:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - burner_count
-  - appliance_installation
-  - capacity_l
-  - color
-  - width
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - burner_count
-  - capacity_l
-  - color
-  - width
-kitchen_appliance:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - capacity_l
-  - body_material
-  - color
-  - equipment
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - capacity_l
-  - body_material
-  - color
-  - equipment
-cleaning_appliance:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - power_source
-  - capacity_l
-  - filter_type
-  - noise_level
-  - equipment
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - capacity_l
-  - filter_type
-  - noise_level
-  - equipment
-climate:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - room_area
-  - capacity_l
-  - noise_level
-  - energy_class
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - capacity_l
-  - noise_level
-  - energy_class
-personal_appliance:
-  attributes:
-  - brand
-  - gtin
-  - model
   - country
-  - power
-  - power_source
-  - equipment
-  - color
-  - waterproof
   optional:
   - brand
   - gtin
-  - model
-  - country
-  - power
-  - equipment
-  - color
-  - waterproof
-sewing_machine:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - purpose
-  - equipment
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - equipment
-cookware:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - cookware_material
-  - capacity_l
-  - diameter
-  - induction
-  - dishwasher_safe
-  - color
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - capacity_l
-  - diameter
-  - induction
-  - dishwasher_safe
-  - color
-tableware:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - cookware_material
-  - count
-  - capacity_l
-  - diameter
-  - color
-  - dishwasher_safe
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - capacity_l
-  - diameter
-  - color
-  - dishwasher_safe
-kitchen_tool:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - cookware_material
-  - length
-  - count
-  - purpose
-  - dishwasher_safe
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - cookware_material
-  - length
-  - count
-  - dishwasher_safe
-storage:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - capacity_l
-  - length
-  - width
-  - height
-  - count
-  - color
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - capacity_l
-  - length
-  - width
-  - height
-  - count
-  - color
-home_decor:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - color
-  - length
-  - width
-  - height
-  - purpose
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - color
-  - length
-  - width
-  - height
-lighting:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - voltage
-  - light_temperature
-  - light_flux
-  - body_material
-  - color
-  - protection_class
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - light_temperature
-  - light_flux
-  - body_material
-  - color
-  - protection_class
-bed:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - furniture_frame
-  - bed_width
-  - bed_length
-  - upholstery
-  - load_kg
-  - color
-  - furniture_style
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - upholstery
-  - load_kg
-  - color
-  - furniture_style
-sofa:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - furniture_frame
-  - upholstery
-  - length
-  - width
-  - height
-  - bed_width
-  - bed_length
-  - foldable
-  - color
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - furniture_frame
-  - height
-  - bed_width
-  - bed_length
-  - foldable
-  - color
-chair:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - furniture_frame
-  - upholstery
-  - load_kg
-  - height
-  - color
-  - furniture_style
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - upholstery
-  - load_kg
-  - height
-  - color
-  - furniture_style
-table:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - furniture_frame
-  - length
-  - width
-  - height
-  - foldable
-  - color
-  - furniture_style
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - furniture_frame
-  - foldable
-  - color
-  - furniture_style
-cabinet:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - furniture_frame
-  - length
-  - width
-  - height
-  - color
-  - furniture_style
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - furniture_frame
-  - color
-  - furniture_style
-mattress:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - bed_width
-  - bed_length
-  - height
-  - firmness
-  - mattress_filling
-  - load_kg
-  - orthopedic
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - height
-  - mattress_filling
-  - load_kg
-  - orthopedic
-furniture_part:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - compatibility
-  - material
-  - length
-  - count
-  - color
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - length
-  - count
-  - color
-bed_linen:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - textile_material
-  - fabric_composition
-  - size
-  - count
-  - color
-  - fabric_density
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - fabric_composition
-  - count
-  - color
-  - fabric_density
-blanket:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - textile_material
-  - fabric_composition
-  - length
-  - width
-  - color
-  - season
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - fabric_composition
-  - color
-  - season
-pillow:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - textile_material
-  - mattress_filling
-  - length
-  - width
-  - orthopedic
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - textile_material
-  - mattress_filling
-  - orthopedic
-towel:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - textile_material
-  - fabric_composition
-  - length
-  - width
-  - fabric_density
-  - color
-  - count
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - fabric_composition
-  - fabric_density
-  - color
-  - count
-curtain:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - textile_material
-  - fabric_composition
-  - length
-  - width
-  - color
-  - count
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - fabric_composition
-  - color
-  - count
-carpet:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - textile_material
-  - length
-  - width
-  - color
-  - purpose
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - textile_material
-  - color
-  - purpose
-clothing:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - size
-  - gender
-  - age
-  - color
-  - textile_material
-  - fabric_composition
-  - season
-  - clothing_fit
-  - clothing_fastener
-  - size_clothing
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - age
-  - color
-  - textile_material
-  - season
-  - clothing_fit
-  - clothing_fastener
-  - size_clothing
-outerwear:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - size
-  - gender
-  - age
-  - color
-  - fabric_composition
-  - season
-  - clothing_fastener
-  - hood
-  - insulated
-  - size_clothing
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - age
-  - color
-  - clothing_fastener
-  - hood
-  - insulated
-  - size_clothing
-underwear:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - size
-  - gender
-  - age
-  - color
-  - fabric_composition
-  - count
-  - size_clothing
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - age
-  - color
-  - count
-  - size_clothing
-swimwear:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - size
-  - gender
-  - age
-  - color
-  - fabric_composition
-  - size_clothing
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - age
-  - color
-  - size_clothing
-shoe:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - size
-  - gender
-  - age
-  - color
-  - season
-  - shoe_upper
-  - shoe_lining
-  - shoe_sole
-  - shoe_fastener
-  - heel_height
-  - size_shoes_eu
-  optional:
-  - brand
-  - gtin
-  - model
   - country
-  - gender
-  - age
-  - color
-  - shoe_lining
-  - shoe_sole
-  - shoe_fastener
-  - heel_height
-  - size_shoes_eu
-bag:
+durable:
+  abstract: true
+  extends: identity
   attributes:
-  - brand
-  - gtin
   - model
-  - country
-  - gender
-  - color
-  - material
-  - length
-  - width
-  - height
-  - capacity_l
-  - purpose
   optional:
-  - brand
-  - gtin
   - model
-  - country
-  - gender
-  - color
-  - material
-  - length
-  - width
-  - height
-  - capacity_l
 accessory:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - size
+  - target_gender
   - color
-  - textile_material
   - material
-  - purpose
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - size
-  - color
-  - textile_material
-  - material
-watch:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - color
-  - body_material
-  - connection
-  - waterproof
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - color
-  - connection
-  - waterproof
-jewelry:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - size
-  - jewelry_metal
-  - jewelry_sample
-  - jewelry_insert
-  - jewelry_weight
-  - color
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - size
-  - jewelry_sample
-  - jewelry_insert
-  - jewelry_weight
-  - color
-cosmetic:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - skin_type
-  - skin_effect
-  - ingredients
-  - volume
-  - net_weight
-  - shelf_life
-  - spf
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - skin_type
-  - skin_effect
-  - volume
-  - net_weight
-  - shelf_life
-  - spf
-haircare:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - hair_type
-  - skin_effect
-  - ingredients
-  - volume
-  - shelf_life
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - hair_type
-  - skin_effect
-  - volume
-  - shelf_life
-makeup:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - skin_type
-  - ingredients
-  - volume
-  - net_weight
-  - shelf_life
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - skin_type
-  - ingredients
-  - volume
-  - net_weight
-  - shelf_life
-perfume:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - fragrance
-  - volume
-  - gender
-  - shelf_life
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - shelf_life
-beauty_tool:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - material
+  - length
+  - width
   - count
-  - color
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - count
-  - color
-hygiene:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - ingredients
-  - count
-  - volume
-  - net_weight
-  - age
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - ingredients
-  - count
-  - volume
-  - net_weight
-  - age
-medical_device:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - medical_application
-  - power_source
-  - equipment
-  - measurement_range
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - power_source
-  - equipment
-  - measurement_range
-medical_supply:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - medical_application
-  - medical_size
-  - count
-  - sterile
-  - material
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - medical_size
-  - sterile
-  - material
-orthopedic:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - medical_application
-  - medical_size
-  - material
-  - load_kg
-  - orthopedic
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - load_kg
-  - orthopedic
-baby_transport:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
+  - audience_age_group
   - min_age
-  - load_kg
-  - weight
-  - foldable
-  - color
-  - equipment
+  - max_age
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - weight
-  - foldable
+  - target_gender
   - color
-  - equipment
-car_seat:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - min_age
-  - load_kg
-  - weight
-  - color
-  - protection_class
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - weight
-  - color
-  - protection_class
-baby_feeding:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - min_age
-  - volume
-  - cookware_material
+  - material
+  - length
+  - width
   - count
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - volume
-  - cookware_material
-  - count
-baby_hygiene:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - age
-  - size
-  - count
-  - ingredients
-  - purpose
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - age
-  - size
-  - ingredients
-baby_furniture:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
+  - audience_age_group
   - min_age
-  - load_kg
-  - furniture_frame
+  - max_age
+agricultural_supply:
+  extends: durable
+  attributes:
+  - material
   - length
   - width
   - height
+  - count
+  - target_species
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - min_age
-  - load_kg
+  - material
   - length
   - width
   - height
-toy:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - min_age
-  - material
-  - color
   - count
-  - purpose
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - color
-  - count
-  - purpose
-construction_toy:
+  - target_species
+air_compressor:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - min_age
-  - toy_parts
-  - material
-  - craft_theme
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - craft_theme
-board_game:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - min_age
-  - players
-  - craft_theme
-  - book_language
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - craft_theme
-  - book_language
-puzzle:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - min_age
-  - puzzle_parts
-  - craft_theme
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - craft_theme
-rc_toy:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - min_age
-  - battery_capacity
-  - power_source
-  - connection
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - battery_capacity
-  - connection
-sport_equipment:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - sport
-  - size
-  - weight
-  - material
-  - load_kg
-  - purpose
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - size
-  - weight
-  - material
-  - load_kg
-  - purpose
-fitness:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - sport
-  - weight
-  - load_kg
-  - material
-  - power_source
-  - foldable
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - weight
-  - load_kg
-  - material
-  - power_source
-  - foldable
-bicycle:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - wheel_diameter
-  - frame_size
-  - bike_frame
-  - bike_brake
-  - bike_gears
-  - gender
-  - age
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - frame_size
-  - bike_brake
-  - bike_gears
-  - gender
-  - age
-ride:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - wheel_diameter
-  - load_kg
-  - material
-  - foldable
-  - battery_capacity
   - power
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - wheel_diameter
-  - material
-  - foldable
-  - battery_capacity
-  - power
-outdoor:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - material
-  - weight
-  - length
-  - width
-  - height
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - weight
-  - length
-  - width
-  - height
-tent:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - tent_places
-  - water_resistance
-  - weight
-  - season
-  - equipment
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - weight
-  - season
-  - equipment
-sleeping_bag:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - comfort_temperature
-  - season
-  - weight
-  - textile_material
-  - length
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - season
-  - weight
-  - textile_material
-  - length
-backpack:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
+  - power_source
+  - voltage
+  - pressure
+  - airflow_m3h
   - capacity_l
-  - weight
-  - textile_material
-  - purpose
-  - waterproof
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - weight
-  - textile_material
-  - purpose
-  - waterproof
-rod:
+  - power
+  - power_source
+  - voltage
+  - pressure
+  - airflow_m3h
+  - capacity_l
+airbrush:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - rod_length
-  - fishing_test
-  - fishing_action
   - material
+  - pressure
+  - nozzle_diameter
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - fishing_test
-  - fishing_action
   - material
-fishing:
+  - pressure
+  - nozzle_diameter
+alcoholic_drink:
+  extends: identity
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - weight
-  - line_diameter
+  - food_category
+  - ingredients
+  - volume
+  - shelf_life
+  - food_storage
+  - food_flavor
+  - ethanol_percent
+  optional:
+  - food_category
+  - ingredients
+  - volume
+  - shelf_life
+  - food_storage
+  - food_flavor
+  - ethanol_percent
+animal:
+  extends: identity
+  attributes:
+  - animal_species
+  - animal_breed
+  - animal_sex
+  - animal_age_months
+  optional:
+  - animal_species
+  - animal_breed
+  - animal_sex
+  - animal_age_months
+antenna_amplifier:
+  extends: durable
+  attributes:
+  - connector
+  - rf_frequency_min_hz
+  - rf_frequency_max_hz
+  - power_source
+  - power
+  optional:
+  - connector
+  - rf_frequency_min_hz
+  - rf_frequency_max_hz
+  - power_source
+  - power
+antenna_part:
+  extends: durable
+  attributes:
   - material
+  - connector
+  - rf_frequency_min_hz
+  - rf_frequency_max_hz
   - count
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - weight
-  - line_diameter
   - material
+  - connector
+  - rf_frequency_min_hz
+  - rf_frequency_max_hz
   - count
-auto_part:
+appliance_container:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - auto_make
-  - auto_model
+  - compatible_model
   - part_number
-  - auto_position
-  - compatibility
+  - cookware_material
+  - capacity_l
+  - length
+  - width
+  - height
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - auto_make
-  - auto_model
-  - auto_position
+  - compatible_model
+  - part_number
+  - cookware_material
+  - length
+  - width
+  - height
+appliance_heater:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - compatible_model
+  - part_number
+  - material
+  - length
+  - width
+  - diameter
+  optional:
+  - power
+  - voltage
+  - compatible_model
+  - part_number
+  - material
+  - length
+  - width
+  - diameter
+appliance_part:
+  extends: common_geometry
+  attributes:
+  - compatible_model
+  - part_number
+  - material
+  optional:
+  - compatible_model
+  - part_number
+  - material
+appliance_pump:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - compatible_model
+  - part_number
+  - flow_rate
+  - pressure
+  optional:
+  - power
+  - voltage
+  - compatible_model
+  - part_number
+  - flow_rate
+  - pressure
+appliance_sensor:
+  extends: durable
+  attributes:
+  - compatible_model
+  - part_number
+  - voltage
+  - material
+  - length
+  - width
+  - height
+  optional:
+  - compatible_model
+  - part_number
+  - voltage
+  - material
+  - length
+  - width
+  - height
+aquarium_device:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - flow_rate
+  - compatible_model
+  optional:
+  - power
+  - voltage
+  - flow_rate
+  - compatible_model
+art:
+  extends: durable
+  attributes:
+  - art_technique
+  - color
+  - count
+  - net_weight
+  - volume
+  optional:
+  - art_technique
+  - color
+  - count
+  - net_weight
+  - volume
+art_tool:
+  extends: durable
+  attributes:
+  - art_technique
+  - material
+  - color
+  - count
+  - length
+  - width
+  optional:
+  - art_technique
+  - material
+  - color
+  - count
+  - length
+  - width
+audio_amplifier:
+  extends: durable
+  attributes:
+  - connection
+  - connector
+  - power_source
+  - power
+  - audio_channels
+  - audio_output_w
+  - audio_frequency_min
+  - audio_frequency_max
+  - interface_standard
+  optional:
+  - connection
+  - connector
+  - power_source
+  - power
+  - audio_channels
+  - audio_frequency_min
+  - audio_frequency_max
+  - interface_standard
+audio_patch_panel:
+  extends: durable
+  attributes:
+  - connector
+  - audio_channels
+  - interface_standard
+  optional:
+  - connector
+  - audio_channels
+  - interface_standard
+audio_player:
+  extends: durable
+  attributes:
+  - color
+  - power_source
+  - storage_capacity
+  - recording_medium
+  - interface_standard
+  - audio_frequency_min
+  - audio_frequency_max
+  optional:
+  - color
+  - power_source
+  - storage_capacity
+  - recording_medium
+  - interface_standard
+  - audio_frequency_min
+  - audio_frequency_max
+audio_pro:
+  extends: durable
+  attributes:
+  - connection
+  - connector
+  - power_source
+  - power
+  - audio_channels
+  - interface_standard
+  optional:
+  - connection
+  - connector
+  - power_source
+  - power
+  - audio_channels
+  - interface_standard
 auto_accessory:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - compatibility
+  - compatible_model
   - material
   - color
   - voltage
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - compatibility
+  - compatible_model
   - material
   - color
   - voltage
-tire:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - tire_width
-  - tire_profile
-  - rim_diameter
-  - tire_season
-  - tire_load_index
-  - tire_speed_index
-  - studded
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - tire_load_index
-  - tire_speed_index
-  - studded
-wheel:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - rim_diameter
-  - rim_width
-  - wheel_bolt_pattern
-  - wheel_offset
-  - material
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - rim_width
-  - wheel_offset
-  - material
 auto_battery:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
   - car_battery_capacity
   - starting_current
   - voltage
@@ -2147,564 +348,552 @@ auto_battery:
   - width
   - height
   optional:
-  - brand
-  - gtin
-  - model
-  - country
+  - car_battery_capacity
+  - starting_current
+  - voltage
   - battery_chemistry
   - length
   - width
   - height
-oil:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - oil_viscosity
-  - oil_specification
-  - auto_engine
-  - volume
-  - purpose
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - oil_viscosity
-  - oil_specification
-  - auto_engine
 auto_chemical:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
   - volume
   - ingredients
   - temperature_max
   optional:
-  - brand
-  - gtin
-  - model
-  - country
+  - volume
   - ingredients
   - temperature_max
-power_tool:
+auto_part:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
+  - auto_make
+  - auto_model
+  - part_number
+  - auto_position
+  - compatible_model
+  optional:
+  - auto_make
+  - auto_model
+  - part_number
+  - auto_position
+  - compatible_model
+auto_passive:
+  extends: durable
+  attributes:
+  - auto_make
+  - auto_model
+  - compatible_model
+  - material
+  - color
+  - length
+  - width
+  - height
+  optional:
+  - auto_make
+  - auto_model
+  - compatible_model
+  - material
+  - color
+  - length
+  - width
+  - height
+awning:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - water_resistance
+  - weight
+  - season
+  optional:
+  - material
+  - length
+  - width
+  - water_resistance
+  - weight
+  - season
+baby_appliance:
+  extends: durable
+  attributes:
   - power
   - power_source
   - voltage
-  - tool_speed
-  - torque
+  - capacity_l
   - equipment
   optional:
-  - brand
-  - gtin
-  - model
-  - country
   - power
+  - power_source
   - voltage
-  - tool_speed
-  - torque
+  - capacity_l
   - equipment
-tool_accessory:
+baby_carrier:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - tool_diameter
-  - tool_mount
-  - compatibility
+  - min_age
+  - max_age
+  - load_kg
   - material
-  - count
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - tool_diameter
-  - tool_mount
-  - material
-  - count
-hand_tool:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - material
-  - length
-  - count
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - length
-  - count
-measuring:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - measurement_range
-  - power_source
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - measurement_range
-  - power_source
-fastener:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - fastener_standard
-  - thread_diameter
-  - fastener_length
-  - material
-  - count
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - fastener_standard
-  - thread_diameter
-  - fastener_length
-paint:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - paint_base
-  - surface_type
+  - weight
   - color
-  - volume
-  - net_weight
-  - drying_time
-  - coverage_area
   optional:
-  - brand
-  - gtin
-  - model
-  - country
+  - min_age
+  - max_age
+  - load_kg
+  - material
+  - weight
   - color
-  - volume
-  - net_weight
-  - drying_time
-  - coverage_area
-building_mix:
+baby_feeding:
+  extends: identity
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - net_weight
-  - surface_type
-  - drying_time
+  - min_age
+  - max_age
+  - cookware_material
+  - count
+  - capacity_l
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - surface_type
-  - drying_time
-building_panel:
+  - min_age
+  - max_age
+  - cookware_material
+  - count
+  - capacity_l
+baby_furniture:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
+  - min_age
+  - max_age
+  - load_kg
+  - furniture_frame
+  - length
+  - width
+  - height
+  optional:
+  - min_age
+  - max_age
+  - load_kg
+  - furniture_frame
+  - length
+  - width
+  - height
+baby_passive:
+  extends: identity
+  attributes:
+  - min_age
+  - max_age
   - material
   - length
   - width
   - height
-  - coverage_area
-  - color
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - height
-  - coverage_area
-  - color
-plumbing:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - material
-  - thread_size
-  - pressure
-  - flow_rate
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - material
-  - thread_size
-  - pressure
-  - flow_rate
-electrical:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - voltage
-  - current
-  - power
-  - protection_class
   - count
-  - purpose
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - current
-  - power
-  - protection_class
-  - count
-wire:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - wire_section
-  - cable_length
-  - voltage
-  - purpose
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - voltage
-  - purpose
-door:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
+  - min_age
+  - max_age
+  - material
   - length
   - width
   - height
+  - count
+baby_passive_mouth:
+  extends: identity
+  attributes:
+  - min_age
+  - max_age
   - material
-  - color
-  - purpose
+  - count
+  - reusable
   optional:
-  - brand
-  - gtin
-  - model
-  - country
+  - min_age
+  - max_age
+  - material
+  - count
+  - reusable
+baby_safety:
+  extends: durable
+  attributes:
+  - material
+  - compatible_model
   - length
+  - width
+  - height
+  - count
+  optional:
+  - material
+  - compatible_model
+  - length
+  - width
+  - height
+  - count
+baby_textile:
+  extends: durable
+  attributes:
+  - min_age
+  - max_age
+  - textile_material
+  - fabric_composition
+  - length
+  - width
   - color
-  - purpose
-garden_tool:
+  optional:
+  - min_age
+  - max_age
+  - textile_material
+  - fabric_composition
+  - length
+  - width
+  - color
+baby_transport:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - power_source
-  - power
+  - min_age
+  - max_age
+  - load_kg
+  - weight
+  - foldable
+  - color
+  - equipment
+  optional:
+  - min_age
+  - max_age
+  - load_kg
+  - weight
+  - foldable
+  - color
+  - equipment
+baby_transport_part:
+  extends: common_geometry
+  attributes:
+  - color
+  - compatible_model
+  - material
+  optional:
+  - color
+  - compatible_model
+  - material
+backpack:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - capacity_l
+  - weight
+  - length
+  - width
+  - height
+  - bag_fastener
+  - bag_compartments
+  - bag_laptop_diagonal
+  - waterproof
+  - target_gender
+  - bag_construction
+  optional:
+  - color
+  - capacity_l
+  - weight
+  - length
+  - width
+  - height
+  - bag_fastener
+  - bag_compartments
+  - bag_laptop_diagonal
+  - waterproof
+  - target_gender
+  - bag_construction
+bag:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - capacity_l
+  - bag_fastener
+  - bag_strap_length
+  - bag_compartments
+  - bag_handle_height
+  - target_gender
+  - bag_construction
+  - audience_age_group
+  - min_age
+  - max_age
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - capacity_l
+  - bag_fastener
+  - bag_strap_length
+  - bag_compartments
+  - bag_handle_height
+  - target_gender
+  - bag_construction
+  - audience_age_group
+  - min_age
+  - max_age
+ball:
+  extends: durable
+  attributes:
+  - sport
   - material
   - weight
+  - ball_circumference
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - power_source
-  - power
+  - sport
   - material
   - weight
-plant:
+  - ball_circumference
+bath_cosmetic:
+  extends: identity
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - plant_species
-  - plant_variety
-  - plant_height
-  - planting_period
-  - flowering_period
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+  - fragrance
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - plant_variety
-  - plant_height
-  - planting_period
-  - flowering_period
-seed:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - plant_species
-  - plant_variety
-  - seed_count
+  - ingredients
+  - volume
   - net_weight
-  - planting_period
+  - shelf_life
+  - fragrance
+battery_cell:
+  extends: durable
+  attributes:
+  - battery_chemistry
+  - battery_capacity
+  - voltage
+  - count
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - seed_count
-  - net_weight
-  - planting_period
-garden_soil:
+  - battery_chemistry
+  - battery_capacity
+  - voltage
+  - count
+beauty_tool:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - fertilizer_composition
-  - net_weight
-  - capacity_l
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - fertilizer_composition
-  - net_weight
-  - capacity_l
-garden_watering:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - flow_rate
-  - pressure
-  - cable_length
   - material
+  - count
+  - color
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - flow_rate
-  - pressure
-  - cable_length
   - material
-garden_furniture:
+  - count
+  - color
+bed:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
+  - furniture_frame
+  - bed_width
+  - bed_length
+  - load_kg
+  - color
+  - furniture_style
+  - furniture_use
+  optional:
   - furniture_frame
   - load_kg
+  - color
+  - furniture_style
+  - furniture_use
+bed_linen:
+  extends: common_textile
+  attributes:
+  - count
+  - color
+  - fabric_density
+  - textile_weave
+  optional:
+  - count
+  - color
+  - fabric_density
+  - textile_weave
+bed_nest:
+  extends: durable
+  attributes:
+  - min_age
+  - max_age
+  - textile_material
+  - fabric_composition
+  - filling_material
   - length
   - width
-  - height
-  - foldable
+  - color
   optional:
-  - brand
-  - gtin
-  - model
-  - country
+  - min_age
+  - max_age
+  - textile_material
+  - fabric_composition
+  - filling_material
+  - length
+  - width
+  - color
+bed_part:
+  extends: durable
+  attributes:
+  - material
+  - bed_width
+  - bed_length
   - load_kg
+  - color
+  optional:
+  - material
+  - bed_width
+  - bed_length
+  - load_kg
+  - color
+bicycle:
+  extends: durable
+  attributes:
+  - wheel_diameter
+  - frame_size
+  - bike_frame
+  - bike_brake
+  - bike_gears
+  - target_gender
+  - max_rider_weight
+  optional:
+  - wheel_diameter
+  - frame_size
+  - bike_frame
+  - bike_brake
+  - bike_gears
+  - target_gender
+  - max_rider_weight
+bike_brake:
+  extends: durable
+  attributes:
+  - compatible_model
+  - material
+  - brake_rotor_diameter
+  optional:
+  - compatible_model
+  - material
+  - brake_rotor_diameter
+bike_part:
+  extends: durable
+  attributes:
+  - compatible_model
+  - material
   - length
   - width
-  - height
-  - foldable
-pet_food:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - target_species
-  - pet_age
-  - pet_breed
-  - food_flavor
-  - ingredients
-  - net_weight
-  - food_diet
+  - weight
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - pet_age
-  - pet_breed
-  - food_flavor
-  - food_diet
-pet_supply:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - target_species
-  - pet_age
-  - purpose
-  - size
+  - compatible_model
   - material
-  - count
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - pet_age
-  - size
-  - material
-  - count
-pet_aquarium:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - target_species
-  - capacity_l
   - length
   - width
-  - height
+  - weight
+bike_tire:
+  extends: durable
+  attributes:
+  - compatible_model
+  - material
+  - wheel_diameter
+  - bike_tire_width
+  optional:
+  - compatible_model
+  - material
+  - wheel_diameter
+  - bike_tire_width
+bike_wheel:
+  extends: durable
+  attributes:
+  - compatible_model
+  - material
+  - wheel_diameter
+  - bike_wheel_mount
+  - weight
+  optional:
+  - compatible_model
+  - material
+  - wheel_diameter
+  - bike_wheel_mount
+  - weight
+blanket:
+  extends: common_textile
+  attributes:
+  - color
+  - season
+  - filling_material
+  optional:
+  - color
+  - season
+  - filling_material
+blinds:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - color
+  - count
+  optional:
+  - material
+  - length
+  - width
+  - color
+  - count
+board_game:
+  extends: durable
+  attributes:
+  - min_age
+  - max_age
+  - players
+  - craft_theme
+  - book_language
+  - board_game_kind
+  optional:
+  - min_age
+  - max_age
+  - players
+  - craft_theme
+  - book_language
+  - board_game_kind
+boat_motor:
+  extends: durable
+  attributes:
   - power
+  - power_source
+  - weight
+  - voltage
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - target_species
-  - length
-  - width
-  - height
   - power
-food:
+  - power_source
+  - weight
+  - voltage
+body_wipe:
+  extends: identity
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - food_category
   - ingredients
-  - net_weight
-  - shelf_life
-  - food_storage
-  - food_energy
-  - food_protein
-  - food_fat
-  - food_carbohydrate
-  - food_diet
-  - food_sugar_free
-  - food_gluten_free
-  - food_lactose_free
+  - count
+  - min_age
+  - max_age
+  - body_area
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - food_category
-  - food_energy
-  - food_protein
-  - food_fat
-  - food_carbohydrate
-  - food_diet
-  - food_sugar_free
-  - food_gluten_free
-  - food_lactose_free
-drink:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - food_category
   - ingredients
-  - volume
-  - shelf_life
-  - food_storage
-  - food_flavor
-  - food_sugar_free
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - food_category
-  - food_flavor
-  - food_sugar_free
-stationery:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - color
   - count
-  - material
-  - paper_format
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - color
-  - material
-  - paper_format
-paper:
+  - min_age
+  - max_age
+  - body_area
+boiler:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - paper_format
-  - paper_density
-  - count
-  - color
+  - power
+  - room_area
+  - pressure
+  - temperature_max
+  - equipment
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - paper_density
-  - color
+  - power
+  - room_area
+  - pressure
+  - temperature_max
+  - equipment
 book:
+  extends: identity
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
   - book_author
   - book_publisher
   - book_isbn
@@ -2714,110 +903,1854 @@ book:
   - book_binding
   - book_pages
   - book_year
-  - age
+  - book_edition_form
+  - min_age
+  - max_age
+  - book_gift_edition
+  - book_edition_status
   optional:
-  - brand
-  - gtin
-  - model
-  - country
   - book_author
   - book_publisher
   - book_isbn
+  - book_language
   - book_genre
   - book_series
+  - book_binding
+  - book_pages
   - book_year
-  - age
-art:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - art_technique
-  - purpose
-  - color
-  - count
-  - net_weight
-  - volume
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - art_technique
-  - color
-  - count
-  - net_weight
-  - volume
-craft:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - craft_theme
-  - purpose
-  - material
-  - count
+  - book_edition_form
   - min_age
+  - max_age
+  - book_gift_edition
+  - book_edition_status
+boot:
+  extends: common_footwear
+  attributes:
+  - season
+  - shoe_upper
+  - shoe_lining
+  - shoe_sole
+  - shoe_fastener
+  - heel_height
+  - shoe_insole
+  - shoe_width
+  - shoe_toe
+  - shoe_back
+  - insole_length
+  - shoe_heel
+  - shaft_height
+  - shaft_circumference
+  - shoe_use
+  - size_footwear_label
+  - audience_age_group
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - craft_theme
+  - season
+  - shoe_lining
+  - shoe_sole
+  - shoe_fastener
+  - heel_height
+  - shoe_insole
+  - shoe_width
+  - shoe_toe
+  - shoe_back
+  - insole_length
+  - shoe_heel
+  - shaft_height
+  - shaft_circumference
+  - shoe_use
+  - audience_age_group
+building_mix:
+  extends: durable
+  attributes:
+  - net_weight
+  - surface_type
+  - drying_time
+  optional:
+  - net_weight
+  - surface_type
+  - drying_time
+building_panel:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - height
+  - coverage_area
+  - color
+  optional:
+  - material
+  - length
+  - width
+  - height
+  - coverage_area
+  - color
+bulk_building:
+  extends: durable
+  attributes:
+  - material
+  - net_weight
+  - capacity_l
+  optional:
+  - material
+  - net_weight
+  - capacity_l
+business_bag:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - capacity_l
+  - bag_fastener
+  - bag_strap_length
+  - bag_compartments
+  - bag_laptop_diagonal
+  - bag_handle_height
+  - target_gender
+  - bag_construction
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - capacity_l
+  - bag_fastener
+  - bag_strap_length
+  - bag_compartments
+  - bag_laptop_diagonal
+  - bag_handle_height
+  - target_gender
+  - bag_construction
+business_equipment:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - interface_standard
+  - width
+  - height
+  - length
+  optional:
+  - power
+  - voltage
+  - interface_standard
+  - width
+  - height
+  - length
+business_folder:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - paper_format
+  - bag_fastener
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - paper_format
+  - bag_fastener
+cabinet:
+  extends: durable
+  attributes:
+  - furniture_frame
+  - length
+  - width
+  - height
+  - color
+  - furniture_style
+  - furniture_placement
+  - furniture_use
+  optional:
+  - furniture_frame
+  - length
+  - width
+  - height
+  - color
+  - furniture_style
+  - furniture_placement
+  - furniture_use
+cable:
+  extends: durable
+  attributes:
+  - connector
+  - cable_length
+  - compatible_model
+  - interface_standard
+  optional:
+  - connector
+  - cable_length
+  - compatible_model
+  - interface_standard
+camera:
+  extends: durable
+  attributes:
+  - sensor_format
+  - video_format
+  - lens_mount
+  - battery_capacity
+  - camera_megapixels
+  optional:
+  - sensor_format
+  - video_format
+  - lens_mount
+  - battery_capacity
+  - camera_megapixels
+canning_lid:
+  extends: durable
+  attributes:
+  - material
+  - diameter
+  - count
+  optional:
+  - material
+  - diameter
+  - count
+capacitor:
+  extends: durable
+  attributes:
+  - component_voltage_rating_v
+  - component_package
+  - component_tolerance
+  - component_capacitance
+  optional:
+  - component_voltage_rating_v
+  - component_package
+  - component_tolerance
+car_seat:
+  extends: durable
+  attributes:
+  - min_age
+  - load_kg
+  - weight
+  - color
+  - child_seat_standard
+  - max_age
+  optional:
+  - min_age
+  - load_kg
+  - weight
+  - color
+  - child_seat_standard
+  - max_age
+card_holder:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - bag_fastener
+  - bag_card_slots
+  - target_gender
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - bag_fastener
+  - bag_card_slots
+  - target_gender
+carpet:
+  extends: durable
+  attributes:
+  - textile_material
+  - length
+  - width
+  - color
+  optional:
+  - textile_material
+  - length
+  - width
+  - color
+certificate:
+  extends: identity
+  attributes:
+  - certificate_program
+  optional:
+  - certificate_program
+chair:
+  extends: durable
+  attributes:
+  - furniture_frame
+  - upholstery
+  - load_kg
+  - height
+  - color
+  - furniture_style
+  - seat_height
+  - seat_width
+  - seat_depth
+  - furniture_placement
+  - furniture_use
+  optional:
+  - furniture_frame
+  - upholstery
+  - load_kg
+  - height
+  - color
+  - furniture_style
+  - seat_height
+  - seat_width
+  - seat_depth
+  - furniture_placement
+  - furniture_use
+charger:
+  extends: durable
+  attributes:
+  - color
+  - connector
+  - power
+  - voltage
+  - wireless
+  - cable_length
+  - electrical_safety
+  optional:
+  - color
+  - connector
+  - power
+  - voltage
+  - wireless
+  - cable_length
+  - electrical_safety
+chemical_fuel:
+  extends: identity
+  attributes:
+  - fuel_type
+  - volume
+  - net_weight
+  - ingredients
+  optional:
+  - fuel_type
+  - volume
+  - net_weight
+  - ingredients
+circuit_board:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - height
+  - count
+  optional:
+  - material
+  - length
+  - width
+  - height
+  - count
+cleaning_appliance:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - noise_level
+  - equipment
+  optional:
+  - power
+  - power_source
+  - noise_level
+  - equipment
+cleaning_part:
+  extends: durable
+  attributes:
+  - compatible_model
+  - part_number
+  - material
+  - filter_type
+  - count
+  optional:
+  - compatible_model
+  - part_number
+  - material
+  - filter_type
+  - count
+climate:
+  extends: durable
+  attributes:
+  - power
+  - room_area
+  - noise_level
+  - energy_class
+  optional:
+  - power
+  - room_area
+  - noise_level
+  - energy_class
+climate_part:
+  extends: durable
+  attributes:
+  - compatible_model
+  - part_number
+  - filter_type
+  - length
+  - width
+  - height
+  optional:
+  - compatible_model
+  - part_number
+  - filter_type
+  - length
+  - width
+  - height
+climate_water:
+  extends: durable
+  attributes:
+  - power
+  - room_area
+  - capacity_l
+  - noise_level
+  - energy_class
+  optional:
+  - power
+  - room_area
+  - capacity_l
+  - noise_level
+  - energy_class
+climbing:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - weight
+  - industrial_standard
+  - climbing_strength
+  optional:
+  - material
+  - length
+  - weight
+  - industrial_standard
+  - climbing_strength
+climbing_rope:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - weight
+  - industrial_standard
+  - climbing_strength
+  - rope_diameter
+  optional:
+  - material
+  - length
+  - weight
+  - industrial_standard
+  - climbing_strength
+  - rope_diameter
+clothing:
+  extends: common_clothing
+  attributes:
+  - textile_material
+  - season
+  - clothing_fit
+  - clothing_fastener
+  - clothing_use
+  - ppe_standard
+  - audience_age_group
+  optional:
+  - textile_material
+  - season
+  - clothing_fit
+  - clothing_fastener
+  - clothing_use
+  - ppe_standard
+  - audience_age_group
+coin_purse:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - bag_fastener
+  - target_gender
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - bag_fastener
+  - target_gender
+coins:
+  extends: durable
+  attributes:
+  - manufacture_year
+  - collectible_condition
+  - coin_inscription
+  - material
+  - diameter
+  - weight
+  optional:
+  - manufacture_year
+  - collectible_condition
+  - coin_inscription
+  - material
+  - diameter
+  - weight
+collectible:
+  extends: durable
+  attributes:
   - material
   - count
-  - min_age
-musical:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
-  - material
-  - string_count
-  - key_count
-  - instrument_key
-  - instrument_tuning
+  - manufacture_year
+  - collectible_condition
   optional:
-  - brand
-  - gtin
-  - model
-  - country
   - material
-  - string_count
-  - key_count
-  - instrument_key
-  - instrument_tuning
-audio_pro:
+  - count
+  - manufacture_year
+  - collectible_condition
+commercial_display:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
+  - material
+  - width
+  - height
+  - length
+  - capacity_l
+  optional:
+  - material
+  - width
+  - height
+  - length
+  - capacity_l
+commercial_kitchen:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - capacity_l
+  - width
+  - height
+  - length
+  optional:
+  - power
+  - voltage
+  - capacity_l
+  - width
+  - height
+  - length
+component:
+  extends: durable
+  attributes:
+  - component_voltage_rating_v
+  - component_current_rating_a
+  - component_power_rating_w
+  - component_package
+  - component_tolerance
+  optional:
+  - component_voltage_rating_v
+  - component_current_rating_a
+  - component_power_rating_w
+  - component_package
+  - component_tolerance
+compression:
+  extends: durable
+  attributes:
+  - medical_size
+  - compression_class
+  - material
+  - min_age
+  - max_age
+  optional:
+  - medical_size
+  - compression_class
+  - material
+  - min_age
+  - max_age
+computer:
+  extends: durable
+  attributes:
+  - processor
+  - cpu_cores
+  - ram
+  - storage_type
+  - storage_capacity
+  - gpu
+  - os
+  - interface_standard
+  - computer_form_factor
+  optional:
+  - processor
+  - cpu_cores
+  - ram
+  - storage_type
+  - storage_capacity
+  - gpu
+  - os
+  - interface_standard
+  - computer_form_factor
+console:
+  extends: durable
+  attributes:
+  - supported_platform
   - connection
-  - interfaces
-  - power
-  - audio_channels
-  - frequency
+  - storage_capacity
+  - wireless
+  - color
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - interfaces
-  - power
-  - audio_channels
-  - frequency
-household_chemical:
+  - connection
+  - storage_capacity
+  - wireless
+  - color
+construction_toy:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
+  - min_age
+  - toy_parts
+  - material
+  - craft_theme
+  - max_age
+  optional:
+  - min_age
+  - toy_parts
+  - material
+  - craft_theme
+  - max_age
+contact_lens:
+  extends: durable
+  attributes:
+  - lens_sphere
+  - lens_cylinder
+  - lens_axis
+  - lens_base_curve
+  - lens_diameter
+  - lens_replacement
+  - count
+  optional:
+  - lens_cylinder
+  - lens_axis
+  - lens_replacement
+  - count
+cooker:
+  extends: durable
+  attributes:
+  - power
+  - burner_count
+  - appliance_installation
+  - capacity_l
+  - color
+  - width
+  optional:
+  - power
+  - appliance_installation
+  - capacity_l
+  - color
+  - width
+cookware:
+  extends: durable
+  attributes:
+  - cookware_material
+  - capacity_l
+  - diameter
+  - induction
+  - dishwasher_safe
+  - color
+  - vessel_coating
+  optional:
+  - cookware_material
+  - capacity_l
+  - diameter
+  - induction
+  - dishwasher_safe
+  - color
+  - vessel_coating
+cookware_lid:
+  extends: durable
+  attributes:
+  - cookware_material
+  - diameter
+  - color
+  - dishwasher_safe
+  optional:
+  - cookware_material
+  - diameter
+  - color
+  - dishwasher_safe
+cosmetic:
+  extends: identity
+  attributes:
+  - skin_type
+  - skin_effect
+  - body_area
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+  - spf
+  - min_age
+  - max_age
+  optional:
+  - skin_type
+  - skin_effect
+  - body_area
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+  - spf
+  - min_age
+  - max_age
+cosmetic_liquid:
+  extends: identity
+  attributes:
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+  optional:
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+cosmetic_passive:
+  extends: identity
+  attributes:
+  - material
+  - color
+  - count
+  optional:
+  - material
+  - color
+  - count
+cosmetic_set:
+  extends: identity
+  attributes:
+  - count
+  - shelf_life
+  - skin_type
+  optional:
+  - count
+  - shelf_life
+  - skin_type
+cpu:
+  extends: durable
+  attributes:
+  - cpu_socket
+  - cpu_cores
+  - cpu_frequency
+  - power
+  optional:
+  - cpu_socket
+  - cpu_cores
+  - cpu_frequency
+  - power
+craft:
+  extends: durable
+  attributes:
+  - craft_theme
+  - material
+  - count
+  - min_age
+  - max_age
+  optional:
+  - craft_theme
+  - material
+  - count
+  - min_age
+  - max_age
+cufflink:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - jewelry_metal
+  - jewelry_sample
+  - jewelry_insert
+  - jewelry_weight
+  - count
+  - target_gender
+  - audience_age_group
+  - min_age
+  - max_age
+  optional:
+  - color
+  - material
+  - jewelry_metal
+  - jewelry_sample
+  - jewelry_insert
+  - jewelry_weight
+  - count
+  - target_gender
+  - audience_age_group
+  - min_age
+  - max_age
+curtain:
+  extends: common_textile
+  attributes:
+  - color
+  - count
+  optional:
+  - color
+  - count
+curtain_hardware:
+  extends: durable
+  attributes:
+  - material
+  - color
+  - length
+  - diameter
+  - count
+  optional:
+  - material
+  - color
+  - length
+  - diameter
+  - count
+diaper:
+  extends: identity
+  attributes:
+  - min_age
+  - max_age
+  - diaper_size_label
+  - wearer_weight_min
+  - wearer_weight_max
+  - reusable
+  - count
+  optional:
+  - min_age
+  - max_age
+  - diaper_size_label
+  - wearer_weight_min
+  - wearer_weight_max
+  - reusable
+  - count
+dishwasher:
+  extends: durable
+  attributes:
+  - place_settings
+  - energy_class
+  - appliance_installation
+  - width
+  - noise_level
+  optional:
+  - energy_class
+  - appliance_installation
+  - width
+  - noise_level
+diving:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - weight
+  optional:
+  - material
+  - length
+  - width
+  - weight
+diving_regulator:
+  extends: durable
+  attributes:
+  - material
+  - weight
+  - pressure
+  optional:
+  - material
+  - weight
+  - pressure
+document_cover:
+  extends: common_geometry
+  attributes:
+  - color
+  - material
+  optional:
+  - color
+document_organizer:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - bag_fastener
+  - count
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - bag_fastener
+  - count
+door:
+  extends: durable
+  attributes:
+  - length
+  - width
+  - height
+  - material
+  - color
+  optional:
+  - length
+  - width
+  - height
+  - material
+  - color
+door_part:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - height
+  - compatible_model
+  optional:
+  - material
+  - length
+  - width
+  - height
+  - compatible_model
+drink:
+  extends: identity
+  attributes:
+  - food_category
+  - ingredients
+  - volume
+  - shelf_life
+  - food_storage
+  - food_flavor
+  - food_sugar_free
+  - food_processing
+  optional:
+  - food_category
+  - ingredients
+  - volume
+  - shelf_life
+  - food_storage
+  - food_flavor
+  - food_sugar_free
+  - food_processing
+drive:
+  extends: durable
+  attributes:
+  - storage_type
+  - storage_capacity
+  - drive_interface
+  - drive_form_factor
+  optional:
+  - storage_type
+  - drive_interface
+  - drive_form_factor
+drone:
+  extends: durable
+  attributes:
+  - video_format
+  - battery_capacity
+  - weight
+  - wireless
+  - operating_time
+  - charging_time
+  optional:
+  - video_format
+  - battery_capacity
+  - weight
+  - wireless
+  - operating_time
+  - charging_time
+dry_heating_appliance:
+  extends: durable
+  attributes:
+  - power
+  - color
+  - body_material
+  - temperature_max
+  - electrical_safety
+  - control_method
+  - heating_elements
+  optional:
+  - power
+  - color
+  - body_material
+  - temperature_max
+  - electrical_safety
+  - control_method
+  - heating_elements
+dryer:
+  extends: durable
+  attributes:
+  - wash_load
+  - energy_class
+  - appliance_installation
+  - noise_level
+  - width
+  - height
+  optional:
+  - energy_class
+  - appliance_installation
+  - noise_level
+  - width
+  - height
+duffel_bag:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - capacity_l
+  - bag_fastener
+  - bag_strap_length
+  - bag_compartments
+  - bag_wheels
+  - target_gender
+  - bag_construction
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - capacity_l
+  - bag_fastener
+  - bag_strap_length
+  - bag_compartments
+  - bag_wheels
+  - target_gender
+  - bag_construction
+earplug:
+  extends: identity
+  attributes:
+  - material
+  - count
+  optional:
+  - material
+  - count
+electric_bicycle:
+  extends: durable
+  attributes:
+  - wheel_diameter
+  - frame_size
+  - bike_frame
+  - bike_brake
+  - bike_gears
+  - target_gender
+  - max_rider_weight
+  - battery_energy
+  - battery_capacity
+  - power
+  - operating_time
+  - charging_time
+  optional:
+  - wheel_diameter
+  - frame_size
+  - bike_frame
+  - bike_brake
+  - bike_gears
+  - target_gender
+  - max_rider_weight
+  - battery_energy
+  - battery_capacity
+  - power
+  - operating_time
+  - charging_time
+electrical:
+  extends: durable
+  attributes:
+  - voltage
+  - current
+  - power
+  - count
+  - electrical_safety
+  - ip_rating
+  optional:
+  - voltage
+  - current
+  - power
+  - count
+  - electrical_safety
+  - ip_rating
+electrical_passive:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - height
+  - count
+  optional:
+  - material
+  - length
+  - width
+  - height
+  - count
+electronic_accessory:
+  extends: durable
+  attributes:
+  - compatible_model
+  - connector
+  - connection
+  - color
+  - cable_length
+  - power
+  optional:
+  - compatible_model
+  - connector
+  - connection
+  - color
+  - cable_length
+  - power
+electronic_fit_part:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - compatible_model
+  - mount_standard
+  - count
+  optional:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - compatible_model
+  - mount_standard
+  - count
+electronic_instrument:
+  extends: durable
+  attributes:
+  - connection
+  - connector
+  - power
+  - power_source
+  - interface_standard
+  optional:
+  - connection
+  - connector
+  - power
+  - power_source
+  - interface_standard
+electronic_module:
+  extends: durable
+  attributes:
+  - voltage
+  - current
+  - power
+  - interface_standard
+  - length
+  - width
+  - height
+  optional:
+  - voltage
+  - current
+  - power
+  - interface_standard
+  - length
+  - width
+  - height
+ereader:
+  extends: durable
+  attributes:
+  - color
+  - storage_capacity
+  - screen_diagonal
+  - battery_capacity
+  - screen_width_px
+  - screen_height_px
+  - os
+  optional:
+  - color
+  - storage_capacity
+  - battery_capacity
+  - screen_width_px
+  - screen_height_px
+  - os
+fashion_jewelry:
+  extends: durable
+  attributes:
+  - material
+  - jewelry_insert
+  - jewelry_weight
+  - color
+  - target_gender
+  - audience_age_group
+  - min_age
+  - max_age
+  optional:
+  - material
+  - jewelry_insert
+  - jewelry_weight
+  - color
+  - target_gender
+  - audience_age_group
+  - min_age
+  - max_age
+fastener:
+  extends: durable
+  attributes:
+  - fastener_standard
+  - thread_diameter
+  - fastener_length
+  - material
+  - count
+  - fastener_drive
+  - wrench_size
+  - thread_pitch
+  optional:
+  - fastener_standard
+  - thread_diameter
+  - fastener_length
+  - material
+  - count
+  - fastener_drive
+  - wrench_size
+  - thread_pitch
+fastener_washer:
+  extends: durable
+  attributes:
+  - material
+  - fastener_standard
+  - thread_diameter
+  - count
+  optional:
+  - material
+  - fastener_standard
+  - thread_diameter
+  - count
+fertilizer:
+  extends: identity
+  attributes:
+  - fertilizer_composition
+  - net_weight
+  - capacity_l
+  optional:
+  - fertilizer_composition
+  - net_weight
+  - capacity_l
+film_camera:
+  extends: durable
+  attributes:
+  - body_material
+  - film_format
+  - lens_mount
+  - weight
+  optional:
+  - body_material
+  - lens_mount
+  - weight
+fire_extinguisher:
+  extends: durable
+  attributes:
+  - net_weight
+  - material
+  - ppe_standard
+  optional:
+  - net_weight
+  - material
+  - ppe_standard
+fishing:
+  extends: durable
+  attributes:
+  - weight
+  - material
+  - count
+  optional:
+  - weight
+  - material
+  - count
+fishing_line:
+  extends: durable
+  attributes:
+  - material
+  - line_diameter
+  - length
+  optional:
+  - material
+  - line_diameter
+  - length
+fitness:
+  extends: durable
+  attributes:
+  - sport
+  - weight
+  - load_kg
+  - material
+  - length
+  - width
+  - height
+  optional:
+  - sport
+  - weight
+  - load_kg
+  - material
+  - length
+  - width
+  - height
+flash_trigger:
+  extends: durable
+  attributes:
+  - power_source
+  - camera_mount
+  - compatible_model
+  - wireless
+  optional:
+  - power_source
+  - camera_mount
+  - compatible_model
+  - wireless
+floor_mat:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - color
+  optional:
+  - material
+  - length
+  - width
+  - color
+floor_scrubber:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - capacity_l
+  - weight
+  - noise_level
+  - equipment
+  optional:
+  - power
+  - power_source
+  - capacity_l
+  - weight
+  - noise_level
+  - equipment
+food:
+  extends: identity
+  attributes:
+  - food_category
+  - ingredients
+  - net_weight
+  - volume
+  - shelf_life
+  - food_storage
+  - food_energy
+  - food_protein
+  - food_fat
+  - food_carbohydrate
+  - food_diet
+  - food_sugar_free
+  - food_gluten_free
+  - food_lactose_free
+  - food_form
+  - food_dry_matter
+  - food_processing
+  optional:
+  - food_category
+  - ingredients
+  - net_weight
+  - volume
+  - shelf_life
+  - food_storage
+  - food_energy
+  - food_protein
+  - food_fat
+  - food_carbohydrate
+  - food_diet
+  - food_sugar_free
+  - food_gluten_free
+  - food_lactose_free
+  - food_form
+  - food_dry_matter
+  - food_processing
+food_packaging:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - count
+  optional:
+  - material
+  - length
+  - width
+  - count
+food_processor:
+  extends: durable
+  attributes:
+  - power
+  - body_material
+  - color
+  - equipment
+  - control_method
+  optional:
+  - body_material
+  - color
+  - equipment
+  - control_method
+freezer:
+  extends: durable
+  attributes:
+  - power
+  - freezer_volume
+  - freezing_capacity
+  - energy_class
+  - appliance_installation
+  - color
+  - length
+  - width
+  - height
+  - noise_level
+  optional:
+  - power
+  - freezing_capacity
+  - energy_class
+  - appliance_installation
+  - color
+  - length
+  - width
+  - height
+  - noise_level
+fridge:
+  extends: durable
+  attributes:
+  - energy_class
+  - appliance_installation
+  - color
+  - length
+  - width
+  - height
+  - fridge_volume
+  - freezer_volume
+  - freezing_capacity
+  optional:
+  - energy_class
+  - appliance_installation
+  - color
+  - length
+  - width
+  - height
+  - freezer_volume
+  - freezing_capacity
+fuel:
+  extends: identity
+  attributes:
+  - fuel_type
+  - net_weight
+  - capacity_l
+  optional:
+  - fuel_type
+  - net_weight
+  - capacity_l
+furniture_general:
+  extends: durable
+  attributes:
+  - furniture_frame
+  - length
+  - width
+  - height
+  - color
+  - furniture_placement
+  - furniture_use
+  optional:
+  - furniture_frame
+  - length
+  - width
+  - height
+  - color
+  - furniture_placement
+  - furniture_use
+furniture_part:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - height
+  - count
+  - color
+  - compatible_model
+  optional:
+  - material
+  - length
+  - width
+  - height
+  - count
+  - color
+  - compatible_model
+furniture_seating_soft:
+  extends: durable
+  attributes:
+  - upholstery
+  - filling_material
+  - load_kg
+  - length
+  - width
+  - height
+  - color
+  - furniture_placement
+  optional:
+  - upholstery
+  - filling_material
+  - load_kg
+  - length
+  - width
+  - height
+  - color
+  - furniture_placement
+game_controller:
+  extends: durable
+  attributes:
+  - supported_platform
+  - connection
+  - wireless
+  - color
+  - compatible_model
+  optional:
+  - connection
+  - wireless
+  - color
+  - compatible_model
+garden_furniture:
+  extends: durable
+  attributes:
+  - furniture_frame
+  - load_kg
+  - length
+  - width
+  - height
+  - foldable
+  optional:
+  - furniture_frame
+  - load_kg
+  - length
+  - width
+  - height
+  - foldable
+garden_hand_tool:
+  extends: durable
+  attributes:
+  - material
+  - weight
+  - length
+  optional:
+  - material
+  - weight
+  - length
+garden_soil:
+  extends: identity
+  attributes:
+  - net_weight
+  - capacity_l
+  optional:
+  - net_weight
+  - capacity_l
+garden_structure:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - height
+  - color
+  optional:
+  - material
+  - length
+  - width
+  - height
+  - color
+garden_supply:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - height
+  - count
+  optional:
+  - material
+  - length
+  - width
+  - height
+  - count
+garden_tool:
+  extends: durable
+  attributes:
+  - power_source
+  - power
+  - material
+  - weight
+  optional:
+  - power_source
+  - power
+  - material
+  - weight
+garden_tool_part:
+  extends: durable
+  attributes:
+  - compatible_model
+  - material
+  - length
+  - count
+  - tool_mount
+  optional:
+  - compatible_model
+  - material
+  - length
+  - count
+  - tool_mount
+garden_watering:
+  extends: durable
+  attributes:
+  - flow_rate
+  - pressure
+  - material
+  optional:
+  - flow_rate
+  - pressure
+  - material
+garment_bag:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - bag_fastener
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - bag_fastener
+golf_club:
+  extends: durable
+  attributes:
+  - sport
+  - material
+  - length
+  - weight
+  - golf_loft
+  - handedness
+  optional:
+  - sport
+  - material
+  - length
+  - weight
+  - golf_loft
+  - handedness
+gpu:
+  extends: durable
+  attributes:
+  - gpu
+  - gpu_memory
+  - power
+  optional:
+  - gpu
+  - gpu_memory
+  - power
+haircare:
+  extends: identity
+  attributes:
+  - hair_type
+  - hair_effect
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+  - min_age
+  - max_age
+  optional:
+  - hair_type
+  - hair_effect
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+  - min_age
+  - max_age
+hand_tool:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - count
+  optional:
+  - material
+  - length
+  - count
+handling:
+  extends: durable
+  attributes:
+  - material
+  - load_kg
+  - weight
+  - length
+  - width
+  - height
+  optional:
+  - material
+  - load_kg
+  - weight
+  - length
+  - width
+  - height
+handwear:
+  extends: durable
+  attributes:
+  - target_gender
+  - min_age
+  - max_age
+  - color
+  - material
+  - fabric_composition
+  - season
+  - hand_circumference
+  - hand_length
+  - handwear_size_label
+  - size_standard
+  - audience_age_group
+  optional:
+  - target_gender
+  - min_age
+  - max_age
+  - color
+  - material
+  - fabric_composition
+  - season
+  - hand_circumference
+  - hand_length
+  - size_standard
+  - audience_age_group
+headphone:
+  extends: durable
+  attributes:
+  - color
+  - connection
+  - connector
+  - wireless
+  - battery_capacity
+  - waterproof
+  - audio_frequency_min
+  - audio_frequency_max
+  - speaker_impedance
+  - operating_time
+  - charging_time
+  - has_microphone
+  optional:
+  - color
+  - connector
+  - wireless
+  - battery_capacity
+  - waterproof
+  - audio_frequency_min
+  - audio_frequency_max
+  - speaker_impedance
+  - operating_time
+  - charging_time
+  - has_microphone
+headwear:
+  extends: durable
+  attributes:
+  - target_gender
+  - min_age
+  - max_age
+  - color
+  - material
+  - fabric_composition
+  - season
+  - head_circumference
+  - headwear_size_label
+  - size_standard
+  - audience_age_group
+  optional:
+  - target_gender
+  - min_age
+  - max_age
+  - color
+  - material
+  - fabric_composition
+  - season
+  - head_circumference
+  - size_standard
+  - audience_age_group
+hearing_protection:
+  extends: durable
+  attributes:
+  - material
+  - ppe_standard
+  - count
+  optional:
+  - material
+  - ppe_standard
+  - count
+heated_household_appliance:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - color
+  - temperature_max
+  - equipment
+  - electrical_safety
+  optional:
+  - power
+  - power_source
+  - color
+  - temperature_max
+  - equipment
+  - electrical_safety
+hob:
+  extends: durable
+  attributes:
+  - power
+  - burner_count
+  - appliance_installation
+  - color
+  - width
+  optional:
+  - power
+  - appliance_installation
+  - color
+  - width
+home_decor:
+  extends: durable
+  attributes:
+  - material
+  - color
+  - length
+  - width
+  - height
+  optional:
+  - material
+  - color
+  - length
+  - width
+  - height
+hood:
+  extends: durable
+  attributes:
+  - power
+  - appliance_installation
+  - airflow_m3h
+  - noise_level
+  - color
+  - width
+  optional:
+  - power
+  - appliance_installation
+  - airflow_m3h
+  - noise_level
+  - color
+  - width
+household_chemical:
+  extends: durable
+  attributes:
   - surface_type
   - ingredients
   - volume
@@ -2826,161 +2759,4224 @@ household_chemical:
   - shelf_life
   - fragrance
   optional:
-  - brand
-  - gtin
-  - model
-  - country
   - surface_type
+  - ingredients
   - volume
   - net_weight
   - count
   - shelf_life
   - fragrance
 household_supply:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
   - material
   - count
   - length
   - width
   optional:
-  - brand
-  - gtin
-  - model
-  - country
+  - material
+  - count
+  - length
+  - width
+household_textile:
+  extends: common_textile
+  attributes:
+  - color
+  - count
+  optional:
+  - color
+  - count
+hydraulic_press:
+  extends: durable
+  attributes:
+  - pressure
+  - load_kg
   - material
   - length
   - width
+  - height
+  optional:
+  - pressure
+  - load_kg
+  - material
+  - length
+  - width
+  - height
+hygiene:
+  extends: identity
+  attributes:
+  - ingredients
+  - count
+  - volume
+  - net_weight
+  - shelf_life
+  - min_age
+  - max_age
+  optional:
+  - ingredients
+  - count
+  - volume
+  - net_weight
+  - shelf_life
+  - min_age
+  - max_age
+hygiene_passive:
+  extends: identity
+  attributes:
+  - material
+  - count
+  - length
+  - width
+  - reusable
+  optional:
+  - material
+  - count
+  - length
+  - width
+  - reusable
 industrial:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - purpose
   - industrial_standard
-  - power
-  - voltage
-  - pressure
-  - flow_rate
-  - protection_class
+  - material
+  - length
+  - width
+  - height
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - power
-  - voltage
-  - pressure
-  - flow_rate
-  - protection_class
-workwear:
+  - industrial_standard
+  - material
+  - length
+  - width
+  - height
+instrument_case:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - size
-  - gender
-  - fabric_composition
-  - season
-  - protection_class
-  - purpose
-  - size_clothing
+  - compatible_model
+  - material
+  - length
+  - width
+  - height
+  - bag_fastener
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - fabric_composition
-  - season
-  - protection_class
-  - size_clothing
-ring:
+  - compatible_model
+  - material
+  - length
+  - width
+  - height
+  - bag_fastener
+instrument_part:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - size
+  - compatible_model
+  - material
+  - length
+  - width
+  - count
+  optional:
+  - compatible_model
+  - material
+  - length
+  - width
+  - count
+intimate_device:
+  extends: durable
+  attributes:
+  - material
+  - power_source
+  - waterproof
+  - length
+  - diameter
+  optional:
+  - material
+  - power_source
+  - waterproof
+  - length
+  - diameter
+intimate_passive:
+  extends: durable
+  attributes:
+  - material
+  - color
+  - length
+  - diameter
+  - count
+  optional:
+  - material
+  - color
+  - length
+  - diameter
+  - count
+intimate_supply:
+  extends: durable
+  attributes:
+  - ingredients
+  - volume
+  - count
+  - shelf_life
+  - material
+  optional:
+  - ingredients
+  - volume
+  - count
+  - shelf_life
+  - material
+jewelry:
+  extends: durable
+  attributes:
+  - material
+  - target_gender
   - jewelry_metal
   - jewelry_sample
   - jewelry_insert
   - jewelry_weight
   - color
-  - size_ring
+  - audience_age_group
+  - min_age
+  - max_age
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - size
+  - material
+  - target_gender
+  - jewelry_metal
   - jewelry_sample
   - jewelry_insert
   - jewelry_weight
   - color
-  - size_ring
+  - audience_age_group
+  - min_age
+  - max_age
+key_ring:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - count
+  optional:
+  - color
+  - length
+  - width
+  - count
+keyboard:
+  extends: durable
+  attributes:
+  - connection
+  - keyboard_layout
+  - switch_type
+  - wireless
+  - backlight
+  - color
+  optional:
+  - connection
+  - keyboard_layout
+  - switch_type
+  - wireless
+  - backlight
+  - color
+keyboard_instrument:
+  extends: durable
+  attributes:
+  - material
+  - key_count
+  - instrument_key
+  - instrument_tuning
+  optional:
+  - material
+  - key_count
+  - instrument_key
+  - instrument_tuning
+kitchen_container:
+  extends: durable
+  attributes:
+  - cookware_material
+  - capacity_l
+  - count
+  - dishwasher_safe
+  optional:
+  - cookware_material
+  - capacity_l
+  - count
+  - dishwasher_safe
+kitchen_heating:
+  extends: durable
+  attributes:
+  - power
+  - capacity_l
+  - color
+  - body_material
+  - temperature_max
+  - electrical_safety
+  - control_method
+  - heating_elements
+  optional:
+  - power
+  - capacity_l
+  - color
+  - body_material
+  - temperature_max
+  - electrical_safety
+  - control_method
+  - heating_elements
+kitchen_small:
+  extends: durable
+  attributes:
+  - power
+  - capacity_l
+  - color
+  - body_material
+  - equipment
+  - electrical_safety
+  - control_method
+  optional:
+  - power
+  - capacity_l
+  - color
+  - body_material
+  - equipment
+  - electrical_safety
+  - control_method
+kitchen_timer:
+  extends: durable
+  attributes:
+  - power_source
+  - operating_time
+  - color
+  optional:
+  - power_source
+  - operating_time
+  - color
+kitchen_tool:
+  extends: durable
+  attributes:
+  - cookware_material
+  - length
+  - count
+  - dishwasher_safe
+  optional:
+  - cookware_material
+  - length
+  - count
+  - dishwasher_safe
+landline_phone:
+  extends: durable
+  attributes:
+  - color
+  - connector
+  - network_standard
+  - wireless
+  - battery_capacity
+  optional:
+  - color
+  - connector
+  - network_standard
+  - wireless
+  - battery_capacity
+laptop:
+  extends: durable
+  attributes:
+  - color
+  - processor
+  - cpu_cores
+  - ram
+  - storage_type
+  - storage_capacity
+  - gpu
+  - gpu_memory
+  - screen_diagonal
+  - os
+  - battery_energy
+  - backlight
+  - screen_width_px
+  - screen_height_px
+  optional:
+  - color
+  - processor
+  - cpu_cores
+  - ram
+  - storage_type
+  - storage_capacity
+  - gpu
+  - gpu_memory
+  - screen_diagonal
+  - os
+  - battery_energy
+  - backlight
+  - screen_width_px
+  - screen_height_px
+lens:
+  extends: durable
+  attributes:
+  - lens_mount
+  - compatible_model
+  - sensor_format
+  - focal_min_mm
+  - focal_max_mm
+  optional:
+  - lens_mount
+  - compatible_model
+  - sensor_format
+  - focal_min_mm
+  - focal_max_mm
+lighting:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - light_temperature
+  - light_flux
+  - body_material
+  - color
+  - ip_rating
+  optional:
+  - power
+  - voltage
+  - light_temperature
+  - light_flux
+  - body_material
+  - color
+  - ip_rating
+linear_measuring:
+  extends: durable
+  attributes:
+  - measuring_length_min
+  - measuring_length_max
+  - length
+  - weight
+  - power_source
+  optional:
+  - measuring_length_min
+  - measuring_length_max
+  - length
+  - weight
+  - power_source
+lower_clothing:
+  extends: common_clothing
+  attributes:
+  - textile_material
+  - season
+  - clothing_fit
+  - clothing_fastener
+  - waist_circumference
+  - clothing_use
+  - audience_age_group
+  optional:
+  - textile_material
+  - season
+  - clothing_fit
+  - clothing_fastener
+  - waist_circumference
+  - clothing_use
+  - audience_age_group
+luggage:
+  extends: durable
+  attributes:
+  - color
+  - body_material
+  - length
+  - width
+  - height
+  - capacity_l
+  - weight
+  - bag_wheels
+  - bag_lock
+  - bag_compartments
+  - tsa_lock
+  optional:
+  - color
+  - capacity_l
+  - weight
+  - bag_wheels
+  - bag_lock
+  - bag_compartments
+  - tsa_lock
+luggage_accessory:
+  extends: durable
+  attributes:
+  - material
+  - color
+  - length
+  - width
+  - height
+  - count
+  optional:
+  - material
+  - color
+  - length
+  - width
+  - height
+  - count
+luggage_lock:
+  extends: durable
+  attributes:
+  - material
+  - bag_lock
+  - compatible_model
+  - tsa_lock
+  optional:
+  - material
+  - compatible_model
+  - tsa_lock
+machine_tool:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - voltage
+  - tool_speed
+  - equipment
+  - length
+  - width
+  - height
+  optional:
+  - power
+  - power_source
+  - voltage
+  - tool_speed
+  - equipment
+  - length
+  - width
+  - height
+magazine:
+  extends: identity
+  attributes:
+  - book_publisher
+  - book_language
+  - book_pages
+  - book_year
+  - paper_format
+  - issn
+  - book_genre
+  optional:
+  - book_publisher
+  - book_language
+  - book_pages
+  - book_year
+  - paper_format
+  - issn
+  - book_genre
+makeup:
+  extends: identity
+  attributes:
+  - color
+  - skin_type
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+  optional:
+  - color
+  - skin_type
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+mannequin:
+  extends: durable
+  attributes:
+  - material
+  - color
+  - height
+  - chest_circumference
+  - waist_circumference
+  - target_gender
+  optional:
+  - material
+  - color
+  - height
+  - chest_circumference
+  - waist_circumference
+  - target_gender
+mattress:
+  extends: durable
+  attributes:
+  - bed_width
+  - bed_length
+  - height
+  - firmness
+  - mattress_filling
+  - load_kg
+  - orthopedic
+  optional:
+  - height
+  - firmness
+  - mattress_filling
+  - load_kg
+  - orthopedic
+measuring:
+  extends: durable
+  attributes:
+  - power_source
+  optional:
+  - power_source
+medical_container:
+  extends: durable
+  attributes:
+  - material
+  - count
+  - capacity_l
+  - length
+  - width
+  - height
+  optional:
+  - material
+  - count
+  - capacity_l
+  - length
+  - width
+  - height
+medical_device:
+  extends: durable
+  attributes:
+  - power_source
+  - equipment
+  - body_area
+  optional:
+  - power_source
+  - equipment
+  - body_area
+medical_needle:
+  extends: durable
+  attributes:
+  - needle_diameter
+  - needle_length
+  - sterile
+  - count
+  optional:
+  - sterile
+  - count
+medical_solution:
+  extends: identity
+  attributes:
+  - ingredients
+  - volume
+  - sterile
+  - shelf_life
+  optional:
+  - ingredients
+  - volume
+  - sterile
+  - shelf_life
+medical_supply:
+  extends: durable
+  attributes:
+  - medical_size
+  - count
+  - sterile
+  - material
+  optional:
+  - medical_size
+  - count
+  - sterile
+  - material
+medicine:
+  extends: identity
+  attributes:
+  - active_ingredient
+  - pharmaceutical_form
+  - ingredients
+  - prescription_required
+  - count
+  - volume
+  - net_weight
+  - shelf_life
+  optional:
+  - active_ingredient
+  - pharmaceutical_form
+  - ingredients
+  - prescription_required
+  - count
+  - volume
+  - net_weight
+  - shelf_life
+metal_fastener_flat:
+  extends: durable
+  attributes:
+  - fastener_standard
+  - thread_diameter
+  - material
+  - count
+  - wrench_size
+  - thread_pitch
+  optional:
+  - fastener_standard
+  - thread_diameter
+  - material
+  - count
+  - wrench_size
+  - thread_pitch
+microphone:
+  extends: durable
+  attributes:
+  - connector
+  - connection
+  - audio_frequency_min
+  - audio_frequency_max
+  - microphone_pattern
+  - voltage
+  - wireless
+  optional:
+  - connector
+  - audio_frequency_min
+  - audio_frequency_max
+  - microphone_pattern
+  - voltage
+  - wireless
+microwave:
+  extends: durable
+  attributes:
+  - power
+  - microwave_output
+  - capacity_l
+  - body_material
+  - color
+  - appliance_installation
+  - control_method
+  optional:
+  - power
+  - microwave_output
+  - body_material
+  - color
+  - appliance_installation
+  - control_method
+milk_frother:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - color
+  - body_material
+  - equipment
+  optional:
+  - power
+  - power_source
+  - color
+  - body_material
+  - equipment
+mobility_aid:
+  extends: durable
+  attributes:
+  - load_kg
+  - width
+  - height
+  - weight
+  - foldable
+  optional:
+  - load_kg
+  - width
+  - height
+  - weight
+  - foldable
+monitor:
+  extends: durable
+  attributes:
+  - screen_diagonal
+  - screen_matrix
+  - refresh_rate
+  - touchscreen
+  - screen_width_px
+  - screen_height_px
+  optional:
+  - screen_matrix
+  - refresh_rate
+  - touchscreen
+  - screen_width_px
+  - screen_height_px
+motherboard:
+  extends: durable
+  attributes:
+  - cpu_socket
+  - chipset
+  - memory_type
+  optional:
+  - cpu_socket
+  - chipset
+  - memory_type
+mouse:
+  extends: durable
+  attributes:
+  - connection
+  - wireless
+  - color
+  - backlight
+  optional:
+  - connection
+  - wireless
+  - color
+  - backlight
+musical:
+  extends: durable
+  attributes:
+  - material
+  - instrument_key
+  - instrument_tuning
+  optional:
+  - material
+  - instrument_key
+  - instrument_tuning
+musical_string:
+  extends: durable
+  attributes:
+  - material
+  - string_count
+  - instrument_tuning
+  - compatible_model
+  - length
+  optional:
+  - material
+  - string_count
+  - instrument_tuning
+  - compatible_model
+  - length
+nail_coating:
+  extends: identity
+  attributes:
+  - color
+  - ingredients
+  - volume
+  - shelf_life
+  optional:
+  - color
+  - ingredients
+  - volume
+  - shelf_life
+nas:
+  extends: durable
+  attributes:
+  - storage_capacity
+  - network_speed
+  - drive_interface
+  - interface_standard
+  optional:
+  - storage_capacity
+  - network_speed
+  - drive_interface
+  - interface_standard
+neck_pillow:
+  extends: durable
+  attributes:
+  - textile_material
+  - filling_material
+  - length
+  - width
+  - color
+  optional:
+  - textile_material
+  - filling_material
+  - length
+  - width
+  - color
+network:
+  extends: durable
+  attributes:
+  - network_standard
+  - network_speed
+  - wireless
+  - interface_standard
+  optional:
+  - network_standard
+  - network_speed
+  - wireless
+  - interface_standard
+nutrition_supplement:
+  extends: identity
+  attributes:
+  - ingredients
+  - pharmaceutical_form
+  - count
+  - net_weight
+  - volume
+  - shelf_life
+  optional:
+  - ingredients
+  - pharmaceutical_form
+  - count
+  - net_weight
+  - volume
+  - shelf_life
+oil:
+  extends: durable
+  attributes:
+  - oil_viscosity
+  - oil_specification
+  - auto_engine
+  - volume
+  optional:
+  - oil_viscosity
+  - oil_specification
+  - auto_engine
+  - volume
+optical_disc_drive:
+  extends: durable
+  attributes:
+  - connection
+  - drive_interface
+  - recording_medium
+  optional:
+  - connection
+  - drive_interface
+  - recording_medium
+optics:
+  extends: durable
+  attributes:
+  - body_material
+  - weight
+  - waterproof
+  - optical_magnification
+  optional:
+  - body_material
+  - weight
+  - waterproof
+  - optical_magnification
+orthopedic:
+  extends: durable
+  attributes:
+  - medical_size
+  - material
+  - load_kg
+  - orthopedic
+  - body_area
+  optional:
+  - medical_size
+  - material
+  - load_kg
+  - orthopedic
+  - body_area
+outdoor:
+  extends: durable
+  attributes:
+  - material
+  - weight
+  - length
+  - width
+  - height
+  optional:
+  - material
+  - weight
+  - length
+  - width
+  - height
+outerwear:
+  extends: common_clothing
+  attributes:
+  - season
+  - clothing_fastener
+  - hood
+  - insulated
+  - clothing_use
+  - ppe_standard
+  - audience_age_group
+  optional:
+  - season
+  - clothing_fastener
+  - hood
+  - insulated
+  - clothing_use
+  - ppe_standard
+  - audience_age_group
+oven:
+  extends: durable
+  attributes:
+  - power
+  - appliance_installation
+  - capacity_l
+  - color
+  - width
+  - temperature_max
+  - heating_elements
+  optional:
+  - power
+  - appliance_installation
+  - color
+  - width
+  - temperature_max
+  - heating_elements
+paint:
+  extends: durable
+  attributes:
+  - paint_base
+  - surface_type
+  - color
+  - volume
+  - net_weight
+  - drying_time
+  - coverage_area
+  - paint_finish
+  - paint_consumption
+  optional:
+  - paint_base
+  - surface_type
+  - color
+  - volume
+  - net_weight
+  - drying_time
+  - coverage_area
+  - paint_finish
+  - paint_consumption
+paper:
+  extends: durable
+  attributes:
+  - paper_format
+  - paper_density
+  - count
+  - color
+  optional:
+  - paper_format
+  - paper_density
+  - count
+  - color
+party_item:
+  extends: identity
+  attributes:
+  - material
+  - color
+  - count
+  - length
+  - width
+  optional:
+  - material
+  - color
+  - count
+  - length
+  - width
+passive_electronics:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - compatible_model
+  - length
+  - width
+  - height
+  optional:
+  - color
+  - material
+  - compatible_model
+  - length
+  - width
+  - height
+passive_network:
+  extends: durable
+  attributes:
+  - connector
+  - network_standard
+  - count
+  - length
+  - width
+  - height
+  optional:
+  - connector
+  - network_standard
+  - count
+  - length
+  - width
+  - height
+passive_ride:
+  extends: durable
+  attributes:
+  - wheel_diameter
+  - material
+  - foldable
+  - max_rider_weight
+  - weight
+  optional:
+  - wheel_diameter
+  - material
+  - foldable
+  - max_rider_weight
+  - weight
+passive_toy:
+  extends: durable
+  attributes:
+  - material
+  - color
+  - min_age
+  - length
+  - width
+  - height
+  - max_age
+  optional:
+  - material
+  - color
+  - min_age
+  - length
+  - width
+  - height
+  - max_age
+pc_accessory:
+  extends: common_geometry
+  attributes:
+  - color
+  - material
+  optional:
+  - color
+  - material
+pc_active_accessory:
+  extends: durable
+  attributes:
+  - compatible_model
+  - connection
+  - connector
+  - interface_standard
+  - power_source
+  - color
+  optional:
+  - compatible_model
+  - connection
+  - connector
+  - interface_standard
+  - power_source
+  - color
+pc_case:
+  extends: durable
+  attributes:
+  - body_material
+  - color
+  - length
+  - width
+  - height
+  - compatible_model
+  optional:
+  - body_material
+  - color
+  - length
+  - width
+  - height
+  - compatible_model
+pc_cooling:
+  extends: durable
+  attributes:
+  - compatible_model
+  - mount_standard
+  - noise_level
+  - power
+  - backlight
+  - length
+  - width
+  - height
+  optional:
+  - compatible_model
+  - mount_standard
+  - noise_level
+  - power
+  - backlight
+  - length
+  - width
+  - height
+pc_power:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - compatible_model
+  optional:
+  - power
+  - voltage
+  - compatible_model
+pc_repair:
+  extends: durable
+  attributes:
+  - compatible_model
+  - part_number
+  - material
+  - length
+  - width
+  - height
+  optional:
+  - compatible_model
+  - part_number
+  - material
+  - length
+  - width
+  - height
+pc_thermal_material:
+  extends: durable
+  attributes:
+  - material
+  - net_weight
+  - height
+  optional:
+  - material
+  - net_weight
+  - height
+pencil_case:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - bag_fastener
+  optional:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - bag_fastener
+percussion:
+  extends: durable
+  attributes:
+  - material
+  - diameter
+  - height
+  - count
+  optional:
+  - material
+  - diameter
+  - height
+  - count
+perfume:
+  extends: identity
+  attributes:
+  - fragrance
+  - volume
+  - target_gender
+  - shelf_life
+  - perfume_concentration
+  - audience_age_group
+  - min_age
+  - max_age
+  optional:
+  - fragrance
+  - volume
+  - target_gender
+  - shelf_life
+  - perfume_concentration
+  - audience_age_group
+  - min_age
+  - max_age
+personal_appliance:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - equipment
+  - color
+  - waterproof
+  - electrical_safety
+  - ip_rating
+  optional:
+  - power
+  - power_source
+  - equipment
+  - color
+  - waterproof
+  - electrical_safety
+  - ip_rating
+personal_part:
+  extends: durable
+  attributes:
+  - compatible_model
+  - part_number
+  - count
+  - material
+  optional:
+  - compatible_model
+  - part_number
+  - count
+  - material
+pet_appliance:
+  extends: durable
+  attributes:
+  - target_species
+  - power
+  - power_source
+  - equipment
+  optional:
+  - target_species
+  - power
+  - power_source
+  - equipment
+pet_aquarium:
+  extends: durable
+  attributes:
+  - capacity_l
+  - material
+  - length
+  - width
+  - height
+  optional:
+  - capacity_l
+  - material
+  - length
+  - width
+  - height
+pet_cosmetic:
+  extends: identity
+  attributes:
+  - target_species
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+  optional:
+  - target_species
+  - ingredients
+  - volume
+  - net_weight
+  - shelf_life
+pet_food:
+  extends: identity
+  attributes:
+  - target_species
+  - pet_breed
+  - food_flavor
+  - ingredients
+  - net_weight
+  - food_diet
+  - pet_life_stage
+  - food_form
+  optional:
+  - target_species
+  - pet_breed
+  - food_flavor
+  - ingredients
+  - net_weight
+  - food_diet
+  - pet_life_stage
+  - food_form
+pet_supply:
+  extends: durable
+  attributes:
+  - target_species
+  - material
+  - count
+  - pet_animal_weight_min
+  - pet_animal_weight_max
+  - length
+  - width
+  - height
+  optional:
+  - target_species
+  - material
+  - count
+  - pet_animal_weight_min
+  - pet_animal_weight_max
+  - length
+  - width
+  - height
+pet_water_test:
+  extends: identity
+  attributes:
+  - count
+  - shelf_life
+  optional:
+  - count
+  - shelf_life
+phone:
+  extends: durable
+  attributes:
+  - color
+  - ram
+  - storage_capacity
+  - screen_diagonal
+  - screen_matrix
+  - processor
+  - os
+  - battery_capacity
+  - network_standard
+  - nfc
+  - waterproof
+  - screen_width_px
+  - screen_height_px
+  - camera_megapixels
+  - operating_time
+  - charging_time
+  optional:
+  - color
+  - ram
+  - storage_capacity
+  - screen_diagonal
+  - screen_matrix
+  - processor
+  - os
+  - battery_capacity
+  - network_standard
+  - nfc
+  - waterproof
+  - screen_width_px
+  - screen_height_px
+  - camera_megapixels
+  - operating_time
+  - charging_time
+phone_cover:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - compatible_model
+  - length
+  - width
+  - height
+  optional:
+  - color
+  - material
+  - compatible_model
+  - length
+  - width
+  - height
+photo_accessory:
+  extends: durable
+  attributes:
+  - material
+  - compatible_model
+  - camera_mount
+  - diameter
+  - length
+  - width
+  optional:
+  - material
+  - compatible_model
+  - camera_mount
+  - diameter
+  - length
+  - width
+photo_film:
+  extends: durable
+  attributes:
+  - film_format
+  - count
+  - shelf_life
+  optional:
+  - count
+  - shelf_life
+pillow:
+  extends: common_textile
+  attributes:
+  - filling_material
+  - orthopedic
+  optional:
+  - filling_material
+  - orthopedic
+pipe_fitting:
+  extends: durable
+  attributes:
+  - material
+  - thread_size
+  - pressure
+  - flow_rate
+  - pipe_inner_diameter
+  - pipe_outer_diameter
+  optional:
+  - material
+  - thread_size
+  - pressure
+  - flow_rate
+  - pipe_inner_diameter
+  - pipe_outer_diameter
+plant:
+  extends: identity
+  attributes:
+  - plant_species
+  - plant_variety
+  - plant_height
+  - planting_period
+  - flowering_period
+  - plant_mature_height
+  - plant_light
+  - plant_growth_stage
+  optional:
+  - plant_species
+  - plant_variety
+  - plant_height
+  - planting_period
+  - flowering_period
+  - plant_mature_height
+  - plant_light
+  - plant_growth_stage
+plant_bulb:
+  extends: identity
+  attributes:
+  - plant_species
+  - plant_variety
+  - planting_period
+  - flowering_period
+  - bulb_size
+  - count
+  optional:
+  - plant_species
+  - plant_variety
+  - planting_period
+  - flowering_period
+  - bulb_size
+  - count
+plant_chemical:
+  extends: identity
+  attributes:
+  - ingredients
+  - net_weight
+  - volume
+  - shelf_life
+  optional:
+  - ingredients
+  - net_weight
+  - volume
+  - shelf_life
+plumbing:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - height
+  optional:
+  - material
+  - length
+  - width
+  - height
+pneumatic_part:
+  extends: durable
+  attributes:
+  - industrial_standard
+  - pressure
+  - flow_rate
+  - material
+  - length
+  - width
+  - height
+  optional:
+  - industrial_standard
+  - pressure
+  - flow_rate
+  - material
+  - length
+  - width
+  - height
+pool:
+  extends: durable
+  attributes:
+  - material
+  - capacity_l
+  - pool_diameter
+  - pool_depth
+  - length
+  - width
+  - height
+  optional:
+  - material
+  - capacity_l
+  - pool_diameter
+  - pool_depth
+  - length
+  - width
+  - height
+portable_battery:
+  extends: durable
+  attributes:
+  - battery_capacity
+  - battery_energy
+  - voltage
+  - connector
+  - power
+  - weight
+  - color
+  - electrical_safety
+  - ip_rating
+  optional:
+  - battery_energy
+  - voltage
+  - connector
+  - power
+  - weight
+  - color
+  - electrical_safety
+  - ip_rating
+portable_light:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - battery_capacity
+  - operating_time
+  - light_flux
+  - light_temperature
+  - ip_rating
+  - color
+  - weight
+  optional:
+  - power
+  - power_source
+  - battery_capacity
+  - operating_time
+  - light_flux
+  - light_temperature
+  - ip_rating
+  - color
+  - weight
+power_tool:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - voltage
+  - equipment
+  - electrical_safety
+  - ip_rating
+  optional:
+  - power
+  - power_source
+  - voltage
+  - equipment
+  - electrical_safety
+  - ip_rating
+power_transformer:
+  extends: durable
+  attributes:
+  - voltage
+  - current
+  - power
+  - electrical_safety
+  optional:
+  - voltage
+  - current
+  - power
+  - electrical_safety
+powered_fitness:
+  extends: durable
+  attributes:
+  - sport
+  - weight
+  - load_kg
+  - material
+  - power_source
+  - power
+  - foldable
+  optional:
+  - sport
+  - weight
+  - load_kg
+  - material
+  - power_source
+  - power
+  - foldable
+powered_industrial:
+  extends: durable
+  attributes:
+  - industrial_standard
+  - power
+  - voltage
+  - electrical_safety
+  - ip_rating
+  - length
+  - width
+  - height
+  optional:
+  - industrial_standard
+  - power
+  - voltage
+  - electrical_safety
+  - ip_rating
+  - length
+  - width
+  - height
+ppe:
+  extends: durable
+  attributes:
+  - material
+  - ppe_standard
+  - count
+  optional:
+  - material
+  - ppe_standard
+  - count
+pressure_gauge:
+  extends: durable
+  attributes:
+  - pressure
+  - material
+  - diameter
+  optional:
+  - pressure
+  - material
+  - diameter
+print_media:
+  extends: durable
+  attributes:
+  - material
+  - count
+  - diameter
+  optional:
+  - material
+  - count
+  - diameter
+printer:
+  extends: durable
+  attributes:
+  - print_technology
+  - paper_format
+  - print_color
+  - connection
+  optional:
+  - print_technology
+  - paper_format
+  - print_color
+  - connection
+printer_ink:
+  extends: durable
+  attributes:
+  - compatible_model
+  - print_color
+  - net_weight
+  - volume
+  optional:
+  - compatible_model
+  - print_color
+  - net_weight
+  - volume
+printer_supply:
+  extends: durable
+  attributes:
+  - compatible_model
+  - print_color
+  - count
+  optional:
+  - compatible_model
+  - print_color
+  - count
+projector:
+  extends: durable
+  attributes:
+  - power
+  - screen_width_px
+  - screen_height_px
+  - light_flux
+  - connection
+  - interface_standard
+  optional:
+  - power
+  - light_flux
+  - connection
+  - interface_standard
+protective_clothing:
+  extends: durable
+  attributes:
+  - material
+  - ppe_standard
+  - size_clothing_label
+  - size_standard
+  optional:
+  - material
+  - ppe_standard
+  - size_standard
+puzzle:
+  extends: durable
+  attributes:
+  - min_age
+  - puzzle_parts
+  - craft_theme
+  - max_age
+  optional:
+  - min_age
+  - puzzle_parts
+  - craft_theme
+  - max_age
+racket:
+  extends: durable
+  attributes:
+  - sport
+  - material
+  - weight
+  - racket_head_area
+  - handedness
+  optional:
+  - sport
+  - material
+  - weight
+  - racket_head_area
+  - handedness
+radio:
+  extends: durable
+  attributes:
+  - color
+  - power_source
+  - rf_frequency_min_hz
+  - rf_frequency_max_hz
+  - wireless
+  - audio_output_w
+  - operating_time
+  optional:
+  - color
+  - power_source
+  - rf_frequency_min_hz
+  - rf_frequency_max_hz
+  - wireless
+  - audio_output_w
+  - operating_time
+ram_module:
+  extends: durable
+  attributes:
+  - ram
+  - memory_type
+  - memory_frequency
+  optional:
+  - ram
+  - memory_type
+  - memory_frequency
+rc_toy:
+  extends: durable
+  attributes:
+  - min_age
+  - battery_capacity
+  - power_source
+  - connection
+  - max_age
+  optional:
+  - min_age
+  - battery_capacity
+  - power_source
+  - connection
+  - max_age
+reading_glasses:
+  extends: durable
+  attributes:
+  - lens_sphere
+  - material
+  - frame_lens_width
+  - frame_bridge_width
+  - frame_temple_length
+  optional:
+  - material
+  - frame_lens_width
+  - frame_bridge_width
+  - frame_temple_length
+recorded_media:
+  extends: durable
+  attributes:
+  - recording_medium
+  - count
+  - recording_language
+  - recording_duration
+  - recording_year
+  optional:
+  - count
+  - recording_language
+  - recording_duration
+  - recording_year
+  abstract: true
+refrigerated_display:
+  extends: durable
+  attributes:
+  - energy_class
+  - appliance_installation
+  - color
+  - length
+  - width
+  - height
+  - fridge_volume
+  optional:
+  - energy_class
+  - appliance_installation
+  - color
+  - length
+  - width
+  - height
+replacement_battery:
+  extends: durable
+  attributes:
+  - compatible_model
+  - part_number
+  - battery_capacity
+  - battery_energy
+  - voltage
+  - length
+  - width
+  - height
+  - weight
+  optional:
+  - compatible_model
+  - part_number
+  - battery_capacity
+  - battery_energy
+  - length
+  - width
+  - height
+  - weight
+resistor:
+  extends: durable
+  attributes:
+  - component_voltage_rating_v
+  - component_power_rating_w
+  - component_package
+  - component_tolerance
+  - component_resistance
+  optional:
+  - component_voltage_rating_v
+  - component_power_rating_w
+  - component_package
+  - component_tolerance
+resonator:
+  extends: durable
+  attributes:
+  - resonator_frequency_hz
+  - component_package
+  - component_tolerance
+  - component_power_rating_w
+  optional:
+  - component_package
+  - component_tolerance
+  - component_power_rating_w
+ride:
+  extends: durable
+  attributes:
+  - wheel_diameter
+  - material
+  - foldable
+  - battery_capacity
+  - power
+  - max_rider_weight
+  optional:
+  - wheel_diameter
+  - material
+  - foldable
+  - battery_capacity
+  - power
+  - max_rider_weight
+ring:
+  extends: durable
+  attributes:
+  - material
+  - target_gender
+  - jewelry_metal
+  - jewelry_sample
+  - jewelry_insert
+  - jewelry_weight
+  - color
+  - ring_inner_diameter
+  - ring_size_label
+  - size_standard
+  - wedding_ring
+  - audience_age_group
+  - min_age
+  - max_age
+  optional:
+  - material
+  - target_gender
+  - jewelry_metal
+  - jewelry_sample
+  - jewelry_insert
+  - jewelry_weight
+  - color
+  - ring_inner_diameter
+  - size_standard
+  - wedding_ring
+  - audience_age_group
+  - min_age
+  - max_age
+rod:
+  extends: durable
+  attributes:
+  - rod_length
+  - fishing_action
+  - material
+  - fishing_cast_min_g
+  - fishing_cast_max_g
+  optional:
+  - fishing_action
+  - material
+  - fishing_cast_min_g
+  - fishing_cast_max_g
+rotating_power_tool:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - voltage
+  - tool_speed
+  - torque
+  - equipment
+  - electrical_safety
+  - ip_rating
+  optional:
+  - power
+  - power_source
+  - voltage
+  - tool_speed
+  - torque
+  - equipment
+  - electrical_safety
+  - ip_rating
+safety_footwear:
+  extends: common_footwear
+  attributes:
+  - shoe_upper
+  - shoe_lining
+  - shoe_sole
+  - shoe_fastener
+  - ppe_standard
+  - size_footwear_label
+  - audience_age_group
+  optional:
+  - shoe_lining
+  - shoe_sole
+  - shoe_fastener
+  - ppe_standard
+  - audience_age_group
+safety_sign:
+  extends: durable
+  attributes:
+  - material
+  - industrial_standard
+  - length
+  - width
+  - count
+  optional:
+  - material
+  - industrial_standard
+  - length
+  - width
+  - count
+scales:
+  extends: durable
+  attributes:
+  - power_source
+  - weighing_max_kg
+  - weighing_step_g
+  - color
+  - length
+  - width
+  - height
+  optional:
+  - power_source
+  - weighing_max_kg
+  - weighing_step_g
+  - color
+  - length
+  - width
+  - height
+scanner:
+  extends: durable
+  attributes:
+  - paper_format
+  - connection
+  - interface_standard
+  - color
+  optional:
+  - paper_format
+  - connection
+  - interface_standard
+  - color
+seed:
+  extends: identity
+  attributes:
+  - plant_species
+  - plant_variety
+  - seed_count
+  - net_weight
+  - planting_period
+  optional:
+  - plant_species
+  - plant_variety
+  - seed_count
+  - net_weight
+  - planting_period
+sewing_kit:
+  extends: durable
+  attributes:
+  - material
+  - count
+  - color
+  optional:
+  - material
+  - count
+  - color
+sewing_machine:
+  extends: durable
+  attributes:
+  - power
+  - equipment
+  optional:
+  - power
+  - equipment
+shoe:
+  extends: common_footwear
+  attributes:
+  - season
+  - shoe_upper
+  - shoe_lining
+  - shoe_sole
+  - shoe_fastener
+  - heel_height
+  - shoe_insole
+  - shoe_width
+  - shoe_toe
+  - shoe_back
+  - insole_length
+  - shoe_heel
+  - shoe_use
+  - size_footwear_label
+  - audience_age_group
+  optional:
+  - season
+  - shoe_lining
+  - shoe_sole
+  - shoe_fastener
+  - heel_height
+  - shoe_insole
+  - shoe_width
+  - shoe_toe
+  - shoe_back
+  - insole_length
+  - shoe_heel
+  - shoe_use
+  - audience_age_group
+shoe_care_product:
+  extends: durable
+  attributes:
+  - volume
+  - ingredients
+  - shelf_life
+  - surface_type
+  optional:
+  - volume
+  - ingredients
+  - shelf_life
+  - surface_type
+shoe_care_tool:
+  extends: common_geometry
+  attributes:
+  - color
+  - material
+  optional:
+  - color
+  - material
+simple_stationery:
+  extends: durable
+  attributes:
+  - material
+  - color
+  - count
+  - length
+  - width
+  optional:
+  - material
+  - color
+  - count
+  - length
+  - width
+skin_cleansing:
+  extends: identity
+  attributes:
+  - ingredients
+  - skin_type
+  - body_area
+  - volume
+  - net_weight
+  - shelf_life
+  - min_age
+  - max_age
+  optional:
+  - ingredients
+  - skin_type
+  - body_area
+  - volume
+  - net_weight
+  - shelf_life
+  - min_age
+  - max_age
+sleep_mask:
+  extends: identity
+  attributes:
+  - material
+  - color
+  - length
+  - width
+  optional:
+  - material
+  - color
+  - length
+  - width
+sleeping_bag:
+  extends: durable
+  attributes:
+  - comfort_temperature
+  - season
+  - weight
+  - textile_material
+  - length
+  optional:
+  - comfort_temperature
+  - season
+  - weight
+  - textile_material
+  - length
+small_case:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - bag_fastener
+  - target_gender
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - bag_fastener
+  - target_gender
+small_wearable:
+  extends: durable
+  attributes:
+  - color
+  - battery_capacity
+  - wireless
+  - waterproof
+  - compatible_model
+  - operating_time
+  - charging_time
+  optional:
+  - color
+  - battery_capacity
+  - wireless
+  - waterproof
+  - compatible_model
+  - operating_time
+  - charging_time
+smart_device:
+  extends: durable
+  attributes:
+  - power_source
+  - network_standard
+  - wireless
+  - ip_rating
+  - operating_time
+  optional:
+  - power_source
+  - network_standard
+  - wireless
+  - ip_rating
+  - operating_time
+sofa:
+  extends: durable
+  attributes:
+  - furniture_frame
+  - upholstery
+  - length
+  - width
+  - height
+  - load_kg
+  - color
+  - seat_height
+  - seat_width
+  - seat_depth
+  - furniture_placement
+  - furniture_use
+  optional:
+  - furniture_frame
+  - upholstery
+  - length
+  - width
+  - height
+  - load_kg
+  - color
+  - seat_height
+  - seat_width
+  - seat_depth
+  - furniture_placement
+  - furniture_use
+sofa_bed:
+  extends: durable
+  attributes:
+  - furniture_frame
+  - upholstery
+  - length
+  - width
+  - height
+  - bed_width
+  - bed_length
+  - foldable
+  - color
+  - seat_height
+  - seat_width
+  - seat_depth
+  - furniture_placement
+  - furniture_use
+  optional:
+  - furniture_frame
+  - upholstery
+  - length
+  - width
+  - height
+  - foldable
+  - color
+  - seat_height
+  - seat_width
+  - seat_depth
+  - furniture_placement
+  - furniture_use
+soft_accessory:
+  extends: durable
+  attributes:
+  - target_gender
+  - color
+  - material
+  - fabric_composition
+  - length
+  - width
+  - audience_age_group
+  - min_age
+  - max_age
+  optional:
+  - target_gender
+  - color
+  - material
+  - fabric_composition
+  - length
+  - width
+  - audience_age_group
+  - min_age
+  - max_age
+software:
+  extends: identity
+  attributes:
+  - license_platform
+  - license_term_months
+  optional:
+  - license_platform
+  - license_term_months
+soldering:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - temperature_max
+  - electrical_safety
+  optional:
+  - power
+  - voltage
+  - temperature_max
+  - electrical_safety
+soldering_material:
+  extends: durable
+  attributes:
+  - material
+  - net_weight
+  - diameter
+  optional:
+  - material
+  - net_weight
+  - diameter
+sous_vide:
+  extends: durable
+  attributes:
+  - power
+  - temperature_max
+  - control_method
+  - electrical_safety
+  optional:
+  - power
+  - temperature_max
+  - control_method
+  - electrical_safety
+speaker:
+  extends: durable
+  attributes:
+  - color
+  - connection
+  - wireless
+  - battery_capacity
+  - audio_output_w
+  - audio_channels
+  - audio_frequency_min
+  - audio_frequency_max
+  - speaker_impedance
+  - speaker_sensitivity
+  - has_microphone
+  optional:
+  - color
+  - wireless
+  - battery_capacity
+  - audio_output_w
+  - audio_channels
+  - audio_frequency_min
+  - audio_frequency_max
+  - speaker_impedance
+  - speaker_sensitivity
+  - has_microphone
+spectacle_frame:
+  extends: durable
+  attributes:
+  - material
+  - color
+  - frame_lens_width
+  - frame_bridge_width
+  - frame_temple_length
+  optional:
+  - material
+  - color
+  - frame_lens_width
+  - frame_bridge_width
+  - frame_temple_length
+sport_equipment:
+  extends: durable
+  attributes:
+  - sport
+  - weight
+  - material
+  - length
+  - width
+  - height
+  optional:
+  - sport
+  - weight
+  - material
+  - length
+  - width
+  - height
+sports_chemical:
+  extends: identity
+  attributes:
+  - ingredients
+  - net_weight
+  - volume
+  - shelf_life
+  optional:
+  - ingredients
+  - net_weight
+  - volume
+  - shelf_life
+sports_footwear:
+  extends: common_footwear
+  attributes:
+  - material
+  - weight
+  - mount_standard
+  - shoe_upper
+  - size_footwear_label
+  - audience_age_group
+  optional:
+  - material
+  - weight
+  - mount_standard
+  - audience_age_group
+sports_grip:
+  extends: durable
+  attributes:
+  - sport
+  - material
+  - length
+  - width
+  - count
+  optional:
+  - sport
+  - material
+  - length
+  - width
+  - count
+sports_string:
+  extends: durable
+  attributes:
+  - sport
+  - material
+  - length
+  - line_diameter
+  optional:
+  - sport
+  - material
+  - length
+  - line_diameter
+stationery:
+  extends: durable
+  attributes:
+  - color
+  - count
+  - material
+  optional:
+  - color
+  - count
+  - material
+steam_appliance:
+  extends: durable
+  attributes:
+  - power
+  - steam_rate
+  - water_tank_capacity
+  - cable_length
+  - weight
+  - color
+  - electrical_safety
+  optional:
+  - power
+  - steam_rate
+  - water_tank_capacity
+  - cable_length
+  - weight
+  - color
+  - electrical_safety
+steam_cleaner:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - water_tank_capacity
+  - steam_rate
+  - noise_level
+  - equipment
+  optional:
+  - power
+  - power_source
+  - water_tank_capacity
+  - steam_rate
+  - noise_level
+  - equipment
+storage:
+  extends: durable
+  attributes:
+  - material
+  - capacity_l
+  - length
+  - width
+  - height
+  - count
+  - color
+  optional:
+  - material
+  - capacity_l
+  - length
+  - width
+  - height
+  - count
+  - color
+string_instrument:
+  extends: durable
+  attributes:
+  - material
+  - string_count
+  - instrument_key
+  - instrument_tuning
+  optional:
+  - material
+  - string_count
+  - instrument_key
+  - instrument_tuning
+studio_light:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - light_temperature
+  - light_flux
+  - camera_mount
+  optional:
+  - power
+  - voltage
+  - light_temperature
+  - light_flux
+  - camera_mount
+swimwear:
+  extends: common_clothing
+  attributes:
+  - audience_age_group
+  optional:
+  - audience_age_group
+swivel_chair:
+  extends: durable
+  attributes:
+  - furniture_frame
+  - upholstery
+  - load_kg
+  - height
+  - color
+  - seat_height
+  - seat_width
+  - seat_depth
+  - furniture_placement
+  - furniture_use
+  optional:
+  - furniture_frame
+  - upholstery
+  - load_kg
+  - height
+  - color
+  - seat_height
+  - seat_width
+  - seat_depth
+  - furniture_placement
+  - furniture_use
+syringe:
+  extends: durable
+  attributes:
+  - syringe_volume
+  - sterile
+  - count
+  optional:
+  - sterile
+  - count
+table:
+  extends: durable
+  attributes:
+  - furniture_frame
+  - length
+  - width
+  - height
+  - foldable
+  - color
+  - furniture_style
+  - furniture_placement
+  - furniture_use
+  optional:
+  - furniture_frame
+  - foldable
+  - color
+  - furniture_style
+  - furniture_placement
+  - furniture_use
+tablet:
+  extends: durable
+  attributes:
+  - color
+  - ram
+  - storage_capacity
+  - screen_diagonal
+  - processor
+  - os
+  - battery_capacity
+  - network_standard
+  - screen_width_px
+  - screen_height_px
+  - camera_megapixels
+  optional:
+  - color
+  - ram
+  - processor
+  - os
+  - battery_capacity
+  - network_standard
+  - screen_width_px
+  - screen_height_px
+  - camera_megapixels
+tableware:
+  extends: durable
+  attributes:
+  - cookware_material
+  - count
+  - capacity_l
+  - diameter
+  - color
+  - dishwasher_safe
+  optional:
+  - cookware_material
+  - count
+  - capacity_l
+  - diameter
+  - color
+  - dishwasher_safe
+tableware_flat:
+  extends: durable
+  attributes:
+  - cookware_material
+  - count
+  - length
+  - width
+  - diameter
+  - color
+  - dishwasher_safe
+  optional:
+  - cookware_material
+  - count
+  - length
+  - width
+  - diameter
+  - color
+  - dishwasher_safe
+tent:
+  extends: durable
+  attributes:
+  - tent_places
+  - water_resistance
+  - weight
+  - season
+  - equipment
+  optional:
+  - water_resistance
+  - weight
+  - season
+  - equipment
+textile_no_filling:
+  extends: durable
+  attributes:
+  - textile_material
+  - fabric_composition
+  - length
+  - width
+  - color
+  - season
+  optional:
+  - textile_material
+  - fabric_composition
+  - length
+  - width
+  - color
+  - season
+thermal_measuring:
+  extends: durable
+  attributes:
+  - measuring_temperature_min
+  - measuring_temperature_max
+  - power_source
+  optional:
+  - measuring_temperature_min
+  - measuring_temperature_max
+  - power_source
+three_d_material:
+  extends: durable
+  attributes:
+  - material
+  - weight
+  - volume
+  - filament_diameter
+  - compatible_model
+  optional:
+  - material
+  - weight
+  - volume
+  - filament_diameter
+  - compatible_model
+three_d_printer:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - interface_standard
+  - print_technology
+  - print_layer_height
+  - print_build_width
+  - print_build_depth
+  - print_build_height
+  optional:
+  - power
+  - voltage
+  - interface_standard
+  - print_technology
+  - print_layer_height
+  - print_build_width
+  - print_build_depth
+  - print_build_height
+three_d_resin:
+  extends: durable
+  attributes:
+  - material
+  - weight
+  - volume
+  - compatible_model
+  optional:
+  - material
+  - weight
+  - volume
+  - compatible_model
+tie_clip:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - jewelry_metal
+  - jewelry_sample
+  - jewelry_insert
+  - jewelry_weight
+  - length
+  - target_gender
+  - audience_age_group
+  - min_age
+  - max_age
+  optional:
+  - color
+  - material
+  - jewelry_metal
+  - jewelry_sample
+  - jewelry_insert
+  - jewelry_weight
+  - length
+  - target_gender
+  - audience_age_group
+  - min_age
+  - max_age
+tire:
+  extends: durable
+  attributes:
+  - tire_width
+  - tire_profile
+  - rim_diameter
+  - tire_season
+  - tire_load_index
+  - tire_speed_index
+  - studded
+  optional:
+  - tire_width
+  - tire_profile
+  - rim_diameter
+  - tire_season
+  - tire_load_index
+  - tire_speed_index
+  - studded
+tobacco:
+  extends: identity
+  attributes:
+  - net_weight
+  - count
+  - fragrance
+  optional:
+  - net_weight
+  - count
+  - fragrance
+tool_accessory:
+  extends: durable
+  attributes:
+  - tool_diameter
+  - tool_mount
+  - compatible_model
+  - material
+  - count
+  optional:
+  - tool_diameter
+  - tool_mount
+  - compatible_model
+  - material
+  - count
+towel:
+  extends: common_textile
+  attributes:
+  - fabric_density
+  - color
+  - count
+  optional:
+  - fabric_density
+  - color
+  - count
+toy:
+  extends: durable
+  attributes:
+  - min_age
+  - max_age
+  - material
+  - color
+  - count
+  optional:
+  - min_age
+  - max_age
+  - material
+  - color
+  - count
+travel_bottle:
+  extends: durable
+  attributes:
+  - cookware_material
+  - count
+  - capacity_l
+  optional:
+  - cookware_material
+  - count
+travel_case:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - capacity_l
+  - bag_fastener
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - capacity_l
+  - bag_fastener
+tv:
+  extends: durable
+  attributes:
+  - screen_diagonal
+  - screen_matrix
+  - refresh_rate
+  - os
+  - power
+  - screen_width_px
+  - screen_height_px
+  optional:
+  - screen_matrix
+  - refresh_rate
+  - os
+  - power
+  - screen_width_px
+  - screen_height_px
+tv_antenna:
+  extends: durable
+  attributes:
+  - color
+  - rf_frequency_min_hz
+  - rf_frequency_max_hz
+  - connector
+  - power_source
+  - length
+  - width
+  - height
+  optional:
+  - color
+  - rf_frequency_min_hz
+  - rf_frequency_max_hz
+  - connector
+  - power_source
+  - length
+  - width
+  - height
+ultrasonic_cleaner:
+  extends: durable
+  attributes:
+  - power
+  - capacity_l
+  - temperature_max
+  - equipment
+  optional:
+  - power
+  - capacity_l
+  - temperature_max
+  - equipment
+underwear:
+  extends: common_clothing
+  attributes:
+  - count
+  - audience_age_group
+  optional:
+  - count
+  - audience_age_group
+unthreaded_fastener:
+  extends: durable
+  attributes:
+  - material
+  - fastener_standard
+  - fastener_length
+  - count
+  optional:
+  - material
+  - fastener_standard
+  - fastener_length
+  - count
+upper_clothing:
+  extends: common_clothing
+  attributes:
+  - textile_material
+  - season
+  - clothing_fit
+  - clothing_fastener
+  - garment_neckline
+  - sleeve_length
+  - chest_circumference
+  - clothing_use
+  - audience_age_group
+  optional:
+  - textile_material
+  - season
+  - clothing_fit
+  - clothing_fastener
+  - garment_neckline
+  - sleeve_length
+  - chest_circumference
+  - clothing_use
+  - audience_age_group
+ups:
+  extends: durable
+  attributes:
+  - power
+  - battery_energy
+  - voltage
+  optional:
+  - power
+  - battery_energy
+  - voltage
+vacuum:
+  extends: durable
+  attributes:
+  - power
+  - suction_power
+  - dust_capacity
+  - noise_level
+  - power_source
+  - filter_type
+  - color
+  - weight
+  optional:
+  - power
+  - suction_power
+  - noise_level
+  - power_source
+  - filter_type
+  - color
+  - weight
+vacuum_part:
+  extends: durable
+  attributes:
+  - compatible_model
+  - part_number
+  - material
+  - count
+  optional:
+  - compatible_model
+  - part_number
+  - material
+  - count
+vacuum_sealer:
+  extends: durable
+  attributes:
+  - power
+  - vacuum_pressure
+  - seal_width_mm
+  - color
+  - voltage
+  optional:
+  - power
+  - vacuum_pressure
+  - seal_width_mm
+  - color
+  - voltage
+vehicle:
+  extends: durable
+  attributes:
+  - auto_make
+  - auto_model
+  - manufacture_year
+  - power
+  - power_source
+  - engine_volume_cm3
+  - vehicle_transmission
+  - vehicle_drive
+  - color
+  - weight
+  optional:
+  - auto_make
+  - auto_model
+  - manufacture_year
+  - power
+  - power_source
+  - engine_volume_cm3
+  - vehicle_transmission
+  - vehicle_drive
+  - color
+  - weight
+ventilation_unit:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - airflow_m3h
+  - noise_level
+  - length
+  - width
+  - height
+  optional:
+  - power
+  - voltage
+  - airflow_m3h
+  - noise_level
+  - length
+  - width
+  - height
+video:
+  extends: durable
+  attributes:
+  - video_format
+  - connection
+  - storage_capacity
+  - interface_standard
+  optional:
+  - video_format
+  - connection
+  - storage_capacity
+  - interface_standard
+video_converter:
+  extends: durable
+  attributes:
+  - video_format
+  - connection
+  - interface_standard
+  - connector
+  - power_source
+  optional:
+  - video_format
+  - connection
+  - interface_standard
+  - connector
+  - power_source
+video_player:
+  extends: durable
+  attributes:
+  - color
+  - interface_standard
+  - video_format
+  - audio_channels
+  - power_source
+  optional:
+  - color
+  - interface_standard
+  - video_format
+  - audio_channels
+  - power_source
+voltage_measuring:
+  extends: durable
+  attributes:
+  - measuring_voltage_min
+  - measuring_voltage_max
+  - power_source
+  - electrical_safety
+  optional:
+  - measuring_voltage_min
+  - measuring_voltage_max
+  - power_source
+  - electrical_safety
+vr_headset:
+  extends: durable
+  attributes:
+  - supported_platform
+  - connection
+  - storage_capacity
+  - wireless
+  - color
+  - screen_width_px
+  - screen_height_px
+  - screen_diagonal
+  optional:
+  - supported_platform
+  - connection
+  - storage_capacity
+  - wireless
+  - color
+  - screen_width_px
+  - screen_height_px
+  - screen_diagonal
+wallet:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - height
+  - bag_fastener
+  - bag_card_slots
+  - target_gender
+  - audience_age_group
+  - min_age
+  - max_age
+  optional:
+  - color
+  - length
+  - width
+  - height
+  - bag_fastener
+  - bag_card_slots
+  - target_gender
+  - audience_age_group
+  - min_age
+  - max_age
+washer:
+  extends: durable
+  attributes:
+  - wash_load
+  - spin_speed
+  - energy_class
+  - appliance_installation
+  - noise_level
+  - width
+  - height
+  optional:
+  - spin_speed
+  - energy_class
+  - appliance_installation
+  - noise_level
+  - width
+  - height
+watch:
+  extends: durable
+  attributes:
+  - target_gender
+  - color
+  - body_material
+  - waterproof
+  - watch_movement
+  - audience_age_group
+  - min_age
+  - max_age
+  optional:
+  - target_gender
+  - color
+  - body_material
+  - waterproof
+  - audience_age_group
+  - min_age
+  - max_age
+watch_case:
+  extends: common_geometry
+  attributes:
+  - color
+  - count
+  - material
+  optional:
+  - color
+  - count
+watch_strap:
+  extends: durable
+  attributes:
+  - color
+  - material
+  - length
+  - width
+  - compatible_model
+  - mount_standard
+  optional:
+  - color
+  - length
+  - width
+  - compatible_model
+  - mount_standard
+water_heater:
+  extends: durable
+  attributes:
+  - power
+  - capacity_l
+  - appliance_installation
+  - pressure
+  - voltage
+  - temperature_max
+  optional:
+  - power
+  - appliance_installation
+  - pressure
+  - voltage
+  - temperature_max
+water_heating_device:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - temperature_max
+  - compatible_model
+  optional:
+  - power
+  - voltage
+  - temperature_max
+  - compatible_model
+water_hose:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - pipe_inner_diameter
+  - pressure
+  optional:
+  - material
+  - length
+  - pipe_inner_diameter
+  - pressure
+water_pump:
+  extends: durable
+  attributes:
+  - power
+  - voltage
+  - pump_head
+  - flow_rate
+  - pressure
+  - ip_rating
+  optional:
+  - power
+  - voltage
+  - pump_head
+  - flow_rate
+  - pressure
+  - ip_rating
+wearable:
+  extends: durable
+  attributes:
+  - color
+  - screen_diagonal
+  - os
+  - battery_capacity
+  - wireless
+  - waterproof
+  - compatible_model
+  - operating_time
+  - charging_time
+  optional:
+  - color
+  - screen_diagonal
+  - os
+  - battery_capacity
+  - wireless
+  - waterproof
+  - compatible_model
+  - operating_time
+  - charging_time
+wearable_small:
+  extends: durable
+  attributes:
+  - power_source
+  - battery_capacity
+  - operating_time
+  - charging_time
+  - material
+  optional:
+  - power_source
+  - battery_capacity
+  - operating_time
+  - charging_time
+  - material
+wheel:
+  extends: durable
+  attributes:
+  - rim_diameter
+  - rim_width
+  - wheel_hole_count
+  - wheel_pcd_mm
+  - wheel_offset
+  - material
+  optional:
+  - rim_diameter
+  - rim_width
+  - wheel_hole_count
+  - wheel_pcd_mm
+  - wheel_offset
+  - material
+wig:
+  extends: durable
+  attributes:
+  - target_gender
+  - color
+  - material
+  - hair_attachment
+  - head_circumference
+  optional:
+  - target_gender
+  - color
+  - material
+  - hair_attachment
+  - head_circumference
+wine_cooler:
+  extends: durable
+  attributes:
+  - energy_class
+  - appliance_installation
+  - color
+  - length
+  - width
+  - height
+  - capacity_l
+  - wine_bottle_count
+  optional:
+  - energy_class
+  - appliance_installation
+  - color
+  - length
+  - width
+  - height
+  - capacity_l
+wire:
+  extends: durable
+  attributes:
+  - wire_section
+  - cable_length
+  - voltage
+  - wire_core_count
+  optional:
+  - wire_section
+  - cable_length
+  - voltage
+  - wire_core_count
+wireless_charger:
+  extends: durable
+  attributes:
+  - color
+  - connector
+  - power
+  - voltage
+  - electrical_safety
+  optional:
+  - color
+  - connector
+  - power
+  - voltage
+  - electrical_safety
+common_clothing:
+  abstract: true
+  extends: durable
+  attributes:
+  - target_gender
+  - min_age
+  - max_age
+  - color
+  - fabric_composition
+  - size_clothing_label
+  - size_standard
+  - wearer_height_min
+  - wearer_height_max
+  optional:
+  - target_gender
+  - min_age
+  - max_age
+  - color
+  - fabric_composition
+  - size_standard
+  - wearer_height_min
+  - wearer_height_max
+common_footwear:
+  abstract: true
+  extends: durable
+  attributes:
+  - target_gender
+  - min_age
+  - max_age
+  - color
+  - foot_length_mm
+  - size_standard
+  optional:
+  - target_gender
+  - min_age
+  - max_age
+  - color
+  - foot_length_mm
+  - size_standard
+common_textile:
+  abstract: true
+  extends: common_textile_material
+  attributes:
+  - length
+  - width
+  optional:
+  - length
+  - width
+common_geometry:
+  abstract: true
+  extends: durable
+  attributes:
+  - length
+  - width
+  - height
+  optional:
+  - length
+  - width
+  - height
+physical_accessory:
+  extends: common_geometry
+  attributes:
+  - color
+  - count
+  - material
+  optional:
+  - color
+  - count
+  - material
+mycelium:
+  extends: identity
+  attributes:
+  - fungus_species
+  - net_weight
+  - planting_period
+  optional:
+  - fungus_species
+  - net_weight
+  - planting_period
+pet_fountain:
+  extends: durable
+  attributes:
+  - target_species
+  - power_source
+  - power
+  - capacity_l
+  - material
+  optional:
+  - target_species
+  - power_source
+  - power
+  - material
+drawing_light_pad:
+  extends: durable
+  attributes:
+  - power_source
+  - length
+  - width
+  - power
+  optional:
+  - power_source
+  - length
+  - width
+  - power
+bag_strap:
+  extends: durable
+  attributes:
+  - material
+  - length
+  - width
+  - color
+  - mount_standard
+  - compatible_model
+  optional:
+  - length
+  - width
+  - color
+  - mount_standard
+  - compatible_model
+bag_repair_lock:
+  extends: durable
+  attributes:
+  - material
+  - bag_lock
+  - mount_standard
+  - length
+  - width
+  - compatible_model
+  optional:
+  - bag_lock
+  - mount_standard
+  - length
+  - width
+  - compatible_model
+floristry:
+  extends: identity
+  attributes:
+  - plant_species
+  - plant_variety
+  - color
+  - length
+  - flower_stem_count
+  - flower_preservation
+  - equipment
+  optional:
+  - plant_species
+  - plant_variety
+  - color
+  - length
+  - flower_stem_count
+  - flower_preservation
+  - equipment
+magnifier:
+  extends: durable
+  attributes:
+  - body_material
+  - weight
+  - waterproof
+  - optical_magnification
+  optional:
+  - body_material
+  - weight
+  - waterproof
+veterinary_medicine:
+  extends: identity
+  attributes:
+  - active_ingredient
+  - pharmaceutical_form
+  - ingredients
+  - prescription_required
+  - count
+  - volume
+  - net_weight
+  - shelf_life
+  - target_species
+  optional:
+  - active_ingredient
+  - pharmaceutical_form
+  - ingredients
+  - prescription_required
+  - count
+  - volume
+  - net_weight
+  - shelf_life
+  - target_species
+passive_cooler:
+  extends: durable
+  attributes:
+  - material
+  - capacity_l
+  - length
+  - width
+  - height
+  - count
+  - color
+  optional:
+  - material
+  - length
+  - width
+  - height
+  - count
+  - color
+hydration_system:
+  extends: durable
+  attributes:
+  - material
+  - capacity_l
+  - length
+  - width
+  - height
+  - count
+  - color
+  optional:
+  - material
+  - length
+  - width
+  - height
+  - count
+  - color
+vessel_appliance:
+  extends: durable
+  attributes:
+  - power
+  - capacity_l
+  - body_material
+  - color
+  - equipment
+  - control_method
+  optional:
+  - power
+  - body_material
+  - color
+  - equipment
+  - control_method
+smartphone:
+  extends: durable
+  attributes:
+  - color
+  - ram
+  - storage_capacity
+  - screen_diagonal
+  - screen_matrix
+  - processor
+  - os
+  - battery_capacity
+  - network_standard
+  - nfc
+  - waterproof
+  - screen_width_px
+  - screen_height_px
+  - camera_megapixels
+  - operating_time
+  - charging_time
+  optional:
+  - color
+  - ram
+  - screen_matrix
+  - processor
+  - os
+  - battery_capacity
+  - network_standard
+  - nfc
+  - waterproof
+  - screen_width_px
+  - screen_height_px
+  - camera_megapixels
+  - operating_time
+  - charging_time
+tankless_heater:
+  extends: durable
+  attributes:
+  - power
+  - flow_rate
+  - voltage
+  - appliance_installation
+  - pressure
+  - temperature_max
+  optional:
+  - flow_rate
+  - voltage
+  - appliance_installation
+  - pressure
+  - temperature_max
+breadmaker:
+  extends: durable
+  attributes:
+  - power
+  - capacity_l
+  - body_material
+  - color
+  - equipment
+  - control_method
+  - bread_loaf_mass_g
+  optional:
+  - power
+  - body_material
+  - color
+  - equipment
+  - control_method
+  - capacity_l
+food_dehydrator:
+  extends: durable
+  attributes:
+  - power
+  - capacity_l
+  - body_material
+  - color
+  - equipment
+  - control_method
+  - drying_tray_count
+  optional:
+  - power
+  - body_material
+  - color
+  - equipment
+  - control_method
+  - capacity_l
+food_steamer:
+  extends: durable
+  attributes:
+  - power
+  - capacity_l
+  - body_material
+  - color
+  - equipment
+  - control_method
+  optional:
+  - power
+  - body_material
+  - color
+  - equipment
+  - control_method
+deep_fryer:
+  extends: durable
+  attributes:
+  - power
+  - capacity_l
+  - color
+  - body_material
+  - temperature_max
+  - electrical_safety
+  - control_method
+  - heating_elements
+  optional:
+  - power
+  - color
+  - body_material
+  - temperature_max
+  - electrical_safety
+  - control_method
+  - heating_elements
+weighted_ball:
+  extends: durable
+  attributes:
+  - sport
+  - weight
+  - material
+  - length
+  - width
+  - height
+  optional:
+  - sport
+  - material
+  - length
+  - width
+  - height
+screen:
+  extends: durable
+  attributes:
+  - screen_diagonal
+  - screen_width_px
+  - screen_height_px
+  - storage_capacity
+  - power_source
+  optional:
+  - screen_width_px
+  - screen_height_px
+  - storage_capacity
+  - power_source
+antiquarian_book:
+  extends: book
+  attributes:
+  - collectible_condition
+  optional:
+  - collectible_condition
+audiobook:
+  extends: recorded_media
+  attributes:
+  - book_author
+  - book_publisher
+  - book_isbn
+  - book_genre
+  - min_age
+  - max_age
+  optional:
+  - book_author
+  - book_publisher
+  - book_isbn
+  - book_genre
+  - min_age
+  - max_age
+sheet_music:
+  extends: identity
+  attributes:
+  - book_author
+  - book_publisher
+  - book_isbn
+  - book_year
+  - book_pages
+  - book_language
+  - music_genre
+  optional:
+  - book_author
+  - book_publisher
+  - book_isbn
+  - book_year
+  - book_pages
+  - book_language
+  - music_genre
+music_recording:
+  extends: recorded_media
+  attributes:
+  - music_genre
+  optional:
+  - music_genre
+film_recording:
+  extends: recorded_media
+  attributes:
+  - film_genre
+  optional:
+  - film_genre
+video_game_recording:
+  extends: recorded_media
+  attributes:
+  - video_game_genre
+  - supported_platform
+  optional:
+  - video_game_genre
+  - supported_platform
+poster:
+  extends: paper
+  attributes:
+  - poster_theme
+  optional:
+  - poster_theme
+greeting_card:
+  extends: paper
+  attributes:
+  - greeting_occasion
+  - book_language
+  optional:
+  - greeting_occasion
+  - book_language
+# Совместимость последовательной загрузки из поставки 9: phone_accessory.
+phone_accessory:
+  extends: physical_accessory
+  attributes: []
+# Совместимость последовательной загрузки из поставки 9: baby_hygiene.
+baby_hygiene:
+  extends: baby_passive
+  attributes: []
+# Совместимость последовательной загрузки из поставки 9: clothing_kids.
 clothing_kids:
-  attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - size
-  - gender
-  - age
-  - color
-  - textile_material
-  - fabric_composition
-  - season
-  - clothing_fit
-  - clothing_fastener
-  - size_kids_height
-  optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - age
-  - color
-  - textile_material
-  - season
-  - clothing_fit
-  - clothing_fastener
-  - size_kids_height
+  extends: clothing
+  attributes: []
+# Совместимость последовательной загрузки из поставки 9: gaming.
+gaming:
+  extends: console
+  attributes: []
+# Совместимость последовательной загрузки из поставки 9: kitchen_appliance.
+kitchen_appliance:
+  extends: vessel_appliance
+  attributes: []
+# Совместимость последовательной загрузки из поставки 9: workwear.
+workwear:
+  extends: protective_clothing
+  attributes: []
+# Совместимость последовательной загрузки из поставки 9: outerwear_kids.
 outerwear_kids:
+  extends: outerwear
+  attributes: []
+massage_chair:
+  extends: durable
   attributes:
-  - brand
-  - gtin
-  - model
-  - country
-  - size
-  - gender
-  - age
+  - power
+  - voltage
+  - furniture_frame
+  - upholstery
+  - length
+  - width
+  - height
+  - load_kg
   - color
-  - fabric_composition
-  - season
-  - clothing_fastener
-  - hood
-  - insulated
-  - size_kids_height
   optional:
-  - brand
-  - gtin
-  - model
-  - country
-  - gender
-  - age
+  - power
+  - voltage
+  - furniture_frame
+  - upholstery
+  - length
+  - width
+  - height
+  - load_kg
   - color
+women_clothing:
+  extends: clothing
+  attributes:
+  - maternity
+  - nursing_access
+  optional:
+  - maternity
+  - nursing_access
+women_upper_clothing:
+  extends: upper_clothing
+  attributes:
+  - maternity
+  - nursing_access
+  optional:
+  - maternity
+  - nursing_access
+women_lower_clothing:
+  extends: lower_clothing
+  attributes:
+  - maternity
+  optional:
+  - maternity
+women_outerwear:
+  extends: outerwear
+  attributes:
+  - maternity
+  optional:
+  - maternity
+women_underwear:
+  extends: underwear
+  attributes:
+  - maternity
+  optional:
+  - maternity
+women_swimwear:
+  extends: swimwear
+  attributes:
+  - maternity
+  - nursing_access
+  optional:
+  - maternity
+  - nursing_access
+uniform:
+  extends: common_clothing
+  attributes:
+  - textile_material
+  - clothing_use
   - clothing_fastener
-  - hood
-  - insulated
-  - size_kids_height
+  - count
+  - audience_age_group
+  optional:
+  - textile_material
+  - clothing_use
+  - clothing_fastener
+  - count
+  - audience_age_group
+work_clothing:
+  extends: uniform
+  attributes:
+  - ppe_standard
+  - season
+  optional:
+  - ppe_standard
+  - season
+jewelry_finding:
+  extends: durable
+  attributes:
+  - material
+  - jewelry_metal
+  - length
+  - width
+  - count
+  - compatible_model
+  optional:
+  - material
+  - jewelry_metal
+  - length
+  - width
+  - count
+  - compatible_model
+portable_detector:
+  extends: durable
+  attributes:
+  - power_source
+  - weight
+  - length
+  - ip_rating
+  optional:
+  - power_source
+  - weight
+  - length
+  - ip_rating
+pressure_washer:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - voltage
+  - pressure
+  optional:
+  - power
+  - power_source
+  - voltage
+  - pressure
+craft_raw_material:
+  extends: identity
+  attributes:
+  - ingredients
+  - net_weight
+  - volume
+  - fragrance
+  - color
+  optional:
+  - ingredients
+  - net_weight
+  - volume
+  - fragrance
+  - color
+soil_meter:
+  extends: durable
+  attributes:
+  - power_source
+  - soil_ph_min
+  - soil_ph_max
+  - soil_moisture_min
+  - soil_moisture_max
+  optional:
+  - power_source
+  - soil_ph_min
+  - soil_ph_max
+  - soil_moisture_min
+  - soil_moisture_max
+car_inner_tube:
+  extends: durable
+  attributes:
+  - tire_width
+  - tire_profile
+  - rim_diameter
+  - material
+  optional:
+  - tire_width
+  - tire_profile
+  - rim_diameter
+  - material
+car_wheel_assembly:
+  extends: wheel
+  attributes:
+  - tire_width
+  - tire_profile
+  - tire_season
+  - tire_load_index
+  - tire_speed_index
+  - studded
+  optional:
+  - tire_width
+  - tire_profile
+  - tire_season
+  - tire_load_index
+  - tire_speed_index
+  - studded
+digital_fabrication:
+  extends: common_geometry
+  attributes:
+  - power
+  - power_source
+  - voltage
+  - connector
+  - weight
+  optional:
+  - power
+  - power_source
+  - voltage
+  - connector
+  - weight
+stage_effect:
+  extends: common_geometry
+  attributes:
+  - power
+  - voltage
+  - capacity_l
+  optional:
+  - power
+  - voltage
+  - capacity_l
+arcade_machine:
+  extends: common_geometry
+  attributes:
+  - power
+  - voltage
+  - weight
+  - min_age
+  - max_age
+  optional:
+  - power
+  - voltage
+  - weight
+  - min_age
+  - max_age
+midi_device:
+  extends: durable
+  attributes:
+  - connector
+  - connection
+  - power_source
+  - voltage
+  optional:
+  - connector
+  - connection
+  - power_source
+  - voltage
+marine_part:
+  extends: common_geometry
+  attributes:
+  - compatible_model
+  - part_number
+  - material
+  optional:
+  - compatible_model
+  - part_number
+  - material
+rod_part:
+  extends: common_geometry
+  attributes:
+  - compatible_model
+  - material
+  - weight
+  optional:
+  - compatible_model
+  - material
+  - weight
+aroma_device:
+  extends: durable
+  attributes:
+  - power
+  - power_source
+  - voltage
+  - capacity_l
+  optional:
+  - power
+  - power_source
+  - voltage
+  - capacity_l
+printer_refill_station:
+  extends: physical_accessory
+  attributes:
+  - compatible_model
+  optional:
+  - compatible_model
+small_engine:
+  extends: common_geometry
+  attributes:
+  - engine_volume_cm3
+  - weight
+  - compatible_model
+  optional:
+  - weight
+  - compatible_model
+wrap_clothing:
+  extends: common_clothing
+  attributes:
+  - textile_material
+  - length
+  - width
+  - audience_age_group
+  optional:
+  - textile_material
+  - length
+  - width
+  - audience_age_group
+gaiter:
+  extends: wrap_clothing
+  attributes:
+  - clothing_fastener
+  optional:
+  - clothing_fastener
+ppe_insert:
+  extends: physical_accessory
+  attributes:
+  - ppe_standard
+  optional:
+  - ppe_standard
+automatic_feeder:
+  extends: durable
+  attributes:
+  - power_source
+  - voltage
+  - capacity_l
+  - material
+  optional:
+  - power_source
+  - voltage
+  - capacity_l
+  - material
+heated_textile:
+  extends: common_textile_material
+  attributes:
+  - length
+  - width
+  - power
+  - voltage
+  optional:
+  - power
+  - voltage
+women_nursing_underwear:
+  extends: women_underwear
+  attributes:
+  - nursing_access
+  optional:
+  - nursing_access
+women_maternity_clothing:
+  extends: clothing
+  attributes:
+  - maternity
+  optional:
+  - maternity
+portable_power_station:
+  extends: durable
+  attributes:
+  - battery_energy
+  - ac_output_w
+  - voltage
+  - power
+  - weight
+  optional:
+  - voltage
+  - power
+  - weight
+canning_autoclave:
+  extends: common_geometry
+  attributes:
+  - cookware_material
+  - capacity_l
+  - pressure
+  optional:
+  - cookware_material
+  - pressure
+car_audio_driver:
+  abstract: true
+  extends: durable
+  attributes:
+  - compatible_model
+  - material
+  - color
+  - speaker_sensitivity
+  - audio_frequency_min
+  - audio_frequency_max
+  optional:
+  - compatible_model
+  - material
+  - color
+  - speaker_sensitivity
+  - audio_frequency_min
+  - audio_frequency_max
+car_speaker:
+  extends: car_audio_driver
+  attributes:
+  - speaker_impedance
+car_subwoofer:
+  extends: car_audio_driver
+  attributes:
+  - speaker_impedance
+  - voltage
+  optional:
+  - speaker_impedance
+  - voltage
+car_amplifier:
+  extends: auto_accessory
+  attributes:
+  - audio_output_w
+  - audio_channels
+  optional:
+  - audio_channels
+common_textile_material:
+  abstract: true
+  extends: durable
+  attributes:
+  - textile_material
+  - fabric_composition
+  optional:
+  - textile_material
+  - fabric_composition
