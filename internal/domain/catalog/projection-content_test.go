@@ -19,6 +19,8 @@ func TestIdenticalProjectionContentIgnoresDeliveryAndDerivedSearchFields(t *test
 	current.UpdatedAt = current.UpdatedAt.Add(time.Hour)
 	current.Card.ModelKey = ""
 	current.Card.ModelKeySource = ""
+	current.Card.VariantKey = "different"
+	current.Card.Publication.Schema = "different"
 	current.Card.Publication.Version++
 	current.Card.Publication.AttributeSearchTerms = map[string][]string{"a1": {"новое выражение"}}
 	if !catalog.IdenticalProjectionContent(previous, current) {

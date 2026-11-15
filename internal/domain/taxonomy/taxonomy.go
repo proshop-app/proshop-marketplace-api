@@ -39,6 +39,7 @@ type ValueMeta struct {
 
 // Attribute — скалярное поле; код имеет один тип и единицу во всей площадке.
 type Attribute struct {
+	Format             string               `json:"format,omitempty" yaml:"format,omitempty"`
 	SearchTermsByValue map[string][]string  `json:"searchTermsByValue,omitempty" yaml:"searchTermsByValue,omitempty"`
 	ValuesMeta         map[string]ValueMeta `json:"valuesMeta,omitempty" yaml:"valuesMeta,omitempty"`
 	Code               string               `json:"code" yaml:"code"`
@@ -75,12 +76,22 @@ type Category struct {
 	Children   []Category `json:"children,omitempty" yaml:"children,omitempty"`
 }
 
-// Schema хранит порядок полей и исключения из обязательности по умолчанию.
+// SchemaIdentity задаёт поля модели, оси и точные идентификаторы варианта.
+type SchemaIdentity struct {
+	Model []string `json:"model" yaml:"model"`
+	Axes  []string `json:"axes" yaml:"axes"`
+	Exact []string `json:"exact,omitempty" yaml:"exact,omitempty"`
+}
+
+// Schema хранит порядок полей и режим переходного выпуска идентичности.
 type Schema struct {
-	Extends    string   `json:"extends,omitempty" yaml:"extends,omitempty"`
-	Abstract   bool     `json:"abstract,omitempty" yaml:"abstract,omitempty"`
-	Attributes []string `json:"attributes" yaml:"attributes"`
-	Optional   []string `json:"optional,omitempty" yaml:"optional,omitempty"`
+	Identity *SchemaIdentity `json:"identity,omitempty" yaml:"identity,omitempty"`
+	// Указатель отличает наследование от явного отключения предупреждений.
+	IdentityWarnings *bool    `json:"identityWarnings,omitempty" yaml:"identityWarnings,omitempty"`
+	Extends          string   `json:"extends,omitempty" yaml:"extends,omitempty"`
+	Abstract         bool     `json:"abstract,omitempty" yaml:"abstract,omitempty"`
+	Attributes       []string `json:"attributes" yaml:"attributes"`
+	Optional         []string `json:"optional,omitempty" yaml:"optional,omitempty"`
 }
 
 // SchemaAttribute содержит обязательность только в контексте схемы.
@@ -91,6 +102,7 @@ type SchemaAttribute struct {
 
 // CategorySchema собирается из одного снимка, без обращения к реестру.
 type CategorySchema struct {
+	Identity *SchemaIdentity `json:"identity,omitempty"`
 	Category
 	Attributes []SchemaAttribute `json:"attributes"`
 }
@@ -120,6 +132,7 @@ type Issue struct {
 
 // Publication — результат проверки и доверенный контекст поисковой проекции.
 type Publication struct {
+	Schema               string                     `json:"schema,omitempty"`
 	AttributeSearchTerms map[string][]string        `json:"attributeSearchTerms,omitempty"`
 	CategoryName         string                     `json:"categoryName"`
 	Version              int64                      `json:"version"`
@@ -213,6 +226,9 @@ func (d Definition) Validate() error {
 }
 
 func (a Attribute) validate() error {
+	if a.Format != "" && a.Format != "gtin" && a.Format != "isbn" {
+		return ErrInvalid.WithMessage("неизвестный format атрибута " + a.Code + ": " + a.Format)
+	}
 	if !ValidCode(a.Code) || strings.TrimSpace(a.Name) == "" || utf8.RuneCountInString(a.Name) > 256 {
 		return ErrInvalid.WithMessage("неверный код или имя атрибута")
 	}
@@ -259,9 +275,6 @@ func (a Attribute) validate() error {
 func (d Definition) validateSchemas() (map[string]Attribute, error) {
 	fields := map[string]Attribute{}
 	for _, a := range d.Attributes {
-		if err := a.validate(); err != nil {
-			return nil, err
-		}
 		if _, exists := fields[a.Code]; exists {
 			return nil, ErrInvalid.WithMessage("повтор кода атрибута")
 		}
@@ -275,7 +288,7 @@ func (d Definition) validateSchemas() (map[string]Attribute, error) {
 		seen := map[string]bool{}
 		for _, code := range schema.Attributes {
 			if _, exists := fields[code]; !exists || seen[code] {
-				return nil, ErrInvalid.WithMessage("неверная ссылка схемы")
+				return nil, ErrInvalid.WithMessage("неверная ссылка схемы " + key + ", атрибут " + code)
 			}
 			seen[code] = true
 		}
@@ -285,6 +298,14 @@ func (d Definition) validateSchemas() (map[string]Attribute, error) {
 				return nil, ErrInvalid.WithMessage("неверный optional")
 			}
 			optional[code] = true
+		}
+		if err := schema.validateIdentity(key, fields); err != nil {
+			return nil, err
+		}
+	}
+	for _, attribute := range d.Attributes {
+		if err := attribute.validate(); err != nil {
+			return nil, err
 		}
 	}
 	return fields, nil
@@ -381,6 +402,7 @@ func (d Definition) Category(id string) (CategorySchema, []string, bool) {
 	result := CategorySchema{Category: category, Attributes: []SchemaAttribute{}}
 	fields := d.Fields()
 	schema := d.Schemas[category.Schema]
+	result.Identity = schema.Identity
 	for _, code := range schema.Attributes {
 		result.Attributes = append(result.Attributes, SchemaAttribute{
 			Attribute: fields[code],
@@ -408,12 +430,16 @@ func (d Definition) Check(card *Card) Publication {
 		p.Issues = append(p.Issues, Issue{Code: "taxonomy.category_unknown"})
 		return p
 	}
+	p.Schema = category.Schema
 	p.CategoryPath = path
 	p.CategoryName = category.FullName()
 	fields := map[string]SchemaAttribute{}
 	for _, a := range category.Attributes {
 		fields[a.Code] = a
 		raw, exists := card.Attributes[a.Code]
+		if identityEmpty(raw) && category.Identity.contains(a.Code) && !a.Required {
+			continue
+		}
 		if !exists {
 			if a.Required {
 				p.Issues = append(p.Issues, Issue{Code: "taxonomy.required", Attribute: a.Code})
@@ -444,6 +470,7 @@ func (d Definition) Check(card *Card) Publication {
 		p.Attributes = map[string]json.RawMessage{}
 		p.AttributeSearchTerms = map[string][]string{}
 	}
+	p.Issues = append(p.Issues, category.Identity.issues(card.Attributes)...)
 	return p
 }
 

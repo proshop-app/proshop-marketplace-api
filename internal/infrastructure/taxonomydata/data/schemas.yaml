@@ -892,6 +892,10 @@ boiler:
   - temperature_max
   - equipment
 book:
+  identityWarnings: true
+  identity:
+    model: [book_isbn]
+    axes: []
   extends: identity
   attributes:
   - book_author
@@ -941,7 +945,6 @@ boot:
   - shaft_height
   - shaft_circumference
   - shoe_use
-  - size_footwear_label
   - audience_age_group
   optional:
   - season
@@ -2628,6 +2631,11 @@ handwear:
   - size_standard
   - audience_age_group
 headphone:
+  identityWarnings: true
+  identity:
+    model: [brand, model]
+    axes: [color]
+    exact: [gtin]
   extends: durable
   attributes:
   - color
@@ -4065,6 +4073,11 @@ pet_water_test:
   - count
   - shelf_life
 phone:
+  identityWarnings: true
+  identity:
+    model: [brand, model]
+    axes: [color, storage_capacity]
+    exact: [gtin]
   extends: durable
   attributes:
   - color
@@ -4704,7 +4717,6 @@ safety_footwear:
   - shoe_sole
   - shoe_fastener
   - ppe_standard
-  - size_footwear_label
   - audience_age_group
   optional:
   - shoe_lining
@@ -4804,7 +4816,6 @@ shoe:
   - insole_length
   - shoe_heel
   - shoe_use
-  - size_footwear_label
   - audience_age_group
   optional:
   - season
@@ -5145,7 +5156,6 @@ sports_footwear:
   - weight
   - mount_standard
   - shoe_upper
-  - size_footwear_label
   - audience_age_group
   optional:
   - material
@@ -5325,6 +5335,11 @@ table:
   - furniture_placement
   - furniture_use
 tablet:
+  identityWarnings: true
+  identity:
+    model: [brand, model]
+    axes: [color, storage_capacity]
+    exact: [gtin]
   extends: durable
   attributes:
   - color
@@ -5986,6 +6001,11 @@ water_pump:
   - pressure
   - ip_rating
 wearable:
+  identityWarnings: true
+  identity:
+    model: [brand, model]
+    axes: [color]
+    exact: [gtin]
   extends: durable
   attributes:
   - color
@@ -6097,6 +6117,11 @@ wireless_charger:
   - voltage
   - electrical_safety
 common_clothing:
+  identityWarnings: true
+  identity:
+    model: [brand, model]
+    axes: [color, size_clothing_label]
+    exact: [gtin]
   abstract: true
   extends: durable
   attributes:
@@ -6119,9 +6144,15 @@ common_clothing:
   - wearer_height_min
   - wearer_height_max
 common_footwear:
+  identityWarnings: true
+  identity:
+    model: [brand, model]
+    axes: [color, size_footwear_label]
+    exact: [gtin]
   abstract: true
   extends: durable
   attributes:
+  - size_footwear_label
   - target_gender
   - min_age
   - max_age

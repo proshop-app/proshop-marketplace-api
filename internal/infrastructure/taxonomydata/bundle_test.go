@@ -1,6 +1,7 @@
 package taxonomydata
 
 import (
+	"encoding/json"
 	"io/fs"
 	"slices"
 	"testing"
@@ -219,5 +220,57 @@ func TestIconsAreRootOnlyAndKnown(t *testing.T) {
 				t.Fatal("неверная иконка принята")
 			}
 		})
+	}
+}
+
+func TestBundledIdentifierFormats(t *testing.T) {
+	release, _, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := release.Definition().Fields()
+	for code, format := range map[string]string{"gtin": "gtin", "book_isbn": "isbn"} {
+		if fields[code].Format != format {
+			t.Fatalf("атрибут %s: format = %q, ожидается %q", code, fields[code].Format, format)
+		}
+	}
+}
+
+func TestIdentityWarningsSourceRoundTrip(t *testing.T) {
+	var source map[string]taxonomy.Schema
+	raw := []byte(`base:
+  abstract: true
+  attributes: [a1]
+  identityWarnings: true
+  identity:
+    model: [a1]
+    axes: []
+child:
+  extends: base
+  identityWarnings: false
+inherited:
+  extends: base
+`)
+	if err := yaml.Unmarshal(raw, &source); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored map[string]taxonomy.Schema
+	if err := json.Unmarshal(encoded, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored["inherited"].IdentityWarnings != nil {
+		t.Fatal("отсутствующее значение превратилось в явный false")
+	}
+	resolved, err := taxonomy.ExpandSchemas(restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved["child"].IdentityWarnings == nil || *resolved["child"].IdentityWarnings ||
+		resolved["inherited"].IdentityWarnings == nil || !*resolved["inherited"].IdentityWarnings {
+		t.Fatal("потерян явный false или наследуемый true при YAML/JSON round trip")
 	}
 }

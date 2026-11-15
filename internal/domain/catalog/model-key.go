@@ -40,9 +40,15 @@ func ModelPartKey(value string) string {
 
 // SetModelKey обновляет только результат наблюдения; исходные атрибуты неизменны.
 func (p *Product) SetModelKey(key, source string) bool {
-	if p.state.Card.ModelKey == key && p.state.Card.ModelKeySource == source {
+	return p.SetIdentityKeys(key, source, "")
+}
+
+// SetIdentityKeys атомарно обновляет результаты наблюдения.
+func (p *Product) SetIdentityKeys(key, source, variant string) bool {
+	if p.state.Card.ModelKey == key && p.state.Card.ModelKeySource == source && p.state.Card.VariantKey == variant {
 		return false
 	}
+	p.state.Card.VariantKey = variant
 	p.state.Card.ModelKey = key
 	p.state.Card.ModelKeySource = source
 	p.state.Version = p.originVersion + 1

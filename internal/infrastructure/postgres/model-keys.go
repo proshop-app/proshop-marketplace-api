@@ -14,6 +14,13 @@ const (
         SELECT p.tenant_id, p.product_id, p.model_key,
             COALESCE(p.model_key_source, 'none') AS source,
             COALESCE(p.card->'publication'->'categoryPath'->>0, '') AS direction,
+            COALESCE(p.card->'publication'->>'schema', '') AS schema,
+            EXISTS (
+                SELECT 1 FROM jsonb_array_elements(
+                    COALESCE(NULLIF(p.card->'publication'->'issues', 'null'), '[]')
+                ) issue
+                WHERE issue->>'code' = 'identity_incomplete'
+            ) AS incomplete,
             p.card
         FROM catalog_products p
         JOIN participants pa ON pa.tenant_id = p.tenant_id
@@ -30,24 +37,28 @@ const (
             )`
 	modelKeyCounts = `WITH published AS (` + publishedModelKeys + `),
         grouped AS (
-            SELECT direction, source, model_key, COUNT(*) AS offers,
+            SELECT direction, schema, source, model_key, COUNT(*) AS offers,
+                COUNT(*) FILTER (WHERE incomplete) AS incomplete,
                 COUNT(DISTINCT tenant_id) AS sellers
             FROM published
-            GROUP BY GROUPING SETS ((direction, source, model_key), (source, model_key))
+            GROUP BY GROUPING SETS (
+                (direction, source, model_key), (schema, source, model_key), (source, model_key)
+            )
+            HAVING (GROUPING(schema) = 1 OR schema <> '')
+                AND (GROUPING(direction) = 1 OR direction <> '')
         )
-        SELECT COALESCE(direction, ''), source, SUM(offers),
-            COUNT(*) FILTER (WHERE model_key IS NOT NULL AND sellers >= 2)
+        SELECT COALESCE(direction, ''), COALESCE(schema, ''), source, SUM(offers),
+            COUNT(*) FILTER (WHERE model_key IS NOT NULL AND sellers >= 2), SUM(incomplete)
         FROM grouped
-        GROUP BY direction, source
-        ORDER BY direction NULLS FIRST, source`
+        GROUP BY direction, schema, source
+        ORDER BY direction NULLS FIRST, schema NULLS FIRST, source`
 	modelKeySamples = `WITH published AS (` + publishedModelKeys + `)
         SELECT model_key, source,
             jsonb_agg(jsonb_build_object(
                 'tenantId', tenant_id, 'productId', product_id,
                 'name', card->>'name',
-                'brand', card->'publication'->'attributes'->'brand',
-                'part_number', card->'publication'->'attributes'->'part_number',
-                'gtin', card->'publication'->'attributes'->'gtin'
+                'schema', schema, 'attributes', card->'publication'->'attributes',
+                'variantKey', card->>'variantKey'
             ) ORDER BY tenant_id, product_id)
         FROM published
         WHERE model_key IS NOT NULL
@@ -93,19 +104,27 @@ func loadModelKeyReport(ctx context.Context, db *gorm.DB, samples bool, report *
 	}()
 	for rows.Next() {
 		var count ports.ModelKeyCount
-		if err := rows.Scan(&count.Direction, &count.Source, &count.Offers, &count.Shared); err != nil {
+		if err := rows.Scan(
+			&count.Direction,
+			&count.Schema,
+			&count.Source,
+			&count.Offers,
+			&count.Shared,
+			&count.IdentityIncomplete,
+		); err != nil {
 			return err
 		}
 		report.Counts = append(report.Counts, count)
 	}
 	totals := make(map[string]int64)
 	for _, count := range report.Counts {
-		totals[count.Direction] += count.Offers
+		totals[count.Direction+"\x00"+count.Schema] += count.Offers
 	}
 	for i := range report.Counts {
 		count := &report.Counts[i]
-		if total := totals[count.Direction]; total > 0 {
+		if total := totals[count.Direction+"\x00"+count.Schema]; total > 0 {
 			count.Share = float64(count.Offers) / float64(total)
+			count.IdentityIncompleteShare = float64(count.IdentityIncomplete) / float64(total)
 		}
 	}
 	if err := rows.Err(); err != nil || !samples {

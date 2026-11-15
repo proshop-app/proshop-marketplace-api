@@ -350,6 +350,7 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	doc.Variants = offer.Card.Variants
 	doc.ModelKey = offer.Card.ModelKey
 	doc.ModelKeySource = offer.Card.ModelKeySource
+	doc.VariantKey = offer.Card.VariantKey
 	doc.Price = offer.Price.Kopecks()
 	doc.BasePrice = offer.BasePrice.Kopecks()
 	doc.Available = offer.Available

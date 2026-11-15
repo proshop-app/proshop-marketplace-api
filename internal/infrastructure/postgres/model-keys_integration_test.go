@@ -16,6 +16,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -71,6 +72,8 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 			snap := snapshot(id, "product", 1, 0)
 			snap.Card.Publication.Published = true
 			snap.Card.Publication.CategoryPath = []string{"direction"}
+			snap.Card.Publication.Schema = "s1"
+			snap.Card.Publication.Issues = []taxonomy.Issue{{Code: "identity_incomplete", Attribute: "axis"}}
 			snap.Card.Variants = &catalog.Variants{
 				GroupID: "v1",
 				Axis: catalog.VariantAxis{
@@ -85,7 +88,7 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			product.SetModelKey("gtin:0036000291452", "gtin")
+			product.SetIdentityKeys("s1:brand-id:a1", "identity", "exact:0036000291452")
 			return tx.Products().Save(ctx, product)
 		})
 		if err != nil {
@@ -96,11 +99,12 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Samples) != 1 || len(report.Counts) != 2 {
+	if len(report.Samples) != 1 || len(report.Counts) != 3 {
 		t.Fatalf("отчёт: %+v", report)
 	}
 	for _, count := range report.Counts {
-		if count.Offers != 2 || count.Shared != 1 || count.Share != 1 {
+		if count.Offers != 2 || count.Shared != 1 || count.Share != 1 ||
+			count.IdentityIncomplete != 2 || count.IdentityIncompleteShare != 1 {
 			t.Fatalf("счётчики: %+v", count)
 		}
 	}
@@ -110,7 +114,7 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 			return err
 		}
 		state := product.State()
-		if state.Card.ModelKey != "gtin:0036000291452" ||
+		if state.Card.ModelKey != "s1:brand-id:a1" || state.Card.VariantKey != "exact:0036000291452" ||
 			state.Card.Variants == nil || state.Card.Variants.Position != 2 {
 			return fmt.Errorf("потерян контракт карточки: %+v", state.Card)
 		}
@@ -145,6 +149,27 @@ func TestModelKeyConflictDoesNotAbortRebuild(t *testing.T) {
 	ctx := context.Background()
 	seedTenant(t, uow, "one", "one", participant.TenantActive)
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		current, err := tx.Taxonomy().Current(ctx)
+		if err != nil {
+			return err
+		}
+		definition := taxonomy.Definition{
+			Version:    current.Version + 1,
+			Categories: []taxonomy.Category{{ID: "c1", Name: "Категория", Slug: "c1", Schema: "s1"}},
+			Attributes: []taxonomy.Attribute{
+				{Code: "brand", Name: "Бренд", Type: "string", Dictionary: "brand"},
+				{Code: "part_number", Name: "Артикул", Type: "string"},
+			},
+			Schemas: map[string]taxonomy.Schema{
+				"s1": {
+					Attributes: []string{"brand", "part_number"},
+					Identity:   &taxonomy.SchemaIdentity{Model: []string{"brand", "part_number"}},
+				},
+			},
+		}
+		if err := tx.Taxonomy().Save(ctx, definition, current.Version); err != nil {
+			return err
+		}
 		tenant, err := tx.Registry().Get(ctx, "one")
 		if err != nil {
 			return err
@@ -178,6 +203,7 @@ func TestModelKeyConflictDoesNotAbortRebuild(t *testing.T) {
 		for _, id := range []ids.ProductID{"first", "second"} {
 			snap := snapshot("one", id, 1, 0)
 			snap.Card.Publication.Published = true
+			snap.Card.Publication.CategoryID = "c1"
 			snap.Card.Publication.Attributes = map[string]json.RawMessage{
 				"brand":       json.RawMessage(`"Brand"`),
 				"part_number": json.RawMessage(`"A1"`),
@@ -236,7 +262,7 @@ func TestModelKeyConflictDoesNotAbortRebuild(t *testing.T) {
 		t.Fatalf("конфликт не учтён: %d, %v", observer.conflicts, resolver.err)
 	}
 	first, ok := index.Doc("one~first")
-	if !ok || first.Name != "Новая карточка" || first.ModelKey != "mpn:brand-id:a1" {
+	if !ok || first.Name != "Новая карточка" || first.ModelKey != "s1:brand-id:a1" {
 		t.Fatalf("догоняющий проход не восстановил актуальный снимок: %+v", first)
 	}
 	if _, ok := index.Doc("one~second"); !ok {

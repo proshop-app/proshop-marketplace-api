@@ -7,14 +7,26 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
 // Версионное сохранение не позволяет пересборке затереть более новое событие.
 // Конфликтующий снимок не индексируется: актуальное событие догонит его через outbox.
 func (i *Indexer) refreshModelKeys(ctx context.Context, states []ports.OfferState) ([]ports.OfferState, error) {
+	var definition taxonomy.Definition
+	if i.models != nil && i.models.enabled {
+		err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+			var err error
+			definition, err = tx.Taxonomy().Current(ctx)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 	ready := make([]ports.OfferState, 0, len(states))
 	for _, state := range states {
-		if state.Product != nil && i.models.Apply(ctx, state.Product) {
+		if state.Product != nil && i.models.Apply(ctx, state.Product, definition) {
 			err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 				return tx.Products().Save(ctx, state.Product)
 			})

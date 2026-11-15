@@ -21,7 +21,12 @@ func New(service *reference.Service) *Resolver {
 
 // Resolve возвращает канонический идентификатор бренда.
 func (r *Resolver) Resolve(ctx context.Context, text string) (string, bool, error) {
-	result, err := r.service.Resolve(ctx, "brand", text)
+	return r.ResolveDictionary(ctx, "brand", text)
+}
+
+// ResolveDictionary возвращает канонический id записи указанного словаря.
+func (r *Resolver) ResolveDictionary(ctx context.Context, dictionary, text string) (string, bool, error) {
+	result, err := r.service.Resolve(ctx, dictionary, text)
 	if err != nil || result.Match == nil {
 		return "", false, err
 	}

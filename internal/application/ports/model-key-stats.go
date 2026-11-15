@@ -7,11 +7,14 @@ import (
 
 // ModelKeyCount содержит покрытие ключами по направлению и источнику.
 type ModelKeyCount struct {
-	Direction string  `json:"direction"`
-	Source    string  `json:"source"`
-	Offers    int64   `json:"offers"`
-	Shared    int64   `json:"shared"`
-	Share     float64 `json:"share"`
+	Schema                  string  `json:"schema"`
+	IdentityIncomplete      int64   `json:"identityIncomplete"`
+	IdentityIncompleteShare float64 `json:"identityIncompleteShare"`
+	Direction               string  `json:"direction"`
+	Source                  string  `json:"source"`
+	Offers                  int64   `json:"offers"`
+	Shared                  int64   `json:"shared"`
+	Share                   float64 `json:"share"`
 }
 
 // ModelKeySample содержит пример совпадения между продавцами.

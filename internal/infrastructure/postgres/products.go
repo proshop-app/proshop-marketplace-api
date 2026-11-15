@@ -86,6 +86,7 @@ type cardJSON struct {
 	Variants       *catalog.Variants    `json:"variants,omitempty"`
 	ModelKey       string               `json:"modelKey,omitempty"`
 	ModelKeySource string               `json:"modelKeySource,omitempty"`
+	VariantKey     string               `json:"variantKey,omitempty"`
 	Marketplace    *taxonomy.Card       `json:"marketplace,omitempty"`
 	Publication    taxonomy.Publication `json:"publication"`
 	Name           string               `json:"name"`
@@ -272,6 +273,7 @@ func encodeCard(card catalog.Card) ([]byte, error) {
 		Variants:       card.Variants,
 		ModelKey:       card.ModelKey,
 		ModelKeySource: card.ModelKeySource,
+		VariantKey:     card.VariantKey,
 		Publication:    card.Publication,
 		Name:           card.Name,
 		Description:    card.Description,
@@ -305,6 +307,7 @@ func decodeCard(raw []byte) (catalog.Card, error) {
 		Variants:       doc.Variants,
 		ModelKey:       doc.ModelKey,
 		ModelKeySource: doc.ModelKeySource,
+		VariantKey:     doc.VariantKey,
 		Publication:    doc.Publication,
 		Name:           doc.Name,
 		Description:    doc.Description,

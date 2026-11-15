@@ -27,6 +27,7 @@ type offerDocument struct {
 	Variants          *catalog.Variants            `json:"variants,omitempty"`
 	ModelKey          string                       `json:"modelKey,omitempty"`
 	ModelKeySource    string                       `json:"modelKeySource,omitempty"`
+	VariantKey        string                       `json:"variantKey,omitempty"`
 	PriceProfiles     []priceProfile               `json:"priceProfiles"`
 	CategoryPath      []string                     `json:"categoryPath"`
 	Delivery          participant.DeliverySettings `json:"delivery"`

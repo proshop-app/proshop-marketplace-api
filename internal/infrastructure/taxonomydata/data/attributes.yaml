@@ -8,6 +8,7 @@
   multiple: false
   variant: false
 - code: gtin
+  format: gtin
   name: Штрихкод (GTIN)
   type: string
   facet: false
@@ -838,6 +839,7 @@
   multiple: false
   variant: false
 - code: book_isbn
+  format: isbn
   name: ISBN
   type: string
   facet: false

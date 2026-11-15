@@ -14,6 +14,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -315,6 +316,20 @@ func taskOf(task ports.NewTask) ports.Task {
 func TestProjectionContinuesWhileBrandRegistryIsUnavailable(t *testing.T) {
 	store, index, clock := fake.NewStore(), fake.NewIndex(), fake.NewClock(t1)
 	seedSeller(store, "t1", participant.TenantActive, true)
+	store.SeedTaxonomy(taxonomy.Definition{
+		Version:    1,
+		Categories: []taxonomy.Category{{ID: "c1", Schema: "s1"}},
+		Attributes: []taxonomy.Attribute{
+			{Code: "brand", Type: "string", Dictionary: "brand"},
+			{Code: "part_number", Type: "string"},
+		},
+		Schemas: map[string]taxonomy.Schema{
+			"s1": {
+				Attributes: []string{"brand", "part_number"},
+				Identity:   &taxonomy.SchemaIdentity{Model: []string{"brand", "part_number"}},
+			},
+		},
+	})
 	snap := snapshot("t1", "p1", 1, t0)
 	snap.Card.Publication.Attributes = map[string]json.RawMessage{
 		"brand":       json.RawMessage(`"Unavailable"`),
