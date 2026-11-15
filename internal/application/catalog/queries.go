@@ -36,8 +36,9 @@ var ErrInvalidQuery = errs.New(errs.Invalid, "catalog.invalid_query", "неко�
 
 // OfferCard — проверенное предложение каталога.
 type OfferCard struct {
-	Variants *VariantBlock
-	Offer    ports.OfferDocument
+	SellersCount *int
+	Variants     *VariantBlock
+	Offer        ports.OfferDocument
 }
 
 // OfferList — страница выдачи и фасеты.

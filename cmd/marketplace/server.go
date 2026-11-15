@@ -523,6 +523,7 @@ func (s *server) httpServer() *http.Server {
 		Moderation:     s.app.moderation,
 		Taxonomy:       s.app.taxonomy,
 		Catalog:        s.app.queries,
+		SellersCounts:  postgres.NewSellersCounts(s.store.pool),
 		Participants:   s.app.participants,
 		Auth:           s.app.auth,
 		Carts:          s.app.carts,

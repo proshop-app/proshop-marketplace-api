@@ -99,8 +99,7 @@ const (
 		JOIN participants pa ON pa.tenant_id = p.tenant_id
 		JOIN tenants t ON t.tenant_id = p.tenant_id
 		JOIN moderation_verdicts mv ON mv.tenant_id = p.tenant_id AND mv.product_id = p.product_id
-		WHERE p.on_sale AND p.default_price IS NOT NULL
-			AND pa.enabled AND pa.delivery_valid AND t.status = 'active' AND mv.status = 'allowed'
+		WHERE ` + visibleOfferSQL + `
 			AND p.category_id IS NOT NULL AND p.category_id <> ''
 		ORDER BY p.category_id`
 )
