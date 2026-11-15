@@ -12,15 +12,15 @@ import (
 const MaxAttributeFacets = 32
 
 // scopeFields не ищет каждый лист заново от корня: на большой таксономии это квадратичная работа.
-// Фильтры разрешены по объединению схем, фасеты — только по пересечению всех листьев области.
+// Фильтры разрешены по объединению схем, охват фасетов считается по листьям области.
 func scopeFields(
 	d taxonomy.Definition,
 	nodes []taxonomy.Category,
 	collectUnion bool,
-) (map[string]taxonomy.Attribute, map[string]taxonomy.Attribute) {
+) (map[string]taxonomy.Attribute, map[string]int) {
 	fields := d.Fields()
 	union := map[string]taxonomy.Attribute{}
-	var common map[string]taxonomy.Attribute
+	coverage := map[string]int{}
 	var collect func([]taxonomy.Category)
 	collect = func(nodes []taxonomy.Category) {
 		for _, node := range nodes {
@@ -28,45 +28,40 @@ func scopeFields(
 				collect(node.Children)
 				continue
 			}
-			leaf := map[string]taxonomy.Attribute{}
 			for _, code := range d.Schemas[node.Schema].Attributes {
 				if collectUnion {
 					union[code] = fields[code]
 				}
-				leaf[code] = fields[code]
-			}
-			if common == nil {
-				common = leaf
-				continue
-			}
-			for code := range common {
-				if _, exists := leaf[code]; !exists {
-					delete(common, code)
-				}
+				coverage[code]++
 			}
 		}
 	}
 	collect(nodes)
-	return union, common
+	return union, coverage
 }
 
 func selectFacetFields(
 	fields map[string]taxonomy.Attribute,
+	coverage map[string]int,
 	filters map[string]ports.AttributeFilter,
 ) []taxonomy.Attribute {
 	out := []taxonomy.Attribute{}
-	for _, field := range fields {
+	for code := range coverage {
+		field := fields[code]
 		if field.Facet && !field.Deprecated {
 			out = append(out, field)
 		}
 	}
-	// Выбранные общие поля сохраняют управление фильтром при исчерпании бюджета.
-	// Остальные упорядочены по коду, независимо от обхода map и дерева.
+	// Выбранные поля сохраняют управление фильтром при исчерпании бюджета.
+	// Остальные упорядочены по убыванию охвата, при равенстве — по коду.
 	sort.Slice(out, func(i, j int) bool {
 		_, left := filters[out[i].Code]
 		_, right := filters[out[j].Code]
 		if left != right {
 			return left
+		}
+		if coverage[out[i].Code] != coverage[out[j].Code] {
+			return coverage[out[i].Code] > coverage[out[j].Code]
 		}
 		return out[i].Code < out[j].Code
 	})

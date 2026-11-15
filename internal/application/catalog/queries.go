@@ -273,7 +273,7 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 			}
 			nodes = []taxonomy.Category{category.Category}
 		}
-		fields, common := scopeFields(d, nodes, normalized.CategoryID != "")
+		fields, coverage := scopeFields(d, nodes, normalized.CategoryID != "")
 		if normalized.CategoryID == "" {
 			fields = d.Fields()
 		}
@@ -287,7 +287,7 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 		// Поля берутся заново из таксономии, повторная подготовка не дублирует фасеты.
 		normalized.FacetFields = []taxonomy.Attribute{}
 		if normalized.WantsFacet(ports.FacetAttributes) {
-			normalized.FacetFields = selectFacetFields(common, normalized.Attributes)
+			normalized.FacetFields = selectFacetFields(fields, coverage, normalized.Attributes)
 		}
 		return nil
 	}); err != nil {

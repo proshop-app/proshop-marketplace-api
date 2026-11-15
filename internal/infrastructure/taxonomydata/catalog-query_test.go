@@ -5,37 +5,41 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"slices"
+	"sort"
 	"testing"
 	"time"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
-// Байты PrepareQuery и текст ошибок зафиксированы до изменения scopeFields на встроенной поставке.
+// Байты PrepareQuery и текст ошибок зафиксированы для ранжирования фасетов по охвату встроенной поставки.
 // Проверяем все поля FacetFields, порядок, типы фильтров, nil/пустые значения и остальные поля запроса.
 var bundledQueryDigests = map[string]string{
-	"":                                   "8ca182740c841b228f519599276da5dc7bcc5f28044a221c7f038bce4444819f",
-	"electronics":                        "820f16e7efab67849ce5f25c5dd375d550e48dbeadcb9b4c1a2abbf8d4e4e1eb",
-	"electronics.family-mobile":          "cd8142cb5dfb102a918613b9158d027d49528af6ceb837a519e7cefe5a69edcd",
+	"":                                   "1171099a0845703428b3da3922c2f22baead6fb8e2cab5d80ccd347e660f1cd7",
+	"electronics":                        "7539365e9db4a8227c367cd6ffb89e84fdbd0d47f3c411cd3272051d0d904d69",
+	"electronics.family-mobile":          "681359fd424f484683a140fa7692544b571a5d330a9d8738518371cdb60b5d7b",
 	"electronics.smartphones":            "ca30b7646f5cc4ae6fbd8a2ea9e530e8ef6e76814ef2b8cd47bb3226ed1e8771",
-	"clothing":                           "0439e97c6a8bb3a80184850d93b889c1a32d49c55916aa77dd135bc2dacde8f6",
-	"clothing.women":                     "a0562698004cfad164c4362350f44eccb6005aced681946642b99f6ba90faad5",
-	"clothing.women-family-underwear":    "8e58e2fcfe1d60a14d452c34ee654ed2c79164345a9d51d8cbd17732e27470cf",
+	"clothing":                           "709ed096c6e416a5472d39db3d652bfa54037c3c27a18637b31b4c607c967bbf",
+	"clothing.women":                     "c488c31239d85484cf8e953efaacf98f1d5b209d830ae37cfc50e937616d5d6d",
+	"clothing.women-family-underwear":    "a3628c8ece45f6a229c25d8f55b1b3127979d1dad8d2ff692abf2b238264fd51",
 	"clothing.bras":                      "28fd2a95b5f7ce3eeda0f768fdabddeb90059cc6cd82402b3873b56e223ba95a",
-	"auto":                               "cf9b73e695c0a4affc2f9ddd87df0855943766f92389d5c0617de62bc9152a4c",
-	"auto.family-parts":                  "d83040a7e31dc1177c8b640375875f681024007408e20921a9438c5bdbfe5397",
+	"auto":                               "db21956b22c81d10aeeb3d0228eea10e86dfd0cc3cfda2d40d492401800891d2",
+	"auto.family-parts":                  "bc9b400497e384d2631f22a7b279e25b882cab4b08f7e8057d4a2daebb1ae143",
 	"auto.family-parts-braking":          "4402c074c53694f808a825fd877d7efbdda0bcf45188b4c1c193857d288a9187",
 	"auto.brake-pads":                    "a098847d78b52b54b0bad132cee03d05b83045487e7e778fc77517af19986c44",
-	"pets":                               "5637a7c2c9b64bd498a02dbdfcd149a8d033f00fcf32354acb267580d0618294",
+	"pets":                               "6841cf361a477ba45ca799ff57b6428b0883dc3604953416ff8e5c7096b13ffa",
 	"pets.family-food":                   "ba6a5665d73d7e49b94ccef358965935a542a6e23c2daa786bad0925cb1d8560",
 	"pets.pet-treats":                    "36dbade10c814274433282bbe8047490ebc06bf25dd84c57794c86d8d2aeca3e",
-	"industry":                           "6269235ec807b8f2822f846c9d9a95dc109db9b297be06e175da5eba026dd41d",
-	"industry.family-equipment":          "6ea4414533f682c4b5b1c0bbcf4e8343678f6986a85f0dc366985e35e199212f",
-	"industry.family-equipment-machines": "e7094e61fad8bf3bed9a5c19ca120eeb123f31debb3d6a6edf62800c3b261e2c",
+	"industry":                           "6e0f761d31b5c9bfff952af0c238ad4455df42a42241f6b9db82b92425567c91",
+	"industry.family-equipment":          "3b424c096b83a35d7327dbd806426f1a5c2210ff3eab3b95a36805ebba433160",
+	"industry.family-equipment-machines": "054bd7115c83045404d42c61214cd6a3aa4d6f74e2273e96b7f65a6f53843320",
 	"industry.soldering-stations":        "8ad8e8af7fccd7079ba9c11d7fc78fc634af750a405c3d3eeafb0faec788cba5",
-	"food":                               "c62ffa44e5ac7ab85434acbc4af587b61271306787485a9bf785862be3c8db9d",
+	"food":                               "14bd93607f008dd7f2eeca5b6b8ecaf627154e956a93476f5febc55ed6515f6e",
 	"food.grains":                        "7518b29bcd4c1e0bdfc61b66adbb8f960009ec1914f90b110e9d632dae25aec9",
 }
 
@@ -99,6 +103,65 @@ func TestBundledCatalogPrepareQuery(t *testing.T) {
 			got := fmt.Sprintf("%x", digest.Sum(nil))
 			if got != want {
 				t.Fatalf("PrepareQuery изменился: %s, ожидалось %s", got, want)
+			}
+		})
+	}
+}
+
+func TestBundledCatalogFacetCoverage(t *testing.T) {
+	release, _, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := release.Definition()
+	store := fake.NewStore()
+	store.SeedTaxonomy(d)
+	queries := appcatalog.NewQueries(store, fake.NewIndex(), nil, nil, nil, fake.NewClock(time.Time{}))
+	for _, id := range []string{"", "shoes", "electronics.smartphones"} {
+		t.Run(id, func(t *testing.T) {
+			prepared, err := queries.PrepareQuery(context.Background(), ports.OfferQuery{CategoryID: id})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(prepared.FacetFields) > appcatalog.MaxAttributeFacets {
+				t.Fatalf("превышен бюджет фасетов: %d", len(prepared.FacetFields))
+			}
+			codes := []string{}
+			for _, field := range prepared.FacetFields {
+				codes = append(codes, field.Code)
+			}
+			if !sort.StringsAreSorted(codes) {
+				t.Fatalf("фасеты не отсортированы по коду: %v", codes)
+			}
+			if id == "" || id == "shoes" {
+				want := []string{"brand", "country"}
+				if id == "shoes" {
+					want = []string{"color", "size_footwear_label", "season", "target_gender"}
+				}
+				for _, code := range want {
+					if !slices.Contains(codes, code) {
+						t.Errorf("отсутствует фасет %s: %v", code, codes)
+					}
+				}
+				return
+			}
+			category, _, ok := d.Category(id)
+			if !ok || len(category.Children) != 0 {
+				t.Fatal("ожидался лист встроенного каталога")
+			}
+			fields := d.Fields()
+			want := []taxonomy.Attribute{}
+			for _, code := range d.Schemas[category.Schema].Attributes {
+				field := fields[code]
+				if field.Facet && !field.Deprecated {
+					want = append(want, field)
+				}
+			}
+			sort.Slice(want, func(i, j int) bool {
+				return want[i].Code < want[j].Code
+			})
+			if !reflect.DeepEqual(prepared.FacetFields, want) {
+				t.Fatalf("фасеты листа отличаются от полей схемы: %v вместо %v", prepared.FacetFields, want)
 			}
 		})
 	}
