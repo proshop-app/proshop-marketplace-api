@@ -29,6 +29,7 @@ type categoryJSON struct {
 
 // offerJSON — предложение в ответе. Суммы — числовые рубли.
 type offerJSON struct {
+	SellersCount      *int                       `json:"sellersCount,omitempty"`
 	Assets            *[]string                  `json:"assets,omitempty"`
 	Rating            *catalog.Rating            `json:"rating"`
 	Variants          *variantBlockJSON          `json:"variants,omitempty"`
@@ -69,18 +70,20 @@ type offerCorrectionJSON struct {
 }
 
 type catalogHandlers struct {
+	sellers ports.SellersCounts
 	queries *appcatalog.Queries
 }
 
 func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 	doc := card.Offer
 	out := offerJSON{
-		Rating:     doc.Rating,
-		CategoryID: doc.CategoryID,
-		Attributes: doc.Attributes,
-		ID:         doc.ID,
-		TenantID:   doc.TenantID,
-		ProductID:  doc.ProductID,
+		SellersCount: card.SellersCount,
+		Rating:       doc.Rating,
+		CategoryID:   doc.CategoryID,
+		Attributes:   doc.Attributes,
+		ID:           doc.ID,
+		TenantID:     doc.TenantID,
+		ProductID:    doc.ProductID,
 		Seller: sellerJSON{
 			Slug:             doc.SellerSlug,
 			Name:             doc.SellerName,
@@ -136,6 +139,9 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+	if !h.populateSellers(r, list.Items) {
+		return
+	}
 	rememberCatalogFacets(r.Context(), query, list.Facets)
 	limit := query.Limit
 	if limit == 0 {
@@ -188,7 +194,11 @@ func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
-	body := toOfferJSON(card, true)
+	cards := []appcatalog.OfferCard{card}
+	if !h.populateSellers(r, cards) {
+		return
+	}
+	body := toOfferJSON(cards[0], true)
 	annotateDelivery(&body, r)
 	writeJSON(w, http.StatusOK, body)
 }

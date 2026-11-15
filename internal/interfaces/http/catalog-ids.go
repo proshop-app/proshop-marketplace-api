@@ -32,6 +32,9 @@ func (h *catalogHandlers) listIDs(w http.ResponseWriter, r *http.Request) {
 		Total:  len(cards),
 		Limit:  len(offerIDs),
 	}
+	if !h.populateSellers(r, cards) {
+		return
+	}
 	for _, card := range cards {
 		item := toOfferJSON(card, false)
 		annotateDelivery(&item, r)

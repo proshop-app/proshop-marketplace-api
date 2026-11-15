@@ -41,6 +41,7 @@ type Deps struct {
 	ServerAPIToken string
 	Moderation     *appmoderation.Service
 	Taxonomy       *apptaxonomy.Service
+	SellersCounts  ports.SellersCounts
 	Catalog        *appcatalog.Queries
 	Participants   *appparticipant.Service
 	Auth           *appbuyer.Auth
@@ -80,7 +81,7 @@ func routes(deps Deps) []route {
 	promotion := &promotionHandlers{service: deps.Promotion, trustedProxies: deps.TrustedProxies}
 	machine := func(next http.HandlerFunc) http.HandlerFunc { return serverAPI(deps.ServerAPIToken, next) }
 	moderation := &moderationHandlers{service: deps.Moderation}
-	catalog := &catalogHandlers{queries: deps.Catalog}
+	catalog := &catalogHandlers{queries: deps.Catalog, sellers: deps.SellersCounts}
 	taxonomy := &taxonomyHandlers{service: deps.Taxonomy, catalog: deps.Catalog}
 	participants := &participantHandlers{service: deps.Participants, buyerFeatures: deps.Features}
 	features := &buyerFeatureHandlers{

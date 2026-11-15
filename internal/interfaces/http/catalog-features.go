@@ -77,6 +77,9 @@ func (h *catalogHandlers) recommendations(w http.ResponseWriter, r *http.Request
 		writeError(w, r, err)
 		return
 	}
+	if !h.populateSellers(r, result.Items) {
+		return
+	}
 	body := recommendationsJSON{Items: []offerJSON{}, Reason: result.Reason}
 	for _, item := range result.Items {
 		body.Items = append(body.Items, toOfferJSON(item, false))
