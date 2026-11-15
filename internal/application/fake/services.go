@@ -50,6 +50,7 @@ type Limiter struct {
 
 // Platform — API сервера установки в памяти.
 type Platform struct {
+	priceContextCalls []ids.TenantID
 	pickups           map[ids.TenantID]ports.PickupPoints
 	pickupCalls       []PickupCall
 	BeforePickup      func(context.Context, ids.TenantID) error

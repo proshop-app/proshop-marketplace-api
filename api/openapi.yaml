@@ -2071,6 +2071,21 @@ paths:
       operationId: listOffers
       parameters:
         - { $ref: "#/components/parameters/MoneyUnit" }
+        - name: ids
+          in: query
+          style: form
+          explode: true
+          schema: { type: array, minItems: 1, maxItems: 20, items: { type: string } }
+          description: >-
+            offerId вида tenantId~productId, от 1 до 20 значений до схлопывания повторов.
+            Первое вхождение задаёт порядок. Пустой или невалидный id — 400 catalog.invalid_query.
+            Не сочетается с q, tenant, groupId, category, priceMin, priceMax, inStock,
+            attr.*, sort, limit, offset, track (даже пустыми) — 400 catalog.invalid_query.
+            deliveryRegion и deliveryCarrier допустимы. Цены учитывают необязательного покупателя.
+            Отсутствующие, скрытые, снятые с публикации предложения и предложения без цены пропускаются.
+            items идут в порядке ids, без description, assets и variants, с контекстом доставки.
+            facets всегда [], total — число items, limit — число уникальных ids, offset — 0.
+            Ошибка индекса по любому id — 503 для всего ответа.
         - name: deliveryCarrier
           in: query
           schema: { type: string }
@@ -2153,6 +2168,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/OfferPage" }
         "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/catalog/offers/{offerId}:
     get:
       tags: [catalog]
