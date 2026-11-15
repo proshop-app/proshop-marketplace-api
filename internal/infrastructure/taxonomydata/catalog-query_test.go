@@ -117,7 +117,7 @@ func TestBundledCatalogFacetCoverage(t *testing.T) {
 	store := fake.NewStore()
 	store.SeedTaxonomy(d)
 	queries := appcatalog.NewQueries(store, fake.NewIndex(), nil, nil, nil, fake.NewClock(time.Time{}))
-	for _, id := range []string{"", "shoes", "electronics.smartphones"} {
+	for _, id := range []string{"", "shoes", "music", "electronics.smartphones"} {
 		t.Run(id, func(t *testing.T) {
 			prepared, err := queries.PrepareQuery(context.Background(), ports.OfferQuery{CategoryID: id})
 			if err != nil {
@@ -133,10 +133,13 @@ func TestBundledCatalogFacetCoverage(t *testing.T) {
 			if !sort.StringsAreSorted(codes) {
 				t.Fatalf("фасеты не отсортированы по коду: %v", codes)
 			}
-			if id == "" || id == "shoes" {
+			if id == "" || id == "shoes" || id == "music" {
 				want := []string{"brand", "country"}
 				if id == "shoes" {
 					want = []string{"color", "size_footwear_label", "season", "target_gender"}
+				}
+				if id == "music" {
+					want = []string{"color"}
 				}
 				for _, code := range want {
 					if !slices.Contains(codes, code) {

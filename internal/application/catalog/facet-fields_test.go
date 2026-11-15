@@ -185,3 +185,76 @@ func TestFacetBudgetRanksLeafCoverageBeforeCode(t *testing.T) {
 		}
 	}
 }
+
+func TestFacetBudgetPinsRareColor(t *testing.T) {
+	d := taxonomy.Definition{}
+	codes := []string{}
+	for i := 0; i < 40; i++ {
+		code := fmt.Sprintf("a%03d", i)
+		d.Attributes = append(d.Attributes, taxonomy.Attribute{
+			Code:  code,
+			Type:  "string",
+			Facet: true,
+		})
+		codes = append(codes, code)
+	}
+	d.Attributes = append(d.Attributes, taxonomy.Attribute{Code: "color", Type: "string", Facet: true})
+	d.Schemas = map[string]taxonomy.Schema{
+		"s1": {Attributes: codes},
+		"s2": {Attributes: []string{"color"}},
+	}
+	// Все 40 обычных полей имеют охват 2, цвет — только 1 из 3 листьев.
+	d.Categories = []taxonomy.Category{{
+		ID: "c1",
+		Children: []taxonomy.Category{
+			{ID: "c2", Schema: "s1"},
+			{ID: "c3", Schema: "s1"},
+			{ID: "c4", Schema: "s2"},
+		},
+	}}
+	for _, color := range []taxonomy.Attribute{
+		{Code: "color", Type: "string", Facet: true},
+		{Code: "color", Type: "string", Facet: true, Deprecated: true},
+		{Code: "color", Type: "string"},
+	} {
+		d.Attributes[len(d.Attributes)-1] = color
+		store := fake.NewStore()
+		store.SeedTaxonomy(d)
+		queries := appcatalog.NewQueries(store, fake.NewIndex(), nil, nil, nil, fake.NewClock(time.Time{}))
+		for _, id := range []string{"", "c1", "c2"} {
+			for _, selected := range []int{0, 1, 40} {
+				filters := map[string]ports.AttributeFilter{}
+				want := append([]string{}, codes[:appcatalog.MaxAttributeFacets]...)
+				if selected == 1 {
+					filters["a039"] = ports.AttributeFilter{Values: []string{"v1"}}
+					want[len(want)-1] = "a039"
+				}
+				if selected == 40 {
+					for _, code := range codes {
+						filters[code] = ports.AttributeFilter{Values: []string{"v1"}}
+					}
+				}
+				if id != "c2" && color.Facet && !color.Deprecated {
+					want = append(want[:len(want)-1], "color")
+					if selected == 1 {
+						want[len(want)-2] = "a039"
+					}
+				}
+				prepared, err := queries.PrepareQuery(context.Background(), ports.OfferQuery{
+					CategoryID: id,
+					Attributes: filters,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				got := []string{}
+				for _, field := range prepared.FacetFields {
+					got = append(got, field.Code)
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("область=%q выбрано=%d цвет=%+v: %v вместо %v", id, selected, color, got, want)
+				}
+			}
+		}
+	}
+}
