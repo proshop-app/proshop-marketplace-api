@@ -360,7 +360,13 @@ func (s *server) services(ctx context.Context) (services, error) {
 	return services{
 		contextCache:  sharedContexts,
 		priceContexts: contexts,
-		buyerFeatures: appbuyer.NewFeatures(uow, s.geoIP(), displayPlatform, redis.NewLimiter(s.cache, keyPrefix), pickups),
+		buyerFeatures: appbuyer.NewFeatures(
+			uow,
+			s.geoIP(),
+			displayPlatform,
+			redis.NewLimiter(s.cache, keyPrefix),
+			pickups,
+		),
 
 		promotion:         promotions,
 		moderationMetrics: moderationMetrics,

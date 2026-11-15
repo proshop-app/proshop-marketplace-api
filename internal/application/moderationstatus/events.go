@@ -129,6 +129,9 @@ func Status(publication taxonomy.Publication, verdict *moderation.Verdict) (stri
 		}
 		reasons = append(reasons, Reason{Source: "taxonomy", Key: issue.Code, Message: message})
 	}
+	if !publication.Published {
+		return status, reasons
+	}
 	verdictReasons := []moderation.Reason{moderation.NotEvaluated()}
 	if verdict != nil {
 		state := verdict.State()
@@ -182,7 +185,7 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 			if err != nil {
 				return err
 			}
-			if decision != nil && decision.Action == moderation.Reject {
+			if product.Card.Publication.Published && decision != nil && decision.Action == moderation.Reject {
 				reasons = rejectionReasons(reasons, rejectedReasons)
 			}
 			body = OfferEvent{

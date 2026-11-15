@@ -44,8 +44,8 @@ func (s *Service) Evaluate(
 	now time.Time,
 ) error {
 	p := product.State()
-	if p.Deleted || p.Card.Marketplace == nil {
-		return nil
+	if p.Deleted || p.Card.Marketplace == nil || !p.Card.Publication.Published {
+		return s.closeUnpublishedCase(ctx, tx, p, now)
 	}
 	if member == nil {
 		var err error
@@ -102,7 +102,10 @@ func (s *Service) Evaluate(
 		changed = verdict.Evaluate(p.Revision, definition.Version, rules, input, now)
 	}
 	if !changed {
-		return nil
+		if verdict.State().Status != moderation.Pending {
+			return nil
+		}
+		return s.syncEvaluationCase(ctx, tx, p, verdict, false, now)
 	}
 	return s.saveEvaluation(ctx, tx, p, verdict, now)
 }
@@ -118,26 +121,78 @@ func (s *Service) saveEvaluation(
 		return err
 	}
 	s.recordVerdict(tx, verdict.State())
+	return s.syncEvaluationCase(ctx, tx, p, verdict, true, now)
+}
+
+func (s *Service) syncEvaluationCase(
+	ctx context.Context,
+	tx ports.Tx,
+	p catalog.ProductState,
+	verdict *moderation.Verdict,
+	verdictChanged bool,
+	now time.Time,
+) error {
 	c, err := tx.ModerationCases().Open(ctx, p.TenantID, p.ProductID)
 	if err != nil && !errors.Is(err, moderation.ErrNotFound) {
 		return err
 	}
-	card, err := reviewCard(ctx, tx, p.TenantID, p.ProductID)
-	if err != nil {
-		return err
+	var card *moderation.ReviewCard
+	// Снимок нужен только новому делу или новой ревизии существующего дела.
+	if (c == nil && verdict.State().Status == moderation.Pending) ||
+		(c != nil && c.State().Revision != verdict.State().Revision) {
+		snapshot, err := reviewCard(ctx, tx, p.TenantID, p.ProductID)
+		if err != nil {
+			return err
+		}
+		card = &snapshot
 	}
-	if c != nil {
-		if c.Refresh(verdict.State(), now, &card) {
+	switch {
+	case c != nil:
+		if c.Refresh(verdict.State(), now, card) {
 			if err := tx.ModerationCases().Save(ctx, c); err != nil {
 				return err
 			}
+		} else if !verdictChanged {
+			return nil
 		}
-	} else if verdict.State().Status == moderation.Pending {
-		c = moderation.NewCase(s.ids.NewUUID(), verdict.State(), moderation.Rule, "", now, &card)
+	case verdict.State().Status == moderation.Pending:
+		c = moderation.NewCase(s.ids.NewUUID(), verdict.State(), moderation.Rule, "", now, card)
 		if err := tx.ModerationCases().Save(ctx, c); err != nil {
 			return err
 		}
+	case !verdictChanged:
+		return nil
 	}
+	return s.enqueueEvaluation(ctx, tx, p, now)
+}
+
+func (s *Service) closeUnpublishedCase(
+	ctx context.Context,
+	tx ports.Tx,
+	p catalog.ProductState,
+	now time.Time,
+) error {
+	c, err := tx.ModerationCases().Open(ctx, p.TenantID, p.ProductID)
+	if errors.Is(err, moderation.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// Вердикт сохраняем: временное снятие публикации не отменяет решение оператора.
+	c.Supersede(now)
+	if err := tx.ModerationCases().Save(ctx, c); err != nil {
+		return err
+	}
+	return s.enqueueEvaluation(ctx, tx, p, now)
+}
+
+func (s *Service) enqueueEvaluation(
+	ctx context.Context,
+	tx ports.Tx,
+	p catalog.ProductState,
+	now time.Time,
+) error {
 	if err := tx.Outbox().Enqueue(ctx, moderationstatus.OfferTask(p.TenantID, p.ProductID, now)); err != nil {
 		return err
 	}
