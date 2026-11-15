@@ -7,7 +7,7 @@ name: proshop-marketplace
 
 services:
   postgres:
-    image: ${DEV_REGISTRY:-docker.io}/library/postgres:16-alpine@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
+    image: ${DEV_REGISTRY:-docker.io}/library/postgres:16-alpine
     environment:
       POSTGRES_USER: marketplace
       POSTGRES_PASSWORD: marketplace
@@ -23,7 +23,7 @@ services:
       retries: 30
 
   opensearch:
-    image: ${DEV_REGISTRY:-docker.io}/opensearchproject/opensearch:2.19.1@sha256:72fe2fc84be8295906b8efca020b46c58ed45c8da60cd9b8b49e1991e38e89a4
+    image: ${DEV_REGISTRY:-docker.io}/opensearchproject/opensearch:2.19.4
     environment:
       discovery.type: single-node
       bootstrap.memory_lock: "true"
@@ -49,7 +49,7 @@ services:
       retries: 40
 
   kafka:
-    image: ${DEV_REGISTRY:-docker.io}/apache/kafka:3.9.1@sha256:4ceccc577f03f51f6af8dbfda55194d0d892f4fa7913ffbded567ce3895622ed
+    image: ${DEV_REGISTRY:-docker.io}/apache/kafka:3.9.1
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -76,7 +76,7 @@ services:
 
   # Redis — лимиты входа покупателей и короткие кэши (неделя 2); на первой неделе сервис его не читает
   redis:
-    image: ${DEV_REGISTRY:-docker.io}/library/redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    image: ${DEV_REGISTRY:-docker.io}/library/redis:7-alpine
     ports:
       - "${MARKETPLACE_REDIS_PORT:-26379}:6379"
     healthcheck:

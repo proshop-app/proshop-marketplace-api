@@ -40,6 +40,7 @@ func ComposeOffer(product *Product, signals *Signals, seller Seller, verdict *mo
 	if product == nil {
 		return Offer{}
 	}
+
 	state := product.State()
 	offer := Offer{ID: ids.OfferID{Tenant: state.TenantID, Product: state.ProductID}, Seller: seller}
 
@@ -48,20 +49,24 @@ func ComposeOffer(product *Product, signals *Signals, seller Seller, verdict *mo
 	} else {
 		offer.Reasons = verdict.State().Reasons
 	}
+
 	if state.Deleted {
 		return offer
 	}
 
 	profile, found := SelectPrice(state.PriceProfiles, DefaultPriceProfile)
+
 	if !found {
 		return offer
 	}
+
 	base := profile.Price
 	price := profile.EffectivePrice
 	available := state.Available
 
 	if signals != nil {
 		sig := signals.State()
+
 		if sig.HasStock && sig.StockAt.After(state.ProjectedAt) {
 			available = sig.Available
 		}

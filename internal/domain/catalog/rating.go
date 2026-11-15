@@ -25,5 +25,6 @@ func NormalizeRating(value float64, count int64) (Rating, error) {
 	if count < 0 || math.IsNaN(value) {
 		return Rating{}, ErrInvalidSnapshot.WithMessage("некорректный рейтинг")
 	}
+
 	return Rating{Value: math.Round(math.Max(0, math.Min(5, value))*10) / 10, Count: count}, nil
 }

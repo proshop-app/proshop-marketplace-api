@@ -65,10 +65,14 @@ func (i *Indexer) HandleTask(ctx context.Context, task ports.Task) error {
 
 	switch task.Kind {
 	case TaskSyncOffer:
+
 		return i.SyncOffer(ctx, tenantID, productID)
+
 	case TaskSyncTenant:
+
 		return i.SyncTenant(ctx, tenantID)
 	default:
+
 		return ErrInvalidTask.WithMessage("неизвестная задача: " + task.Kind)
 	}
 }
@@ -80,24 +84,32 @@ func (i *Indexer) SyncOffer(ctx context.Context, tenantID ids.TenantID, productI
 
 	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
+
 		state, err = tx.Offers().Offer(ctx, tenantID, productID)
+
 		if err != nil {
 			return err
 		}
+
 		return tx.Outbox().Enqueue(ctx, ports.StoreCardTask(tenantID, i.clock.Now().Add(i.refreshDelay)))
 	})
+
 	if errors.Is(err, catalog.ErrProductNotFound) {
 		return nil
 	}
+
 	if err != nil {
 		return err
 	}
 
 	ready, err := i.refreshModelKeys(ctx, []ports.OfferState{state})
+
 	if err != nil || len(ready) == 0 {
 		return err
 	}
+
 	doc, ok := Document(state)
+
 	if !ok {
 		return nil
 	}
@@ -121,17 +133,21 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 			}
 			return tx.Outbox().Enqueue(ctx, ports.StoreCardTask(tenantID, i.clock.Now().Add(i.refreshDelay)))
 		})
+
 		if err != nil {
 			return err
 		}
+
 		if len(states) == 0 {
 			return nil
 		}
 
 		ready, err := i.refreshModelKeys(ctx, states)
+
 		if err != nil {
 			return err
 		}
+
 		if docs := documents(ready); len(docs) > 0 {
 			if err := i.index.Put(ctx, docs); err != nil {
 				return err
@@ -139,6 +155,7 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 		}
 
 		after = states[len(states)-1].Product.State().ProductID
+
 		if len(states) < i.batch {
 			return nil
 		}
