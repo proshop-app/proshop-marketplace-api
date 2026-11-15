@@ -36,7 +36,6 @@ type Config struct {
 	Identity   Identity
 	HTTP       HTTP
 	Database   Database
-	OpenSearch OpenSearch
 	Search     Search
 	Kafka      Kafka
 	Outbox     Outbox
@@ -112,21 +111,10 @@ type Checkout struct {
 	QuoteTimeout              time.Duration
 }
 
-// Carrier — учётная запись платформы у перевозчика только на чтение справочника.
-type Carrier struct {
-	RegionCodes  map[string]string
-	URL          string
-	ClientID     string
-	ClientSecret string
-	Token        string
-}
-
-// Delivery — справочники пунктов выдачи.
+// Delivery — кэш и предел обращений к магазинам.
 type Delivery struct {
-	CDEK            Carrier
-	Yandex          Carrier
-	RefreshInterval time.Duration
-	PickupIndex     string
+	CacheTTL time.Duration
+	Attempts int
 }
 
 // Settings — сверка настроек магазинов с сервером.
@@ -158,16 +146,6 @@ type Search struct {
 	URL                 string
 	Token               string
 	Timeout             time.Duration
-}
-
-// OpenSearch — кластер геоиндекса пунктов выдачи.
-type OpenSearch struct {
-	URLs               []string
-	Username           string
-	Password           string
-	InsecureSkipVerify bool
-	Shards             int
-	Replicas           int
 }
 
 // Kafka — брокеры установки и своя группа консьюмера.
@@ -242,14 +220,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			Token:               r.required("SEARCH_MARKETPLACE_TOKEN"),
 			Timeout:             r.duration("SEARCH_TIMEOUT", 35*time.Second),
 		},
-		OpenSearch: OpenSearch{
-			URLs:               r.urls("OPENSEARCH_URLS"),
-			Username:           r.str("OPENSEARCH_USERNAME", ""),
-			Password:           r.str("OPENSEARCH_PASSWORD", ""),
-			InsecureSkipVerify: r.boolean("OPENSEARCH_INSECURE_SKIP_VERIFY", false),
-			Shards:             r.positive("OPENSEARCH_SHARDS", 1),
-			Replicas:           r.nonNegative("OPENSEARCH_REPLICAS", 1),
-		},
 		Kafka: Kafka{
 			Brokers:                r.list("KAFKA_BROKERS"),
 			TopicPrefix:            r.str("KAFKA_TOPIC_PREFIX", ""),
@@ -314,19 +284,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			QuoteTimeout:              r.duration("QUOTE_TIMEOUT", 5*time.Second),
 		},
 		Delivery: Delivery{
-			CDEK: Carrier{
-				URL:          r.str("CDEK_API_URL", "https://api.cdek.ru"),
-				RegionCodes:  r.regionCodes("CDEK_REGION_CODES"),
-				ClientID:     r.str("CDEK_CLIENT_ID", ""),
-				ClientSecret: r.str("CDEK_CLIENT_SECRET", ""),
-			},
-			Yandex: Carrier{
-				URL:         r.str("YANDEX_DELIVERY_API_URL", "https://b2b-authproxy.taxi.yandex.net"),
-				RegionCodes: r.regionCodes("YANDEX_REGION_CODES"),
-				Token:       r.str("YANDEX_DELIVERY_TOKEN", ""),
-			},
-			RefreshInterval: r.duration("PICKUP_REFRESH_INTERVAL", 24*time.Hour),
-			PickupIndex:     r.str("OPENSEARCH_PICKUP_INDEX", "marketplace-pickup-points"),
+			CacheTTL: r.duration("PICKUP_CACHE_TTL", time.Hour),
+			Attempts: r.positive("PICKUP_MAX_ATTEMPTS", 3),
 		},
 		Settings: Settings{
 			SyncInterval:          r.duration("SETTINGS_SYNC_INTERVAL", 5*time.Minute),
@@ -359,9 +318,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		r.fail("SEARCH_MARKETPLACE_TOKEN", "отдельный токен поискового сервиса")
 	}
 
-	if (cfg.OpenSearch.Username == "") != (cfg.OpenSearch.Password == "") {
-		r.fail("OPENSEARCH_USERNAME", "задаётся вместе с OPENSEARCH_PASSWORD")
-	}
 	if strings.TrimSpace(cfg.Kafka.GroupID) == "" {
 		r.fail("KAFKA_GROUP_ID", "не может быть пустым")
 	}
@@ -382,9 +338,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	}
 	if token := cfg.Platform.Token; token != "" && len(token) < minOperatorTokenLength {
 		r.fail("SERVICE_TOKEN_MARKETPLACE", fmt.Sprintf("не короче %d символов", minOperatorTokenLength))
-	}
-	if (cfg.Delivery.CDEK.ClientID == "") != (cfg.Delivery.CDEK.ClientSecret == "") {
-		r.fail("CDEK_CLIENT_ID", "задаётся вместе с CDEK_CLIENT_SECRET")
 	}
 
 	r.validatePromotion(cfg)
@@ -508,20 +461,6 @@ func (r *reader) list(name string) []string {
 	}
 	if len(items) == 0 {
 		r.fail(name, "пустой список")
-	}
-
-	return items
-}
-
-func (r *reader) urls(name string) []string {
-	items := r.list(name)
-	for _, item := range items {
-		parsed, err := url.Parse(item)
-		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-			r.fail(name, "ожидаются адреса http(s)://хост:порт через запятую")
-
-			return items
-		}
 	}
 
 	return items

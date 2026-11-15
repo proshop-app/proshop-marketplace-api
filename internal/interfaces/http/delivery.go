@@ -2,9 +2,6 @@ package http
 
 import (
 	"net/http"
-	"strconv"
-	"strings"
-	"time"
 
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
@@ -21,19 +18,18 @@ type locationJSON struct {
 }
 
 type pickupPointJSON struct {
-	RegionCode  string       `json:"regionCode"`
-	Carrier     string       `json:"carrier"`
-	Code        string       `json:"code"`
-	Name        string       `json:"name"`
-	Address     string       `json:"address"`
-	City        string       `json:"city"`
-	Location    locationJSON `json:"location"`
-	Schedule    string       `json:"schedule"`
-	RefreshedAt time.Time    `json:"refreshedAt"`
+	RegionCode string       `json:"regionCode"`
+	Carrier    string       `json:"carrier"`
+	Code       string       `json:"code"`
+	Name       string       `json:"name"`
+	Address    string       `json:"address"`
+	City       string       `json:"city"`
+	Location   locationJSON `json:"location"`
+	Schedule   string       `json:"schedule"`
 }
 
 type deliveryHandlers struct {
-	directory *appdelivery.Directory
+	directory *appdelivery.Service
 }
 
 // carriers — подключённые перевозчики для переключателя карты.
@@ -48,7 +44,7 @@ func (h *deliveryHandlers) carriers(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": body})
 }
 
-// pickupPoints — пункты перевозчика: ?carrier=&bbox=minLon,minLat,maxLon,maxLat | city=&limit=
+// pickupPoints — пункты перевозчика: ?carrier=&city=
 func (h *deliveryHandlers) pickupPoints(w http.ResponseWriter, r *http.Request) {
 	values := r.URL.Query()
 
@@ -59,29 +55,11 @@ func (h *deliveryHandlers) pickupPoints(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	area := delivery.Area{City: values.Get("city")}
-
-	if raw := values.Get("bbox"); raw != "" {
-		box, err := parseBBox(raw)
-		if err != nil {
-			writeError(w, r, err)
-
-			return
-		}
-
-		area.BBox = &box
+	if values.Has("bbox") || values.Has("limit") {
+		writeError(w, r, ErrInvalidQuery.WithMessage("bbox и limit больше не поддерживаются"))
+		return
 	}
-
-	limit := 0
-	if raw := values.Get("limit"); raw != "" {
-		if limit, err = strconv.Atoi(raw); err != nil {
-			writeError(w, r, ErrInvalidQuery.WithMessage("limit — целое число"))
-
-			return
-		}
-	}
-
-	points, err := h.directory.Search(r.Context(), carrier, area, limit)
+	points, err := h.directory.Search(r.Context(), carrier, values.Get("city"))
 	if err != nil {
 		writeError(w, r, err)
 
@@ -101,29 +79,9 @@ func (h *deliveryHandlers) pickupPoints(w http.ResponseWriter, r *http.Request) 
 				Lat: p.Location.Lat,
 				Lon: p.Location.Lon,
 			},
-			Schedule:    p.Schedule,
-			RefreshedAt: p.RefreshedAt.UTC(),
+			Schedule: p.Schedule,
 		})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"items": body})
-}
-
-func parseBBox(raw string) (delivery.BBox, error) {
-	parts := strings.Split(raw, ",")
-	if len(parts) != 4 {
-		return delivery.BBox{}, delivery.ErrInvalidArea.WithMessage("bbox — minLon,minLat,maxLon,maxLat")
-	}
-
-	values := make([]float64, 4)
-	for i, part := range parts {
-		value, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
-		if err != nil {
-			return delivery.BBox{}, delivery.ErrInvalidArea.WithMessage("bbox — четыре числа через запятую")
-		}
-
-		values[i] = value
-	}
-
-	return delivery.BBox{MinLon: values[0], MinLat: values[1], MaxLon: values[2], MaxLat: values[3]}, nil
 }

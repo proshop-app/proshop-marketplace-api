@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -51,6 +50,9 @@ type Limiter struct {
 
 // Platform — API сервера установки в памяти.
 type Platform struct {
+	pickups           map[ids.TenantID]ports.PickupPoints
+	pickupCalls       []PickupCall
+	BeforePickup      func(context.Context, ids.TenantID) error
 	Reviews           []ports.Review
 	ReviewsErr        error
 	promos            map[ids.TenantID]ports.GroupPricing
@@ -78,20 +80,6 @@ type Platform struct {
 	AfterStubPayment  func()
 	stubPaid          map[string]bool
 	stubCalls         []ids.TenantID
-}
-
-// PickupProvider — справочник перевозчика в памяти.
-type PickupProvider struct {
-	Info    delivery.CarrierInfo
-	Batches [][]delivery.PickupPoint
-	Err     error
-}
-
-// PickupIndex — геоиндекс пунктов в памяти.
-type PickupIndex struct {
-	mu      sync.Mutex
-	points  map[pointKey]delivery.PickupPoint
-	created bool
 }
 
 // NewUUID — следующий идентификатор вида 00000000-0000-4000-8000-00000000000N.
@@ -374,86 +362,4 @@ func (p *Platform) MarketplaceSettings(_ context.Context, tenant ids.TenantID) (
 	}
 
 	return p.settings[tenant], nil
-}
-
-// Carrier — перевозчик.
-func (p *PickupProvider) Carrier() delivery.CarrierInfo { return p.Info }
-
-// Fetch отдаёт пачки; Err — после первой пачки, как обрыв выгрузки.
-func (p *PickupProvider) Fetch(_ context.Context, yield func([]delivery.PickupPoint) error) error {
-	for i, batch := range p.Batches {
-		if p.Err != nil && i > 0 {
-			return p.Err
-		}
-
-		if err := yield(append([]delivery.PickupPoint(nil), batch...)); err != nil {
-			return err
-		}
-	}
-
-	return p.Err
-}
-
-// NewPickupIndex — пустой индекс.
-func NewPickupIndex() *PickupIndex {
-	return &PickupIndex{points: map[pointKey]delivery.PickupPoint{}}
-}
-
-// Ensure заводит индекс.
-func (x *PickupIndex) Ensure(context.Context) (bool, error) {
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	created := !x.created
-	x.created = true
-
-	return created, nil
-}
-
-// Put пишет действующие и убирает закрытые.
-func (x *PickupIndex) Put(_ context.Context, points []delivery.PickupPoint) error {
-	x.mu.Lock()
-	defer x.mu.Unlock()
-
-	for _, point := range points {
-		key := pointKey{point.Carrier, point.Code}
-		if point.Active {
-			x.points[key] = point
-		} else {
-			delete(x.points, key)
-		}
-	}
-
-	return nil
-}
-
-// Search — пункты перевозчика в области.
-func (x *PickupIndex) Search(_ context.Context, query ports.PickupPointQuery) ([]delivery.PickupPoint, error) {
-	x.mu.Lock()
-	defer x.mu.Unlock()
-
-	var found []delivery.PickupPoint
-
-	for _, point := range x.points {
-		if point.Carrier != query.Carrier || len(found) == query.Limit {
-			continue
-		}
-		box := query.Area.BBox
-		switch {
-		case box != nil && point.Location.Lat >= box.MinLat && point.Location.Lat <= box.MaxLat &&
-			point.Location.Lon >= box.MinLon && point.Location.Lon <= box.MaxLon:
-			found = append(found, point)
-		case box == nil && strings.EqualFold(point.City, strings.TrimSpace(query.Area.City)):
-			found = append(found, point)
-		}
-	}
-
-	return found, nil
-}
-
-// Size — число пунктов в индексе.
-func (x *PickupIndex) Size() int {
-	x.mu.Lock()
-	defer x.mu.Unlock()
-
-	return len(x.points)
 }

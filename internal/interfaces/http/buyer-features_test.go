@@ -162,14 +162,14 @@ func TestBuyerProfilePickupAndRegionHTTP(t *testing.T) {
 		Code:       "point-1",
 		Address:    "Адрес справочника",
 		RegionCode: "RU-AD",
-		Active:     true,
+		City:       "Город",
 	}
-	e.store.SeedPickupPoint(point)
+	e.pickups.Points = []delivery.PickupPoint{point}
 	result := e.session(
 		t,
 		http.MethodPatch,
 		"/api/v1/buyer/profile",
-		`{"pickupPoint":{"provider":"cdek","code":"point-1","address":"Подмена","regionCode":"RU-AL"}}`,
+		`{"pickupPoint":{"provider":"cdek","city":"Город","code":"point-1","address":"Подмена","regionCode":"RU-AL"}}`,
 		cookie,
 	)
 	if result.status != http.StatusOK {
@@ -191,13 +191,13 @@ func TestBuyerProfilePickupAndRegionHTTP(t *testing.T) {
 	if result.status != http.StatusOK || result.body["source"] != "profile" || result.body["code"] != "RU-AL" {
 		t.Fatal(result)
 	}
-	point.Active = false
-	e.store.SeedPickupPoint(point)
+	point.Code = "other"
+	e.pickups.Points = []delivery.PickupPoint{point}
 	result = e.session(
 		t,
 		http.MethodPatch,
 		"/api/v1/buyer/profile",
-		`{"pickupPoint":{"provider":"cdek","code":"point-1"}}`,
+		`{"pickupPoint":{"provider":"cdek","city":"Город","code":"unknown"}}`,
 		cookie,
 	)
 	if result.status != http.StatusNotFound {
@@ -356,13 +356,13 @@ func TestBuyerRegionIPAndAuthenticatedLimit(t *testing.T) {
 func TestBuyerProfilePartialAndNull(t *testing.T) {
 	e := newEnv(t)
 	cookie := e.login(t)
-	e.store.SeedPickupPoint(delivery.PickupPoint{
+	e.pickups.Points = []delivery.PickupPoint{{
 		Carrier:    "cdek",
 		Code:       "p1",
 		RegionCode: "RU-AD",
-		Active:     true,
-	})
-	body := `{"region":{"code":"RU-AD"},"pickupPoint":{"provider":"cdek","code":"p1"},` +
+		City:       "Город",
+	}}
+	body := `{"region":{"code":"RU-AD"},"pickupPoint":{"provider":"cdek","city":"Город","code":"p1"},` +
 		`"notifications":{"priceDrops":true,"shopNews":true}}`
 	result := e.session(t, http.MethodPatch, "/api/v1/buyer/profile", body, cookie)
 	if result.status != http.StatusOK {

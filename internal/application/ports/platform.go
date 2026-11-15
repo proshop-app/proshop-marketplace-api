@@ -62,6 +62,7 @@ type CatalogPricing interface {
 
 // PlatformAPI — доверенный канал продавца; цены выбираются по проверенному аккаунту.
 type PlatformAPI interface {
+	PickupPoints(context.Context, ids.TenantID, delivery.Carrier, string) (PickupPoints, error)
 	SellerOrders
 	PromoPricing
 	CatalogPricing

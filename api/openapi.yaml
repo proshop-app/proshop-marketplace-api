@@ -2401,16 +2401,14 @@ paths:
     get:
       tags: [delivery]
       summary: Пункты выдачи перевозчика
-      description: Ровно одно из двух — область карты или город.
+      description: Список через активный магазин; кэш по службе и городу на час.
       operationId: listPickupPoints
       parameters:
         - { name: carrier, in: query, required: true, schema: { type: string, examples: [cdek, yandex] } }
-        - name: bbox
+        - name: city
           in: query
-          description: "minLon,minLat,maxLon,maxLat в градусах"
-          schema: { type: string, examples: ["37.5,55.6,37.8,55.9"] }
-        - { name: city, in: query, schema: { type: string }, description: "Город словами перевозчика, без учёта регистра" }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } }
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 120 }
       responses:
         "200":
           description: Пункты
@@ -2424,7 +2422,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/PickupPoint" }
         "400": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/checkout:
     post:
       tags: [checkout]
@@ -2487,10 +2485,11 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [carrier, pickupPointCode]
+              required: [carrier, pickupPointCode, city]
               properties:
                 carrier: { type: string }
                 pickupPointCode: { type: string }
+                city: { type: string, minLength: 1, maxLength: 120 }
       responses:
         "200": { $ref: "#/components/responses/Checkout" }
         "400": { $ref: "#/components/responses/Error" }
@@ -4684,12 +4683,18 @@ components:
     BuyerPickupChoice:
       type: [object, "null"]
       required: [provider, code]
+      description: |
+        При первом выборе или смене provider/code city обязателен.
+        Если provider/code совпадают с сохранённым пунктом, а city пуст или совпадает,
+        сохраняются прежние город, адрес и регион без обращения к магазину.
+        Другой непустой city требует проверки по списку магазина.
       additionalProperties: false
       properties:
         provider: { type: string }
         code: { type: string }
-        address: { type: string, description: Игнорируется; берётся из справочника }
-        regionCode: { type: string, description: Игнорируется; берётся из справочника }
+        city: { type: string, maxLength: 120 }
+        address: { type: string, description: Игнорируется; берётся из списка магазина }
+        regionCode: { type: string, description: Игнорируется; берётся из списка магазина }
     BuyerRegion:
       type: [object, "null"]
       required: [code, name]
@@ -4698,11 +4703,12 @@ components:
         name: { type: string, description: Каноническое имя; входное имя игнорируется }
     BuyerPickup:
       type: [object, "null"]
-      required: [provider, code, address, regionCode]
+      required: [provider, code, city, address, regionCode]
       properties:
         provider: { type: string }
         code: { type: string }
-        address: { type: string, description: Из справочника ПВЗ }
+        city: { type: string, minLength: 1, maxLength: 120 }
+        address: { type: string, description: Из списка магазина }
         regionCode: { type: string }
     BuyerNotifications:
       type: object
@@ -7088,9 +7094,9 @@ components:
         name: { type: string }
     PickupPoint:
       type: object
-      required: [carrier, code, name, address, city, location, schedule, refreshedAt]
+      required: [carrier, code, name, address, city, regionCode, location, schedule]
       properties:
-        regionCode: { type: string, description: "ISO 3166-2 RU; пусто при неизвестном соответствии" }
+        regionCode: { type: string, description: "ISO 3166-2 RU; обязателен в ответе магазина" }
         carrier: { type: string }
         code: { type: string }
         name: { type: string }
@@ -7103,7 +7109,6 @@ components:
             lat: { type: number }
             lon: { type: number }
         schedule: { type: string }
-        refreshedAt: { type: string, format: date-time }
     Quote:
       type: object
       required:

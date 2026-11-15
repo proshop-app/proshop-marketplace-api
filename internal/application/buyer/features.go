@@ -38,6 +38,7 @@ type RegionLimitError struct {
 
 // Features — покупательские сценарии в одной транзакции на изменение.
 type Features struct {
+	points  ports.PickupLookup
 	uow     ports.UnitOfWork
 	geo     ports.GeoIP
 	pricing ports.CatalogPricing
@@ -78,8 +79,9 @@ func NewFeatures(
 	geo ports.GeoIP,
 	pricing ports.CatalogPricing,
 	limiter ports.RateLimiter,
+	points ports.PickupLookup,
 ) *Features {
-	return &Features{uow: uow, geo: geo, pricing: pricing, limiter: limiter}
+	return &Features{uow: uow, geo: geo, pricing: pricing, limiter: limiter, points: points}
 }
 
 // Profile возвращает сохранённый профиль и актуальное число снижений.
@@ -104,9 +106,50 @@ func (s *Features) Patch(
 	id ids.UUID,
 	change func(buyer.ProfileState) (buyer.ProfileState, error),
 ) (ProfileView, error) {
+	var original *buyer.Profile
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		profile, err := tx.BuyerFeatures().Profile(ctx, id)
+		if err != nil {
+			return err
+		}
+		original = profile
+		return nil
+	})
+	if err != nil {
+		return ProfileView{}, err
+	}
+	previous := original.State()
+	state, err := change(original.State())
+	if err != nil {
+		return ProfileView{}, err
+	}
+	if selected, saved := state.PickupPoint, previous.PickupPoint; selected != nil && saved != nil &&
+		selected.Provider == saved.Provider && selected.Code == saved.Code &&
+		(selected.City == "" || selected.City == saved.City) {
+		// Старые клиенты знают только код: адрес, регион и город берём из сохранённого выбора.
+		state.PickupPoint = saved
+	}
+	if state.PickupPoint != nil &&
+		(previous.PickupPoint == nil || *state.PickupPoint != *previous.PickupPoint) {
+		selected := state.PickupPoint
+		if _, err := delivery.NormalizeCity(selected.City); err != nil {
+			return ProfileView{}, err
+		}
+		point, err := s.points.Point(ctx, delivery.Carrier(selected.Provider), selected.Code, selected.City)
+		if err != nil {
+			return ProfileView{}, err
+		}
+		state.PickupPoint = &buyer.Pickup{
+			Provider:   string(point.Carrier),
+			Code:       point.Code,
+			City:       point.City,
+			Address:    point.Address,
+			RegionCode: point.RegionCode,
+		}
+	}
 	contexts := s.profileContexts(ctx, id)
 	var result ProfileView
-	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		if err := tx.BuyerFeatures().Lock(ctx, id); err != nil {
 			return err
 		}
@@ -114,27 +157,8 @@ func (s *Features) Patch(
 		if err != nil {
 			return err
 		}
-		previous := p.State()
-		state, err := change(p.State())
-		if err != nil {
-			return err
-		}
-		if state.PickupPoint != nil &&
-			(previous.PickupPoint == nil || *state.PickupPoint != *previous.PickupPoint) {
-			selected := state.PickupPoint
-			point, err := tx.PickupPoints().Get(ctx, delivery.Carrier(selected.Provider), selected.Code)
-			if err != nil {
-				return err
-			}
-			if !point.Active {
-				return delivery.ErrPickupPointNotFound
-			}
-			state.PickupPoint = &buyer.Pickup{
-				Provider:   string(point.Carrier),
-				Code:       point.Code,
-				Address:    point.Address,
-				RegionCode: point.RegionCode,
-			}
+		if p.State().Version != previous.Version {
+			return buyer.ErrProfileConflict
 		}
 		changed, err := p.Change(state)
 		if err != nil {

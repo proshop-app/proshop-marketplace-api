@@ -20,8 +20,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencedata"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
-	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
@@ -62,25 +60,6 @@ func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 		slog.Int("indexed", result.Indexed),
 		slog.Int("caughtUp", result.CaughtUp),
 	)
-
-	return nil
-}
-
-// refreshPickupPoints обновляет справочники пунктов выдачи один раз.
-func refreshPickupPoints(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	store, err := openStorage(ctx, cfg)
-	if err != nil {
-		return err
-	}
-	defer store.close()
-
-	pickups := directory(store, cfg)
-	if err := pickups.EnsureIndex(ctx); err != nil {
-		return fmt.Errorf("индекс пунктов выдачи: %w", err)
-	}
-
-	runner := jobs.NewPickupRefreshRunner(pickups, cfg.Delivery.RefreshInterval, logger, telemetry.NewRegistry())
-	runner.RunOnce(ctx)
 
 	return nil
 }

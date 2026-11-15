@@ -2,32 +2,25 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 )
 
-// PickupPointsProvider — справочник пунктов выдачи одного перевозчика,
-// читаемый учётной записью платформы. Новый перевозчик — новая реализация.
-type PickupPointsProvider interface {
-	// Carrier — код и название перевозчика.
-	Carrier() delivery.CarrierInfo
-	// Fetch выгружает весь справочник пачками; ошибка yield прерывает выгрузку.
-	Fetch(ctx context.Context, yield func(points []delivery.PickupPoint) error) error
+// PickupPoints — ответ магазина без транспортной обёртки.
+type PickupPoints struct {
+	Available bool                   `json:"available"`
+	Reason    string                 `json:"reason,omitempty"`
+	Items     []delivery.PickupPoint `json:"items"`
 }
 
-// PickupPointQuery — пункты перевозчика в области карты или городе.
-type PickupPointQuery struct {
-	Carrier delivery.Carrier
-	Area    delivery.Area
-	Limit   int
+// PickupCache хранит неперсональные списки по службе и нормализованному городу.
+type PickupCache interface {
+	Get(context.Context, string) ([]byte, bool, error)
+	Set(context.Context, string, []byte, time.Duration) error
 }
 
-// PickupPointIndex — геоиндекс пунктов выдачи.
-type PickupPointIndex interface {
-	// Ensure заводит индекс, если его нет; created — индекс только что заведён.
-	Ensure(ctx context.Context) (created bool, err error)
-	// Put пишет действующие пункты и убирает закрытые.
-	Put(ctx context.Context, points []delivery.PickupPoint) error
-	// Search — действующие пункты перевозчика в области.
-	Search(ctx context.Context, query PickupPointQuery) ([]delivery.PickupPoint, error)
+// PickupLookup проверяет выбор по текущему списку магазина.
+type PickupLookup interface {
+	Point(context.Context, delivery.Carrier, string, string) (delivery.PickupPoint, error)
 }

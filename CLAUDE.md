@@ -18,9 +18,9 @@ domain ← application ← interfaces, infrastructure        сборка гра
 | `pkg/` | деньги, идентификаторы, ошибки с кодами | только стандартную библиотеку и `pkg/` |
 | `internal/domain/<контекст>` | агрегаты, объекты-значения, правила, `errors.go`, `repository.go` (только интерфейсы) | стандартную библиотеку, `pkg/`, другие пакеты домена |
 | `internal/application/<контекст>` | сценарии: команды, запросы, транзакции через `UnitOfWork` | домен, `pkg/`, `application/ports`; **не** `infrastructure`, `interfaces`, `config` |
-| `internal/application/ports` | порты: `UnitOfWork`/`Tx`, outbox, inbox, индексы, часы, сессии и лимиты, звонок (`CallCheck`), API сервера (`PlatformAPI`), справочники перевозчиков | домен, `pkg/` |
+| `internal/application/ports` | порты: `UnitOfWork`/`Tx`, outbox, inbox, индексы, часы, сессии и лимиты, звонок (`CallCheck`), API сервера (`PlatformAPI`), списки ПВЗ магазина | домен, `pkg/` |
 | `internal/application/fake` | реализации портов в памяти для тестов | как приложение |
-| `internal/infrastructure/*` | реализации портов: PostgreSQL, OpenSearch, Kafka, Redis, sms.ru, СДЭК, Яндекс Доставка, API сервера, телеметрия | приложение, домен, `pkg/`, библиотеки; **не** `interfaces`, `config` |
+| `internal/infrastructure/*` | реализации портов: PostgreSQL, OpenSearch, Kafka, Redis, sms.ru, API сервера, телеметрия | приложение, домен, `pkg/`, библиотеки; **не** `interfaces`, `config` |
 | `internal/interfaces/*` | HTTP, обработчики Kafka, фоновые циклы: разбор → сценарий → ответ | приложение, домен, `pkg/`, библиотеки; **не** `infrastructure`, `config` |
 | `internal/config` | окружение с проверкой на старте | читает только `cmd/` |
 | `cmd/` | сборка зависимостей без DI-магии | всё |
@@ -97,10 +97,9 @@ domain ← application ← interfaces, infrastructure        сборка гра
   под тегом `integration`, на compose: `make test-integration`. Каждый тест
   заводит свою базу (`postgres/pgtest`), свой алиас индекса, свои топики и
   группу и убирает их за собой. Миграции в тестах применяются с нуля.
-- Адаптеры внешних API (sms.ru, СДЭК, Яндекс, сервер) тестируются на
+- Адаптеры внешних API (sms.ru, сервер) тестируются на
   `testdata` — записанных ответах — через `httptest`. Живой вызов — только
-  отдельным тестом под флагом окружения (`SMSRU_LIVE_TEST=1`,
-  `CDEK_LIVE_TEST=1`, `YANDEX_LIVE_TEST=1`) с ключами из окружения.
+  отдельным тестом под флагом окружения (`SMSRU_LIVE_TEST=1`) с ключами из окружения.
 
 ## Ошибки
 
@@ -128,7 +127,7 @@ domain ← application ← interfaces, infrastructure        сборка гра
   списка топиков); появившийся топик подхватывается без перезапуска.
 - Индекс предложений — производная проекции в общем `proshop-search`.
   Backend обращается к нему через `infrastructure/searchapi` и порт `OfferIndex`;
-  прямой OpenSearch здесь обслуживает только геоиндекс пунктов выдачи.
+  ПВЗ получаются через магазин и кэшируются в Redis на час.
   Документ пишется с внешней версией `external_gte` = сумма версий товара, сигналов, участника и записи
   реестра: поздний снимок не проигрывает раннему. Скрытое предложение —
   документ без карточки. Перестроение — новое поколение, атомарная смена
@@ -180,7 +179,7 @@ domain ← application ← interfaces, infrastructure        сборка гра
 `make dev` — compose (PostgreSQL 16, OpenSearch, Kafka KRaft, Redis),
 миграции и сервис с перезапуском (air). Остальное: `make test`,
 `make test-integration`, `make lint`, `make migrate`, `make reindex`,
-`make refresh-pickup-points`, `make build`, `make image`. Инструменты не ставятся глобально: golangci-lint
+`make build`, `make image`. Инструменты не ставятся глобально: golangci-lint
 и air — `go run` с версиями из `Makefile`, goose встроен в `cmd/migrate`.
 `GOTOOLCHAIN=local`: проект собирается go1.23.2.
 

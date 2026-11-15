@@ -28,7 +28,6 @@ func validEnv() map[string]string {
 		"DATABASE_URL":                "postgres://marketplace:marketplace@localhost:5432/marketplace",
 		"SEARCH_URL":                  "http://localhost:5002",
 		"SEARCH_MARKETPLACE_TOKEN":    "local-search-marketplace-token-0123456789",
-		"OPENSEARCH_URLS":             "http://localhost:9200",
 		"KAFKA_BROKERS":               "localhost:9092, localhost:9093",
 		"OPERATOR_TOKEN":              strings.Repeat("x", 32),
 		"PROMOTION_TIMEZONE":          "Etc/UTC",
@@ -73,7 +72,6 @@ func TestLoadReportsAllMissing(t *testing.T) {
 
 	required := []string{
 		"DATABASE_URL",
-		"OPENSEARCH_URLS",
 		"KAFKA_BROKERS",
 		"OPERATOR_TOKEN",
 		"REDIS_URL",
@@ -98,8 +96,8 @@ func TestLoadWeekTwo(t *testing.T) {
 		cfg.Login.PhoneLimit.Count != 3 ||
 		cfg.Login.PhoneLimit.Window != 10*time.Minute ||
 		cfg.Cart.TTL != 30*24*time.Hour ||
-		cfg.Delivery.PickupIndex != "marketplace-pickup-points" ||
-		cfg.Delivery.CDEK.ClientID != "" {
+		cfg.Delivery.CacheTTL != time.Hour ||
+		cfg.Delivery.Attempts != 3 {
 		t.Fatalf("умолчания недели 2: %+v", cfg)
 	}
 
@@ -107,12 +105,11 @@ func TestLoadWeekTwo(t *testing.T) {
 	env["SMSRU_MODE"] = "sandbox"
 	delete(env, "SMSRU_API_ID")
 	env["LOGIN_IP_LIMIT"] = "50/30m"
-	env["CDEK_CLIENT_ID"] = "id"
-	env["CDEK_CLIENT_SECRET"] = "secret"
+	env["PICKUP_MAX_ATTEMPTS"] = "5"
 
 	cfg, err = config.Load(envOf(env))
 	if err != nil || cfg.SmsRu.Mode != config.SmsRuSandbox || cfg.Login.IPLimit.Count != 50 ||
-		cfg.Delivery.CDEK.ClientSecret != "secret" {
+		cfg.Delivery.Attempts != 5 {
 		t.Fatalf("песочница без ключа и свои лимиты: %+v %v", cfg, err)
 	}
 
@@ -121,7 +118,6 @@ func TestLoadWeekTwo(t *testing.T) {
 	bad["REDIS_URL"] = "http://x"
 	bad["PLATFORM_API_URL"] = "server"
 	bad["SERVICE_TOKEN_MARKETPLACE"] = "short"
-	bad["CDEK_CLIENT_ID"] = "only-id"
 	bad["SMSRU_MODE"] = "fake"
 
 	_, err = config.Load(envOf(bad))
@@ -130,7 +126,6 @@ func TestLoadWeekTwo(t *testing.T) {
 		"REDIS_URL",
 		"PLATFORM_API_URL",
 		"SERVICE_TOKEN_MARKETPLACE",
-		"CDEK_CLIENT_ID",
 		"SMSRU_MODE",
 	}
 
@@ -145,10 +140,8 @@ func TestLoadValidatesValues(t *testing.T) {
 	env := validEnv()
 	env["OPERATOR_TOKEN"] = "short"
 	env["DATABASE_URL"] = "mysql://x"
-	env["OPENSEARCH_URLS"] = "localhost:9200"
 	env["OUTBOX_BATCH"] = "zero"
 	env["OUTBOX_LEASE"] = "-1s"
-	env["OPENSEARCH_USERNAME"] = "admin"
 	env["LOG_LEVEL"] = "verbose"
 	env["KAFKA_MAX_ATTEMPTS"] = "0"
 
@@ -160,10 +153,8 @@ func TestLoadValidatesValues(t *testing.T) {
 	invalid := []string{
 		"OPERATOR_TOKEN",
 		"DATABASE_URL",
-		"OPENSEARCH_URLS",
 		"OUTBOX_BATCH",
 		"OUTBOX_LEASE",
-		"OPENSEARCH_USERNAME",
 		"LOG_LEVEL",
 		"KAFKA_MAX_ATTEMPTS",
 	}
@@ -268,15 +259,13 @@ func TestOperatorAndRegionConfiguration(t *testing.T) {
 	}
 	values["OPERATOR_PASSWORD_HASH"] = "hash-validated-by-startup"
 	values["OPERATOR_ORIGIN"] = "https://admin.example"
-	values["CDEK_REGION_CODES"] = `{"81":"RU-MOW"}`
 	cfg, err := config.Load(envOf(values))
-	if err != nil || cfg.Operator.SessionTTL != 8*time.Hour || cfg.Delivery.CDEK.RegionCodes["81"] != "RU-MOW" {
+	if err != nil || cfg.Operator.SessionTTL != 8*time.Hour {
 		t.Fatal(cfg.Operator, err)
 	}
 	for name, value := range map[string]string{
 		"OPERATOR_ORIGIN":      "https://admin.example/path",
 		"OPERATOR_SESSION_TTL": "25h",
-		"CDEK_REGION_CODES":    `{"81":"fake:abc"}`,
 	} {
 		saved := values[name]
 		values[name] = value
@@ -394,5 +383,23 @@ func TestPaymentStubConfig(t *testing.T) {
 	values["PAYMENT_STUB"] = "invalid"
 	if _, err := config.Load(envOf(values)); err == nil {
 		t.Fatal("некорректный флаг принят")
+	}
+}
+
+func TestPickupProxyConfiguration(t *testing.T) {
+	env := validEnv()
+	env["PICKUP_CACHE_TTL"] = "2h"
+	env["PICKUP_MAX_ATTEMPTS"] = "7"
+	cfg, err := config.Load(envOf(env))
+	if err != nil || cfg.Delivery.CacheTTL != 2*time.Hour || cfg.Delivery.Attempts != 7 {
+		t.Fatal(cfg.Delivery, err)
+	}
+	for _, key := range []string{"PICKUP_CACHE_TTL", "PICKUP_MAX_ATTEMPTS"} {
+		saved := env[key]
+		env[key] = "0"
+		if _, err := config.Load(envOf(env)); err == nil || !strings.Contains(err.Error(), key) {
+			t.Fatal(key, err)
+		}
+		env[key] = saved
 	}
 }

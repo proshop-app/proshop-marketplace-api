@@ -53,7 +53,6 @@ func (r *reader) validatePromotion(c Config) {
 		c.Reference.ReadToken,
 		c.Identity.Secret,
 		c.Identity.OperatorSecret,
-		c.Delivery.Yandex.Token,
 	}
 	for _, other := range others {
 		if token == other {

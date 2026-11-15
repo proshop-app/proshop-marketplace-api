@@ -1,10 +1,8 @@
 package delivery
 
 import (
-	"encoding/json"
 	"math"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -15,38 +13,21 @@ const (
 
 // Location — координаты в градусах WGS 84.
 type Location struct {
-	Lat float64
-	Lon float64
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
 }
 
-// PickupPoint — пункт выдачи перевозчика в справочнике маркетплейса.
+// PickupPoint — пункт выдачи перевозчика из ответа магазина.
 type PickupPoint struct {
-	Carrier    Carrier
-	Code       string
-	Name       string
-	Address    string
-	City       string
-	RegionCode string
-	Location   Location
+	Carrier    Carrier  `json:"carrier"`
+	Code       string   `json:"code"`
+	Name       string   `json:"name"`
+	Address    string   `json:"address"`
+	City       string   `json:"city"`
+	RegionCode string   `json:"regionCode"`
+	Location   Location `json:"location"`
 	// Schedule — график работы словами перевозчика.
-	Schedule string
-	// Payload — исходная запись перевозчика: для разбора спорных случаев.
-	Payload     json.RawMessage
-	Active      bool
-	RefreshedAt time.Time
-}
-
-// Area — где искать пункты: область карты или город.
-type Area struct {
-	// BBox — область карты: юго-западный и северо-восточный углы.
-	BBox *BBox
-	// City — город словами перевозчика.
-	City string
-}
-
-// BBox — прямоугольник карты.
-type BBox struct {
-	MinLon, MinLat, MaxLon, MaxLat float64
+	Schedule string `json:"schedule"`
 }
 
 // Valid — координаты в допустимых пределах.
@@ -60,20 +41,15 @@ func NewPickupPoint(
 	code, name, address, city string,
 	location Location,
 	schedule string,
-	payload json.RawMessage,
-	now time.Time,
 ) (PickupPoint, error) {
 	point := PickupPoint{
-		Carrier:     carrier,
-		Code:        strings.TrimSpace(code),
-		Name:        strings.TrimSpace(name),
-		Address:     strings.TrimSpace(address),
-		City:        strings.TrimSpace(city),
-		Location:    location,
-		Schedule:    strings.TrimSpace(schedule),
-		Payload:     payload,
-		Active:      true,
-		RefreshedAt: now,
+		Carrier:  carrier,
+		Code:     strings.TrimSpace(code),
+		Name:     strings.TrimSpace(name),
+		Address:  strings.TrimSpace(address),
+		City:     strings.TrimSpace(city),
+		Location: location,
+		Schedule: strings.TrimSpace(schedule),
 	}
 
 	switch {
@@ -92,24 +68,11 @@ func NewPickupPoint(
 	return point, nil
 }
 
-// Validate проверяет область поиска: ровно одно из двух.
-func (a Area) Validate() error {
-	city := strings.TrimSpace(a.City)
-
-	switch {
-	case a.BBox == nil && city == "":
-		return ErrInvalidArea
-	case a.BBox != nil && city != "":
-		return ErrInvalidArea.WithMessage("задайте что-то одно: область карты или город")
-	case a.BBox != nil:
-		box := a.BBox
-		southWest, northEast := Location{Lat: box.MinLat, Lon: box.MinLon}, Location{Lat: box.MaxLat, Lon: box.MaxLon}
-		if !southWest.Valid() || !northEast.Valid() || box.MinLat > box.MaxLat || box.MinLon > box.MaxLon {
-			return ErrInvalidArea.WithMessage("область карты: minLon,minLat,maxLon,maxLat в градусах")
-		}
-	case utf8.RuneCountInString(city) > 200:
-		return ErrInvalidArea.WithMessage("слишком длинное название города")
+// NormalizeCity определяет общий ключ кэша без изменения регистра запроса магазина.
+func NormalizeCity(city string) (string, error) {
+	city = strings.Join(strings.Fields(city), " ")
+	if city == "" || utf8.RuneCountInString(city) > 120 {
+		return "", ErrInvalidCity
 	}
-
-	return nil
+	return city, nil
 }

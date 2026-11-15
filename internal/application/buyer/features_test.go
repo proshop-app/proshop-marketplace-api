@@ -80,7 +80,7 @@ func seedFeatureOffer(store *fake.Store, price int64, visible bool) {
 func TestSavedPriceAndUnavailable(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	service := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter())
+	service := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
 	seedFeatureOffer(store, 100, true)
 	offer := ids.OfferID{Tenant: "t1", Product: "p1"}
 	for _, kind := range []ports.SavedKind{ports.Favorites, ports.PriceWatches} {
@@ -126,7 +126,7 @@ func TestSavedPriceAndUnavailable(t *testing.T) {
 func TestFeatureLimitAndRollback(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	service := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter())
+	service := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
 	seedFeatureOffer(store, 100, true)
 	err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		for i := 0; i < buyer.FavoritesLimit; i++ {
@@ -165,7 +165,7 @@ func TestRegionPriority(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
 	geo := &fake.GeoIP{Region: &buyer.Region{Code: "RU-AD"}}
-	service := app.NewFeatures(store, geo, fake.NewPlatform(), fake.NewLimiter())
+	service := app.NewFeatures(store, geo, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
 	result, err := service.Region(ctx, featureBuyer, "192.0.2.1")
 	if err != nil || result.Source != "ip" {
 		t.Fatalf("IP: %+v %v", result, err)
@@ -204,7 +204,8 @@ func TestRegionPriority(t *testing.T) {
 	if err != nil || result.Source != "profile" || *result.Code != "RU-AL" || geo.Calls != 1 {
 		t.Fatal(result, err)
 	}
-	none, err := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter()).Region(ctx, "", "192.0.2.1")
+	serviceWithoutGeo := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
+	none, err := serviceWithoutGeo.Region(ctx, "", "192.0.2.1")
 	if err != nil || none.Source != "none" || none.Code != nil {
 		t.Fatal(none, err)
 	}
@@ -213,7 +214,7 @@ func TestRegionPriority(t *testing.T) {
 func TestSubscriptionsAreIdempotentAndCounted(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	service := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter())
+	service := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
 	err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		return tx.StoreCards().Save(ctx, ports.StoreRecord{
 			PagePublic: true,
@@ -255,7 +256,7 @@ func TestSubscriptionsAreIdempotentAndCounted(t *testing.T) {
 func TestWatchTargetChangeAndFavoritesPagination(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	service := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter())
+	service := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
 	seedFeatureOffer(store, 100, true)
 	offer := ids.OfferID{Tenant: "t1", Product: "p1"}
 	if err := service.PutSaved(ctx, featureBuyer, ports.PriceWatches, offer, nil); err != nil {
@@ -300,7 +301,7 @@ func TestWatchTargetChangeAndFavoritesPagination(t *testing.T) {
 func TestWatchAndSubscriptionLimits(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	service := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter())
+	service := app.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
 	if err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		for i := 0; i < buyer.PriceWatchesLimit; i++ {
 			if err := tx.BuyerFeatures().PutSaved(ctx, featureBuyer, ports.PriceWatches, ports.SavedOffer{
@@ -339,7 +340,7 @@ func TestRegionProviderLimit(t *testing.T) {
 	ctx := context.Background()
 	geo := &fake.GeoIP{Region: &buyer.Region{Code: "RU-AD"}, CacheHit: true}
 	limiter := fake.NewLimiter()
-	service := app.NewFeatures(fake.NewStore(), geo, fake.NewPlatform(), limiter)
+	service := app.NewFeatures(fake.NewStore(), geo, fake.NewPlatform(), limiter, &fake.PickupLookup{})
 	for i := 0; i < 40; i++ {
 		if result, err := service.Region(ctx, "", "192.0.2.1"); err != nil || result.Source != app.RegionIP {
 			t.Fatal(result, err)
@@ -376,7 +377,8 @@ func TestSavedPersonalPricesAndContextFailure(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
 	platform := fake.NewPlatform()
-	service := app.NewFeatures(store, nil, platform, fake.NewLimiter())
+	points := &fake.PickupLookup{}
+	service := app.NewFeatures(store, nil, platform, fake.NewLimiter(), points)
 	seedFeatureOffer(store, 100, true)
 	state, _ := store.Product("t1", "p1")
 	state.PriceProfiles = append(state.PriceProfiles, catalog.PriceProfile{
@@ -409,13 +411,13 @@ func TestSavedPersonalPricesAndContextFailure(t *testing.T) {
 	}
 	failure := errors.New("контексты недоступны")
 	platform.Fail("t1", failure)
-	store.SeedPickupPoint(delivery.PickupPoint{
+	points.Points = []delivery.PickupPoint{{
 		Carrier:    "cdek",
 		Code:       "point-1",
 		RegionCode: "RU-AD",
 		Address:    "Адрес пункта",
-		Active:     true,
-	})
+		City:       "Город",
+	}}
 	if profile, err := service.Profile(ctx, featureBuyer); err != nil || profile.Alerts.PriceDrops != nil {
 		t.Fatal(profile, err)
 	}
@@ -428,7 +430,7 @@ func TestSavedPersonalPricesAndContextFailure(t *testing.T) {
 	if profile, err := service.Patch(ctx, featureBuyer, func(state buyer.ProfileState) (buyer.ProfileState, error) {
 		state.Name = "Имя"
 		state.Region = &buyer.Region{Code: "RU-AD"}
-		state.PickupPoint = &buyer.Pickup{Provider: "cdek", Code: "point-1"}
+		state.PickupPoint = &buyer.Pickup{Provider: "cdek", Code: "point-1", City: "Город"}
 		state.Notifications = buyer.Notifications{PriceDrops: true, ShopNews: true}
 		return state, nil
 	}); err != nil || profile.Name != "Имя" || profile.Alerts.PriceDrops != nil {
@@ -449,7 +451,7 @@ func TestFeaturePricingOutsideTransaction(t *testing.T) {
 	seedFeatureOffer(store, 100, true)
 	uow := &trackedFeatureUOW{UnitOfWork: store}
 	pricing := &checkedFeaturePricing{CatalogPricing: fake.NewPlatform(), uow: uow}
-	service := app.NewFeatures(uow, nil, pricing, fake.NewLimiter())
+	service := app.NewFeatures(uow, nil, pricing, fake.NewLimiter(), &fake.PickupLookup{})
 	if _, err := appcatalog.PriceContexts(ctx, uow, pricing, featureBuyer, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -492,7 +494,7 @@ func TestFeaturePricingOutsideTransaction(t *testing.T) {
 func TestRegionLimitRetryHint(t *testing.T) {
 	limiter := fake.NewLimiter()
 	geo := &fake.GeoIP{}
-	service := app.NewFeatures(fake.NewStore(), geo, fake.NewPlatform(), limiter)
+	service := app.NewFeatures(fake.NewStore(), geo, fake.NewPlatform(), limiter, &fake.PickupLookup{})
 	ctx := context.Background()
 	for i := 0; i < 30; i++ {
 		if _, err := service.Region(ctx, "", "192.0.2.1"); err != nil {
@@ -522,7 +524,7 @@ func TestProfilePricingOnlyWatchedTenants(t *testing.T) {
 	platform.Fail("t2", errors.New("посторонний магазин недоступен"))
 	uow := &trackedFeatureUOW{UnitOfWork: store}
 	pricing := &checkedFeaturePricing{CatalogPricing: platform, uow: uow}
-	service := app.NewFeatures(uow, nil, pricing, fake.NewLimiter())
+	service := app.NewFeatures(uow, nil, pricing, fake.NewLimiter(), &fake.PickupLookup{})
 	check := func(want int) {
 		t.Helper()
 		profile, err := service.Profile(ctx, featureBuyer)

@@ -25,6 +25,7 @@ type Region struct {
 
 // Pickup — сохранённый пункт выдачи, проверенный по справочнику.
 type Pickup struct {
+	City       string `json:"city"`
 	Provider   string `json:"provider"`
 	Code       string `json:"code"`
 	Address    string `json:"address"`

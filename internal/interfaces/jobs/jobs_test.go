@@ -12,7 +12,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -30,10 +29,6 @@ type dispatcher struct {
 
 type purger struct {
 	mu    sync.Mutex
-	calls int
-}
-
-type refresher struct {
 	calls int
 }
 
@@ -143,47 +138,6 @@ func TestRetentionRunnerPurgesOnStart(t *testing.T) {
 
 	if p.calls != 1 {
 		t.Fatalf("чистка сразу на старте и не чаще интервала: %d", p.calls)
-	}
-}
-
-func (r *refresher) Refresh(context.Context) []appdelivery.RefreshResult {
-	r.calls++
-
-	return []appdelivery.RefreshResult{
-		{Carrier: "cdek", Fetched: 3},
-		{Carrier: "yandex", Err: errors.New("сбой")},
-		{Carrier: "ozon", Skipped: true},
-	}
-}
-
-func TestPickupRefreshRunnerRecords(t *testing.T) {
-	registry := prometheus.NewRegistry()
-	r := &refresher{}
-	runner := jobs.NewPickupRefreshRunner(r, time.Hour, quiet, registry)
-
-	runner.RunOnce(context.Background())
-
-	results := map[string]float64{}
-	fetched := 0.0
-	families, _ := registry.Gather()
-	for _, family := range families {
-		for _, metric := range family.GetMetric() {
-			labels := map[string]string{}
-			for _, label := range metric.GetLabel() {
-				labels[label.GetName()] = label.GetValue()
-			}
-
-			switch family.GetName() {
-			case "marketplace_pickup_points_refresh_total":
-				results[labels["carrier"]+":"+labels["result"]] += metric.GetCounter().GetValue()
-			case "marketplace_pickup_points_fetched":
-				fetched += metric.GetGauge().GetValue()
-			}
-		}
-	}
-
-	if results["cdek:done"] != 1 || results["yandex:failed"] != 1 || results["ozon:skipped"] != 1 || fetched != 3 {
-		t.Fatalf("метрики обновления: %+v %v", results, fetched)
 	}
 }
 

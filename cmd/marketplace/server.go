@@ -67,7 +67,7 @@ type services struct {
 	settings          *appparticipant.Settings
 	auth              *appbuyer.Auth
 	carts             *appcart.Service
-	directory         *appdelivery.Directory
+	directory         *appdelivery.Service
 	checkouts         *appcheckout.Service
 	dispatcher        *messaging.Dispatcher
 	janitor           *messaging.Janitor
@@ -183,7 +183,11 @@ func (s *server) services(ctx context.Context) (services, error) {
 		models,
 		cfg.Settings.StoreCardRefreshDelay,
 	)
-	pickups := directory(s.store, cfg)
+	pickups := appdelivery.NewService(uow, resyncing, redis.NewPickupCache(s.cache, keyPrefix), appdelivery.Config{
+		Attempts:     cfg.Delivery.Attempts,
+		TTL:          cfg.Delivery.CacheTTL,
+		QuoteTimeout: cfg.Checkout.QuoteTimeout,
+	})
 	auth := appbuyer.NewAuth(
 		uow,
 		callCheck(ctx, cfg, s.logger),
@@ -302,7 +306,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		Metrics:         telemetry.NewPromotion(s.metrics),
 	})
 	return services{
-		buyerFeatures: appbuyer.NewFeatures(uow, s.geoIP(), resyncing, redis.NewLimiter(s.cache, keyPrefix)),
+		buyerFeatures: appbuyer.NewFeatures(uow, s.geoIP(), resyncing, redis.NewLimiter(s.cache, keyPrefix), pickups),
 
 		promotion:         promotions,
 		moderationMetrics: moderationMetrics,
@@ -337,10 +341,6 @@ func (s *server) prepareIndexes(ctx context.Context) error {
 	}
 	if built {
 		s.logger.Info("индекс предложений собран из проекции")
-	}
-
-	if err := s.app.directory.EnsureIndex(ctx); err != nil {
-		return fmt.Errorf("индекс пунктов выдачи: %w", err)
 	}
 
 	return nil
@@ -437,7 +437,6 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
 		jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, cfg.Outbox.Batch, s.logger, s.metrics).Run,
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
-		jobs.NewPickupRefreshRunner(s.app.directory, cfg.Delivery.RefreshInterval, s.logger, s.metrics).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).Run,
 		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).Run,
 		jobs.NewModelKeyStatsRunner(postgres.NewModelKeyStats(s.store.pool), s.logger, s.metrics).Run,
@@ -452,10 +451,6 @@ func (s *server) httpServer() *http.Server {
 		{
 			Name:  "search",
 			Probe: s.store.index.Ping,
-		},
-		{
-			Name:  "opensearch-pickups",
-			Probe: s.store.pickups.Ping,
 		},
 		{Name: "redis", Probe: func(ctx context.Context) error { return s.cache.Ping(ctx).Err() }},
 		{Name: "kafka", Probe: func(ctx context.Context) error { return infrakafka.Ping(ctx, cfg.Kafka.Brokers) }},
