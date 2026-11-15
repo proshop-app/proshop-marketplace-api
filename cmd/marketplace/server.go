@@ -24,13 +24,16 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/application/platformguard"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/application/pricecontexts"
 	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/contextcache"
 	infrakafka "github.com/proshop-app/proshop-marketplace/internal/infrastructure/kafka"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/password"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/platformapi"
@@ -51,6 +54,8 @@ const referenceStatsInterval = time.Minute
 
 // services — сценарии приложения процесса.
 type services struct {
+	contextCache  *redis.PriceContexts
+	priceContexts *pricecontexts.Service
 	buyerFeatures *appbuyer.Features
 
 	promotion         *apppromotion.Service
@@ -93,6 +98,8 @@ type promotionRandom struct{}
 
 // serve — HTTP, консьюмер Kafka и фоновые задачи до сигнала остановки.
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	if cfg.Operator.PasswordHash != "" {
 		if err := password.Validate(cfg.Operator.PasswordHash); err != nil {
 			return err
@@ -104,7 +111,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	defer store.close()
 
-	cache, err := redis.Open(ctx, cfg.Redis.URL)
+	cache, err := redis.NewClient(cfg.Redis.URL)
 	if err != nil {
 		return err
 	}
@@ -115,6 +122,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return err
 	}
 	defer func() { _ = s.app.writer.Close() }()
+	defer func() { _ = s.app.contextCache.Close() }()
+	defer s.app.priceContexts.Stop()
 
 	if err := s.prepareIndexes(ctx); err != nil {
 		return err
@@ -138,13 +147,53 @@ func (s *server) services(ctx context.Context) (services, error) {
 	now := clock.System{}
 	identities := random.IDs{}
 	uow := storecache.NewUnitOfWork(postgres.NewUnitOfWork(s.store.pool), redis.NewStoreCardCache(s.cache, keyPrefix))
-	platform := platformapi.New(platformapi.Config{
+	upstream := platformapi.New(platformapi.Config{
 		BaseURL: cfg.Platform.URL,
 		Token:   cfg.Platform.Token,
 		Timeout: cfg.Platform.Timeout,
 	})
+	platform := platformguard.New(
+		upstream,
+		platformguard.Config{
+			ReadTimeout:      cfg.Platform.ReadTimeout,
+			StrictTimeout:    cfg.Platform.Timeout,
+			CacheTTL:         cfg.Platform.CacheTTL,
+			StaleTTL:         cfg.Platform.StaleTTL,
+			CacheSize:        cfg.Platform.CacheSize,
+			MaxConcurrent:    cfg.Platform.MaxConcurrent,
+			FailureThreshold: cfg.Platform.FailureThreshold,
+			OpenInterval:     cfg.Platform.OpenInterval,
+			LogInterval:      cfg.Platform.LogInterval,
+		},
+		now,
+		telemetry.NewPlatform(s.metrics),
+		s.logger,
+	)
+	contextMetrics := telemetry.NewPriceContexts(s.metrics)
+	sharedContexts := redis.NewPriceContexts(s.cache, keyPrefix, cfg.PriceContexts.Size, contextMetrics)
+	contextCache := contextcache.NewFallback(
+		sharedContexts,
+		contextcache.NewMemory(cfg.PriceContexts.Size, now, contextMetrics),
+	)
+	contexts := pricecontexts.New(
+		ctx,
+		pricecontexts.Config{
+			TTL:           cfg.PriceContexts.TTL,
+			StaleTTL:      cfg.PriceContexts.StaleTTL,
+			LoadTimeout:   cfg.PriceContexts.LoadTimeout,
+			MaxConcurrent: cfg.PriceContexts.MaxConcurrent,
+		},
+		uow,
+		platform,
+		contextCache,
+		now,
+		identities,
+		contextMetrics,
+	)
+
 	// корзина и покупка узнают об отказе участия первыми — по нему сверка настроек внеочередная
 	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
+	displayPlatform := contexts.ForDisplay(resyncing)
 	settings := appparticipant.NewSettings(uow, platform, now, identities)
 	var candidates ports.ReferenceCandidates
 	if cfg.Reference.CandidatesInterval > 0 && cfg.Search.CandidatesToken != "" {
@@ -203,6 +252,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			IPLimit:       appbuyer.Limit(cfg.Login.IPLimit),
 		},
 	)
+	auth.WithPriceContexts(contexts)
 	carts := appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL)
 	checkouts := appcheckout.NewService(
 		uow,
@@ -229,7 +279,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 	projector := appcatalog.NewProjector(uow, now, moderation)
 	registry := appparticipant.NewRegistry(uow, now, identities)
-	replay := kafka.NewReplay(kafka.NewRouter(projector, registry), cfg.Kafka.TopicPrefix)
+	replay := kafka.NewReplay(kafka.NewRouter(projector, registry).WithPriceContexts(contexts), cfg.Kafka.TopicPrefix)
 	events := messaging.NewEvents(uow, now, replay)
 	var operatorTokens ports.IdentityTokens
 	if cfg.Operator.Email != "" {
@@ -281,6 +331,8 @@ func (s *server) services(ctx context.Context) (services, error) {
 			moderationstatus.TaskParticipant: statuses.HandleTask,
 		},
 	)
+	indexer.SetBatchObserver(telemetry.NewOfferBatches(s.metrics))
+	dispatcher.RegisterBatch(appcatalog.TaskSyncOffer, indexer.HandleOfferBatch)
 	janitor := messaging.NewJanitor(postgres.NewRetention(s.store.pool), now, messaging.RetentionPolicy{
 		ProcessedEvents: cfg.Retention.ProcessedEvents,
 		OutboxDone:      cfg.Retention.OutboxDone,
@@ -290,7 +342,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 
 	features := postgres.NewCatalogFeatures(s.store.pool)
-	queries := appcatalog.NewQueries(uow, s.store.index, resyncing, features, features, now)
+	queries := appcatalog.NewQueries(uow, s.store.index, displayPlatform, features, features, now)
 	location, err := time.LoadLocation(cfg.Promotion.Timezone)
 	if err != nil {
 		return services{}, err
@@ -306,7 +358,9 @@ func (s *server) services(ctx context.Context) (services, error) {
 		Metrics:         telemetry.NewPromotion(s.metrics),
 	})
 	return services{
-		buyerFeatures: appbuyer.NewFeatures(uow, s.geoIP(), resyncing, redis.NewLimiter(s.cache, keyPrefix), pickups),
+		contextCache:  sharedContexts,
+		priceContexts: contexts,
+		buyerFeatures: appbuyer.NewFeatures(uow, s.geoIP(), displayPlatform, redis.NewLimiter(s.cache, keyPrefix), pickups),
 
 		promotion:         promotions,
 		moderationMetrics: moderationMetrics,
@@ -349,7 +403,7 @@ func (s *server) prepareIndexes(ctx context.Context) error {
 // run запускает HTTP, консьюмер и фоновые циклы; первый сбой останавливает остальных.
 func (s *server) run(ctx context.Context) error {
 	cfg := s.cfg
-	router := kafka.NewRouter(s.app.projector, s.app.registry)
+	router := kafka.NewRouter(s.app.projector, s.app.registry).WithPriceContexts(s.app.priceContexts)
 	topics := kafka.FullTopics(cfg.Kafka.TopicPrefix, router)
 	reader := infrakafka.NewReader(infrakafka.Config{
 		Brokers: cfg.Kafka.Brokers,
@@ -435,7 +489,7 @@ func (s *server) jobs() []func(context.Context) error {
 		).Run,
 		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
-		jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, cfg.Outbox.Batch, s.logger, s.metrics).Run,
+		jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics).Run,
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).Run,
 		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).Run,

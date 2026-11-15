@@ -53,6 +53,7 @@ type Platform struct {
 	pickups           map[ids.TenantID]ports.PickupPoints
 	pickupCalls       []PickupCall
 	BeforePickup      func(context.Context, ids.TenantID) error
+	CallHook          func(context.Context, string) error
 	Reviews           []ports.Review
 	ReviewsErr        error
 	promos            map[ids.TenantID]ports.GroupPricing
@@ -328,10 +329,13 @@ func (p *Platform) checkItems(
 
 // QuoteDelivery — заданный расчёт; не задан — магазин не везёт этим перевозчиком.
 func (p *Platform) QuoteDelivery(
-	_ context.Context,
+	ctx context.Context,
 	tenant ids.TenantID,
 	request ports.QuoteRequest,
 ) (delivery.Offered, error) {
+	if err := p.platformCall(ctx, "quote"); err != nil {
+		return delivery.Offered{}, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -350,7 +354,10 @@ func (p *Platform) QuoteDelivery(
 }
 
 // MarketplaceSettings — заданные настройки; не заданы — участие выключено.
-func (p *Platform) MarketplaceSettings(_ context.Context, tenant ids.TenantID) (ports.ShopSettings, error) {
+func (p *Platform) MarketplaceSettings(ctx context.Context, tenant ids.TenantID) (ports.ShopSettings, error) {
+	if err := p.platformCall(ctx, "settings"); err != nil {
+		return ports.ShopSettings{}, err
+	}
 	if p.BeforeSettings != nil {
 		p.BeforeSettings(tenant)
 	}

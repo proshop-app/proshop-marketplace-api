@@ -15,10 +15,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
-	"sync"
 	"time"
-
-	"golang.org/x/sync/singleflight"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -59,12 +56,9 @@ type Config struct {
 
 // Client — внутренний API сервера.
 type Client struct {
-	reviewsMu     sync.Mutex
-	reviews       map[string]reviewCacheEntry
-	reviewsFlight singleflight.Group
-	baseURL       string
-	token         string
-	http          *http.Client
+	baseURL string
+	token   string
+	http    *http.Client
 }
 
 type itemJSON struct {
@@ -419,12 +413,15 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 		case reply.StatusCode == http.StatusNotFound && body.Code == "ORDER_NOT_FOUND":
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
 		}
-		slog.Warn(
-			"неизвестный отказ сервера магазина",
-			slog.String("tenantId", string(tenant)),
-			slog.String("code", body.Code),
-			slog.Int("status", reply.StatusCode),
-		)
+		// Общий ценовой контекст журналирует обёртка порта с ограничением частоты.
+		if tenant != "" {
+			slog.Warn(
+				"неизвестный отказ сервера магазина",
+				slog.String("tenantId", string(tenant)),
+				slog.String("code", body.Code),
+				slog.Int("status", reply.StatusCode),
+			)
+		}
 		return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason, Unexpected: true}
 	}
 	return ErrUnavailable.WithMessage(message)

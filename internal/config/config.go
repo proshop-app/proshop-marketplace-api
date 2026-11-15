@@ -29,28 +29,29 @@ type DaData struct {
 
 // Config — настройки процесса маркетплейса.
 type Config struct {
-	DaData     DaData
-	Promotion  Promotion
-	Moderation Moderation
-	ModelKeys  bool
-	Identity   Identity
-	HTTP       HTTP
-	Database   Database
-	Search     Search
-	Kafka      Kafka
-	Outbox     Outbox
-	Retention  Retention
-	Operator   Operator
-	Redis      Redis
-	SmsRu      SmsRu
-	Login      Login
-	Platform   Platform
-	Cart       Cart
-	Checkout   Checkout
-	Delivery   Delivery
-	Settings   Settings
-	Reference  Reference
-	LogLevel   string
+	PriceContexts PriceContexts
+	DaData        DaData
+	Promotion     Promotion
+	Moderation    Moderation
+	ModelKeys     bool
+	Identity      Identity
+	HTTP          HTTP
+	Database      Database
+	Search        Search
+	Kafka         Kafka
+	Outbox        Outbox
+	Retention     Retention
+	Operator      Operator
+	Redis         Redis
+	SmsRu         SmsRu
+	Login         Login
+	Platform      Platform
+	Cart          Cart
+	Checkout      Checkout
+	Delivery      Delivery
+	Settings      Settings
+	Reference     Reference
+	LogLevel      string
 }
 
 // Redis — сессии покупателей и лимиты частоты.
@@ -91,9 +92,17 @@ type Login struct {
 
 // Platform — внутренний API сервера установки.
 type Platform struct {
-	URL     string
-	Token   string
-	Timeout time.Duration
+	URL              string
+	Token            string
+	Timeout          time.Duration
+	ReadTimeout      time.Duration
+	CacheTTL         time.Duration
+	StaleTTL         time.Duration
+	CacheSize        int
+	MaxConcurrent    int
+	FailureThreshold int
+	OpenInterval     time.Duration
+	LogInterval      time.Duration
 }
 
 // Cart — корзины.
@@ -205,8 +214,9 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	r := reader{env: env}
 
 	cfg := Config{
-		Promotion: r.promotion(),
-		Identity:  r.identity(),
+		PriceContexts: r.priceContexts(),
+		Promotion:     r.promotion(),
+		Identity:      r.identity(),
 		HTTP: HTTP{
 			Addr:            r.str("HTTP_ADDR", ":8080"),
 			ShutdownTimeout: r.duration("SHUTDOWN_TIMEOUT", 20*time.Second),
@@ -231,8 +241,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		},
 		Outbox: Outbox{
 			PollInterval: r.duration("OUTBOX_POLL_INTERVAL", time.Second),
-			Batch:        r.positive("OUTBOX_BATCH", 100),
-			PerTenant:    r.positive("OUTBOX_PER_TENANT", 20),
+			Batch:        r.positive("OUTBOX_BATCH", 200),
+			PerTenant:    r.positive("OUTBOX_PER_TENANT", 200),
 			Lease:        r.duration("OUTBOX_LEASE", time.Minute),
 		},
 		Retention: Retention{
@@ -270,9 +280,17 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			IPLimit:       r.limit("LOGIN_IP_LIMIT", Limit{Count: 20, Window: time.Hour}),
 		},
 		Platform: Platform{
-			URL:     r.httpURL("PLATFORM_API_URL"),
-			Token:   r.required("SERVICE_TOKEN_MARKETPLACE"),
-			Timeout: r.duration("PLATFORM_API_TIMEOUT", 5*time.Second),
+			URL:              r.httpURL("PLATFORM_API_URL"),
+			Token:            r.required("SERVICE_TOKEN_MARKETPLACE"),
+			Timeout:          r.duration("PLATFORM_API_TIMEOUT", 5*time.Second),
+			ReadTimeout:      r.duration("PLATFORM_READ_TIMEOUT", 300*time.Millisecond),
+			CacheTTL:         r.duration("PLATFORM_CACHE_TTL", 30*time.Second),
+			StaleTTL:         r.duration("PLATFORM_STALE_TTL", 5*time.Minute),
+			CacheSize:        r.positive("PLATFORM_CACHE_SIZE", 1024),
+			MaxConcurrent:    r.positive("PLATFORM_MAX_CONCURRENT", 16),
+			FailureThreshold: r.positive("PLATFORM_FAILURE_THRESHOLD", 5),
+			OpenInterval:     r.duration("PLATFORM_OPEN_INTERVAL", 5*time.Second),
+			LogInterval:      r.duration("PLATFORM_LOG_INTERVAL", 30*time.Second),
 		},
 		Cart: Cart{TTL: r.duration("CART_TTL", 30*24*time.Hour)},
 		Checkout: Checkout{
@@ -333,6 +351,15 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	if cfg.Outbox.PerTenant > cfg.Outbox.Batch {
 		r.fail("OUTBOX_PER_TENANT", "не больше OUTBOX_BATCH")
 	}
+	if cfg.Outbox.Batch > 200 {
+		r.fail("OUTBOX_BATCH", "не больше 200: предел служебного API поиска")
+	}
+	if cfg.Outbox.PollInterval > time.Minute {
+		r.fail("OUTBOX_POLL_INTERVAL", "не больше минуты")
+	}
+	if cfg.Outbox.Lease <= cfg.Search.Timeout {
+		r.fail("OUTBOX_LEASE", "должна превышать SEARCH_TIMEOUT")
+	}
 	if cfg.SmsRu.Mode == SmsRuLive && cfg.SmsRu.APIID == "" {
 		r.fail("SMSRU_API_ID", "обязательна при SMSRU_MODE=live")
 	}
@@ -340,6 +367,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		r.fail("SERVICE_TOKEN_MARKETPLACE", fmt.Sprintf("не короче %d символов", minOperatorTokenLength))
 	}
 
+	r.validatePlatform(cfg.Platform)
 	r.validatePromotion(cfg)
 	r.validateReference(cfg)
 	r.validateOperator(cfg.Operator)

@@ -21,6 +21,9 @@ type Index struct {
 	counter     int
 	// FailPut, если задан, возвращается из записи документов.
 	FailPut error
+	// PutBatches и RejectPut позволяют проверить групповые отправки и изоляцию отказа.
+	PutBatches [][]ports.OfferDocument
+	RejectPut  func([]ports.OfferDocument) error
 }
 
 // NewIndex — индекс без рабочего поколения.
@@ -39,6 +42,13 @@ func (x *Index) Exists(context.Context) (bool, error) {
 // Put пишет в рабочее поколение, заводя его при первом обращении.
 func (x *Index) Put(ctx context.Context, docs []ports.OfferDocument) error {
 	x.mu.Lock()
+	x.PutBatches = append(x.PutBatches, append([]ports.OfferDocument(nil), docs...))
+	if x.RejectPut != nil {
+		if err := x.RejectPut(docs); err != nil {
+			x.mu.Unlock()
+			return err
+		}
+	}
 	if x.active == "" {
 		x.counter++
 		x.active = fmt.Sprintf("gen-%d", x.counter)

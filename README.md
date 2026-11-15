@@ -66,7 +66,7 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `HTTP_ADDR` | | `:8080` | адрес HTTP |
 | `SHUTDOWN_TIMEOUT` | | `20s` | ожидание запросов при остановке |
 | `LOG_LEVEL` | | `info` | `debug`, `info`, `warn`, `error` |
-| `OUTBOX_POLL_INTERVAL`, `OUTBOX_BATCH`, `OUTBOX_PER_TENANT`, `OUTBOX_LEASE` | | `1s`, `100`, `20`, `1m` | разбор outbox |
+| `OUTBOX_POLL_INTERVAL`, `OUTBOX_BATCH`, `OUTBOX_PER_TENANT`, `OUTBOX_LEASE` | | `1s`, `200`, `200`, `1m` | [пакетный outbox](docs/shared-search.md#пакетная-доставка-из-outbox) |
 | `RETENTION_PROCESSED_EVENTS`, `RETENTION_OUTBOX_DONE`, `RETENTION_PARKED_EVENTS`, `RETENTION_INTERVAL` | | `336h`, `72h`, `720h`, `1h` | чистка служебных записей |
 | `RETENTION_CHALLENGES` | | `24h` | чистка истёкших проверок входа |
 | `REDIS_URL` | да | — | Redis `redis://…`: сессии и лимиты входа |
@@ -81,7 +81,13 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `HTTP_TRUST_PROXY` | | `0` | сколько прокси перед сервисом дописывают `X-Forwarded-For`; `0` — адрес соединения, заголовок не читается |
 | `PLATFORM_API_URL` | да | — | внутренний API сервера установки |
 | `SERVICE_TOKEN_MARKETPLACE` | да | — | токен маркетплейса к API сервера, ≥ 32 символов |
-| `PLATFORM_API_TIMEOUT` | | `5s` | ожидание ответа сервера |
+| `PLATFORM_API_TIMEOUT` | | `5s` | ожидание строгого ответа сервера |
+| `PLATFORM_READ_TIMEOUT` | | `300ms` | бюджет необязательных витринных блоков |
+| `PLATFORM_CACHE_TTL` / `PLATFORM_STALE_TTL` | | `30s` / `5m` | свежесть и окно stale |
+| `PLATFORM_CACHE_SIZE` | | `1024` | предел записей кэша контекстов и отзывов |
+| `PLATFORM_MAX_CONCURRENT` | | `16` | общий лимит обращений к ячейке |
+| `PLATFORM_FAILURE_THRESHOLD` | | `5` | число отказов до открытия предохранителя |
+| `PLATFORM_OPEN_INTERVAL` / `PLATFORM_LOG_INTERVAL` | | `5s` / `30s` | пауза предохранителя и журнала |
 | `CART_TTL` | | `720h` | срок жизни корзины без изменений |
 | `QUOTE_TTL`, `QUOTE_TIMEOUT` | | `30m`, `5s` | наибольший срок расчёта доставки, ожидание магазина |
 | `PICKUP_CACHE_TTL` | | `1h` | TTL непустого списка ПВЗ по службе и городу |
@@ -503,3 +509,5 @@ API таксономии, её PostgreSQL-таблицы и поставка д�
 Витрина не подмешивает `catalog.basePrice` из другого снимка, не прогнозирует денежный итог
 при изменении количества и не отправляет собственные суммы корзины. Дополнительных запросов
 цены по товару для этих полей нет.
+
+Зависимости страниц от cell-api, деградация, кэш и метрики: [platform-dependency](docs/platform-dependency.md).

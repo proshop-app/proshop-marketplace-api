@@ -53,17 +53,29 @@ type ClaimRequest struct {
 	LeaseUntil time.Time
 }
 
+// TaskResolution — результат с токеном аренды; NextAt задан только при повторе.
+type TaskResolution struct {
+	ID       int64
+	Attempts int
+	At       time.Time
+	NextAt   *time.Time
+	Error    string
+}
+
 // TaskQueue — разбор outbox. Взятая задача держится арендой: упавший
 // обработчик не теряет её, после аренды её возьмёт другой.
 type TaskQueue interface {
-	// Claim берёт созревшие задачи, не больше PerTenant на магазин: шумный
-	// магазин не задерживает чужие задачи.
+	// Claim чередует созревшие задачи магазинов до общего Limit, не больше PerTenant на магазин.
 	Claim(ctx context.Context, request ClaimRequest) ([]Task, error)
 	// Complete отмечает задачу выполненной, только если attempts соответствует текущему Claim.
 	// Отсутствующая, завершённая или взятая другим обработчиком задача — ErrTaskClaimConflict.
 	Complete(ctx context.Context, id int64, attempts int, at time.Time) error
 	// Retry откладывает задачу до nextAt с причиной; проверяет владельца, как Complete.
 	Retry(ctx context.Context, id int64, attempts int, nextAt time.Time, reason string) error
+	// Resolve сохраняет результаты пачки атомарно, проверяя владельца каждой задачи.
+	Resolve(context.Context, []TaskResolution) error
+	// ReadyCounts считает только созревшие задачи, без завершённых и арендованных.
+	ReadyCounts(context.Context, time.Time) (map[string]int64, error)
 }
 
 // Inbox — учёт обработанных событий для дедупа.

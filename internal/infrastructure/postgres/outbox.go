@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,16 +27,16 @@ const (
 			FROM outbox
 			WHERE done_at IS NULL AND next_at <= $1
 		), candidates AS (
-			SELECT c.id, c.next_at
+			SELECT c.id, c.next_at, c.position
 			FROM due_tenants t
 			CROSS JOIN LATERAL (
-				SELECT id, next_at
+				SELECT id, next_at, row_number() OVER (ORDER BY next_at, id) AS position
 				FROM outbox
 				WHERE tenant_id = t.tenant_id AND done_at IS NULL AND next_at <= $1
 				ORDER BY next_at, id
 				LIMIT $3
 			) c
-			ORDER BY c.next_at, c.id
+			ORDER BY c.position, c.next_at, c.id
 			LIMIT $2
 		), locked AS (
 			SELECT o.id
@@ -45,13 +44,16 @@ const (
 			JOIN candidates c ON c.id = o.id
 			WHERE o.done_at IS NULL AND o.next_at <= $1
 			FOR UPDATE OF o SKIP LOCKED
+		), updated AS (
+			UPDATE outbox
+			SET attempts = outbox.attempts + 1,
+				next_at = $4
+			FROM locked
+			WHERE outbox.id = locked.id
+			RETURNING outbox.id, outbox.kind, outbox.tenant_id, outbox.payload, outbox.attempts, outbox.created_at
 		)
-		UPDATE outbox
-		SET attempts = outbox.attempts + 1,
-			next_at = $4
-		FROM locked
-		WHERE outbox.id = locked.id
-		RETURNING outbox.id, outbox.kind, outbox.tenant_id, outbox.payload, outbox.attempts, outbox.created_at`
+		SELECT u.* FROM updated u JOIN candidates c ON c.id = u.id
+		ORDER BY c.position, c.next_at, c.id`
 
 	completeTask = `
 		UPDATE outbox
@@ -164,8 +166,6 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("взятие задач: %w", err)
 	}
-
-	sort.Slice(tasks, func(i, j int) bool { return tasks[i].ID < tasks[j].ID })
 
 	return tasks, nil
 }

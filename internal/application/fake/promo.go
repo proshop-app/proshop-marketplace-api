@@ -24,6 +24,9 @@ func (p *Platform) PriceGroup(
 	tenant ids.TenantID,
 	request ports.GroupPricingRequest,
 ) (ports.GroupPricing, error) {
+	if err := p.platformCall(ctx, "price_group"); err != nil {
+		return ports.GroupPricing{}, err
+	}
 	buyer, code, items := request.BuyerID, request.PromoCode, request.Items
 	checks, err := p.checkItems(ctx, tenant, ports.GroupPricingRequest{BuyerID: buyer, Items: items})
 	if err != nil {

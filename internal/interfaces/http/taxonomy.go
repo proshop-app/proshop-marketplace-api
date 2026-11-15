@@ -17,6 +17,7 @@ const maxTaxonomyBody = 2 << 20
 type taxonomyHandlers struct {
 	service *apptaxonomy.Service
 	catalog *appcatalog.Queries
+	sources dictionarySourcesCache
 }
 
 func taxonomyCached(w http.ResponseWriter, r *http.Request, version int64) bool {

@@ -52,8 +52,8 @@ func TestDispatcherCompletesAndRetries(t *testing.T) {
 	if outcomes[0].Lag != 3*time.Second {
 		t.Fatalf("задержка задачи: %s", outcomes[0].Lag)
 	}
-	if !errors.Is(outcomes[2].Err, messaging.ErrUnknownTask) {
-		t.Fatalf("неизвестная задача: %v", outcomes[2].Err)
+	if !errors.Is(outcomes[1].Err, messaging.ErrUnknownTask) {
+		t.Fatalf("неизвестная задача: %v", outcomes[1].Err)
 	}
 
 	rows := store.OutboxRows()

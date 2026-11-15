@@ -58,7 +58,9 @@ func (d *buyerFeaturesData) clone() *buyerFeaturesData {
 		for kind, items := range kinds {
 			for _, item := range items {
 				raw, _ := json.Marshal(item.Offer)
-				_ = json.Unmarshal(raw, &item.Offer)
+				var snapshot ports.OfferSnapshot
+				_ = json.Unmarshal(raw, &snapshot)
+				item.Offer = snapshot
 				if item.TargetPrice != nil {
 					v := *item.TargetPrice
 					item.TargetPrice = &v

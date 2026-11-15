@@ -54,6 +54,7 @@ type offerJSON struct {
 }
 
 type offerPageJSON struct {
+	Pricing    string               `json:"pricing,omitempty"`
 	Correction *offerCorrectionJSON `json:"correction,omitempty"`
 	Facets     []facetJSON          `json:"facets"`
 	Items      []offerJSON          `json:"items"`
@@ -116,7 +117,7 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 
 // list — выдача: GET /api/v1/catalog/offers?q=&tenant=&category=&priceMin=&priceMax=&inStock=&sort=&limit=&offset=
 func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
-	query, err := parseOfferQuery(r)
+	query, err := parseCatalogOfferQuery(r)
 	if err != nil {
 		writeError(w, r, err)
 
@@ -141,11 +142,12 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := offerPageJSON{
-		Facets: facets,
-		Items:  make([]offerJSON, 0, len(list.Items)),
-		Total:  list.Total,
-		Limit:  limit,
-		Offset: query.Offset,
+		Pricing: list.Pricing,
+		Facets:  facets,
+		Items:   make([]offerJSON, 0, len(list.Items)),
+		Total:   list.Total,
+		Limit:   limit,
+		Offset:  query.Offset,
 	}
 	if list.Correction != nil {
 		body.Correction = &offerCorrectionJSON{
@@ -184,6 +186,23 @@ func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
 	body := toOfferJSON(card, true)
 	annotateDelivery(&body, r)
 	writeJSON(w, http.StatusOK, body)
+}
+
+// parseCatalogOfferQuery добавляет exact только каталогу: общий разбор используется также рекламой.
+func parseCatalogOfferQuery(r *http.Request) (ports.OfferQuery, error) {
+	query, err := parseOfferQuery(r)
+	if err != nil {
+		return query, err
+	}
+
+	if exact, present := r.URL.Query()["exact"]; present {
+		if len(exact) != 1 || (exact[0] != "true" && exact[0] != "false") {
+			return query, appcatalog.ErrInvalidQuery.WithMessage("exact — true или false")
+		}
+		query.Exact = exact[0] == "true"
+	}
+
+	return query, nil
 }
 
 func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {

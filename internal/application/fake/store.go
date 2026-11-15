@@ -280,6 +280,16 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Ta
 	})
 
 	perTenant := map[ids.TenantID]int{}
+	positions := map[int]int{}
+	for _, i := range due {
+		tenant := s.data.outbox[i].TenantID
+		perTenant[tenant]++
+		positions[i] = perTenant[tenant]
+	}
+	sort.SliceStable(due, func(a, b int) bool {
+		return positions[due[a]] < positions[due[b]]
+	})
+	perTenant = map[ids.TenantID]int{}
 	tasks := make([]ports.Task, 0, request.Limit)
 
 	for _, i := range due {

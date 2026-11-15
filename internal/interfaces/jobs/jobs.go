@@ -16,6 +16,7 @@ import (
 // Dispatcher — разбор одной пачки outbox.
 type Dispatcher interface {
 	RunOnce(ctx context.Context) ([]messaging.Outcome, error)
+	ReadyCounts(context.Context) (map[string]int64, error)
 }
 
 // Purger — чистка по сроку.
@@ -23,16 +24,17 @@ type Purger interface {
 	Purge(ctx context.Context) (ports.PurgeResult, error)
 }
 
-// OutboxRunner крутит разбор outbox: полная пачка — сразу следующая,
-// неполная — пауза до следующего опроса.
+// OutboxRunner опустошает готовую очередь, затем ждёт следующего опроса.
 type OutboxRunner struct {
 	dispatcher Dispatcher
 	interval   time.Duration
-	batch      int
 	logger     *slog.Logger
 	tasks      *prometheus.CounterVec
 	lag        *prometheus.HistogramVec
 	errors     prometheus.Counter
+	ready      *prometheus.GaugeVec
+	depthAt    time.Time
+	readyKinds map[string]bool
 }
 
 // RetentionRunner чистит служебные записи по расписанию.
@@ -46,15 +48,14 @@ type RetentionRunner struct {
 func NewOutboxRunner(
 	dispatcher Dispatcher,
 	interval time.Duration,
-	batch int,
 	logger *slog.Logger,
 	registerer prometheus.Registerer,
 ) *OutboxRunner {
 	r := &OutboxRunner{
 		dispatcher: dispatcher,
 		interval:   interval,
-		batch:      batch,
 		logger:     logger,
+		readyKinds: map[string]bool{},
 		tasks: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "marketplace_outbox_tasks_total",
@@ -66,7 +67,7 @@ func NewOutboxRunner(
 			prometheus.HistogramOpts{
 				Name:    "marketplace_outbox_task_lag_seconds",
 				Help:    "Время от постановки задачи до её выполнения.",
-				Buckets: []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60, 300, 900},
+				Buckets: []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60, 300, 900, 1800, 3600, 10800, 21600},
 			},
 			[]string{"kind"},
 		),
@@ -74,8 +75,15 @@ func NewOutboxRunner(
 			Name: "marketplace_outbox_cycle_errors_total",
 			Help: "Сбои цикла разбора outbox: взятие или отметка задач.",
 		}),
+		ready: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "marketplace_outbox_ready_tasks",
+				Help: "Готовые задачи outbox по виду, без действующих аренд и отложенных повторов.",
+			},
+			[]string{"kind"},
+		),
 	}
-	registerer.MustRegister(r.tasks, r.lag, r.errors)
+	registerer.MustRegister(r.tasks, r.lag, r.errors, r.ready)
 
 	return r
 }
@@ -83,6 +91,10 @@ func NewOutboxRunner(
 // Run крутит разбор до отмены контекста.
 func (r *OutboxRunner) Run(ctx context.Context) error {
 	for {
+		if time.Now().After(r.depthAt) {
+			r.recordDepth(ctx)
+			r.depthAt = time.Now().Add(r.interval)
+		}
 		outcomes, err := r.dispatcher.RunOnce(ctx)
 		r.record(outcomes)
 
@@ -91,13 +103,31 @@ func (r *OutboxRunner) Run(ctx context.Context) error {
 			r.logger.Error("outbox: цикл разбора не удался", slog.Any("error", err))
 		}
 
-		if err == nil && len(outcomes) == r.batch {
+		if err == nil && len(outcomes) > 0 {
 			continue
 		}
 
 		if !wait(ctx, r.interval) {
 			return nil
 		}
+	}
+}
+
+func (r *OutboxRunner) recordDepth(ctx context.Context) {
+	counts, err := r.dispatcher.ReadyCounts(ctx)
+	if err != nil {
+		if ctx.Err() == nil {
+			r.errors.Inc()
+			r.logger.Error("outbox: подсчёт готовых задач не удался", slog.Any("error", err))
+		}
+		return
+	}
+	for kind := range r.readyKinds {
+		r.ready.WithLabelValues(kind).Set(0)
+	}
+	for kind, count := range counts {
+		r.readyKinds[kind] = true
+		r.ready.WithLabelValues(kind).Set(float64(count))
 	}
 }
 

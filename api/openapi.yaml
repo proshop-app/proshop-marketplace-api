@@ -1636,6 +1636,31 @@ paths:
       description: Только из parked при совпадении expectedVersion; устаревший запрос без сохранённого ключа — 409 с текущим event.
         Аудит автора/времени/заметки. Retry атомарно ставит outbox с версией решения и отдельным бюджетом попыток;
         queued не означает успех, после ошибки событие возвращается в parked.
+  /api/v1/taxonomy/dictionary-sources:
+    get:
+      tags: [taxonomy]
+      summary: Готовые источники строковых подсказок одной версии таксономии
+      operationId: taxonomyDictionarySources
+      description: >-
+        Итог свёртки Attribute.dictionary, глобального правила и правил от корня к разделу.
+        Только string атрибуты из схемы раздела или схем его потомков с непустым набором источников.
+        Потребители используют карту вместо самостоятельной свёртки dictionary-bindings.
+      parameters:
+        - { $ref: "#/components/parameters/TaxonomyCache" }
+      responses:
+        "200":
+          description: Карта раздел → атрибут → словари; при отсутствии пар dictionarySources равен {}
+          headers:
+            ETag: { schema: { type: string }, description: 'Общая версия снимка, например "taxonomy-42"' }
+            X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyDictionarySources" }
+        "304":
+          description: Версия не изменилась
+          headers:
+            ETag: { schema: { type: string } }
+            X-Taxonomy-Version: { schema: { type: integer, format: int64 } }
   /api/v1/taxonomy/dictionary-bindings:
     get:
       tags: [taxonomy]
@@ -1960,13 +1985,14 @@ paths:
           schema: { type: integer, minimum: 0, maximum: 9999, default: 0 }
       responses:
         "200":
-          description: "Ответ не персональный: Cache-Control: public, max-age=30; limit + offset не больше 10000."
+          description: >-
+            Ответ не персональный, Cache-Control public max-age=30; limit + offset не больше 10000.
+            При отказе сервера магазинов последняя успешная страница или items=[], total=0, HTTP 200.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReviewPage" }
         "400": { description: Некорректная пагинация }
         "404": { description: Предложение скрыто или отсутствует }
-        "503": { description: Сервер магазина недоступен }
   /api/v1/recommendations:
     get:
       tags: [catalog]
@@ -1977,6 +2003,7 @@ paths:
         home — категории интересов с исключением купленного; без интересов популярные по salesCount.
         deliveryRegion ограничивает все виды рекомендаций; неизвестный регион — 400.
         Для гостя и вошедшего Cache-Control: private, no-store.
+        Отказ сервера магазинов не прерывает страницу: старые ценовые контексты либо пустой items с HTTP 200.
       parameters:
         - { $ref: "#/components/parameters/MoneyUnit" }
         - name: context
@@ -2012,6 +2039,9 @@ paths:
       tags: [catalog]
       summary: Выдача предложений
       description: |
+        При отказе персонализации используются последние успешные ценовые контексты.
+        Без сохранённых контекстов вошедший покупатель получает HTTP 200 с пустыми items и total=0.
+        Гостевой каталог читает публичные цены из проекции без сервера магазинов.
         Только опубликованные предложения. category — узел дерева площадки, включая потомков.
         Канонические фильтры: attr.<код>=значение; повтор параметра означает OR,
         разные коды — AND. Для number: attr.<код>.min и attr.<код>.max (включительно),
@@ -2045,6 +2075,14 @@ paths:
             Учитывается только при непустом q и offset=0; иначе игнорируется.
             Любое значение, кроме true и 1, — 400.
         - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Строка поиска }
+        - name: exact
+          in: query
+          schema: { type: boolean, default: false }
+          description: >-
+            Искать как набрано: без исправления опечаток, раскладки и транслита.
+            Словари, стоп-слова, контекст разделов, partial, фильтры, фасеты и сортировка сохраняются.
+            Только true или false, один раз; пустое и любое другое значение — 400 catalog.invalid_query.
+            Без параметра или при false поведение прежнее; служебное поле движку отправляется только при true.
         - name: tenant
           in: query
           style: form
@@ -2102,6 +2140,9 @@ paths:
     get:
       tags: [catalog]
       summary: Карточка предложения
+      description: >-
+        При отказе персонализации используется последний успешный профиль цен, а без него публичный
+        профиль из проекции. HTTP 200 для существующего видимого предложения; оформление проверяет цены заново.
       operationId: getOffer
       parameters:
         - { $ref: "#/components/parameters/MoneyUnit" }
@@ -2248,8 +2289,8 @@ paths:
       tags: [cart]
       summary: Корзина покупателя
       description: >-
-        Нет корзины или она просрочена — пустая. Все группы проверяются у магазинов параллельно,
-        включая группы без промокода; возвращаются актуальные цены покупателя и скидки.
+        Нет корзины или она просрочена — пустая. Возвращается последний сохранённый снимок без cell-api.
+        Для актуализации цен и наличия используется POST /api/v1/cart/verify; оформление проверяет их заново.
       operationId: getCart
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       responses:
@@ -4449,6 +4490,8 @@ paths:
   /api/v1/catalog/sponsored:
     get:
       summary: Спонсорские карточки первой страницы
+      description: >-
+        При отказе сервера магазинов используются старые ценовые контексты либо пустой items с HTTP 200.
       security: []
       parameters:
       - { $ref: "#/components/parameters/MoneyUnit" }
@@ -6369,6 +6412,31 @@ components:
         Attribute.dictionary, глобальное правило, затем путь от корня к выбранной категории.
         extend — объединение, replace — замена; replace [] отключает. Дубликаты удаляются
         в порядке первого появления без семантического приоритета. Не более 16 итоговых источников.
+    TaxonomyDictionarySources:
+      type: object
+      additionalProperties: false
+      required: [version, dictionarySources]
+      properties:
+        version: { type: integer, format: int64, minimum: 0 }
+        dictionarySources:
+          type: object
+          maxProperties: 4096
+          description: >-
+            Ключи — id разделов, вложенные ключи — коды string атрибутов из их области.
+            Пустые наборы и разделы без пар отсутствуют; объект присутствует всегда.
+          additionalProperties:
+            type: object
+            minProperties: 1
+            maxProperties: 256
+            additionalProperties:
+              type: array
+              minItems: 1
+              maxItems: 16
+              uniqueItems: true
+              items: { type: string, maxLength: 32, pattern: '^[a-z][a-z0-9_]{0,31}$' }
+              description: >-
+                Порядок свёртки: словарь атрибута, глобальное правило, правила от корня к разделу;
+                extend добавляет без дублей, replace заменяет. Порядок не задаёт приоритет выдачи.
     TaxonomyDictionaryBindings:
       type: object
       additionalProperties: false
@@ -6838,6 +6906,13 @@ components:
       type: object
       required: [items, total, limit, offset, facets]
       properties:
+        pricing:
+          type: string
+          enum: [personal, public]
+          description: >-
+            Только для вошедшего покупателя. personal — применён персональный профиль хотя бы одного продавца;
+            public — использованы публичные профили, в том числе при ещё не загруженном контексте.
+            Поле отсутствует у гостя. Ответ покупателя private, no-store.
         correction:
           $ref: "#/components/schemas/OfferCorrection"
         items:

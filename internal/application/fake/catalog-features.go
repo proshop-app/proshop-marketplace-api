@@ -47,11 +47,14 @@ func (f *CatalogFeatures) Recommend(
 
 // ProductReviews возвращает страницу публичных отзывов из памяти.
 func (p *Platform) ProductReviews(
-	_ context.Context,
+	ctx context.Context,
 	_ ids.TenantID,
 	_ ids.ProductID,
 	limit, offset int,
 ) (ports.ReviewPage, error) {
+	if err := p.platformCall(ctx, "reviews"); err != nil {
+		return ports.ReviewPage{}, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.ReviewsErr != nil {

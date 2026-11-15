@@ -61,13 +61,14 @@ type CheckResult struct {
 
 // Auth — вход покупателя по звонку.
 type Auth struct {
-	uow     ports.UnitOfWork
-	calls   ports.CallCheck
-	tokens  ports.IdentityTokens
-	limiter ports.RateLimiter
-	ids     ports.IDs
-	clock   ports.Clock
-	config  AuthConfig
+	priceContexts ports.PriceContextPreloader
+	uow           ports.UnitOfWork
+	calls         ports.CallCheck
+	tokens        ports.IdentityTokens
+	limiter       ports.RateLimiter
+	ids           ports.IDs
+	clock         ports.Clock
+	config        AuthConfig
 }
 
 // NewAuth — сценарии входа.
@@ -81,6 +82,18 @@ func NewAuth(uow ports.UnitOfWork, calls ports.CallCheck, tokens ports.IdentityT
 		ids:     identities,
 		clock:   clock,
 		config:  config,
+	}
+}
+
+// WithPriceContexts подключает необязательную предзагрузку после успешного входа.
+func (a *Auth) WithPriceContexts(preloader ports.PriceContextPreloader) *Auth {
+	a.priceContexts = preloader
+	return a
+}
+
+func (a *Auth) preload(buyer ids.UUID) {
+	if a.priceContexts != nil {
+		a.priceContexts.Preload(buyer)
 	}
 }
 
@@ -242,6 +255,8 @@ func (a *Auth) issued(ctx context.Context, access ports.IdentityAccess) (IssuedS
 		return IssuedSession{}, err
 	}
 
+	a.preload(found.ID)
+
 	return IssuedSession{
 		Token:           access.Token,
 		Key:             access.Key,
@@ -342,6 +357,8 @@ func (a *Auth) issue(ctx context.Context, challengeID ids.UUID) (CheckResult, er
 	if err != nil {
 		return CheckResult{}, err
 	}
+
+	a.preload(found.ID)
 
 	return CheckResult{
 		Challenge: viewOf(challenge),
