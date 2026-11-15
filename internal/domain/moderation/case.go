@@ -131,3 +131,14 @@ func (c *Case) Decide(expected, revision int64, action Action, note string, now 
 	c.state.Version = c.origin.Version + 1
 	return true, nil
 }
+
+// Supersede закрывает дело без решения оператора, когда карточка вышла из публикации.
+func (c *Case) Supersede(now time.Time) bool {
+	if c.state.Status != Open {
+		return false
+	}
+	c.state.Status = Superseded
+	c.state.DecidedAt = &now
+	c.state.Version = c.origin.Version + 1
+	return true
+}

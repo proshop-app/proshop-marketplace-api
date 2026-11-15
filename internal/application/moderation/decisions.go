@@ -47,7 +47,7 @@ func (s *Service) OpenCase(
 			return err
 		}
 		p := product.State()
-		if p.Deleted || p.Card.Marketplace == nil {
+		if p.Deleted || p.Card.Marketplace == nil || !p.Card.Publication.Published {
 			return moderation.ErrInvalid
 		}
 		existing, err := tx.ModerationCases().Open(ctx, offer.Tenant, offer.Product)
@@ -152,7 +152,7 @@ func (s *Service) decide(
 		if _, err := c.Decide(cmd.ExpectedVersion, p.State().Revision, action, cmd.Note, now); err != nil {
 			return err
 		}
-		if p.State().Deleted || p.State().Card.Marketplace == nil {
+		if p.State().Deleted || p.State().Card.Marketplace == nil || !p.State().Card.Publication.Published {
 			return moderation.ErrCaseStale
 		}
 		reasonMessage, err := moderation.ResolveReason(ctx, tx.ModerationRules(), cmd.Reason)

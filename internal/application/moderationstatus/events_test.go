@@ -38,10 +38,13 @@ func TestStatus(t *testing.T) {
 				Message: reason.Message,
 			})
 			want := "hidden"
-			if verdictStatus == moderation.Pending {
+			if published && verdictStatus == moderation.Pending {
 				want = "pending"
 			} else if published && verdictStatus == moderation.Allowed {
 				want, expected = "published", []moderationstatus.Reason{}
+			}
+			if !published {
+				expected = expected[:1]
 			}
 			status, reasons := moderationstatus.Status(publication, verdict)
 			if status != want || !reflect.DeepEqual(reasons, expected) {

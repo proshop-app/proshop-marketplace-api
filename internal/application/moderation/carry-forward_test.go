@@ -221,6 +221,13 @@ func TestReviewedProjectionBusinessChangeRequiresEvaluation(t *testing.T) {
 			applyReviewedProjection(t, e, next)
 			after := e.view(t, "p1")
 			member, _ := e.store.Participant("t1")
+			if !next.Card.Marketplace.Published {
+				if !samePublicationVerdict(before.Verdict, after.Verdict) ||
+					after.Case != nil || e.document(t).Visible {
+					t.Fatal("неопубликованная карточка должна сохранять вердикт без дела", after)
+				}
+				return
+			}
 			if after.Verdict.Status != moderation.Pending || after.Verdict.DecidedBy != moderation.Rule ||
 				after.Verdict.Decision != nil || after.Case == nil || after.Case.Revision != 2 ||
 				e.document(t).Visible ||

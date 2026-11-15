@@ -29,7 +29,11 @@ func TestModerationMetricsCommittedDecisions(t *testing.T) {
 		ProductID: "p1",
 		Revision:  1,
 		Version:   1,
-		Card:      catalog.Card{Name: "Товар", Marketplace: &taxonomy.Card{CategoryID: "c1"}},
+		Card: catalog.Card{
+			Name:        "Товар",
+			Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
+			Publication: taxonomy.Publication{Published: true},
+		},
 	})
 	service := appmoderation.NewService(store, clock, &fake.IDs{}, appmoderation.Config{
 		ProbationOffers: 50,
