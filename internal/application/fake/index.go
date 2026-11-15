@@ -14,6 +14,7 @@ import (
 
 // Index — индекс предложений в памяти с поколениями и версиями документов.
 type Index struct {
+	BeforeGet   func(context.Context, string) error
 	Facets      []ports.Facet
 	mu          sync.Mutex
 	generations map[string]map[string]ports.OfferDocument
@@ -86,7 +87,13 @@ func (x *Index) PutGeneration(_ context.Context, generation string, docs []ports
 }
 
 // Get — документ рабочего поколения.
-func (x *Index) Get(_ context.Context, id string) (ports.OfferDocument, bool, error) {
+func (x *Index) Get(ctx context.Context, id string) (ports.OfferDocument, bool, error) {
+	if x.BeforeGet != nil {
+		if err := x.BeforeGet(ctx, id); err != nil {
+			return ports.OfferDocument{}, false, err
+		}
+	}
+
 	x.mu.Lock()
 	defer x.mu.Unlock()
 

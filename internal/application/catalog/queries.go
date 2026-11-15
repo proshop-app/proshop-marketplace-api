@@ -160,12 +160,9 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UU
 		doc = public
 		key = catalog.DefaultPriceProfile
 	}
-	profile, found := catalog.SelectPrice(doc.PriceProfiles, key)
-	if !found {
+	if !selectOfferPrice(&doc, key) {
 		return OfferCard{}, catalog.ErrOfferNotFound
 	}
-	doc.Price = profile.EffectivePrice.Kopecks()
-	doc.BasePrice = profile.Price.Kopecks()
 
 	variants, err := q.offerVariants(ctx, doc, key)
 	if err != nil {

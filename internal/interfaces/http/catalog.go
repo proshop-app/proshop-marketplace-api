@@ -117,6 +117,11 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 
 // list — выдача: GET /api/v1/catalog/offers?q=&tenant=&category=&priceMin=&priceMax=&inStock=&sort=&limit=&offset=
 func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Has("ids") {
+		h.listIDs(w, r)
+		return
+	}
+
 	query, err := parseCatalogOfferQuery(r)
 	if err != nil {
 		writeError(w, r, err)

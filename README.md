@@ -105,7 +105,7 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 |---|---|---|
 | `GET /health` | открыт | PostgreSQL, API поиска, Redis, Kafka: 200 или 503 |
 | `GET /metrics` | открыт | метрики Prometheus |
-| `GET /api/v1/catalog/offers` | открыт | выдача: `q`, `tenant`, `category`, `tag`, `priceMin`, `priceMax`, `inStock`, `sort` (`relevance`, `price_asc`, `price_desc`, `newest`), `limit` ≤ 100, `offset` |
+| `GET /api/v1/catalog/offers` | открыт | `ids` (повторяемый, 1–20 offerId): карточки в порядке первого вхождения, без фильтров выдачи; контекст доставки допустим. Обычная выдача: `q`, `tenant`, `category`, `tag`, `priceMin`, `priceMax`, `inStock`, `sort` (`relevance`, `price_asc`, `price_desc`, `newest`), `limit` ≤ 100, `offset` |
 | `GET /api/v1/catalog/offers/{offerId}` | открыт | карточка; `offerId` = `<tenantId>~<productId>` |
 | `POST/GET/DELETE /api/v1/operator/session` | оператор платформы | вход по паролю, текущая сессия, выход |
 | `PUT /api/v1/operator/participants/{tenantId}/delivery` | оператор | регионы ISO и перевозчики, CAS по version |

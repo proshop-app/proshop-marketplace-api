@@ -29,6 +29,7 @@ func (p *Platform) PriceContexts(
 
 	profiles := make(map[ids.TenantID]string, len(tenants))
 	for _, tenant := range tenants {
+		p.priceContextCalls = append(p.priceContextCalls, tenant)
 		if err := p.failing[tenant]; err != nil {
 			return nil, err
 		}
@@ -74,4 +75,11 @@ func (p *Platform) ItemCheckCalls() []ItemCheckCall {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return append([]ItemCheckCall(nil), p.checks...)
+}
+
+// PriceContextCalls возвращает магазины, для которых запрашивали контекст цены.
+func (p *Platform) PriceContextCalls() []ids.TenantID {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]ids.TenantID(nil), p.priceContextCalls...)
 }
