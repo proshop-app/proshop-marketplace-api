@@ -24,6 +24,8 @@ const (
 	taskLeaseSlack      = 5 * time.Second
 	PollWorkers         = 4
 	PollPerTenant       = 1
+	CancelWorkers       = 4
+	CancelPerTenant     = 1
 )
 
 // TaskResult публикуется после отметки задачи; позволяет циклу сразу заполнить свободное место.
@@ -33,9 +35,9 @@ type TaskResult struct {
 	Lag  time.Duration
 }
 
-// CreationExecutor разделяет создание, закрытие срока и сверку на независимые полосы.
+// Executor разделяет создание, закрытие срока, отмену и сверку на независимые полосы.
 // Dispatch вызывается одним циклом, результаты каждого вызова сохраняются независимо.
-type CreationExecutor struct {
+type Executor struct {
 	queue   ports.TaskQueue
 	clock   ports.Clock
 	service *Service
@@ -45,9 +47,9 @@ type CreationExecutor struct {
 	wg      sync.WaitGroup
 }
 
-// NewCreationExecutor собирает отдельный пул поверх существующей очереди.
-func NewCreationExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service) *CreationExecutor {
-	return &CreationExecutor{
+// NewExecutor собирает отдельный пул поверх существующей очереди.
+func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service) *Executor {
+	return &Executor{
 		queue:   queue,
 		clock:   clock,
 		service: service,
@@ -55,26 +57,29 @@ func NewCreationExecutor(queue ports.TaskQueue, clock ports.Clock, service *Serv
 			TaskCreateOrder:    {},
 			TaskExpireCreation: {},
 			TaskPollOrder:      {},
+			TaskCancelOrder:    {},
 		},
-		results: make(chan TaskResult, CreationWorkers+DeadlineWorkers+PollWorkers),
+		results: make(chan TaskResult, CreationWorkers+DeadlineWorkers+PollWorkers+CancelWorkers),
 	}
 }
 
 // Results сообщает циклу о свободном месте после обработки задачи.
-func (e *CreationExecutor) Results() <-chan TaskResult { return e.results }
+func (e *Executor) Results() <-chan TaskResult { return e.results }
 
 // Wait вызывается после остановки Dispatch и отмены контекста исполнения.
-func (e *CreationExecutor) Wait() { e.wg.Wait() }
+func (e *Executor) Wait() { e.wg.Wait() }
 
 // Dispatch не ждёт HTTP: каждый освободившийся слот доступен следующему Claim.
-func (e *CreationExecutor) Dispatch(ctx context.Context) error {
+func (e *Executor) Dispatch(ctx context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	for _, kind := range []string{TaskExpireCreation, TaskCreateOrder, TaskPollOrder} {
+	for _, kind := range []string{TaskExpireCreation, TaskCreateOrder, TaskCancelOrder, TaskPollOrder} {
 		limit, perTenant := CreationWorkers, CreationPerTenant
 		switch kind {
 		case TaskExpireCreation:
 			limit, perTenant = DeadlineWorkers, DeadlineWorkers
+		case TaskCancelOrder:
+			limit, perTenant = CancelWorkers, CancelPerTenant
 		case TaskPollOrder:
 			limit, perTenant = PollWorkers, PollPerTenant
 		}
@@ -107,7 +112,7 @@ func (e *CreationExecutor) Dispatch(ctx context.Context) error {
 	return nil
 }
 
-func (e *CreationExecutor) execute(ctx context.Context, task ports.Task) {
+func (e *Executor) execute(ctx context.Context, task ports.Task) {
 	defer e.wg.Done()
 	err := e.service.HandleOrderTask(ctx, task)
 	var saved error

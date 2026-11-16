@@ -375,3 +375,23 @@ func TestCancelPurchaseHTTP(t *testing.T) {
 		t.Fatal(repeat.Code, repeat.Body.String())
 	}
 }
+
+func TestCancellationDiagnosticsJSON(t *testing.T) {
+	state := checkout.State{Groups: []checkout.Group{{
+		TenantID:                  "t1",
+		CancellationAttempts:      3,
+		CancellationLastErrorCode: "checkout.cancellation_order_mismatch",
+	}}}
+	view, err := toCheckoutJSON(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"cancellationAttempts":3`) ||
+		!strings.Contains(string(raw), `"cancellationLastErrorCode":"checkout.cancellation_order_mismatch"`) {
+		t.Fatal(string(raw))
+	}
+}

@@ -67,6 +67,9 @@ type Platform struct {
 	settings          map[ids.TenantID]ports.ShopSettings
 	failing           map[ids.TenantID]error
 	requests          []ports.QuoteRequest
+	cancelledOrders   map[string]ports.CancelOrderResult
+	cancelRequests    map[ids.TenantID][]ports.CancelOrderRequest
+	cancelErrors      map[ids.TenantID]error
 	orders            map[string]checkout.SellerOrder
 	orderRefusals     map[string]error
 	orderTenants      map[string]ids.TenantID
@@ -238,6 +241,9 @@ func (l *Limiter) Allow(_ context.Context, key string, limit int, window time.Du
 func NewPlatform() *Platform {
 	return &Platform{
 		items:             map[ids.TenantID]map[ids.ProductID]ports.ItemCheck{},
+		cancelledOrders:   map[string]ports.CancelOrderResult{},
+		cancelRequests:    map[ids.TenantID][]ports.CancelOrderRequest{},
+		cancelErrors:      map[ids.TenantID]error{},
 		orders:            map[string]checkout.SellerOrder{},
 		stubPaid:          map[string]bool{},
 		orderRefusals:     map[string]error{},

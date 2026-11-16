@@ -83,3 +83,16 @@ func (c *Client) PickupPoints(
 		return c.upstream.PickupPoints(ctx, tenant, carrier, city)
 	})
 }
+
+// CancelOrder ограничивает команду тем же бюджетом и учитывает метрики магазина.
+func (c *Client) CancelOrder(
+	ctx context.Context,
+	tenant ids.TenantID,
+	request ports.CancelOrderRequest,
+) (ports.CancelOrderResult, error) {
+	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
+	cancelOrder := func(ctx context.Context) (ports.CancelOrderResult, error) {
+		return c.upstream.CancelOrder(ctx, tenant, request)
+	}
+	return call(ctx, c, "cancel_order", c.cfg.StrictTimeout, cancelOrder)
+}

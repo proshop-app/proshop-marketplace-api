@@ -204,7 +204,7 @@ func TestDeadlineTaskWaitsForAttemptLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.clock.Advance(time.Second)
-	executor := appcheckout.NewCreationExecutor(e.store, e.clock, e.service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, e.service)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestExecutorBacksOffNonPendingFailures(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	executor := appcheckout.NewCreationExecutor(e.store, e.clock, e.service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, e.service)
 	for _, delay := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second} {
 		now := e.clock.Now()
 		if err := executor.Dispatch(ctx); err != nil {

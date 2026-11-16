@@ -120,9 +120,11 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	}
 	g.OrderID, g.ExpiresAt = order.OrderID, order.ExpiresAt
 	g.NextPollAt = now
-	g.LastOrderStatus = GroupAwaitingPayment
+	if !g.CancellationConfirmed {
+		g.LastOrderStatus = GroupAwaitingPayment
+	}
 	if g.Abandoned {
-		g.ReconciliationRequired = true
+		g.ReconciliationRequired = !g.CancellationConfirmed
 	} else {
 		g.Status, g.Reason = GroupAwaitingPayment, ""
 	}
@@ -142,7 +144,8 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	if g.Abandoned || from == GroupSellerUnreachable {
 		from = g.LastOrderStatus
 	}
-	if g.OrderID == "" || g.OrderID != order.OrderID || !allowed(from, order.Status) {
+	confirmedCancellation := g.CancellationBlocked && order.Status == GroupCancelled
+	if g.OrderID == "" || g.OrderID != order.OrderID || (!allowed(from, order.Status) && !confirmedCancellation) {
 		return false, ErrTransition
 	}
 	if order.Status == GroupCancelled && order.Reason == "" {
@@ -151,18 +154,17 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	if g.Status == order.Status && g.Reason == order.Reason && g.NextPollAt.Equal(next) {
 		return false, nil
 	}
-	if g.Abandoned {
-		g.ReconciliationRequired = order.Status != GroupCancelled
-		if order.Status == GroupCancelled && g.Status == GroupCancellationRequested {
-			g.Status, g.Reason = GroupCancelled, order.Reason
-		}
-	} else {
+	if !g.Abandoned {
 		g.Status, g.Reason = order.Status, order.Reason
 	}
 	g.NextPollAt = next
 	g.PollFailures = 0
 	g.LastErrorCode = ""
 	g.LastOrderStatus = order.Status
+	if g.CancellationBlocked && (order.Status == GroupDelivered ||
+		order.Status == GroupReturned || order.Status == GroupCancelled) {
+		g.ReconciliationRequired = false
+	}
 	c.rollup()
 	return true, c.touch(now)
 }

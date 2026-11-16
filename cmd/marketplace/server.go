@@ -75,7 +75,7 @@ type services struct {
 	directory         *appdelivery.Service
 	checkouts         *appcheckout.Service
 	dispatcher        *messaging.Dispatcher
-	creation          *appcheckout.CreationExecutor
+	creation          *appcheckout.Executor
 	janitor           *messaging.Janitor
 	parker            *messaging.Parker
 	reference         *appreference.Service
@@ -322,6 +322,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 				appcheckout.TaskCreateOrder,
 				appcheckout.TaskExpireCreation,
 				appcheckout.TaskPollOrder,
+				appcheckout.TaskCancelOrder,
 			},
 			Batch:     cfg.Outbox.Batch,
 			PerTenant: cfg.Outbox.PerTenant,
@@ -393,7 +394,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		directory:         pickups,
 		checkouts:         checkouts,
 		dispatcher:        dispatcher,
-		creation:          appcheckout.NewCreationExecutor(postgres.NewTaskQueue(s.store.pool), now, checkouts),
+		creation:          appcheckout.NewExecutor(postgres.NewTaskQueue(s.store.pool), now, checkouts),
 		janitor:           janitor,
 		parker:            messaging.NewParker(uow),
 		reference:         references,

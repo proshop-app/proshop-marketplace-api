@@ -27,6 +27,9 @@ func (p *Platform) CreateOrder(
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	key := string(tenant) + ":" + request.ExternalCheckoutID + ":" + string(request.GroupID)
+	if _, cancelled := p.cancelledOrders[key]; cancelled {
+		return checkout.SellerOrder{}, &ports.OrderRefusal{Code: "ORDER_CHECKOUT_CANCELLED"}
+	}
 	request.Items = append([]ports.OrderItem(nil), request.Items...)
 	p.orderRequests[tenant] = append(p.orderRequests[tenant], request)
 	raw, _ := json.Marshal(request)

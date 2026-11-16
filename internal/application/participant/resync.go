@@ -101,3 +101,13 @@ func (p *ResyncingPlatform) PriceGroup(
 	result, err := p.PlatformAPI.PriceGroup(ctx, tenant, request)
 	return result, p.resync(ctx, tenant, err)
 }
+
+// CancelOrder сохраняет отказ участия для внеочередной сверки настроек.
+func (p *ResyncingPlatform) CancelOrder(
+	ctx context.Context,
+	tenant ids.TenantID,
+	request ports.CancelOrderRequest,
+) (ports.CancelOrderResult, error) {
+	result, err := p.PlatformAPI.CancelOrder(ctx, tenant, request)
+	return result, p.resync(ctx, tenant, err)
+}

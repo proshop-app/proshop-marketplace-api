@@ -74,7 +74,7 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		saveCtx, finish = context.WithTimeout(context.WithoutCancel(ctx), completionTimeout)
 		defer finish()
 	}
-	state, err = s.saveCreation(saveCtx, buyerID, id, tenant, func(c *checkout.Checkout, now time.Time) error {
+	state, err = s.saveOrderResult(saveCtx, buyerID, id, tenant, func(c *checkout.Checkout, now time.Time) error {
 		if failed == nil {
 			_, attachErr := c.CompleteCreation(tenant, token, answer, now)
 			if !errors.Is(attachErr, checkout.ErrInvalidOrder) {
@@ -118,7 +118,7 @@ func (s *Service) creationLease(c *checkout.Checkout, tenant ids.TenantID, now t
 }
 
 // Повторяем только временный сбой хранилища и конфликт версии, не маскируя ошибки сценария.
-func (s *Service) saveCreation(
+func (s *Service) saveOrderResult(
 	ctx context.Context,
 	buyerID, id ids.UUID,
 	tenant ids.TenantID,
@@ -129,11 +129,11 @@ func (s *Service) saveCreation(
 		if err := ctx.Err(); err != nil {
 			return checkout.State{}, err
 		}
-		state, err := s.updateSelection(ctx, buyerID, id, nil, mutate)
+		state, err := s.updateSelection(ctx, buyerID, id, s.enqueueCancellations, mutate)
 		if err == nil || (!errors.Is(err, checkout.ErrConflict) && errs.CodeOf(err) != errs.Unavailable) {
 			return state, err
 		}
-		slog.Warn("создание: повтор записи итога", "tenantId", tenant, "checkoutId", id, "delay", delay, "error", err)
+		slog.Warn("заказ: повтор записи итога", "tenantId", tenant, "checkoutId", id, "delay", delay, "error", err)
 		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
@@ -161,7 +161,7 @@ func creationFailure(err error) (string, checkout.GroupStatus, []checkout.PriceC
 		switch refusal.Code {
 		case "DELIVERY_UNAVAILABLE", "DELIVERY_CHANGED":
 			return refusal.Code, checkout.GroupDeliveryUnavailable, nil
-		case "OUT_OF_STOCK":
+		case "OUT_OF_STOCK", "ORDER_CHECKOUT_CANCELLED":
 			return refusal.Code, checkout.GroupRejected, nil
 		case "IDEMPOTENCY_CONFLICT":
 			return refusal.Code, checkout.GroupSellerUnreachable, nil

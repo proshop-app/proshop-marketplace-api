@@ -56,7 +56,7 @@ func (p delayedOrderPlatform) CreateOrder(
 	return p.PlatformAPI.CreateOrder(ctx, tenant, request)
 }
 
-func TestCreationExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
+func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
@@ -67,7 +67,7 @@ func TestCreationExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 	started := make(chan struct{}, 1)
 	platform := delayedOrderPlatform{PlatformAPI: e.platform, release: release, started: started}
 	service := appcheckout.NewService(e.store, e.index, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewCreationExecutor(e.store, e.clock, service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service)
 	otherStarted := make(chan struct{})
 	otherRelease := make(chan struct{})
 	otherDone := make(chan error, 1)
@@ -87,6 +87,7 @@ func TestCreationExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 				appcheckout.TaskCreateOrder,
 				appcheckout.TaskExpireCreation,
 				appcheckout.TaskPollOrder,
+				appcheckout.TaskCancelOrder,
 			},
 		},
 		map[string]messaging.Handler{
@@ -103,9 +104,13 @@ func TestCreationExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 		close(release)
 		close(otherRelease)
 		executor.Wait()
+		if err := executeTasks(ctx, e); err != nil {
+			t.Error(err)
+		}
 		late, err := service.Get(ctx, buyerID, c.ID)
-		if err != nil || late.Groups[0].OrderID == "" || late.Groups[0].Status != checkout.GroupUnconfirmed {
-			t.Error("поздний заказ сохраняется для сверки", late, err)
+		if err != nil || !late.Groups[0].CancellationConfirmed || late.Groups[0].ReconciliationRequired ||
+			late.Groups[0].Status != checkout.GroupUnconfirmed {
+			t.Error("позднее создание должно быть отменено либо запрещено по ключу", late, err)
 		}
 		if err := <-otherDone; err != nil {
 			t.Error(err)
@@ -145,7 +150,7 @@ func TestCreationExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 	}
 	state, err = service.Get(ctx, buyerID, c.ID)
 	if err != nil || state.Groups[0].Status != checkout.GroupUnconfirmed ||
-		!state.Groups[0].ReconciliationRequired || !state.Groups[0].CartReturned {
+		!state.Groups[0].CartReturned {
 		t.Fatal(state, err)
 	}
 
@@ -171,7 +176,7 @@ func TestPollLaneDoesNotBlockCreationOrGeneralOutbox(t *testing.T) {
 	started, release := make(chan struct{}, 2), make(chan struct{})
 	platform := delayedPollPlatform{PlatformAPI: e.platform, release: release, started: started}
 	service := appcheckout.NewService(e.store, e.index, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewCreationExecutor(e.store, e.clock, service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service)
 	defer func() { close(release); executor.Wait() }()
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
@@ -220,6 +225,7 @@ func TestPollLaneDoesNotBlockCreationOrGeneralOutbox(t *testing.T) {
 				appcheckout.TaskCreateOrder,
 				appcheckout.TaskExpireCreation,
 				appcheckout.TaskPollOrder,
+				appcheckout.TaskCancelOrder,
 			},
 		},
 		map[string]messaging.Handler{"index": func(context.Context, ports.Task) error { return nil }},

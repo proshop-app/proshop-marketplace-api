@@ -37,7 +37,7 @@ domain ← application ← interfaces, infrastructure        сборка гра
 Статусы, отправка и возвраты остаются по группам.
 Создание заказов — outbox + HTTP; GET покупки читает только базу. Срок подтверждения
 15 секунд (константа `CreationTimeout`) сохраняется с намерением. Правила оформления,
-отмены, сверки и предложение команды отмены — `docs/checkout-async.md`.
+отмены через cancel-by-checkout и сверки — `docs/checkout-async.md`.
 
 ## Раскладка кода
 

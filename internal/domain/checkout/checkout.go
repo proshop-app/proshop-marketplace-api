@@ -54,9 +54,17 @@ type Group struct {
 	Abandoned bool
 	// ReconciliationRequired сохраняет работу после локального итога, пока магазин не подтвердил отмену.
 	ReconciliationRequired bool
-	PromoCode              string
-	Tracking               *Tracking
-	TenantID               ids.TenantID
+	// CancellationConfirmed ограждает итог отмены от позднего ответа создания.
+	CancellationConfirmed bool
+	// CancellationQueued фиксирует единственную задачу вместе с переходом, включая её повторы.
+	CancellationQueued bool
+	// CancellationBlocked останавливает неисправимую команду, сохраняя сверку известного заказа.
+	CancellationBlocked       bool
+	CancellationAttempts      int
+	CancellationLastErrorCode string
+	PromoCode                 string
+	Tracking                  *Tracking
+	TenantID                  ids.TenantID
 	// ExternalCheckoutID — ключ заказа у магазина: <checkoutId>:<tenantId>.
 	ExternalCheckoutID string
 	Lines              []Line

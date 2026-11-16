@@ -44,33 +44,35 @@ type quoteJSON struct {
 }
 
 type checkoutGroupJSON struct {
-	CreationStatus         string               `json:"creationStatus,omitempty"`
-	ReconciliationRequired bool                 `json:"reconciliationRequired"`
-	CreationDeadline       *time.Time           `json:"creationDeadline,omitempty"`
-	Seller                 *participant.Seller  `json:"seller"`
-	Tracking               *trackingJSON        `json:"tracking"`
-	TenantID               string               `json:"tenantId"`
-	ExternalCheckoutID     string               `json:"externalCheckoutId"`
-	Lines                  []checkoutLineJSON   `json:"lines"`
-	BaseTotal              rubles               `json:"baseTotal"`
-	Discount               rubles               `json:"discount"`
-	Total                  rubles               `json:"total"`
-	Goods                  rubles               `json:"goods"`
-	Quote                  *quoteJSON           `json:"quote"`
-	Status                 checkout.GroupStatus `json:"status"`
-	OrderID                string               `json:"orderId,omitempty"`
-	ExpiresAt              *time.Time           `json:"expiresAt,omitempty"`
-	DeliveryPrice          rubles               `json:"deliveryPrice"`
-	Reason                 string               `json:"reason,omitempty"`
-	CurrentPrices          []priceChangeJSON    `json:"currentPrices,omitempty"`
-	ReturnFailed           bool                 `json:"returnFailed"`
-	ReturnReason           string               `json:"returnReason,omitempty"`
-	ReturnRemaining        []returnLineJSON     `json:"returnRemaining,omitempty"`
-	PollFailures           int                  `json:"pollFailures"`
-	NextPollAt             time.Time            `json:"nextPollAt"`
-	LastErrorCode          string               `json:"lastErrorCode,omitempty"`
-	CreateFailures         int                  `json:"createFailures"`
-	CreateExhausted        bool                 `json:"createExhausted"`
+	CreationStatus            string               `json:"creationStatus,omitempty"`
+	ReconciliationRequired    bool                 `json:"reconciliationRequired"`
+	CreationDeadline          *time.Time           `json:"creationDeadline,omitempty"`
+	Seller                    *participant.Seller  `json:"seller"`
+	Tracking                  *trackingJSON        `json:"tracking"`
+	TenantID                  string               `json:"tenantId"`
+	ExternalCheckoutID        string               `json:"externalCheckoutId"`
+	Lines                     []checkoutLineJSON   `json:"lines"`
+	BaseTotal                 rubles               `json:"baseTotal"`
+	Discount                  rubles               `json:"discount"`
+	Total                     rubles               `json:"total"`
+	Goods                     rubles               `json:"goods"`
+	Quote                     *quoteJSON           `json:"quote"`
+	Status                    checkout.GroupStatus `json:"status"`
+	OrderID                   string               `json:"orderId,omitempty"`
+	ExpiresAt                 *time.Time           `json:"expiresAt,omitempty"`
+	DeliveryPrice             rubles               `json:"deliveryPrice"`
+	Reason                    string               `json:"reason,omitempty"`
+	CurrentPrices             []priceChangeJSON    `json:"currentPrices,omitempty"`
+	ReturnFailed              bool                 `json:"returnFailed"`
+	ReturnReason              string               `json:"returnReason,omitempty"`
+	ReturnRemaining           []returnLineJSON     `json:"returnRemaining,omitempty"`
+	PollFailures              int                  `json:"pollFailures"`
+	NextPollAt                time.Time            `json:"nextPollAt"`
+	CancellationAttempts      int                  `json:"cancellationAttempts"`
+	CancellationLastErrorCode string               `json:"cancellationLastErrorCode,omitempty"`
+	LastErrorCode             string               `json:"lastErrorCode,omitempty"`
+	CreateFailures            int                  `json:"createFailures"`
+	CreateExhausted           bool                 `json:"createExhausted"`
 }
 
 type priceChangeJSON struct {
@@ -149,24 +151,26 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 
 	for _, group := range state.Groups {
 		g := checkoutGroupJSON{
-			TenantID:               string(group.TenantID),
-			ReconciliationRequired: group.ReconciliationRequired,
-			CreationStatus:         creationStatus(group.CreationResult()),
-			ExternalCheckoutID:     group.ExternalCheckoutID,
-			Lines:                  make([]checkoutLineJSON, 0, len(group.Lines)),
-			Goods:                  rubles(group.Goods.Kopecks()),
-			Status:                 group.Status,
-			OrderID:                group.OrderID,
-			DeliveryPrice:          rubles(group.DeliveryPrice.Kopecks()),
-			Reason:                 group.Reason,
-			Tracking:               trackingResponse(group.Tracking),
-			ReturnFailed:           group.ReturnFailed,
-			ReturnReason:           group.ReturnReason,
-			PollFailures:           group.PollFailures,
-			NextPollAt:             group.NextPollAt,
-			CreateFailures:         group.CreateFailures,
-			LastErrorCode:          group.LastErrorCode,
-			CreateExhausted:        group.CreateExhausted,
+			TenantID:                  string(group.TenantID),
+			ReconciliationRequired:    group.ReconciliationRequired,
+			CreationStatus:            creationStatus(group.CreationResult()),
+			ExternalCheckoutID:        group.ExternalCheckoutID,
+			Lines:                     make([]checkoutLineJSON, 0, len(group.Lines)),
+			Goods:                     rubles(group.Goods.Kopecks()),
+			Status:                    group.Status,
+			OrderID:                   group.OrderID,
+			DeliveryPrice:             rubles(group.DeliveryPrice.Kopecks()),
+			Reason:                    group.Reason,
+			Tracking:                  trackingResponse(group.Tracking),
+			ReturnFailed:              group.ReturnFailed,
+			ReturnReason:              group.ReturnReason,
+			PollFailures:              group.PollFailures,
+			NextPollAt:                group.NextPollAt,
+			CreateFailures:            group.CreateFailures,
+			LastErrorCode:             group.LastErrorCode,
+			CancellationAttempts:      group.CancellationAttempts,
+			CancellationLastErrorCode: group.CancellationLastErrorCode,
+			CreateExhausted:           group.CreateExhausted,
 		}
 
 		for _, change := range group.CurrentPrices {

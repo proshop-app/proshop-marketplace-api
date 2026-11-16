@@ -2771,10 +2771,11 @@ paths:
       summary: Отменить покупку до начала оплаты
       description: >-
         Только владелец. Повтор безопасен. Товары возвращаются в корзину существующим
-        механизмом частичного возврата. Оплата закрывается сразу. Пока сервер не имеет
-        команды отмены, созданные или возможные заказы остаются на сверке:
+        механизмом частичного возврата. Оплата закрывается сразу. До подтверждения команды
         reconciliationRequired=true не означает подтверждённую магазином отмену.
         Группа с возможным заказом получает cancellation_requested; без попытки создания — rejected.
+        Отмена выполняется через outbox командой cancel-by-checkout; cancelled или absent подтверждает отмену.
+        ORDER_NOT_CANCELLABLE оставляет группу на сверке с причиной для оператора.
         cancelled означает подтверждение магазина.
         Заказ и резерв живут у магазина до подтверждения отмены или expiresAt.
         При неизвестном результате или подтверждённой оплате — 409 checkout.transition;
@@ -7493,7 +7494,7 @@ components:
           description: Результат создания группы; созданный заказ остаётся created после отмены или истечения.
         reconciliationRequired:
           type: boolean
-          description: Возможный или известный заказ требует отмены/сверки магазина; заказ и резерв живут до подтверждения или expiresAt.
+          description: Ожидается cancel-by-checkout; cancelled/absent снимает сверку. ORDER_NOT_CANCELLABLE оставляет её с причиной для оператора.
         creationDeadline:
           type: string
           format: date-time
@@ -7565,6 +7566,13 @@ components:
           maximum: 5
         createExhausted:
           type: boolean
+        cancellationAttempts:
+          type: integer
+          minimum: 0
+          description: Число начатых вызовов команды отмены магазина.
+        cancellationLastErrorCode:
+          type: string
+          description: Последняя ошибка отмены; очищается при подтверждённой отмене.
         lastErrorCode:
           type: string
         currentPrices:
@@ -8297,7 +8305,7 @@ components:
           description: Результат создания группы; созданный заказ остаётся created после отмены или истечения.
         reconciliationRequired:
           type: boolean
-          description: Возможный или известный заказ требует отмены/сверки магазина; заказ и резерв живут до подтверждения или expiresAt.
+          description: Ожидается cancel-by-checkout; cancelled/absent снимает сверку. ORDER_NOT_CANCELLABLE оставляет её с причиной для оператора.
         creationDeadline:
           type: string
           format: date-time
@@ -8368,6 +8376,13 @@ components:
           maximum: 5
         createExhausted:
           type: boolean
+        cancellationAttempts:
+          type: integer
+          minimum: 0
+          description: Число начатых вызовов команды отмены магазина.
+        cancellationLastErrorCode:
+          type: string
+          description: Последняя ошибка отмены; очищается при подтверждённой отмене.
         lastErrorCode:
           type: string
         currentPrices:
