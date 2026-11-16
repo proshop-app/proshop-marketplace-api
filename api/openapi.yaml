@@ -478,6 +478,35 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/internal/tenants/{tenantId}/status:
+    get:
+      tags: [internal]
+      summary: Текущие статусы предложений и участия магазина
+      operationId: getTenantStatuses
+      security: [{ serverApiToken: [] }]
+      description: >-
+        SERVER_API_TOKEN; пустая настройка — 404, неверный Bearer — 401.
+        Тот же расчёт, что в событиях статусов. С ids читаются только товары, participant — null.
+        Без ids читается только участник, items — пустой массив.
+        Неизвестные и удалённые товары пропускаются, отсутствующий участник — null.
+        Запрос ничего не сохраняет и не публикует.
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - name: ids
+          in: query
+          description: От 1 до 200 непустых id товаров через запятую; дубли удаляются; participant — null.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Текущая обратная связь площадки
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketplaceStatusSnapshot" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/internal/tenants/{tenantId}/participation:
     get:
       tags: [internal]
@@ -5100,6 +5129,65 @@ components:
         total: { type: integer, minimum: 0 }
         limit: { type: integer, minimum: 0 }
         offset: { type: integer, minimum: 0 }
+    MarketplaceStatusReason:
+      type: [object, "null"]
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+    MarketplaceStatusDecision:
+      type: [object, "null"]
+      required: [action, reason, note, at]
+      properties:
+        action: { type: string, enum: [allow, reject] }
+        reason: { $ref: "#/components/schemas/MarketplaceStatusReason" }
+        note: { type: string, minLength: 1, maxLength: 2000 }
+        at: { type: string, format: date-time }
+    MarketplaceOfferStatus:
+      type: object
+      required: [schemaVersion, tenantId, productId, revision, status, visible, reasons, decision, at]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        tenantId: { type: string }
+        productId: { type: string }
+        revision: { type: integer, minimum: 0 }
+        status: { type: string, enum: [published, pending, hidden] }
+        visible:
+          type: boolean
+          description: Допуск карточки, без состояния участника, как в событии статуса.
+        reasons:
+          type: array
+          items:
+            type: object
+            required: [source, key, message]
+            properties:
+              source: { type: string, enum: [taxonomy, moderation] }
+              key: { type: string }
+              message: { type: string }
+        decision: { $ref: "#/components/schemas/MarketplaceStatusDecision" }
+        at: { type: string, format: date-time }
+    MarketplaceParticipantStatus:
+      type: [object, "null"]
+      required: [schemaVersion, tenantId, stage, enabled, trust, reason, note, by, at]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        tenantId: { type: string }
+        stage: { $ref: "#/components/schemas/ParticipationStage" }
+        enabled: { type: boolean }
+        trust: { type: string, enum: [probation, trusted] }
+        reason: { $ref: "#/components/schemas/MarketplaceStatusReason" }
+        note: { type: string }
+        by: { type: string, enum: [operator, system] }
+        at: { type: string, format: date-time }
+    MarketplaceStatusSnapshot:
+      type: object
+      description: С ids — только items и participant null; без ids — участник и items [].
+      required: [items, participant]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MarketplaceOfferStatus" }
+        participant: { $ref: "#/components/schemas/MarketplaceParticipantStatus" }
     ParticipationStage:
       type: string
       enum: [candidate, connected, returned, disconnected]

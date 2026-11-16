@@ -6,15 +6,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres/pgtest"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 const (
@@ -43,7 +47,23 @@ func TestM5VerdictStorage(t *testing.T) {
 			Note:   "Заметка",
 			At:     now,
 		})
-		return tx.ModerationVerdicts().Save(ctx, v)
+		if err := tx.ModerationVerdicts().Save(ctx, v); err != nil {
+			return err
+		}
+		snapshot := catalog.Snapshot{
+			TenantID:      "t1",
+			ProductID:     "p1",
+			Revision:      1,
+			At:            now,
+			Card:          catalog.Card{Name: "Товар"},
+			Price:         money.FromKopecks(100),
+			PriceProfiles: []catalog.PriceProfile{{Key: catalog.DefaultPriceProfile, Price: money.FromKopecks(100)}},
+		}
+		product, err := catalog.NewProduct(snapshot, now)
+		if err != nil {
+			return err
+		}
+		return tx.Products().Save(ctx, product)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -57,6 +77,17 @@ func TestM5VerdictStorage(t *testing.T) {
 		state := v.State()
 		if state.Operator.ID != "o1" || state.Decision.Reason.Text != "Текст" {
 			return fmt.Errorf("%+v", state)
+		}
+		batch, err := tx.Offers().Batch(ctx, []ids.OfferID{{Tenant: "t1", Product: "p1"}})
+		if err != nil {
+			return err
+		}
+		if len(batch) != 1 || batch[0].Verdict == nil {
+			return fmt.Errorf("пакет не содержит вердикт: %+v", batch)
+		}
+		read := batch[0].Verdict.State()
+		if read.Operator != state.Operator || !reflect.DeepEqual(read.Decision, state.Decision) {
+			return fmt.Errorf("пакет потерял автора или решение: %+v", read)
 		}
 		filter := moderation.Filter{DecidedBy: moderation.Operator, Limit: 10}
 		page, total, err := tx.ModerationVerdicts().List(ctx, filter)

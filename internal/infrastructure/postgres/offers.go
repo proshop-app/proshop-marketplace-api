@@ -29,7 +29,10 @@ const (
 			pa.awaiting_review, pa.subsidy, pa.settings_synced_at, pa.version, pa.created_at, pa.updated_at,
 			pa.free_delivery_from, pa.delivery_settings, pa.trust, pa.approved_offers,
 			t.tenant_id, t.slug, t.status, t.cell, t.plan, t.hosts, t.event_at, t.version, t.updated_at,
-			to_jsonb(mv)
+			CASE WHEN mv.tenant_id IS NULL THEN NULL ELSE
+				to_jsonb(mv) || jsonb_build_object('operator', jsonb_build_object(
+					'id', mv.operator_id, 'name', mv.operator_name))
+			END
 		FROM catalog_products p
 		LEFT JOIN offers o ON o.tenant_id = p.tenant_id AND o.product_id = p.product_id
 		LEFT JOIN participants pa ON pa.tenant_id = p.tenant_id

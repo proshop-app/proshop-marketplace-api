@@ -18,6 +18,7 @@ import (
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	appoperator "github.com/proshop-app/proshop-marketplace/internal/application/operator"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -36,6 +37,7 @@ type Check struct {
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
+	Statuses       *moderationstatus.Service
 	Features       *appbuyer.Features
 	Promotion      *apppromotion.Service
 	ServerAPIToken string
@@ -84,6 +86,7 @@ func routes(deps Deps) []route {
 	catalog := &catalogHandlers{queries: deps.Catalog, sellers: deps.SellersCounts}
 	taxonomy := &taxonomyHandlers{service: deps.Taxonomy, catalog: deps.Catalog}
 	participants := &participantHandlers{service: deps.Participants, buyerFeatures: deps.Features}
+	statuses := &statusHandlers{service: deps.Statuses}
 	features := &buyerFeatureHandlers{
 		service:        deps.Features,
 		trustedProxies: deps.TrustedProxies,
@@ -168,6 +171,7 @@ func routes(deps Deps) []route {
 			operator(participants.moderateCard),
 		},
 		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/participation", machine(participants.participation)},
+		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/status", machine(statuses.get)},
 		{
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/participation/submit",
