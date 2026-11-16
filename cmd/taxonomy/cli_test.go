@@ -3,8 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
 func TestCheckDoesNotNeedDatabase(t *testing.T) {
@@ -64,5 +70,36 @@ func TestApplyRequiresCategoryReplacementAcknowledgementBeforeDatabase(t *testin
 	if code := run([]string{"apply"}, &output, &diagnostics); code != 2 ||
 		!strings.Contains(diagnostics.String(), "--confirm-category-replacement") {
 		t.Fatal(code, diagnostics.String())
+	}
+}
+
+func TestReleaseFailureReportsDomainReasonWithoutCause(t *testing.T) {
+	secret := errors.New("postgres://user:secret-value@private-host/database")
+	for _, domain := range []*errs.Error{
+		reference.ErrDictionaryNotFound,
+		taxonomy.ErrReleaseConflict,
+		taxonomy.ErrInvalid.WithMessage("словарь не существует: d1"),
+	} {
+		t.Run(domain.Key(), func(t *testing.T) {
+			var output bytes.Buffer
+			err := fmt.Errorf("внешняя ошибка %s: %w", secret.Error(), domain.Wrap(secret))
+			code := releaseFailure(&output, err)
+			want := "поставка не применена: " + domain.Key() + ": " + domain.Message() + "\n"
+			if code != 1 || output.String() != want {
+				t.Fatalf("code=%d, диагностика=%q", code, output.String())
+			}
+		})
+	}
+	for _, err := range []error{
+		secret,
+		fmt.Errorf("подключение: %w", secret),
+		errs.New(errs.Internal, "storage.internal", secret.Error()).Wrap(secret),
+		errs.New(errs.Unavailable, "storage.unavailable", secret.Error()).Wrap(secret),
+	} {
+		var output bytes.Buffer
+		if code := releaseFailure(&output, err); code != 1 ||
+			output.String() != "поставка не применена: проверьте миграции, версию и изменения оператора\n" {
+			t.Fatalf("code=%d, диагностика=%q", code, output.String())
+		}
 	}
 }

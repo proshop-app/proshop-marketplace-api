@@ -21,6 +21,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
 const commandTimeout = 2 * time.Minute
@@ -154,8 +155,7 @@ func run(args []string, output, diagnostics io.Writer) int {
 	}
 	result, err := operation(ctx, release)
 	if err != nil {
-		// Ошибка драйвера может содержать адрес или credentials: CLI не печатает её.
-		return failure(diagnostics, "поставка не применена: проверьте миграции, версию и изменения оператора", 1)
+		return releaseFailure(diagnostics, err)
 	}
 	if err := json.NewEncoder(output).Encode(result); err != nil {
 		return 1
@@ -170,4 +170,13 @@ func failure(output io.Writer, message string, code int) int {
 	}
 
 	return code
+}
+
+func releaseFailure(output io.Writer, err error) int {
+	message := "поставка не применена: проверьте миграции, версию и изменения оператора"
+	if domain, ok := errs.As(err); ok && domain.Code() != errs.Internal && domain.Code() != errs.Unavailable {
+		// Причина и внешняя обёртка могут содержать реквизиты подключения; выводим только доменное сообщение.
+		message = "поставка не применена: " + domain.Key() + ": " + domain.Message()
+	}
+	return failure(output, message, 1)
 }

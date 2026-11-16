@@ -5,7 +5,9 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	app "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
@@ -35,18 +38,8 @@ func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
 		&fake.Publisher{},
 		appreference.Config{Topic: "reference.changed"},
 	)
-	for _, attribute := range release.Attributes {
-		if attribute.Type != "enum" {
-			continue
-		}
-		delivery, _, err := referencedata.Load(os.DirFS("../../../deploy/reference/" + attribute.Dictionary))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := registry.Apply(ctx, delivery); err != nil {
-			t.Fatal(err)
-		}
-	}
+	seedReleaseDictionaries(ctx, t, registry, release)
+	release.ConfirmCategoryReplacement = true
 	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{}, nil)
 	results := make(chan taxonomy.ReleaseResult, 2)
 	failures := make(chan error, 2)
@@ -140,7 +133,7 @@ func TestReleasePreservesOperatorChanges(t *testing.T) {
 		"categories",
 		operator.Definition(),
 		1,
-		app.LoadOptions{},
+		app.LoadOptions{ReplaceCategories: true},
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -199,4 +192,93 @@ func testRelease(version int64, suffix string) taxonomy.Release {
 			},
 		},
 	}
+}
+
+// Публикация проверяет и источники подсказок, даже если у открытого словаря пока нет записей.
+func seedReleaseDictionaries(
+	ctx context.Context,
+	t *testing.T,
+	registry *appreference.Service,
+	release taxonomy.Release,
+) {
+	t.Helper()
+	dictionaries := map[string]reference.ImportDictionary{}
+	for _, attribute := range release.Attributes {
+		if attribute.Dictionary == "" {
+			continue
+		}
+		item := reference.ImportDictionary{
+			Code:    attribute.Dictionary,
+			Kind:    reference.KindOpen,
+			Release: 1,
+			Entries: []reference.DeliveryEntry{},
+		}
+		if attribute.Type == "enum" {
+			item.Kind = reference.KindClosed
+			item.Entries = releaseDictionaryEntries(t, release, attribute.Dictionary)
+		}
+		dictionaries[item.Code] = item
+	}
+	for _, binding := range release.DictionaryBindings {
+		for _, code := range binding.Dictionaries {
+			if _, exists := dictionaries[code]; !exists {
+				dictionaries[code] = reference.ImportDictionary{
+					Code:    code,
+					Kind:    reference.KindOpen,
+					Release: 1,
+					Entries: []reference.DeliveryEntry{},
+				}
+			}
+		}
+	}
+	input := reference.ImportPackage{
+		SchemaVersion: 1,
+		Sources:       []reference.ImportSource{{ID: "s1", URL: "https://example.org/data", License: "CC0-1.0"}},
+	}
+	for _, item := range dictionaries {
+		input.Dictionaries = append(input.Dictionaries, item)
+	}
+	if _, err := registry.Import(ctx, "", input); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func releaseDictionaryEntries(t *testing.T, release taxonomy.Release, code string) []reference.DeliveryEntry {
+	t.Helper()
+	directory := "../../../deploy/reference/" + code
+	if _, err := os.Stat(directory); err == nil {
+		delivery, _, err := referencedata.Load(os.DirFS(directory))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return delivery.Entries
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal(err)
+	}
+	// У отсутствующей поставки берём только канонические ключи метаданных, без выдуманных значений.
+	required := map[string]bool{}
+	for _, attribute := range release.Attributes {
+		if attribute.Dictionary != code {
+			continue
+		}
+		for value := range attribute.ValuesMeta {
+			required[value] = true
+		}
+		for value := range attribute.SearchTermsByValue {
+			required[value] = true
+		}
+	}
+	values := make([]string, 0, len(required))
+	for value := range required {
+		values = append(values, value)
+	}
+	sort.Strings(values)
+	if len(values) == 0 {
+		t.Fatalf("нет подтверждённых значений для закрытого словаря %s", code)
+	}
+	entries := make([]reference.DeliveryEntry, 0, len(values))
+	for _, value := range values {
+		entries = append(entries, reference.DeliveryEntry{Canonical: value, Status: reference.StatusConfirmed})
+	}
+	return entries
 }
