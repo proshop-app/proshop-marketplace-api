@@ -4838,6 +4838,7 @@ shoe_care_product:
   hiddenFacets: [model]
   extends: durable
   attributes:
+  - product_type
   - volume
   - ingredients
   - shelf_life
@@ -4851,6 +4852,7 @@ shoe_care_tool:
   hiddenFacets: [model]
   extends: common_geometry
   attributes:
+  - product_type
   - color
   - material
   optional:
@@ -6131,6 +6133,7 @@ common_clothing:
   abstract: true
   extends: durable
   attributes:
+  - product_type
   - target_gender
   - min_age
   - max_age
@@ -6158,6 +6161,7 @@ common_footwear:
   abstract: true
   extends: durable
   attributes:
+  - product_type
   - size_footwear_label
   - target_gender
   - min_age
@@ -7019,9 +7023,13 @@ common_textile_material:
   - fabric_composition
 
 clothing_headwear:
+  attributes:
+  - product_type
   extends: headwear
   hiddenFacets: [model]
 
 footwear_accessory:
+  attributes:
+  - product_type
   extends: accessory
   hiddenFacets: [model]

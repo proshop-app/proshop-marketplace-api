@@ -21,16 +21,11 @@ import (
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencedata"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/taxonomyfile"
 )
 
 const releaseDataPath = "../../infrastructure/taxonomydata/"
-
-type releaseSeedEntry struct {
-	Canonical string          `json:"canonical"`
-	Status    string          `json:"status"`
-	Metadata  json.RawMessage `json:"metadata"`
-}
 
 func TestRelease10ActualFilesThroughHTTP(t *testing.T) {
 	store := fake.NewStore()
@@ -64,7 +59,7 @@ func TestRelease10ActualFilesThroughHTTP(t *testing.T) {
 		handler.ServeHTTP(w, r)
 		return w
 	}
-	// Файлы не подменены маленькой моделью. Нет target_gender в deploy/reference:
+	// Файлы не подменены маленькой моделью. Намеренно не загружаем target_gender:
 	// ошибка реестра не должна частично опубликовать новые атрибуты.
 	w := call("attributes", attributes, previous.Version, "")
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "target_gender") {
@@ -162,24 +157,11 @@ func seedRelease10Dictionaries(
 		if kind != reference.KindClosed {
 			continue
 		}
-		code := attribute.Dictionary
-		if targetOnly {
-			code = "gender"
-		}
-		body, err := os.ReadFile("../../../deploy/reference/" + code + "/entries.json")
-		if err != nil {
-			t.Fatal(err)
-		}
-		var entries []releaseSeedEntry
-		if err := json.Unmarshal(body, &entries); err != nil {
-			t.Fatal(err)
-		}
-		err = store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
+		entries := release10DictionaryEntries(t, attribute.Dictionary)
+		err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 			var records []*reference.Entry
 			for _, seed := range entries {
-				// Только для fake-теста: существующие взрослые значения gender,
-				// без возрастных вариантов. Это не поставка отсутствующего пула.
-				if seed.Status != "confirmed" || targetOnly && strings.HasPrefix(seed.Canonical, "Для ") {
+				if seed.Status != reference.StatusConfirmed {
 					continue
 				}
 				entry, err := reference.NewEntry(
@@ -206,4 +188,30 @@ func seedRelease10Dictionaries(
 			t.Fatal(err)
 		}
 	}
+}
+
+func release10DictionaryEntries(t *testing.T, code string) []reference.DeliveryEntry {
+	t.Helper()
+	root := "../../../deploy/reference"
+	directory := root + "/" + code
+	if _, err := os.Stat(directory); err == nil {
+		delivery, _, err := referencedata.Load(os.DirFS(directory))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return delivery.Entries
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	input, err := referencedata.LoadImport(os.DirFS(root), "bootstrap.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dictionary := range input.Dictionaries {
+		if dictionary.Code == code && dictionary.Kind == reference.KindClosed {
+			return dictionary.Entries
+		}
+	}
+	t.Fatalf("закрытый словарь %s отсутствует в поставках и bootstrap", code)
+	return nil
 }

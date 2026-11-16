@@ -213,8 +213,9 @@ func TestFacetBudgetPinsRareColor(t *testing.T) {
 		},
 	}}
 	for _, color := range []taxonomy.Attribute{
+		{Code: "color", Type: "string", Facet: true, FacetPinned: true},
 		{Code: "color", Type: "string", Facet: true},
-		{Code: "color", Type: "string", Facet: true, Deprecated: true},
+		{Code: "color", Type: "string", Facet: true, FacetPinned: true, Deprecated: true},
 		{Code: "color", Type: "string"},
 	} {
 		d.Attributes[len(d.Attributes)-1] = color
@@ -234,7 +235,7 @@ func TestFacetBudgetPinsRareColor(t *testing.T) {
 						filters[code] = ports.AttributeFilter{Values: []string{"v1"}}
 					}
 				}
-				if id != "c2" && color.Facet && !color.Deprecated {
+				if id != "c2" && color.Facet && color.FacetPinned && !color.Deprecated {
 					want = append(want[:len(want)-1], "color")
 					if selected == 1 {
 						want[len(want)-2] = "a039"

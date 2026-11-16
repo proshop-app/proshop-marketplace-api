@@ -90,6 +90,11 @@ func auditAttribute(field taxonomy.Attribute) error {
 	if !field.Deprecated {
 		switch normalizedName(field.Name) {
 		case "тип", "вид", "назначение", "размер", "классзащиты":
+			// Объект единственного общего вида товара определён закрытым словарём.
+			if field.Code == "product_type" && field.Name == "Тип" &&
+				field.Type == "enum" && field.Dictionary == "product_type" {
+				break
+			}
 			return qualityError(field.Code, "название без объекта или системы")
 		}
 	}

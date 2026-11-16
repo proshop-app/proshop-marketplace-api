@@ -7170,6 +7170,10 @@ components:
       additionalProperties: false
       required: [code, name, type]
       properties:
+        facetPinned:
+          type: boolean
+          default: false
+          description: Закрепляет фасет в бюджете без порога охвата; без выбора нужно минимум два значения.
         format: { type: string, enum: [gtin, isbn], description: "Формат идентификатора независимо от кода атрибута" }
         code: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
         name: { type: string, minLength: 1, maxLength: 256 }
@@ -7265,6 +7269,10 @@ components:
       type: object
       required: [code, name, type, required]
       properties:
+        facetPinned:
+          type: boolean
+          default: false
+          description: Закрепляет фасет в бюджете без порога охвата; без выбора нужно минимум два значения.
         format: { type: string, enum: [gtin, isbn], description: "Формат идентификатора независимо от кода атрибута" }
         code: { type: string }
         name: { type: string }
