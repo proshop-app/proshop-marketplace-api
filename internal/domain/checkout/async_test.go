@@ -44,8 +44,7 @@ func TestCreationDeadlineAndLateResult(t *testing.T) {
 	if c.Groups()[0].Status != checkout.GroupUnconfirmed || !c.Groups()[0].ReconciliationRequired {
 		t.Fatal("поздний заказ не открывает оплату", c.State())
 	}
-	order.Status, order.Reason = checkout.GroupCancelled, "expired"
-	if _, err := c.Observe("t1", order, t0, t0); err != nil {
+	if _, err := c.CompleteCancellation("t1", order.OrderID, t0); err != nil {
 		t.Fatal(err)
 	}
 	if c.Groups()[0].ReconciliationRequired {
@@ -69,8 +68,7 @@ func TestBuyerCancellationAndCreationResult(t *testing.T) {
 	if err := c.BeginPayment(t0); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
-	order.Status, order.Reason = checkout.GroupCancelled, "expired"
-	if _, err := c.Observe("t1", order, t0, t0); err != nil {
+	if _, err := c.CompleteCancellation("t1", order.OrderID, t0); err != nil {
 		t.Fatal(err)
 	}
 	if c.Groups()[0].Status != checkout.GroupCancelled ||
@@ -99,8 +97,11 @@ func TestAbandonedFailureAndPaymentFence(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if c.Groups()[0].ReconciliationRequired {
-		t.Fatal(c.State())
+	if !c.Groups()[0].ReconciliationRequired {
+		t.Fatal("окончательное закрытие требует ответа команды отмены")
+	}
+	if _, err := c.CompleteCancellation("t1", "", t0); err != nil {
+		t.Fatal(err)
 	}
 	c = creatingWithDeadline(t)
 	attach(t, c, 0)
@@ -197,5 +198,33 @@ func TestNextWorkAtMatchesDueRules(t *testing.T) {
 				t.Fatalf("%+v: %v, %v at %v", g, next, found, now)
 			}
 		}
+	}
+}
+
+func TestCancellationConfirmationFencesLateCreation(t *testing.T) {
+	c := creatingWithDeadline(t)
+	if _, err := c.ClaimCreation("t1", "attempt", t0.Add(time.Second), t0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Cancel(t0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.CompleteCancellation("t1", "", t0); err != nil {
+		t.Fatal(err)
+	}
+	order := attach(t, c, 0)
+	if _, err := c.CompleteCreation("t1", "attempt", order, t0); err != nil {
+		t.Fatal(err)
+	}
+	g := c.Groups()[0]
+	if g.Status != checkout.GroupCancelled || g.LastOrderStatus != checkout.GroupCancelled ||
+		g.ReconciliationRequired || !g.CancellationConfirmed || g.PollDue(t0) {
+		t.Fatal(g)
+	}
+	if _, err := c.BlockCancellation("t1", "t1-order", checkout.GroupPaid, "refused", t0); err != nil {
+		t.Fatal(err)
+	}
+	if c.Groups()[0].CancellationBlocked {
+		t.Fatal("поздний отказ отменил подтверждение")
 	}
 }

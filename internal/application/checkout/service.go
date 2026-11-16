@@ -675,7 +675,13 @@ func (s *Service) observeTransitions(tx ports.Tx, before, after checkout.State) 
 	}
 	for i, g := range after.Groups {
 		old := before.Groups[i]
-		events := make([]string, 0, 4)
+		events := make([]string, 0, 6)
+		if g.CancellationConfirmed && !old.CancellationConfirmed {
+			events = append(events, "cancellation_confirmed")
+		}
+		if g.CancellationBlocked && !old.CancellationBlocked {
+			events = append(events, "cancellation_refused")
+		}
 		if g.Status == checkout.GroupUnconfirmed && old.Status != g.Status {
 			events = append(events, "creation_expired")
 		}

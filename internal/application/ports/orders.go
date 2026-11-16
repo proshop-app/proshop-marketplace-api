@@ -23,6 +23,13 @@ var ErrInvalidOrderStatus = errs.New(
 	"неизвестный статус заказа магазина",
 )
 
+// ErrInvalidCancellationResponse означает неисправимый ответ команды отмены.
+var ErrInvalidCancellationResponse = errs.New(
+	errs.Invalid,
+	"platform.invalid_cancellation_response",
+	"ответ отмены не соответствует контракту",
+)
+
 // PriceChanged содержит актуальные цены для повторного оформления, без изменения снимка заказа.
 type PriceChanged struct{ Items []checkout.PriceChange }
 
@@ -47,8 +54,28 @@ type CreateOrderRequest struct {
 	DeliveryPrice      money.Money      `json:"deliveryPrice"`
 }
 
+// CancelOrderRequest — команда запрета создания и отмены заказа по ключу оформления.
+type CancelOrderRequest struct {
+	ExternalCheckoutID string       `json:"externalCheckoutId"`
+	GroupID            ids.TenantID `json:"groupId"`
+	Reason             string       `json:"reason"`
+}
+
+// CancelOrderResult — подтверждённая отмена либо запрет создания отсутствующего заказа.
+type CancelOrderResult struct {
+	OrderID string
+	Absent  bool
+}
+
+// OrderNotCancellable сохраняет известный заказ для операторской сверки.
+type OrderNotCancellable struct {
+	OrderID string
+	Status  checkout.GroupStatus
+}
+
 // SellerOrders — команды и сверка заказов через тот же доверенный канал.
 type SellerOrders interface {
+	CancelOrder(context.Context, ids.TenantID, CancelOrderRequest) (CancelOrderResult, error)
 	// StubPayment идемпотентно подтверждает заказ болванкой; amount — сумма в копейках.
 	StubPayment(ctx context.Context, tenantID ids.TenantID, orderID string, amount money.Money) error
 	CreateOrder(context.Context, ids.TenantID, CreateOrderRequest) (checkout.SellerOrder, error)
@@ -68,3 +95,8 @@ func (e *PriceChanged) Unwrap() error { return ErrPriceChanged }
 func (e *OrderRefusal) Error() string { return "platform.order_refusal: " + e.Code }
 
 func (e *OrderRefusal) Unwrap() error { return ErrOrderRefusal }
+
+func (e *OrderNotCancellable) Error() string {
+	return "platform.order_not_cancellable: " + string(e.Status)
+}
+func (e *OrderNotCancellable) Unwrap() error { return ErrOrderRefusal }

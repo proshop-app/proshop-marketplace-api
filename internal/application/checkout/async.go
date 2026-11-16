@@ -12,9 +12,10 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-// Виды задач создания и сверки независимой группы магазина.
+// Виды задач создания, отмены и сверки независимой группы магазина.
 const (
 	TaskCreateOrder    = "checkout.create_order"
+	TaskCancelOrder    = "checkout.cancel_order"
 	TaskPollOrder      = "checkout.poll_order"
 	TaskExpireCreation = "checkout.expire_creation"
 )
@@ -67,6 +68,8 @@ func (s *Service) HandleOrderTask(ctx context.Context, task ports.Task) error {
 		return errs.New(errs.Invalid, "checkout.invalid_task", "повреждена задача заказа").Wrap(err)
 	}
 	switch task.Kind {
+	case TaskCancelOrder:
+		return s.cancelGroup(ctx, payload.BuyerID, payload.CheckoutID, task.TenantID)
 	case TaskPollOrder:
 		return s.pollGroup(ctx, payload.BuyerID, payload.CheckoutID, task.TenantID)
 	case TaskExpireCreation:
@@ -74,7 +77,7 @@ func (s *Service) HandleOrderTask(ctx context.Context, task ports.Task) error {
 			_, err := c.ExpireCreation(now)
 			return err
 		}
-		state, err := s.retrySelection(ctx, payload.BuyerID, payload.CheckoutID, nil, expire)
+		state, err := s.retrySelection(ctx, payload.BuyerID, payload.CheckoutID, s.enqueueCancellations, expire)
 		if err != nil {
 			return err
 		}
@@ -107,7 +110,7 @@ func (s *Service) resumePurchase(ctx context.Context, state checkout.State) erro
 				}
 			}
 		}
-		return nil
+		return s.enqueueCancellations(ctx, tx, c)
 	}
 	_, err := s.updateSelection(ctx, state.BuyerID, state.ID, enqueue, func(c *checkout.Checkout, now time.Time) error {
 		return nil
@@ -118,9 +121,15 @@ func (s *Service) resumePurchase(ctx context.Context, state checkout.State) erro
 	return s.ReturnCancelled(ctx, state.BuyerID, state.ID)
 }
 
-// Cancel фиксирует отказ покупателя; без команды отмены магазина остаётся операторская сверка.
+// Cancel фиксирует отказ покупателя и команды магазинам в одной транзакции.
 func (s *Service) Cancel(ctx context.Context, buyerID, id ids.UUID) (checkout.State, error) {
-	return s.retrySelection(ctx, buyerID, id, s.returnItems, func(c *checkout.Checkout, now time.Time) error {
+	after := func(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
+		if err := s.returnItems(ctx, tx, c); err != nil {
+			return err
+		}
+		return s.enqueueCancellations(ctx, tx, c)
+	}
+	return s.retrySelection(ctx, buyerID, id, after, func(c *checkout.Checkout, now time.Time) error {
 		_, err := c.Cancel(now)
 		return err
 	})

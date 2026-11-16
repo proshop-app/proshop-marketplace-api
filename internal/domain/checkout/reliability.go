@@ -60,7 +60,7 @@ func (g Group) CreationDue(now time.Time) bool {
 // PollDue учитывает срок следующего обращения и окончательные статусы.
 func (g Group) PollDue(now time.Time) bool {
 	if g.Abandoned {
-		return g.ReconciliationRequired && g.OrderID != "" && !now.Before(g.NextPollAt)
+		return g.CancellationBlocked && g.ReconciliationRequired && g.OrderID != "" && !now.Before(g.NextPollAt)
 	}
 	return g.OrderID != "" && g.Status != GroupCancelled && g.Status != GroupReturned && !now.Before(g.NextPollAt)
 }
@@ -107,9 +107,13 @@ func (c *Checkout) CompleteCreation(
 	}
 	changed, err := c.AttachOrder(tenant, order, now)
 	if err == nil {
+		progress := g.CreateToken != "" || g.CreateFailures != 0 || g.LastErrorCode != ""
 		g.CreateToken = ""
 		g.CreateFailures = 0
 		g.LastErrorCode = ""
+		if !changed && progress {
+			return true, c.touch(now)
+		}
 	}
 	return changed, err
 }
@@ -131,10 +135,6 @@ func (c *Checkout) FailCreation(
 		return false, nil
 	}
 	if g.Abandoned {
-		// Окончательный отказ доказывает отсутствие нового заказа, кроме конфликта чужого тела по ключу.
-		if terminal != "" && !reconciliation {
-			g.ReconciliationRequired = false
-		}
 		g.CreateToken = ""
 		g.LastErrorCode = code
 		return true, c.touch(now)
@@ -205,7 +205,10 @@ func (c *Checkout) FailPoll(tenant ids.TenantID, token, reason string, now time.
 		return false, nil
 	}
 	g.PollToken = ""
-	g.LastErrorCode, g.Reason = reason, reason
+	g.LastErrorCode = reason
+	if !g.CancellationBlocked {
+		g.Reason = reason
+	}
 	if g.PollFailures < MaxOrderFailures {
 		g.PollFailures++
 	}

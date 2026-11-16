@@ -408,7 +408,8 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 			(body.Code == "MARKETPLACE_STUB_PAYMENT_AMOUNT" || body.Code == "MARKETPLACE_STUB_PAYMENT_STATE"):
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
 		case reply.StatusCode == http.StatusConflict && (body.Code == "DELIVERY_UNAVAILABLE" ||
-			body.Code == "DELIVERY_CHANGED" || body.Code == "OUT_OF_STOCK" || body.Code == "IDEMPOTENCY_CONFLICT"):
+			body.Code == "DELIVERY_CHANGED" || body.Code == "OUT_OF_STOCK" ||
+			body.Code == "IDEMPOTENCY_CONFLICT" || body.Code == "ORDER_CHECKOUT_CANCELLED"):
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
 		case reply.StatusCode == http.StatusNotFound && body.Code == "ORDER_NOT_FOUND":
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}

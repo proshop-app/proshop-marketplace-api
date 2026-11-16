@@ -221,4 +221,37 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	if err := service.HandleOrderTask(ctx, tasks[0]); err != nil {
 		t.Fatal(err)
 	}
+	request.Now, request.LeaseUntil = clock.Now(), clock.Now().Add(time.Second)
+	request.Kinds = []string{appcheckout.TaskCancelOrder}
+	tasks, err = queue.Claim(ctx, request)
+	if err != nil || len(tasks) != 1 {
+		t.Fatal("отмена поставлена вместе с переходом", tasks, err)
+	}
+	platform.FailCancel("t1", context.DeadlineExceeded)
+	if err := service.HandleOrderTask(ctx, tasks[0]); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	state, err = service.Get(ctx, buyerA, c.ID())
+	if err != nil || state.Groups[0].CancellationAttempts != 1 ||
+		state.Groups[0].CancellationLastErrorCode != "platform.unavailable" {
+		t.Fatal(state, err)
+	}
+	platform.FailCancel("t1", nil)
+	if err := service.HandleOrderTask(ctx, tasks[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := queue.Complete(ctx, tasks[0].ID, tasks[0].Attempts, clock.Now()); err != nil {
+		t.Fatal(err)
+	}
+	state, err = service.Get(ctx, buyerA, c.ID())
+	if err != nil || !state.Groups[0].CancellationConfirmed || state.Groups[0].ReconciliationRequired ||
+		state.Groups[0].Status != checkout.GroupCancelled || state.Groups[0].CancellationAttempts != 2 ||
+		state.Groups[0].CancellationLastErrorCode != "" {
+		t.Fatal(state, err)
+	}
+	stuck, err = service.OperatorList(ctx, "", true)
+	if err != nil || len(stuck) != 0 {
+		t.Fatal(stuck, err)
+	}
+
 }

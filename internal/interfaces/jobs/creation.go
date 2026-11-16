@@ -14,14 +14,14 @@ const creationPollInterval = 200 * time.Millisecond
 
 // CreationRunner пополняет пул после каждого результата, независимо от других задач outbox.
 type CreationRunner struct {
-	executor *appcheckout.CreationExecutor
+	executor *appcheckout.Executor
 	logger   *slog.Logger
 	record   func(messaging.Outcome)
 }
 
 // NewCreationRunner подключает пул к жизненному циклу процесса.
 func NewCreationRunner(
-	executor *appcheckout.CreationExecutor,
+	executor *appcheckout.Executor,
 	logger *slog.Logger,
 	record func(messaging.Outcome),
 ) *CreationRunner {

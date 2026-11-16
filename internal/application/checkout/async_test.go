@@ -67,7 +67,12 @@ func executeTasks(ctx context.Context, e *env) error {
 		Limit:      200,
 		PerTenant:  200,
 		LeaseUntil: e.clock.Now().Add(5*time.Second + 100*time.Millisecond),
-		Kinds:      []string{appcheckout.TaskCreateOrder, appcheckout.TaskExpireCreation, appcheckout.TaskPollOrder},
+		Kinds: []string{
+			appcheckout.TaskCreateOrder,
+			appcheckout.TaskExpireCreation,
+			appcheckout.TaskPollOrder,
+			appcheckout.TaskCancelOrder,
+		},
 	})
 	if err != nil {
 		return err
@@ -382,7 +387,7 @@ func TestDefinitiveFirstPaymentRefusalAllowsCancellation(t *testing.T) {
 	}
 }
 
-func TestCreationExecutorRetriesRespectDeadline(t *testing.T) {
+func TestExecutorRetriesRespectDeadline(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
@@ -390,7 +395,7 @@ func TestCreationExecutorRetriesRespectDeadline(t *testing.T) {
 	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
-	executor := appcheckout.NewCreationExecutor(e.store, e.clock, e.service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, e.service)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
