@@ -21,7 +21,7 @@ var commands = map[string]command{
 	"moderation":              moderationReevaluate,
 	"serve":                   serve,
 	"reindex":                 reindex,
-	"reference":               referenceDelivery,
+	"reference":               referenceCommand,
 	"model-keys":              modelKeysReport,
 }
 

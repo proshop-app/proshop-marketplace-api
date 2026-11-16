@@ -211,45 +211,6 @@ func TestReferenceSnapshotHorizon(t *testing.T) {
 	}
 }
 
-func TestReferenceDeliveryOnPostgres(t *testing.T) {
-	service, _, _ := referenceService(t)
-	ctx := context.Background()
-	existing := createReference(t, service, "Бренд", reference.StatusCandidate)
-	aliases := []reference.DeliveryAlias{{Text: "Brend", Kind: reference.AliasTranslit}}
-	delivery := reference.Delivery{
-		Dictionary: referenceDict,
-		Version:    1,
-		Checksum:   strings.Repeat("a", 64),
-		Entries: []reference.DeliveryEntry{
-			{Canonical: "Бренд", Status: reference.StatusConfirmed, Aliases: aliases},
-			{Canonical: "Бренд Два", Status: reference.StatusConfirmed, Metadata: []byte(`{"directions": ["d1"]}`)},
-		},
-	}
-	applied, err := service.Apply(ctx, delivery)
-	if err != nil || applied.Created != 1 || applied.Updated != 1 {
-		t.Fatalf("поставка: %+v %v", applied, err)
-	}
-	repeat, err := service.Apply(ctx, delivery)
-	if err != nil || repeat.Changed || repeat.Revision != applied.Revision {
-		t.Fatalf("повтор поставки: %+v %v", repeat, err)
-	}
-	rolled, err := service.Rollback(ctx, delivery)
-	if err != nil || !rolled.Changed {
-		t.Fatalf("откат: %+v %v", rolled, err)
-	}
-	snapshot, err := service.Snapshot(ctx, referenceDict, nil)
-	if err != nil || len(snapshot.Entries) != 1 || snapshot.Entries[0].ID != existing.Entry.ID ||
-		snapshot.Entries[0].Status != reference.StatusCandidate || len(snapshot.Entries[0].Aliases) != 1 {
-		t.Fatalf("после отката: %+v %v", snapshot, err)
-	}
-	if again, err := service.Rollback(ctx, delivery); err != nil || again.Changed {
-		t.Fatalf("повтор отката: %+v %v", again, err)
-	}
-	if _, err := service.Apply(ctx, delivery); !errors.Is(err, reference.ErrDeliveryConflict) {
-		t.Fatalf("повтор откаченной поставки: %v", err)
-	}
-}
-
 func TestReferenceConcurrentClaimsOfOneKey(t *testing.T) {
 	service, _, _ := referenceService(t)
 	ctx := context.Background()
@@ -341,30 +302,14 @@ func TestReferenceLargeDeliveryWritesRevisionPerBatch(t *testing.T) {
 			Aliases:   aliases,
 		})
 	}
-	delivery := reference.Delivery{
-		Dictionary: referenceDict,
-		Version:    1,
-		Checksum:   strings.Repeat("c", 64),
-		Entries:    entries,
-	}
 	started := time.Now()
-	applied, err := service.Apply(ctx, delivery)
-	if err != nil || applied.Created != largeDelivery {
+	applied, err := importReferenceEntries(ctx, service, entries)
+	if err != nil || applied.CreatedEntries != largeDelivery {
 		t.Fatalf("поставка: %+v %v", applied, err)
 	}
 	t.Logf("поставка %d записей: %s", largeDelivery, time.Since(started))
 	var changes int
 	if err := pool.QueryRow(ctx, countReferenceChanges).Scan(&changes); err != nil || changes != largeDelivery/500 {
 		t.Fatalf("ревизий журнала: %d %v", changes, err)
-	}
-	started = time.Now()
-	rolled, err := service.Rollback(ctx, delivery)
-	if err != nil || rolled.Updated != largeDelivery {
-		t.Fatalf("откат: %+v %v", rolled, err)
-	}
-	t.Logf("откат %d записей: %s", largeDelivery, time.Since(started))
-	snapshot, err := service.Snapshot(ctx, referenceDict, nil)
-	if err != nil || len(snapshot.Entries) != 0 {
-		t.Fatalf("после отката: %d записей %v", len(snapshot.Entries), err)
 	}
 }

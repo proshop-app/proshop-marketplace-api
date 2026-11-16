@@ -1,6 +1,7 @@
 package reference
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,7 +12,7 @@ import (
 )
 
 const (
-	importSchemaVersion   = 1
+	importSchemaVersion   = 2
 	maxImportDictionaries = 1000
 	maxImportEntries      = 100000
 	maxImportSources      = 10000
@@ -27,12 +28,15 @@ type ImportSource struct {
 	Version string `json:"version,omitempty"`
 }
 
-// ImportDictionary — поставка значений и вид создаваемого словаря.
+// ImportDictionary — полный заголовок и записи одного выпуска словаря.
 type ImportDictionary struct {
-	Code    string          `json:"code"`
-	Kind    Kind            `json:"kind"`
-	Release int64           `json:"release"`
-	Entries []DeliveryEntry `json:"entries"`
+	Code       string          `json:"code"`
+	Kind       Kind            `json:"kind"`
+	Identity   bool            `json:"identity"`
+	AliasKinds []AliasKind     `json:"aliasKinds"`
+	Limits     Limits          `json:"limits"`
+	Release    int64           `json:"release"`
+	Entries    []DeliveryEntry `json:"entries"`
 }
 
 // ImportPackage — один проверяемый документ нескольких словарей.
@@ -44,8 +48,32 @@ type ImportPackage struct {
 
 // PreparedImport — неизменяемая поставка с проверенным происхождением.
 type PreparedImport struct {
-	Kind     Kind
+	Settings DictionarySettings
 	Delivery Delivery
+}
+
+type importDictionaryFields ImportDictionary
+
+type importDictionaryJSON struct {
+	*importDictionaryFields
+	Identity *bool `json:"identity"`
+}
+
+// UnmarshalJSON требует явного identity, не меняя тип настройки в агрегате.
+func (input *ImportDictionary) UnmarshalJSON(body []byte) error {
+	var fields importDictionaryFields
+	decoded := importDictionaryJSON{importDictionaryFields: &fields}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	if decoded.Identity == nil {
+		return ErrInvalidSettings.WithMessage("identity — обязательный boolean")
+	}
+	fields.Identity = *decoded.Identity
+	*input = ImportDictionary(fields)
+	return nil
 }
 
 // PrepareImport проверяет весь пакет до транзакции и считает суммы после
@@ -64,8 +92,8 @@ func PrepareImport(input ImportPackage) ([]PreparedImport, error) {
 	codes := map[string]bool{}
 	total := 0
 	for _, dictionary := range input.Dictionaries {
-		if codes[dictionary.Code] || (dictionary.Kind != KindOpen && dictionary.Kind != KindClosed) {
-			return nil, ErrInvalidDelivery.WithMessage("повтор кода или неверный вид словаря")
+		if codes[dictionary.Code] {
+			return nil, ErrInvalidDelivery.WithMessage("повтор кода словаря")
 		}
 		codes[dictionary.Code] = true
 		total += len(dictionary.Entries)
@@ -103,32 +131,37 @@ func prepareDictionary(input ImportDictionary, sources map[string]ImportSource) 
 	if input.Entries == nil {
 		return PreparedImport{}, ErrInvalidDelivery.WithMessage("entries — обязательный массив, не null")
 	}
-	entries := slices.Clone(input.Entries)
-	for i := range entries {
-		if entries[i].Status == "" {
-			entries[i].Status = StatusCandidate
-		}
-		metadata, err := importMetadata(entries[i].Metadata, sources)
-		if err != nil {
-			return PreparedImport{}, err
-		}
-		entries[i].Metadata = metadata
+	settings := input.settings()
+	if err := settings.Validate(); err != nil {
+		return PreparedImport{}, err
 	}
-	body, err := json.Marshal(entries)
+	settings.AliasKinds = slices.Clone(settings.AliasKinds)
+	slices.Sort(settings.AliasKinds)
+	entries, err := prepareImportEntries(input.Entries, sources)
 	if err != nil {
-		return PreparedImport{}, ErrInvalidDelivery.Wrap(err)
+		return PreparedImport{}, err
 	}
-	checksum := sha256.Sum256(body)
+	checksum, err := importChecksum(settings, entries)
+	if err != nil {
+		return PreparedImport{}, err
+	}
 	delivery := Delivery{
 		Dictionary: input.Code,
 		Version:    input.Release,
-		Checksum:   hex.EncodeToString(checksum[:]),
+		Checksum:   checksum,
 		Entries:    entries,
 	}
-	if err := validateDelivery(delivery, input.Kind == KindOpen); err != nil {
+	dictionary := RestoreDictionary(DictionaryState{
+		Code:       input.Code,
+		Kind:       settings.Kind,
+		Identity:   settings.Identity,
+		AliasKinds: settings.AliasKinds,
+		Limits:     settings.Limits,
+	})
+	if err := validateDelivery(delivery, dictionary, input.Kind == KindOpen); err != nil {
 		return PreparedImport{}, err
 	}
-	return PreparedImport{Kind: input.Kind, Delivery: delivery}, nil
+	return PreparedImport{Settings: settings, Delivery: delivery}, nil
 }
 
 func importMetadata(raw json.RawMessage, sources map[string]ImportSource) (json.RawMessage, error) {
@@ -175,4 +208,44 @@ func importMetadata(raw json.RawMessage, sources map[string]ImportSource) (json.
 		return nil, ErrInvalidDelivery.Wrap(err)
 	}
 	return CleanMetadata(body)
+}
+
+// settings возвращает заголовок, включённый в контрольную сумму выпуска.
+func (input ImportDictionary) settings() DictionarySettings {
+	return DictionarySettings{
+		Kind:       input.Kind,
+		Identity:   input.Identity,
+		AliasKinds: input.AliasKinds,
+		Limits:     input.Limits,
+	}
+}
+
+func prepareImportEntries(input []DeliveryEntry, sources map[string]ImportSource) ([]DeliveryEntry, error) {
+	entries := slices.Clone(input)
+	for i := range entries {
+		if entries[i].Status == "" {
+			entries[i].Status = StatusCandidate
+		}
+		metadata, err := importMetadata(entries[i].Metadata, sources)
+		if err != nil {
+			return nil, err
+		}
+		entries[i].Metadata = metadata
+	}
+	return entries, nil
+}
+
+func importChecksum(settings DictionarySettings, entries []DeliveryEntry) (string, error) {
+	body, err := json.Marshal(struct {
+		Settings DictionarySettings `json:"settings"`
+		Entries  []DeliveryEntry    `json:"entries"`
+	}{
+		Settings: settings,
+		Entries:  entries,
+	})
+	if err != nil {
+		return "", ErrInvalidDelivery.Wrap(err)
+	}
+	checksum := sha256.Sum256(body)
+	return hex.EncodeToString(checksum[:]), nil
 }

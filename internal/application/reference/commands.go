@@ -51,7 +51,7 @@ func (s *Service) Create(ctx context.Context, cmd CreateCommand) (EntryResult, e
 		}
 		draft := reference.NewDraft(m.dict.Code())
 		draft.Track(entry)
-		if _, err := m.record(ctx, draft, reference.ChangeCreated, entry.ID(), cmd.Meta, 0); err != nil {
+		if _, err := m.record(ctx, draft, reference.ChangeCreated, entry.ID(), cmd.Meta); err != nil {
 			return err
 		}
 		result = EntryResult{Entry: entry.State(), Created: true, Changed: true}
@@ -86,7 +86,7 @@ func (s *Service) Update(ctx context.Context, cmd UpdateCommand) (EntryResult, e
 				return err
 			}
 		}
-		result.Changed, err = m.record(ctx, draft, reference.ChangeUpdated, entry.ID(), cmd.Meta, 0)
+		result.Changed, err = m.record(ctx, draft, reference.ChangeUpdated, entry.ID(), cmd.Meta)
 		result.Entry = entry.State()
 		return err
 	})
@@ -120,7 +120,7 @@ func (s *Service) Merge(ctx context.Context, cmd MergeCommand) (EntryResult, err
 		for _, merged := range chain {
 			draft.Track(merged).Repoint(target.ID())
 		}
-		result.Changed, err = m.record(ctx, draft, reference.ChangeMerged, source.ID(), cmd.Meta, 0)
+		result.Changed, err = m.record(ctx, draft, reference.ChangeMerged, source.ID(), cmd.Meta)
 		result.Entry = target.State()
 		return err
 	})
@@ -142,7 +142,7 @@ func (s *Service) AddAlias(ctx context.Context, cmd AddAliasCommand) (EntryResul
 		if err != nil {
 			return err
 		}
-		result.Changed, err = m.record(ctx, draft, reference.ChangeAliasAdded, entry.ID(), cmd.Meta, 0)
+		result.Changed, err = m.record(ctx, draft, reference.ChangeAliasAdded, entry.ID(), cmd.Meta)
 		result.Entry, result.Alias = entry.State(), &alias
 		return err
 	})
@@ -164,7 +164,7 @@ func (s *Service) RemoveAlias(ctx context.Context, cmd RemoveAliasCommand) (Entr
 		if err != nil {
 			return err
 		}
-		result.Changed, err = m.record(ctx, draft, reference.ChangeAliasRemoved, entry.ID(), cmd.Meta, 0)
+		result.Changed, err = m.record(ctx, draft, reference.ChangeAliasRemoved, entry.ID(), cmd.Meta)
 		result.Entry, result.Alias = entry.State(), &alias
 		return err
 	})

@@ -38,13 +38,13 @@ docker run --rm proshop-marketplace-taxonomy:uno-4 check
 
 ```bash
 make migrate
-make reference-apply
+make reference-import REFERENCE_DATA=../uno-reference-data
 docker run --rm --env DATABASE_URL proshop-marketplace-taxonomy:uno-4 apply
 ```
 
 Адрес БД должен быть доступен из выбранной Docker-сети. Запуск из исходников
 после миграций — `make taxonomy-apply`. `make dev` выполняет оба шага
-последовательно после миграций и `reference-apply`, перед запуском API. В Kubernetes Job `marketplace-taxonomy`
+последовательно после миграций и `reference-import`, перед запуском API. В Kubernetes Job `marketplace-taxonomy`
 запускается после `marketplace-migrate` и применения поставок словарей.
 Закрытые словари должны уже содержать confirmed-записи; иначе публикация отклоняется. Локально и в production используется
 один сохранённый образ; для production его можно закрепить по дайджесту.
@@ -180,14 +180,13 @@ CLI `load` и `make taxonomy-load` удалены; оператор загруж
 | Сад и спорт | `planting_period`, `flowering_period`, `sport`, `bike_frame`, `bike_brake`, `fishing_action` |
 | Книги, музыка и творчество | `book_author`, `book_publisher`, `book_genre`, `instrument_key`, `instrument_tuning`, `art_technique`, `craft_theme` |
 
-Проверенный пакет — `uno-reference-data/exports/reference-v2.json`:
-88 словарей, 8973 записи; SHA-256
-`5ff8428e6c5d4dc1107f7b004b3eb3fb051d23550b314dbcf34b775d2ea30170`.
-Это отдельный явный импорт по [контракту оператора](reference-import.md).
+Для текущей установки используется полный пакет v2
+`uno-reference-data/exports/marketplace-bootstrap.json` по [контракту оператора](reference-import.md).
+Исторические пакеты формата v1 больше не принимаются.
 Порядок на существующей и пустой установке:
 
-1. Применить миграции и начальные поставки реестра (`reference apply`).
-2. Импортировать указанный JSON через операторский API. Убедиться, что все
+1. Применить миграции и импортировать полный пакет v2 из uno-reference-data.
+2. Проверить результат импорта. Убедиться, что все
    необходимые словари созданы с `kind: open`. Повтор того же пакета безопасен.
 3. Проверить комплект `taxonomy check` и выполнить `taxonomy apply` образом
    поставки 7. Если текущий снимок содержит правки оператора, сначала сравнить
@@ -197,8 +196,7 @@ CLI `load` и `make taxonomy-load` удалены; оператор загруж
    confirmed-записи; подтверждение приходит дельтой реестра без новой
    публикации таксономии. Сервер магазина обновляет свой кеш раз в минуту.
 
-`reference apply` с одними начальными 19 словарями недостаточен для новой
-поставки: отсутствующий или закрытый словарь отклоняет её целиком.
+Неполного пакета словарей недостаточно для публикации таксономии: отсутствующий или закрытый словарь отклоняет её целиком.
 Запуск API не импортирует пакет и не изменяет реестр самостоятельно.
 
 Открытый словарь даёт подсказки, но не ограничивает допустимые строки.

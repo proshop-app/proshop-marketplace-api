@@ -108,13 +108,12 @@ func (m *session) record(
 	kind reference.ChangeKind,
 	primary ids.UUID,
 	meta reference.Meta,
-	reverts int64,
 ) (bool, error) {
 	change, ok := draft.Change(kind, primary, meta, m.now)
 	if !ok {
 		return false, nil
 	}
-	// Итоговые образы проверяются также при откате, иначе журнал мог бы вернуть запрещённое состояние.
+	// Итоговые образы проверяются перед записью журнала.
 	for _, image := range change.Forward {
 		if image.State == nil {
 			continue
@@ -129,7 +128,6 @@ func (m *session) record(
 		}
 	}
 
-	change.Reverts = reverts
 	revision, err := m.repo.Append(ctx, change)
 	if err != nil {
 		return false, err

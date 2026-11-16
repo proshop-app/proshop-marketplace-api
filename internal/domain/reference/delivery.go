@@ -48,7 +48,7 @@ type Delivery struct {
 	Entries    []DeliveryEntry
 }
 
-// DeliveryRecord — применённая поставка и её диапазон ревизий для отката.
+// DeliveryRecord — применённый выпуск и диапазон ревизий записей.
 type DeliveryRecord struct {
 	Dictionary   string
 	Version      int64
@@ -56,21 +56,14 @@ type DeliveryRecord struct {
 	RevisionFrom int64
 	RevisionTo   int64
 	AppliedAt    time.Time
-	RolledBack   bool
-	// RollbackRevision — голова словаря после отката.
-	RollbackRevision int64
 }
 
-// DeliveryResult — итог apply или rollback; повтор сообщает Changed=false.
+// DeliveryResult — внутренний итог применения выпуска.
 type DeliveryResult struct {
-	Dictionary string `json:"dictionary"`
-	Release    int64  `json:"release"`
-	Revision   int64  `json:"revision"`
-	Changed    bool   `json:"changed"`
-	RolledBack bool   `json:"rolledBack"`
-	Created    int    `json:"created"`
-	Updated    int    `json:"updated"`
-	Skipped    int    `json:"skipped"`
+	Changed bool
+	Created int
+	Updated int
+	Skipped int
 }
 
 // DefaultLimits — лимиты словаря из плана реестра с текущей версией нормализации.
@@ -84,20 +77,14 @@ func DefaultLimits() Limits {
 	}
 }
 
-// ValidateDelivery проверяет поставку без хранилища: номер, сумму, статусы,
-// лимиты по умолчанию и то, что ни один ключ не встречается у двух записей.
-func ValidateDelivery(d Delivery) error {
-	return validateDelivery(d, false)
-}
-
-func validateDelivery(d Delivery, allowEmpty bool) error {
+// validateDelivery проверяет записи по настройкам заголовка пакета.
+func validateDelivery(d Delivery, dict *Dictionary, allowEmpty bool) error {
 	checksum, err := hex.DecodeString(d.Checksum)
 	if !ValidCode(d.Dictionary) || d.Version < 1 || d.Version > MaxDeliveryVersion || err != nil ||
 		len(checksum) != checksumSize || d.Checksum != strings.ToLower(d.Checksum) ||
 		(!allowEmpty && len(d.Entries) == 0) {
 		return ErrInvalidDelivery
 	}
-	dict := RestoreDictionary(DictionaryState{Code: d.Dictionary, AliasKinds: AliasKinds, Limits: DefaultLimits()})
 	owners := map[string]int{}
 	for i, entry := range d.Entries {
 		place := "запись " + strconv.Itoa(i+1)
@@ -143,31 +130,16 @@ func validateDelivery(d Delivery, allowEmpty bool) error {
 	return nil
 }
 
-// PlanDelivery решает, применять ли поставку: повтор той же ничего не меняет, понижение номера,
-// подмена данных и повтор откаченной поставки — конфликт.
+// PlanDelivery пропускает повтор того же выпуска с той же суммой.
+// Устаревший выпуск или та же версия с другой суммой — конфликт.
 func PlanDelivery(latest *DeliveryRecord, d Delivery) (bool, error) {
 	if latest == nil || d.Version > latest.Version {
 		return true, nil
 	}
-	if d.Version < latest.Version || d.Checksum != latest.Checksum || latest.RolledBack {
+	if d.Version < latest.Version || d.Checksum != latest.Checksum {
 		return false, ErrDeliveryConflict
 	}
 	return false, nil
-}
-
-// PlanDeliveryRollback откатывает только последнюю поставку и только пока
-// после неё в словаре не было правок: иначе откат затёр бы оператора.
-func PlanDeliveryRollback(latest *DeliveryRecord, dict *Dictionary, d Delivery) (bool, error) {
-	if latest == nil || latest.Version != d.Version || latest.Checksum != d.Checksum {
-		return false, ErrDeliveryConflict
-	}
-	if latest.RolledBack {
-		return false, nil
-	}
-	if dict.Revision() != latest.RevisionTo {
-		return false, ErrDeliveryConflict.WithMessage("после поставки в словаре были правки")
-	}
-	return true, nil
 }
 
 func messageOf(err error) string {

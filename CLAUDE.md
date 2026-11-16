@@ -180,10 +180,12 @@ domain ← application ← interfaces, infrastructure        сборка гра
 ## Одна команда
 
 `make dev` — compose (PostgreSQL 16, OpenSearch, Kafka KRaft, Redis),
-миграции → импорт `deploy/reference/bootstrap.json` → `reference-apply` →
-публикация таксономии → сервис с перезапуском (air). Пакет регистрирует
-недостающие словари; открытые остаются без значений до отдельного импорта
-из uno-reference-data. Только `dev` автоматически передаёт подтверждение
+миграции → `reference-import` → публикация таксономии → сервис с перезапуском (air).
+Данные словарей принадлежат только uno-reference-data. Нужен его checkout:
+`REFERENCE_DATA ?= ../uno-reference-data`; пакет формата 2 —
+`REFERENCE_PACKAGE ?= $(REFERENCE_DATA)/exports/marketplace-bootstrap.json`.
+Без каталога или файла запуск завершается ошибкой. API на старте ничего не импортирует.
+Только `dev` автоматически передаёт подтверждение
 замены категорий: среда разработки одноразовая. `taxonomy-apply` сохраняет
 требование явного подтверждения оператором. Остальное: `make test`,
 `make test-integration`, `make lint`, `make migrate`, `make reindex`,

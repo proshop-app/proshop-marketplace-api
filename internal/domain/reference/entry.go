@@ -196,14 +196,6 @@ func RestoreEntry(state EntryState) *Entry {
 	}}
 }
 
-// RevivedEntry — запись, удалённая ревизией, восстанавливается из её образа как новая строка.
-func RevivedEntry(image EntryState, now time.Time) *Entry {
-	state := cloneState(image)
-	state.Version = 0
-	state.UpdatedAt = moment(now)
-	return &Entry{state: state}
-}
-
 // CleanMetadata проверяет свободные поля записи: объект не больше 4 КиБ;
 // metadata.directions — подсказка направлений, только массив строк, ничего не запрещает.
 func CleanMetadata(raw json.RawMessage) (json.RawMessage, error) {
@@ -447,22 +439,8 @@ func (e *Entry) Repoint(target ids.UUID) bool {
 	return true
 }
 
-// Revert возвращает записи содержимое образа журнала; версия продолжает расти.
-func (e *Entry) Revert(image EntryState) bool {
-	if SameContent(&e.state, &image) {
-		return false
-	}
-	restored := cloneState(image)
-	restored.Occurrences = e.state.Occurrences
-	restored.Revision = e.state.Revision
-	restored.Version = e.state.Version
-	restored.UpdatedAt = e.state.UpdatedAt
-	e.state = restored
-	return true
-}
-
 // SameContent сравнивает содержимое записей без версии, ревизии и времени:
-// по нему откат проверяет, что запись не менялась после откатываемой ревизии.
+// журнал использует его, чтобы не создавать ревизию без изменения содержимого.
 func SameContent(a, b *EntryState) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil

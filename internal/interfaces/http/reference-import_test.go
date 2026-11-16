@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,9 +16,14 @@ import (
 )
 
 const referenceImportJSONFixture = `{
-    "schemaVersion":1,
+    "schemaVersion":2,
     "sources":[{"id":"s1","url":"https://example.org/data","license":"CC0-1.0"}],
-    "dictionaries":[{"code":"d1","kind":"open","release":1,"entries":[{"canonical":"Значение"}]}]
+    "dictionaries":[{
+        "code":"d1","kind":"open",
+        "identity":false,"aliasKinds":["spelling"],
+        "limits":{"maxEntries":1000000,"maxAliases":50,
+            "maxAliasLength":120,"maxAliasWords":8,"normalizer":"v1"},
+        "release":1,"entries":[{"canonical":"Значение"}]} ]
 }`
 
 func TestReferenceImportRecordsRequestPrincipal(t *testing.T) {
@@ -42,9 +48,18 @@ func TestReferenceImportRecordsRequestPrincipal(t *testing.T) {
 }
 
 func TestReferenceImportStrictJSONAndYAML(t *testing.T) {
-	yamlBody := "schemaVersion: 1\nsources:\n  - id: s1\n    url: https://example.org/data\n" +
-		"    license: CC0-1.0\ndictionaries:\n  - code: d1\n    kind: open\n    release: 1\n" +
+	yamlBody := "schemaVersion: 2\nsources:\n  - id: s1\n    url: https://example.org/data\n" +
+		"    license: CC0-1.0\ndictionaries:\n  - code: d1\n    kind: open\n    identity: false\n    release: 1\n" +
+		"    aliasKinds: [spelling]\n" +
+		"    limits: {maxEntries: 1000000, maxAliases: 50,\n" +
+		"      maxAliasLength: 120, maxAliasWords: 8, normalizer: v1}\n" +
 		"    entries:\n      - canonical: Значение\n"
+	extraField := strings.Replace(
+		referenceImportJSONFixture,
+		`"identity":false,`,
+		`"identity":false,"extra":true,`,
+		1,
+	)
 	cases := []struct {
 		name        string
 		contentType string
@@ -62,10 +77,15 @@ func TestReferenceImportStrictJSONAndYAML(t *testing.T) {
 		},
 		{name: "неверный тип", contentType: "text/plain", body: yamlBody},
 		{name: "YAML под видом JSON", contentType: "application/json", body: yamlBody},
-		{name: "лишнее поле", contentType: "application/json", body: `{"schemaVersion":1,"extra":true}`},
-		{name: "повтор JSON", contentType: "application/json", body: `{"schemaVersion":1,"schemaVersion":2}`},
-		{name: "повтор YAML", contentType: "application/yaml", body: "schemaVersion: 1\nschemaVersion: 1\n"},
-		{name: "несколько документов", contentType: "application/yaml", body: yamlBody + "---\nschemaVersion: 1\n"},
+		{
+			name:        "лишнее поле словаря",
+			contentType: "application/json",
+			body:        extraField,
+		},
+		{name: "лишнее поле", contentType: "application/json", body: `{"schemaVersion":2,"extra":true}`},
+		{name: "повтор JSON", contentType: "application/json", body: `{"schemaVersion":2,"schemaVersion":2}`},
+		{name: "повтор YAML", contentType: "application/yaml", body: "schemaVersion: 2\nschemaVersion: 2\n"},
+		{name: "несколько документов", contentType: "application/yaml", body: yamlBody + "---\nschemaVersion: 2\n"},
 		{name: "якорь", contentType: "application/yaml", body: "schemaVersion: &v 1\n"},
 		{name: "ссылка", contentType: "application/yaml", body: "a: &v 1\nb: *v\n"},
 		{name: "специальный тег", contentType: "application/yaml", body: "schemaVersion: !custom 1\n"},
@@ -80,7 +100,7 @@ func TestReferenceImportStrictJSONAndYAML(t *testing.T) {
 			if (err == nil) != test.valid {
 				t.Fatal(input, err)
 			}
-			if test.valid && (input.SchemaVersion != 1 || input.Dictionaries[0].Entries[0].Canonical != "Значение") {
+			if test.valid && (input.SchemaVersion != 2 || input.Dictionaries[0].Entries[0].Canonical != "Значение") {
 				t.Fatal("документ изменился при разборе", input)
 			}
 		})
@@ -103,9 +123,13 @@ func TestReferenceImportJSONAndYAMLShareDefaultedChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	yamlBody := "schemaVersion: 1\nsources:\n  - license: CC0-1.0\n    url: https://example.org/data\n" +
+	yamlBody := "schemaVersion: 2\nsources:\n  - license: CC0-1.0\n    url: https://example.org/data\n" +
 		"    id: s1\ndictionaries:\n  - entries:\n      - status: candidate\n        aliases: []\n" +
-		"        canonical: Значение\n    release: 1\n    kind: open\n    code: d1\n"
+		"        canonical: Значение\n    release: 1\n" +
+		"    aliasKinds: [spelling]\n" +
+		"    limits: {maxEntries: 1000000, maxAliases: 50,\n" +
+		"      maxAliasLength: 120, maxAliasWords: 8, normalizer: v1}\n" +
+		"    kind: open\n    identity: false\n    code: d1\n"
 	yamlRequest := httptest.NewRequest("POST", "/", strings.NewReader(yamlBody))
 	yamlRequest.Header.Set("Content-Type", "application/yaml")
 	yamlInput, err := decodeReferenceImport(httptest.NewRecorder(), yamlRequest)
@@ -154,5 +178,38 @@ func TestReferenceImportEmptyDictionaryHTTP(t *testing.T) {
 				t.Fatal(dictionaries, err)
 			}
 		})
+	}
+}
+
+func TestReferenceImportRejectsVersionOne(t *testing.T) {
+	store := fake.NewStore()
+	service := appreference.NewService(store, fake.NewClock(time.Now()), &fake.IDs{}, nil, appreference.Config{})
+	handler := referenceHandlers{service: service}
+	body := strings.Replace(referenceImportJSONFixture, `"schemaVersion":2`, `"schemaVersion":1`, 1)
+	request := httptest.NewRequest(http.MethodPost, "/import", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	handler.importPackage(response, request)
+	if response.Code != http.StatusBadRequest ||
+		!strings.Contains(response.Body.String(), "reference.invalid_delivery") {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	dictionaries, err := service.DictionarySummaries(context.Background())
+	if err != nil || len(dictionaries) != 0 {
+		t.Fatal("версия 1 изменила реестр", dictionaries, err)
+	}
+}
+
+func TestReferenceImportRequiresIdentity(t *testing.T) {
+	for _, contentType := range []string{"application/json", "application/yaml"} {
+		for _, value := range []string{"", `"identity":null,`} {
+			body := strings.Replace(referenceImportJSONFixture, `"identity":false,`, value, 1)
+			request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			request.Header.Set("Content-Type", contentType)
+			_, err := decodeReferenceImport(httptest.NewRecorder(), request)
+			if !errors.Is(err, reference.ErrInvalidSettings) {
+				t.Fatal("identity не проверен", contentType, err)
+			}
+		}
 	}
 }

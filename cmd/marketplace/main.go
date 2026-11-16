@@ -3,7 +3,7 @@
 //
 //	marketplace                        HTTP, консьюмер Kafka, разбор outbox и фоновые задачи
 //	marketplace reindex                перестроение индекса предложений из проекции
-//	marketplace reference check|apply|rollback --dir <каталог>  поставка реестра справочных сущностей
+//	marketplace reference import --file <пакет.json>  импорт справочных сущностей
 package main
 
 import "os"

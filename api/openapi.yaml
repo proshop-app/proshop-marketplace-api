@@ -3086,8 +3086,13 @@ paths:
         имеют общий бюджет 120 секунд; на ответ после отмены оставлено ещё 5 секунд. Неизвестные и повторные
         ключи, якоря, ссылки и несколько YAML-документов запрещены. Один пакет
         либо применяется целиком, либо полностью откатывается. Повтор релиза с
-        той же канонической суммой — no-op; изменение данных того же релиза,
-        понижение релиза, другой kind или normalizer — 409. Правки оператора,
+        той же канонической суммой — no-op. Формат schemaVersion=2; версия 1 отвергается.
+        Сумма включает настройки заголовка и записи. Изменение суммы того же релиза
+        или понижение релиза — 409 reference.delivery_conflict. Небезопасное изменение
+        настроек — 409 reference.settings_conflict; неверные настройки — 400 reference.invalid_settings.
+        kind/identity меняются только без записей; лимиты написаний и aliasKinds
+        заполненного словаря можно только расширить. maxEntries не ниже текущего счётчика.
+        Другой normalizer существующего словаря — 409 reference.normalizer_mismatch. Правки оператора,
         rejected/deprecated и непустая metadata сохраняются правилами поставки.
         taxonomy bindings и публикация taxonomy не меняются. Для cookie нужны
         Origin и X-Requested-With: KvazarOperator, как на других операторских мутациях.
@@ -8069,7 +8074,7 @@ components:
     ReferenceImportDictionary:
       type: object
       additionalProperties: false
-      required: [code, kind, release, entries]
+      required: [code, kind, identity, aliasKinds, limits, release, entries]
       description: Пустой entries допустим только для open; closed требует хотя бы одну запись.
       if:
         properties:
@@ -8080,6 +8085,24 @@ components:
       properties:
         code: { type: string, pattern: '^[a-z][a-z0-9_]{0,31}$' }
         kind: { type: string, enum: [open, closed] }
+        identity: { type: boolean }
+        aliasKinds:
+          type: array
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+          contains: { const: spelling }
+          items: { type: string, enum: [spelling, translit, abbreviation, former, locale] }
+        limits:
+          type: object
+          additionalProperties: false
+          required: [maxEntries, maxAliases, maxAliasLength, maxAliasWords, normalizer]
+          properties:
+            maxEntries: { type: integer, minimum: 1, maximum: 1000000 }
+            maxAliases: { type: integer, minimum: 1, maximum: 50 }
+            maxAliasLength: { type: integer, minimum: 1, maximum: 120 }
+            maxAliasWords: { type: integer, minimum: 1, maximum: 8 }
+            normalizer: { type: string, const: v1 }
         release: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
         entries:
           type: array
@@ -8091,7 +8114,7 @@ components:
       additionalProperties: false
       required: [schemaVersion, sources, dictionaries]
       properties:
-        schemaVersion: { type: integer, const: 1 }
+        schemaVersion: { type: integer, const: 2 }
         sources:
           type: array
           minItems: 1
@@ -8120,7 +8143,7 @@ components:
       additionalProperties: false
       required: [schemaVersion, dictionaries]
       properties:
-        schemaVersion: { type: integer, const: 1 }
+        schemaVersion: { type: integer, const: 2 }
         dictionaries:
           type: array
           items: { $ref: "#/components/schemas/ReferenceImportDictionaryResult" }

@@ -110,19 +110,19 @@ func TestAuthorDeliveryChecksCanonicalSeparatelyFromAliases(t *testing.T) {
 		},
 	}
 
-	if err := ValidateDelivery(delivery); err != nil {
+	if err := validateTestDelivery(delivery); err != nil {
 		t.Fatal("поставка русского canonical с иноязычным alias отклонена", err)
 	}
 
 	delivery.Entries[0].Canonical = "Foreign Author"
 
-	if err := ValidateDelivery(delivery); !errors.Is(err, ErrInvalidDelivery) {
+	if err := validateTestDelivery(delivery); !errors.Is(err, ErrInvalidDelivery) {
 		t.Fatal("поставка иноязычного canonical принята", err)
 	}
 
 	delivery.Dictionary = "b1"
 
-	if err := ValidateDelivery(delivery); err != nil {
+	if err := validateTestDelivery(delivery); err != nil {
 		t.Fatal("другой словарь ограничен правилом авторов", err)
 	}
 }

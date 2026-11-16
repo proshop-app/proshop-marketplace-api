@@ -133,7 +133,7 @@ func recordReviewEntries(
 		// Два образа со статусом той же или меньшей длины и обёртки Image с id.
 		weight := 2*len(raw) + 128
 		if size > 0 && size+weight > maxReviewImages {
-			if _, err := m.record(ctx, draft, reference.ChangeUpdated, primary, meta, 0); err != nil {
+			if _, err := m.record(ctx, draft, reference.ChangeUpdated, primary, meta); err != nil {
 				return err
 			}
 			draft = reference.NewDraft(m.dict.Code())
@@ -151,6 +151,6 @@ func recordReviewEntries(
 	if size == 0 {
 		return nil
 	}
-	_, err := m.record(ctx, draft, reference.ChangeUpdated, primary, meta, 0)
+	_, err := m.record(ctx, draft, reference.ChangeUpdated, primary, meta)
 	return err
 }

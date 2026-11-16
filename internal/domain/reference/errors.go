@@ -4,6 +4,10 @@ import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 // Ошибки реестра; ключи стабильны для потребителей.
 var (
+	// ErrInvalidSettings — заголовок пакета нарушает поддерживаемый контракт.
+	ErrInvalidSettings = errs.New(errs.Invalid, "reference.invalid_settings", "некорректные настройки словаря")
+	// ErrSettingsConflict — новые правила могут обесценить уже принятые записи.
+	ErrSettingsConflict = errs.New(errs.Conflict, "reference.settings_conflict", "небезопасное изменение словаря")
 	// ErrInvalid — данные записи или варианта нарушают правило словаря.
 	ErrInvalid = errs.New(errs.Invalid, "reference.invalid", "некорректные данные реестра")
 	// ErrLimit — запись выходит за лимит словаря: записей, вариантов, длины или слов.
@@ -52,16 +56,10 @@ var (
 	)
 	// ErrInvalidDelivery — поставка не прошла проверку до обращения к хранилищу.
 	ErrInvalidDelivery = errs.New(errs.Invalid, "reference.invalid_delivery", "некорректная поставка реестра")
-	// ErrDeliveryConflict — поставка понижает версию, подменяет данные или откат уже невозможен.
+	// ErrDeliveryConflict — выпуск устарел или повторён с другой контрольной суммой.
 	ErrDeliveryConflict = errs.New(
 		errs.Conflict,
 		"reference.delivery_conflict",
-		"поставка устарела, изменена или после неё были правки",
-	)
-	// ErrRevertConflict — запись изменилась после ревизии, которую откатывают.
-	ErrRevertConflict = errs.New(
-		errs.Conflict,
-		"reference.revert_conflict",
-		"запись изменилась после откатываемой ревизии",
+		"выпуск устарел или имеет другую контрольную сумму",
 	)
 )

@@ -1,0 +1,30 @@
+{
+    "version": 1,
+    "attributes": [
+        {
+            "code": "a2",
+            "name": "Атрибут",
+            "type": "string",
+            "variant": true,
+            "description": "Описание атрибута"
+        }
+    ],
+    "schemas": {
+        "s1": {
+            "attributes": [
+                "a2"
+            ],
+            "optional": [
+                "a2"
+            ]
+        }
+    },
+    "categories": [
+        {
+            "id": "c0",
+            "slug": "c0",
+            "name": "Категория",
+            "schema": "s1"
+        }
+    ]
+}

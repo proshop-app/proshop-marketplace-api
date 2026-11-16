@@ -93,7 +93,7 @@ func (s *Service) createCandidates(
 				created++
 			}
 			meta := reference.Meta{Source: reference.SourceCatalog}
-			_, err := m.record(ctx, draft, reference.ChangeCreated, primary, meta, 0)
+			_, err := m.record(ctx, draft, reference.ChangeCreated, primary, meta)
 			return err
 		})
 		return err

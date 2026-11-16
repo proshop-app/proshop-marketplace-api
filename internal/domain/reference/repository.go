@@ -73,7 +73,6 @@ type Repository interface {
 
 	LatestDelivery(ctx context.Context, dictionary string) (*DeliveryRecord, error)
 	RecordDelivery(ctx context.Context, record DeliveryRecord) error
-	MarkDeliveryRollback(ctx context.Context, dictionary string, version, revision int64) error
 
 	// ReplacePresence заменяет присутствие записи целиком: пересчёт идемпотентен.
 	ReplacePresence(ctx context.Context, entry ids.UUID, rows []Presence, at time.Time) error

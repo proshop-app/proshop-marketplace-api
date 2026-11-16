@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
@@ -144,9 +143,11 @@ func TestAuthorCandidateImportAddsAliasWithoutChangingConfirmedEntry(t *testing.
 	input := importPackageFixture()
 	input.Dictionaries = []reference.ImportDictionary{
 		{
-			Code:    authorDictionary,
-			Kind:    reference.KindOpen,
-			Release: 2,
+			Code:       authorDictionary,
+			Kind:       reference.KindOpen,
+			AliasKinds: reference.AliasKinds,
+			Limits:     reference.DefaultLimits(),
+			Release:    2,
 			Entries: []reference.DeliveryEntry{
 				{
 					Canonical: "Автор",
@@ -306,66 +307,6 @@ func TestAuthorCollectorSkipsForeignObservationsAndContinuesPages(t *testing.T) 
 
 	if err != nil || created.Created != 1 {
 		t.Fatal("наблюдение другого словаря потеряно", created, err)
-	}
-}
-
-func TestAuthorJournalRestoreCannotBypassCanonicalPolicy(t *testing.T) {
-	h := newAuthorHarness(t)
-	ctx := context.Background()
-	_, err := h.service.mutate(ctx, authorDictionary, func(ctx context.Context, m *session) error {
-		state := reference.EntryState{
-			ID:            "e1",
-			Dictionary:    authorDictionary,
-			CanonicalName: "Foreign Author",
-			CanonicalKey:  "foreign author",
-			Status:        reference.StatusCandidate,
-		}
-		entry := reference.RevivedEntry(state, m.now)
-		draft := reference.NewDraft(authorDictionary)
-		draft.Track(entry)
-		_, err := m.record(ctx, draft, reference.ChangeReverted, entry.ID(), operatorMeta, 1)
-		return err
-	})
-
-	if !errors.Is(err, reference.ErrInvalid) {
-		t.Fatal("восстановление обошло проверку имени", err)
-	}
-
-	page, err := h.service.List(ctx, authorDictionary, reference.ListFilter{})
-
-	if err != nil || page.Total != 0 || len(h.events(t)) != 0 {
-		t.Fatal("неверное восстановление изменило реестр", page, err)
-	}
-}
-
-func TestAuthorPolicyDoesNotRestrictOtherDictionaryJournalRestore(t *testing.T) {
-	h := newHarness(t)
-	ctx := context.Background()
-	name := strings.Repeat("x", reference.DefaultMaxAliasLength+1)
-	_, err := h.service.mutate(ctx, testDict, func(ctx context.Context, m *session) error {
-		state := reference.EntryState{
-			ID:            "e1",
-			Dictionary:    testDict,
-			CanonicalName: name,
-			CanonicalKey:  name,
-			Status:        reference.StatusConfirmed,
-			Source:        reference.SourceOperator,
-		}
-		entry := reference.RevivedEntry(state, m.now)
-		draft := reference.NewDraft(testDict)
-		draft.Track(entry)
-		_, err := m.record(ctx, draft, reference.ChangeReverted, entry.ID(), operatorMeta, 1)
-		return err
-	})
-
-	if err != nil {
-		t.Fatal("политика авторов изменила восстановление другого словаря", err)
-	}
-
-	page, err := h.service.List(ctx, testDict, reference.ListFilter{})
-
-	if err != nil || page.Total != 1 || page.Entries[0].CanonicalName != name {
-		t.Fatal("историческое имя другого словаря не восстановлено", page, err)
 	}
 }
 
