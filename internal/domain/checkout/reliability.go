@@ -7,13 +7,15 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+// Паузы и ограничения повторов создания и сверки.
 const (
-	// MaxOrderFailures — после пяти отказов создание останавливается, опрос становится редким.
+	// MaxOrderFailures — после пяти отказов опрос становится редким.
 	MaxOrderFailures = 5
-	// OrderCallLease — захват попытки переживает обрыв процесса и ограничивает конкурентные вызовы.
-	OrderCallLease = time.Minute
+	// OrderPollLease ограничивает конкурентные опросы уже созданного заказа.
+	OrderPollLease = time.Minute
 	// OrderRetryBase — первая задержка после отказа.
-	OrderRetryBase = 30 * time.Second
+	OrderRetryBase     = 30 * time.Second
+	CreationRetryDelay = time.Second
 	// OrderRetryCap — максимальная задержка обычных повторов.
 	OrderRetryCap = 10 * time.Minute
 	// OrderSlowPoll — сверка магазина, который долго не отвечает.
@@ -52,18 +54,23 @@ func (c *Checkout) RecheckDelivery(quotes map[ids.TenantID]delivery.Quote, now t
 // CreationDue отличает повтор создания от сверки уже созданного заказа.
 func (g Group) CreationDue(now time.Time) bool {
 	return g.OrderID == "" && (g.Status == GroupCreating || g.Status == GroupSellerUnreachable) &&
-		!g.CreateExhausted && !now.Before(g.NextCreateAt)
+		!g.Abandoned && !g.CreateExhausted && !g.CreationExpired(now) && !now.Before(g.NextCreateAt)
 }
 
 // PollDue учитывает срок следующего обращения и окончательные статусы.
 func (g Group) PollDue(now time.Time) bool {
+	if g.Abandoned {
+		return g.ReconciliationRequired && g.OrderID != "" && !now.Before(g.NextPollAt)
+	}
 	return g.OrderID != "" && g.Status != GroupCancelled && g.Status != GroupReturned && !now.Before(g.NextPollAt)
 }
 
 // Returnable — группа без исполненного заказа, которую нужно вернуть в корзину.
 func (g Group) Returnable() bool {
 	status := g.EffectiveStatus()
-	return status == GroupCancelled || status == GroupPriceChanged || status == GroupDeliveryUnavailable
+	return status == GroupCancellationRequested || status == GroupRejected ||
+		status == GroupUnconfirmed || status == GroupCancelled ||
+		status == GroupPriceChanged || status == GroupDeliveryUnavailable
 }
 
 // ReturnDue ограничивает повтор частичного возврата в переполненную корзину.
@@ -72,7 +79,7 @@ func (g Group) ReturnDue(now time.Time) bool {
 }
 
 // ClaimCreation фиксирует захват до внешнего вызова. Параллельный обработчик пропускает группу.
-func (c *Checkout) ClaimCreation(tenant ids.TenantID, token string, now time.Time) (bool, error) {
+func (c *Checkout) ClaimCreation(tenant ids.TenantID, token string, leaseUntil, now time.Time) (bool, error) {
 	g := c.group(tenant)
 	if g == nil {
 		return false, ErrNotFound
@@ -80,7 +87,7 @@ func (c *Checkout) ClaimCreation(tenant ids.TenantID, token string, now time.Tim
 	if !g.CreationDue(now) {
 		return false, nil
 	}
-	g.CreateToken, g.NextCreateAt = token, now.Add(OrderCallLease)
+	g.CreateToken, g.NextCreateAt = token, leaseUntil
 	return true, c.touch(now)
 }
 
@@ -112,6 +119,7 @@ func (c *Checkout) FailCreation(
 	tenant ids.TenantID,
 	token, code, reason string,
 	terminal GroupStatus,
+	reconciliation bool,
 	prices []PriceChange,
 	now time.Time,
 ) (bool, error) {
@@ -119,7 +127,19 @@ func (c *Checkout) FailCreation(
 	if g == nil {
 		return false, ErrNotFound
 	}
-	if g.CreateToken != token || g.OrderID != "" || g.Returnable() {
+	if g.CreateToken != token || g.OrderID != "" {
+		return false, nil
+	}
+	if g.Abandoned {
+		// Окончательный отказ доказывает отсутствие нового заказа, кроме конфликта чужого тела по ключу.
+		if terminal != "" && !reconciliation {
+			g.ReconciliationRequired = false
+		}
+		g.CreateToken = ""
+		g.LastErrorCode = code
+		return true, c.touch(now)
+	}
+	if g.Returnable() {
 		return false, nil
 	}
 	g.CreateToken = ""
@@ -127,11 +147,10 @@ func (c *Checkout) FailCreation(
 	g.Status, g.Reason = GroupSellerUnreachable, reason
 	g.LastErrorCode = code
 	g.CurrentPrices = append([]PriceChange(nil), prices...)
-	g.NextCreateAt = now.Add(retryDelay(g.CreateFailures))
+	g.NextCreateAt = now.Add(CreationRetryDelay)
 	if terminal != "" {
 		g.Status = terminal
-	}
-	if g.CreateFailures >= MaxOrderFailures || terminal != "" {
+		g.ReconciliationRequired = reconciliation
 		g.CreateExhausted = true
 	}
 	c.rollup()
@@ -147,7 +166,7 @@ func (c *Checkout) ClaimPoll(tenant ids.TenantID, token string, now time.Time) (
 	if !g.PollDue(now) {
 		return false, nil
 	}
-	g.PollToken, g.NextPollAt = token, now.Add(OrderCallLease)
+	g.PollToken, g.NextPollAt = token, now.Add(OrderPollLease)
 	return true, c.touch(now)
 }
 
@@ -191,7 +210,7 @@ func (c *Checkout) FailPoll(tenant ids.TenantID, token, reason string, now time.
 		g.PollFailures++
 	}
 	g.NextPollAt = now.Add(retryDelay(g.PollFailures))
-	if g.PollFailures >= MaxOrderFailures {
+	if g.PollFailures >= MaxOrderFailures && !g.Abandoned {
 		if g.Status != GroupSellerUnreachable {
 			g.LastOrderStatus = g.Status
 		}
@@ -235,4 +254,17 @@ func retryDelay(failures int) time.Duration {
 		return OrderRetryCap
 	}
 	return delay
+}
+
+// NextWorkAt возвращает ближайшую сверку или возврат; нулевое время означает работу сразу.
+func (g Group) NextWorkAt() (time.Time, bool) {
+	var next time.Time
+	found := g.PollDue(g.NextPollAt)
+	if found {
+		next = g.NextPollAt
+	}
+	if g.ReturnDue(g.NextReturnAt) && (!found || g.NextReturnAt.Before(next)) {
+		next, found = g.NextReturnAt, true
+	}
+	return next, found
 }

@@ -75,6 +75,7 @@ type services struct {
 	directory         *appdelivery.Service
 	checkouts         *appcheckout.Service
 	dispatcher        *messaging.Dispatcher
+	creation          *appcheckout.CreationExecutor
 	janitor           *messaging.Janitor
 	parker            *messaging.Parker
 	reference         *appreference.Service
@@ -263,6 +264,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		identities,
 		now,
 		appcheckout.Config{
+			OrderCallTimeout:          cfg.Platform.Timeout,
 			DeliverySubsidyMinPercent: cfg.Checkout.DeliverySubsidyMinPercent,
 			QuoteTTL:                  cfg.Checkout.QuoteTTL,
 			ReturnBaseURL:             cfg.Checkout.ReturnBaseURL,
@@ -311,10 +313,16 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 	)
 
+	checkouts.SetObserver(jobs.NewCheckoutMetrics(s.logger, s.metrics))
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(s.store.pool),
 		now,
 		messaging.DispatcherConfig{
+			ExcludeKinds: []string{
+				appcheckout.TaskCreateOrder,
+				appcheckout.TaskExpireCreation,
+				appcheckout.TaskPollOrder,
+			},
 			Batch:     cfg.Outbox.Batch,
 			PerTenant: cfg.Outbox.PerTenant,
 			Lease:     cfg.Outbox.Lease,
@@ -385,6 +393,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		directory:         pickups,
 		checkouts:         checkouts,
 		dispatcher:        dispatcher,
+		creation:          appcheckout.NewCreationExecutor(postgres.NewTaskQueue(s.store.pool), now, checkouts),
 		janitor:           janitor,
 		parker:            messaging.NewParker(uow),
 		reference:         references,
@@ -486,6 +495,7 @@ func (s *server) jobs() []func(context.Context) error {
 			s.metrics,
 		).Run)
 	}
+	outbox := jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics)
 	return append(runners, []func(context.Context) error{
 		jobs.NewPromotionRunner(
 			s.app.promotion,
@@ -494,8 +504,9 @@ func (s *server) jobs() []func(context.Context) error {
 			s.cfg.Promotion.TickInterval,
 		).Run,
 		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
+		jobs.NewCreationRunner(s.app.creation, s.logger, outbox.RecordOutcome).Run,
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
-		jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics).Run,
+		outbox.Run,
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).Run,
 		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).Run,

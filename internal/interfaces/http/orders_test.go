@@ -8,6 +8,7 @@ import (
 
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
 
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
@@ -79,9 +80,10 @@ func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
 	body := `{"contact":{"phone":"79251234567","name":"Покупатель"}}`
 	created := e.session(t, http.MethodPost, path+"/orders", body, cookie)
 	if created.status != http.StatusOK || created.body["nextPayment"] != nil ||
-		created.body["status"] != "awaiting_payment" {
+		created.body["status"] != "creating_orders" {
 		t.Fatalf("заказы: %+v", created)
 	}
+	runOrderWorker(t, e)
 	paidURL := path + "/pay"
 	link := e.session(t, http.MethodPost, paidURL, "", cookie)
 	if link.status != http.StatusOK || link.body["url"] == "" {
@@ -117,6 +119,7 @@ func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
 		t.Fatalf("панель: %+v", operator)
 	}
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
+	runOrderWorker(t, e)
 	refreshed := e.session(t, http.MethodGet, path, "", cookie)
 	if refreshed.status != http.StatusOK || refreshed.body["status"] != "paid" || refreshed.body["nextPayment"] != nil {
 		t.Fatalf("источник статуса — магазин: %+v", refreshed)
@@ -191,6 +194,32 @@ func TestCatalogShowsDeliveryUnavailableOutsideSellerRegions(t *testing.T) {
 		item := items[0].(map[string]any)
 		if item["deliveryAvailable"] != selected.allowed {
 			t.Fatalf("регион: %+v", item)
+		}
+	}
+}
+
+func runOrderWorker(t *testing.T, e *env) {
+	t.Helper()
+	ctx := context.Background()
+	if err := e.checkouts.Resume(ctx); err != nil {
+		t.Fatal(err)
+	}
+	tasks, err := e.store.Claim(ctx, ports.ClaimRequest{
+		Now:        e.clock.Now(),
+		Limit:      100,
+		PerTenant:  100,
+		LeaseUntil: e.clock.Now().Add(time.Minute),
+		Kinds:      []string{appcheckout.TaskCreateOrder, appcheckout.TaskExpireCreation, appcheckout.TaskPollOrder},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range tasks {
+		if err := e.checkouts.HandleOrderTask(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.store.Complete(ctx, task.ID, task.Attempts, e.clock.Now()); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

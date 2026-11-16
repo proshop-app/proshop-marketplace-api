@@ -12,10 +12,12 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -203,5 +205,53 @@ func TestSettingsSyncRunnerCountsFailures(t *testing.T) {
 
 	if s.calls != 1 || total != 1 {
 		t.Fatalf("сверка на старте, сбой магазина в метрике: %d %v", s.calls, total)
+	}
+}
+
+func TestCheckoutOutboxMetricsAndRoutineWaiting(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	var journal strings.Builder
+	logger := slog.New(slog.NewTextHandler(&journal, nil))
+	runner := jobs.NewOutboxRunner(&dispatcher{}, time.Second, logger, registry)
+	for _, kind := range []string{
+		appcheckout.TaskCreateOrder,
+		appcheckout.TaskExpireCreation,
+		appcheckout.TaskPollOrder,
+	} {
+		runner.RecordOutcome(outcome(kind, nil))
+	}
+	pending := errs.New(errs.Unavailable, "checkout.creation_pending", "ожидание")
+	runner.RecordOutcome(outcome(appcheckout.TaskExpireCreation, pending))
+	if journal.Len() != 0 {
+		t.Fatal("штатное ожидание не должно засорять журнал", journal.String())
+	}
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	done, retry, observed := 0.0, 0.0, uint64(0)
+	for _, family := range families {
+		for _, metric := range family.GetMetric() {
+			switch family.GetName() {
+			case "marketplace_outbox_tasks_total":
+				for _, label := range metric.GetLabel() {
+					if label.GetName() == "result" && label.GetValue() == "done" {
+						done += metric.GetCounter().GetValue()
+					}
+					if label.GetName() == "result" && label.GetValue() == "retry" {
+						retry += metric.GetCounter().GetValue()
+					}
+				}
+			case "marketplace_outbox_task_lag_seconds":
+				observed += metric.GetHistogram().GetSampleCount()
+			}
+		}
+	}
+	if done != 3 || retry != 1 || observed != 3 {
+		t.Fatal(done, retry, observed)
+	}
+	runner.RecordOutcome(outcome(appcheckout.TaskCreateOrder, errors.New("хранилище недоступно")))
+	if !strings.Contains(journal.String(), "tenantId=t1") {
+		t.Fatal(journal.String())
 	}
 }

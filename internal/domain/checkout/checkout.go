@@ -48,9 +48,15 @@ type Line struct {
 
 // Group — заказ одного продавца в покупке.
 type Group struct {
-	PromoCode string
-	Tracking  *Tracking
-	TenantID  ids.TenantID
+	// CreationDeadline фиксирует обещанный срок и не продлевается повтором команды.
+	CreationDeadline time.Time
+	// Abandoned запрещает позднему ответу повторно открыть оплату после отказа покупателя или срока.
+	Abandoned bool
+	// ReconciliationRequired сохраняет работу после локального итога, пока магазин не подтвердил отмену.
+	ReconciliationRequired bool
+	PromoCode              string
+	Tracking               *Tracking
+	TenantID               ids.TenantID
 	// ExternalCheckoutID — ключ заказа у магазина: <checkoutId>:<tenantId>.
 	ExternalCheckoutID string
 	Lines              []Line
@@ -99,6 +105,10 @@ type PriceCheck struct {
 
 // State — плоский снимок покупки.
 type State struct {
+	// PaymentAttempt не даёт отказу старого запроса сбросить блокировку нового платежа.
+	PaymentAttempt string
+	// PaymentStarted запрещает отмену, пока неизвестен результат уже отправленной оплаты.
+	PaymentStarted bool
 	ID             ids.UUID
 	BuyerID        ids.UUID
 	IdempotencyKey string

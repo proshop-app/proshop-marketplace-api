@@ -25,8 +25,9 @@ type NewTask struct {
 	// одному товару даёт одну синхронизацию.
 	DedupKey string
 	Payload  []byte
-	// At — время постановки; задача созревает сразу.
-	At time.Time
+	// At — время постановки. AvailableAt задаёт срок отложенной задачи; ноль означает At.
+	At          time.Time
+	AvailableAt time.Time
 }
 
 // Task — задача, взятая из outbox на разбор.
@@ -47,10 +48,14 @@ type Outbox interface {
 
 // ClaimRequest — сколько задач взять и до какого времени их держать.
 type ClaimRequest struct {
-	Now        time.Time
-	Limit      int
-	PerTenant  int
-	LeaseUntil time.Time
+	Kinds        []string
+	ExcludeKinds []string
+	// TenantSlots уменьшает квоту с учётом уже выполняющихся задач.
+	TenantSlots map[ids.TenantID]int
+	Now         time.Time
+	Limit       int
+	PerTenant   int
+	LeaseUntil  time.Time
 }
 
 // TaskResolution — результат с токеном аренды; NextAt задан только при повторе.

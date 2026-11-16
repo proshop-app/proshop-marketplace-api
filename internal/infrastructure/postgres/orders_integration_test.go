@@ -73,7 +73,12 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := stale.ClaimCreation("t1", "stale-attempt", at(2)); err != nil {
+	if _, err := stale.ClaimCreation(
+		"t1",
+		"stale-attempt",
+		at(2).Add(5*time.Second+100*time.Millisecond),
+		at(2),
+	); err != nil {
 		t.Fatal(err)
 	}
 	err = do(t, uow, func(ctx context.Context, tx ports.Tx) error { return tx.Checkouts().Update(ctx, stale) })
@@ -93,10 +98,10 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 			return fmt.Errorf("после загрузки: %+v", state)
 		}
 		items, err := tx.Checkouts().List(ctx, checkout.Filter{
-			BuyerID:        buyerA,
-			OrdersOnly:     true,
-			AwaitingBefore: at(20),
-			Limit:          100,
+			BuyerID:     buyerA,
+			OrdersOnly:  true,
+			StuckBefore: at(20),
+			Limit:       100,
 		})
 		if err != nil || len(items) != 1 {
 			return fmt.Errorf("фильтр ожидающих: %d %w", len(items), err)

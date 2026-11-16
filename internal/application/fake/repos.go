@@ -189,10 +189,14 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 		if f.OrdersOnly && (state.Status == checkout.StatusDraft || state.Status == checkout.StatusConfirmed) {
 			continue
 		}
-		if !f.AwaitingBefore.IsZero() {
+		if f.HasOrders && !checkout.Restore(state).HasOrders() {
+			continue
+		}
+		if !f.StuckBefore.IsZero() {
 			stuck := false
 			for _, g := range state.Groups {
-				if g.Status == checkout.GroupAwaitingPayment && !g.AwaitingSince.After(f.AwaitingBefore) {
+				if g.ReconciliationRequired ||
+					(g.Status == checkout.GroupAwaitingPayment && !g.AwaitingSince.After(f.StuckBefore)) {
 					stuck = true
 				}
 			}
@@ -213,11 +217,8 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 }
 
 func checkoutWorkDue(state checkout.State, now time.Time) bool {
-	if !state.CartConsumed {
-		return true
-	}
 	for _, g := range state.Groups {
-		if g.CreationDue(now) || g.PollDue(now) || g.ReturnDue(now) {
+		if g.PollDue(now) || g.ReturnDue(now) {
 			return true
 		}
 	}

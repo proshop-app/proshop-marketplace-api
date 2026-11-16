@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
@@ -133,28 +134,36 @@ func (r *OutboxRunner) recordDepth(ctx context.Context) {
 
 func (r *OutboxRunner) record(outcomes []messaging.Outcome) {
 	for _, outcome := range outcomes {
-		tenant := string(outcome.Task.TenantID)
-
-		if outcome.Err == nil {
-			r.tasks.WithLabelValues(outcome.Task.Kind, tenant, "done").Inc()
-			r.lag.WithLabelValues(outcome.Task.Kind).Observe(outcome.Lag.Seconds())
-
-			continue
-		}
-
-		r.tasks.WithLabelValues(outcome.Task.Kind, tenant, "retry").Inc()
-		r.logger.Warn(
-			"outbox: задача отложена",
-			slog.String("kind", outcome.Task.Kind),
-			slog.String("tenantId", tenant),
-			slog.Int64(
-				"taskId",
-				outcome.Task.ID,
-			),
-			slog.Int("attempt", outcome.Task.Attempts),
-			slog.Any("error", outcome.Err),
-		)
+		r.RecordOutcome(outcome)
 	}
+}
+
+// RecordOutcome учитывает результаты всех полос общего outbox.
+func (r *OutboxRunner) RecordOutcome(outcome messaging.Outcome) {
+	tenant := string(outcome.Task.TenantID)
+
+	if outcome.Err == nil {
+		r.tasks.WithLabelValues(outcome.Task.Kind, tenant, "done").Inc()
+		r.lag.WithLabelValues(outcome.Task.Kind).Observe(outcome.Lag.Seconds())
+
+		return
+	}
+
+	r.tasks.WithLabelValues(outcome.Task.Kind, tenant, "retry").Inc()
+	if appcheckout.CreationPending(outcome.Err) {
+		return
+	}
+	r.logger.Warn(
+		"outbox: задача отложена",
+		slog.String("kind", outcome.Task.Kind),
+		slog.String("tenantId", tenant),
+		slog.Int64(
+			"taskId",
+			outcome.Task.ID,
+		),
+		slog.Int("attempt", outcome.Task.Attempts),
+		slog.Any("error", outcome.Err),
+	)
 }
 
 // NewRetentionRunner — чистка раз в interval.

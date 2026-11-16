@@ -37,7 +37,7 @@ func TestPromoOrderSnapshotAndInvalidation(t *testing.T) {
 					PromoCode: &cart.PromoCode{Code: "SAVE", Message: expiredPromoMessage()},
 				})
 			}
-			state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+			state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 			if invalid {
 				if err != nil || e.platform.OrderCount() != 1 ||
 					state.Groups[0].LastErrorCode != checkout.ErrPromoInvalid.Key() ||
@@ -70,7 +70,7 @@ func TestTrackingPollSnapshotAndOwnership(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	c := confirmedPurchase(t, e)
-	state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestTrackingPollSnapshotAndOwnership(t *testing.T) {
 		URL:     "https://example.test/123",
 	})
 	e.clock.Advance(61 * time.Second)
-	state, err = e.service.Refresh(ctx, buyerID, c.ID)
+	state, err = refreshOrders(ctx, e, buyerID, c.ID)
 	if err != nil || state.Groups[0].Tracking == nil || *state.Groups[0].Tracking.Number != "123" {
 		t.Fatal(state, err)
 	}
@@ -126,8 +126,9 @@ func TestPromoOrderRetryAfterCodeExpired(t *testing.T) {
 	}
 	c := confirmedPurchase(t, e)
 	crash := errors.New("ответ потерян после создания")
-	e.platform.AfterCreate = func() { e.store.FailCommit = crash }
-	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); !errors.Is(err, crash) {
+	attemptCtx, stop := context.WithCancel(ctx)
+	e.platform.AfterCreate = func() { e.store.FailCommit = crash; stop() }
+	if _, err := beginAndExecute(attemptCtx, e, buyerID, c.ID, orderContact); !errors.Is(err, crash) {
 		t.Fatal(err)
 	}
 	e.platform.AfterCreate = nil
@@ -135,8 +136,8 @@ func TestPromoOrderRetryAfterCodeExpired(t *testing.T) {
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{
 		PromoCode: &cart.PromoCode{Code: "SAVE", Message: expiredPromoMessage()},
 	})
-	e.clock.Advance(2 * time.Minute)
-	state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+	e.clock.Advance(5*time.Second + 100*time.Millisecond)
+	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 	if err != nil || state.Groups[0].Status != checkout.GroupAwaitingPayment {
 		t.Fatal(state, err)
 	}
@@ -187,7 +188,7 @@ func TestConfirmRepricesDiscountsAndLowerPrice(t *testing.T) {
 	if err != nil || state.Status != checkout.StatusConfirmed {
 		t.Fatal(state, err)
 	}
-	state, err = e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+	state, err = beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 	if err != nil || state.Groups[0].Status != checkout.GroupAwaitingPayment {
 		t.Fatal(state, err)
 	}
@@ -305,7 +306,7 @@ func TestReturnedGroupKeepsUncheckedPromo(t *testing.T) {
 			}
 			c := confirmedPurchase(t, e)
 			e.platform.FailCreate("t1", &ports.OrderRefusal{Code: code})
-			if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+			if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 				t.Fatal(err)
 			}
 			basket, err := e.carts.Get(ctx, buyerID)
@@ -363,7 +364,7 @@ func TestReturnedGroupKeepsNewCartPromo(t *testing.T) {
 	}
 	purchase := confirmedPurchase(t, e)
 	e.platform.FailCreate("t1", errors.New("нет ответа"))
-	if _, err := e.service.CreateOrders(ctx, buyerID, purchase.ID, orderContact); err != nil {
+	if _, err := beginAndExecute(ctx, e, buyerID, purchase.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{PromoCode: &cart.PromoCode{Code: "NEW", Valid: true}})
@@ -375,7 +376,7 @@ func TestReturnedGroupKeepsNewCartPromo(t *testing.T) {
 	}
 	e.platform.FailCreate("t1", checkout.ErrPromoInvalid.WithMessage("старый код истёк"))
 	e.clock.Advance(2 * time.Minute)
-	if _, err := e.service.CreateOrders(ctx, buyerID, purchase.ID, orderContact); err != nil {
+	if _, err := beginAndExecute(ctx, e, buyerID, purchase.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
 	basket, err := e.carts.Get(ctx, buyerID)
@@ -406,7 +407,7 @@ func TestReturnedGroupMarksSameCartPromoRejected(t *testing.T) {
 	}
 	purchase := confirmedPurchase(t, e)
 	e.platform.FailCreate("t1", errors.New("нет ответа"))
-	if _, err := e.service.CreateOrders(ctx, buyerID, purchase.ID, orderContact); err != nil {
+	if _, err := beginAndExecute(ctx, e, buyerID, purchase.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{PromoCode: &cart.PromoCode{Code: "OLD", Valid: true}})
@@ -417,8 +418,8 @@ func TestReturnedGroupMarksSameCartPromoRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.FailCreate("t1", checkout.ErrPromoInvalid.WithMessage("старый код истёк"))
-	e.clock.Advance(2 * time.Minute)
-	if _, err := e.service.CreateOrders(ctx, buyerID, purchase.ID, orderContact); err != nil {
+	e.clock.Advance(time.Second)
+	if _, err := beginAndExecute(ctx, e, buyerID, purchase.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
 	basket, err := e.carts.Get(ctx, buyerID)

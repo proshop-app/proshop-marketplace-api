@@ -49,7 +49,7 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 	if _, err := c.MarkCartConsumed(at(0)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.ClaimCreation("t1", "create", at(0)); err != nil {
+	if _, err := c.ClaimCreation("t1", "create", at(0).Add(5*time.Second+100*time.Millisecond), at(0)); err != nil {
 		t.Fatal(err)
 	}
 	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
@@ -63,7 +63,12 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if claimed, err := loaded.ClaimCreation("t1", "duplicate", now); err != nil || claimed {
+		if claimed, err := loaded.ClaimCreation(
+			"t1",
+			"duplicate",
+			now.Add(5*time.Second+100*time.Millisecond),
+			now,
+		); err != nil || claimed {
 			return fmt.Errorf("сохранённая аренда должна пережить чтение: %v %w", claimed, err)
 		}
 		_, err = loaded.CompleteCreation(
@@ -182,7 +187,7 @@ func TestExhaustedCreationReturnDueAfterRestart(t *testing.T) {
 	if _, err := c.MarkCartConsumed(at(0)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.ClaimCreation("t1", "create", at(0)); err != nil {
+	if _, err := c.ClaimCreation("t1", "create", at(0).Add(5*time.Second+100*time.Millisecond), at(0)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -192,6 +197,7 @@ func TestExhaustedCreationReturnDueAfterRestart(t *testing.T) {
 		"IDEMPOTENCY_CONFLICT",
 		"отказ",
 		checkout.GroupSellerUnreachable,
+		true,
 		nil,
 		at(0),
 	); err != nil {

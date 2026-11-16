@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -38,14 +40,14 @@ func TestSinglePaymentRecovery(t *testing.T) {
 			e := setup(t)
 			c := confirmedPurchase(t, e)
 			ctx := context.Background()
-			state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+			state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 			if err != nil {
 				t.Fatal(err)
 			}
 			first := state.Groups[0]
 			if mode == "partial" {
 				e.platform.SetOrderStatus(first.OrderID, checkout.GroupPaid, "")
-				if _, err := e.service.Refresh(ctx, buyerID, c.ID); err != nil {
+				if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
 					t.Fatal(err)
 				}
 				// Уже оплаченный локально магазин больше не вызывается.
@@ -111,7 +113,7 @@ func TestSinglePaymentConcurrentUpdate(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
-	state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +163,16 @@ func TestPaymentWithoutStubPreservesCart(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	before, _ := e.store.Cart(buyerID)
-	service := appcheckout.NewService(e.store, e.index, e.platform, nil, nil, nil, e.clock, appcheckout.Config{})
+	service := appcheckout.NewService(
+		e.store,
+		e.index,
+		e.platform,
+		nil,
+		nil,
+		&fake.IDs{},
+		e.clock,
+		appcheckout.Config{},
+	)
 	_, err := service.CreateOrders(context.Background(), buyerID, c.ID, orderContact)
 	if !errors.Is(err, checkout.ErrPaymentUnavailable) {
 		t.Fatal(err)
@@ -188,7 +199,7 @@ func TestPaymentRefusalsStopAtFirstGroup(t *testing.T) {
 			e := setup(t)
 			c := confirmedPurchase(t, e)
 			ctx := context.Background()
-			if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+			if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 				t.Fatal(err)
 			}
 			refusal := error(&ports.OrderRefusal{Code: code})
@@ -214,7 +225,7 @@ func TestExpiredPaymentMakesNoServerCalls(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
-	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+	if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
 	e.clock.Advance(time.Hour)
@@ -239,13 +250,13 @@ func TestPaymentAfterExhaustedCreation(t *testing.T) {
 		c := confirmedPurchase(t, e)
 		ctx := context.Background()
 		e.platform.FailCreate("t1", refusal)
-		state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+		state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for !state.Groups[0].CreateExhausted {
 			e.clock.Advance(state.Groups[0].NextCreateAt.Sub(e.clock.Now()))
-			if err := e.service.Resume(ctx); err != nil {
+			if err := resumeAndExecute(ctx, e); err != nil {
 				t.Fatal(err)
 			}
 			state, err = e.service.Get(ctx, buyerID, c.ID)
@@ -273,7 +284,7 @@ func TestPaymentWithUnreachablePoll(t *testing.T) {
 		e := setup(t)
 		c := confirmedPurchase(t, e)
 		ctx := context.Background()
-		if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+		if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 			t.Fatal(err)
 		}
 		if paid {
@@ -283,7 +294,7 @@ func TestPaymentWithUnreachablePoll(t *testing.T) {
 		}
 		e.platform.Fail("t1", errors.New("нет связи"))
 		for range checkout.MaxOrderFailures {
-			state, err := e.service.Refresh(ctx, buyerID, c.ID)
+			state, err := refreshOrders(ctx, e, buyerID, c.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -316,7 +327,7 @@ func TestSinglePaymentDoubleConfirm(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
-	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+	if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
 	e.platform.AfterStubPayment = func() {
@@ -339,26 +350,32 @@ func TestPaymentRetriesLocalConflict(t *testing.T) {
 		e := setup(t)
 		c := confirmedPurchase(t, e)
 		ctx := context.Background()
-		if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+		if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 			t.Fatal(err)
 		}
 		uow := &paymentConflictUOW{UnitOfWork: e.store}
-		service := appcheckout.NewService(uow, e.index, e.platform, nil, nil, nil, e.clock, appcheckout.Config{
-			PaymentStub: true,
-		})
+		service := appcheckout.NewService(
+			uow,
+			e.index,
+			e.platform,
+			nil,
+			nil,
+			&fake.IDs{},
+			e.clock,
+			appcheckout.Config{
+				PaymentStub: true,
+			},
+		)
 		e.platform.AfterStubPayment = func() { uow.remaining = conflicts }
 		err := service.ConfirmPayment(ctx, buyerID, c.ID)
-		if conflicts == 2 && err != nil {
-			t.Fatal(err)
-		}
-		if conflicts == 3 && !errors.Is(err, checkout.ErrConflict) {
+		if err != nil {
 			t.Fatal(err)
 		}
 		if uow.attempts != conflicts || len(e.platform.StubPaymentCalls()) != 2 {
 			t.Fatal(uow.attempts)
 		}
 		state, _ := e.service.Get(ctx, buyerID, c.ID)
-		if checkout.Restore(state).PaymentComplete() != (conflicts == 2) {
+		if !checkout.Restore(state).PaymentComplete() {
 			t.Fatal(state.Status)
 		}
 	}
@@ -368,7 +385,7 @@ func TestFakePaymentContract(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
-	state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 	if err != nil {
 		t.Fatal(err)
 	}

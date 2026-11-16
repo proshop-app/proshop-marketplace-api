@@ -3,6 +3,7 @@ package checkout
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -11,19 +12,31 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+const (
+	creationSaveInitialDelay = 20 * time.Millisecond
+	creationSaveMaxDelay     = time.Second
+	completionTimeout        = 3 * time.Second
+)
+
 func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant ids.TenantID) error {
 	token := string(s.ids.NewUUID())
 	claimed := false
-	state, err := s.update(ctx, buyerID, id, func(c *checkout.Checkout, now time.Time) error {
+	state, err := s.retrySelection(ctx, buyerID, id, nil, func(c *checkout.Checkout, now time.Time) error {
 		var err error
-		claimed, err = c.ClaimCreation(tenant, token, now)
+		claimed, err = c.ClaimCreation(tenant, token, s.creationLease(c, tenant, now), now)
 		return err
 	})
-	if errors.Is(err, checkout.ErrConflict) {
-		return nil
-	}
-	if err != nil || !claimed {
+	if err != nil {
 		return err
+	}
+	if !claimed {
+		for _, g := range state.Groups {
+			if g.TenantID == tenant && g.OrderID == "" && !g.CreateExhausted &&
+				!g.Abandoned && !g.CreationExpired(s.clock.Now()) {
+				return errCreationPending
+			}
+		}
+		return nil
 	}
 	var group checkout.Group
 	for _, g := range state.Groups {
@@ -51,8 +64,17 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 	}
 	// Повтор команды должен вернуть сохранённый заказ, даже если код уже истёк.
 	// Сервер сравнивает снимок discounts внутри транзакции создания.
-	answer, failed := s.platform.CreateOrder(ctx, tenant, request)
-	_, err = s.update(ctx, buyerID, id, func(c *checkout.Checkout, now time.Time) error {
+	callCtx, cancel := context.WithTimeout(ctx, min(s.orderCallBudget(), group.CreationDeadline.Sub(s.clock.Now())))
+	answer, failed := s.platform.CreateOrder(callCtx, tenant, request)
+	cancel()
+	// Полученный orderId сохраняем даже при остановке процесса, но ограничиваем время завершения.
+	saveCtx := ctx
+	if failed == nil {
+		var finish context.CancelFunc
+		saveCtx, finish = context.WithTimeout(context.WithoutCancel(ctx), completionTimeout)
+		defer finish()
+	}
+	state, err = s.saveCreation(saveCtx, buyerID, id, tenant, func(c *checkout.Checkout, now time.Time) error {
 		if failed == nil {
 			_, attachErr := c.CompleteCreation(tenant, token, answer, now)
 			if !errors.Is(attachErr, checkout.ErrInvalidOrder) {
@@ -72,10 +94,55 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		if errors.As(failed, &refusal) && refusal.Reason != "" {
 			reason = refusal.Reason
 		}
-		_, err := c.FailCreation(tenant, token, code, reason, terminal, prices, now)
+		_, err := c.FailCreation(tenant, token, code, reason, terminal, code == "IDEMPOTENCY_CONFLICT", prices, now)
 		return err
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	for _, g := range state.Groups {
+		if g.TenantID == tenant && g.OrderID == "" && !g.CreateExhausted && !g.Abandoned {
+			return errCreationPending
+		}
+	}
+	return nil
+}
+
+func (s *Service) creationLease(c *checkout.Checkout, tenant ids.TenantID, now time.Time) time.Time {
+	for _, g := range c.Groups() {
+		if g.TenantID == tenant {
+			return now.Add(min(s.orderCallBudget(), g.CreationDeadline.Sub(now)) + creationLeaseSlack)
+		}
+	}
+	return now
+}
+
+// Повторяем только временный сбой хранилища и конфликт версии, не маскируя ошибки сценария.
+func (s *Service) saveCreation(
+	ctx context.Context,
+	buyerID, id ids.UUID,
+	tenant ids.TenantID,
+	mutate func(*checkout.Checkout, time.Time) error,
+) (checkout.State, error) {
+	delay := creationSaveInitialDelay
+	for {
+		if err := ctx.Err(); err != nil {
+			return checkout.State{}, err
+		}
+		state, err := s.updateSelection(ctx, buyerID, id, nil, mutate)
+		if err == nil || (!errors.Is(err, checkout.ErrConflict) && errs.CodeOf(err) != errs.Unavailable) {
+			return state, err
+		}
+		slog.Warn("создание: повтор записи итога", "tenantId", tenant, "checkoutId", id, "delay", delay, "error", err)
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return checkout.State{}, ctx.Err()
+		case <-timer.C:
+		}
+		delay = min(delay*2, creationSaveMaxDelay)
+	}
 }
 
 func creationFailure(err error) (string, checkout.GroupStatus, []checkout.PriceChange) {
@@ -95,7 +162,7 @@ func creationFailure(err error) (string, checkout.GroupStatus, []checkout.PriceC
 		case "DELIVERY_UNAVAILABLE", "DELIVERY_CHANGED":
 			return refusal.Code, checkout.GroupDeliveryUnavailable, nil
 		case "OUT_OF_STOCK":
-			return refusal.Code, checkout.GroupCancelled, nil
+			return refusal.Code, checkout.GroupRejected, nil
 		case "IDEMPOTENCY_CONFLICT":
 			return refusal.Code, checkout.GroupSellerUnreachable, nil
 		default:
@@ -128,7 +195,9 @@ func (s *Service) pollGroup(ctx context.Context, buyerID, id ids.UUID, tenant id
 			orderID = g.OrderID
 		}
 	}
-	answer, failed := s.platform.GetOrder(ctx, tenant, orderID)
+	callCtx, cancel := context.WithTimeout(ctx, s.orderCallBudget())
+	answer, failed := s.platform.GetOrder(callCtx, tenant, orderID)
+	cancel()
 	_, err = s.update(ctx, buyerID, id, func(c *checkout.Checkout, now time.Time) error {
 		if failed == nil {
 			interval := paidPoll
@@ -154,4 +223,11 @@ func (s *Service) pollGroup(ctx context.Context, buyerID, id ids.UUID, tenant id
 		return err
 	})
 	return err
+}
+
+func (s *Service) orderCallBudget() time.Duration {
+	if s.config.OrderCallTimeout > 0 {
+		return min(CreationCallTimeout, s.config.OrderCallTimeout)
+	}
+	return CreationCallTimeout
 }

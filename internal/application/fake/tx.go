@@ -232,11 +232,15 @@ func versionMatches[K comparable, V any](rows map[K]V, key K, origin int64, vers
 }
 
 func (o outbox) Enqueue(_ context.Context, task ports.NewTask) error {
+	next := task.AvailableAt
+	if next.IsZero() {
+		next = task.At
+	}
 	if task.DedupKey != "" {
 		for i, row := range o.d.outbox {
 			if row.DedupKey == task.DedupKey && row.DoneAt == nil && row.Attempts == 0 {
-				if task.At.Before(row.NextAt) {
-					o.d.outbox[i].NextAt = task.At
+				if next.Before(row.NextAt) {
+					o.d.outbox[i].NextAt = next
 				}
 				return nil
 			}
@@ -250,7 +254,7 @@ func (o outbox) Enqueue(_ context.Context, task ports.NewTask) error {
 		TenantID:  task.TenantID,
 		DedupKey:  task.DedupKey,
 		Payload:   task.Payload,
-		NextAt:    task.At,
+		NextAt:    next,
 		CreatedAt: task.At,
 	})
 

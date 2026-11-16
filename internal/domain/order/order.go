@@ -13,4 +13,17 @@ func Snapshot(state checkout.State) Purchase {
 }
 
 // State возвращает копию групп и выбранного ПВЗ.
-func (p Purchase) State() checkout.State { return checkout.Restore(p.state).State() }
+func (p Purchase) State() checkout.State {
+	state := checkout.Restore(p.state).State()
+	// В кабинете уже созданный неоплаченный заказ виден даже во время ожидания соседних групп.
+	// Право на оплату по-прежнему проверяется по исходной покупке и creationComplete.
+	if state.Status == checkout.StatusCreatingOrders {
+		for _, g := range state.Groups {
+			if g.OrderID != "" && g.EffectiveStatus() == checkout.GroupAwaitingPayment {
+				state.Status = checkout.StatusAwaitingPayment
+				break
+			}
+		}
+	}
+	return state
+}

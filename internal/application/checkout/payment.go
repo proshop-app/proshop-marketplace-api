@@ -51,6 +51,33 @@ func (s *Service) ConfirmPayment(ctx context.Context, buyerID, id ids.UUID) erro
 	if _, err := c.PaymentAmount(); err != nil {
 		return err
 	}
+	token := string(s.ids.NewUUID())
+	uncertain := false
+	state, err = s.retrySelection(ctx, buyerID, id, nil, func(current *checkout.Checkout, now time.Time) error {
+		uncertain = current.State().PaymentStarted
+		return current.ClaimPayment(token, now)
+	})
+	if err != nil {
+		return err
+	}
+	unpaid := false
+	failed := false
+	defer func() {
+		if failed && (uncertain || !unpaid) {
+			probeCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), completionTimeout)
+			unpaid = s.confirmUnpaid(probeCtx, state)
+			stop()
+		}
+		finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), completionTimeout)
+		defer cancel()
+		finish := func(current *checkout.Checkout, now time.Time) error {
+			return current.FinishPayment(token, unpaid, now)
+		}
+		_, finishErr := s.retrySelection(finishCtx, buyerID, id, nil, finish)
+		if finishErr != nil {
+			slog.Error("оплата: завершение попытки не сохранено", "checkoutId", id, "error", finishErr)
+		}
+	}()
 	paid := make(map[ids.TenantID]string)
 	for _, g := range state.Groups {
 		if g.EffectiveStatus() != checkout.GroupAwaitingPayment {
@@ -61,14 +88,17 @@ func (s *Service) ConfirmPayment(ctx context.Context, buyerID, id ids.UUID) erro
 			return err
 		}
 		if err := s.platform.StubPayment(ctx, g.TenantID, g.OrderID, amount); err != nil {
+			failed = true
 			slog.Warn("отказ оплаты заказа", "tenantId", g.TenantID, "orderId", g.OrderID, "error", err)
 			if errors.Is(err, ports.ErrMarketplaceDisabled) {
+				unpaid = len(paid) == 0
 				return checkout.ErrTransition.Wrap(err)
 			}
 			var refusal *ports.OrderRefusal
 			if errors.As(err, &refusal) {
 				switch refusal.Code {
 				case "MARKETPLACE_STUB_PAYMENT_STATE", "MARKETPLACE_STUB_PAYMENT_AMOUNT", "ORDER_NOT_FOUND":
+					unpaid = len(paid) == 0 && refusal.Code != "MARKETPLACE_STUB_PAYMENT_STATE"
 					return checkout.ErrTransition.Wrap(err)
 				}
 			}
@@ -76,25 +106,37 @@ func (s *Service) ConfirmPayment(ctx context.Context, buyerID, id ids.UUID) erro
 		}
 		paid[g.TenantID] = g.OrderID
 	}
-	// Короткую транзакцию повторяем при гонке с опросом; сервер повторно не вызываем.
-	for range 3 {
-		_, err = s.update(ctx, buyerID, id, func(current *checkout.Checkout, now time.Time) error {
-			if current.PaymentComplete() {
-				return nil
+	// Повторяем только CAS сохранения; сервер повторно не вызываем.
+	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), completionTimeout)
+	defer cancel()
+	_, err = s.retrySelection(finishCtx, buyerID, id, nil, func(current *checkout.Checkout, now time.Time) error {
+		if current.PaymentComplete() {
+			return nil
+		}
+		for _, g := range current.Groups() {
+			if g.EffectiveStatus() == checkout.GroupAwaitingPayment && paid[g.TenantID] != g.OrderID {
+				return checkout.ErrTransition
 			}
-			for _, g := range current.Groups() {
-				if g.EffectiveStatus() == checkout.GroupAwaitingPayment && paid[g.TenantID] != g.OrderID {
-					return checkout.ErrTransition
-				}
-			}
-			_, err := current.Pay(now)
-			return err
-		})
-		if !errors.Is(err, checkout.ErrConflict) {
-			return err
+		}
+		_, err := current.Pay(now)
+		return err
+	})
+	return err
+}
+
+// Неопределённая прежняя попытка не считается отказом без сверки всех известных заказов.
+func (s *Service) confirmUnpaid(ctx context.Context, state checkout.State) bool {
+	for _, g := range state.Groups {
+		if g.OrderID == "" {
+			continue
+		}
+		order, err := s.platform.GetOrder(ctx, g.TenantID, g.OrderID)
+		if err != nil || order.OrderID != g.OrderID ||
+			(order.Status != checkout.GroupAwaitingPayment && order.Status != checkout.GroupCancelled) {
+			return false
 		}
 	}
-	return err
+	return true
 }
 
 // PaymentReturnURL — фиксированный адрес витрины, параметры браузера не используются.

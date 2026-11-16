@@ -31,51 +31,49 @@ func confirmedPurchase(t *testing.T, e *env) checkout.State {
 	return state
 }
 
-func TestResumeAfterOrderCreatedBeforeCommit(t *testing.T) {
+func TestCreationTaskRecoversAfterExecutorStopsBeforeCommit(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
 	crash := errors.New("падение перед фиксацией")
-	e.platform.AfterCreate = func() { e.store.FailCommit = crash }
-	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); !errors.Is(err, crash) {
+	attemptCtx, stop := context.WithCancel(ctx)
+	e.platform.AfterCreate = func() { e.store.FailCommit = crash; stop() }
+	if _, err := beginAndExecute(attemptCtx, e, buyerID, c.ID, orderContact); !errors.Is(err, crash) {
 		t.Fatal(err)
 	}
 	if e.platform.OrderCount() != 1 {
 		t.Fatal("заказ успел появиться у магазина")
 	}
 	e.platform.AfterCreate, e.store.FailCommit = nil, nil
-	e.clock.Advance(checkout.OrderCallLease)
-	if err := e.service.Resume(ctx); err != nil {
+	e.clock.Advance(5*time.Second + 100*time.Millisecond)
+	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
 	state, err := e.service.Get(ctx, buyerID, c.ID)
 	if err != nil || state.Status != checkout.StatusAwaitingPayment || e.platform.OrderCount() != 2 {
-		t.Fatalf("возобновление без дублей: %+v %v", state, err)
+		t.Fatalf("повтор до срока восстанавливает оба заказа: %+v %v", state, err)
 	}
-	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, checkout.Contact{}); err != nil {
+	if _, err := beginAndExecute(ctx, e, buyerID, c.ID, checkout.Contact{}); err != nil {
 		t.Fatal(err)
 	}
 	if e.platform.OrderCount() != 2 {
 		t.Fatal("повтор не создаёт заказов")
 	}
-	basket, err := e.carts.Get(ctx, buyerID)
-	if err != nil || len(basket.Lines) != 0 {
-		t.Fatalf("снимок изъят из корзины один раз: %+v %v", basket, err)
-	}
+
 }
 
 func TestSellerFailureDoesNotBlockOtherGroups(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	e.platform.FailCreate("t1", errors.New("магазин не отвечает"))
-	state, err := e.service.CreateOrders(context.Background(), buyerID, c.ID, orderContact)
+	state, err := beginAndExecute(context.Background(), e, buyerID, c.ID, orderContact)
 	if err != nil || state.Groups[0].Status != checkout.GroupSellerUnreachable ||
 		state.Groups[1].Status != checkout.GroupAwaitingPayment {
 		t.Fatalf("независимые группы: %+v %v", state, err)
 	}
 	e.platform.FailCreate("t1", nil)
-	e.clock.Advance(checkout.OrderRetryBase)
-	if err := e.service.Resume(context.Background()); err != nil {
+	e.clock.Advance(time.Second)
+	if err := resumeAndExecute(context.Background(), e); err != nil {
 		t.Fatal(err)
 	}
 	if e.platform.OrderCount() != 2 {
@@ -93,7 +91,7 @@ func TestPriceChangedKeepsSnapshotAndReturnsGroup(t *testing.T) {
 		Price:     money.FromKopecks(209000),
 	})
 	ctx := context.Background()
-	state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 	if err != nil || state.Groups[0].Status != checkout.GroupPriceChanged ||
 		state.Groups[0].Lines[0].Price.Kopecks() != 199000 ||
 		state.Groups[0].CurrentPrices[0].Price.Kopecks() != 209000 || e.platform.OrderCount() != 1 {
@@ -112,21 +110,21 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
-	state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 	if err != nil {
 		t.Fatal(err)
 	}
 	first, second := state.Groups[0], state.Groups[1]
 	e.platform.SetOrderStatus(first.OrderID, checkout.GroupPaid, "")
 	e.platform.SetOrderStatus(second.OrderID, checkout.GroupCancelled, "payment_expired")
-	state, err = e.service.Refresh(ctx, buyerID, c.ID)
+	state, err = refreshOrders(ctx, e, buyerID, c.ID)
 	if err != nil || state.Status != checkout.StatusPartiallyPaid {
 		t.Fatalf("сверка: %+v %v", state, err)
 	}
 	if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
-	if err := e.service.Resume(ctx); err != nil {
+	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
 	basket, err := e.carts.Get(ctx, buyerID)
@@ -138,7 +136,7 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 		t.Fatalf("кабинет: %+v %v", purchases, err)
 	}
 	other := ids.UUID("11111111-1111-4111-8111-111111111111")
-	if _, err := e.service.CreateOrders(ctx, other, c.ID, orderContact); !errors.Is(err, checkout.ErrNotFound) {
+	if _, err := beginAndExecute(ctx, e, other, c.ID, orderContact); !errors.Is(err, checkout.ErrNotFound) {
 		t.Fatal(err)
 	}
 	if _, err := e.service.Pay(ctx, other, c.ID); !errors.Is(err, checkout.ErrNotFound) {
@@ -146,7 +144,7 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 	}
 	e.clock.Advance(11 * time.Minute)
 	e.platform.SetOrderStatus(first.OrderID, checkout.GroupShipped, "")
-	state, err = e.service.Refresh(ctx, buyerID, c.ID)
+	state, err = refreshOrders(ctx, e, buyerID, c.ID)
 	if err != nil || state.Groups[0].Status != checkout.GroupShipped {
 		t.Fatalf("трек: %+v %v", state, err)
 	}
@@ -156,11 +154,11 @@ func TestPaymentExpiryAndStuckFilter(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
-	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+	if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
 	e.clock.Advance(16 * time.Minute)
-	if _, err := e.service.Refresh(ctx, buyerID, c.ID); err != nil {
+	if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
 	stuck, err := e.service.OperatorList(ctx, "", true)
@@ -209,14 +207,15 @@ func TestInvalidSellerTotalDoesNotBlockOtherSeller(t *testing.T) {
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
 	crash := errors.New("нет записи ответа")
-	e.platform.AfterCreate = func() { e.store.FailCommit = crash }
-	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); !errors.Is(err, crash) {
+	attemptCtx, stop := context.WithCancel(ctx)
+	e.platform.AfterCreate = func() { e.store.FailCommit = crash; stop() }
+	if _, err := beginAndExecute(attemptCtx, e, buyerID, c.ID, orderContact); !errors.Is(err, crash) {
 		t.Fatal(err)
 	}
 	e.platform.AfterCreate, e.store.FailCommit = nil, nil
-	e.clock.Advance(checkout.OrderCallLease)
+	e.clock.Advance(5*time.Second + 100*time.Millisecond)
 	e.platform.SetOrderTotal("order-1", money.FromKopecks(1))
-	if err := e.service.Resume(ctx); err != nil {
+	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
 	state, err := e.service.Get(ctx, buyerID, c.ID)

@@ -13,7 +13,7 @@ func TestVerifiedBuyerReachesEverySellerOperation(t *testing.T) {
 	contact := orderContact
 	contact.Phone = "70000000000"
 
-	if _, err := e.service.CreateOrders(context.Background(), buyerID, purchase.ID, contact); err != nil {
+	if _, err := beginAndExecute(context.Background(), e, buyerID, purchase.ID, contact); err != nil {
 		t.Fatal(err)
 	}
 	calls := e.platform.ItemCheckCalls()

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 const (
 	insertTask = `
 		INSERT INTO outbox (kind, tenant_id, dedup_key, payload, next_at, created_at)
-		VALUES ($1, $2, $3, $4, $5, $5)
+		VALUES ($1, $2, $3, $4, $6, $5)
 		ON CONFLICT (dedup_key) WHERE done_at IS NULL AND attempts = 0 DO UPDATE
 		SET next_at = EXCLUDED.next_at
 		WHERE EXCLUDED.next_at < outbox.next_at`
@@ -26,6 +27,8 @@ const (
 			SELECT DISTINCT tenant_id
 			FROM outbox
 			WHERE done_at IS NULL AND next_at <= $1
+				AND (cardinality($5::text[]) = 0 OR kind = ANY($5::text[]))
+				AND NOT (kind = ANY($6::text[]))
 		), candidates AS (
 			SELECT c.id, c.next_at, c.position
 			FROM due_tenants t
@@ -33,8 +36,10 @@ const (
 				SELECT id, next_at, row_number() OVER (ORDER BY next_at, id) AS position
 				FROM outbox
 				WHERE tenant_id = t.tenant_id AND done_at IS NULL AND next_at <= $1
+				AND (cardinality($5::text[]) = 0 OR kind = ANY($5::text[]))
+				AND NOT (kind = ANY($6::text[]))
 				ORDER BY next_at, id
-				LIMIT $3
+				LIMIT COALESCE(($7::jsonb ->> t.tenant_id)::integer, $3)
 			) c
 			ORDER BY c.position, c.next_at, c.id
 			LIMIT $2
@@ -80,6 +85,10 @@ type TaskQueue struct {
 
 // Enqueue ставит задачу; невзятая задача с тем же ключом склеивает повтор.
 func (o *Outbox) Enqueue(ctx context.Context, task ports.NewTask) error {
+	next := task.AvailableAt
+	if next.IsZero() {
+		next = task.At
+	}
 	var dedup any
 	if task.DedupKey != "" {
 		dedup = task.DedupKey
@@ -94,6 +103,7 @@ func (o *Outbox) Enqueue(ctx context.Context, task ports.NewTask) error {
 		dedup,
 		string(task.Payload),
 		task.At,
+		next,
 	)
 	if err != nil {
 		return fmt.Errorf("задача %s: %w", task.Kind, err)
@@ -123,6 +133,10 @@ func (q *TaskQueue) Claim(ctx context.Context, request ports.ClaimRequest) ([]po
 }
 
 func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimRequest) ([]ports.Task, error) {
+	slots, err := json.Marshal(request.TenantSlots)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := rawSQL(
 		ctx,
 		db,
@@ -131,6 +145,9 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 		request.Limit,
 		request.PerTenant,
 		request.LeaseUntil,
+		append([]string{}, request.Kinds...),
+		append([]string{}, request.ExcludeKinds...),
+		string(slots),
 	).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("взятие задач: %w", err)

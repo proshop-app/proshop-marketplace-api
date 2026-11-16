@@ -29,20 +29,32 @@ func TestDeliveryRecheckReturnsToDraftWithNewTotals(t *testing.T) {
 }
 
 func TestOrderAttemptClaimsAndStaleResponses(t *testing.T) {
-	c := ordersReady(t)
-	if _, err := c.BeginOrders(contact, t0); err != nil {
+	c := creatingWithDeadline(t)
+	if changed, err := c.ClaimCreation(
+		"t1",
+		"one",
+		t0.Add(5*time.Second+100*time.Millisecond),
+		t0,
+	); err != nil || !changed {
 		t.Fatal(err)
 	}
-	if changed, err := c.ClaimCreation("t1", "one", t0); err != nil || !changed {
-		t.Fatal(err)
-	}
-	if changed, err := c.ClaimCreation("t1", "two", t0); err != nil || changed {
+	if changed, err := c.ClaimCreation(
+		"t1",
+		"two",
+		t0.Add(5*time.Second+100*time.Millisecond),
+		t0,
+	); err != nil || changed {
 		t.Fatal("параллельная попытка")
 	}
-	if changed, err := c.ClaimCreation("t1", "two", t0.Add(checkout.OrderCallLease)); err != nil || !changed {
+	if changed, err := c.ClaimCreation(
+		"t1",
+		"two",
+		t0.Add(5*time.Second+100*time.Millisecond).Add(5*time.Second+100*time.Millisecond),
+		t0.Add(5*time.Second+100*time.Millisecond),
+	); err != nil || !changed {
 		t.Fatal(err)
 	}
-	if changed, err := c.FailCreation("t1", "one", "timeout", "timeout", "", nil, t0); err != nil || changed {
+	if changed, err := c.FailCreation("t1", "one", "timeout", "timeout", "", false, nil, t0); err != nil || changed {
 		t.Fatal("поздний ответ изменил новую попытку")
 	}
 }

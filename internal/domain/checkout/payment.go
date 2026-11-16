@@ -68,7 +68,8 @@ func (c *Checkout) PaymentComplete() bool {
 		switch g.EffectiveStatus() {
 		case GroupPaid, GroupShipped, GroupDelivered, GroupReturned:
 			paid = true
-		case GroupCancelled, GroupPriceChanged, GroupDeliveryUnavailable:
+		case GroupCancellationRequested, GroupRejected, GroupCancelled,
+			GroupPriceChanged, GroupDeliveryUnavailable, GroupUnconfirmed:
 		default:
 			return false
 		}

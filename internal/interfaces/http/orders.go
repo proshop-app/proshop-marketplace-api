@@ -113,3 +113,13 @@ func (h *checkoutHandlers) respondList(w http.ResponseWriter, r *http.Request, s
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "next": next})
 }
+
+func (h *checkoutHandlers) cancel(w http.ResponseWriter, r *http.Request) {
+	id, err := ids.ParseUUID(r.PathValue("checkoutId"))
+	if err != nil {
+		writeError(w, r, checkout.ErrNotFound)
+		return
+	}
+	state, err := h.checkouts.Cancel(r.Context(), BuyerID(r.Context()), id)
+	h.respond(w, r, http.StatusOK, state, err)
+}

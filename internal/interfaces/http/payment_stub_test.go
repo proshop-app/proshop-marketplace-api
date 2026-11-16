@@ -16,6 +16,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -56,7 +57,13 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 		Version:        1,
 		Total:          money.FromKopecks(12445),
 		Groups: []checkout.Group{{
-			TenantID:      "t1",
+			TenantID: "t1",
+			Lines: []checkout.Line{{
+				Offer:    ids.OfferID{Tenant: "t1", Product: "p1"},
+				Quantity: 1,
+				Price:    money.FromKopecks(12345),
+			}},
+			Quote:         &delivery.Quote{Status: delivery.QuoteAvailable, BuyerCost: money.FromKopecks(100)},
 			ExpiresAt:     clock.Now().Add(time.Hour),
 			OrderID:       order.OrderID,
 			Status:        checkout.GroupAwaitingPayment,
@@ -87,7 +94,8 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 	})
 	mux := http.NewServeMux()
 	for _, route := range routes(Deps{Auth: auth, Checkouts: service}) {
-		if strings.Contains(route.path, "payment-stub") || strings.HasSuffix(route.path, "/pay") {
+		if strings.Contains(route.path, "payment-stub") || strings.HasSuffix(route.path, "/pay") ||
+			strings.HasSuffix(route.path, "/cancel") {
 			mux.HandleFunc(route.method+" "+route.path, route.handler)
 		}
 	}
@@ -245,7 +253,29 @@ func TestPaymentStubPaidWithFailedPoll(t *testing.T) {
 	}
 	e.platform.Fail("t1", errors.New("нет связи"))
 	for range checkout.MaxOrderFailures {
-		state, err := e.service.Refresh(context.Background(), paymentTestBuyer, paymentTestID)
+		err := e.service.Resume(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		tasks, err := e.store.Claim(context.Background(), ports.ClaimRequest{
+			Now:        e.clock.Now(),
+			Limit:      100,
+			PerTenant:  100,
+			LeaseUntil: e.clock.Now().Add(time.Minute),
+			Kinds:      []string{appcheckout.TaskPollOrder},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, task := range tasks {
+			if err := e.service.HandleOrderTask(context.Background(), task); err != nil {
+				t.Fatal(err)
+			}
+			if err := e.store.Complete(context.Background(), task.ID, task.Attempts, e.clock.Now()); err != nil {
+				t.Fatal(err)
+			}
+		}
+		state, err := e.service.Get(context.Background(), paymentTestBuyer, paymentTestID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -325,5 +355,23 @@ func TestPaymentStubConcurrentConfirmRedirects(t *testing.T) {
 	state, _ := e.store.Checkout(paymentTestID)
 	if !checkout.Restore(state).PaymentComplete() {
 		t.Fatal(state)
+	}
+}
+
+func TestCancelPurchaseHTTP(t *testing.T) {
+	e := newPaymentTest(t, true)
+	path := "/api/v1/checkout/" + string(paymentTestID) + "/cancel"
+	response := e.call(http.MethodPost, path, e.cookie, "https://market.example")
+	if response.Code != http.StatusOK {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	state, err := e.service.Get(context.Background(), paymentTestBuyer, paymentTestID)
+	if err != nil || state.Groups[0].Status != checkout.GroupCancellationRequested ||
+		!state.Groups[0].ReconciliationRequired || state.Groups[0].CreationResult() != checkout.CreationCreated {
+		t.Fatal(state, err)
+	}
+	repeat := e.call(http.MethodPost, path, e.cookie, "https://market.example")
+	if repeat.Code != http.StatusOK {
+		t.Fatal(repeat.Code, repeat.Body.String())
 	}
 }

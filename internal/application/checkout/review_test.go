@@ -46,7 +46,7 @@ func TestBeginOrdersRechecksSellerDeliveryBeforeAnyOrder(t *testing.T) {
 			}
 			e.platform.SetSettings("t1", settings)
 			// Не ждём TTL: настройки нужно перечитать и при ещё действующем quote.
-			state, err := e.service.CreateOrders(context.Background(), buyerID, c.ID, orderContact)
+			state, err := beginAndExecute(context.Background(), e, buyerID, c.ID, orderContact)
 			if !errors.Is(err, checkout.ErrDeliveryChanged) || state.Status != checkout.StatusDraft ||
 				state.Groups[0].DeliveryPrice.Kopecks() == 7000 || e.platform.OrderCount() != 0 {
 				t.Fatalf("новая доставка требует подтверждения: %+v %v", state, err)
@@ -61,7 +61,7 @@ func TestBeginOrdersRechecksSellerDeliveryBeforeAnyOrder(t *testing.T) {
 			if _, err := e.service.Confirm(context.Background(), buyerID, c.ID); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := e.service.CreateOrders(context.Background(), buyerID, c.ID, orderContact); err != nil {
+			if _, err := beginAndExecute(context.Background(), e, buyerID, c.ID, orderContact); err != nil {
 				t.Fatal(err)
 			}
 			if e.platform.OrderCount() != 2 {
@@ -76,13 +76,13 @@ func TestDeliveryUnavailableIsTerminalAndReturnsGroup(t *testing.T) {
 	c := confirmedPurchase(t, e)
 	e.platform.FailCreate("t1", &ports.OrderRefusal{Code: "DELIVERY_UNAVAILABLE"})
 	ctx := context.Background()
-	state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 	if err != nil || state.Groups[0].Status != checkout.GroupDeliveryUnavailable || !state.Groups[0].CartReturned ||
 		state.Groups[1].Status != checkout.GroupAwaitingPayment {
 		t.Fatalf("окончательный отказ: %+v %v", state, err)
 	}
 	e.clock.Advance(2 * time.Minute)
-	if err := e.service.Resume(ctx); err != nil {
+	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
 	if len(e.platform.OrderRequests("t1")) != 1 {
@@ -94,33 +94,40 @@ func TestDeliveryUnavailableIsTerminalAndReturnsGroup(t *testing.T) {
 	}
 }
 
-func TestUnknownCreationErrorHasBoundedRetries(t *testing.T) {
+func TestUnknownCreationErrorRetriesOnlyBeforeDeadline(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	e.platform.FailCreate("t1", &ports.OrderRefusal{Code: "UNKNOWN_FAILURE"})
 	ctx := context.Background()
-	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+	if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
-	for i := 1; i < checkout.MaxOrderFailures; i++ {
+	for {
 		state, err := e.service.Get(ctx, buyerID, c.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
+		if !state.Groups[0].NextCreateAt.Before(state.Groups[0].CreationDeadline) {
+			break
+		}
 		e.clock.Advance(state.Groups[0].NextCreateAt.Sub(e.clock.Now()))
-		if err := e.service.Resume(ctx); err != nil {
+		if err := resumeAndExecute(ctx, e); err != nil {
 			t.Fatal(err)
 		}
 	}
+	beforeDeadline := len(e.platform.OrderRequests("t1"))
+	if beforeDeadline < 2 {
+		t.Fatal("временный отказ должен повторяться")
+	}
 	for range 3 {
 		e.clock.Advance(time.Hour)
-		if err := e.service.Resume(ctx); err != nil {
+		if err := resumeAndExecute(ctx, e); err != nil {
 			t.Fatal(err)
 		}
 	}
 	state, err := e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || !state.Groups[0].CreateExhausted || state.Groups[0].Reason != "UNKNOWN_FAILURE" ||
-		len(e.platform.OrderRequests("t1")) != checkout.MaxOrderFailures {
+	if err != nil || !state.Groups[0].CreateExhausted || state.Groups[0].Reason != "creation_deadline_exceeded" ||
+		len(e.platform.OrderRequests("t1")) != beforeDeadline {
 		t.Fatalf("ограничение повторов: %+v %v", state, err)
 	}
 }
@@ -129,7 +136,7 @@ func TestPartialCartReturnDoesNotBlockShippedOrPayment(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
-	state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +149,7 @@ func TestPartialCartReturnDoesNotBlockShippedOrPayment(t *testing.T) {
 		Lines:     []cart.Line{{Offer: p1, Name: "Товар", Price: money.FromKopecks(199000), Quantity: 998}},
 	})
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupCancelled, "payment_expired")
-	if _, err := e.service.Refresh(ctx, buyerID, c.ID); err != nil {
+	if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.service.Pay(ctx, buyerID, c.ID); err != nil {
@@ -150,12 +157,12 @@ func TestPartialCartReturnDoesNotBlockShippedOrPayment(t *testing.T) {
 	}
 	e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupPaid, "")
 	e.clock.Advance(30 * time.Second)
-	if _, err := e.service.Refresh(ctx, buyerID, c.ID); err != nil {
+	if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
 	e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupShipped, "")
 	e.clock.Advance(10 * time.Minute)
-	if err := e.service.Resume(ctx); err != nil {
+	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
 	state, err = e.service.Get(ctx, buyerID, c.ID)
@@ -192,7 +199,7 @@ func TestFailedPollBackoffAndRecovery(t *testing.T) {
 		e := setup(t)
 		c := confirmedPurchase(t, e)
 		ctx := context.Background()
-		state, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact)
+		state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -204,7 +211,7 @@ func TestFailedPollBackoffAndRecovery(t *testing.T) {
 		}
 		previousDelay := time.Duration(0)
 		for i := 1; i <= checkout.MaxOrderFailures; i++ {
-			state, err = e.service.Refresh(ctx, buyerID, c.ID)
+			state, err = refreshOrders(ctx, e, buyerID, c.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -214,7 +221,7 @@ func TestFailedPollBackoffAndRecovery(t *testing.T) {
 			}
 			calls := e.platform.PollCalls("t1")
 			for range 5 {
-				if _, err := e.service.Refresh(ctx, buyerID, c.ID); err != nil {
+				if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -232,7 +239,7 @@ func TestFailedPollBackoffAndRecovery(t *testing.T) {
 		e.platform.FailPoll("t1", nil)
 		e.platform.SetOrderStatus(firstID, checkout.GroupPaid, "")
 		e.clock.Advance(checkout.OrderSlowPoll)
-		state, err = e.service.Refresh(ctx, buyerID, c.ID)
+		state, err = refreshOrders(ctx, e, buyerID, c.ID)
 		if err != nil || state.Groups[0].Status != checkout.GroupPaid || state.Groups[0].PollFailures != 0 {
 			t.Fatalf("восстановление сверки: %+v %v", state, err)
 		}
@@ -256,7 +263,7 @@ func TestConcurrentBeginOrdersUsesCASAndSingleSetOfRequests(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := e.service.CreateOrders(context.Background(), buyerID, c.ID, orderContact)
+			_, err := beginAndExecute(context.Background(), e, buyerID, c.ID, orderContact)
 			failures <- err
 		}()
 	}
@@ -277,7 +284,7 @@ func TestConcurrentBeginOrdersUsesCASAndSingleSetOfRequests(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := e.service.Resume(context.Background()); err != nil {
+	if err := resumeAndExecute(context.Background(), e); err != nil {
 		t.Fatal(err)
 	}
 	for _, tenant := range []ids.TenantID{"t1", "t2"} {
@@ -295,7 +302,7 @@ func TestCreationRetryKeepsIdenticalBodyAfterSettingsChange(t *testing.T) {
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
 	e.platform.FailCreate("t1", errors.New("таймаут"))
-	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+	if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
 	original := e.platform.OrderRequests("t1")[0]
@@ -306,8 +313,8 @@ func TestCreationRetryKeepsIdenticalBodyAfterSettingsChange(t *testing.T) {
 	settings.FreeDeliveryFrom = money.Money{}
 	e.platform.SetSettings("t1", settings)
 	e.platform.FailCreate("t1", nil)
-	e.clock.Advance(checkout.OrderRetryBase)
-	if err := e.service.Resume(ctx); err != nil {
+	e.clock.Advance(time.Second)
+	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
 	requests := e.platform.OrderRequests("t1")
