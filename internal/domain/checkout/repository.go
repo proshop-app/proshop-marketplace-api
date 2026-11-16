@@ -9,12 +9,14 @@ import (
 
 // Filter — курсор по ID, владелец и окно ожидания для панели оператора.
 type Filter struct {
-	BuyerID        ids.UUID
-	AfterID        ids.UUID
-	Limit          int
-	AwaitingBefore time.Time
-	OrdersOnly     bool
-	WorkDueAt      time.Time
+	// HasOrders скрывает из кабинета намерения без документов магазина.
+	HasOrders   bool
+	BuyerID     ids.UUID
+	AfterID     ids.UUID
+	Limit       int
+	StuckBefore time.Time
+	OrdersOnly  bool
+	WorkDueAt   time.Time
 }
 
 // Repository — покупки.

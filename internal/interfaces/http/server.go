@@ -297,6 +297,7 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/checkout/{checkoutId}/delivery/quotes", signedIn(checkouts.quote)},
 		{http.MethodPost, "/api/v1/checkout/{checkoutId}/confirm", signedIn(checkouts.confirm)},
 		{http.MethodPost, "/api/v1/checkout/{checkoutId}/orders", signedIn(checkouts.createOrders)},
+		{http.MethodPost, "/api/v1/checkout/{checkoutId}/cancel", signedIn(checkouts.cancel)},
 		{http.MethodPost, "/api/v1/checkout/{checkoutId}/pay", signedIn(checkouts.pay)},
 		{
 			http.MethodGet,

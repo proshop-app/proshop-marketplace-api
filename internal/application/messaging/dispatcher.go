@@ -32,9 +32,10 @@ type Outcome struct {
 
 // DispatcherConfig — размеры пачки и аренда.
 type DispatcherConfig struct {
-	Batch     int
-	PerTenant int
-	Lease     time.Duration
+	ExcludeKinds []string
+	Batch        int
+	PerTenant    int
+	Lease        time.Duration
 }
 
 // Dispatcher разбирает outbox: берёт созревшие задачи с арендой, выполняет и
@@ -89,10 +90,11 @@ func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
 	now := d.clock.Now()
 
 	tasks, err := d.queue.Claim(ctx, ports.ClaimRequest{
-		Now:        now,
-		Limit:      d.config.Batch,
-		PerTenant:  d.config.PerTenant,
-		LeaseUntil: now.Add(d.config.Lease),
+		Now:          now,
+		ExcludeKinds: d.config.ExcludeKinds,
+		Limit:        d.config.Batch,
+		PerTenant:    d.config.PerTenant,
+		LeaseUntil:   now.Add(d.config.Lease),
 	})
 	if err != nil {
 		return nil, err

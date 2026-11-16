@@ -16,9 +16,14 @@ import (
 // GroupStatus — состояние независимого заказа магазина.
 type GroupStatus string
 
+// Статусы независимой группы: локальное решение не подменяет подтверждение магазина.
 const (
+	GroupCancellationRequested GroupStatus = "cancellation_requested"
+	GroupRejected              GroupStatus = "rejected"
 	// GroupCreating — команда создания ещё не завершена.
 	GroupCreating GroupStatus = "creating_order"
+	// GroupUnconfirmed — срок подтверждения магазина истёк.
+	GroupUnconfirmed GroupStatus = "unconfirmed"
 	// GroupAwaitingPayment — магазин ждёт оплаты.
 	GroupAwaitingPayment GroupStatus = "awaiting_payment"
 	// GroupPaid — магазин подтвердил оплату.
@@ -103,7 +108,7 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 		}
 		return false, ErrTransition
 	}
-	if g.Status != GroupCreating && g.Status != GroupSellerUnreachable {
+	if !g.Abandoned && g.Status != GroupCreating && g.Status != GroupSellerUnreachable {
 		return false, ErrTransition
 	}
 	total, err := g.Goods.Add(g.DeliveryPrice)
@@ -114,7 +119,13 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 		return false, ErrInvalidOrder
 	}
 	g.OrderID, g.ExpiresAt = order.OrderID, order.ExpiresAt
-	g.Status, g.Reason, g.NextPollAt = GroupAwaitingPayment, "", now
+	g.NextPollAt = now
+	g.LastOrderStatus = GroupAwaitingPayment
+	if g.Abandoned {
+		g.ReconciliationRequired = true
+	} else {
+		g.Status, g.Reason = GroupAwaitingPayment, ""
+	}
 	g.AwaitingSince = now
 	c.rollup()
 	return true, c.touch(now)
@@ -128,7 +139,7 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 		return false, ErrNotFound
 	}
 	from := g.Status
-	if from == GroupSellerUnreachable {
+	if g.Abandoned || from == GroupSellerUnreachable {
 		from = g.LastOrderStatus
 	}
 	if g.OrderID == "" || g.OrderID != order.OrderID || !allowed(from, order.Status) {
@@ -140,7 +151,14 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	if g.Status == order.Status && g.Reason == order.Reason && g.NextPollAt.Equal(next) {
 		return false, nil
 	}
-	g.Status, g.Reason = order.Status, order.Reason
+	if g.Abandoned {
+		g.ReconciliationRequired = order.Status != GroupCancelled
+		if order.Status == GroupCancelled && g.Status == GroupCancellationRequested {
+			g.Status, g.Reason = GroupCancelled, order.Reason
+		}
+	} else {
+		g.Status, g.Reason = order.Status, order.Reason
+	}
 	g.NextPollAt = next
 	g.PollFailures = 0
 	g.LastErrorCode = ""
@@ -176,7 +194,8 @@ func (c *Checkout) rollup() {
 		switch g.EffectiveStatus() {
 		case GroupPaid, GroupShipped, GroupDelivered, GroupReturned:
 			paid++
-		case GroupCancelled, GroupPriceChanged, GroupDeliveryUnavailable:
+		case GroupCancellationRequested, GroupRejected, GroupCancelled,
+			GroupPriceChanged, GroupDeliveryUnavailable, GroupUnconfirmed:
 			cancelled++
 		case GroupCreating, GroupSellerUnreachable:
 			pending++
@@ -262,8 +281,11 @@ func cloneTracking(value *Tracking) *Tracking {
 
 // EffectiveStatus сохраняет последний статус заказа при сбое опроса и исключает окончательный отказ создания.
 func (g Group) EffectiveStatus() GroupStatus {
+	if g.Abandoned {
+		return g.Status
+	}
 	if g.OrderID == "" && g.CreateExhausted {
-		return GroupCancelled
+		return GroupRejected
 	}
 	if g.Status == GroupSellerUnreachable && g.OrderID != "" && g.LastOrderStatus != "" {
 		return g.LastOrderStatus

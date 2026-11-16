@@ -2,14 +2,20 @@ package checkout
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
+
+// CreationTimeout — обещанный покупателю срок от фиксации намерения.
+const CreationTimeout = 15 * time.Second
 
 func (s *Service) prepareOrders(
 	ctx context.Context,
@@ -20,16 +26,19 @@ func (s *Service) prepareOrders(
 	if err != nil {
 		return checkout.State{}, err
 	}
+	if c.Status() != checkout.StatusDraft && c.Status() != checkout.StatusConfirmed {
+		return c.State(), nil
+	}
+	if !s.config.PaymentStub {
+		return checkout.State{}, checkout.ErrPaymentUnavailable
+	}
 	if c.Status() == checkout.StatusDraft {
 		return c.State(), checkout.ErrTransition
-	}
-	if c.Status() != checkout.StatusConfirmed {
-		return c.State(), nil
 	}
 	quotes := s.freshQuotes(ctx, buyerID, c.Groups(), *c.Delivery())
 	expected := c.State().Version
 	deliveryChanged := false
-	state, err := s.update(ctx, buyerID, id, func(current *checkout.Checkout, now time.Time) error {
+	begin := func(current *checkout.Checkout, now time.Time) error {
 		if current.State().Version != expected {
 			return checkout.ErrConflict
 		}
@@ -38,9 +47,18 @@ func (s *Service) prepareOrders(
 		if err != nil || deliveryChanged {
 			return err
 		}
-		_, err = current.BeginOrders(contact, now)
-		return err
-	})
+		if _, err = current.BeginOrders(contact, now); err != nil {
+			return err
+		}
+		return current.SetCreationDeadline(now.Add(CreationTimeout), now)
+	}
+	state, err := s.updateSelection(ctx, buyerID, id, s.enqueueCreation, begin)
+	if errors.Is(err, checkout.ErrConflict) || errors.Is(err, cart.ErrConflict) {
+		current, loadErr := s.load(ctx, buyerID, id)
+		if loadErr == nil && current.Status() != checkout.StatusConfirmed && current.Status() != checkout.StatusDraft {
+			return current.State(), nil
+		}
+	}
 	if err != nil {
 		return state, err
 	}
@@ -99,4 +117,22 @@ func (s *Service) freshGroupQuote(
 		Delivery:         settings.Delivery,
 		Subsidy:          settings.Subsidy,
 	})
+}
+
+func (s *Service) enqueueCreation(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
+	if c.Status() != checkout.StatusCreatingOrders || c.State().CartConsumed {
+		return nil
+	}
+	if err := s.consumeCart(ctx, tx, c); err != nil {
+		return err
+	}
+	for _, g := range c.Groups() {
+		if err := enqueueOrderTask(ctx, tx, TaskCreateOrder, c.State(), g, s.clock.Now()); err != nil {
+			return err
+		}
+		if err := enqueueOrderTask(ctx, tx, TaskExpireCreation, c.State(), g, s.clock.Now()); err != nil {
+			return err
+		}
+	}
+	return nil
 }

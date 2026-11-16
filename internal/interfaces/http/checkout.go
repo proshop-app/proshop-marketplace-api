@@ -44,30 +44,33 @@ type quoteJSON struct {
 }
 
 type checkoutGroupJSON struct {
-	Seller             *participant.Seller  `json:"seller"`
-	Tracking           *trackingJSON        `json:"tracking"`
-	TenantID           string               `json:"tenantId"`
-	ExternalCheckoutID string               `json:"externalCheckoutId"`
-	Lines              []checkoutLineJSON   `json:"lines"`
-	BaseTotal          rubles               `json:"baseTotal"`
-	Discount           rubles               `json:"discount"`
-	Total              rubles               `json:"total"`
-	Goods              rubles               `json:"goods"`
-	Quote              *quoteJSON           `json:"quote"`
-	Status             checkout.GroupStatus `json:"status"`
-	OrderID            string               `json:"orderId,omitempty"`
-	ExpiresAt          *time.Time           `json:"expiresAt,omitempty"`
-	DeliveryPrice      rubles               `json:"deliveryPrice"`
-	Reason             string               `json:"reason,omitempty"`
-	CurrentPrices      []priceChangeJSON    `json:"currentPrices,omitempty"`
-	ReturnFailed       bool                 `json:"returnFailed"`
-	ReturnReason       string               `json:"returnReason,omitempty"`
-	ReturnRemaining    []returnLineJSON     `json:"returnRemaining,omitempty"`
-	PollFailures       int                  `json:"pollFailures"`
-	NextPollAt         time.Time            `json:"nextPollAt"`
-	LastErrorCode      string               `json:"lastErrorCode,omitempty"`
-	CreateFailures     int                  `json:"createFailures"`
-	CreateExhausted    bool                 `json:"createExhausted"`
+	CreationStatus         string               `json:"creationStatus,omitempty"`
+	ReconciliationRequired bool                 `json:"reconciliationRequired"`
+	CreationDeadline       *time.Time           `json:"creationDeadline,omitempty"`
+	Seller                 *participant.Seller  `json:"seller"`
+	Tracking               *trackingJSON        `json:"tracking"`
+	TenantID               string               `json:"tenantId"`
+	ExternalCheckoutID     string               `json:"externalCheckoutId"`
+	Lines                  []checkoutLineJSON   `json:"lines"`
+	BaseTotal              rubles               `json:"baseTotal"`
+	Discount               rubles               `json:"discount"`
+	Total                  rubles               `json:"total"`
+	Goods                  rubles               `json:"goods"`
+	Quote                  *quoteJSON           `json:"quote"`
+	Status                 checkout.GroupStatus `json:"status"`
+	OrderID                string               `json:"orderId,omitempty"`
+	ExpiresAt              *time.Time           `json:"expiresAt,omitempty"`
+	DeliveryPrice          rubles               `json:"deliveryPrice"`
+	Reason                 string               `json:"reason,omitempty"`
+	CurrentPrices          []priceChangeJSON    `json:"currentPrices,omitempty"`
+	ReturnFailed           bool                 `json:"returnFailed"`
+	ReturnReason           string               `json:"returnReason,omitempty"`
+	ReturnRemaining        []returnLineJSON     `json:"returnRemaining,omitempty"`
+	PollFailures           int                  `json:"pollFailures"`
+	NextPollAt             time.Time            `json:"nextPollAt"`
+	LastErrorCode          string               `json:"lastErrorCode,omitempty"`
+	CreateFailures         int                  `json:"createFailures"`
+	CreateExhausted        bool                 `json:"createExhausted"`
 }
 
 type priceChangeJSON struct {
@@ -84,20 +87,21 @@ type selectionJSON struct {
 
 // checkoutJSON — покупка; суммы — рубли из согласованного снимка.
 type checkoutJSON struct {
-	ID            string              `json:"id"`
-	Status        string              `json:"status"`
-	Groups        []checkoutGroupJSON `json:"groups"`
-	Delivery      *selectionJSON      `json:"delivery"`
-	BaseTotal     rubles              `json:"baseTotal"`
-	Discount      rubles              `json:"discount"`
-	PaidTotal     rubles              `json:"paidTotal"`
-	GoodsTotal    rubles              `json:"goodsTotal"`
-	DeliveryTotal rubles              `json:"deliveryTotal"`
-	Total         rubles              `json:"total"`
-	Version       int64               `json:"version"`
-	CreatedAt     time.Time           `json:"createdAt"`
-	UpdatedAt     time.Time           `json:"updatedAt"`
-	ConfirmedAt   *time.Time          `json:"confirmedAt"`
+	CreationComplete bool                `json:"creationComplete"`
+	ID               string              `json:"id"`
+	Status           string              `json:"status"`
+	Groups           []checkoutGroupJSON `json:"groups"`
+	Delivery         *selectionJSON      `json:"delivery"`
+	BaseTotal        rubles              `json:"baseTotal"`
+	Discount         rubles              `json:"discount"`
+	PaidTotal        rubles              `json:"paidTotal"`
+	GoodsTotal       rubles              `json:"goodsTotal"`
+	DeliveryTotal    rubles              `json:"deliveryTotal"`
+	Total            rubles              `json:"total"`
+	Version          int64               `json:"version"`
+	CreatedAt        time.Time           `json:"createdAt"`
+	UpdatedAt        time.Time           `json:"updatedAt"`
+	ConfirmedAt      *time.Time          `json:"confirmedAt"`
 }
 
 type checkoutHandlers struct {
@@ -117,15 +121,16 @@ type returnLineJSON struct {
 
 func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 	out := checkoutJSON{
-		ID:            string(state.ID),
-		Status:        string(state.Status),
-		Groups:        make([]checkoutGroupJSON, 0, len(state.Groups)),
-		GoodsTotal:    rubles(state.GoodsTotal.Kopecks()),
-		DeliveryTotal: rubles(state.DeliveryTotal.Kopecks()),
-		Total:         rubles(state.Total.Kopecks()),
-		Version:       state.Version,
-		CreatedAt:     state.CreatedAt.UTC(),
-		UpdatedAt:     state.UpdatedAt.UTC(),
+		ID:               string(state.ID),
+		CreationComplete: checkout.Restore(state).CreationComplete(),
+		Status:           string(state.Status),
+		Groups:           make([]checkoutGroupJSON, 0, len(state.Groups)),
+		GoodsTotal:       rubles(state.GoodsTotal.Kopecks()),
+		DeliveryTotal:    rubles(state.DeliveryTotal.Kopecks()),
+		Total:            rubles(state.Total.Kopecks()),
+		Version:          state.Version,
+		CreatedAt:        state.CreatedAt.UTC(),
+		UpdatedAt:        state.UpdatedAt.UTC(),
 	}
 
 	if !state.ConfirmedAt.IsZero() {
@@ -144,22 +149,24 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 
 	for _, group := range state.Groups {
 		g := checkoutGroupJSON{
-			TenantID:           string(group.TenantID),
-			ExternalCheckoutID: group.ExternalCheckoutID,
-			Lines:              make([]checkoutLineJSON, 0, len(group.Lines)),
-			Goods:              rubles(group.Goods.Kopecks()),
-			Status:             group.Status,
-			OrderID:            group.OrderID,
-			DeliveryPrice:      rubles(group.DeliveryPrice.Kopecks()),
-			Reason:             group.Reason,
-			Tracking:           trackingResponse(group.Tracking),
-			ReturnFailed:       group.ReturnFailed,
-			ReturnReason:       group.ReturnReason,
-			PollFailures:       group.PollFailures,
-			NextPollAt:         group.NextPollAt,
-			CreateFailures:     group.CreateFailures,
-			LastErrorCode:      group.LastErrorCode,
-			CreateExhausted:    group.CreateExhausted,
+			TenantID:               string(group.TenantID),
+			ReconciliationRequired: group.ReconciliationRequired,
+			CreationStatus:         creationStatus(group.CreationResult()),
+			ExternalCheckoutID:     group.ExternalCheckoutID,
+			Lines:                  make([]checkoutLineJSON, 0, len(group.Lines)),
+			Goods:                  rubles(group.Goods.Kopecks()),
+			Status:                 group.Status,
+			OrderID:                group.OrderID,
+			DeliveryPrice:          rubles(group.DeliveryPrice.Kopecks()),
+			Reason:                 group.Reason,
+			Tracking:               trackingResponse(group.Tracking),
+			ReturnFailed:           group.ReturnFailed,
+			ReturnReason:           group.ReturnReason,
+			PollFailures:           group.PollFailures,
+			NextPollAt:             group.NextPollAt,
+			CreateFailures:         group.CreateFailures,
+			LastErrorCode:          group.LastErrorCode,
+			CreateExhausted:        group.CreateExhausted,
 		}
 
 		for _, change := range group.CurrentPrices {
@@ -174,6 +181,10 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 				OfferID:  remaining.Offer.String(),
 				Quantity: remaining.Quantity,
 			})
+		}
+		if !group.CreationDeadline.IsZero() {
+			deadline := group.CreationDeadline
+			g.CreationDeadline = &deadline
 		}
 		if !group.ExpiresAt.IsZero() {
 			expires := group.ExpiresAt
@@ -305,7 +316,7 @@ func (h *checkoutHandlers) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.checkouts.Refresh(r.Context(), BuyerID(r.Context()), checkoutID)
+	state, err := h.checkouts.Get(r.Context(), BuyerID(r.Context()), checkoutID)
 	h.respond(w, r, http.StatusOK, state, err)
 }
 
@@ -387,4 +398,19 @@ func trackingResponse(value *checkout.Tracking) *trackingJSON {
 		return nil
 	}
 	return &trackingJSON{Carrier: value.Carrier, Number: value.Number, URL: value.URL}
+}
+
+func creationStatus(result checkout.CreationResult) string {
+	switch result {
+	case checkout.CreationPending:
+		return "creating"
+	case checkout.CreationCreated:
+		return "created"
+	case checkout.CreationUnconfirmed:
+		return "unconfirmed"
+	case checkout.CreationRejected:
+		return "rejected"
+	default:
+		return ""
+	}
 }

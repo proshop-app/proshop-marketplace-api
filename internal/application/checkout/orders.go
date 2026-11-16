@@ -26,60 +26,7 @@ func (s *Service) CreateOrders(
 	checkoutID ids.UUID,
 	contact checkout.Contact,
 ) (checkout.State, error) {
-	if _, err := s.Get(ctx, buyerID, checkoutID); err != nil {
-		return checkout.State{}, err
-	}
-	if !s.config.PaymentStub {
-		return checkout.State{}, checkout.ErrPaymentUnavailable
-	}
-	state, err := s.prepareOrders(ctx, buyerID, checkoutID, contact)
-	if err != nil {
-		return state, err
-	}
-
-	if err := s.consumeCart(ctx, buyerID, checkoutID); err != nil {
-		return checkout.State{}, err
-	}
-	return s.createGroups(ctx, buyerID, checkoutID)
-}
-
-func (s *Service) createGroups(ctx context.Context, buyerID, id ids.UUID) (checkout.State, error) {
-	c, err := s.load(ctx, buyerID, id)
-	if err != nil {
-		return checkout.State{}, err
-	}
-	for _, g := range c.Groups() {
-		if !g.CreationDue(s.clock.Now()) {
-			continue
-		}
-		if err := s.createGroup(ctx, buyerID, id, g.TenantID); err != nil {
-			return checkout.State{}, err
-		}
-	}
-	if err := s.ReturnCancelled(ctx, buyerID, id); err != nil {
-		return checkout.State{}, err
-	}
-	return s.Get(ctx, buyerID, id)
-}
-
-// Refresh сверяет только захваченные через CAS группы; отказ также сдвигает NextPollAt.
-func (s *Service) Refresh(ctx context.Context, buyerID, id ids.UUID) (checkout.State, error) {
-	c, err := s.load(ctx, buyerID, id)
-	if err != nil {
-		return checkout.State{}, err
-	}
-	for _, g := range c.Groups() {
-		if !g.PollDue(s.clock.Now()) {
-			continue
-		}
-		if err := s.pollGroup(ctx, buyerID, id, g.TenantID); err != nil {
-			return checkout.State{}, err
-		}
-	}
-	if err := s.ReturnCancelled(ctx, buyerID, id); err != nil {
-		return checkout.State{}, err
-	}
-	return s.Get(ctx, buyerID, id)
+	return s.prepareOrders(ctx, buyerID, checkoutID, contact)
 }
 
 // Resume работает и при запуске, и по расписанию. Отдельная покупка не задерживает остальные.
@@ -92,15 +39,7 @@ func (s *Service) Resume(ctx context.Context) error {
 			return errors.Join(append(failures, err)...)
 		}
 		for _, state := range states {
-			if err := s.consumeCart(ctx, state.BuyerID, state.ID); err != nil {
-				failures = append(failures, err)
-				continue
-			}
-			if _, err := s.createGroups(ctx, state.BuyerID, state.ID); err != nil {
-				failures = append(failures, err)
-				continue
-			}
-			if _, err := s.Refresh(ctx, state.BuyerID, state.ID); err != nil {
+			if err := s.resumePurchase(ctx, state); err != nil {
 				failures = append(failures, err)
 			}
 		}
@@ -113,7 +52,13 @@ func (s *Service) Resume(ctx context.Context) error {
 
 // Purchases читает страницу снимков кабинета только для владельца.
 func (s *Service) Purchases(ctx context.Context, buyerID ids.UUID, after ids.UUID) ([]order.Purchase, error) {
-	states, err := s.list(ctx, checkout.Filter{BuyerID: buyerID, AfterID: after, Limit: orderBatch, OrdersOnly: true})
+	states, err := s.list(ctx, checkout.Filter{
+		BuyerID:    buyerID,
+		AfterID:    after,
+		Limit:      orderBatch,
+		OrdersOnly: true,
+		HasOrders:  true,
+	})
 	result := make([]order.Purchase, 0, len(states))
 	for _, state := range states {
 		result = append(result, order.Snapshot(state))
@@ -121,11 +66,11 @@ func (s *Service) Purchases(ctx context.Context, buyerID ids.UUID, after ids.UUI
 	return result, err
 }
 
-// OperatorList читает покупки, при stuck — ожидающие дольше 15 минут.
+// OperatorList показывает незавершённую отмену сразу, ожидание оплаты — после 15 минут.
 func (s *Service) OperatorList(ctx context.Context, after ids.UUID, stuck bool) ([]checkout.State, error) {
 	f := checkout.Filter{AfterID: after, Limit: orderBatch, OrdersOnly: true}
 	if stuck {
-		f.AwaitingBefore = s.clock.Now().Add(-15 * time.Minute)
+		f.StuckBefore = s.clock.Now().Add(-15 * time.Minute)
 	}
 	return s.list(ctx, f)
 }
@@ -146,38 +91,29 @@ func (s *Service) list(ctx context.Context, f checkout.Filter) ([]checkout.State
 }
 
 // consumeCart удаляет только количество из снимка, сохраняя добавленное после оформления.
-func (s *Service) consumeCart(ctx context.Context, buyerID, id ids.UUID) error {
-	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		c, err := tx.Checkouts().Get(ctx, id)
-		if err != nil {
-			return err
-		}
-		if c.BuyerID() != buyerID {
-			return checkout.ErrNotFound
-		}
-		if c.State().CartConsumed {
-			return nil
-		}
-		basket, err := tx.Carts().ByBuyer(ctx, buyerID)
-		if err != nil && !errors.Is(err, cart.ErrNotFound) {
-			return err
-		}
-		now, ttl := s.clock.Now(), s.cartTTL()
-		if basket != nil && !basket.Expired(now) {
-			for _, g := range c.Groups() {
-				for _, line := range g.Lines {
-					basket.Consume(line.Offer, line.Quantity, now, ttl)
-				}
-			}
-			if err := tx.Carts().Save(ctx, basket); err != nil {
-				return err
+func (s *Service) consumeCart(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
+	if c.State().CartConsumed {
+		return nil
+	}
+	basket, err := tx.Carts().ByBuyer(ctx, c.BuyerID())
+	if err != nil && !errors.Is(err, cart.ErrNotFound) {
+		return err
+	}
+	now, ttl := s.clock.Now(), s.cartTTL()
+	if basket != nil && !basket.Expired(now) {
+		for _, g := range c.Groups() {
+			for _, line := range g.Lines {
+				basket.Consume(line.Offer, line.Quantity, now, ttl)
 			}
 		}
-		if _, err := c.MarkCartConsumed(now); err != nil {
+		if err := tx.Carts().Save(ctx, basket); err != nil {
 			return err
 		}
-		return tx.Checkouts().Update(ctx, c)
-	})
+	}
+	if _, err := c.MarkCartConsumed(now); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ReturnCancelled изолирует возврат каждой группы от остальных групп и сверки заказов.
@@ -203,58 +139,61 @@ func (s *Service) ReturnCancelled(ctx context.Context, buyerID, id ids.UUID) err
 }
 
 func (s *Service) returnCancelledGroup(ctx context.Context, buyerID, id ids.UUID, tenant ids.TenantID) error {
-	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		c, err := tx.Checkouts().Get(ctx, id)
+	after := func(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
+		return s.returnGroupInTx(ctx, tx, c, tenant)
+	}
+	_, err := s.updateSelection(ctx, buyerID, id, after, func(*checkout.Checkout, time.Time) error {
+		return nil
+	})
+	return err
+}
+
+func (s *Service) returnGroupInTx(
+	ctx context.Context,
+	tx ports.Tx,
+	c *checkout.Checkout,
+	tenant ids.TenantID,
+) error {
+	now, ttl := s.clock.Now(), s.cartTTL()
+	for _, g := range c.Groups() {
+		if g.TenantID != tenant || !g.ReturnDue(now) {
+			continue
+		}
+		basket, err := tx.Carts().ByBuyer(ctx, c.BuyerID())
+		if errors.Is(err, cart.ErrNotFound) {
+			basket, err = cart.New(s.ids.NewUUID(), c.BuyerID(), now, ttl), nil
+		}
 		if err != nil {
 			return err
 		}
-		if c.BuyerID() != buyerID {
-			return checkout.ErrNotFound
+		basket.ResetIfExpired(now, ttl)
+		lines := g.Lines
+		if g.ReturnFailed {
+			lines = g.ReturnRemaining
 		}
-		now, ttl := s.clock.Now(), s.cartTTL()
-		for _, g := range c.Groups() {
-			if g.TenantID != tenant || !g.ReturnDue(now) {
-				continue
-			}
-			basket, err := tx.Carts().ByBuyer(ctx, buyerID)
-			if errors.Is(err, cart.ErrNotFound) {
-				basket, err = cart.New(s.ids.NewUUID(), buyerID, now, ttl), nil
-			}
-			if err != nil {
+		remaining, reason := returnGroup(basket, lines, now, ttl)
+		// Новый код покупателя важнее снимка покупки; отказ того же кода сохраняем с причиной.
+		if g.PromoCode != "" && basket.State().Promos[tenant].Code == "" {
+			_, err := basket.SetPromo(tenant, g.PromoCode, now, ttl)
+			if err != nil && !errors.Is(err, cart.ErrLineNotFound) {
 				return err
 			}
-			basket.ResetIfExpired(now, ttl)
-			lines := g.Lines
-			if g.ReturnFailed {
-				lines = g.ReturnRemaining
-			}
-			remaining, reason := returnGroup(basket, lines, now, ttl)
-			// Новый код покупателя важнее снимка покупки; отказ того же кода сохраняем с причиной.
-			if g.PromoCode != "" && basket.State().Promos[tenant].Code == "" {
-				_, err := basket.SetPromo(tenant, g.PromoCode, now, ttl)
-				if err != nil && !errors.Is(err, cart.ErrLineNotFound) {
-					return err
-				}
-			}
-			if g.PromoCode != "" && basket.State().Promos[tenant].Code == g.PromoCode {
-				if g.LastErrorCode == checkout.ErrPromoInvalid.Key() {
-					message := g.Reason
-					if message == "" {
-						message = checkout.ErrPromoInvalid.Message()
-					}
-					basket.ApplyPromo(tenant, cart.PromoCode{Code: g.PromoCode, Message: &message}, nil, now, ttl)
-				}
-			}
-			if _, err := c.RecordCartReturn(tenant, remaining, reason, now); err != nil {
-				return err
-			}
-			if err := tx.Carts().Save(ctx, basket); err != nil {
-				return err
-			}
-			return tx.Checkouts().Update(ctx, c)
 		}
-		return nil
-	})
+		if g.PromoCode != "" && basket.State().Promos[tenant].Code == g.PromoCode {
+			if g.LastErrorCode == checkout.ErrPromoInvalid.Key() {
+				message := g.Reason
+				if message == "" {
+					message = checkout.ErrPromoInvalid.Message()
+				}
+				basket.ApplyPromo(tenant, cart.PromoCode{Code: g.PromoCode, Message: &message}, nil, now, ttl)
+			}
+		}
+		if _, err := c.RecordCartReturn(tenant, remaining, reason, now); err != nil {
+			return err
+		}
+		return tx.Carts().Save(ctx, basket)
+	}
+	return nil
 }
 
 func (s *Service) deferCartReturn(ctx context.Context, buyerID, id ids.UUID, tenant ids.TenantID, cause error) error {

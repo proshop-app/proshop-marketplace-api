@@ -3,6 +3,7 @@ package fake
 import (
 	"context"
 	"maps"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -265,7 +266,9 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Ta
 
 	due := make([]int, 0)
 	for i, row := range s.data.outbox {
-		if row.DoneAt == nil && !row.NextAt.After(request.Now) {
+		if row.DoneAt == nil && !row.NextAt.After(request.Now) &&
+			(len(request.Kinds) == 0 || slices.Contains(request.Kinds, row.Kind)) &&
+			!slices.Contains(request.ExcludeKinds, row.Kind) {
 			due = append(due, i)
 		}
 	}
@@ -294,7 +297,11 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Ta
 
 	for _, i := range due {
 		row := &s.data.outbox[i]
-		if len(tasks) == request.Limit || perTenant[row.TenantID] == request.PerTenant {
+		limit := request.PerTenant
+		if slots, ok := request.TenantSlots[row.TenantID]; ok {
+			limit = slots
+		}
+		if len(tasks) == request.Limit || perTenant[row.TenantID] >= limit {
 			continue
 		}
 

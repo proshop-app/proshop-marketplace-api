@@ -2721,15 +2721,22 @@ paths:
   /api/v1/checkout/{checkoutId}/orders:
     post:
       tags: [checkout]
-      summary: Создать независимые заказы для единого платежа
+      summary: Поставить создание заказов в очередь
       description: >-
+        Проверяет покупку и свежие расчёты. Намерение, списание корзины и задачи outbox
+        фиксируются атомарно; ответ creating_orders не ждёт создания заказов в магазинах.
+        Повтор возвращает сохранённое состояние без новых задач.
         Без PAYMENT_STUB — 503 checkout.payment_unavailable до изъятия корзины.
-        Сначала обновляются все расчёты и настройки. Новая плата — 409 DELIVERY_CHANGED
-        с checkout и новыми итогами, заказов нет. Отказ промокода магазина — ответ 200:
-        в группе status=price_changed, lastErrorCode=checkout.promo_invalid, reason — причина отказа,
+        Новая плата — 409 DELIVERY_CHANGED с checkout и новыми расчётами.
+        Отказ промокода при фоновом создании отражается в состоянии группы:
+        status=price_changed, lastErrorCode=checkout.promo_invalid, reason — причина отказа,
         cartReturned=true после полного возврата строк в корзину. Код корзины имеет приоритет
         над кодом покупки; при совпадении кодов сохраняется причина отказа, при пустом коде — код покупки.
         Остальные магазины продолжают оформление. Код и скидки передаются в заказ магазина.
+        Опрос GET покупки читает только базу. При creationComplete=true все группы получили итог;
+        оплата возможна только за созданные заказы. Срок создания — 15 секунд от фиксации намерения.
+        По истечении группа unconfirmed возвращается в корзину; reconciliationRequired
+        означает незавершённую сверку возможного заказа магазина.
       operationId: createCheckoutOrders
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
@@ -2758,12 +2765,37 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/cancel:
+    post:
+      tags: [checkout]
+      summary: Отменить покупку до начала оплаты
+      description: >-
+        Только владелец. Повтор безопасен. Товары возвращаются в корзину существующим
+        механизмом частичного возврата. Оплата закрывается сразу. Пока сервер не имеет
+        команды отмены, созданные или возможные заказы остаются на сверке:
+        reconciliationRequired=true не означает подтверждённую магазином отмену.
+        Группа с возможным заказом получает cancellation_requested; без попытки создания — rejected.
+        cancelled означает подтверждение магазина.
+        Заказ и резерв живут у магазина до подтверждения отмены или expiresAt.
+        При неизвестном результате или подтверждённой оплате — 409 checkout.transition;
+        достоверный отказ первой оплаты без оплаченных групп снова разрешает отмену.
+      operationId: cancelCheckout
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200": { $ref: "#/components/responses/Checkout" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/checkout/{checkoutId}/pay:
     post:
       tags: [checkout]
       summary: Открыть единую кассу покупки
       description: >-
-        Только владелец. Без PAYMENT_STUB — 503 checkout.payment_unavailable.
+        Только владелец; creationComplete=true. Без PAYMENT_STUB — 503 checkout.payment_unavailable.
         Проверяется now < expiresAt всех ожидающих групп; истёкший срок — 409 checkout.payment_expired.
         Нечего оплачивать (включая уже оплаченную покупку) — 409 checkout.transition.
         Исчерпанное создание без orderId возвращается в корзину и исключается из суммы;
@@ -2905,6 +2937,10 @@ paths:
     get:
       tags: [checkout]
       summary: Покупки владельца со статусами групп, треками и ПВЗ
+      description: >-
+        Только покупки с хотя бы одним известным orderId. Созданная неоплаченная группа
+        даёт статус покупки awaiting_payment даже во время создания остальных групп;
+        оплата всё равно требует creationComplete=true. GET покупки показывает исходный creating_orders.
       operationId: listBuyerOrders
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
@@ -2924,7 +2960,7 @@ paths:
   /api/v1/operator/checkouts:
     get:
       tags: [operator]
-      summary: Покупки с группами; stuck=true — ожидают оплату не менее 15 минут
+      summary: Покупки; stuck=true — незавершённая отмена или ожидание оплаты от 15 минут
       operationId: listOperatorCheckouts
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
@@ -7434,6 +7470,7 @@ components:
     CheckoutGroup:
       type: object
       required:
+      - reconciliationRequired
       - tenantId
       - externalCheckoutId
       - lines
@@ -7452,6 +7489,17 @@ components:
       - discount
       - total
       properties:
+        creationStatus:
+          type: string
+          enum: [creating, created, unconfirmed, rejected]
+          description: Результат создания группы; созданный заказ остаётся created после отмены или истечения.
+        reconciliationRequired:
+          type: boolean
+          description: Возможный или известный заказ требует отмены/сверки магазина; заказ и резерв живут до подтверждения или expiresAt.
+        creationDeadline:
+          type: string
+          format: date-time
+          description: Срок 15 секунд от намерения; закрытие ждёт завершения активной аренды попытки (запас до 100 ms).
         seller:
           $ref: '#/components/schemas/OrderSeller'
         tracking:
@@ -7460,9 +7508,13 @@ components:
           type: string
         status:
           type: string
+          description: cancellation_requested — отказ покупателя; cancelled — отмена подтверждена магазином.
           enum:
           - ''
           - creating_order
+          - unconfirmed
+          - cancellation_requested
+          - rejected
           - awaiting_payment
           - paid
           - cancelled
@@ -7579,6 +7631,7 @@ components:
     Checkout:
       type: object
       required:
+      - creationComplete
       - id
       - status
       - groups
@@ -7594,6 +7647,9 @@ components:
       - discount
       - paidTotal
       properties:
+        creationComplete:
+          type: boolean
+          description: Все группы получили итог создания; витрина прекращает опрос ожидания.
         id:
           type: string
           format: uuid
@@ -8158,6 +8214,7 @@ components:
     InternalCheckout:
       type: object
       required:
+      - creationComplete
       - id
       - status
       - groups
@@ -8170,6 +8227,9 @@ components:
       - updatedAt
       - confirmedAt
       properties:
+        creationComplete:
+          type: boolean
+          description: Все группы получили итог создания; витрина прекращает опрос ожидания.
         id:
           type: string
           format: uuid
@@ -8217,6 +8277,7 @@ components:
     InternalCheckoutGroup:
       type: object
       required:
+      - reconciliationRequired
       - tenantId
       - externalCheckoutId
       - lines
@@ -8232,6 +8293,17 @@ components:
       - seller
       - tracking
       properties:
+        creationStatus:
+          type: string
+          enum: [creating, created, unconfirmed, rejected]
+          description: Результат создания группы; созданный заказ остаётся created после отмены или истечения.
+        reconciliationRequired:
+          type: boolean
+          description: Возможный или известный заказ требует отмены/сверки магазина; заказ и резерв живут до подтверждения или expiresAt.
+        creationDeadline:
+          type: string
+          format: date-time
+          description: Срок 15 секунд от намерения; закрытие ждёт завершения активной аренды попытки (запас до 100 ms).
         seller:
           $ref: '#/components/schemas/OrderSeller'
         tracking:
@@ -8240,9 +8312,13 @@ components:
           type: string
         status:
           type: string
+          description: cancellation_requested — отказ покупателя; cancelled — отмена подтверждена магазином.
           enum:
           - ''
           - creating_order
+          - unconfirmed
+          - cancellation_requested
+          - rejected
           - awaiting_payment
           - paid
           - cancelled

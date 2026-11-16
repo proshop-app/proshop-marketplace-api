@@ -1,0 +1,140 @@
+package checkout
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"time"
+
+	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+)
+
+// Ограничения пула и сроков независимого исполнителя оформления.
+const (
+	// CreationWorkers и CreationPerTenant оставляют свободные места для других магазинов.
+	CreationWorkers   = 16
+	CreationPerTenant = 2
+	// DeadlineWorkers закрывают ожидание независимо от занятых HTTP-вызовами мест.
+	DeadlineWorkers     = 4
+	CreationCallTimeout = 5 * time.Second
+	creationLeaseSlack  = 100 * time.Millisecond
+	taskLeaseSlack      = 5 * time.Second
+	PollWorkers         = 4
+	PollPerTenant       = 1
+)
+
+// TaskResult публикуется после отметки задачи; позволяет циклу сразу заполнить свободное место.
+type TaskResult struct {
+	Task ports.Task
+	Err  error
+	Lag  time.Duration
+}
+
+// CreationExecutor разделяет создание, закрытие срока и сверку на независимые полосы.
+// Dispatch вызывается одним циклом, результаты каждого вызова сохраняются независимо.
+type CreationExecutor struct {
+	queue   ports.TaskQueue
+	clock   ports.Clock
+	service *Service
+	mu      sync.Mutex
+	active  map[string]map[ids.TenantID]int
+	results chan TaskResult
+	wg      sync.WaitGroup
+}
+
+// NewCreationExecutor собирает отдельный пул поверх существующей очереди.
+func NewCreationExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service) *CreationExecutor {
+	return &CreationExecutor{
+		queue:   queue,
+		clock:   clock,
+		service: service,
+		active: map[string]map[ids.TenantID]int{
+			TaskCreateOrder:    {},
+			TaskExpireCreation: {},
+			TaskPollOrder:      {},
+		},
+		results: make(chan TaskResult, CreationWorkers+DeadlineWorkers+PollWorkers),
+	}
+}
+
+// Results сообщает циклу о свободном месте после обработки задачи.
+func (e *CreationExecutor) Results() <-chan TaskResult { return e.results }
+
+// Wait вызывается после остановки Dispatch и отмены контекста исполнения.
+func (e *CreationExecutor) Wait() { e.wg.Wait() }
+
+// Dispatch не ждёт HTTP: каждый освободившийся слот доступен следующему Claim.
+func (e *CreationExecutor) Dispatch(ctx context.Context) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, kind := range []string{TaskExpireCreation, TaskCreateOrder, TaskPollOrder} {
+		limit, perTenant := CreationWorkers, CreationPerTenant
+		switch kind {
+		case TaskExpireCreation:
+			limit, perTenant = DeadlineWorkers, DeadlineWorkers
+		case TaskPollOrder:
+			limit, perTenant = PollWorkers, PollPerTenant
+		}
+		slots := make(map[ids.TenantID]int)
+		for tenant, count := range e.active[kind] {
+			limit -= count
+			slots[tenant] = perTenant - count
+		}
+		if limit == 0 {
+			continue
+		}
+		now := e.clock.Now()
+		tasks, err := e.queue.Claim(ctx, ports.ClaimRequest{
+			Now:         now,
+			Limit:       limit,
+			PerTenant:   perTenant,
+			Kinds:       []string{kind},
+			TenantSlots: slots,
+			LeaseUntil:  now.Add(e.service.orderCallBudget() + taskLeaseSlack),
+		})
+		if err != nil {
+			return err
+		}
+		for _, task := range tasks {
+			e.active[kind][task.TenantID]++
+			e.wg.Add(1)
+			go e.execute(ctx, task)
+		}
+	}
+	return nil
+}
+
+func (e *CreationExecutor) execute(ctx context.Context, task ports.Task) {
+	defer e.wg.Done()
+	err := e.service.HandleOrderTask(ctx, task)
+	var saved error
+	if err == nil {
+		saved = e.queue.Complete(ctx, task.ID, task.Attempts, e.clock.Now())
+	} else {
+		next := e.clock.Now().Add(messaging.Backoff(task.Attempts))
+		if CreationPending(err) {
+			next = e.clock.Now().Add(checkout.CreationRetryDelay)
+		}
+		var pending *creationPendingUntil
+		if errors.As(err, &pending) {
+			next = pending.at
+		}
+		saved = e.queue.Retry(ctx, task.ID, task.Attempts, next, err.Error())
+	}
+	e.mu.Lock()
+	e.active[task.Kind][task.TenantID]--
+	if e.active[task.Kind][task.TenantID] == 0 {
+		delete(e.active[task.Kind], task.TenantID)
+	}
+	e.mu.Unlock()
+	if saved != nil {
+		err = saved
+	}
+	select {
+	case e.results <- TaskResult{Task: task, Err: err, Lag: e.clock.Now().Sub(task.CreatedAt)}:
+	case <-ctx.Done():
+	}
+}

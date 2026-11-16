@@ -40,6 +40,7 @@ const token = "operator-token-for-tests-0123456789"
 var t0 = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
 
 type env struct {
+	checkouts  *appcheckout.Service
 	limiter    *fake.Limiter
 	geo        *fake.GeoIP
 	refreshKey string
@@ -158,6 +159,7 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 		Registerer: registry,
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
+	e.checkouts = deps.Checkouts
 	for _, option := range options {
 		option(&deps)
 	}

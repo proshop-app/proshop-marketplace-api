@@ -57,8 +57,8 @@ const (
   ORDER BY tenant_id`
 
 	insertCheckoutGroup = `
-		INSERT INTO checkout_groups (checkout_id, ` + groupColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
+		INSERT INTO checkout_groups (checkout_id, ` + groupColumns + `, next_work_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`
 
 	updateCheckoutGroup = `
 		UPDATE checkout_groups
@@ -74,7 +74,8 @@ const (
 			max_days = $12,
 			quote_expires_at = $13,
 			order_progress = $14,
-			tracking = $15
+			tracking = $15,
+			next_work_at = $16
 		WHERE checkout_id = $1 AND tenant_id = $2`
 )
 
@@ -325,6 +326,8 @@ func (r *checkoutRow) checkout() (checkout.State, error) {
 		return checkout.State{}, err
 	}
 	state.Contact, state.CartConsumed = meta.Contact, meta.CartConsumed
+	state.PaymentStarted = meta.PaymentStarted
+	state.PaymentAttempt = meta.PaymentAttempt
 	state.ID = ids.UUID(r.id)
 	state.BuyerID = ids.UUID(r.buyerID)
 	state.Status = checkout.Status(r.status)
@@ -492,7 +495,7 @@ func groupArgs(group checkout.Group) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(args, encodeOrderProgress(group), jsonArg([]byte(tracking))), nil
+	return append(args, encodeOrderProgress(group), jsonArg([]byte(tracking)), nextCheckoutWork(group)), nil
 }
 
 // quoteArgs — поля расчёта доставки; суммы и сроки есть только у доступного расчёта.
@@ -520,4 +523,13 @@ func quoteArgs(q *delivery.Quote) []any {
 		q.MaxDays,
 		q.ExpiresAt,
 	}
+}
+
+// Проекция очередного опроса/возврата позволяет не читать JSON всей истории в Resume.
+func nextCheckoutWork(g checkout.Group) any {
+	next, found := g.NextWorkAt()
+	if !found {
+		return nil
+	}
+	return next
 }

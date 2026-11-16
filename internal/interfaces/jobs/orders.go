@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// OrderResumer — возобновление саги и сверка статусов магазинов.
+// OrderResumer — сверка статусов магазинов и повтор возврата товаров.
 type OrderResumer interface{ Resume(context.Context) error }
 
 // OrdersRunner запускает сверку сразу и по расписанию.
@@ -21,7 +21,7 @@ func NewOrdersRunner(service OrderResumer, interval time.Duration, logger *slog.
 	return &OrdersRunner{service: service, interval: interval, logger: logger}
 }
 
-// Run восстанавливает незаконченные создания на старте, затем сверяет статусы по расписанию.
+// Run ставит сверку в outbox сразу при старте и затем по расписанию.
 func (r *OrdersRunner) Run(ctx context.Context) error {
 	for {
 		if err := r.service.Resume(ctx); err != nil && ctx.Err() == nil {

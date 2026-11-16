@@ -29,7 +29,7 @@ const (
 		SET LOCAL enable_sort = off;
 		SET LOCAL plan_cache_mode = force_generic_plan`
 	prepareCheckoutListPlan    = `PREPARE checkout_list_plan AS `
-	explainCheckoutListPlan    = `EXPLAIN (COSTS OFF) EXECUTE checkout_list_plan($1, $2, $3, $4, $5, $6)`
+	explainCheckoutListPlan    = `EXPLAIN (COSTS OFF) EXECUTE checkout_list_plan($1, $2, $3, $4, $5, $6, $7)`
 	deallocateCheckoutListPlan = `DEALLOCATE checkout_list_plan`
 )
 
@@ -117,12 +117,12 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 		},
 		{
 			name:   "давно ожидают оплаты",
-			filter: checkout.Filter{OrdersOnly: true, AwaitingBefore: at(15), Limit: 100},
+			filter: checkout.Filter{OrdersOnly: true, StuckBefore: at(15), Limit: 100},
 			want:   []ids.UUID{allIDs[3]},
 		},
 		{
 			name:   "все ожидающие",
-			filter: checkout.Filter{AwaitingBefore: at(35), Limit: 100},
+			filter: checkout.Filter{StuckBefore: at(35), Limit: 100},
 			want:   allIDs[3:],
 		},
 		{
@@ -130,27 +130,26 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(0), Limit: 100},
 		},
 		{
-			name:   "пора создавать",
+			name:   "истечение создания не работа Resume",
 			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(1), Limit: 100},
-			want:   []ids.UUID{allIDs[2]},
 		},
 		{
-			name:   "пора создавать и опрашивать",
+			name:   "пора опрашивать известный заказ",
 			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(10), Limit: 100},
-			want:   allIDs[2:4],
+			want:   allIDs[3:4],
 		},
 		{
 			name:   "все задания готовы",
 			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(30), Limit: 100},
-			want:   allIDs[2:],
+			want:   allIDs[3:],
 		},
 		{
 			name: "ожидающий заказ ещё рано опрашивать",
 			filter: checkout.Filter{
-				OrdersOnly:     true,
-				AwaitingBefore: at(15),
-				WorkDueAt:      at(9),
-				Limit:          100,
+				OrdersOnly:  true,
+				StuckBefore: at(15),
+				WorkDueAt:   at(9),
+				Limit:       100,
 			},
 		},
 	} {
@@ -430,12 +429,22 @@ func seedCheckoutList(t *testing.T, uow *postgres.UnitOfWork) []*checkout.Checko
 			if _, err := purchase.BeginOrders(contact, at(0)); err != nil {
 				t.Fatal(err)
 			}
+			if value.status == checkout.StatusCreatingOrders {
+				if err := purchase.SetCreationDeadline(at(0).Add(15*time.Second), at(0)); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if _, err := purchase.MarkCartConsumed(at(0)); err != nil {
 				t.Fatal(err)
 			}
 			for _, group := range purchase.Groups() {
 				if value.status == checkout.StatusCreatingOrders {
-					if _, err := purchase.ClaimCreation(group.TenantID, "in-progress", at(0)); err != nil {
+					if _, err := purchase.ClaimCreation(
+						group.TenantID,
+						"in-progress",
+						at(0).Add(5*time.Second+100*time.Millisecond),
+						at(0),
+					); err != nil {
 						t.Fatal(err)
 					}
 					continue

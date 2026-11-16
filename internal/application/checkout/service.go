@@ -20,8 +20,12 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
+const updateRetryDelay = 10 * time.Millisecond
+
 // Config — сроки расчётов.
 type Config struct {
+	// OrderCallTimeout — уже настроенный HTTP-бюджет адаптера; аренда не должна пережидать его.
+	OrderCallTimeout time.Duration
 	// DeliverySubsidyMinPercent — нижняя граница субсидии продавца, 0–100.
 	DeliverySubsidyMinPercent int
 	// QuoteTTL — дольше этого цена доставки не держится, что бы ни обещал магазин.
@@ -37,6 +41,7 @@ type Config struct {
 
 // Service — покупка покупателя.
 type Service struct {
+	observer ports.CheckoutObserver
 	carts    ports.CartVerifier
 	uow      ports.UnitOfWork
 	index    ports.OfferIndex
@@ -525,7 +530,15 @@ func (s *Service) update(
 	buyerID, checkoutID ids.UUID,
 	mutate func(*checkout.Checkout, time.Time) error,
 ) (checkout.State, error) {
-	return s.updateSelection(ctx, buyerID, checkoutID, nil, mutate)
+	var state checkout.State
+	var err error
+	for range 3 {
+		state, err = s.updateSelection(ctx, buyerID, checkoutID, nil, mutate)
+		if !errors.Is(err, checkout.ErrConflict) {
+			break
+		}
+	}
+	return state, err
 }
 
 func (s *Service) updateSelection(
@@ -543,15 +556,10 @@ func (s *Service) updateSelection(
 		if c.BuyerID() != buyerID {
 			return checkout.ErrNotFound
 		}
-		before := c.State().Version
+		previous := c.State()
+		before := previous.Version
 		if err := mutate(c, s.clock.Now()); err != nil {
 			return err
-		}
-
-		if c.State().Version != before {
-			if err := tx.Checkouts().Update(ctx, c); err != nil {
-				return err
-			}
 		}
 
 		if after != nil {
@@ -559,8 +567,14 @@ func (s *Service) updateSelection(
 				return err
 			}
 		}
+		if c.State().Version != before {
+			if err := tx.Checkouts().Update(ctx, c); err != nil {
+				return err
+			}
+		}
 
 		state = c.State()
+		s.observeTransitions(tx, previous, state)
 
 		return nil
 	})
@@ -621,4 +635,61 @@ func saveBuyerPickup(ctx context.Context, tx ports.Tx, c *checkout.Checkout) err
 		}
 	}
 	return nil
+}
+
+// retrySelection не отдаёт покупателю конфликт с независимой группой той же покупки.
+func (s *Service) retrySelection(
+	ctx context.Context,
+	buyerID, id ids.UUID,
+	after func(context.Context, ports.Tx, *checkout.Checkout) error,
+	mutate func(*checkout.Checkout, time.Time) error,
+) (checkout.State, error) {
+	for {
+		state, err := s.updateSelection(ctx, buyerID, id, after, mutate)
+		if !errors.Is(err, checkout.ErrConflict) && !errors.Is(err, cart.ErrConflict) {
+			return state, err
+		}
+		if err := waitUpdate(ctx); err != nil {
+			return checkout.State{}, err
+		}
+	}
+}
+
+func waitUpdate(ctx context.Context) error {
+	timer := time.NewTimer(updateRetryDelay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// SetObserver вызывается при сборке до запуска обработчиков.
+func (s *Service) SetObserver(observer ports.CheckoutObserver) { s.observer = observer }
+
+func (s *Service) observeTransitions(tx ports.Tx, before, after checkout.State) {
+	if s.observer == nil {
+		return
+	}
+	for i, g := range after.Groups {
+		old := before.Groups[i]
+		events := make([]string, 0, 4)
+		if g.Status == checkout.GroupUnconfirmed && old.Status != g.Status {
+			events = append(events, "creation_expired")
+		}
+		if g.ReconciliationRequired && !old.ReconciliationRequired {
+			events = append(events, "reconciliation_required")
+		}
+		if g.Abandoned && g.OrderID != "" && old.OrderID == "" {
+			events = append(events, "late_order")
+		}
+		if g.Reason == "buyer_cancelled" && old.Reason != g.Reason {
+			events = append(events, "buyer_cancelled")
+		}
+		for _, event := range events {
+			tx.AfterCommit(func() { s.observer.RecordCheckoutEvent(g.TenantID, after.ID, event) })
+		}
+	}
 }

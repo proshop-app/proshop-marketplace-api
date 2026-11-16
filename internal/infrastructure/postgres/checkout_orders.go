@@ -16,25 +16,16 @@ const (
 
 	listCheckoutFilters = `
   AND (NOT $3 OR status NOT IN ('draft', 'confirmed'))
+ AND (NOT $7 OR EXISTS (SELECT 1 FROM checkout_groups g
+  WHERE g.checkout_id = c.id AND coalesce(g.order_progress->>'OrderID', '') <> ''))
   AND ($4::timestamptz IS NULL OR EXISTS (
    SELECT 1 FROM checkout_groups g
-   WHERE g.checkout_id = c.id AND g.order_progress->>'Status' = 'awaiting_payment'
-    AND (g.order_progress->>'AwaitingSince')::timestamptz <= $4
+   WHERE g.checkout_id = c.id AND (g.order_progress->>'ReconciliationRequired' = 'true'
+    OR (g.order_progress->>'Status' = 'awaiting_payment'
+     AND (g.order_progress->>'AwaitingSince')::timestamptz <= $4))
   ))
- AND ($6::timestamptz IS NULL OR order_context->>'CartConsumed' IS DISTINCT FROM 'true' OR EXISTS (
-  SELECT 1 FROM checkout_groups g WHERE g.checkout_id = c.id AND (
-   (g.order_progress->>'Status' IN ('creating_order', 'seller_unreachable')
-    AND coalesce(g.order_progress->>'OrderID', '') = ''
-    AND g.order_progress->>'CreateExhausted' IS DISTINCT FROM 'true'
-    AND coalesce((g.order_progress->>'NextCreateAt')::timestamptz, '-infinity') <= $6)
-   OR ((g.order_progress->>'Status' IN ('cancelled', 'price_changed', 'delivery_unavailable')
-    OR (g.order_progress->>'CreateExhausted' = 'true' AND coalesce(g.order_progress->>'OrderID', '') = ''))
-    AND g.order_progress->>'CartReturned' IS DISTINCT FROM 'true'
-    AND coalesce((g.order_progress->>'NextReturnAt')::timestamptz, '-infinity') <= $6)
-   OR (g.order_progress->>'OrderID' <> ''
-    AND g.order_progress->>'Status' NOT IN ('cancelled', 'returned')
-    AND (g.order_progress->>'NextPollAt')::timestamptz <= $6)
-  )
+ AND ($6::timestamptz IS NULL OR c.id IN (
+ SELECT checkout_id FROM checkout_groups WHERE next_work_at <= $6
  ))
  ORDER BY id
  LIMIT $5`
@@ -47,14 +38,18 @@ const (
 )
 
 type checkoutOrderContext struct {
-	Contact      checkout.Contact
-	CartConsumed bool
+	PaymentAttempt string
+	PaymentStarted bool
+	Contact        checkout.Contact
+	CartConsumed   bool
 }
 
 func encodeOrderContext(s checkout.State) string {
 	raw, _ := json.Marshal(checkoutOrderContext{
-		Contact:      s.Contact,
-		CartConsumed: s.CartConsumed,
+		Contact:        s.Contact,
+		PaymentAttempt: s.PaymentAttempt,
+		PaymentStarted: s.PaymentStarted,
+		CartConsumed:   s.CartConsumed,
 	})
 	return string(raw)
 }
@@ -65,7 +60,7 @@ func encodeOrderProgress(g checkout.Group) string {
 	return string(raw)
 }
 
-// List выбирает страницу покупок для кабинета, панели или фоновой саги.
+// List выбирает страницу покупок для кабинета, панели или фоновой сверки.
 func (r *Checkouts) List(ctx context.Context, f checkout.Filter) ([]*checkout.Checkout, error) {
 	buyerID, err := checkoutFilterUUID(f.BuyerID)
 	if err != nil {
@@ -84,9 +79,10 @@ func (r *Checkouts) List(ctx context.Context, f checkout.Filter) ([]*checkout.Ch
 		buyerID,
 		afterID,
 		f.OrdersOnly,
-		nullTime(f.AwaitingBefore),
+		nullTime(f.StuckBefore),
 		f.Limit,
 		nullTime(f.WorkDueAt),
+		f.HasOrders,
 	).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("список покупок: %w", err)
