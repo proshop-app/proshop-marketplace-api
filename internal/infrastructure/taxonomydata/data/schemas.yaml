@@ -928,6 +928,7 @@ book:
   - book_gift_edition
   - book_edition_status
 boot:
+  hiddenFacets: [model]
   extends: common_footwear
   attributes:
   - season
@@ -4710,6 +4711,7 @@ rotating_power_tool:
   - electrical_safety
   - ip_rating
 safety_footwear:
+  hiddenFacets: [model]
   extends: common_footwear
   attributes:
   - shoe_upper
@@ -4801,6 +4803,7 @@ sewing_machine:
   - power
   - equipment
 shoe:
+  hiddenFacets: [model]
   extends: common_footwear
   attributes:
   - season
@@ -4832,6 +4835,7 @@ shoe:
   - shoe_use
   - audience_age_group
 shoe_care_product:
+  hiddenFacets: [model]
   extends: durable
   attributes:
   - volume
@@ -4844,6 +4848,7 @@ shoe_care_product:
   - shelf_life
   - surface_type
 shoe_care_tool:
+  hiddenFacets: [model]
   extends: common_geometry
   attributes:
   - color
@@ -6117,6 +6122,7 @@ wireless_charger:
   - voltage
   - electrical_safety
 common_clothing:
+  hiddenFacets: [model]
   identityWarnings: true
   identity:
     model: [brand, model]
@@ -7011,3 +7017,11 @@ common_textile_material:
   optional:
   - textile_material
   - fabric_composition
+
+clothing_headwear:
+  extends: headwear
+  hiddenFacets: [model]
+
+footwear_accessory:
+  extends: accessory
+  hiddenFacets: [model]

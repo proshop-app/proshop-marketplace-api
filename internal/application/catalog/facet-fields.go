@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -31,11 +32,14 @@ func scopeFields(
 				collect(node.Children)
 				continue
 			}
-			for _, code := range d.Schemas[node.Schema].Attributes {
+			schema := d.Schemas[node.Schema]
+			for _, code := range schema.Attributes {
 				if collectUnion {
 					union[code] = fields[code]
 				}
-				coverage[code]++
+				if !slices.Contains(schema.HiddenFacets, code) {
+					coverage[code]++
+				}
 			}
 		}
 	}

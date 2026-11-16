@@ -94,6 +94,7 @@ type Schema struct {
 	Abstract         bool     `json:"abstract,omitempty" yaml:"abstract,omitempty"`
 	Attributes       []string `json:"attributes" yaml:"attributes"`
 	Optional         []string `json:"optional,omitempty" yaml:"optional,omitempty"`
+	HiddenFacets     []string `json:"hiddenFacets,omitempty" yaml:"hiddenFacets,omitempty"`
 }
 
 // SchemaAttribute содержит обязательность только в контексте схемы.
@@ -301,6 +302,13 @@ func (d Definition) validateSchemas() (map[string]Attribute, error) {
 				return nil, ErrInvalid.WithMessage("неверный optional")
 			}
 			optional[code] = true
+		}
+		hidden := map[string]bool{}
+		for _, code := range schema.HiddenFacets {
+			if !seen[code] || hidden[code] {
+				return nil, ErrInvalid.WithMessage("неверный hiddenFacets")
+			}
+			hidden[code] = true
 		}
 		if err := schema.validateIdentity(key, fields); err != nil {
 			return nil, err

@@ -9043,7 +9043,7 @@
         axis: product_kind
         definition: Многоразовый головной убор медицинской униформы; одноразовые медицинские и косметологические
           шапочки исключены.
-        schema: headwear
+        schema: clothing_headwear
         title: 'Одежда: Специальная одежда и униформа: Медицинская одежда: Медицинские колпаки'
       title: 'Одежда: Специальная одежда и униформа: Медицинская одежда'
     - id: clothing.family-service
@@ -9096,7 +9096,7 @@
         slug: clothing-chef-hats
         axis: product_kind
         definition: Многоразовый головной убор поварской униформы; одноразовые гигиенические шапочки исключены.
-        schema: headwear
+        schema: clothing_headwear
         title: 'Одежда: Специальная одежда и униформа: Одежда для кухни и сервиса: Поварские колпаки'
       title: 'Одежда: Специальная одежда и униформа: Одежда для кухни и сервиса'
     - id: clothing.family-uniform
@@ -10590,13 +10590,13 @@
         slug: stelki
         axis: product_kind
         definition: 'Самостоятельный вид изделия: Стельки. Материал, цвет, бренд и размер не меняют вид.'
-        schema: accessory
+        schema: footwear_accessory
       - id: shoes.laces
         name: Шнурки
         slug: shnurki
         axis: product_kind
         definition: 'Самостоятельный вид изделия: Шнурки. Материал, цвет, бренд и размер не меняют вид.'
-        schema: accessory
+        schema: footwear_accessory
       - id: shoes.heel-pads
         name: Подпяточники
         slug: podpyatochniki

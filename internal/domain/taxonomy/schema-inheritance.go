@@ -40,6 +40,7 @@ func expandSchemas(source map[string]Schema) (map[string]Schema, error) {
 			}
 			schema.Attributes = slices.Clone(parent.Attributes)
 			schema.Optional = slices.Clone(parent.Optional)
+			schema.HiddenFacets = slices.Clone(parent.HiddenFacets)
 			schema.Identity = parent.Identity
 			schema.IdentityWarnings = parent.IdentityWarnings
 		}
@@ -75,6 +76,16 @@ func expandSchemas(source map[string]Schema) (map[string]Schema, error) {
 			seen[code] = true
 			if !slices.Contains(schema.Optional, code) {
 				schema.Optional = append(schema.Optional, code)
+			}
+		}
+		seen = map[string]bool{}
+		for _, code := range recipe.HiddenFacets {
+			if !slices.Contains(schema.Attributes, code) || seen[code] {
+				return Schema{}, ErrInvalid.WithMessage("неверный hiddenFacets: " + name + "." + code)
+			}
+			seen[code] = true
+			if !slices.Contains(schema.HiddenFacets, code) {
+				schema.HiddenFacets = append(schema.HiddenFacets, code)
 			}
 		}
 		if len(schema.Attributes) == 0 {
