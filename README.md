@@ -17,8 +17,8 @@ make dev
 ```
 
 Команда поднимает PostgreSQL 16, OpenSearch 2.19, Kafka 3.9 в режиме KRaft и
-Redis, применяет миграции, импортирует `deploy/reference/bootstrap.json`,
-применяет поставки `deploy/reference` и публикует таксономию. Затем запускает
+Redis, применяет миграции, импортирует пакет v2 из checkout uno-reference-data
+и публикует таксономию. Затем запускает
 сервис на `:8080` с перезапуском при правках. Повтор поставок идемпотентен.
 Подтверждение замены категорий автоматически передаётся только в `dev`: эта
 цель предназначена для одноразовой среды разработки. Для стенда реальные
@@ -31,7 +31,7 @@ Kafka `29094`, Redis `26379`; любой меняется переменной
 | Команда | Что делает |
 |---|---|
 | `make dev` | инфраструктура, миграции, словари, таксономия, сервис с перезапуском (air) |
-| `make reference-bootstrap` | импорт заголовков недостающих словарей и минимального closed-пула |
+| `make reference-import` | импорт полного пакета v2 из uno-reference-data |
 | `make test` | юнит-тесты с `-race` и сторож слоистости |
 | `make test-integration` | интеграционные тесты на compose (поднимает его сам) |
 | `make lint` | golangci-lint v2.3.1 с `depguard` по слоям |
@@ -318,8 +318,7 @@ Enum ссылается на закрытый словарь; string может 
 
 ```bash
 make migrate
-make reference-bootstrap
-make reference-apply
+make reference-import REFERENCE_DATA=../uno-reference-data
 make taxonomy-check
 go run ./cmd/taxonomy manifest
 make taxonomy-apply
@@ -456,25 +455,26 @@ API без параметра не отправляет поле и сохран
 одного compose этого репозитория для поиска предложений недостаточно.
 API таксономии, её PostgreSQL-таблицы и поставка данных используют реализацию master.
 
-Реестр справочных сущностей принадлежит площадке: 19 поставок в
-`deploy/reference`, применение после миграций — `make reference-apply`.
-Перед ними `make reference-bootstrap` импортирует пакет `bootstrap.json`: 176
-пустых open и closed `target_gender` с «Женский»/«Мужской». Существующие 19
-словарей из миграций в пакет не входят; история их поставок остаётся отдельной.
-Это минимальная комплектность для публикации, а не полный набор значений
-uno-reference-data. Пакет содержит данные репозитория без заявления открытой лицензии.
-Контракт потребителей и пополнение описаны в [docs/reference.md](docs/reference.md).
+Реестр справочных сущностей и рабочая база принадлежат площадке; данные и настройки
+словарей — только uno-reference-data. Образ API не содержит словари и при запуске их не импортирует.
+
 Сбор кандидатов требует отдельного `SEARCH_CANDIDATES_TOKEN` для поиска;
 `REFERENCE_CANDIDATES_INTERVAL=1h` задаёт период, `0` выключает сбор.
 При пустом токене сборщик не запускается.
 
-Образ содержит справочники в `/reference` (только чтение); `reference apply-all` использует этот каталог по умолчанию, `--dir` переопределяет его.
-Порядок чистой установки: `/migrate up` →
-`/marketplace reference import --file /reference/bootstrap.json` →
-`/marketplace reference apply-all` (обе команды требуют только `DATABASE_URL`) →
-проверка и явное применение `/taxonomy apply --confirm-category-replacement`.
-На стенде оператор отдельно импортирует реальные значения из uno-reference-data;
-при конфликте вида или истории поставок нужна сверка, а не смена номера вслепую.
+Для чистой базы нужен checkout uno-reference-data:
+
+```bash
+make dev REFERENCE_DATA=../uno-reference-data
+# Только импорт в уже подготовленную базу:
+make reference-import REFERENCE_DATA=../uno-reference-data
+```
+
+По умолчанию `REFERENCE_PACKAGE=$(REFERENCE_DATA)/exports/marketplace-bootstrap.json`.
+Отсутствие каталога или пакета — ошибка. Полный пакет должен быть выпущен в uno-reference-data
+по [контракту v2](docs/reference-import.md), включая необходимые taxonomy заголовки и confirmed-значения.
+На стенде оператор импортирует пакет до публикации таксономии. Старый Helm Job
+`marketplace-reference` должен быть отключён (`reference.enabled=false`): прежнего CLI больше нет.
 
 Продвижение использует обязательные `PROMOTION_TIMEZONE` (IANA, без умолчания) и
 `PROMOTION_VISITOR_SALT` (от 16 символов). `PROMOTION_SEARCH_RELEVANCE_DEPTH` — 10–500,

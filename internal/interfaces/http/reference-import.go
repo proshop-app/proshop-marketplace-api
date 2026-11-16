@@ -67,7 +67,7 @@ func (h *referenceHandlers) importPackage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, referenceImportResponse{SchemaVersion: 1, Dictionaries: results})
+	writeJSON(w, http.StatusOK, referenceImportResponse{SchemaVersion: 2, Dictionaries: results})
 }
 
 // referenceImportBudget действует после проверки оператора: общий бюджет
@@ -131,6 +131,9 @@ func decodeReferenceImport(w http.ResponseWriter, r *http.Request) (reference.Im
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
+		if errors.Is(err, reference.ErrInvalidSettings) {
+			return input, err
+		}
 		return input, ErrInvalidBody.Wrap(err)
 	}
 	return input, nil

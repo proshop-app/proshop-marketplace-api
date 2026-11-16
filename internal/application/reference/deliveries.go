@@ -2,7 +2,6 @@ package reference
 
 import (
 	"context"
-	"strconv"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -12,28 +11,17 @@ import (
 // записи и сохранение — по одному обращению к хранилищу на пачку, а не на запись.
 const deliveryBatch = 500
 
-// Apply применяет поставку одной транзакцией пачками по deliveryBatch:
+// applyDelivery применяет выпуск одной транзакцией пачками по deliveryBatch:
 // новые записи заводятся, существующим добавляются недостающие варианты,
 // кандидат подтверждается, если поставка его подтверждает. Отклонённое и
 // выведенное оператором не трогается, свободные поля существующей записи не
 // перезаписываются. Ключ другой записи — конфликт всей поставки.
-func (s *Service) Apply(ctx context.Context, d reference.Delivery) (reference.DeliveryResult, error) {
-	result := reference.DeliveryResult{Dictionary: d.Dictionary, Release: d.Version}
-	if err := reference.ValidateDelivery(d); err != nil {
-		return result, err
-	}
-	meta := reference.Meta{Actor: "delivery:" + strconv.FormatInt(d.Version, 10), Source: reference.SourceSeed}
-	revision, err := s.mutate(ctx, d.Dictionary, func(ctx context.Context, m *session) error {
-		return s.applyDelivery(ctx, m, d, meta, &result)
-	})
-	result.Revision = revision
-	return result, err
-}
 
 func (s *Service) applyDelivery(
 	ctx context.Context,
 	m *session,
 	d reference.Delivery,
+	settings reference.DictionarySettings,
 	meta reference.Meta,
 	result *reference.DeliveryResult,
 ) error {
@@ -45,6 +33,11 @@ func (s *Service) applyDelivery(
 	if err != nil || !apply {
 		return err
 	}
+	changed, err := m.dict.Configure(settings)
+	if err != nil {
+		return err
+	}
+	m.dirty = m.dirty || changed
 	from := m.dict.Revision()
 	for start := 0; start < len(d.Entries); start += deliveryBatch {
 		batch := d.Entries[start:min(start+deliveryBatch, len(d.Entries))]
@@ -61,40 +54,6 @@ func (s *Service) applyDelivery(
 		RevisionTo:   m.dict.Revision(),
 		AppliedAt:    m.now,
 	})
-}
-
-// Rollback откатывает последнюю поставку обратными образами её ревизий, пока
-// после неё в словаре не было правок. Повтор отката ничего не меняет.
-func (s *Service) Rollback(ctx context.Context, d reference.Delivery) (reference.DeliveryResult, error) {
-	result := reference.DeliveryResult{Dictionary: d.Dictionary, Release: d.Version, RolledBack: true}
-	if err := reference.ValidateDelivery(d); err != nil {
-		return result, err
-	}
-	meta := reference.Meta{Actor: "rollback:" + strconv.FormatInt(d.Version, 10), Source: reference.SourceSeed}
-	revision, err := s.mutate(ctx, d.Dictionary, func(ctx context.Context, m *session) error {
-		latest, err := m.repo.LatestDelivery(ctx, d.Dictionary)
-		if err != nil {
-			return err
-		}
-		apply, err := reference.PlanDeliveryRollback(latest, m.dict, d)
-		if err != nil || !apply {
-			return err
-		}
-		changes, err := m.repo.Changes(ctx, d.Dictionary, latest.RevisionFrom, latest.RevisionTo)
-		if err != nil {
-			return err
-		}
-		for i := len(changes) - 1; i >= 0; i-- {
-			if err := s.revert(ctx, m, changes[i], meta); err != nil {
-				return err
-			}
-			result.Updated += len(changes[i].EntryIDs)
-		}
-		result.Changed = true
-		return m.repo.MarkDeliveryRollback(ctx, d.Dictionary, d.Version, m.dict.Revision())
-	})
-	result.Revision = revision
-	return result, err
 }
 
 // deliver применяет пачку поставки одной ревизией журнала.
@@ -155,7 +114,7 @@ func (s *Service) deliver(
 			result.Updated++
 		}
 	}
-	_, err = m.record(ctx, draft, reference.ChangeDelivered, touched[0].ID(), meta, 0)
+	_, err = m.record(ctx, draft, reference.ChangeDelivered, touched[0].ID(), meta)
 	return err
 }
 
@@ -217,48 +176,6 @@ func (s *Service) extend(m *session, entry *reference.Entry, item reference.Deli
 		return err
 	}
 	return nil
-}
-
-// revert применяет обратный образ записи журнала новой ревизией. Запись,
-// изменившаяся после неё, — конфликт: откат не затирает чужую правку.
-// Записи образа читаются одним запросом: ревизия поставки несёт целую пачку.
-func (s *Service) revert(ctx context.Context, m *session, change reference.Change, meta reference.Meta) error {
-	list := make([]ids.UUID, 0, len(change.Forward))
-	for _, image := range change.Forward {
-		list = append(list, image.ID)
-	}
-	entries, err := m.repo.Entries(ctx, m.dict.Code(), list)
-	if err != nil {
-		return err
-	}
-	current := make(map[ids.UUID]*reference.Entry, len(entries))
-	for _, entry := range entries {
-		current[entry.ID()] = entry
-	}
-	draft := reference.NewDraft(m.dict.Code())
-	for i, image := range change.Forward {
-		entry := current[image.ID]
-		var state *reference.EntryState
-		if entry != nil {
-			copied := entry.State()
-			state = &copied
-		}
-		if !reference.SameContent(state, image.State) {
-			return reference.ErrRevertConflict.WithMessage("запись " + string(image.ID) + " изменилась после ревизии " +
-				strconv.FormatInt(change.Revision, 10))
-		}
-		target := change.Inverse[i].State
-		switch {
-		case target == nil && entry != nil:
-			draft.Delete(entry)
-		case target != nil && entry == nil:
-			draft.Track(reference.RevivedEntry(*target, m.now))
-		case target != nil:
-			draft.Track(entry).Revert(*target)
-		}
-	}
-	_, err = m.record(ctx, draft, reference.ChangeReverted, change.EntryID, meta, change.Revision)
-	return err
 }
 
 func (s *Service) deliveryAliases(aliases []reference.DeliveryAlias) []reference.AliasInput {

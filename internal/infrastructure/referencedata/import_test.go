@@ -11,15 +11,24 @@ import (
 
 func TestLoadImportPackage(t *testing.T) {
 	input := reference.ImportPackage{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		Sources:       []reference.ImportSource{{ID: "s1", URL: "https://example.org/data", License: "CC0-1.0"}},
 		Dictionaries: []reference.ImportDictionary{
-			{Code: "d1", Kind: reference.KindOpen, Release: 1, Entries: []reference.DeliveryEntry{}},
 			{
-				Code:    "d2",
-				Kind:    reference.KindClosed,
-				Release: 1,
-				Entries: []reference.DeliveryEntry{{Canonical: "Значение", Status: reference.StatusConfirmed}},
+				Code:       "d1",
+				Kind:       reference.KindOpen,
+				AliasKinds: reference.AliasKinds,
+				Limits:     reference.DefaultLimits(),
+				Release:    1,
+				Entries:    []reference.DeliveryEntry{},
+			},
+			{
+				Code:       "d2",
+				Kind:       reference.KindClosed,
+				AliasKinds: reference.AliasKinds,
+				Limits:     reference.DefaultLimits(),
+				Release:    1,
+				Entries:    []reference.DeliveryEntry{{Canonical: "Значение", Status: reference.StatusConfirmed}},
 			},
 		},
 	}
@@ -35,7 +44,7 @@ func TestLoadImportPackage(t *testing.T) {
 	for _, body := range []string{
 		"{",
 		"null",
-		`{"schemaVersion": 2}`,
+		`{"schemaVersion": 1}`,
 		`{"schemaVersion": 1, "unexpected": true}`,
 		string(body) + " {}",
 	} {
@@ -46,5 +55,17 @@ func TestLoadImportPackage(t *testing.T) {
 	}
 	if _, err := LoadImport(source, "missing.json"); !errors.Is(err, reference.ErrInvalidDelivery) {
 		t.Fatal(err)
+	}
+}
+
+func TestLoadImportRequiresIdentity(t *testing.T) {
+	for _, body := range []string{
+		`{"schemaVersion":2,"dictionaries":[{"code":"d1"}]}`,
+		`{"schemaVersion":2,"dictionaries":[{"code":"d1","identity":null}]}`,
+	} {
+		source := fstest.MapFS{"package.json": &fstest.MapFile{Data: []byte(body)}}
+		if _, err := LoadImport(source, "package.json"); !errors.Is(err, reference.ErrInvalidSettings) {
+			t.Fatal("identity не проверен", err)
+		}
 	}
 }

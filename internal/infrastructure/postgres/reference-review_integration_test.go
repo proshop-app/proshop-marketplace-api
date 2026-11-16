@@ -81,12 +81,7 @@ func seedReviewDatabase(t *testing.T, service *appreference.Service, count, alia
 			})
 		}
 	}
-	if _, err := service.Apply(context.Background(), reference.Delivery{
-		Dictionary: referenceDict,
-		Version:    1,
-		Checksum:   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		Entries:    entries,
-	}); err != nil {
+	if _, err := importReferenceEntries(context.Background(), service, entries); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := service.Snapshot(context.Background(), referenceDict, nil)

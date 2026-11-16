@@ -23,12 +23,7 @@ func seedReviewCandidates(t *testing.T, h *harness, count int) Snapshot {
 			Metadata:  []byte(`{"label":"Подсказка","directions":["c1"]}`),
 		}
 	}
-	if _, err := h.service.Apply(context.Background(), reference.Delivery{
-		Dictionary: testDict,
-		Version:    1,
-		Checksum:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		Entries:    entries,
-	}); err != nil {
+	if _, err := importOne(t, h, testImport(1, entries...)); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := h.service.Snapshot(context.Background(), testDict, nil)

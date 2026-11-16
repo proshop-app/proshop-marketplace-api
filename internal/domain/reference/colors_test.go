@@ -72,11 +72,11 @@ func TestColorDeliveryValidation(t *testing.T) {
 		Checksum:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		Entries:    []DeliveryEntry{{Canonical: "Хаки", Status: StatusConfirmed}},
 	}
-	if err := ValidateDelivery(delivery); err == nil {
+	if err := validateTestDelivery(delivery); err == nil {
 		t.Fatal("поставка подтвердила непривязанный цвет")
 	}
 	delivery.Entries[0].Metadata = json.RawMessage(`{"baseColors":["Зелёный"]}`)
-	if err := ValidateDelivery(delivery); err != nil {
+	if err := validateTestDelivery(delivery); err != nil {
 		t.Fatal(err)
 	}
 }

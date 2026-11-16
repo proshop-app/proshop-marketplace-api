@@ -8,7 +8,7 @@ import (
 
 var testChecksum = strings.Repeat("ab", 32)
 
-func TestValidateDelivery(t *testing.T) {
+func TestValidateImportEntries(t *testing.T) {
 	valid := Delivery{
 		Dictionary: "b1",
 		Version:    1,
@@ -18,7 +18,7 @@ func TestValidateDelivery(t *testing.T) {
 			{Canonical: "Бренд Два", Status: StatusCandidate},
 		},
 	}
-	if err := ValidateDelivery(valid); err != nil {
+	if err := validateTestDelivery(valid); err != nil {
 		t.Fatal(err)
 	}
 	broken := map[string]func(d *Delivery){
@@ -35,7 +35,7 @@ func TestValidateDelivery(t *testing.T) {
 		d := valid
 		d.Entries = append([]DeliveryEntry(nil), valid.Entries...)
 		breakIt(&d)
-		if err := ValidateDelivery(d); !errors.Is(err, ErrInvalidDelivery) {
+		if err := validateTestDelivery(d); !errors.Is(err, ErrInvalidDelivery) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -60,30 +60,6 @@ func TestPlanDelivery(t *testing.T) {
 	if _, err := PlanDelivery(latest, older); !errors.Is(err, ErrDeliveryConflict) {
 		t.Fatal("понижение номера прошло")
 	}
-	latest.RolledBack = true
-	if _, err := PlanDelivery(latest, d); !errors.Is(err, ErrDeliveryConflict) {
-		t.Fatal("повтор откаченной поставки прошёл")
-	}
-}
-
-func TestPlanDeliveryRollback(t *testing.T) {
-	d := Delivery{Version: 1, Checksum: testChecksum}
-	dict := RestoreDictionary(DictionaryState{Code: "b1", Revision: 5})
-	latest := &DeliveryRecord{Version: 1, Checksum: testChecksum, RevisionFrom: 2, RevisionTo: 5}
-	if apply, err := PlanDeliveryRollback(latest, dict, d); !apply || err != nil {
-		t.Fatalf("откат: %v %v", apply, err)
-	}
-	edited := RestoreDictionary(DictionaryState{Code: "b1", Revision: 6})
-	if _, err := PlanDeliveryRollback(latest, edited, d); !errors.Is(err, ErrDeliveryConflict) {
-		t.Fatal("откат после правок прошёл")
-	}
-	latest.RolledBack = true
-	if apply, err := PlanDeliveryRollback(latest, edited, d); apply || err != nil {
-		t.Fatal("повтор отката не пустой")
-	}
-	if _, err := PlanDeliveryRollback(nil, dict, d); !errors.Is(err, ErrDeliveryConflict) {
-		t.Fatal("откат без поставки прошёл")
-	}
 }
 
 func TestDictionaryAdvanceLimit(t *testing.T) {
@@ -97,4 +73,13 @@ func TestDictionaryAdvanceLimit(t *testing.T) {
 	if err := dict.Advance(4, 0); err == nil {
 		t.Fatal("ревизия не выросла, а словарь сдвинулся")
 	}
+}
+
+func validateTestDelivery(delivery Delivery) error {
+	dictionary := RestoreDictionary(DictionaryState{
+		Code:       delivery.Dictionary,
+		AliasKinds: AliasKinds,
+		Limits:     DefaultLimits(),
+	})
+	return validateDelivery(delivery, dictionary, false)
 }

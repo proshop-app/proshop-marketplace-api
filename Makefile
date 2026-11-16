@@ -35,14 +35,16 @@ export REDIS_URL PLATFORM_API_URL SERVICE_TOKEN_MARKETPLACE SMSRU_MODE SEARCH_UR
 
 IMAGE ?= proshop-marketplace:dev
 TAXONOMY_IMAGE ?= proshop-marketplace-taxonomy:dev
+REFERENCE_DATA ?= ../uno-reference-data
+REFERENCE_PACKAGE ?= $(REFERENCE_DATA)/exports/marketplace-bootstrap.json
 
 .PHONY: dev infra-up infra-down migrate reindex test test-integration lint build image
 
 ## dev: инфраструктура, миграции, словари, таксономия и сервис с перезапуском при правках
-dev: infra-up
+dev: reference-data-check
+	$(MAKE) infra-up
 	$(MAKE) migrate
-	$(MAKE) reference-bootstrap
-	$(MAKE) reference-apply
+	$(MAKE) reference-import
 # Только dev подтверждает замену дерева: это одноразовая среда разработки.
 	go run ./cmd/taxonomy apply --confirm-category-replacement
 	$(AIR) -c .air.toml
@@ -107,11 +109,15 @@ taxonomy-rollback:
 taxonomy-image:
 	docker build --target taxonomy -t $(TAXONOMY_IMAGE) .
 
-.PHONY: reference-apply
-reference-apply:
-	go run ./cmd/marketplace reference apply-all --dir deploy/reference
+.PHONY: reference-import reference-data-check
+## reference-import: импорт полного пакета из checkout uno-reference-data
+reference-import: reference-data-check
+	go run ./cmd/marketplace reference import --file "$(REFERENCE_PACKAGE)"
 
-.PHONY: reference-bootstrap
-## reference-bootstrap: зарегистрировать недостающие словари для встроенной таксономии
-reference-bootstrap:
-	go run ./cmd/marketplace reference import --file deploy/reference/bootstrap.json
+reference-data-check:
+	@test -d "$(REFERENCE_DATA)" || { \
+		echo 'Нет checkout uno-reference-data: git clone git@github.com:proshop-app/uno-reference-data.git' >&2; \
+		echo 'и задайте REFERENCE_DATA=/путь/к/uno-reference-data.' >&2; exit 1; }
+	@test -f "$(REFERENCE_PACKAGE)" || { \
+		echo 'Нет пакета $(REFERENCE_PACKAGE). Нужен exports/marketplace-bootstrap.json формата v2 из uno-reference-data.' >&2; \
+		exit 1; }

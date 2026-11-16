@@ -5,7 +5,6 @@ package postgres_test
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -13,21 +12,18 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	app "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres/pgtest"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencedata"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
 )
 
-func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
+func TestReleaseImportAndConcurrentRetry(t *testing.T) {
 	pool := pgtest.Pool(t)
 	ctx := context.Background()
-	release, _, err := taxonomydata.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
+	release := testRelease(1, "a")
+	release.Attributes[0].Dictionary = "a1"
 	registry := appreference.NewService(
 		postgres.NewUnitOfWork(pool),
 		clock.System{},
@@ -35,15 +31,10 @@ func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
 		&fake.Publisher{},
 		appreference.Config{Topic: "reference.changed"},
 	)
-	input, err := referencedata.LoadImport(os.DirFS("../../../deploy/reference"), "bootstrap.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	directories, err := os.ReadDir("../../../deploy/reference")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Повторяем весь путь dev: пустые open и история старых поставок должны остаться неизменными.
+	input := referenceImportFixture()
+	input.Dictionaries = input.Dictionaries[:1]
+	input.Dictionaries[0].Entries = []reference.DeliveryEntry{}
+	// Пустой open и повтор импорта не создают записи.
 	for attempt := 0; attempt < 2; attempt++ {
 		imported, err := registry.Import(ctx, "", input)
 		if err != nil {
@@ -52,20 +43,6 @@ func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
 		for _, result := range imported {
 			if result.Changed != (attempt == 0) || result.Created != (attempt == 0) {
 				t.Fatalf("повтор пакета: %+v", result)
-			}
-		}
-		for _, directory := range directories {
-			if !directory.IsDir() {
-				continue
-			}
-			source := os.DirFS("../../../deploy/reference/" + directory.Name())
-			delivery, _, err := referencedata.Load(source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			result, err := registry.Apply(ctx, delivery)
-			if err != nil || result.Changed != (attempt == 0) {
-				t.Fatalf("поставка %s: %+v, %v", directory.Name(), result, err)
 			}
 		}
 	}

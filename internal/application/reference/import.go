@@ -63,23 +63,21 @@ func (s *Service) importDictionary(
 	d := item.Delivery
 	created, err := tx.Reference().CreateDictionary(ctx, reference.DictionaryState{
 		Code:       d.Dictionary,
-		Kind:       item.Kind,
-		AliasKinds: reference.AliasKinds,
-		Limits:     reference.DefaultLimits(),
+		Kind:       item.Settings.Kind,
+		Identity:   item.Settings.Identity,
+		AliasKinds: item.Settings.AliasKinds,
+		Limits:     item.Settings.Limits,
 	})
 	if err != nil {
 		return ImportResult{}, err
 	}
-	result := reference.DeliveryResult{Dictionary: d.Dictionary, Release: d.Version}
+	result := reference.DeliveryResult{}
 	meta := reference.Meta{Actor: "delivery:" + strconv.FormatInt(d.Version, 10), Source: reference.SourceSeed}
 	if actor != "" {
 		meta.Actor = actor
 	}
 	revision, err := s.mutateInTransaction(ctx, tx, d.Dictionary, func(ctx context.Context, m *session) error {
-		if m.dict.State().Kind != item.Kind {
-			return reference.ErrDeliveryConflict.WithMessage("нельзя изменить вид словаря: " + d.Dictionary)
-		}
-		return s.applyDelivery(ctx, m, d, meta, &result)
+		return s.applyDelivery(ctx, m, d, item.Settings, meta, &result)
 	})
 	if err != nil {
 		return ImportResult{}, err

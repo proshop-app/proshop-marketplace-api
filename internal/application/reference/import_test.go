@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -14,22 +13,26 @@ import (
 
 func importPackageFixture() reference.ImportPackage {
 	return reference.ImportPackage{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		Sources: []reference.ImportSource{
 			{ID: "s1", URL: "https://example.org/data", License: "CC0-1.0"},
 		},
 		Dictionaries: []reference.ImportDictionary{
 			{
-				Code:    "a1",
-				Kind:    reference.KindOpen,
-				Release: 1,
-				Entries: []reference.DeliveryEntry{{Canonical: "Первое"}},
+				Code:       "a1",
+				Kind:       reference.KindOpen,
+				AliasKinds: reference.AliasKinds,
+				Limits:     reference.DefaultLimits(),
+				Release:    1,
+				Entries:    []reference.DeliveryEntry{{Canonical: "Первое"}},
 			},
 			{
-				Code:    "c1",
-				Kind:    reference.KindClosed,
-				Release: 1,
-				Entries: []reference.DeliveryEntry{{Canonical: "Второе"}},
+				Code:       "c1",
+				Kind:       reference.KindClosed,
+				AliasKinds: reference.AliasKinds,
+				Limits:     reference.DefaultLimits(),
+				Release:    1,
+				Entries:    []reference.DeliveryEntry{{Canonical: "Второе"}},
 			},
 		},
 	}
@@ -83,23 +86,6 @@ func TestImportRecordsAuthorAndDeliveryRelease(t *testing.T) {
 	}
 }
 
-func TestApplyWithoutOperatorKeepsDeliveryAuthor(t *testing.T) {
-	h := newHarness(t)
-	delivery := testDelivery(
-		7,
-		strings.Repeat("a", 64),
-		reference.DeliveryEntry{Canonical: "Значение", Status: reference.StatusCandidate},
-	)
-	if _, err := h.service.Apply(context.Background(), delivery); err != nil {
-		t.Fatal(err)
-	}
-	changes := h.store.ReferenceChanges()
-	if len(changes) != 1 || changes[0].Meta.Actor != "delivery:7" ||
-		changes[0].Meta.Source != reference.SourceSeed {
-		t.Fatal("автор поставки без оператора изменился", changes)
-	}
-}
-
 func TestImportCreatesMixedDictionariesAndNoopsWithoutNewEvents(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
@@ -139,6 +125,7 @@ func TestImportRollsBackEarlierDictionaryJournalAndOutboxOnConflict(t *testing.T
 	h.create(t, "Владелец", reference.StatusCandidate, "Занято")
 	before := len(h.events(t))
 	input := importPackageFixture()
+	input.Dictionaries[1].Identity = true
 	input.Dictionaries[1].Code = testDict
 	input.Dictionaries[1].Kind = reference.KindOpen
 	input.Dictionaries[1].Entries[0].Aliases = []reference.DeliveryAlias{{Text: "Занято"}}
@@ -156,7 +143,9 @@ func TestImportRejectsKindAndNormalizerChangesAtomically(t *testing.T) {
 	for _, normalizer := range []bool{false, true} {
 		t.Run(map[bool]string{false: "kind", true: "normalizer"}[normalizer], func(t *testing.T) {
 			h := newHarness(t)
+			h.create(t, "Значение", reference.StatusCandidate)
 			input := importPackageFixture()
+			input.Dictionaries[1].Identity = true
 			input.Dictionaries[1].Code = testDict
 			if normalizer {
 				limits := reference.DefaultLimits()
@@ -172,7 +161,7 @@ func TestImportRejectsKindAndNormalizerChangesAtomically(t *testing.T) {
 				t.Fatal("несовместимый словарь принят")
 			}
 			dictionaries, err := h.service.Dictionaries(context.Background())
-			if err != nil || len(dictionaries) != 1 || len(h.events(t)) != 0 {
+			if err != nil || len(dictionaries) != 1 || len(h.events(t)) != 1 {
 				t.Fatal("частичное применение", dictionaries, err)
 			}
 		})
@@ -198,10 +187,13 @@ func TestImportPreservesOperatorMetadataAndRejectedEntry(t *testing.T) {
 	input := importPackageFixture()
 	input.Dictionaries = []reference.ImportDictionary{
 		{
-			Code:    testDict,
-			Kind:    reference.KindOpen,
-			Release: 1,
-			Entries: []reference.DeliveryEntry{{Canonical: "Запись", Status: reference.StatusConfirmed}},
+			Code:       testDict,
+			Identity:   true,
+			Kind:       reference.KindOpen,
+			AliasKinds: reference.AliasKinds,
+			Limits:     reference.DefaultLimits(),
+			Release:    1,
+			Entries:    []reference.DeliveryEntry{{Canonical: "Запись", Status: reference.StatusConfirmed}},
 		},
 	}
 	result, err := h.service.Import(context.Background(), "", input)

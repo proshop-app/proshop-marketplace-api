@@ -9,64 +9,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
 // Справочники bootstrap и исторические каталоги поставки не пересекаются.
-func dictionaryEntries(t *testing.T, code string) []reference.DeliveryEntry {
-	t.Helper()
-	raw, err := os.ReadFile("../../../deploy/reference/bootstrap.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var input reference.ImportPackage
-	if err := json.Unmarshal(raw, &input); err != nil {
-		t.Fatal(err)
-	}
-	for _, dictionary := range input.Dictionaries {
-		if dictionary.Code == code {
-			return dictionary.Entries
-		}
-	}
-	raw, err = os.ReadFile("../../../deploy/reference/" + code + "/entries.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var entries []reference.DeliveryEntry
-	if err := json.Unmarshal(raw, &entries); err != nil {
-		t.Fatal(err)
-	}
-	return entries
-}
-
-func TestEnumExamplesUseConfirmedValues(t *testing.T) {
-	release, _, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, field := range release.Attributes {
-		if field.Type != "enum" {
-			continue
-		}
-		dictionary := field.Dictionary
-		// Новый пул отделяет возраст; пример взят из подтверждённого словаря происхождения.
-		// Наличие нового closed-пула и его values проверяется публикацией через реестр.
-		if field.Code == "target_gender" {
-			dictionary = "gender"
-		}
-		entries := dictionaryEntries(t, dictionary)
-		confirmed := false
-		for _, entry := range entries {
-			if entry.Canonical == field.Example && entry.Status == "confirmed" {
-				confirmed = true
-			}
-		}
-		if !confirmed {
-			t.Errorf("пример %s=%q отсутствует в confirmed-значениях", field.Code, field.Example)
-		}
-	}
-}
 
 func TestTaxonomyQuality(t *testing.T) {
 	release, _, err := Load()

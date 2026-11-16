@@ -11,8 +11,7 @@ import (
 
 const (
 	selectLatestDelivery = `
-		SELECT dictionary_code, version, checksum, revision_from, revision_to, applied_at,
-			rolled_back_at IS NOT NULL, COALESCE(rollback_revision, 0)
+		SELECT dictionary_code, version, checksum, revision_from, revision_to, applied_at
 		FROM reference.deliveries
 		WHERE dictionary_code = $1
 		ORDER BY version DESC
@@ -21,12 +20,6 @@ const (
 	insertDelivery = `
 		INSERT INTO reference.deliveries (dictionary_code, version, checksum, revision_from, revision_to, applied_at)
 		VALUES ($1, $2, $3, $4, $5, $6)`
-
-	markDeliveryRollback = `
-		UPDATE reference.deliveries
-		SET rolled_back_at = now(),
-			rollback_revision = $3
-		WHERE dictionary_code = $1 AND version = $2 AND rolled_back_at IS NULL`
 
 	deletePresence = `
 		DELETE FROM reference.entry_presence
@@ -48,8 +41,6 @@ func (r *References) LatestDelivery(ctx context.Context, dictionary string) (*re
 		&record.RevisionFrom,
 		&record.RevisionTo,
 		&record.AppliedAt,
-		&record.RolledBack,
-		&record.RollbackRevision,
 	)
 	if notFound(err) {
 		return nil, nil
@@ -78,18 +69,6 @@ func (r *References) RecordDelivery(ctx context.Context, record reference.Delive
 	}
 	if err != nil {
 		return fmt.Errorf("поставка %s/%d: %w", record.Dictionary, record.Version, err)
-	}
-	return nil
-}
-
-// MarkDeliveryRollback отмечает откат той же транзакцией, что и обратные ревизии.
-func (r *References) MarkDeliveryRollback(ctx context.Context, dictionary string, version, revision int64) error {
-	tag, err := execSQL(ctx, r.db, markDeliveryRollback, dictionary, version, revision)
-	if err != nil {
-		return fmt.Errorf("откат поставки %s/%d: %w", dictionary, version, err)
-	}
-	if tag == 0 {
-		return reference.ErrDeliveryConflict
 	}
 	return nil
 }

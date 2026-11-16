@@ -54,14 +54,16 @@ func TestHintImportBindingReviewAndRollbackPreserveFreeStrings(t *testing.T) {
 		t.Fatal("неудачная публикация изменила снимок или события")
 	}
 	_, err := registry.Import(ctx, "", reference.ImportPackage{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		Sources:       []reference.ImportSource{{ID: "s1", URL: "https://example.org/data", License: "CC0-1.0"}},
 		Dictionaries: []reference.ImportDictionary{
 			{
-				Code:    "a1",
-				Kind:    reference.KindOpen,
-				Release: 2,
-				Entries: []reference.DeliveryEntry{{Canonical: "Подсказка"}},
+				Code:       "a1",
+				Kind:       reference.KindOpen,
+				AliasKinds: reference.AliasKinds,
+				Limits:     reference.DefaultLimits(),
+				Release:    2,
+				Entries:    []reference.DeliveryEntry{{Canonical: "Подсказка"}},
 			},
 		},
 	})

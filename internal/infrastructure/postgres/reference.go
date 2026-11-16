@@ -45,6 +45,10 @@ const (
 		UPDATE reference.dictionaries
 		SET revision = $2,
 			entries = $3,
+			kind = $4,
+			identity = $5,
+			alias_kinds = $6,
+			limits = $7,
 			updated_at = now()
 		WHERE code = $1`
 
@@ -196,10 +200,7 @@ func (r *References) CreateDictionary(ctx context.Context, state reference.Dicti
 	if err != nil {
 		return false, err
 	}
-	kinds := make([]string, 0, len(state.AliasKinds))
-	for _, kind := range state.AliasKinds {
-		kinds = append(kinds, string(kind))
-	}
+	kinds := aliasKindStrings(state.AliasKinds)
 	result, err := execSQL(
 		ctx,
 		r.db,
@@ -246,10 +247,26 @@ func (r *References) Dictionaries(ctx context.Context) ([]*reference.Dictionary,
 	return out, rows.Err()
 }
 
-// SaveDictionary переносит голову журнала и счётчик записей; строка уже заблокирована.
+// SaveDictionary сохраняет настройки, голову и счётчик; строка заблокирована до конца транзакции.
 func (r *References) SaveDictionary(ctx context.Context, dict *reference.Dictionary) error {
 	state := dict.State()
-	if _, err := execSQL(ctx, r.db, updateDictionary, state.Code, state.Revision, state.Entries); err != nil {
+	limits, err := json.Marshal(state.Limits)
+	if err != nil {
+		return fmt.Errorf("словарь %s: %w", state.Code, err)
+	}
+	kinds := aliasKindStrings(state.AliasKinds)
+	if _, err := execSQL(
+		ctx,
+		r.db,
+		updateDictionary,
+		state.Code,
+		state.Revision,
+		state.Entries,
+		string(state.Kind),
+		state.Identity,
+		kinds,
+		string(limits),
+	); err != nil {
 		return fmt.Errorf("словарь %s: %w", state.Code, err)
 	}
 	return nil
@@ -698,4 +715,12 @@ func uuidStrings(list []ids.UUID) []string {
 // likePrefix — шаблон LIKE «начинается с ключа»: спецсимволы ключа экранируются.
 func likePrefix(key string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(key) + "%"
+}
+
+func aliasKindStrings(kinds []reference.AliasKind) []string {
+	values := make([]string, 0, len(kinds))
+	for _, kind := range kinds {
+		values = append(values, string(kind))
+	}
+	return values
 }

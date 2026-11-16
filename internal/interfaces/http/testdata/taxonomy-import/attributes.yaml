@@ -1,0 +1,12 @@
+- code: a1
+  name: Словарь
+  type: enum
+  dictionary: d1
+  valuesMeta:
+    Значение:
+      hex: "#112233"
+- code: a2
+  name: Атрибут
+  description: Описание атрибута
+  type: string
+  variant: true

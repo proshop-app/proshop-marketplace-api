@@ -349,16 +349,6 @@ func (r references) RecordDelivery(_ context.Context, record reference.DeliveryR
 	return nil
 }
 
-func (r references) MarkDeliveryRollback(_ context.Context, dictionary string, version, revision int64) error {
-	for i, record := range r.d.reference.deliveries {
-		if record.Dictionary == dictionary && record.Version == version {
-			r.d.reference.deliveries[i].RolledBack = true
-			r.d.reference.deliveries[i].RollbackRevision = revision
-		}
-	}
-	return nil
-}
-
 func (r references) ReplacePresence(_ context.Context, entry ids.UUID, rows []reference.Presence, _ time.Time) error {
 	if _, ok := r.d.reference.entries[entry]; !ok {
 		return reference.ErrEntryNotFound

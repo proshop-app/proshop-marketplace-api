@@ -3,6 +3,7 @@ package taxonomydata
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"slices"
 	"testing"
 	"time"
@@ -19,13 +20,18 @@ func productTypeDefinition(t *testing.T) taxonomy.Definition {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entries := dictionaryEntries(t, "product_type")
+	body, err := os.ReadFile("testdata/dictionary-values.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var values []string
+	if err := json.Unmarshal(body, &values); err != nil {
+		t.Fatal(err)
+	}
 	d := release.Definition()
 	for i := range d.Attributes {
 		if d.Attributes[i].Code == "product_type" {
-			for _, entry := range entries {
-				d.Attributes[i].Values = append(d.Attributes[i].Values, entry.Canonical)
-			}
+			d.Attributes[i].Values = values
 		}
 	}
 	return d
@@ -59,7 +65,7 @@ func TestBundledProductType(t *testing.T) {
 		if slices.Contains(schema.Optional, "product_type") || slices.Contains(schema.HiddenFacets, "product_type") {
 			t.Errorf("тип необязателен или скрыт у %s", node.ID)
 		}
-		invalid := []json.RawMessage{nil, json.RawMessage(`"неизвестный вид"`), json.RawMessage(`["Лоферы"]`)}
+		invalid := []json.RawMessage{nil, json.RawMessage(`"неизвестный вид"`), json.RawMessage(`["Значение"]`)}
 		for _, raw := range invalid {
 			attributes := map[string]json.RawMessage{}
 			if raw != nil {
@@ -79,7 +85,7 @@ func TestBundledProductType(t *testing.T) {
 		publication := d.Check(&taxonomy.Card{
 			CategoryID: node.ID,
 			Published:  true,
-			Attributes: map[string]json.RawMessage{"product_type": json.RawMessage(`"Лоферы"`)},
+			Attributes: map[string]json.RawMessage{"product_type": json.RawMessage(`"Значение"`)},
 		})
 		if slices.ContainsFunc(publication.Issues, func(issue taxonomy.Issue) bool {
 			return issue.Attribute == "product_type"
@@ -102,7 +108,9 @@ func TestBundledProductTypeFacetScope(t *testing.T) {
 	for _, id := range []string{"", "clothing", "shoes", "clothing.women", "shoes.men-loafers"} {
 		query, err := queries.PrepareQuery(context.Background(), ports.OfferQuery{
 			CategoryID: id,
-			Attributes: map[string]ports.AttributeFilter{"product_type": {Values: []string{"Лоферы", "Кроссовки"}}},
+			Attributes: map[string]ports.AttributeFilter{
+				"product_type": {Values: []string{"Значение", "Другое значение"}},
+			},
 		})
 		if err != nil {
 			t.Fatalf("%s: %v", id, err)

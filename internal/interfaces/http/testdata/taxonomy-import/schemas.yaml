@@ -1,0 +1,7 @@
+base:
+  abstract: true
+  attributes: [a1]
+s1:
+  extends: base
+  attributes: [a2]
+  optional: [a1, a2]

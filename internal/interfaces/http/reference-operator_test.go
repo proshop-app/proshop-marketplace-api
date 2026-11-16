@@ -14,9 +14,14 @@ import (
 )
 
 const operatorReferenceImportFixture = `{
-    "schemaVersion":1,
+    "schemaVersion":2,
     "sources":[{"id":"s1","url":"https://example.org/data","license":"CC0-1.0"}],
-    "dictionaries":[{"code":"d1","kind":"closed","release":1,"entries":[{"canonical":"Значение"}]}]
+    "dictionaries":[{
+        "code":"d1","kind":"closed",
+        "identity":false,"aliasKinds":["spelling"],
+        "limits":{"maxEntries":1000000,"maxAliases":50,
+            "maxAliasLength":120,"maxAliasWords":8,"normalizer":"v1"},
+        "release":1,"entries":[{"canonical":"Значение"}]} ]
 }`
 
 func TestOperatorReferenceImportAndApprovalUseExistingCookieCSRF(t *testing.T) {
