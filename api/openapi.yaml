@@ -2213,6 +2213,33 @@ paths:
               schema: { $ref: "#/components/schemas/OfferPage" }
         "400": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
+  /api/v1/catalog/variants/{tenantId}/{groupId}:
+    get:
+      tags: [catalog]
+      summary: Все видимые варианты группы продавца
+      operationId: getOfferVariants
+      description: >-
+        Отдельный запрос перед рендером карточки. Цены в контексте покупателя.
+        Порядок options — порядок осей; до 200 предложений, truncated указывает на технический потолок.
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: groupId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Варианты группы; пустые options и items, если доступных вариантов нет
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OfferVariants" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/catalog/offers/{offerId}:
     get:
       tags: [catalog]
@@ -7051,8 +7078,12 @@ components:
           type: string
           description: Только в карточке
         variants:
-          $ref: '#/components/schemas/OfferVariants'
-          description: Только в карточке; один продавец и ценовой контекст
+          type: object
+          required: [groupId]
+          properties:
+            groupId:
+              type: string
+          description: Только в карточке; идентификатор для отдельного запроса вариантов
         image:
           type: string
         assets:
@@ -7100,27 +7131,30 @@ components:
       type: object
       required:
       - groupId
-      - axis
+      - options
       - items
       - truncated
       properties:
         groupId:
           type: string
-        axis:
-          type: object
-          required:
-          - key
-          - code
-          - name
-          properties:
-            key:
-              type: string
-            code:
-              type: string
-            name:
-              type: string
+        options:
+          type: array
+          description: Оси в порядке группы магазина
+          items:
+            type: object
+            required: [key, code, name, values]
+            properties:
+              key: { type: string }
+              code: { type: string }
+              name: { type: string }
+              values:
+                description: Порядок позиций группы (position, затем id); упорядочивание по схеме категории выполняет клиент.
+                type: array
+                uniqueItems: true
+                items: { type: string }
         truncated:
           type: boolean
+          description: При превышении потолка в 200 предложений текущая карточка может отсутствовать в items.
         items:
           type: array
           maxItems: 200
@@ -7128,8 +7162,7 @@ components:
             type: object
             required:
             - id
-            - current
-            - value
+            - attrs
             - position
             - price
             - basePrice
@@ -7138,10 +7171,9 @@ components:
             properties:
               id:
                 type: string
-              current:
-                type: boolean
-              value:
-                type: string
+              attrs:
+                type: object
+                additionalProperties: { type: string }
               position:
                 type: integer
                 minimum: 0
@@ -7163,8 +7195,6 @@ components:
                 type: boolean
               image:
                 type: string
-              duplicate:
-                type: boolean
     OfferPage:
       type: object
       required: [items, total, limit, offset, facets]

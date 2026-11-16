@@ -32,7 +32,7 @@ type offerJSON struct {
 	SellersCount      *int                       `json:"sellersCount,omitempty"`
 	Assets            *[]string                  `json:"assets,omitempty"`
 	Rating            *catalog.Rating            `json:"rating"`
-	Variants          *variantBlockJSON          `json:"variants,omitempty"`
+	Variants          *variantGroupJSON          `json:"variants,omitempty"`
 	DeliveryAvailable *bool                      `json:"deliveryAvailable,omitempty"`
 	CategoryID        string                     `json:"categoryId"`
 	Attributes        map[string]json.RawMessage `json:"attributes"`
@@ -109,7 +109,9 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 		assets := append([]string{}, doc.Assets...)
 		out.Assets = &assets
 		out.Description = doc.Description
-		out.Variants = variantResponse(card.Variants)
+		if doc.Variants != nil {
+			out.Variants = &variantGroupJSON{GroupID: doc.Variants.GroupID}
+		}
 	}
 	for _, c := range doc.Categories {
 		out.Categories = append(out.Categories, categoryJSON{ID: c.ID, Name: c.Name, URL: c.URL})

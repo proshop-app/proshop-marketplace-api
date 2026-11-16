@@ -2,147 +2,250 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"slices"
 	"sort"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-// VariantBlock содержит варианты текущего продавца.
+// VariantBlock содержит всю доступную часть группы продавца.
 type VariantBlock struct {
-	GroupID   string              `json:"groupId"`
-	Axis      catalog.VariantAxis `json:"axis"`
-	Items     []VariantItem       `json:"items"`
-	Truncated bool                `json:"truncated"`
+	GroupID   string          `json:"groupId"`
+	Options   []VariantOption `json:"options"`
+	Items     []VariantItem   `json:"items"`
+	Truncated bool            `json:"truncated"`
 }
 
-// VariantItem описывает доступную покупателю позицию группы.
+// VariantOption содержит метаданные оси и только существующие значения.
+type VariantOption struct {
+	Key    string   `json:"key"`
+	Code   string   `json:"code"`
+	Name   string   `json:"name"`
+	Values []string `json:"values"`
+}
+
+// VariantItem — предложение со значениями всех осей и выбранной ценой.
 type VariantItem struct {
-	ID        string `json:"id"`
-	Current   bool   `json:"current"`
-	Value     string `json:"value"`
-	Position  int    `json:"position"`
-	Price     int64  `json:"price"`
-	BasePrice int64  `json:"basePrice"`
-	Available int    `json:"available"`
-	InStock   bool   `json:"inStock"`
-	Image     string `json:"image,omitempty"`
-	Duplicate bool   `json:"duplicate,omitempty"`
+	ID        string            `json:"id"`
+	Attrs     map[string]string `json:"attrs"`
+	Position  int               `json:"position"`
+	Price     int64             `json:"price"`
+	BasePrice int64             `json:"basePrice"`
+	Available int               `json:"available"`
+	InStock   bool              `json:"inStock"`
+	Image     string            `json:"image,omitempty"`
 }
 
-func (q *Queries) offerVariants(
-	ctx context.Context,
-	current ports.OfferDocument,
-	priceKey string,
-) (*VariantBlock, error) {
-	if current.Variants == nil {
-		return nil, nil
+// Variants загружает группу отдельно от карточки с контекстом покупателя.
+func (q *Queries) Variants(ctx context.Context, tenantID, groupID string, buyerID ids.UUID) (*VariantBlock, error) {
+	if _, err := ids.ParseTenantID(tenantID); err != nil {
+		return nil, err
 	}
-	group, err := q.index.Group(ctx, current.TenantID, current.Variants.GroupID)
+	if _, err := ids.ParseProductID(groupID); err != nil {
+		return nil, err
+	}
+	group, err := q.index.Group(ctx, tenantID, groupID)
 	if err != nil {
 		return nil, err
 	}
-	var values []string
-	err = q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		definition, err := tx.Taxonomy().Current(ctx)
+	contexts, err := q.priceContexts(ctx, buyerID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	keys, err := variantOfferIDs(group.Items)
+	if err != nil {
+		return nil, err
+	}
+	key := priceProfileKey(contexts, ids.TenantID(tenantID))
+	var publicStates map[ids.OfferID]ports.OfferState
+	if key == "" && len(keys) > 0 {
+		publicStates, err = q.variantPublicStates(ctx, keys)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		category, _, found := definition.Category(current.CategoryID)
-		if found {
-			for _, attribute := range category.Attributes {
-				if attribute.Code == current.Variants.Axis.Code {
-					values = attribute.Values
-					break
-				}
-			}
+	}
+	group.Items, err = pricedVariants(group.Items, keys, key, publicStates)
+	if err != nil {
+		return nil, err
+	}
+	return variantBlock(tenantID, groupID, group), nil
+}
+
+func variantOfferIDs(items []ports.OfferDocument) ([]ids.OfferID, error) {
+	keys := make([]ids.OfferID, len(items))
+	for i, item := range items {
+		key, err := ids.ParseOfferID(item.ID)
+		if err != nil {
+			return nil, err
 		}
-		return nil
+		keys[i] = key
+	}
+	return keys, nil
+}
+
+func (q *Queries) variantPublicStates(
+	ctx context.Context,
+	keys []ids.OfferID,
+) (map[ids.OfferID]ports.OfferState, error) {
+	var states []ports.OfferState
+	err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		states, err = tx.Offers().Batch(ctx, keys)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	return variantBlock(current, group, priceKey, values), nil
+	byID := make(map[ids.OfferID]ports.OfferState, len(states))
+	for _, state := range states {
+		if state.Product != nil {
+			product := state.Product.State()
+			byID[ids.OfferID{Tenant: product.TenantID, Product: product.ProductID}] = state
+		}
+	}
+	return byID, nil
 }
 
-func variantBlock(current ports.OfferDocument, group ports.OfferGroup, priceKey string, values []string) *VariantBlock {
-	block := &VariantBlock{
-		GroupID:   current.Variants.GroupID,
-		Axis:      current.Variants.Axis,
-		Items:     []VariantItem{},
+func pricedVariants(
+	items []ports.OfferDocument,
+	keys []ids.OfferID,
+	key string,
+	publicStates map[ids.OfferID]ports.OfferState,
+) ([]ports.OfferDocument, error) {
+	priced := make([]ports.OfferDocument, 0, len(items))
+	for i, doc := range items {
+		err := priceOffer(&doc, key, publicStates[keys[i]])
+		if errors.Is(err, catalog.ErrOfferNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		priced = append(priced, doc)
+	}
+	return priced, nil
+}
+
+func variantBlock(tenantID, groupID string, group ports.OfferGroup) *VariantBlock {
+	offers := compatibleVariants(tenantID, groupID, group.Items)
+	items := variantItems(offers)
+	return &VariantBlock{
+		GroupID:   groupID,
+		Options:   variantOptions(offers, items),
+		Items:     items,
 		Truncated: group.Truncated,
 	}
-	currentFound := false
-	for _, item := range group.Items {
-		if item.ID == current.ID {
-			currentFound = true
+}
+
+func compatibleVariants(tenantID, groupID string, items []ports.OfferDocument) []ports.OfferDocument {
+	items = orderedVariants(items)
+	out := make([]ports.OfferDocument, 0, len(items))
+	var axes []catalog.VariantAxis
+	for _, item := range items {
+		if !item.Visible || item.TenantID != tenantID || item.VariantsID != groupID {
+			continue
 		}
-	}
-	// Карточка за пределами первых 200 тоже должна иметь выбранный пункт.
-	if !currentFound {
-		if len(group.Items) >= 200 {
-			group.Items = group.Items[:199]
-			block.Truncated = true
-		}
-		group.Items = append(group.Items, current)
-	}
-	for _, item := range group.Items {
 		variant := item.Variants
-		if !item.Visible || item.TenantID != current.TenantID || variant == nil || variant.GroupID != block.GroupID {
+		if variant == nil || len(variant.Axes) == 0 {
+			slog.Warn("нет осей варианта", "tenantId", tenantID, "groupId", groupID, "offer", item.ID)
 			continue
 		}
-		if variant.Axis.Code != block.Axis.Code || variant.Axis.Key != block.Axis.Key {
-			slog.Warn("ось варианта отличается", "tenantId", item.TenantID, "groupId", block.GroupID, "offer", item.ID)
+		if axes == nil {
+			axes = variant.Axes
+		}
+		if !variantKeysMatch(variant.Axes, axes) {
+			slog.Warn("оси варианта отличаются", "tenantId", tenantID, "groupId", groupID, "offer", item.ID)
 			continue
 		}
-		profile, found := catalog.SelectPrice(item.PriceProfiles, priceKey)
-		if !found {
-			continue
+		out = append(out, item)
+	}
+	return out
+}
+
+func orderedVariants(items []ports.OfferDocument) []ports.OfferDocument {
+	items = slices.Clone(items)
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := variantPosition(items[i]), variantPosition(items[j])
+		if a != b {
+			return a < b
 		}
-		block.Items = append(block.Items, VariantItem{
-			ID:        item.ID,
-			Current:   item.ID == current.ID,
-			Value:     variant.Value,
-			Position:  variant.Position,
-			Price:     profile.EffectivePrice.Kopecks(),
-			BasePrice: profile.Price.Kopecks(),
-			Available: item.Available,
-			InStock:   item.InStock,
-			Image:     item.Image,
+		return items[i].ID < items[j].ID
+	})
+	return items
+}
+
+func variantItems(offers []ports.OfferDocument) []VariantItem {
+	items := make([]VariantItem, 0, len(offers))
+	for _, offer := range offers {
+		attrs := make(map[string]string, len(offer.Variants.Axes))
+		for _, axis := range offer.Variants.Axes {
+			attrs[axis.Key] = axis.Value
+		}
+		items = append(items, VariantItem{
+			ID:        offer.ID,
+			Attrs:     attrs,
+			Position:  offer.Variants.Position,
+			Price:     offer.Price,
+			BasePrice: offer.BasePrice,
+			Available: offer.Available,
+			InStock:   offer.InStock,
+			Image:     offer.Image,
 		})
 	}
-	order := make(map[string]int, len(values))
-	for i, value := range values {
-		order[value] = i + 1
-	}
-	sort.SliceStable(block.Items, func(i, j int) bool {
-		a, b := block.Items[i], block.Items[j]
-		ai, bi := order[a.Value], order[b.Value]
-		if ai != bi {
-			if ai == 0 {
-				return false
-			}
-			if bi == 0 {
-				return true
-			}
-			return ai < bi
-		}
-		if a.Position != b.Position {
-			return a.Position < b.Position
-		}
-		return a.ID < b.ID
-	})
-	seen := map[string]bool{}
-	for i := range block.Items {
-		item := &block.Items[i]
-		item.Duplicate = seen[item.Value]
-		seen[item.Value] = true
-	}
-	if len(block.Items) < 2 {
-		return nil
-	}
+	return items
+}
 
-	return block
+func variantOptions(offers []ports.OfferDocument, items []VariantItem) []VariantOption {
+	options := []VariantOption{}
+	if len(offers) == 0 {
+		return options
+	}
+	for _, axis := range offers[0].Variants.Axes {
+		options = append(options, VariantOption{
+			Key:    axis.Key,
+			Code:   axis.Code,
+			Name:   axis.Name,
+			Values: variantValues(items, axis.Key),
+		})
+	}
+	return options
+}
+
+func variantValues(items []VariantItem, key string) []string {
+	values := []string{}
+	seen := map[string]bool{}
+	for _, item := range items {
+		if value := item.Attrs[key]; value != "" && !seen[value] {
+			values = append(values, value)
+			seen[value] = true
+		}
+	}
+	return values
+}
+
+func variantPosition(item ports.OfferDocument) int {
+	if item.Variants == nil {
+		return 0
+	}
+	return item.Variants.Position
+}
+
+func variantKeysMatch(axes, expected []catalog.VariantAxis) bool {
+	keys := make(map[string]bool, len(axes))
+	for _, axis := range axes {
+		keys[axis.Key] = true
+	}
+	if len(keys) != len(expected) {
+		return false
+	}
+	for _, axis := range expected {
+		if !keys[axis.Key] {
+			return false
+		}
+	}
+	return true
 }

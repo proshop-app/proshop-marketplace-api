@@ -28,6 +28,28 @@ func (q *Queries) priceContexts(
 	return PriceContexts(ctx, q.uow, q.platform, buyerID, tenants)
 }
 
+func priceOffer(
+	doc *ports.OfferDocument,
+	key string,
+	publicState ports.OfferState,
+) error {
+	// На холодном отказе персонализации остаётся публичная карточка из проекции.
+	// Оформление независимо перепроверит цену и наличие у продавца.
+	if key == "" {
+		// Пустой контекст возможен и для скрытого магазина: устаревший индекс не должен его раскрыть.
+		public, ok := Document(publicState)
+		if !ok || !public.Visible {
+			return catalog.ErrOfferNotFound
+		}
+		*doc = public
+		key = catalog.DefaultPriceProfile
+	}
+	if !selectOfferPrice(doc, key) {
+		return catalog.ErrOfferNotFound
+	}
+	return nil
+}
+
 // PriceContexts выбирает контексты публичных магазинов из того же источника, что каталог.
 // nil-фильтр выбирает все магазины, пустой список — ни одного.
 func PriceContexts(

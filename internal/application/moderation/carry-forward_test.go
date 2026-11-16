@@ -196,7 +196,9 @@ func TestReviewedProjectionBusinessChangeRequiresEvaluation(t *testing.T) {
 		},
 		{
 			name: "variant axis value",
-			edit: func(snapshot *catalog.Snapshot) { snapshot.Card.Variants.Value = "v2" },
+			edit: func(snapshot *catalog.Snapshot) {
+				snapshot.Card.Variants.Axes[0].Value = "v2"
+			},
 		},
 		{
 			name: "marketplace category",
@@ -455,8 +457,14 @@ func reviewedProjectionSnapshot(e environment, revision int64) catalog.Snapshot 
 			},
 			Variants: &catalog.Variants{
 				GroupID: "group-1",
-				Axis:    catalog.VariantAxis{Key: "platform.a1", Code: "a1", Name: "Атрибут"},
-				Value:   "v1",
+				Axes: []catalog.VariantAxis{
+					{
+						Key:   "platform.a1",
+						Code:  "a1",
+						Name:  "Атрибут",
+						Value: "v1",
+					},
+				},
 			},
 			Name:        "Товар",
 			Description: "Описание",
