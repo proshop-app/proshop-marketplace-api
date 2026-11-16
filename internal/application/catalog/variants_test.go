@@ -10,7 +10,6 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
 func variantOffer(id, value string, position int) ports.OfferDocument {
@@ -49,7 +48,7 @@ func TestVariantBlockScopeOrderAndDuplicates(t *testing.T) {
 	group := ports.OfferGroup{
 		Items: []ports.OfferDocument{duplicate, current, foreign, hidden, small, noAxes},
 	}
-	block := variantBlock("seller", "group", group, taxonomy.Definition{})
+	block := variantBlock("seller", "group", group)
 	if len(block.Items) != 3 || len(block.Options) != 1 {
 		t.Fatalf("состав: %+v", block)
 	}
@@ -60,6 +59,30 @@ func TestVariantBlockScopeOrderAndDuplicates(t *testing.T) {
 		if item.Price != 90 || item.BasePrice != 100 {
 			t.Fatalf("ценовой контекст: %+v", item)
 		}
+	}
+}
+
+func TestVariantValuesFollowFirstPositionThenID(t *testing.T) {
+	group := ports.OfferGroup{
+		Items: []ports.OfferDocument{
+			variantOffer("seller~z", "M", 2),
+			variantOffer("seller~b", "S", 1),
+			variantOffer("seller~later", "L", 3),
+			variantOffer("seller~a", "L", 1),
+		},
+	}
+	block := variantBlock("seller", "group", group)
+	if strings.Join(block.Options[0].Values, ",") != "L,S,M" {
+		t.Fatalf("значения идут по первому появлению, без таксономии: %+v", block.Options)
+	}
+	want := []string{"seller~a", "seller~b", "seller~z", "seller~later"}
+	for i, item := range block.Items {
+		if item.ID != want[i] {
+			t.Fatalf("position, затем id: %+v", block.Items)
+		}
+	}
+	if group.Items[0].ID != "seller~z" {
+		t.Fatal("исходная группа изменена")
 	}
 }
 
@@ -91,7 +114,7 @@ func TestVariantBlockMixedAxisSets(t *testing.T) {
 			previous := slog.Default()
 			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
 			t.Cleanup(func() { slog.SetDefault(previous) })
-			block := variantBlock("seller", "group", group, taxonomy.Definition{})
+			block := variantBlock("seller", "group", group)
 			wantAxes, wantItems, wantWarnings := 2, 2, 3
 			if legacyFirst {
 				wantAxes, wantItems, wantWarnings = 1, 1, 4
@@ -136,7 +159,7 @@ func TestVariantBlockAllItemsMultipleAxesAndOrderedJSON(t *testing.T) {
 			}
 			group.Items = append(group.Items, offer)
 		}
-		block := variantBlock("seller", "group", group, taxonomy.Definition{})
+		block := variantBlock("seller", "group", group)
 		if len(block.Items) != 200 || len(block.Options) != count || !block.Truncated {
 			t.Fatalf("обрезанная группа: %+v", block)
 		}

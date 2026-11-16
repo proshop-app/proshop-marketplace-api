@@ -7060,6 +7060,7 @@ components:
               code: { type: string }
               name: { type: string }
               values:
+                description: Порядок позиций группы (position, затем id); упорядочивание по схеме категории выполняет клиент.
                 type: array
                 uniqueItems: true
                 items: { type: string }

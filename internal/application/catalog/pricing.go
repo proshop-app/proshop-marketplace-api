@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -29,36 +28,16 @@ func (q *Queries) priceContexts(
 	return PriceContexts(ctx, q.uow, q.platform, buyerID, tenants)
 }
 
-func (q *Queries) priceOffer(
-	ctx context.Context,
-	offerID ids.OfferID,
+func priceOffer(
 	doc *ports.OfferDocument,
-	buyerID ids.UUID,
-	contexts map[ids.TenantID]string,
-	publicStates map[ids.OfferID]ports.OfferState,
+	key string,
+	publicState ports.OfferState,
 ) error {
-	key := priceProfileKey(contexts, offerID.Tenant)
 	// На холодном отказе персонализации остаётся публичная карточка из проекции.
 	// Оформление независимо перепроверит цену и наличие у продавца.
-	if buyerID != "" && key == "" {
-		state := publicStates[offerID]
-		var err error
-		// Группа передаёт снимки одной пачки; карточка читает свою проекцию отдельно.
-		if publicStates == nil {
-			err = q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-				var err error
-				state, err = tx.Offers().Offer(ctx, offerID.Tenant, offerID.Product)
-				return err
-			})
-		}
-		if errors.Is(err, catalog.ErrProductNotFound) {
-			return catalog.ErrOfferNotFound
-		}
-		if err != nil {
-			return err
-		}
+	if key == "" {
 		// Пустой контекст возможен и для скрытого магазина: устаревший индекс не должен его раскрыть.
-		public, ok := Document(state)
+		public, ok := Document(publicState)
 		if !ok || !public.Visible {
 			return catalog.ErrOfferNotFound
 		}

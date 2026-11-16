@@ -18,6 +18,7 @@ import (
 
 func TestSeparateVariantRequestAndCardReference(t *testing.T) {
 	store, index := fake.NewStore(), fake.NewIndex()
+	// Порядок схемы намеренно отличается: ручка вариантов им больше не пользуется.
 	store.SeedTaxonomy(taxonomy.Definition{
 		Attributes: []taxonomy.Attribute{
 			{
@@ -97,8 +98,8 @@ func TestSeparateVariantRequestAndCardReference(t *testing.T) {
 	}
 	body := response.Body.String()
 	for _, expected := range []string{
-		`"options":[{"key":"platform.size","code":"size","name":"Размер","values":["S","M"]}]`,
-		`"values":["S","M"]`,
+		`"options":[{"key":"platform.size","code":"size","name":"Размер","values":["M","S"]}]`,
+		`"values":["M","S"]`,
 		`"price":120`,
 		`"basePrice":123.45`,
 		`"attrs":{"platform.size":"M"}`,

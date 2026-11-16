@@ -136,7 +136,22 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UU
 	if err != nil {
 		return OfferCard{}, err
 	}
-	if err := q.priceOffer(ctx, offerID, &doc, buyerID, contexts, nil); err != nil {
+	key := priceProfileKey(contexts, offerID.Tenant)
+	var publicState ports.OfferState
+	if key == "" {
+		err = q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+			var err error
+			publicState, err = tx.Offers().Offer(ctx, offerID.Tenant, offerID.Product)
+			return err
+		})
+		if errors.Is(err, catalog.ErrProductNotFound) {
+			return OfferCard{}, catalog.ErrOfferNotFound
+		}
+		if err != nil {
+			return OfferCard{}, err
+		}
+	}
+	if err := priceOffer(&doc, key, publicState); err != nil {
 		return OfferCard{}, err
 	}
 

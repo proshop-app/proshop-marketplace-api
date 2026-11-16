@@ -12,6 +12,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -24,11 +25,13 @@ type variantPricingPlatform struct {
 
 type variantPricingUOW struct {
 	ports.UnitOfWork
-	transactions int
-	batches      int
-	singles      int
-	batchSize    int
-	batchErr     error
+	transactions  int
+	batches       int
+	singles       int
+	batchSize     int
+	batchErr      error
+	singleErr     error
+	taxonomyReads int
 }
 
 type variantPricingTx struct {
@@ -52,6 +55,11 @@ func (tx variantPricingTx) Offers() ports.OfferStates {
 	return variantPricingOffers{OfferStates: tx.Tx.Offers(), uow: tx.uow}
 }
 
+func (tx variantPricingTx) Taxonomy() taxonomy.Repository {
+	tx.uow.taxonomyReads++
+	return tx.Tx.Taxonomy()
+}
+
 func (o variantPricingOffers) Batch(ctx context.Context, keys []ids.OfferID) ([]ports.OfferState, error) {
 	o.uow.batches++
 	o.uow.batchSize = len(keys)
@@ -70,6 +78,9 @@ func (o variantPricingOffers) Offer(
 	product ids.ProductID,
 ) (ports.OfferState, error) {
 	o.uow.singles++
+	if o.uow.singleErr != nil {
+		return ports.OfferState{}, o.uow.singleErr
+	}
 	return o.OfferStates.Offer(ctx, tenant, product)
 }
 
@@ -172,15 +183,19 @@ func TestVariantsUseSameBuyerPricesAsOffer(t *testing.T) {
 			if err != nil || reads != 0 || platform.calls > 1 {
 				t.Fatalf("ошибка, чтения карточек, запросы контекста: %v, %d, %d", err, reads, platform.calls)
 			}
-			wantTransactions, wantBatches := 1, 0
+			wantTransactions, wantBatches := 0, 0
 			if tc.buyer != "" {
-				wantTransactions = 2 // Один выбор контекста и одно чтение группы с таксономией.
+				wantTransactions = 1 // Только существующий выбор контекста покупателя.
 				if tc.profile == "" {
+					wantTransactions++
 					wantBatches = 1
 				}
 			}
 			if uow.transactions != wantTransactions || uow.batches != wantBatches || uow.singles != 0 {
 				t.Fatalf("транзакции, пачки, одиночные чтения: %d, %d, %d", uow.transactions, uow.batches, uow.singles)
+			}
+			if uow.taxonomyReads != 0 {
+				t.Fatal("запрос вариантов читает таксономию")
 			}
 			if wantBatches > 0 && uow.batchSize != size {
 				t.Fatalf("размер пачки: %d вместо %d", uow.batchSize, size)
@@ -210,7 +225,57 @@ func TestVariantsUseSameBuyerPricesAsOffer(t *testing.T) {
 					}
 				}
 			}
+			wantSingles := 0
+			if tc.buyer != "" && tc.profile == "" {
+				wantSingles = 2
+			}
+			if uow.singles != wantSingles || uow.batches != wantBatches {
+				t.Fatalf("карточки читают только своё публичное состояние на холодном пути: %+v", uow)
+			}
 		})
+	}
+}
+
+func TestVariantsEmptyColdGroupSkipsBatch(t *testing.T) {
+	store := fake.NewStore()
+	seedSeller(store, "t1", participant.TenantActive, true)
+	uow := &variantPricingUOW{UnitOfWork: store}
+	platform := &variantPricingPlatform{Platform: fake.NewPlatform(), contexts: map[ids.TenantID]string{}}
+	queries := appcatalog.NewQueries(uow, fake.NewIndex(), platform, nil, nil, nil)
+	group, err := queries.Variants(context.Background(), "t1", "group", "buyer")
+	if err != nil || len(group.Items) != 0 {
+		t.Fatal(group, err)
+	}
+	if uow.transactions != 1 || uow.batches != 0 || uow.singles != 0 || uow.taxonomyReads != 0 {
+		t.Fatalf("пустая группа не требует чтения состояний или таксономии: %+v", uow)
+	}
+}
+
+func TestOfferColdPublicReadErrors(t *testing.T) {
+	failure := errors.New("хранилище недоступно")
+	for _, tc := range []struct {
+		readErr error
+		wantErr error
+	}{
+		{readErr: catalog.ErrProductNotFound, wantErr: catalog.ErrOfferNotFound},
+		{readErr: failure, wantErr: failure},
+	} {
+		store, index := fake.NewStore(), fake.NewIndex()
+		seedSeller(store, "t1", participant.TenantActive, true)
+		ctx := context.Background()
+		id := ids.OfferID{Tenant: "t1", Product: "p1"}
+		if err := index.Put(ctx, []ports.OfferDocument{{ID: id.String(), Visible: true}}); err != nil {
+			t.Fatal(err)
+		}
+		uow := &variantPricingUOW{UnitOfWork: store, singleErr: tc.readErr}
+		platform := &variantPricingPlatform{Platform: fake.NewPlatform(), contexts: map[ids.TenantID]string{}}
+		queries := appcatalog.NewQueries(uow, index, platform, nil, nil, nil)
+		if _, err := queries.Offer(ctx, id, "buyer"); !errors.Is(err, tc.wantErr) {
+			t.Fatalf("отказ карточки изменился: %v вместо %v", err, tc.wantErr)
+		}
+		if uow.transactions != 2 || uow.singles != 1 || uow.batches != 0 {
+			t.Fatalf("карточка читает одно публичное состояние: %+v", uow)
+		}
 	}
 }
 
