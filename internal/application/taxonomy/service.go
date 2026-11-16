@@ -4,16 +4,13 @@ package taxonomy
 import (
 	"context"
 
-	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
-	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
-	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-const revalidationBatch = 200
+const revalidationBatch = 50
 
-// Service атомарно меняет схему и перепроверяет проекции; индекс догоняет через outbox.
+// Service атомарно публикует схему и задания; товары перепроверяются фоновыми страницами.
 type Service struct {
 	evaluator ports.ModerationEvaluator
 	uow       ports.UnitOfWork
@@ -126,7 +123,7 @@ func (s *Service) LoadPartWithOptions(
 		if err := r.Save(ctx, next, current.Version); err != nil {
 			return err
 		}
-		if err := s.revalidate(ctx, tx, next); err != nil {
+		if err := r.QueueRevalidation(ctx, next.Version, taxonomy.AffectedCategories(current, next)); err != nil {
 			return err
 		}
 		version = next.Version
@@ -157,43 +154,4 @@ func removesCategoryLeaves(previous, next []taxonomy.Category) bool {
 		return false
 	}
 	return missing(previous)
-}
-
-func (s *Service) revalidate(ctx context.Context, tx ports.Tx, d taxonomy.Definition) error {
-	var tenant ids.TenantID
-	var product ids.ProductID
-	for {
-		items, err := tx.Products().Page(ctx, tenant, product, revalidationBatch)
-		if err != nil {
-			return err
-		}
-		for _, p := range items {
-			state := p.State()
-			tenant, product = state.TenantID, state.ProductID
-
-			if p.Revalidate(d, s.clock.Now()) {
-				if err := tx.Products().Save(ctx, p); err != nil {
-					return err
-				}
-
-				statusTask := moderationstatus.OfferTask(tenant, product, s.clock.Now())
-
-				if err := tx.Outbox().Enqueue(ctx, statusTask); err != nil {
-					return err
-				}
-			}
-			if s.evaluator != nil {
-				if err := s.evaluator.Evaluate(ctx, tx, p, nil, nil, s.clock.Now()); err != nil {
-					return err
-				}
-			}
-			task := appcatalog.SyncOfferTask(tenant, product, s.clock.Now())
-			if err := tx.Outbox().Enqueue(ctx, task); err != nil {
-				return err
-			}
-		}
-		if len(items) < revalidationBatch {
-			return nil
-		}
-	}
 }

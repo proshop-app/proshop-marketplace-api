@@ -52,6 +52,7 @@ type data struct {
 	taxonomy         taxonomy.Definition
 	taxonomyVersions map[int64]taxonomy.Definition
 	taxonomyRelease  *taxonomy.ReleaseRecord
+	revalidations    []taxonomy.Revalidation
 	participants     map[ids.TenantID]participant.State
 	tenants          map[ids.TenantID]participant.TenantState
 	products         map[productKey]catalog.ProductState
@@ -89,6 +90,7 @@ func (d *data) clone() *data {
 		promotion:        d.promotion.clone(),
 		moderation:       d.moderation.clone(),
 		taxonomy:         d.taxonomy,
+		revalidations:    slices.Clone(d.revalidations),
 		taxonomyVersions: maps.Clone(d.taxonomyVersions),
 		taxonomyRelease:  cloneRelease(d.taxonomyRelease),
 		decisions:        maps.Clone(d.decisions),

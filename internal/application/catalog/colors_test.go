@@ -218,6 +218,15 @@ func TestColorRegistryPublicationDocumentAndSearch(t *testing.T) {
 	if _, err := service.LoadPart(ctx, "schemas", definition, frozen.Version); err != nil {
 		t.Fatal(err)
 	}
+	for {
+		job, err := service.RevalidateNext(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if job == nil {
+			break
+		}
+	}
 	product, _ := store.Product("t1", "p5")
 	if !reflect.DeepEqual(product.Card.Publication.AttributeFacetValues["color"], []string{"Зелёный"}) {
 		t.Fatal("публикация не перепроверила товар")

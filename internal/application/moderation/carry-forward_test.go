@@ -43,6 +43,7 @@ func TestReviewedProjectionReplayPreservesHistoricalApproval(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
+	revalidateTaxonomy(t, taxonomies)
 	err = e.store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 		product, err := tx.Products().Get(ctx, "t1", "p1")
 		if err != nil {

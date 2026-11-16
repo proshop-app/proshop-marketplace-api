@@ -107,6 +107,18 @@ func TestTaxonomyVersionsAndProjection(t *testing.T) {
 	if err := applyDefinition(ctx, service, next); err != nil {
 		t.Fatal(err)
 	}
+	if p := read(); !p.Published || p.Version != 1 {
+		t.Fatal("публикация не должна ждать перепроверку", p)
+	}
+	for {
+		job, err := service.RevalidateNext(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if job == nil {
+			break
+		}
+	}
 	if p := read(); p.Published || p.Issues[0].Code != "taxonomy.required" || p.Version != 2 {
 		t.Fatalf("%+v", p)
 	}

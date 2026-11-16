@@ -503,6 +503,9 @@ func (s *server) jobs() []func(context.Context) error {
 	}
 	outbox := jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics)
 	return append(runners, []func(context.Context) error{
+		func(ctx context.Context) error {
+			return jobs.RunTaxonomyRevalidation(ctx, s.app.taxonomy, s.logger)
+		},
 		jobs.NewPromotionRunner(
 			s.app.promotion,
 			postgres.NewPromotionLock(s.store.pool),

@@ -103,6 +103,11 @@ func TestLoadAndRevalidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, _ = store.Product("t1", "p1")
+	if !p.Card.Publication.Published || p.Card.Publication.Version != 1 {
+		t.Fatal("публикация изменила товар до фоновой страницы", p)
+	}
+	drainRevalidation(t, service)
+	p, _ = store.Product("t1", "p1")
 	if p.Card.Publication.Published || p.Card.Publication.Issues[0].Code != "taxonomy.enum_value" {
 		t.Fatalf("ошибка должна скрыть карточку: %+v", p)
 	}
@@ -120,6 +125,7 @@ func TestLoadAndRevalidate(t *testing.T) {
 	if err := applyDefinition(ctx, service, schema(3)); err != nil {
 		t.Fatal(err)
 	}
+	drainRevalidation(t, service)
 	p, _ = store.Product("t1", "p1")
 	if !p.Card.Publication.Published || p.Card.Publication.Version != 3 {
 		t.Fatalf("%+v", p)
@@ -185,15 +191,21 @@ func TestRevalidationPagesIncludeNonParticipants(t *testing.T) {
 			ProductID: ids.ProductID(fmt.Sprintf("p%03d", i)),
 			Revision:  1,
 			Version:   1,
-			Card:      catalog.Card{Name: "Товар", Visible: true},
+			Card: catalog.Card{
+				Name:        "Товар",
+				Visible:     true,
+				Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
+			},
 		})
 	}
-	if err := applyDefinition(context.Background(), apptaxonomy.NewService(store, clock, nil), schema(1)); err != nil {
+	service := apptaxonomy.NewService(store, clock, nil)
+	if err := applyDefinition(context.Background(), service, schema(1)); err != nil {
 		t.Fatal(err)
 	}
+	drainRevalidation(t, service)
 	for i := 0; i < 205; i++ {
 		p, _ := store.Product("t1", ids.ProductID(fmt.Sprintf("p%03d", i)))
-		if p.Version != 2 || p.Card.Publication.Version != 1 || p.Card.Publication.Published {
+		if p.Version != 2 || p.Card.Publication.Version != 1 || !p.Card.Publication.Published {
 			t.Fatalf("товар пропущен при перепроверке: %+v", p)
 		}
 	}
@@ -253,5 +265,18 @@ func seedValues(t *testing.T, store *fake.Store, values ...string) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func drainRevalidation(t *testing.T, service *apptaxonomy.Service) {
+	t.Helper()
+	for {
+		job, err := service.RevalidateNext(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if job == nil {
+			return
+		}
 	}
 }

@@ -74,9 +74,14 @@ func TestSearchTermsOnlyPublicationPreservesFrozenDictionaries(t *testing.T) {
 		if !reflect.DeepEqual(want, next) {
 			t.Fatalf("метаданные обновили другие части или frozen Values: %+v", next)
 		}
+		drainRevalidation(t, service)
 		after, _ := store.Product("t1", "p1")
-		if !after.Card.Publication.Published || after.Version <= before.Version || len(store.OutboxRows()) == 0 {
+		if !after.Card.Publication.Published || after.Version < before.Version || len(store.OutboxRows()) == 0 {
 			t.Fatalf("публикация не перепроверена: %+v", after)
+		}
+		if reflect.DeepEqual(before.Card.Publication.AttributeSearchTerms["a1"], terms["v1"]) &&
+			after.Version != before.Version {
+			t.Fatal("неизменившиеся выражения запустили перепроверку")
 		}
 		if !reflect.DeepEqual(after.Card.Publication.AttributeSearchTerms["a1"], terms["v1"]) {
 			t.Fatalf("выражения не обновлены/очищены: %+v", after.Card.Publication)
