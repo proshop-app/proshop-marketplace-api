@@ -38,11 +38,13 @@ TAXONOMY_IMAGE ?= proshop-marketplace-taxonomy:dev
 
 .PHONY: dev infra-up infra-down migrate reindex test test-integration lint build image
 
-## dev: инфраструктура в compose, миграции и сервис с перезапуском при правках
+## dev: инфраструктура, миграции, словари, таксономия и сервис с перезапуском при правках
 dev: infra-up
 	$(MAKE) migrate
+	$(MAKE) reference-bootstrap
 	$(MAKE) reference-apply
-	$(MAKE) taxonomy-apply
+# Только dev подтверждает замену дерева: это одноразовая среда разработки.
+	go run ./cmd/taxonomy apply --confirm-category-replacement
 	$(AIR) -c .air.toml
 
 ## infra-up: PostgreSQL, OpenSearch, Kafka (KRaft) и Redis, ждать готовности
@@ -93,6 +95,7 @@ taxonomy-check:
 	go run ./cmd/taxonomy check
 
 ## taxonomy-apply: идемпотентно установить готовую поставку после миграций
+# Вне dev оператор должен явно подтвердить замену: существующие товары могут требовать переназначения.
 taxonomy-apply:
 	go run ./cmd/taxonomy apply
 
@@ -107,3 +110,8 @@ taxonomy-image:
 .PHONY: reference-apply
 reference-apply:
 	go run ./cmd/marketplace reference apply-all --dir deploy/reference
+
+.PHONY: reference-bootstrap
+## reference-bootstrap: зарегистрировать недостающие словари для встроенной таксономии
+reference-bootstrap:
+	go run ./cmd/marketplace reference import --file deploy/reference/bootstrap.json

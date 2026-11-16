@@ -23,9 +23,9 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
-// errReferenceUsage — команда поставки реестра вызвана без действия или каталога.
+// errReferenceUsage — команда реестра вызвана без действия или пути к данным.
 var errReferenceUsage = errors.New(
-	"использование: marketplace reference check|apply|apply-all|rollback --dir <каталог>",
+	"использование: marketplace reference check|apply|apply-all|rollback --dir <каталог>; import --file <пакет.json>",
 )
 
 // reindex перестраивает индекс предложений из проекции.
@@ -64,13 +64,16 @@ func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 	return nil
 }
 
-// referenceDelivery проверяет, применяет или откатывает поставку реестра из
-// каталога. check не подключается к базе; apply и rollback — одной транзакцией.
+// referenceDelivery принимает каталог поставки или файл пакета для импорта.
+// check не подключается к базе; каждое изменение выполняется одной транзакцией.
 func referenceDelivery(ctx context.Context, cfg config.Config, _ *slog.Logger) error {
 	return runReferenceDelivery(ctx, cfg, os.Args[2:], os.Stdout)
 }
 
 func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string, output io.Writer) error {
+	if len(args) > 0 && args[0] == "import" {
+		return runReferenceImport(ctx, cfg, args[1:], output)
+	}
 	if len(args) == 0 || (args[0] != "check" && args[0] != "apply" && args[0] != "rollback" && args[0] != "apply-all") {
 		return errReferenceUsage
 	}
@@ -123,10 +126,13 @@ func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string,
 // deliveryFailure — причина отказа без текста драйвера: он может содержать адрес базы.
 func deliveryFailure(err error) error {
 	if typed, ok := errs.As(err); ok && typed.Code() != errs.Internal && typed.Code() != errs.Unavailable {
-		return fmt.Errorf("поставка реестра не применена: %s", typed.Message())
+		return fmt.Errorf("поставка реестра не применена: %s: %s", typed.Key(), typed.Message())
 	}
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return err
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
 	}
 	return errors.New("поставка реестра не применена: проверьте миграции и доступность базы")
 }
@@ -164,4 +170,34 @@ func referenceDirectory(args []string) (string, error) {
 		return "", errReferenceUsage
 	}
 	return *dir, nil
+}
+
+func runReferenceImport(ctx context.Context, cfg config.Config, args []string, output io.Writer) error {
+	options := flag.NewFlagSet("reference import", flag.ContinueOnError)
+	options.SetOutput(io.Discard)
+	file := options.String("file", "", "файл пакета ImportPackage v1 в JSON")
+	if err := options.Parse(args); err != nil || options.NArg() != 0 || *file == "" {
+		return errReferenceUsage
+	}
+	input, err := referencedata.LoadImport(os.DirFS(filepath.Dir(*file)), filepath.Base(*file))
+	if err != nil {
+		return deliveryFailure(err)
+	}
+	pool, err := postgres.Open(ctx, cfg.Database.URL, 2)
+	if err != nil {
+		return errors.New("не удалось подключиться к PostgreSQL")
+	}
+	defer pool.Close()
+	service := appreference.NewService(
+		postgres.NewUnitOfWork(pool),
+		clock.System{},
+		random.IDs{},
+		nil,
+		appreference.Config{},
+	)
+	results, err := service.Import(ctx, "", input)
+	if err != nil {
+		return deliveryFailure(err)
+	}
+	return json.NewEncoder(output).Encode(results)
 }

@@ -8,6 +8,7 @@ import (
 
 func TestDeployBundles(t *testing.T) {
 	root := "../../../deploy/reference"
+	registry := migrationDictionaries(t)
 	directories, err := os.ReadDir(root)
 	if err != nil {
 		t.Fatal(err)
@@ -23,12 +24,19 @@ func TestDeployBundles(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			dictionary, exists := registry[delivery.Dictionary]
+			if !exists {
+				t.Fatal("поставка не регистрирует словарь: заголовка нет в миграциях", delivery.Dictionary)
+			}
+			dictionary.entries = delivery.Entries
+			registry[delivery.Dictionary] = dictionary
 			if delivery.Dictionary != directory.Name() {
 				t.Fatal("код не совпадает с каталогом")
 			}
 		})
 	}
-	if count != 19 {
+	if count != len(registry) {
 		t.Fatalf("словарей: %d", count)
 	}
+	assertTaxonomyDictionaries(t, registry)
 }

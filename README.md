@@ -17,14 +17,21 @@ make dev
 ```
 
 Команда поднимает PostgreSQL 16, OpenSearch 2.19, Kafka 3.9 в режиме KRaft и
-Redis, применяет миграции и запускает сервис на `:8080` с перезапуском при
-правках. Порты compose на хосте: PostgreSQL `25432`, OpenSearch `29200`,
+Redis, применяет миграции, импортирует `deploy/reference/bootstrap.json`,
+применяет поставки `deploy/reference` и публикует таксономию. Затем запускает
+сервис на `:8080` с перезапуском при правках. Повтор поставок идемпотентен.
+Подтверждение замены категорий автоматически передаётся только в `dev`: эта
+цель предназначена для одноразовой среды разработки. Для стенда реальные
+значения импортируются оператором из uno-reference-data отдельно.
+
+Порты compose на хосте: PostgreSQL `25432`, OpenSearch `29200`,
 Kafka `29094`, Redis `26379`; любой меняется переменной
 `MARKETPLACE_<СЕРВИС>_PORT`.
 
 | Команда | Что делает |
 |---|---|
-| `make dev` | инфраструктура, миграции, сервис с перезапуском (air) |
+| `make dev` | инфраструктура, миграции, словари, таксономия, сервис с перезапуском (air) |
+| `make reference-bootstrap` | импорт заголовков недостающих словарей и минимального closed-пула |
 | `make test` | юнит-тесты с `-race` и сторож слоистости |
 | `make test-integration` | интеграционные тесты на compose (поднимает его сам) |
 | `make lint` | golangci-lint v2.3.1 с `depguard` по слоям |
@@ -304,11 +311,18 @@ Enum ссылается на закрытый словарь; string может 
 
 ```bash
 make migrate
+make reference-bootstrap
 make reference-apply
 make taxonomy-check
 go run ./cmd/taxonomy manifest
 make taxonomy-apply
 ```
+
+Последняя команда намеренно не подтверждает замену дерева: для поставки 10
+после проверки оператор запускает `go run ./cmd/taxonomy apply --confirm-category-replacement`.
+Если опубликованный снимок изменён оператором, дополнительно требуется
+проверенная `--expected-version`. Для чистой среды разработки весь порядок
+выполняет `make dev`.
 
 Оператор правит части через API с If-Match. Команда `taxonomy load`,
 цель `taxonomy-load` и прежний развёрнутый пример удалены.
@@ -437,13 +451,23 @@ API таксономии, её PostgreSQL-таблицы и поставка д�
 
 Реестр справочных сущностей принадлежит площадке: 19 поставок в
 `deploy/reference`, применение после миграций — `make reference-apply`.
+Перед ними `make reference-bootstrap` импортирует пакет `bootstrap.json`: 176
+пустых open и closed `target_gender` с «Женский»/«Мужской». Существующие 19
+словарей из миграций в пакет не входят; история их поставок остаётся отдельной.
+Это минимальная комплектность для публикации, а не полный набор значений
+uno-reference-data. Пакет содержит данные репозитория без заявления открытой лицензии.
 Контракт потребителей и пополнение описаны в [docs/reference.md](docs/reference.md).
 Сбор кандидатов требует отдельного `SEARCH_CANDIDATES_TOKEN` для поиска;
 `REFERENCE_CANDIDATES_INTERVAL=1h` задаёт период, `0` выключает сбор.
 При пустом токене сборщик не запускается.
 
 Образ содержит справочники в `/reference` (только чтение); `reference apply-all` использует этот каталог по умолчанию, `--dir` переопределяет его.
-Порядок выката: `/migrate up` → `/marketplace reference apply-all` (только `DATABASE_URL`) → `/taxonomy apply`.
+Порядок чистой установки: `/migrate up` →
+`/marketplace reference import --file /reference/bootstrap.json` →
+`/marketplace reference apply-all` (обе команды требуют только `DATABASE_URL`) →
+проверка и явное применение `/taxonomy apply --confirm-category-replacement`.
+На стенде оператор отдельно импортирует реальные значения из uno-reference-data;
+при конфликте вида или истории поставок нужна сверка, а не смена номера вслепую.
 
 Продвижение использует обязательные `PROMOTION_TIMEZONE` (IANA, без умолчания) и
 `PROMOTION_VISITOR_SALT` (от 16 символов). `PROMOTION_SEARCH_RELEVANCE_DEPTH` — 10–500,

@@ -177,7 +177,12 @@ domain ← application ← interfaces, infrastructure        сборка гра
 ## Одна команда
 
 `make dev` — compose (PostgreSQL 16, OpenSearch, Kafka KRaft, Redis),
-миграции и сервис с перезапуском (air). Остальное: `make test`,
+миграции → импорт `deploy/reference/bootstrap.json` → `reference-apply` →
+публикация таксономии → сервис с перезапуском (air). Пакет регистрирует
+недостающие словари; открытые остаются без значений до отдельного импорта
+из uno-reference-data. Только `dev` автоматически передаёт подтверждение
+замены категорий: среда разработки одноразовая. `taxonomy-apply` сохраняет
+требование явного подтверждения оператором. Остальное: `make test`,
 `make test-integration`, `make lint`, `make migrate`, `make reindex`,
 `make build`, `make image`. Инструменты не ставятся глобально: golangci-lint
 и air — `go run` с версиями из `Makefile`, goose встроен в `cmd/migrate`.

@@ -1,0 +1,1084 @@
+{
+    "schemaVersion": 1,
+    "sources": [
+        {
+            "id": "marketplace-taxonomy-10",
+            "url": "https://github.com/proshop-app/proshop-marketplace-api/blob/master/docs/taxonomy-dictionaries-needed.md",
+            "license": "Данные репозитория proshop-marketplace; открытая лицензия не заявлена.",
+            "version": "taxonomy-10"
+        }
+    ],
+    "dictionaries": [
+        {
+            "code": "active_ingredient",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "animal_breed",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "animal_sex",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "animal_species",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "appliance_installation",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "art_technique",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "audience_age_group",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "auto_engine",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "auto_make",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "auto_model",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "auto_position",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "bag_construction",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "bag_fastener",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "bag_lock",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "bike_brake",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "bike_frame",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "bike_wheel_mount",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "board_game_kind",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "body_area",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "book_author",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "book_edition_form",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "book_edition_status",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "book_genre",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "book_language",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "book_publisher",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "book_series",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "camera_mount",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "certificate_program",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "child_seat_standard",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "chipset",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "clothing_fastener",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "clothing_fit",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "clothing_use",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "collectible_condition",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_accessories",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_appliances",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_auto",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_baby",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_computers",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_electronics",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_furniture",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_garden",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_health",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_industry",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_jewelry",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_kitchen",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_music",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_outdoors",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_pets",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_renovation",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_tools",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compat_toys",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compatible_model",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "component_package",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "compression_class",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "computer_form_factor",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "connection",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "connector",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "control_method",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "cpu_socket",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "craft_theme",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "diaper_size_label",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "drive_form_factor",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "drive_interface",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "electrical_safety",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "energy_class",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "fabric_composition",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "fastener_drive",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "fastener_standard",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "filling_material",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "film_format",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "film_genre",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "filter_type",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "fishing_action",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "flower_preservation",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "flowering_period",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "food_category",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "food_diet",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "food_flavor",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "food_form",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "food_processing",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "food_storage",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "fragrance",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "fuel_type",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "fungus_species",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "furniture_frame",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "furniture_placement",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "furniture_style",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "furniture_use",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "garment_neckline",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "gpu",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "greeting_occasion",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "hair_attachment",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "hair_effect",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "hair_type",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "handedness",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "handwear_size_label",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "headwear_size_label",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "industrial_standard",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "instrument_key",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "instrument_tuning",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "interface_standard",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "ip_rating",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "jewelry_insert",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "jewelry_sample",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "keyboard_layout",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "lens_mount",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "lens_replacement",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "license_platform",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "mattress_filling",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "medical_size",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "memory_type",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "microphone_pattern",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "model",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "mount_standard",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "music_genre",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "network_standard",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "oil_specification",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "oil_viscosity",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "os",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "paint_base",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "paint_finish",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "paper_format",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "perfume_concentration",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "pet_breed",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "pet_life_stage",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "pharmaceutical_form",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "plant_growth_stage",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "plant_light",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "plant_species",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "plant_variety",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "planting_period",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "poster_theme",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "power_source",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "ppe_standard",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "print_color",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "print_technology",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "processor",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "recording_language",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "recording_medium",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "resolution",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "ring_size_label",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "sensor_format",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "shoe_back",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "shoe_fastener",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "shoe_heel",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "shoe_insole",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "shoe_lining",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "shoe_sole",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "shoe_toe",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "shoe_upper",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "shoe_use",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "shoe_width",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "size_clothing_label",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "size_footwear_label",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "size_standard",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "skin_effect",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "skin_type",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "sport",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "supported_platform",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "surface_type",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "switch_type",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "target_gender",
+            "kind": "closed",
+            "release": 1,
+            "entries": [
+                {
+                    "canonical": "Женский",
+                    "status": "confirmed"
+                },
+                {
+                    "canonical": "Мужской",
+                    "status": "confirmed"
+                }
+            ]
+        },
+        {
+            "code": "target_species",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "textile_weave",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "thread_size",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "tire_load_index",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "tire_season",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "tire_speed_index",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "tool_mount",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "upholstery",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "vehicle_drive",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "vehicle_transmission",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "vessel_coating",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "video_format",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "video_game_genre",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "watch_movement",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        }
+    ]
+}
