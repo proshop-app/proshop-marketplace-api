@@ -10,19 +10,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-// optionalBuyer допускает гостя; переданный токен должен быть действительным.
-func optionalBuyer(auth *appbuyer.Auth, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "private, no-store")
-		if sessionToken(r) == "" {
-			next(w, r)
-			return
-		}
-		buyerOnly(auth, next)(w, r)
-	}
-}
-
-// publicBuyer допускает устаревший вход на публичных страницах.
+// publicBuyer допускает устаревший вход на публичных страницах: недействительный access — гость, не 401.
 func publicBuyer(auth *appbuyer.Auth, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "private, no-store")

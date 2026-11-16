@@ -4511,12 +4511,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        '401':
-          description: Нет доступа
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
         '404':
           description: Не найдено или машинный API выключен
           content:
