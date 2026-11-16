@@ -12,9 +12,6 @@ import (
 // Это бюджет интерфейса, не размер глобального справочника; контракт поиска допускает 256.
 const MaxAttributeFacets = 32
 
-// Цвет — главный покупательский фильтр, должен быть везде, где он есть в схемах области.
-const pinnedFacetCode = "color"
-
 // scopeFields не ищет каждый лист заново от корня: на большой таксономии это квадратичная работа.
 // Фильтры разрешены по объединению схем, охват фасетов считается по листьям области.
 func scopeFields(
@@ -59,11 +56,11 @@ func selectFacetFields(
 			out = append(out, field)
 		}
 	}
-	// Цвет и выбранные поля сохраняют управление фильтром при исчерпании бюджета.
+	// Закреплённые и выбранные поля сохраняют управление фильтром при исчерпании бюджета.
 	// Остальные упорядочены по убыванию охвата, при равенстве — по коду.
 	sort.Slice(out, func(i, j int) bool {
-		if (out[i].Code == pinnedFacetCode) != (out[j].Code == pinnedFacetCode) {
-			return out[i].Code == pinnedFacetCode
+		if out[i].FacetPinned != out[j].FacetPinned {
+			return out[i].FacetPinned
 		}
 		_, left := filters[out[i].Code]
 		_, right := filters[out[j].Code]

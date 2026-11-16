@@ -986,6 +986,7 @@
   dictionary: medical_size
 - code: color
   name: Цвет
+  facetPinned: true
   type: enum
   facet: true
   valuesMeta:
@@ -4267,5 +4268,16 @@
   example: '500'
   dictionaryNote: Числовая характеристика из паспорта; словарь не применяется.
   requiredReason: Без допустимой продолжительной нагрузки нельзя выбрать аккумуляторную электростанцию.
+  multiple: false
+  variant: false
+- code: product_type
+  name: Тип
+  type: enum
+  dictionary: product_type
+  facet: true
+  facetPinned: true
+  description: Вид конкретного товара, выбранный продавцом из закрытого справочника.
+  requiredReason: Без вида товара покупатель не найдёт его фильтром.
+  example: Лоферы
   multiple: false
   variant: false

@@ -28,7 +28,7 @@ func visibleFacets(facets []ports.Facet, total int, query ports.OfferQuery) []po
 		}
 		f = orderFacet(f, query.FacetFields)
 		f = facetValuesMeta(f, query.FacetFields)
-		if !strings.HasPrefix(f.Code, "attr.") || (f.Count > 0 && f.Count*100 >= total*FacetCoveragePercent) {
+		if visibleAttributeFacet(f, total, query) {
 			out = append(out, f)
 		}
 	}
@@ -108,9 +108,18 @@ func attributeNumber(raw string) (float64, error) {
 	return value, nil
 }
 
-// Порядок снимка не зависит от частоты значений в поисковых агрегациях.
+// Палитра задаёт порядок образцов; остальные фасеты упорядочены по числу товаров.
 func orderFacet(facet ports.Facet, fields []taxonomy.Attribute) ports.Facet {
 	for _, field := range fields {
+		if facet.Code == "attr."+field.Code && field.FacetPinned && len(field.FacetOptions) == 0 {
+			sort.SliceStable(facet.Values, func(i, j int) bool {
+				if facet.Values[i].Count != facet.Values[j].Count {
+					return facet.Values[i].Count > facet.Values[j].Count
+				}
+				return facet.Values[i].Value < facet.Values[j].Value
+			})
+			return facet
+		}
 		if facet.Code != "attr."+field.Code || len(field.FacetOptions) == 0 {
 			continue
 		}
@@ -148,4 +157,26 @@ func facetValuesMeta(facet ports.Facet, fields []taxonomy.Attribute) ports.Facet
 		break
 	}
 	return facet
+}
+
+// Выбор сохраняет управление закреплённым фасетом даже без альтернатив.
+func visibleAttributeFacet(facet ports.Facet, total int, query ports.OfferQuery) bool {
+	if !strings.HasPrefix(facet.Code, "attr.") {
+		return true
+	}
+	for _, field := range query.FacetFields {
+		if facet.Code != "attr."+field.Code {
+			continue
+		}
+		if field.FacetPinned {
+			if len(query.Attributes[field.Code].Values) > 0 {
+				return true
+			}
+			if len(facet.Values) < 2 {
+				return false
+			}
+			return facet.Count > 0
+		}
+	}
+	return facet.Count > 0 && facet.Count*100 >= total*FacetCoveragePercent
 }

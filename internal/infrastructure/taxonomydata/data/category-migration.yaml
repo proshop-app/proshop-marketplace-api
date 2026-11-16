@@ -1,5 +1,5 @@
 fromRelease: 9
-toRelease: 14
+toRelease: 15
 mappings:
 - from: electronics.smartphones
   to:
