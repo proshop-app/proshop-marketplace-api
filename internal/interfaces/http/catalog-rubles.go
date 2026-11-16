@@ -6,27 +6,24 @@ import (
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 )
 
 type variantItemJSON struct {
-	ID        string `json:"id"`
-	Current   bool   `json:"current"`
-	Value     string `json:"value"`
-	Position  int    `json:"position"`
-	Price     rubles `json:"price"`
-	BasePrice rubles `json:"basePrice"`
-	Available int    `json:"available"`
-	InStock   bool   `json:"inStock"`
-	Image     string `json:"image,omitempty"`
-	Duplicate bool   `json:"duplicate,omitempty"`
+	ID        string            `json:"id"`
+	Attrs     map[string]string `json:"attrs"`
+	Position  int               `json:"position"`
+	Price     rubles            `json:"price"`
+	BasePrice rubles            `json:"basePrice"`
+	Available int               `json:"available"`
+	InStock   bool              `json:"inStock"`
+	Image     string            `json:"image,omitempty"`
 }
 
 type variantBlockJSON struct {
-	GroupID   string              `json:"groupId"`
-	Axis      catalog.VariantAxis `json:"axis"`
-	Items     []variantItemJSON   `json:"items"`
-	Truncated bool                `json:"truncated"`
+	GroupID   string                     `json:"groupId"`
+	Options   []appcatalog.VariantOption `json:"options"`
+	Items     []variantItemJSON          `json:"items"`
+	Truncated bool                       `json:"truncated"`
 }
 
 type priceBucketJSON struct {
@@ -53,22 +50,20 @@ func variantResponse(block *appcatalog.VariantBlock) *variantBlockJSON {
 	}
 	result := &variantBlockJSON{
 		GroupID:   block.GroupID,
-		Axis:      block.Axis,
+		Options:   block.Options,
 		Items:     make([]variantItemJSON, 0, len(block.Items)),
 		Truncated: block.Truncated,
 	}
 	for _, item := range block.Items {
 		result.Items = append(result.Items, variantItemJSON{
 			ID:        item.ID,
-			Current:   item.Current,
-			Value:     item.Value,
+			Attrs:     item.Attrs,
 			Position:  item.Position,
 			Price:     rubles(item.Price),
 			BasePrice: rubles(item.BasePrice),
 			Available: item.Available,
 			InStock:   item.InStock,
 			Image:     item.Image,
-			Duplicate: item.Duplicate,
 		})
 	}
 	return result

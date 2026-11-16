@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -26,6 +27,43 @@ func (q *Queries) priceContexts(
 		tenants = []ids.TenantID{ids.TenantID(tenantFilter)}
 	}
 	return PriceContexts(ctx, q.uow, q.platform, buyerID, tenants)
+}
+
+func (q *Queries) priceOffer(
+	ctx context.Context,
+	offerID ids.OfferID,
+	doc *ports.OfferDocument,
+	buyerID ids.UUID,
+	contexts map[ids.TenantID]string,
+) error {
+	key := priceProfileKey(contexts, offerID.Tenant)
+	// На холодном отказе персонализации остаётся публичная карточка из проекции.
+	// Оформление независимо перепроверит цену и наличие у продавца.
+	if buyerID != "" && key == "" {
+		var state ports.OfferState
+		err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+			var err error
+			state, err = tx.Offers().Offer(ctx, offerID.Tenant, offerID.Product)
+			return err
+		})
+		if errors.Is(err, catalog.ErrProductNotFound) {
+			return catalog.ErrOfferNotFound
+		}
+		if err != nil {
+			return err
+		}
+		// Пустой контекст возможен и для скрытого магазина: устаревший индекс не должен его раскрыть.
+		public, ok := Document(state)
+		if !ok || !public.Visible {
+			return catalog.ErrOfferNotFound
+		}
+		*doc = public
+		key = catalog.DefaultPriceProfile
+	}
+	if !selectOfferPrice(doc, key) {
+		return catalog.ErrOfferNotFound
+	}
+	return nil
 }
 
 // PriceContexts выбирает контексты публичных магазинов из того же источника, что каталог.

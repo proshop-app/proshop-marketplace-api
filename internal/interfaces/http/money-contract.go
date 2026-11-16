@@ -74,6 +74,7 @@ func publicMoneyRoute(method, path string) bool {
 	}
 	for _, prefix := range []string{
 		"/api/v1/catalog/offers",
+		"/api/v1/catalog/variants",
 		"/api/v1/catalog/sponsored",
 		"/api/v1/recommendations",
 		"/api/v1/cart",

@@ -123,7 +123,9 @@ func TestIdenticalProjectionContentRejectsBusinessChanges(t *testing.T) {
 		},
 		{
 			name: "variant value",
-			edit: func(state *catalog.ProductState) { state.Card.Variants.Value = "v2" },
+			edit: func(state *catalog.ProductState) {
+				state.Card.Variants.Axes[0].Value = "v2"
+			},
 		},
 		{
 			name: "raw marketplace category",
@@ -213,8 +215,14 @@ func reviewedProjectionContent(t *testing.T) catalog.ProductState {
 				ModelKeySource: "derived-source",
 				Variants: &catalog.Variants{
 					GroupID: "group-1",
-					Axis:    catalog.VariantAxis{Key: "platform.a1", Code: "a1", Name: "Атрибут"},
-					Value:   "v1",
+					Axes: []catalog.VariantAxis{
+						{
+							Key:   "platform.a1",
+							Code:  "a1",
+							Name:  "Атрибут",
+							Value: "v1",
+						},
+					},
 				},
 				Marketplace: &taxonomy.Card{
 					Price:      &marketplacePrice,

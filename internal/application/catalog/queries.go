@@ -37,7 +37,6 @@ var ErrInvalidQuery = errs.New(errs.Invalid, "catalog.invalid_query", "неко�
 // OfferCard — проверенное предложение каталога.
 type OfferCard struct {
 	SellersCount *int
-	Variants     *VariantBlock
 	Offer        ports.OfferDocument
 }
 
@@ -137,41 +136,12 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UU
 	if err != nil {
 		return OfferCard{}, err
 	}
-	key := priceProfileKey(contexts, offerID.Tenant)
-	// На холодном отказе персонализации остаётся публичная карточка из проекции.
-	// Оформление независимо перепроверит цену и наличие у продавца.
-	if buyerID != "" && key == "" {
-		var state ports.OfferState
-		err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-			var err error
-			state, err = tx.Offers().Offer(ctx, offerID.Tenant, offerID.Product)
-			return err
-		})
-		if errors.Is(err, catalog.ErrProductNotFound) {
-			return OfferCard{}, catalog.ErrOfferNotFound
-		}
-		if err != nil {
-			return OfferCard{}, err
-		}
-		// Пустой контекст возможен и для скрытого магазина: устаревший индекс не должен его раскрыть.
-		public, ok := Document(state)
-		if !ok || !public.Visible {
-			return OfferCard{}, catalog.ErrOfferNotFound
-		}
-		doc = public
-		key = catalog.DefaultPriceProfile
-	}
-	if !selectOfferPrice(&doc, key) {
-		return OfferCard{}, catalog.ErrOfferNotFound
-	}
-
-	variants, err := q.offerVariants(ctx, doc, key)
-	if err != nil {
+	if err := q.priceOffer(ctx, offerID, &doc, buyerID, contexts); err != nil {
 		return OfferCard{}, err
 	}
+
 	return OfferCard{
-		Offer:    doc,
-		Variants: variants,
+		Offer: doc,
 	}, nil
 }
 

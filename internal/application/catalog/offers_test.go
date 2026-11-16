@@ -64,7 +64,7 @@ func TestOffersOrderVisibilityAndPrices(t *testing.T) {
 	got := make([]string, 0, len(cards))
 	for _, card := range cards {
 		got = append(got, card.Offer.ID)
-		if card.Offer.Price != 9000 || card.Offer.BasePrice != 12000 || card.Variants != nil {
+		if card.Offer.Price != 9000 || card.Offer.BasePrice != 12000 {
 			t.Fatal(card)
 		}
 	}

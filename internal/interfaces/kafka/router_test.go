@@ -326,6 +326,9 @@ func TestMarketplacePriceProjectedWithoutFloat(t *testing.T) {
 func TestVariantSnapshotCompatibility(t *testing.T) {
 	for _, payload := range []string{
 		`null`,
+		`{"groupId":"v1","position":0,"axes":[
+            {"key":"platform.color","code":"color","name":"Цвет","value":"Синий"},
+            {"key":"platform.size","code":"size","name":"Размер","value":"M"}]}`,
 		`{"groupId":"v1","axis":{"key":"platform.color","code":"color","name":"Цвет"},"value":"Синий","position":0}`,
 	} {
 		body := strings.Replace(productBody, `"variantsId":"v1"`, `"variantsId":"v1","variants":`+payload, 1)

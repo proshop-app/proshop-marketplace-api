@@ -76,12 +76,14 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 			snap.Card.Publication.Issues = []taxonomy.Issue{{Code: "identity_incomplete", Attribute: "axis"}}
 			snap.Card.Variants = &catalog.Variants{
 				GroupID: "v1",
-				Axis: catalog.VariantAxis{
-					Key:  "platform.color",
-					Code: "color",
-					Name: "Цвет",
+				Axes: []catalog.VariantAxis{
+					{
+						Key:   "platform.color",
+						Code:  "color",
+						Name:  "Цвет",
+						Value: "Синий",
+					},
 				},
-				Value:    "Синий",
 				Position: 2,
 			}
 			product, err := catalog.NewProduct(snap, at(0))

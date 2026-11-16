@@ -266,6 +266,7 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/catalog/offers/{offerId}/reviews", catalog.reviews},
 		{http.MethodGet, "/api/v1/catalog/offers", publicBuyer(deps.Auth, catalog.list)},
 		{http.MethodGet, "/api/v1/catalog/offers/{offerId}", publicBuyer(deps.Auth, catalog.card)},
+		{http.MethodGet, "/api/v1/catalog/variants/{tenantId}/{groupId}", publicBuyer(deps.Auth, catalog.variants)},
 
 		{http.MethodGet, "/api/v1/operator/participants", operator(participants.list)},
 		{http.MethodPost, "/api/v1/operator/participants", operator(participants.create)},
