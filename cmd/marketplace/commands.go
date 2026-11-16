@@ -36,11 +36,11 @@ func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 	}
 	defer store.close()
 
-	uow := postgres.NewUnitOfWork(store.pool)
+	uow := postgres.NewUnitOfWorkWithSnapshots(store.pool, store.snapshots)
 	references := appreference.NewService(uow, clock.System{}, random.IDs{}, nil, appreference.Config{})
 	models := appcatalog.NewModelKeys(referencecatalog.New(references), nil, cfg.ModelKeys)
 	indexer := appcatalog.NewIndexer(
-		postgres.NewUnitOfWork(store.pool),
+		uow,
 		store.index,
 		clock.System{},
 		indexBatch,
@@ -147,7 +147,7 @@ func moderationReevaluate(ctx context.Context, cfg config.Config, _ *slog.Logger
 	}
 	defer store.close()
 	service := appmoderation.NewService(
-		postgres.NewUnitOfWork(store.pool),
+		postgres.NewUnitOfWorkWithSnapshots(store.pool, store.snapshots),
 		clock.System{},
 		random.IDs{},
 		appmoderation.Config{

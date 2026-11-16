@@ -126,9 +126,25 @@ func TestTaxonomyVersionsAndProjection(t *testing.T) {
 }
 
 func TestTaxonomySharedLockSerializesLoad(t *testing.T) {
+	t.Run("cold", func(t *testing.T) { testTaxonomySharedLock(t, false) })
+	t.Run("warm", func(t *testing.T) { testTaxonomySharedLock(t, true) })
+}
+
+func testTaxonomySharedLock(t *testing.T, warm bool) {
+	t.Helper()
+
 	pool := pgtest.Pool(t)
 	uow := postgres.NewUnitOfWork(pool)
 	ctx := context.Background()
+	if warm {
+		err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+			_, err := tx.Taxonomy().Current(ctx)
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	locked := make(chan struct{})
 	release := make(chan struct{})
 	finished := make(chan error, 1)

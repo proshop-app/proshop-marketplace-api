@@ -13,6 +13,7 @@ import (
 
 const (
 	selectTaxonomy        = `SELECT definition FROM taxonomy_head WHERE singleton FOR SHARE`
+	readTaxonomyVersion   = `SELECT version FROM taxonomy_head WHERE singleton FOR SHARE`
 	selectTaxonomyVersion = `SELECT definition FROM taxonomy_versions WHERE version = $1`
 	lockTaxonomy          = `SELECT version FROM taxonomy_head WHERE singleton FOR UPDATE`
 	updateTaxonomy        = `UPDATE taxonomy_head
@@ -26,11 +27,35 @@ const (
 
 // Taxonomy — версии схем в PostgreSQL, блокировка головы согласует приём и загрузку.
 type Taxonomy struct {
-	db *gorm.DB
+	db       *gorm.DB
+	snapshot snapshotReader[taxonomy.Definition]
+}
+
+func newTaxonomy(
+	db *gorm.DB,
+	shared *snapshot[taxonomy.Definition],
+	afterCommit func(func()),
+) *Taxonomy {
+	return &Taxonomy{
+		db: db,
+		snapshot: snapshotReader[taxonomy.Definition]{
+			shared:      shared,
+			afterCommit: afterCommit,
+		},
+	}
 }
 
 // Current читает голову с разделяемой блокировкой до фиксации транзакции.
 func (r *Taxonomy) Current(ctx context.Context) (taxonomy.Definition, error) {
+	var version int64
+	if err := rawSQL(ctx, r.db, readTaxonomyVersion).Row().Scan(&version); err != nil {
+		return taxonomy.Definition{}, err
+	}
+
+	return r.snapshot.current(version, func() (taxonomy.Definition, error) { return r.load(ctx) })
+}
+
+func (r *Taxonomy) load(ctx context.Context) (taxonomy.Definition, error) {
 	var raw []byte
 	if err := rawSQL(ctx, r.db, selectTaxonomy).Row().Scan(&raw); err != nil {
 		return taxonomy.Definition{}, err

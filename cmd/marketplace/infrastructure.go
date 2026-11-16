@@ -26,8 +26,9 @@ const (
 
 // storage — база и индексы процесса.
 type storage struct {
-	pool  *pgxpool.Pool
-	index *searchapi.Index
+	pool      *pgxpool.Pool
+	index     *searchapi.Index
+	snapshots *postgres.Snapshots
 }
 
 // openStorage подключает PostgreSQL и API поиска.
@@ -48,8 +49,9 @@ func openStorage(ctx context.Context, cfg config.Config) (*storage, error) {
 	}
 
 	return &storage{
-		pool:  pool,
-		index: index,
+		pool:      pool,
+		index:     index,
+		snapshots: &postgres.Snapshots{},
 	}, nil
 }
 

@@ -24,17 +24,36 @@ import (
 
 // UnitOfWork — транзакция PostgreSQL на каждый вызов Do.
 type UnitOfWork struct {
-	source *connectionSource
+	source    *connectionSource
+	snapshots *Snapshots
 }
 
 type scope struct {
 	afterCommit []func()
 	db          *gorm.DB
+	snapshots   *Snapshots
+	taxonomy    *Taxonomy
+	moderation  *ModerationRules
 }
 
 // NewUnitOfWork — UnitOfWork поверх пула.
 func NewUnitOfWork(pool *pgxpool.Pool) *UnitOfWork {
-	return &UnitOfWork{source: newConnectionSource(pool)}
+	return NewUnitOfWorkWithSnapshots(pool, &Snapshots{})
+}
+
+// NewUnitOfWorkWithSnapshots разделяет снимки между всеми транзакциями процесса.
+func NewUnitOfWorkWithSnapshots(pool *pgxpool.Pool, snapshots *Snapshots) *UnitOfWork {
+	return &UnitOfWork{
+		source:    newConnectionSource(pool),
+		snapshots: snapshots,
+	}
+}
+
+func newScope(db *gorm.DB, snapshots *Snapshots) *scope {
+	return &scope{
+		db:        db,
+		snapshots: snapshots,
+	}
 }
 
 // Do открывает транзакцию, выполняет fn и фиксирует; ошибка или паника fn откатывают.
@@ -60,9 +79,7 @@ func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx por
 		}
 	}()
 
-	scope := &scope{
-		db: shared.orm,
-	}
+	scope := newScope(shared.orm, u.snapshots)
 	if err = fn(ctx, scope); err != nil {
 		return err
 	}
@@ -122,7 +139,12 @@ func (s *scope) Carts() cart.Repository { return &Carts{db: s.db} }
 
 func (s *scope) Checkouts() checkout.Repository { return &Checkouts{db: s.db} }
 
-func (s *scope) Taxonomy() taxonomy.Repository { return &Taxonomy{db: s.db} }
+func (s *scope) Taxonomy() taxonomy.Repository {
+	if s.taxonomy == nil {
+		s.taxonomy = newTaxonomy(s.db, &s.snapshots.taxonomy, s.AfterCommit)
+	}
+	return s.taxonomy
+}
 
 func (s *scope) Reference() reference.Repository { return &References{db: s.db} }
 
@@ -136,7 +158,12 @@ func (s *scope) ModerationDecisions() moderation.DecisionRepository {
 	return &ModerationDecisions{db: s.db}
 }
 
-func (s *scope) ModerationRules() moderation.RulesRepository { return &ModerationRules{db: s.db} }
+func (s *scope) ModerationRules() moderation.RulesRepository {
+	if s.moderation == nil {
+		s.moderation = newModerationRules(s.db, &s.snapshots.moderation, s.AfterCommit)
+	}
+	return s.moderation
+}
 
 func (s *scope) ParticipantDecisions() participant.DecisionRepository {
 	return &ParticipantDecisions{db: s.db}

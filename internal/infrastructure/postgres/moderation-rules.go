@@ -18,15 +18,36 @@ const (
 
 // ModerationRules сериализует правки словаря общей строкой ревизии.
 type ModerationRules struct {
-	db *gorm.DB
+	db       *gorm.DB
+	snapshot snapshotReader[moderation.Rules]
+}
+
+func newModerationRules(
+	db *gorm.DB,
+	shared *snapshot[moderation.Rules],
+	afterCommit func(func()),
+) *ModerationRules {
+	return &ModerationRules{
+		db: db,
+		snapshot: snapshotReader[moderation.Rules]{
+			shared:      shared,
+			afterCommit: afterCommit,
+		},
+	}
 }
 
 // Current согласует список фраз с ревизией правил.
 func (r *ModerationRules) Current(ctx context.Context) (moderation.Rules, error) {
-	rules := moderation.Rules{Phrases: []moderation.StopPhrase{}}
-	if err := rawSQL(ctx, r.db, readModerationRules).Row().Scan(&rules.Revision); err != nil {
-		return rules, err
+	var revision int64
+	if err := rawSQL(ctx, r.db, readModerationRules).Row().Scan(&revision); err != nil {
+		return moderation.Rules{}, err
 	}
+
+	return r.snapshot.current(revision, func() (moderation.Rules, error) { return r.load(ctx, revision) })
+}
+
+func (r *ModerationRules) load(ctx context.Context, revision int64) (moderation.Rules, error) {
+	rules := moderation.Rules{Revision: revision, Phrases: []moderation.StopPhrase{}}
 	rows, err := rawSQL(ctx, r.db, listModerationPhrases).Rows()
 	if err != nil {
 		return rules, err
