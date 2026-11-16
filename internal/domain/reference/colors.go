@@ -11,14 +11,6 @@ func ValidateColorState(dict *Dictionary, state EntryState) error {
 	if dict.Code() != colorpalette.Dictionary {
 		return nil
 	}
-	if _, _, err := dict.Spelling(state.CanonicalName); err != nil {
-		return err
-	}
-	for _, alias := range state.Aliases {
-		if _, _, err := dict.Spelling(alias.Text); err != nil {
-			return err
-		}
-	}
 	parents, err := colorpalette.Parents(state.Metadata)
 	if err != nil {
 		return err

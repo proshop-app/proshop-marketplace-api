@@ -41,7 +41,6 @@ func TestColorConfirmationAndMetadata(t *testing.T) {
 		t.Fatal("удалена обязательная привязка")
 	}
 	for _, raw := range []string{
-		`{"baseColors":["Другие цвета"]}`,
 		`{"baseColors":["Хаки"]}`,
 		`{"baseColors":["Синий","Синий"]}`,
 		`{"baseColors":["Синий","Зелёный","Белый"]}`,
@@ -63,14 +62,6 @@ func TestColorConfirmationAndMetadata(t *testing.T) {
 	}
 	if err := ValidateColorState(dict, base.State()); err == nil {
 		t.Fatal("у базового появились родители")
-	}
-	for _, name := range []string{"Другие цвета", " ДРУГИЕ  ЦВЕТА "} {
-		if _, err := NewEntry(dict, NewEntryInput{Name: name, Status: StatusCandidate}, testNow); err == nil {
-			t.Errorf("создано зарезервированное имя %s", name)
-		}
-		if _, _, err := base.AddAlias(dict, AliasInput{Text: name}, SourceOperator, testNow); err == nil {
-			t.Errorf("создан зарезервированный вариант %s", name)
-		}
 	}
 }
 

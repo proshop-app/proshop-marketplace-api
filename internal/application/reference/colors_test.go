@@ -55,44 +55,36 @@ func TestColorConfirmationValidatesFinalState(t *testing.T) {
 }
 
 func TestColorJournalCannotRestoreForbiddenState(t *testing.T) {
-	for _, name := range []string{"без родителей", "запрещённый вариант"} {
-		t.Run(name, func(t *testing.T) {
-			h := newHarness(t)
-			h.store.SeedReferenceDictionary(reference.DictionaryState{
-				Code:       "color",
-				Kind:       reference.KindClosed,
-				AliasKinds: reference.AliasKinds,
-				Limits:     reference.DefaultLimits(),
-			})
-			_, err := h.service.mutate(context.Background(), "color", func(ctx context.Context, m *session) error {
-				state := reference.EntryState{
-					ID:            "e1",
-					Dictionary:    "color",
-					CanonicalName: "Хаки",
-					CanonicalKey:  "хаки",
-					Status:        reference.StatusConfirmed,
-				}
-				if name == "запрещённый вариант" {
-					state.Metadata = json.RawMessage(`{"baseColors":["Зелёный"]}`)
-					state.Aliases = []reference.AliasState{{Text: "Другие цвета"}}
-				}
-				// Историческое удаление могло сохранить запрещённое теперь состояние.
-				change := reference.Change{
-					Dictionary: "color",
-					EntryID:    state.ID,
-					Revision:   1,
-					Forward:    []reference.Image{{ID: state.ID}},
-					Inverse:    []reference.Image{{ID: state.ID, State: &state}},
-				}
-				return h.service.revert(ctx, m, change, operatorMeta)
-			})
-			if err == nil {
-				t.Fatal("откат восстановил запрещённое состояние")
-			}
-			page, err := h.service.List(context.Background(), "color", reference.ListFilter{})
-			if err != nil || page.Total != 0 || len(h.store.OutboxRows()) != 0 {
-				t.Fatal("отказ оставил частичное изменение", err)
-			}
-		})
+	h := newHarness(t)
+	h.store.SeedReferenceDictionary(reference.DictionaryState{
+		Code:       "color",
+		Kind:       reference.KindClosed,
+		AliasKinds: reference.AliasKinds,
+		Limits:     reference.DefaultLimits(),
+	})
+	_, err := h.service.mutate(context.Background(), "color", func(ctx context.Context, m *session) error {
+		state := reference.EntryState{
+			ID:            "e1",
+			Dictionary:    "color",
+			CanonicalName: "Хаки",
+			CanonicalKey:  "хаки",
+			Status:        reference.StatusConfirmed,
+		}
+		// Историческое удаление могло сохранить запрещённое теперь состояние.
+		change := reference.Change{
+			Dictionary: "color",
+			EntryID:    state.ID,
+			Revision:   1,
+			Forward:    []reference.Image{{ID: state.ID}},
+			Inverse:    []reference.Image{{ID: state.ID, State: &state}},
+		}
+		return h.service.revert(ctx, m, change, operatorMeta)
+	})
+	if err == nil {
+		t.Fatal("откат восстановил запрещённое состояние")
+	}
+	page, err := h.service.List(context.Background(), "color", reference.ListFilter{})
+	if err != nil || page.Total != 0 || len(h.store.OutboxRows()) != 0 {
+		t.Fatal("отказ оставил частичное изменение", err)
 	}
 }

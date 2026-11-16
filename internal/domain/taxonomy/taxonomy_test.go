@@ -360,8 +360,12 @@ func TestNormalizedReferences(t *testing.T) {
 		"неверный цвет": func(d *taxonomy.Definition) {
 			d.Attributes[0].ValuesMeta = map[string]taxonomy.ValueMeta{"v1": {Hex: "white"}}
 		},
+		"неизвестный образец": func(d *taxonomy.Definition) {
+			d.Attributes[0].ValuesMeta = map[string]taxonomy.ValueMeta{"v1": {Swatch: "unknown"}}
+		},
 		"чужое значение": func(d *taxonomy.Definition) {
-			d.Attributes[0].ValuesMeta = map[string]taxonomy.ValueMeta{"other": {Hex: "#FFFFFF"}}
+			d.Attributes[0].ValuesMeta = map[string]taxonomy.ValueMeta{"foreign": {Hex: "#FFFFFF"}}
+			d.Attributes[0].FacetOptions = []string{"foreign"}
 		},
 		"схема раздела": func(d *taxonomy.Definition) {
 			d.Categories[0].Children = []taxonomy.Category{{ID: "c2", Name: "Другая", Slug: "c2", Schema: "s1"}}

@@ -9,8 +9,6 @@ import (
 const (
 	// Dictionary — словарь исходных значений цвета.
 	Dictionary = "color"
-	// Other — вычисляемая корзина, недоступная в реестре.
-	Other = "Другие цвета"
 )
 
 var palette = []string{
@@ -82,13 +80,10 @@ func Validate(value string, parents []string, confirmed bool) error {
 	return nil
 }
 
-// facetValues оставляет базовый цвет самим собой и отправляет непривязанный оттенок в корзину.
+// facetValues возвращает базовый цвет или родителей оттенка; без привязки значений нет.
 func facetValues(value string, parents []string) []string {
 	if IsBase(value) {
 		return []string{value}
-	}
-	if len(parents) == 0 {
-		return []string{Other}
 	}
 	return slices.Clone(parents)
 }

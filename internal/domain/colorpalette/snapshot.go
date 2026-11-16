@@ -13,14 +13,14 @@ func Resolve(
 			return nil, nil, ErrInvalid.WithMessage("базовый цвет не подтверждён в реестре: " + value)
 		}
 	}
-	options := append(Values(), Other)
+	options := Values()
 	for _, value := range options {
 		if !samples[value] {
 			return nil, nil, ErrInvalid.WithMessage("нет образца значения фасета: " + value)
 		}
 	}
 	for value := range samples {
-		if !IsBase(value) && value != Other {
+		if !IsBase(value) {
 			return nil, nil, ErrInvalid.WithMessage("образец задан вне палитры: " + value)
 		}
 	}
@@ -33,7 +33,9 @@ func Resolve(
 		if err := Validate(value, parents, false); err != nil {
 			return nil, nil, err
 		}
-		byValue[value] = facetValues(value, parents)
+		if values := facetValues(value, parents); len(values) > 0 {
+			byValue[value] = values
+		}
 	}
 	return options, byValue, nil
 }

@@ -330,12 +330,12 @@ func TestTaxonomyFacetSnapshotHTTP(t *testing.T) {
 			Name:         "Цвет",
 			Type:         "enum",
 			Values:       []string{"Зелёный", "Хаки"},
-			FacetOptions: []string{"Зелёный", "Другие цвета"},
+			FacetOptions: []string{"Зелёный"},
 			FacetValuesByValue: map[string][]string{
 				"Зелёный": {"Зелёный"},
 				"Хаки":    {"Зелёный"},
 			},
-			ValuesMeta: map[string]taxonomy.ValueMeta{"Другие цвета": {Swatch: "other"}},
+			ValuesMeta: map[string]taxonomy.ValueMeta{"Зелёный": {Hex: "#008000"}},
 		}},
 	})
 	handler := NewHandler(Deps{
@@ -357,9 +357,9 @@ func TestTaxonomyFacetSnapshotHTTP(t *testing.T) {
 		t.Fatal(response.Code, response.Body.String())
 	}
 	attribute := body.Attributes[0]
-	if !reflect.DeepEqual(attribute.FacetOptions, []string{"Зелёный", "Другие цвета"}) ||
+	if !reflect.DeepEqual(attribute.FacetOptions, []string{"Зелёный"}) ||
 		!reflect.DeepEqual(attribute.FacetValuesByValue["Хаки"], []string{"Зелёный"}) ||
-		attribute.ValuesMeta["Другие цвета"].Swatch != "other" {
+		attribute.ValuesMeta["Зелёный"].Hex != "#008000" {
 		t.Fatal(response.Body.String())
 	}
 }

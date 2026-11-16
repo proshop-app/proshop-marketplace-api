@@ -6557,12 +6557,15 @@ components:
         facetOptions:
           type: array
           readOnly: true
-          description: Допустимые значения фасета в порядке показа, включая вычисляемые корзины.
+          description: Допустимые значения фасета в порядке показа; для attr.color — ровно 18 базовых цветов.
           items: { type: string, minLength: 1, maxLength: 1024 }
         facetValuesByValue:
           type: object
           readOnly: true
-          description: Значение характеристики → значения фасета. Ключи только из values.
+          description: >-
+            Значение характеристики → значения фасета. Ключи только из values.
+            Цвет без базового отсутствует в отображении; товар остаётся в выдаче,
+            но не участвует в фасете attr.color и отборе по цвету.
           additionalProperties:
             type: array
             minItems: 1
@@ -6598,7 +6601,7 @@ components:
         type: object
         properties:
           hex: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
-          swatch: { type: string, enum: [multicolor, pattern, other] }
+          swatch: { type: string, enum: [multicolor, pattern] }
     TaxonomySchemaIdentity:
       type: object
       additionalProperties: false
@@ -6646,12 +6649,15 @@ components:
         facetOptions:
           type: array
           readOnly: true
-          description: Допустимые значения фасета в порядке показа, включая вычисляемые корзины.
+          description: Допустимые значения фасета в порядке показа; для attr.color — ровно 18 базовых цветов.
           items: { type: string, minLength: 1, maxLength: 1024 }
         facetValuesByValue:
           type: object
           readOnly: true
-          description: Значение характеристики → значения фасета. Ключи только из values.
+          description: >-
+            Значение характеристики → значения фасета. Ключи только из values.
+            Цвет без базового отсутствует в отображении; товар остаётся в выдаче,
+            но не участвует в фасете attr.color и отборе по цвету.
           additionalProperties:
             type: array
             minItems: 1
@@ -7937,7 +7943,7 @@ components:
           uniqueItems: true
           description: >-
             Только для color: 1–2 значения палитры у подтверждённого оттенка.
-            У базового цвета родителей нет; «Другие цвета» запрещено.
+            У базового цвета родителей нет.
           items: { type: string }
     ReferenceAliasInput:
       type: object

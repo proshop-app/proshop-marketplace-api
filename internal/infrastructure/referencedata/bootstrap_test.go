@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/proshop-app/proshop-marketplace/internal/domain/colorpalette"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
 )
@@ -87,10 +86,6 @@ func assertTaxonomyDictionaries(t *testing.T, dictionaries map[string]suppliedDi
 			t.Errorf("у %s нет confirmed-значений", code)
 		}
 		for value := range attribute.ValuesMeta {
-			// Корзина палитры — вычисляемое значение фасета: образец у неё есть, записи реестра нет.
-			if code == colorpalette.Dictionary && value == colorpalette.Other {
-				continue
-			}
 			if !confirmed[value] {
 				t.Errorf("%s.valuesMeta: %s не подтверждено в %s", attribute.Code, value, code)
 			}

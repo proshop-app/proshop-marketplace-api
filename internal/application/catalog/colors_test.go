@@ -39,7 +39,7 @@ func TestColorRegistryPublicationDocumentAndSearch(t *testing.T) {
 		Type:       "enum",
 		Dictionary: "color",
 		Facet:      true,
-		ValuesMeta: map[string]taxonomy.ValueMeta{colorpalette.Other: {Swatch: "other"}},
+		ValuesMeta: map[string]taxonomy.ValueMeta{},
 	}
 	create := func(name string, status reference.Status, metadata string) appreference.EntryResult {
 		t.Helper()
@@ -108,10 +108,10 @@ func TestColorRegistryPublicationDocumentAndSearch(t *testing.T) {
 	input.Attributes[0].FacetOptions = []string{"подмена"}
 	input.Attributes[0].FacetValuesByValue = map[string][]string{"подмена": {"подмена"}}
 	input.Attributes[0].ValuesMeta = maps.Clone(field.ValuesMeta)
-	delete(input.Attributes[0].ValuesMeta, colorpalette.Other)
+	delete(input.Attributes[0].ValuesMeta, "Белый")
 	_, publicationErr := service.LoadPart(ctx, "attributes", input, 1)
 	if typed, ok := errs.As(publicationErr); !ok || typed.Key() != "taxonomy.invalid" ||
-		typed.Message() != "нет образца значения фасета: Другие цвета" {
+		typed.Message() != "нет образца значения фасета: Белый" {
 		t.Fatalf("отказ публикации потерял контекст или причину: %v", publicationErr)
 	}
 	input.Attributes[0].ValuesMeta = field.ValuesMeta
@@ -119,7 +119,14 @@ func TestColorRegistryPublicationDocumentAndSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	published, _ := service.Current(ctx)
-	for _, value := range []string{"Произвольный", "Вариант", candidate.Entry.CanonicalName, colorpalette.Other} {
+	color := published.Fields()["color"]
+	if len(color.FacetOptions) != 18 || !reflect.DeepEqual(color.FacetOptions, colorpalette.Values()) {
+		t.Fatalf("неверная палитра: %v", color.FacetOptions)
+	}
+	if _, ok := color.FacetValuesByValue["Оттенок"]; ok {
+		t.Fatal("непривязанное значение получило фасет")
+	}
+	for _, value := range []string{"Произвольный", "Вариант", candidate.Entry.CanonicalName} {
 		raw, _ := json.Marshal(value)
 		result := published.Check(&taxonomy.Card{
 			CategoryID: "c1",
@@ -154,6 +161,9 @@ func TestColorRegistryPublicationDocumentAndSearch(t *testing.T) {
 			if !ok || !doc.Listed || string(doc.Attributes["color"]) != string(raw) {
 				t.Fatalf("неверная проекция: %+v", doc)
 			}
+			if shade == "Оттенок" && len(doc.AttributeFacetValues["color"]) != 0 {
+				t.Fatal("непривязанный оттенок получил значения фасета")
+			}
 			return index.Put(ctx, []ports.OfferDocument{doc})
 		}); err != nil {
 			t.Fatal(err)
@@ -177,15 +187,17 @@ func TestColorRegistryPublicationDocumentAndSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = append(want, ports.FacetBucket{Value: colorpalette.Other, Count: 1})
+	if page.Total != 6 {
+		t.Fatalf("непривязанный оттенок пропал из выдачи: %+v", page)
+	}
 	if got := findFacet(t, page.Facets, "attr.color"); !reflect.DeepEqual(got.Values, want) {
-		t.Fatalf("корзина не последняя: %+v", got)
+		t.Fatalf("непривязанный оттенок попал в фасет: %+v", got)
 	}
 	page, err = queries.Search(ctx, ports.OfferQuery{
-		Attributes: map[string]ports.AttributeFilter{"color": {Values: []string{colorpalette.Other}}},
+		Attributes: map[string]ports.AttributeFilter{"color": {Values: colorpalette.Values()}},
 	})
-	if err != nil || page.Total != 1 {
-		t.Fatalf("отбор по корзине: %+v %v", page, err)
+	if err != nil || page.Total != 5 {
+		t.Fatalf("непривязанный оттенок попал в отбор: %+v %v", page, err)
 	}
 	beforeTasks := len(store.OutboxRows())
 	_, err = registry.Update(ctx, appreference.UpdateCommand{

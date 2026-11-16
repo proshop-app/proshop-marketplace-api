@@ -8,7 +8,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
-func TestFacetOptionsOrderAndComputedBucket(t *testing.T) {
+func TestFacetOptionsOrderAndAllowedValues(t *testing.T) {
 	field := taxonomy.Attribute{
 		Code:         "a1",
 		Type:         "enum",
@@ -24,7 +24,11 @@ func TestFacetOptionsOrderAndComputedBucket(t *testing.T) {
 			{Value: "f1", Count: 0},
 		},
 	}
-	want := []ports.FacetBucket{{Value: "f1", Count: 0}, {Value: "f2", Count: 2}}
+	want := []ports.FacetBucket{
+		{Value: "f1", Count: 0},
+		{Value: "f2", Count: 2},
+		{Value: "f3", Count: 0},
+	}
 	if got := orderFacet(facet, []taxonomy.Attribute{field}); !reflect.DeepEqual(got.Values, want) {
 		t.Fatal(got)
 	}

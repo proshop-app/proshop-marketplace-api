@@ -2,6 +2,7 @@ package colorpalette
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -21,11 +22,6 @@ func TestSnapshotPolicyRejectsEachViolation(t *testing.T) {
 			name:    "нет образца базового",
 			message: "нет образца",
 			mutate:  func(_ map[string]json.RawMessage, samples map[string]bool) { delete(samples, "Белый") },
-		},
-		{
-			name:    "нет образца корзины",
-			message: "нет образца",
-			mutate:  func(_ map[string]json.RawMessage, samples map[string]bool) { delete(samples, Other) },
 		},
 		{
 			name:    "образец оттенка",
@@ -69,14 +65,17 @@ func TestSnapshotAllowsLegacyUnmappedValue(t *testing.T) {
 	entries, samples := paletteFixture()
 	entries["Оттенок"] = json.RawMessage(`{}`)
 	options, values, err := Resolve(entries, samples)
-	if err != nil || len(options) != 19 || options[18] != Other || values["Оттенок"][0] != Other {
-		t.Fatalf("нет корзины для старого подтверждённого значения: %v %v %v", options, values, err)
+	if err != nil || len(options) != 18 || !slices.Equal(options, Values()) {
+		t.Fatalf("неверная палитра: %v %v", options, err)
+	}
+	if _, ok := values["Оттенок"]; ok {
+		t.Fatalf("непривязанное значение получило фасет: %v", values)
 	}
 }
 
 func paletteFixture() (map[string]json.RawMessage, map[string]bool) {
 	entries := map[string]json.RawMessage{}
-	samples := map[string]bool{Other: true}
+	samples := map[string]bool{}
 	for _, value := range Values() {
 		entries[value] = json.RawMessage(`{}`)
 		samples[value] = true

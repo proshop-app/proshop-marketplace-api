@@ -3,7 +3,6 @@ package catalog
 import (
 	"encoding/json"
 	"math"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -120,8 +119,7 @@ func orderFacet(facet ports.Facet, fields []taxonomy.Attribute) ports.Facet {
 		}
 		values := []ports.FacetBucket{}
 		for _, bucket := range facet.Values {
-			if _, ok := order[bucket.Value]; ok &&
-				(bucket.Count != 0 || slices.Contains(field.Values, bucket.Value)) {
+			if _, ok := order[bucket.Value]; ok {
 				values = append(values, bucket)
 			}
 		}

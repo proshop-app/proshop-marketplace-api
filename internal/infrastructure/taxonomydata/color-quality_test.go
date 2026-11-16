@@ -51,7 +51,7 @@ func TestPaletteSamplesAreComplete(t *testing.T) {
 			continue
 		}
 		palette := colorpalette.Values()
-		if len(palette) != 18 || len(field.ValuesMeta) != len(palette)+1 {
+		if len(palette) != 18 || len(field.ValuesMeta) != len(palette) {
 			t.Fatal("палитра расходится с набором образцов")
 		}
 		for _, value := range palette {
