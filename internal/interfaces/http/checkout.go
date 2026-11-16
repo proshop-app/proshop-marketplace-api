@@ -100,6 +100,7 @@ type checkoutJSON struct {
 	GoodsTotal       rubles              `json:"goodsTotal"`
 	DeliveryTotal    rubles              `json:"deliveryTotal"`
 	Total            rubles              `json:"total"`
+	PayableTotal     rubles              `json:"payableTotal"`
 	Version          int64               `json:"version"`
 	CreatedAt        time.Time           `json:"createdAt"`
 	UpdatedAt        time.Time           `json:"updatedAt"`
@@ -122,6 +123,11 @@ type returnLineJSON struct {
 }
 
 func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
+	payable, err := appcheckout.PaymentAmount(state)
+	if err != nil && !errors.Is(err, checkout.ErrTransition) {
+		return checkoutJSON{}, err
+	}
+
 	out := checkoutJSON{
 		ID:               string(state.ID),
 		CreationComplete: checkout.Restore(state).CreationComplete(),
@@ -130,6 +136,7 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 		GoodsTotal:       rubles(state.GoodsTotal.Kopecks()),
 		DeliveryTotal:    rubles(state.DeliveryTotal.Kopecks()),
 		Total:            rubles(state.Total.Kopecks()),
+		PayableTotal:     rubles(payable.Kopecks()),
 		Version:          state.Version,
 		CreatedAt:        state.CreatedAt.UTC(),
 		UpdatedAt:        state.UpdatedAt.UTC(),

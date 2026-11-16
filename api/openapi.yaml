@@ -7645,6 +7645,7 @@ components:
       - goodsTotal
       - deliveryTotal
       - total
+      - payableTotal
       - version
       - createdAt
       - updatedAt
@@ -7695,6 +7696,15 @@ components:
           minimum: 0
           maximum: 9999999999999.99
           description: Сумма в рублях
+        payableTotal:
+          type: number
+          multipleOf: 0.01
+          minimum: 0
+          maximum: 9999999999999.99
+          description: >-
+            Сумма к оплате сейчас в рублях по тому же правилу, что использует касса:
+            товары и доставка групп, ожидающих оплаты. 0, пока создание не завершено,
+            нечего оплачивать либо покупка отменена или оплачена. total сохраняет сумму всех групп.
         version:
           type: integer
           format: int64
