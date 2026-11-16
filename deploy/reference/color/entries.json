@@ -29,12 +29,7 @@
   {
     "canonical": "Серебристый",
     "status": "confirmed",
-    "aliases": [
-      {
-        "text": "Серебряный",
-        "kind": "spelling"
-      }
-    ],
+    "aliases": [],
     "metadata": {
       "order": 3,
       "directions": []
@@ -142,12 +137,7 @@
   {
     "canonical": "Золотистый",
     "status": "confirmed",
-    "aliases": [
-      {
-        "text": "Золотой",
-        "kind": "spelling"
-      }
-    ],
+    "aliases": [],
     "metadata": {
       "order": 15,
       "directions": []
@@ -409,6 +399,30 @@
       "directions": [],
       "baseColors": [
         "Зелёный"
+      ]
+    }
+  },
+  {
+    "canonical": "Золотой",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 38,
+      "directions": [],
+      "baseColors": [
+        "Золотистый"
+      ]
+    }
+  },
+  {
+    "canonical": "Серебряный",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 39,
+      "directions": [],
+      "baseColors": [
+        "Серебристый"
       ]
     }
   }

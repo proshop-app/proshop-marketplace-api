@@ -12,7 +12,7 @@ func TestColorDeliveryCoversPaletteAndShades(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(delivery.Entries) != 38 || summary.Aliases != 2 {
+	if len(delivery.Entries) != 40 || summary.Aliases != 0 {
 		t.Fatalf("не покрыты 40 значений: %+v", summary)
 	}
 	bases, shades := 0, 0
@@ -27,7 +27,7 @@ func TestColorDeliveryCoversPaletteAndShades(t *testing.T) {
 			shades++
 		}
 	}
-	if bases != 18 || shades != 20 {
+	if bases != 18 || shades != 22 {
 		t.Fatalf("палитра %d, оттенки %d", bases, shades)
 	}
 }
