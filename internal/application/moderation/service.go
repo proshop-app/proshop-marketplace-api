@@ -43,6 +43,33 @@ func (s *Service) Evaluate(
 	previous *catalog.ProductState,
 	now time.Time,
 ) error {
+	changed, err := s.evaluate(ctx, tx, product, member, previous, now)
+	if err != nil || !changed {
+		return err
+	}
+	return s.enqueueEvaluation(ctx, tx, product.State(), now)
+}
+
+// EvaluateProjection оставляет постановку задач вызывающему проектору.
+func (s *Service) EvaluateProjection(
+	ctx context.Context,
+	tx ports.Tx,
+	product *catalog.Product,
+	previous *catalog.ProductState,
+	now time.Time,
+) error {
+	_, err := s.evaluate(ctx, tx, product, nil, previous, now)
+	return err
+}
+
+func (s *Service) evaluate(
+	ctx context.Context,
+	tx ports.Tx,
+	product *catalog.Product,
+	member *participant.Participant,
+	previous *catalog.ProductState,
+	now time.Time,
+) (bool, error) {
 	p := product.State()
 	if p.Deleted || p.Card.Marketplace == nil || !p.Card.Publication.Published {
 		return s.closeUnpublishedCase(ctx, tx, p, now)
@@ -51,19 +78,19 @@ func (s *Service) Evaluate(
 		var err error
 		member, err = tx.Participants().Get(ctx, p.TenantID)
 		if errors.Is(err, participant.ErrNotFound) {
-			return nil
+			return false, nil
 		}
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 	definition, err := tx.Taxonomy().Current(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	rules, err := tx.ModerationRules().Current(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	rules.RequireImage = s.config.RequireImage
 	verdict, err := tx.ModerationVerdicts().Get(ctx, p.TenantID, p.ProductID)
@@ -71,7 +98,7 @@ func (s *Service) Evaluate(
 		verdict, err = moderation.NewVerdict(p.TenantID, p.ProductID), nil
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
 	input := moderation.Input{
 		Policy:      definition.ModerationPolicy(p.Card.Marketplace.CategoryID),
@@ -95,7 +122,7 @@ func (s *Service) Evaluate(
 			now,
 		)
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 	if !changed {
@@ -103,7 +130,7 @@ func (s *Service) Evaluate(
 	}
 	if !changed {
 		if verdict.State().Status != moderation.Pending {
-			return nil
+			return false, nil
 		}
 		return s.syncEvaluationCase(ctx, tx, p, verdict, false, now)
 	}
@@ -116,9 +143,9 @@ func (s *Service) saveEvaluation(
 	p catalog.ProductState,
 	verdict *moderation.Verdict,
 	now time.Time,
-) error {
+) (bool, error) {
 	if err := tx.ModerationVerdicts().Save(ctx, verdict); err != nil {
-		return err
+		return false, err
 	}
 	s.recordVerdict(tx, verdict.State())
 	return s.syncEvaluationCase(ctx, tx, p, verdict, true, now)
@@ -131,10 +158,10 @@ func (s *Service) syncEvaluationCase(
 	verdict *moderation.Verdict,
 	verdictChanged bool,
 	now time.Time,
-) error {
+) (bool, error) {
 	c, err := tx.ModerationCases().Open(ctx, p.TenantID, p.ProductID)
 	if err != nil && !errors.Is(err, moderation.ErrNotFound) {
-		return err
+		return false, err
 	}
 	var card *moderation.ReviewCard
 	// Снимок нужен только новому делу или новой ревизии существующего дела.
@@ -142,7 +169,7 @@ func (s *Service) syncEvaluationCase(
 		(c != nil && c.State().Revision != verdict.State().Revision) {
 		snapshot, err := reviewCard(ctx, tx, p.TenantID, p.ProductID)
 		if err != nil {
-			return err
+			return false, err
 		}
 		card = &snapshot
 	}
@@ -150,20 +177,20 @@ func (s *Service) syncEvaluationCase(
 	case c != nil:
 		if c.Refresh(verdict.State(), now, card) {
 			if err := tx.ModerationCases().Save(ctx, c); err != nil {
-				return err
+				return false, err
 			}
 		} else if !verdictChanged {
-			return nil
+			return false, nil
 		}
 	case verdict.State().Status == moderation.Pending:
 		c = moderation.NewCase(s.ids.NewUUID(), verdict.State(), moderation.Rule, "", now, card)
 		if err := tx.ModerationCases().Save(ctx, c); err != nil {
-			return err
+			return false, err
 		}
 	case !verdictChanged:
-		return nil
+		return false, nil
 	}
-	return s.enqueueEvaluation(ctx, tx, p, now)
+	return true, nil
 }
 
 func (s *Service) closeUnpublishedCase(
@@ -171,20 +198,20 @@ func (s *Service) closeUnpublishedCase(
 	tx ports.Tx,
 	p catalog.ProductState,
 	now time.Time,
-) error {
+) (bool, error) {
 	c, err := tx.ModerationCases().Open(ctx, p.TenantID, p.ProductID)
 	if errors.Is(err, moderation.ErrNotFound) {
-		return nil
+		return false, nil
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
 	// Вердикт сохраняем: временное снятие публикации не отменяет решение оператора.
 	c.Supersede(now)
 	if err := tx.ModerationCases().Save(ctx, c); err != nil {
-		return err
+		return false, err
 	}
-	return s.enqueueEvaluation(ctx, tx, p, now)
+	return true, nil
 }
 
 func (s *Service) enqueueEvaluation(

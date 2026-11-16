@@ -152,6 +152,10 @@ func (s *scope) ModerationVerdicts() moderation.VerdictRepository {
 	return &ModerationVerdicts{db: s.db}
 }
 
+func (s *scope) ProjectionValidation() ports.ProjectionValidation {
+	return &ProjectionValidation{db: s.db}
+}
+
 func (s *scope) ModerationCases() moderation.CaseRepository { return &ModerationCases{db: s.db} }
 
 func (s *scope) ModerationDecisions() moderation.DecisionRepository {

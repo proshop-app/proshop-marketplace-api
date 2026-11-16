@@ -27,10 +27,11 @@ type snapshotDatabase struct {
 }
 
 type snapshotSQLState struct {
-	version  int64
-	raw      []byte
-	revision int64
-	phrases  [][]driver.Value
+	version    int64
+	raw        []byte
+	revision   int64
+	phrases    [][]driver.Value
+	validation []driver.Value
 }
 
 type snapshotConnector struct {
@@ -128,6 +129,9 @@ func (c *snapshotConnection) QueryContext(
 	}
 	rows := &snapshotRows{columns: []string{"value"}}
 	switch query {
+	case readValidationSources:
+		rows.columns = []string{"version", "revision", "participant", "probation", "verdict"}
+		rows.values = [][]driver.Value{c.state.validation}
 	case readTaxonomyVersion, lockTaxonomy:
 		rows.values = [][]driver.Value{{c.state.version}}
 		c.database.bytes += 8

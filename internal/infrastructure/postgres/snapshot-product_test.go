@@ -211,7 +211,10 @@ func BenchmarkApplyProductSnapshots(b *testing.B) {
 			ctx := context.Background()
 			b.ResetTimer()
 			for iteration := 0; iteration < b.N; iteration++ {
-				if err := projector.ApplyProduct(ctx, snapshotProductEvent(int64(iteration+1))); err != nil {
+				// Изменение текста требует проверки: бенчмарк измеряет переиспользование снимка схемы.
+				event := snapshotProductEvent(int64(iteration + 1))
+				event.Snapshot.Card.Name = fmt.Sprintf("Товар %d", iteration)
+				if err := projector.ApplyProduct(ctx, event); err != nil {
 					b.Fatal(err)
 				}
 				if err := indexer.SyncOffer(ctx, "t1", "p1"); err != nil {

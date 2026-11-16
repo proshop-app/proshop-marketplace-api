@@ -58,15 +58,28 @@ func (s *Service) CaseDetails(ctx context.Context, id ids.UUID) (CaseView, error
 }
 
 func reviewCard(ctx context.Context, tx ports.Tx, tenant ids.TenantID, product ids.ProductID) (ReviewCard, error) {
-	var result ReviewCard
 	state, err := tx.Offers().Offer(ctx, tenant, product)
 	if err != nil {
 		return ReviewCard{}, err
 	}
+	result := snapshotReviewCard(state)
+	definition, err := tx.Taxonomy().Current(ctx)
+	if err != nil {
+		return ReviewCard{}, err
+	}
+	for _, categoryID := range result.Publication.CategoryPath {
+		if category, _, ok := definition.Category(categoryID); ok {
+			result.CategoryPath = append(result.CategoryPath, category.Name)
+		}
+	}
+	return result, nil
+}
+
+func snapshotReviewCard(state ports.OfferState) ReviewCard {
 	p := state.Product.State()
 	card := p.Card
 	offer := catalog.ComposeOffer(state.Product, state.Signals, catalog.Seller{}, state.Verdict)
-	result = ReviewCard{
+	result := ReviewCard{
 		Name:         card.Name,
 		Description:  card.Description,
 		Image:        card.Image,
@@ -84,14 +97,5 @@ func reviewCard(ctx context.Context, tx ports.Tx, tenant ids.TenantID, product i
 		seller := state.Participant.State()
 		result.Seller = ReviewSeller{Slug: seller.Slug, Name: seller.Name}
 	}
-	definition, err := tx.Taxonomy().Current(ctx)
-	if err != nil {
-		return ReviewCard{}, err
-	}
-	for _, categoryID := range card.Publication.CategoryPath {
-		if category, _, ok := definition.Category(categoryID); ok {
-			result.CategoryPath = append(result.CategoryPath, category.Name)
-		}
-	}
-	return result, nil
+	return result
 }
