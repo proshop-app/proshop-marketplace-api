@@ -47,3 +47,36 @@ func TestFacetOptionsOrderAndAllowedValues(t *testing.T) {
 		t.Fatal("значение характеристики принято вместо значения фасета")
 	}
 }
+
+func TestFacetValuesMetaFromSnapshot(t *testing.T) {
+	red := taxonomy.ValueMeta{Hex: "#FF0000"}
+	many := taxonomy.ValueMeta{Swatch: "multicolor"}
+	fields := []taxonomy.Attribute{
+		{Code: "size", Type: "enum"},
+		{Code: "color", Type: "enum", ValuesMeta: map[string]taxonomy.ValueMeta{"Красный": red, "Разноцветный": many}},
+	}
+	facet := ports.Facet{
+		Code: "attr.color",
+		Values: []ports.FacetBucket{
+			{Value: "Красный", Count: 2},
+			{Value: "Разноцветный", Count: 1},
+			{Value: "Без образца", Count: 1},
+		},
+	}
+	want := []ports.FacetBucket{
+		{Value: "Красный", Count: 2, Meta: &red},
+		{Value: "Разноцветный", Count: 1, Meta: &many},
+		{Value: "Без образца", Count: 1},
+	}
+	got := facetValuesMeta(facet, fields)
+	if !reflect.DeepEqual(got.Values, want) {
+		t.Fatalf("неверные образцы: %+v", got.Values)
+	}
+	if facet.Values[0].Meta != nil {
+		t.Fatal("образцы записаны в исходный фасет")
+	}
+	size := ports.Facet{Code: "attr.size", Values: []ports.FacetBucket{{Value: "M", Count: 1}}}
+	if got := facetValuesMeta(size, fields); got.Values[0].Meta != nil {
+		t.Fatal("образец у значения без valuesMeta")
+	}
+}

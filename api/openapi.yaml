@@ -6818,6 +6818,14 @@ components:
                 type: string
               count:
                 type: integer
+              meta:
+                type: object
+                description: >-
+                  Образец значения из снимка таксономии (valuesMeta атрибута): hex или swatch.
+                  Есть только у значений с образцом; по нему витрина рисует палитру без схемы категории.
+                properties:
+                  hex: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+                  swatch: { type: string, enum: [multicolor, pattern] }
     Error:
       type: object
       required: [error]

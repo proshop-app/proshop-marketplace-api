@@ -1,6 +1,10 @@
 package ports
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
+)
 
 // AttributeFilter — OR значений одного кода, AND кодов; границы включительные.
 type AttributeFilter struct {
@@ -11,9 +15,12 @@ type AttributeFilter struct {
 }
 
 // FacetBucket — каноническое значение и число предложений с ним.
+// Meta — образец значения из снимка таксономии (valuesMeta): витрина рисует палитру
+// по самому фасету, без схемы категории и справочника атрибутов.
 type FacetBucket struct {
-	Value string `json:"value"`
-	Count int    `json:"count"`
+	Value string              `json:"value"`
+	Count int                 `json:"count"`
+	Meta  *taxonomy.ValueMeta `json:"meta,omitempty"`
 }
 
 // PriceBucket — границы в копейках из гистограммы движка.

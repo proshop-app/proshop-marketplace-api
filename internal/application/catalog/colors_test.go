@@ -178,7 +178,9 @@ func TestColorRegistryPublicationDocumentAndSearch(t *testing.T) {
 	if err != nil || page.Total != 5 {
 		t.Fatalf("зелёный не нашёл пять оттенков: %+v %v", page, err)
 	}
-	want := []ports.FacetBucket{{Value: "Зелёный", Count: 5}, {Value: "Синий", Count: 1}}
+	// Образец значения приходит в самом фасете: витрине не нужны схема категории и справочник атрибутов.
+	white := taxonomy.ValueMeta{Hex: "#FFFFFF"}
+	want := []ports.FacetBucket{{Value: "Зелёный", Count: 5, Meta: &white}, {Value: "Синий", Count: 1, Meta: &white}}
 	if got := findFacet(t, page.Facets, "attr.color"); !reflect.DeepEqual(got.Values, want) || got.Count != 5 {
 		t.Fatalf("неверный фасет: %+v", got)
 	}

@@ -27,6 +27,7 @@ func visibleFacets(facets []ports.Facet, total int, query ports.OfferQuery) []po
 			continue
 		}
 		f = orderFacet(f, query.FacetFields)
+		f = facetValuesMeta(f, query.FacetFields)
 		if !strings.HasPrefix(f.Code, "attr.") || (f.Count > 0 && f.Count*100 >= total*FacetCoveragePercent) {
 			out = append(out, f)
 		}
@@ -124,6 +125,25 @@ func orderFacet(facet ports.Facet, fields []taxonomy.Attribute) ports.Facet {
 			}
 		}
 		sort.Slice(values, func(i, j int) bool { return order[values[i].Value] < order[values[j].Value] })
+		facet.Values = values
+		break
+	}
+	return facet
+}
+
+// Образцы значений берутся из снимка таксономии, по которому построен фасет.
+func facetValuesMeta(facet ports.Facet, fields []taxonomy.Attribute) ports.Facet {
+	for _, field := range fields {
+		if facet.Code != "attr."+field.Code || len(field.ValuesMeta) == 0 {
+			continue
+		}
+		values := make([]ports.FacetBucket, len(facet.Values))
+		for i, bucket := range facet.Values {
+			if meta, ok := field.ValuesMeta[bucket.Value]; ok {
+				bucket.Meta = &meta
+			}
+			values[i] = bucket
+		}
 		facet.Values = values
 		break
 	}
