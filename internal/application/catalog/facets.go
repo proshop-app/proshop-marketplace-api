@@ -3,6 +3,8 @@ package catalog
 import (
 	"encoding/json"
 	"math"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -25,6 +27,7 @@ func visibleFacets(facets []ports.Facet, total int, query ports.OfferQuery) []po
 		if !query.WantsFacet(code) {
 			continue
 		}
+		f = orderFacet(f, query.FacetFields)
 		if !strings.HasPrefix(f.Code, "attr.") || (f.Count > 0 && f.Count*100 >= total*FacetCoveragePercent) {
 			out = append(out, f)
 		}
@@ -78,7 +81,11 @@ func validateAttributeFilters(filters map[string]ports.AttributeFilter, fields m
 				}
 			case "enum":
 				found := false
-				for _, allowed := range a.Values {
+				options := a.FacetOptions
+				if options == nil {
+					options = a.Values
+				}
+				for _, allowed := range options {
 					found = found || value == allowed
 				}
 				if !found {
@@ -99,4 +106,28 @@ func attributeNumber(raw string) (float64, error) {
 		return 0, ErrInvalidQuery
 	}
 	return value, nil
+}
+
+// Порядок снимка не зависит от частоты значений в поисковых агрегациях.
+func orderFacet(facet ports.Facet, fields []taxonomy.Attribute) ports.Facet {
+	for _, field := range fields {
+		if facet.Code != "attr."+field.Code || len(field.FacetOptions) == 0 {
+			continue
+		}
+		order := map[string]int{}
+		for i, value := range field.FacetOptions {
+			order[value] = i
+		}
+		values := []ports.FacetBucket{}
+		for _, bucket := range facet.Values {
+			if _, ok := order[bucket.Value]; ok &&
+				(bucket.Count != 0 || slices.Contains(field.Values, bucket.Value)) {
+				values = append(values, bucket)
+			}
+		}
+		sort.Slice(values, func(i, j int) bool { return order[values[i].Value] < order[values[j].Value] })
+		facet.Values = values
+		break
+	}
+	return facet
 }

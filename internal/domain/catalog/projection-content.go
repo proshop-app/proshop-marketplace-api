@@ -22,5 +22,6 @@ func projectionContent(state ProductState) ProductState {
 	state.Card.Publication.Version = 0
 	state.Card.Publication.Schema = ""
 	state.Card.Publication.AttributeSearchTerms = nil
+	state.Card.Publication.AttributeFacetValues = nil
 	return state
 }

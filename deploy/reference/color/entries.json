@@ -29,7 +29,12 @@
   {
     "canonical": "Серебристый",
     "status": "confirmed",
-    "aliases": [],
+    "aliases": [
+      {
+        "text": "Серебряный",
+        "kind": "spelling"
+      }
+    ],
     "metadata": {
       "order": 3,
       "directions": []
@@ -137,7 +142,12 @@
   {
     "canonical": "Золотистый",
     "status": "confirmed",
-    "aliases": [],
+    "aliases": [
+      {
+        "text": "Золотой",
+        "kind": "spelling"
+      }
+    ],
     "metadata": {
       "order": 15,
       "directions": []
@@ -159,6 +169,247 @@
     "metadata": {
       "order": 17,
       "directions": []
+    }
+  },
+  {
+    "canonical": "Бирюзовый",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 18,
+      "directions": [],
+      "baseColors": [
+        "Голубой"
+      ]
+    }
+  },
+  {
+    "canonical": "Бронзовый",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 19,
+      "directions": [],
+      "baseColors": [
+        "Коричневый"
+      ]
+    }
+  },
+  {
+    "canonical": "Бургунди",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 20,
+      "directions": [],
+      "baseColors": [
+        "Бордовый"
+      ]
+    }
+  },
+  {
+    "canonical": "Коралловый",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 21,
+      "directions": [],
+      "baseColors": [
+        "Оранжевый"
+      ]
+    }
+  },
+  {
+    "canonical": "Кремовый",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 22,
+      "directions": [],
+      "baseColors": [
+        "Бежевый"
+      ]
+    }
+  },
+  {
+    "canonical": "Лайм",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 23,
+      "directions": [],
+      "baseColors": [
+        "Зелёный"
+      ]
+    }
+  },
+  {
+    "canonical": "Лососёвый",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 24,
+      "directions": [],
+      "baseColors": [
+        "Розовый"
+      ]
+    }
+  },
+  {
+    "canonical": "Медный",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 25,
+      "directions": [],
+      "baseColors": [
+        "Оранжевый"
+      ]
+    }
+  },
+  {
+    "canonical": "Мятный",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 26,
+      "directions": [],
+      "baseColors": [
+        "Зелёный"
+      ]
+    }
+  },
+  {
+    "canonical": "Оливковый",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 27,
+      "directions": [],
+      "baseColors": [
+        "Зелёный"
+      ]
+    }
+  },
+  {
+    "canonical": "Персиковый",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 28,
+      "directions": [],
+      "baseColors": [
+        "Оранжевый"
+      ]
+    }
+  },
+  {
+    "canonical": "Почти белый",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 29,
+      "directions": [],
+      "baseColors": [
+        "Белый"
+      ]
+    }
+  },
+  {
+    "canonical": "Пурпурный",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 30,
+      "directions": [],
+      "baseColors": [
+        "Фиолетовый"
+      ]
+    }
+  },
+  {
+    "canonical": "Светло-синий",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 31,
+      "directions": [],
+      "baseColors": [
+        "Голубой"
+      ]
+    }
+  },
+  {
+    "canonical": "Сине-зелёный",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 32,
+      "directions": [],
+      "baseColors": [
+        "Синий",
+        "Зелёный"
+      ]
+    }
+  },
+  {
+    "canonical": "Слоновая кость",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 33,
+      "directions": [],
+      "baseColors": [
+        "Бежевый"
+      ]
+    }
+  },
+  {
+    "canonical": "Темно-синий",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 34,
+      "directions": [],
+      "baseColors": [
+        "Синий"
+      ]
+    }
+  },
+  {
+    "canonical": "Угольный",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 35,
+      "directions": [],
+      "baseColors": [
+        "Чёрный"
+      ]
+    }
+  },
+  {
+    "canonical": "Фуксия",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 36,
+      "directions": [],
+      "baseColors": [
+        "Розовый"
+      ]
+    }
+  },
+  {
+    "canonical": "Хаки",
+    "status": "confirmed",
+    "aliases": [],
+    "metadata": {
+      "order": 37,
+      "directions": [],
+      "baseColors": [
+        "Зелёный"
+      ]
     }
   }
 ]

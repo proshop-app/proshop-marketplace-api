@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/colorpalette"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
@@ -41,6 +42,7 @@ func resolveDictionaries(ctx context.Context, registry ports.TaxonomyDictionarie
 	sort.Strings(sorted)
 	kinds := map[string]reference.Kind{}
 	values := map[string][]string{}
+	colorMetadata := map[string]json.RawMessage{}
 	for _, code := range sorted {
 		dictionary, err := registry.LockDictionary(ctx, code)
 		if err != nil {
@@ -67,6 +69,9 @@ func resolveDictionaries(ctx context.Context, registry ports.TaxonomyDictionarie
 			if state.Status != reference.StatusConfirmed {
 				continue
 			}
+			if code == colorpalette.Dictionary {
+				colorMetadata[state.CanonicalName] = state.Metadata
+			}
 			var metadata dictionaryMetadata
 			if err := json.Unmarshal(state.Metadata, &metadata); err != nil {
 				return taxonomy.ErrInvalid.WithMessage("неверный порядок значений словаря: " + code)
@@ -88,6 +93,8 @@ func resolveDictionaries(ctx context.Context, registry ports.TaxonomyDictionarie
 	for i := range d.Attributes {
 		a := &d.Attributes[i]
 		a.Values = nil
+		a.FacetOptions = nil
+		a.FacetValuesByValue = nil
 		if a.Dictionary == "" {
 			continue
 		}
@@ -102,6 +109,21 @@ func resolveDictionaries(ctx context.Context, registry ports.TaxonomyDictionarie
 			a.Values = values[a.Dictionary]
 			if len(a.Values) == 0 {
 				return taxonomy.ErrInvalid.WithMessage("нет подтверждённых значений: " + a.Dictionary)
+			}
+			if a.Dictionary == colorpalette.Dictionary {
+				samples := make(map[string]bool, len(a.ValuesMeta))
+				for value, sample := range a.ValuesMeta {
+					samples[value] = sample.Hex != "" || sample.Swatch != ""
+				}
+				options, byValue, err := colorpalette.Resolve(colorMetadata, samples)
+				if err != nil {
+					message := err.Error()
+					if typed, ok := errs.As(err); ok {
+						message = typed.Message()
+					}
+					return taxonomy.ErrInvalid.WithMessage(message).Wrap(err)
+				}
+				a.FacetOptions, a.FacetValuesByValue = options, byValue
 			}
 		}
 	}

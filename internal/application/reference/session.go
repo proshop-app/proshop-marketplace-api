@@ -114,14 +114,18 @@ func (m *session) record(
 	if !ok {
 		return false, nil
 	}
-	// Восстановление из журнала также не должно обходить политику canonical.
+	// Итоговые образы проверяются также при откате, иначе журнал мог бы вернуть запрещённое состояние.
 	for _, image := range change.Forward {
-		if image.State == nil || reference.CanonicalLanguageAllowed(m.dict.Code(), image.State.CanonicalName) {
+		if image.State == nil {
 			continue
 		}
-
-		if _, _, err := m.dict.CanonicalSpelling(image.State.CanonicalName); err != nil {
+		if err := reference.ValidateColorState(m.dict, *image.State); err != nil {
 			return false, err
+		}
+		if !reference.CanonicalLanguageAllowed(m.dict.Code(), image.State.CanonicalName) {
+			if _, _, err := m.dict.CanonicalSpelling(image.State.CanonicalName); err != nil {
+				return false, err
+			}
 		}
 	}
 

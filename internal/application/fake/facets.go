@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
@@ -85,6 +86,15 @@ func fakeFacets(candidates []ports.OfferDocument, query ports.OfferQuery) []port
 				continue
 			}
 			var value string
+			if strings.HasPrefix(a.Code, "attr.") {
+				if values, ok := doc.AttributeFacetValues[strings.TrimPrefix(a.Code, "attr.")]; ok {
+					f.Count++
+					for _, value := range values {
+						counts[value]++
+					}
+					continue
+				}
+			}
 			switch a.Code {
 			case "category":
 				value = doc.CategoryID
@@ -149,4 +159,18 @@ func fakeFacets(candidates []ports.OfferDocument, query ports.OfferQuery) []port
 		out = append(out, f)
 	}
 	return out
+}
+
+func documentAttributeMatches(doc ports.OfferDocument, code string, filter ports.AttributeFilter) bool {
+	values, ok := doc.AttributeFacetValues[code]
+	if !ok {
+		return attributeMatches(doc.Attributes[code], filter)
+	}
+	for _, value := range values {
+		raw, _ := json.Marshal(value)
+		if attributeMatches(raw, filter) {
+			return true
+		}
+	}
+	return false
 }

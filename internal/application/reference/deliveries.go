@@ -213,10 +213,8 @@ func (s *Service) extend(m *session, entry *reference.Entry, item reference.Deli
 			return err
 		}
 	}
-	if len(item.Metadata) > 0 && string(entry.Metadata()) == "{}" {
-		if _, err := entry.SetMetadata(item.Metadata); err != nil {
-			return err
-		}
+	if _, err := entry.DeliveryMetadata(item.Metadata); err != nil {
+		return err
 	}
 	return nil
 }

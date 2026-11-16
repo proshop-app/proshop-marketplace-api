@@ -39,6 +39,8 @@ type ValueMeta struct {
 
 // Attribute — скалярное поле; код имеет один тип и единицу во всей площадке.
 type Attribute struct {
+	FacetOptions       []string             `json:"facetOptions,omitempty" yaml:"-"`
+	FacetValuesByValue map[string][]string  `json:"facetValuesByValue,omitempty" yaml:"-"`
 	Format             string               `json:"format,omitempty" yaml:"format,omitempty"`
 	SearchTermsByValue map[string][]string  `json:"searchTermsByValue,omitempty" yaml:"searchTermsByValue,omitempty"`
 	ValuesMeta         map[string]ValueMeta `json:"valuesMeta,omitempty" yaml:"valuesMeta,omitempty"`
@@ -132,6 +134,7 @@ type Issue struct {
 
 // Publication — результат проверки и доверенный контекст поисковой проекции.
 type Publication struct {
+	AttributeFacetValues map[string][]string        `json:"attributeFacetValues,omitempty"`
 	Schema               string                     `json:"schema,omitempty"`
 	AttributeSearchTerms map[string][]string        `json:"attributeSearchTerms,omitempty"`
 	CategoryName         string                     `json:"categoryName"`
@@ -418,6 +421,7 @@ func (d Definition) Check(card *Card) Publication {
 		Version:              d.Version,
 		Attributes:           map[string]json.RawMessage{},
 		AttributeSearchTerms: map[string][]string{},
+		AttributeFacetValues: map[string][]string{},
 		Issues:               []Issue{},
 	}
 	if card == nil {
@@ -451,6 +455,9 @@ func (d Definition) Check(card *Card) Publication {
 			p.Issues = append(p.Issues, Issue{Code: issue, Attribute: a.Code})
 		} else {
 			p.Attributes[a.Code] = append(json.RawMessage(nil), raw...)
+			if values := a.facetValues(raw); len(values) > 0 {
+				p.AttributeFacetValues[a.Code] = values
+			}
 			if terms := a.searchTerms(raw); len(terms) > 0 {
 				p.AttributeSearchTerms[a.Code] = terms
 			}
@@ -469,6 +476,7 @@ func (d Definition) Check(card *Card) Publication {
 	if !p.Published {
 		p.Attributes = map[string]json.RawMessage{}
 		p.AttributeSearchTerms = map[string][]string{}
+		p.AttributeFacetValues = map[string][]string{}
 	}
 	p.Issues = append(p.Issues, category.Identity.issues(card.Attributes)...)
 	return p

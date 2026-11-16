@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strconv"
 	"unicode"
+
+	"github.com/proshop-app/proshop-marketplace/internal/domain/colorpalette"
 )
 
 // Kind — открытый словарь растёт от продавцов и оператора, закрытый — перечисление схемы.
@@ -135,6 +137,9 @@ func (d *Dictionary) Spelling(text string) (clean, key string, err error) {
 		return "", "", ErrLimit.WithMessage("в написании больше " + strconv.Itoa(limits.MaxAliasWords) + " слов")
 	}
 	key = Key(clean)
+	if d.Code() == colorpalette.Dictionary && key == Key(colorpalette.Other) {
+		return "", "", colorpalette.ErrInvalid.WithMessage("имя корзины зарезервировано")
+	}
 	if key == "" {
 		return "", "", ErrInvalid.WithMessage("у написания пустой ключ")
 	}

@@ -1025,6 +1025,8 @@
       swatch: pattern
     Разноцветный:
       swatch: multicolor
+    Другие цвета:
+      swatch: other
   dictionary: color
   description: Основной видимый цвет готового изделия.
   example: Чёрный

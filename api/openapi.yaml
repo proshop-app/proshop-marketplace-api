@@ -6554,6 +6554,21 @@ components:
         unit: { type: string, description: Единица только для number }
         facet: { type: boolean, default: false }
         valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
+        facetOptions:
+          type: array
+          readOnly: true
+          description: Допустимые значения фасета в порядке показа, включая вычисляемые корзины.
+          items: { type: string, minLength: 1, maxLength: 1024 }
+        facetValuesByValue:
+          type: object
+          readOnly: true
+          description: Значение характеристики → значения фасета. Ключи только из values.
+          additionalProperties:
+            type: array
+            minItems: 1
+            maxItems: 8
+            uniqueItems: true
+            items: { type: string, minLength: 1, maxLength: 1024 }
         description: { type: string, maxLength: 1024, description: Определение свойства и объекта измерения }
         dictionaryNote: { type: string, maxLength: 512, description: Причина отсутствия словаря }
         example: { type: string, maxLength: 256, description: "Пример формата, не словарное значение" }
@@ -6583,7 +6598,7 @@ components:
         type: object
         properties:
           hex: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
-          swatch: { type: string, enum: [multicolor, pattern] }
+          swatch: { type: string, enum: [multicolor, pattern, other] }
     TaxonomySchemaIdentity:
       type: object
       additionalProperties: false
@@ -6626,6 +6641,21 @@ components:
         required: { type: boolean }
         values: { type: array, items: { type: string } }
         valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
+        facetOptions:
+          type: array
+          readOnly: true
+          description: Допустимые значения фасета в порядке показа, включая вычисляемые корзины.
+          items: { type: string, minLength: 1, maxLength: 1024 }
+        facetValuesByValue:
+          type: object
+          readOnly: true
+          description: Значение характеристики → значения фасета. Ключи только из values.
+          additionalProperties:
+            type: array
+            minItems: 1
+            maxItems: 8
+            uniqueItems: true
+            items: { type: string, minLength: 1, maxLength: 1024 }
         description: { type: string, maxLength: 1024, description: Определение свойства и объекта измерения }
         dictionaryNote: { type: string, maxLength: 512, description: Причина отсутствия словаря }
         example: { type: string, maxLength: 256, description: "Пример формата, не словарное значение" }
@@ -7898,6 +7928,14 @@ components:
       properties:
         directions:
           type: array
+          items: { type: string }
+        baseColors:
+          type: array
+          maxItems: 2
+          uniqueItems: true
+          description: >-
+            Только для color: 1–2 значения палитры у подтверждённого оттенка.
+            У базового цвета родителей нет; «Другие цвета» запрещено.
           items: { type: string }
     ReferenceAliasInput:
       type: object

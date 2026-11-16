@@ -47,6 +47,7 @@ type OfferStates interface {
 
 // OfferDocument — предложение в индексе поиска. Суммы — в копейках.
 type OfferDocument struct {
+	AttributeFacetValues map[string][]string
 	AttributeSearchTerms map[string][]string
 	Rating               *catalog.Rating
 	Variants             *catalog.Variants

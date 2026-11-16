@@ -2,11 +2,15 @@ package taxonomydata
 
 import (
 	"fmt"
+	"io"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/colorpalette"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
@@ -212,6 +216,34 @@ func auditAudiencePlacement(roots []taxonomy.Category) error {
 			if duplicate := scoped[name]; duplicate != "" {
 				return qualityError(id, "вид одновременно общий и аудиторный: "+duplicate)
 			}
+		}
+	}
+	return nil
+}
+
+// WriteQuality выводит разделы качества живого реестра таксономии.
+func WriteQuality(output io.Writer, entries []*reference.Entry) error {
+	if _, err := fmt.Fprintln(output, "Цвета без базового"); err != nil {
+		return err
+	}
+	names := []string{}
+	for _, entry := range entries {
+		state := entry.State()
+		if state.Status != reference.StatusConfirmed {
+			continue
+		}
+		parents, err := colorpalette.Parents(state.Metadata)
+		if err != nil {
+			return err
+		}
+		if !colorpalette.IsBase(state.CanonicalName) && len(parents) == 0 {
+			names = append(names, state.CanonicalName)
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if _, err := fmt.Fprintln(output, name); err != nil {
+			return err
 		}
 	}
 	return nil

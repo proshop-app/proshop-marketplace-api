@@ -15,6 +15,16 @@ func toDocument(doc ports.OfferDocument) (offerDocument, error) {
 		return offerDocument{}, err
 	}
 	for index := range attributes {
+		values, present := doc.AttributeFacetValues[attributes[index].Key]
+		if present {
+			if attributes[index].Type != "" {
+				return offerDocument{}, ErrInvalid.WithMessage("facetValues требуют строковую характеристику")
+			}
+			if err := taxonomy.ValidateFacetValues(values); err != nil {
+				return offerDocument{}, ErrInvalid.Wrap(err)
+			}
+			attributes[index].FacetValues = append([]string(nil), values...)
+		}
 		terms := doc.AttributeSearchTerms[attributes[index].Key]
 		if err := taxonomy.ValidateSearchTerms(terms); err != nil {
 			return offerDocument{}, ErrInvalid.Wrap(err)

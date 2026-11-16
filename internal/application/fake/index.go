@@ -186,7 +186,7 @@ func matches(doc ports.OfferDocument, query ports.OfferQuery, except string) boo
 		return false
 	}
 	for code, filter := range query.Attributes {
-		if except != "attr."+code && !attributeMatches(doc.Attributes[code], filter) {
+		if except != "attr."+code && !documentAttributeMatches(doc, code, filter) {
 			return false
 		}
 	}

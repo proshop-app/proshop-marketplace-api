@@ -82,7 +82,7 @@ func TestPriceBucketsAndRatingContract(t *testing.T) {
 	}
 }
 
-func TestVersionFiveDocumentContract(t *testing.T) {
+func TestDocumentCatalogFeaturesContract(t *testing.T) {
 	raw, err := os.ReadFile("testdata/search_buckets.json")
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +108,7 @@ func TestVersionFiveDocumentContract(t *testing.T) {
 	client.client.Transport = featureTransport(func(r *http.Request) (*http.Response, error) {
 		w := httptest.NewRecorder()
 		if strings.HasSuffix(r.URL.Path, "/status") {
-			_, _ = w.Write([]byte(`{"contractVersion":5,"ready":true}`))
+			_ = json.NewEncoder(w).Encode(map[string]any{"contractVersion": contractVersion, "ready": true})
 			return w.Result(), nil
 		}
 		var body struct {

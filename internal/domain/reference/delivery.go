@@ -110,6 +110,14 @@ func validateDelivery(d Delivery, allowEmpty bool) error {
 		if _, _, err := dict.CanonicalSpelling(entry.Canonical); err != nil {
 			return ErrInvalidDelivery.WithMessage(place + ": " + messageOf(err))
 		}
+		if err := ValidateColorState(dict, EntryState{
+			Dictionary:    d.Dictionary,
+			CanonicalName: entry.Canonical,
+			Status:        entry.Status,
+			Metadata:      entry.Metadata,
+		}); err != nil {
+			return ErrInvalidDelivery.WithMessage(place + ": " + messageOf(err))
+		}
 		texts := []string{entry.Canonical}
 		if len(entry.Aliases)+1 > dict.Limits().MaxAliases {
 			return ErrInvalidDelivery.WithMessage(place + ": слишком много вариантов")

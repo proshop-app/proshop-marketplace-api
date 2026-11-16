@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -317,5 +318,48 @@ func TestTaxonomyAttributeFormatHTTP(t *testing.T) {
 			len(body.Attributes) != 1 || body.Attributes[0].Format != "isbn" {
 			t.Fatal(path, response.Code, response.Body.String())
 		}
+	}
+}
+
+func TestTaxonomyFacetSnapshotHTTP(t *testing.T) {
+	store := fake.NewStore()
+	store.SeedTaxonomy(taxonomy.Definition{
+		Version: 1,
+		Attributes: []taxonomy.Attribute{{
+			Code:         "color",
+			Name:         "Цвет",
+			Type:         "enum",
+			Values:       []string{"Зелёный", "Хаки"},
+			FacetOptions: []string{"Зелёный", "Другие цвета"},
+			FacetValuesByValue: map[string][]string{
+				"Зелёный": {"Зелёный"},
+				"Хаки":    {"Зелёный"},
+			},
+			ValuesMeta: map[string]taxonomy.ValueMeta{"Другие цвета": {Swatch: "other"}},
+		}},
+	})
+	handler := NewHandler(Deps{
+		Registerer: prometheus.NewRegistry(),
+		Taxonomy:   apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/taxonomy/attributes", nil))
+	var body struct {
+		Attributes []struct {
+			FacetOptions       []string                      `json:"facetOptions"`
+			FacetValuesByValue map[string][]string           `json:"facetValuesByValue"`
+			ValuesMeta         map[string]taxonomy.ValueMeta `json:"valuesMeta"`
+		} `json:"attributes"`
+	}
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &body) != nil ||
+		len(body.Attributes) != 1 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	attribute := body.Attributes[0]
+	if !reflect.DeepEqual(attribute.FacetOptions, []string{"Зелёный", "Другие цвета"}) ||
+		!reflect.DeepEqual(attribute.FacetValuesByValue["Хаки"], []string{"Зелёный"}) ||
+		attribute.ValuesMeta["Другие цвета"].Swatch != "other" {
+		t.Fatal(response.Body.String())
 	}
 }

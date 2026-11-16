@@ -85,6 +85,7 @@ func (s *Service) carryReviewedProjection(
 func sameSemanticReviewCard(previous, current moderation.ReviewCard) bool {
 	previous.Publication.Version, current.Publication.Version = 0, 0
 	previous.Publication.AttributeSearchTerms, current.Publication.AttributeSearchTerms = nil, nil
+	previous.Publication.AttributeFacetValues, current.Publication.AttributeFacetValues = nil, nil
 	return reflect.DeepEqual(previous, current)
 }
 

@@ -29,6 +29,8 @@ func TestDocumentSearchTermsOnlyForVisiblePublishedOffer(t *testing.T) {
 	original := state.Product.State()
 	original.Card.Publication.Attributes = map[string]json.RawMessage{"a1": json.RawMessage(`true`)}
 	original.Card.Publication.AttributeSearchTerms = map[string][]string{"a1": {"значение"}}
+	original.Card.Publication.Attributes["color"] = json.RawMessage(`"Хаки"`)
+	original.Card.Publication.AttributeFacetValues = map[string][]string{"color": {"Зелёный"}}
 	for _, name := range []string{"visible", "hidden", "deleted", "unpublished"} {
 		t.Run(name, func(t *testing.T) {
 			product := original
@@ -49,9 +51,13 @@ func TestDocumentSearchTermsOnlyForVisiblePublishedOffer(t *testing.T) {
 				if !reflect.DeepEqual(doc.AttributeSearchTerms, original.Card.Publication.AttributeSearchTerms) {
 					t.Fatalf("выражения не попали в предложение: %+v", doc)
 				}
+				if !reflect.DeepEqual(doc.AttributeFacetValues, original.Card.Publication.AttributeFacetValues) {
+					t.Fatalf("значения фасета не попали в документ: %+v", doc)
+				}
 				return
 			}
-			if doc.Visible || len(doc.AttributeSearchTerms) != 0 || len(doc.Attributes) != 0 {
+			if doc.Visible || len(doc.AttributeSearchTerms) != 0 || len(doc.Attributes) != 0 ||
+				len(doc.AttributeFacetValues) != 0 {
 				t.Fatalf("скрытое предложение сохраняет выражения или атрибуты: %+v", doc)
 			}
 		})

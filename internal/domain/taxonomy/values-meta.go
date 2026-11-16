@@ -9,12 +9,13 @@ var colorHex = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 func (a Attribute) validateValuesMeta() error {
 	for value, meta := range a.ValuesMeta {
-		if a.Type != "enum" || (len(a.Values) > 0 && !slices.Contains(a.Values, value)) {
+		if a.Type != "enum" || (len(a.Values) > 0 &&
+			!slices.Contains(a.Values, value) && !slices.Contains(a.FacetOptions, value)) {
 			return ErrInvalid.WithMessage("метаданные относятся только к значению перечисления")
 		}
 		if (meta.Hex == "") == (meta.Swatch == "") ||
 			(meta.Hex != "" && !colorHex.MatchString(meta.Hex)) ||
-			(meta.Swatch != "" && meta.Swatch != "multicolor" && meta.Swatch != "pattern") {
+			(meta.Swatch != "" && meta.Swatch != "multicolor" && meta.Swatch != "pattern" && meta.Swatch != "other") {
 			return ErrInvalid.WithMessage("некорректный образец цвета")
 		}
 	}

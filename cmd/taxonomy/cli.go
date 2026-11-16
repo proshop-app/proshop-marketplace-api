@@ -40,12 +40,15 @@ type bundleInfo struct {
 }
 
 func run(args []string, output, diagnostics io.Writer) int {
+	if len(args) == 1 && args[0] == "quality" {
+		return qualityCommand(output, diagnostics)
+	}
 	if len(args) > 0 && args[0] == "manifest" {
 		return manifestCommand(args[1:], output, diagnostics)
 	}
 	if len(args) == 0 ||
 		(args[0] != "check" && args[0] != "apply" && args[0] != "rollback" && args[0] != "remove-hint") {
-		return failure(diagnostics, "использование: taxonomy check|apply|rollback|remove-hint", 2)
+		return failure(diagnostics, "использование: taxonomy check|apply|rollback|remove-hint|quality", 2)
 	}
 	options := flag.NewFlagSet("taxonomy", flag.ContinueOnError)
 	options.SetOutput(diagnostics)

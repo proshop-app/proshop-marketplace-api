@@ -1,6 +1,6 @@
 replaceCategories: true
-release: 11
-checksum: 8f3c9e18bc9cd19ac52fbcc643a1adb8224f1a5a20f461c8d48e00314e55128d
+release: 12
+checksum: 0f681b276adf0dad593e97813e3e1175eff21a9f26d6a5a688e98d13adb4a563
 coverage:
     directions: 29
     categories: 3974
