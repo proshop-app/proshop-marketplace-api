@@ -3,6 +3,8 @@ package catalog_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"testing"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
@@ -18,6 +20,57 @@ type variantPricingPlatform struct {
 	*fake.Platform
 	contexts map[ids.TenantID]string
 	calls    int
+}
+
+type variantPricingUOW struct {
+	ports.UnitOfWork
+	transactions int
+	batches      int
+	singles      int
+	batchSize    int
+	batchErr     error
+}
+
+type variantPricingTx struct {
+	ports.Tx
+	uow *variantPricingUOW
+}
+
+type variantPricingOffers struct {
+	ports.OfferStates
+	uow *variantPricingUOW
+}
+
+func (u *variantPricingUOW) Do(ctx context.Context, fn func(context.Context, ports.Tx) error) error {
+	u.transactions++
+	return u.UnitOfWork.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		return fn(ctx, variantPricingTx{Tx: tx, uow: u})
+	})
+}
+
+func (tx variantPricingTx) Offers() ports.OfferStates {
+	return variantPricingOffers{OfferStates: tx.Tx.Offers(), uow: tx.uow}
+}
+
+func (o variantPricingOffers) Batch(ctx context.Context, keys []ids.OfferID) ([]ports.OfferState, error) {
+	o.uow.batches++
+	o.uow.batchSize = len(keys)
+	if o.uow.batchErr != nil {
+		return nil, o.uow.batchErr
+	}
+	states, err := o.OfferStates.Batch(ctx, keys)
+	// SQL не гарантирует порядок результатов пачки.
+	slices.Reverse(states)
+	return states, err
+}
+
+func (o variantPricingOffers) Offer(
+	ctx context.Context,
+	tenant ids.TenantID,
+	product ids.ProductID,
+) (ports.OfferState, error) {
+	o.uow.singles++
+	return o.OfferStates.Offer(ctx, tenant, product)
 }
 
 func (p *variantPricingPlatform) PriceContexts(
@@ -37,6 +90,7 @@ func TestVariantsUseSameBuyerPricesAsOffer(t *testing.T) {
 		price   int64
 		base    int64
 		hidden  bool
+		size    int
 	}{
 		{name: "гость", price: 9500, base: 10000},
 		{name: "покупатель с контекстом", buyer: "buyer", profile: "personal", price: 7000, base: 8000},
@@ -44,12 +98,15 @@ func TestVariantsUseSameBuyerPricesAsOffer(t *testing.T) {
 		{name: "покупатель без контекста", buyer: "buyer", price: 9000, base: 12000},
 		{name: "нет цены профиля", buyer: "buyer", profile: "missing"},
 		{name: "скрытый магазин без контекста", buyer: "buyer", hidden: true},
+		{name: "200 предложений без контекста", buyer: "buyer", price: 9000, base: 12000, size: 200},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			store, index := fake.NewStore(), fake.NewIndex()
 			seedSeller(store, "t1", participant.TenantActive, true)
-			for i, product := range []ids.ProductID{"p1", "p2"} {
+			size := max(2, tc.size)
+			for i := range size {
+				product := ids.ProductID(fmt.Sprintf("p%d", i+1))
 				seedProduct(store, "t1", product)
 				state, _ := store.Product("t1", product)
 				state.Card.VariantsID = "group"
@@ -104,7 +161,8 @@ func TestVariantsUseSameBuyerPricesAsOffer(t *testing.T) {
 			if tc.profile != "" {
 				platform.contexts["t1"] = tc.profile
 			}
-			queries := appcatalog.NewQueries(store, index, platform, nil, nil, nil)
+			uow := &variantPricingUOW{UnitOfWork: store}
+			queries := appcatalog.NewQueries(uow, index, platform, nil, nil, nil)
 			reads := 0
 			index.BeforeGet = func(context.Context, string) error {
 				reads++
@@ -114,7 +172,20 @@ func TestVariantsUseSameBuyerPricesAsOffer(t *testing.T) {
 			if err != nil || reads != 0 || platform.calls > 1 {
 				t.Fatalf("ошибка, чтения карточек, запросы контекста: %v, %d, %d", err, reads, platform.calls)
 			}
-			wantItems := 2
+			wantTransactions, wantBatches := 1, 0
+			if tc.buyer != "" {
+				wantTransactions = 2 // Один выбор контекста и одно чтение группы с таксономией.
+				if tc.profile == "" {
+					wantBatches = 1
+				}
+			}
+			if uow.transactions != wantTransactions || uow.batches != wantBatches || uow.singles != 0 {
+				t.Fatalf("транзакции, пачки, одиночные чтения: %d, %d, %d", uow.transactions, uow.batches, uow.singles)
+			}
+			if wantBatches > 0 && uow.batchSize != size {
+				t.Fatalf("размер пачки: %d вместо %d", uow.batchSize, size)
+			}
+			wantItems := size
 			if tc.price == 0 {
 				wantItems = 0
 			}
@@ -140,5 +211,42 @@ func TestVariantsUseSameBuyerPricesAsOffer(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestVariantsColdBatchMissingProductAndError(t *testing.T) {
+	for _, failure := range []error{nil, errors.New("хранилище недоступно")} {
+		store, index := fake.NewStore(), fake.NewIndex()
+		seedSeller(store, "t1", participant.TenantActive, true)
+		ctx := context.Background()
+		id := ids.OfferID{Tenant: "t1", Product: "missing"}
+		doc := ports.OfferDocument{
+			ID:         id.String(),
+			TenantID:   "t1",
+			VariantsID: "group",
+			Visible:    true,
+		}
+		if err := index.Put(ctx, []ports.OfferDocument{doc}); err != nil {
+			t.Fatal(err)
+		}
+		uow := &variantPricingUOW{UnitOfWork: store, batchErr: failure}
+		platform := &variantPricingPlatform{Platform: fake.NewPlatform(), contexts: map[ids.TenantID]string{}}
+		queries := appcatalog.NewQueries(uow, index, platform, nil, nil, nil)
+		group, err := queries.Variants(ctx, "t1", "group", "buyer")
+		if uow.batches != 1 || uow.singles != 0 || uow.transactions != 2 {
+			t.Fatalf("ожидалась одна пачка в транзакции группы: %+v", uow)
+		}
+		if failure != nil {
+			if !errors.Is(err, failure) || group != nil {
+				t.Fatal("ошибка чтения пачки потеряна", err)
+			}
+			continue
+		}
+		if err != nil || len(group.Items) != 0 {
+			t.Fatal("отсутствующее предложение попало в группу", group, err)
+		}
+		if _, err := queries.Offer(ctx, id, "buyer"); !errors.Is(err, catalog.ErrOfferNotFound) {
+			t.Fatal("отказ карточки изменился", err)
+		}
 	}
 }

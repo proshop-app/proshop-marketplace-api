@@ -1,8 +1,10 @@
 package catalog
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -48,16 +50,73 @@ func TestVariantBlockScopeOrderAndDuplicates(t *testing.T) {
 		Items: []ports.OfferDocument{duplicate, current, foreign, hidden, small, noAxes},
 	}
 	block := variantBlock("seller", "group", group, taxonomy.Definition{})
-	if len(block.Items) != 4 || len(block.Options) != 1 {
+	if len(block.Items) != 3 || len(block.Options) != 1 {
 		t.Fatalf("состав: %+v", block)
 	}
-	if strings.Join(block.Options[0].Values, ",") != "M,S" || block.Items[2].ID != duplicate.ID {
+	if strings.Join(block.Options[0].Values, ",") != "M,S" || block.Items[1].ID != duplicate.ID {
 		t.Fatalf("порядок и сохранение всех предложений: %+v", block)
 	}
 	for _, item := range block.Items {
 		if item.Price != 90 || item.BasePrice != 100 {
 			t.Fatalf("ценовой контекст: %+v", item)
 		}
+	}
+}
+
+func TestVariantBlockMixedAxisSets(t *testing.T) {
+	for _, legacyFirst := range []bool{false, true} {
+		t.Run(fmt.Sprint(legacyFirst), func(t *testing.T) {
+			legacy := variantOffer("seller~legacy", "L", 2)
+			body := `{"groupId":"group","position":2,"axis":` +
+				`{"key":"platform.size","code":"size","name":"Размер"},"value":"L"}`
+			if err := json.Unmarshal([]byte(body), legacy.Variants); err != nil {
+				t.Fatal(err)
+			}
+			if legacyFirst {
+				legacy.Variants.Position = 0
+			}
+			two := variantOffer("seller~two", "M", 1)
+			color := catalog.VariantAxis{Key: "platform.color", Code: "color", Name: "Цвет", Value: "Синий"}
+			two.Variants.Axes = append([]catalog.VariantAxis{color}, two.Variants.Axes...)
+			reversed := variantOffer("seller~reversed", "S", 3)
+			reversed.Variants.Axes = append(reversed.Variants.Axes, color)
+			other := variantOffer("seller~other", "S", 4)
+			other.Variants.Axes[0].Key = "platform.material"
+			other.Variants.Axes[0].Code = "material"
+			other.Variants.Axes = append(other.Variants.Axes, color)
+			missing := variantOffer("seller~missing", "", 0)
+			missing.Variants = nil
+			group := ports.OfferGroup{Items: []ports.OfferDocument{reversed, legacy, other, missing, two}}
+			var logs bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+			block := variantBlock("seller", "group", group, taxonomy.Definition{})
+			wantAxes, wantItems, wantWarnings := 2, 2, 3
+			if legacyFirst {
+				wantAxes, wantItems, wantWarnings = 1, 1, 4
+			}
+			if len(block.Options) != wantAxes || len(block.Items) != wantItems {
+				t.Fatalf("смешанная группа: %+v", block)
+			}
+			if !legacyFirst && (block.Options[0].Key != color.Key || block.Items[0].ID != two.ID) {
+				t.Fatalf("оси первого подходящего предложения по позиции: %+v", block)
+			}
+			warnings := strings.Split(strings.TrimSpace(logs.String()), "\n")
+			if len(warnings) != wantWarnings {
+				t.Fatal(logs.String())
+			}
+			for _, warning := range warnings {
+				var record map[string]string
+				if err := json.Unmarshal([]byte(warning), &record); err != nil {
+					t.Fatal(err)
+				}
+				if record["level"] != "WARN" || record["tenantId"] != "seller" ||
+					record["groupId"] != "group" || record["offer"] == "" {
+					t.Fatal(record)
+				}
+			}
+		})
 	}
 }
 

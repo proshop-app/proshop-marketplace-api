@@ -3,6 +3,8 @@ package catalog
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"slices"
 	"sort"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -55,16 +57,39 @@ func (q *Queries) Variants(ctx context.Context, tenantID, groupID string, buyerI
 	if err != nil {
 		return nil, err
 	}
-	items := make([]ports.OfferDocument, 0, len(group.Items))
-	for _, doc := range group.Items {
-		if !doc.Visible || doc.TenantID != tenantID || doc.VariantsID != groupID {
-			continue
-		}
-		id, err := ids.ParseOfferID(doc.ID)
+	keys := make([]ids.OfferID, len(group.Items))
+	for i, doc := range group.Items {
+		keys[i], err = ids.ParseOfferID(doc.ID)
 		if err != nil {
 			return nil, err
 		}
-		err = q.priceOffer(ctx, id, &doc, buyerID, contexts)
+	}
+	publicStates := make(map[ids.OfferID]ports.OfferState, len(keys))
+	var definition taxonomy.Definition
+	err = q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		if buyerID != "" && priceProfileKey(contexts, ids.TenantID(tenantID)) == "" {
+			states, err := tx.Offers().Batch(ctx, keys)
+			if err != nil {
+				return err
+			}
+			for _, state := range states {
+				if state.Product != nil {
+					product := state.Product.State()
+					key := ids.OfferID{Tenant: product.TenantID, Product: product.ProductID}
+					publicStates[key] = state
+				}
+			}
+		}
+		var err error
+		definition, err = tx.Taxonomy().Current(ctx)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]ports.OfferDocument, 0, len(group.Items))
+	for i, doc := range group.Items {
+		err := q.priceOffer(ctx, keys[i], &doc, buyerID, contexts, publicStates)
 		if errors.Is(err, catalog.ErrOfferNotFound) {
 			continue
 		}
@@ -74,15 +99,6 @@ func (q *Queries) Variants(ctx context.Context, tenantID, groupID string, buyerI
 		items = append(items, doc)
 	}
 	group.Items = items
-	var definition taxonomy.Definition
-	err = q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		var err error
-		definition, err = tx.Taxonomy().Current(ctx)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
 	return variantBlock(tenantID, groupID, group, definition), nil
 }
 
@@ -97,14 +113,23 @@ func variantBlock(
 		Items:     []VariantItem{},
 		Truncated: group.Truncated,
 	}
+	items := slices.Clone(group.Items)
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := variantPosition(items[i]), variantPosition(items[j])
+		if a != b {
+			return a < b
+		}
+		return items[i].ID < items[j].ID
+	})
 	var category taxonomy.CategorySchema
-	for _, item := range group.Items {
+	for _, item := range items {
 		if !item.Visible || item.TenantID != tenantID || item.VariantsID != groupID {
 			continue
 		}
 		variant := item.Variants
-		if variant == nil {
-			variant = &catalog.Variants{}
+		if variant == nil || len(variant.Axes) == 0 {
+			slog.Warn("нет осей варианта", "tenantId", tenantID, "groupId", groupID, "offer", item.ID)
+			continue
 		}
 		if len(block.Options) == 0 {
 			category, _, _ = definition.Category(item.CategoryID)
@@ -121,6 +146,10 @@ func variantBlock(
 		for _, axis := range variant.Axes {
 			attrs[axis.Key] = axis.Value
 		}
+		if !variantKeysMatch(attrs, block.Options) {
+			slog.Warn("оси варианта отличаются", "tenantId", tenantID, "groupId", groupID, "offer", item.ID)
+			continue
+		}
 		block.Items = append(block.Items, VariantItem{
 			ID:        item.ID,
 			Attrs:     attrs,
@@ -132,13 +161,6 @@ func variantBlock(
 			Image:     item.Image,
 		})
 	}
-	sort.SliceStable(block.Items, func(i, j int) bool {
-		a, b := block.Items[i], block.Items[j]
-		if a.Position != b.Position {
-			return a.Position < b.Position
-		}
-		return a.ID < b.ID
-	})
 	for i := range block.Options {
 		option := &block.Options[i]
 		seen := map[string]bool{}
@@ -162,4 +184,23 @@ func variantBlock(
 		})
 	}
 	return block
+}
+
+func variantPosition(item ports.OfferDocument) int {
+	if item.Variants == nil {
+		return 0
+	}
+	return item.Variants.Position
+}
+
+func variantKeysMatch(attrs map[string]string, options []VariantOption) bool {
+	if len(attrs) != len(options) {
+		return false
+	}
+	for _, option := range options {
+		if _, found := attrs[option.Key]; !found {
+			return false
+		}
+	}
+	return true
 }

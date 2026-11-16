@@ -8,6 +8,8 @@ import (
 
 // MaxVariantAxes ограничивает размер контракта предложения.
 const MaxVariantAxes = 8
+
+// maxVariantValue должен совпадать с пределом keyword в поиске.
 const maxVariantValue = 1024
 
 // VariantAxis — системная ось группы продавца.

@@ -7065,6 +7065,7 @@ components:
                 items: { type: string }
         truncated:
           type: boolean
+          description: При превышении потолка в 200 предложений текущая карточка может отсутствовать в items.
         items:
           type: array
           maxItems: 200

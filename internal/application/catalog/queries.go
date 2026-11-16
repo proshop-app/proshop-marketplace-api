@@ -136,7 +136,7 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UU
 	if err != nil {
 		return OfferCard{}, err
 	}
-	if err := q.priceOffer(ctx, offerID, &doc, buyerID, contexts); err != nil {
+	if err := q.priceOffer(ctx, offerID, &doc, buyerID, contexts, nil); err != nil {
 		return OfferCard{}, err
 	}
 
