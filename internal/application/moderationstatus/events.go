@@ -176,56 +176,19 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 			if err != nil {
 				return err
 			}
-			product := state.Product.State()
-			if product.Deleted {
-				return nil
-			}
-			status, reasons := Status(product.Card.Publication, state.Verdict)
-			decision, rejectedReasons, err := currentDecision(ctx, tx, p, state.Verdict, product.Revision)
-			if err != nil {
+			event, err := offerEvent(ctx, tx, p, state, at)
+			if err != nil || event == nil {
 				return err
 			}
-			if product.Card.Publication.Published && decision != nil && decision.Action == moderation.Reject {
-				reasons = rejectionReasons(reasons, rejectedReasons)
-			}
-			body = OfferEvent{
-				Decision:      decision,
-				SchemaVersion: 1,
-				TenantID:      p.TenantID,
-				ProductID:     p.ProductID,
-				Revision:      product.Revision,
-				Status:        status,
-				Visible:       status == "published",
-				Reasons:       reasons,
-				At:            at,
-			}
+			body = event
 			message.Topic = s.offerTopic
 			message.Key, _ = json.Marshal([]string{string(p.TenantID), string(p.ProductID)})
 		case TaskParticipant:
-			member, err := tx.Participants().Get(ctx, p.TenantID)
+			var err error
+			body, err = participantEvent(ctx, tx, p.TenantID, at)
 			if err != nil {
 				return err
 			}
-			history, _, err := tx.ParticipantDecisions().List(ctx, p.TenantID, participant.Page{Limit: 1})
-			if err != nil {
-				return err
-			}
-			state := member.State()
-			event := ParticipantEvent{
-				By:            "operator",
-				SchemaVersion: 1,
-				TenantID:      p.TenantID,
-				Enabled:       state.Enabled,
-				Stage:         state.Stage,
-				Trust:         state.Trust,
-				At:            at,
-			}
-			if len(history) > 0 {
-				d := history[0]
-				event.Reason = moderation.DecisionReason(d.Reason, d.ReasonMessage)
-				event.Note, event.By = d.Note, d.Actor
-			}
-			body = event
 			message.Topic, message.Key = s.participantTopic, []byte(p.TenantID)
 		default:
 			return moderation.ErrInvalid
@@ -238,6 +201,70 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 		return err
 	}
 	return s.publisher.Publish(ctx, message)
+}
+
+func offerEvent(
+	ctx context.Context,
+	tx ports.Tx,
+	p payload,
+	state ports.OfferState,
+	at string,
+) (*OfferEvent, error) {
+	product := state.Product.State()
+	if product.Deleted {
+		return nil, nil
+	}
+	status, reasons := Status(product.Card.Publication, state.Verdict)
+	decision, rejectedReasons, err := currentDecision(ctx, tx, p, state.Verdict, product.Revision)
+	if err != nil {
+		return nil, err
+	}
+	if product.Card.Publication.Published && decision != nil && decision.Action == moderation.Reject {
+		reasons = rejectionReasons(reasons, rejectedReasons)
+	}
+	return &OfferEvent{
+		Decision:      decision,
+		SchemaVersion: 1,
+		TenantID:      p.TenantID,
+		ProductID:     p.ProductID,
+		Revision:      product.Revision,
+		Status:        status,
+		Visible:       status == "published",
+		Reasons:       reasons,
+		At:            at,
+	}, nil
+}
+
+func participantEvent(
+	ctx context.Context,
+	tx ports.Tx,
+	tenant ids.TenantID,
+	at string,
+) (*ParticipantEvent, error) {
+	member, err := tx.Participants().Get(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	history, _, err := tx.ParticipantDecisions().List(ctx, tenant, participant.Page{Limit: 1})
+	if err != nil {
+		return nil, err
+	}
+	state := member.State()
+	event := ParticipantEvent{
+		By:            "operator",
+		SchemaVersion: 1,
+		TenantID:      tenant,
+		Enabled:       state.Enabled,
+		Stage:         state.Stage,
+		Trust:         state.Trust,
+		At:            at,
+	}
+	if len(history) > 0 {
+		d := history[0]
+		event.Reason = moderation.DecisionReason(d.Reason, d.ReasonMessage)
+		event.Note, event.By = d.Note, d.Actor
+	}
+	return &event, nil
 }
 
 func currentDecision(

@@ -54,6 +54,7 @@ const referenceStatsInterval = time.Minute
 
 // services — сценарии приложения процесса.
 type services struct {
+	statuses      *moderationstatus.Service
 	contextCache  *redis.PriceContexts
 	priceContexts *pricecontexts.Service
 	buyerFeatures *appbuyer.Features
@@ -387,6 +388,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		indexer:           indexer,
 		queries:           queries,
 		participants:      participants,
+		statuses:          statuses,
 		registry:          registry,
 		settings:          settings,
 		auth:              auth,
@@ -528,6 +530,7 @@ func (s *server) httpServer() *http.Server {
 		{Name: "kafka", Probe: func(ctx context.Context) error { return infrakafka.Ping(ctx, cfg.Kafka.Brokers) }},
 	}
 	handler := transport.NewHandler(transport.Deps{
+		Statuses: s.app.statuses,
 		Features: s.app.buyerFeatures,
 
 		Promotion:      s.app.promotion,

@@ -156,6 +156,10 @@ func TestStatusEvents(t *testing.T) {
 		t.Fatal(member)
 	}
 	before = e.store.OutboxRows()
+	snapshot, err := service.Get(ctx, "t1", nil)
+	if err != nil || !reflect.DeepEqual(snapshot.Participant, &member) {
+		t.Fatal("чтение участия отличается от события", snapshot, err)
+	}
 	if _, err := members.SetTrust(ctx, "t1", participant.Trusted, decision); err != nil {
 		t.Fatal(err)
 	}
