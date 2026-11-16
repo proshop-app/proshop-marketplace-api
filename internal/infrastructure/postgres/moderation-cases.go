@@ -17,8 +17,9 @@ const (
 	caseColumns = `id, tenant_id, product_id, revision,
  source, status, reasons, note,
  opened_at, decided_at, version, card`
-	selectModerationCase = `SELECT ` + caseColumns + ` FROM moderation_cases WHERE id = $1`
-	insertModerationCase = `INSERT INTO moderation_cases (
+	selectModerationCase  = `SELECT ` + caseColumns + ` FROM moderation_cases WHERE id = $1`
+	moderationCaseReasons = `SELECT id, reasons FROM moderation_cases WHERE id = ANY($1::uuid[])`
+	insertModerationCase  = `INSERT INTO moderation_cases (
  id, tenant_id, product_id, revision,
  source, status, reasons, note,
  opened_at, decided_at, version, card
@@ -61,6 +62,34 @@ type ModerationCases struct {
 // Get читает исходное состояние для условного сохранения.
 func (r *ModerationCases) Get(ctx context.Context, id ids.UUID) (*moderation.Case, error) {
 	return scanModerationCase(rawSQL(ctx, r.db, selectModerationCase, id).Row())
+}
+
+// Reasons читает причины одной пачкой без снимков карточек и восстановления агрегатов.
+func (r *ModerationCases) Reasons(ctx context.Context, cases []ids.UUID) (map[ids.UUID][]moderation.Reason, error) {
+	result := make(map[ids.UUID][]moderation.Reason)
+	if len(cases) == 0 {
+		return result, nil
+	}
+	rows, err := rawSQL(ctx, r.db, moderationCaseReasons, uuidStrings(cases)).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	for rows.Next() {
+		var id ids.UUID
+		var raw []byte
+		if err := rows.Scan(&id, &raw); err != nil {
+			return nil, err
+		}
+		var reasons []moderation.Reason
+		if err := json.Unmarshal(raw, &reasons); err != nil {
+			return nil, err
+		}
+		result[id] = reasons
+	}
+	return result, rows.Err()
 }
 
 func scanModerationCase(row rowScanner) (*moderation.Case, error) {

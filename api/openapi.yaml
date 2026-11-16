@@ -486,14 +486,15 @@ paths:
       security: [{ serverApiToken: [] }]
       description: >-
         SERVER_API_TOKEN; пустая настройка — 404, неверный Bearer — 401.
-        Тот же расчёт, что в событиях статусов. Без ids возвращается только участник.
+        Тот же расчёт, что в событиях статусов. С ids читаются только товары, participant — null.
+        Без ids читается только участник, items — пустой массив.
         Неизвестные и удалённые товары пропускаются, отсутствующий участник — null.
         Запрос ничего не сохраняет и не публикует.
       parameters:
         - { $ref: "#/components/parameters/TenantId" }
         - name: ids
           in: query
-          description: От 1 до 200 непустых id товаров через запятую; дубли удаляются.
+          description: От 1 до 200 непустых id товаров через запятую; дубли удаляются; participant — null.
           schema: { type: string }
       responses:
         "200":
@@ -5180,6 +5181,7 @@ components:
         at: { type: string, format: date-time }
     MarketplaceStatusSnapshot:
       type: object
+      description: С ids — только items и participant null; без ids — участник и items [].
       required: [items, participant]
       properties:
         items:

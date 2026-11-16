@@ -17,6 +17,12 @@ const (
  d.action, d.reason, d.note, d.revision, d.at, d.reason_message
  FROM moderation_decisions d JOIN moderation_cases c ON c.id = d.case_id
  WHERE c.tenant_id = $1 AND c.product_id = $2 ORDER BY d.at DESC, d.id DESC`
+	latestModerationDecisions = `SELECT DISTINCT ON (c.product_id)
+ c.product_id, d.id, d.case_id, d.operator_id, d.operator_name,
+ d.action, d.reason, d.note, d.revision, d.at, d.reason_message
+ FROM moderation_decisions d JOIN moderation_cases c ON c.id = d.case_id
+ WHERE c.tenant_id = $1 AND c.product_id = ANY($2::text[])
+ ORDER BY c.product_id, d.at DESC, d.id DESC`
 )
 
 // ModerationDecisions не предоставляет операций изменения истории.
@@ -78,4 +84,50 @@ func (r *ModerationDecisions) List(
 		result = append(result, d)
 	}
 	return result, rows.Err()
+}
+
+// Latest читает только последнее решение каждого товара, не загружая весь журнал.
+func (r *ModerationDecisions) Latest(
+	ctx context.Context,
+	tenant ids.TenantID,
+	products []ids.ProductID,
+) (map[ids.ProductID]moderation.Decision, error) {
+	result := make(map[ids.ProductID]moderation.Decision)
+	if len(products) == 0 {
+		return result, nil
+	}
+	rows, err := rawSQL(ctx, r.db, latestModerationDecisions, tenant, products).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	for rows.Next() {
+		product, d, err := scanLatestModerationDecision(rows)
+		if err != nil {
+			return nil, err
+		}
+		result[product] = d
+	}
+	return result, rows.Err()
+}
+
+func scanLatestModerationDecision(row rowScanner) (ids.ProductID, moderation.Decision, error) {
+	var product ids.ProductID
+	var d moderation.Decision
+	err := row.Scan(
+		&product,
+		&d.ID,
+		&d.CaseID,
+		&d.Operator.ID,
+		&d.Operator.Name,
+		&d.Action,
+		&d.Reason,
+		&d.Note,
+		&d.Revision,
+		&d.At,
+		&d.ReasonMessage,
+	)
+	return product, d, err
 }

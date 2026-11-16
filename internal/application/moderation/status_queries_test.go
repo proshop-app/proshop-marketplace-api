@@ -59,6 +59,9 @@ func TestStatusQueryMatchesEvents(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if snapshot.Participant != nil {
+				t.Fatal("запрос товаров прочитал участника")
+			}
 			if len(snapshot.Items) != len(messages) {
 				t.Fatal(snapshot, messages)
 			}

@@ -29,6 +29,7 @@ type VerdictRepository interface {
 
 // CaseRepository гарантирует единственность открытого дела и условное обновление.
 type CaseRepository interface {
+	Reasons(context.Context, []ids.UUID) (map[ids.UUID][]Reason, error)
 	OpenStats(context.Context) ([]OpenStat, error)
 	Get(context.Context, ids.UUID) (*Case, error)
 	Open(context.Context, ids.TenantID, ids.ProductID) (*Case, error)
@@ -38,6 +39,7 @@ type CaseRepository interface {
 
 // DecisionRepository разрешает только добавление и чтение журнала.
 type DecisionRepository interface {
+	Latest(context.Context, ids.TenantID, []ids.ProductID) (map[ids.ProductID]Decision, error)
 	Add(context.Context, Decision) error
 	Cached(context.Context, string, time.Time) (CachedDecision, bool, error)
 	Cache(context.Context, string, CachedDecision) error

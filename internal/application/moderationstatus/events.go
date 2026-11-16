@@ -4,12 +4,9 @@ package moderationstatus
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"reflect"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
@@ -169,18 +166,11 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 			if _, err := ids.ParseProductID(string(p.ProductID)); err != nil {
 				return moderation.ErrInvalid.Wrap(err)
 			}
-			state, err := tx.Offers().Offer(ctx, p.TenantID, p.ProductID)
-			if errors.Is(err, catalog.ErrProductNotFound) {
-				return nil
-			}
-			if err != nil {
+			events, err := offerEvents(ctx, tx, p.TenantID, []ids.ProductID{p.ProductID}, at)
+			if err != nil || len(events) == 0 {
 				return err
 			}
-			event, err := offerEvent(ctx, tx, p, state, at)
-			if err != nil || event == nil {
-				return err
-			}
-			body = event
+			body = events[0]
 			message.Topic = s.offerTopic
 			message.Key, _ = json.Marshal([]string{string(p.TenantID), string(p.ProductID)})
 		case TaskParticipant:
@@ -201,38 +191,6 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 		return err
 	}
 	return s.publisher.Publish(ctx, message)
-}
-
-func offerEvent(
-	ctx context.Context,
-	tx ports.Tx,
-	p payload,
-	state ports.OfferState,
-	at string,
-) (*OfferEvent, error) {
-	product := state.Product.State()
-	if product.Deleted {
-		return nil, nil
-	}
-	status, reasons := Status(product.Card.Publication, state.Verdict)
-	decision, rejectedReasons, err := currentDecision(ctx, tx, p, state.Verdict, product.Revision)
-	if err != nil {
-		return nil, err
-	}
-	if product.Card.Publication.Published && decision != nil && decision.Action == moderation.Reject {
-		reasons = rejectionReasons(reasons, rejectedReasons)
-	}
-	return &OfferEvent{
-		Decision:      decision,
-		SchemaVersion: 1,
-		TenantID:      p.TenantID,
-		ProductID:     p.ProductID,
-		Revision:      product.Revision,
-		Status:        status,
-		Visible:       status == "published",
-		Reasons:       reasons,
-		At:            at,
-	}, nil
 }
 
 func participantEvent(
@@ -265,49 +223,6 @@ func participantEvent(
 		event.Note, event.By = d.Note, d.Actor
 	}
 	return &event, nil
-}
-
-func currentDecision(
-	ctx context.Context,
-	tx ports.Tx,
-	p payload,
-	verdict *moderation.Verdict,
-	revision int64,
-) (*OfferDecision, []moderation.Reason, error) {
-	if verdict == nil {
-		return nil, nil, nil
-	}
-	v := verdict.State()
-	if v.DecidedBy != moderation.Operator || v.Status == moderation.Pending ||
-		v.Revision != revision || v.Decision == nil {
-		return nil, nil, nil
-	}
-	history, err := tx.ModerationDecisions().List(ctx, p.TenantID, p.ProductID)
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(history) > 0 {
-		d := history[0]
-		if d.Revision <= revision && d.Action == v.Decision.Action && d.Operator == v.Operator &&
-			d.At.Equal(v.Decision.At) && d.Note == v.Decision.Note &&
-			reflect.DeepEqual(moderation.DecisionReason(d.Reason, d.ReasonMessage), v.Decision.Reason) {
-			var reasons []moderation.Reason
-			if d.Action == moderation.Reject {
-				c, err := tx.ModerationCases().Get(ctx, d.CaseID)
-				if err != nil {
-					return nil, nil, err
-				}
-				reasons = c.State().Reasons
-			}
-			return &OfferDecision{
-				Action: d.Action,
-				Reason: moderation.DecisionReason(d.Reason, d.ReasonMessage),
-				Note:   d.Note,
-				At:     d.At.UTC().Format(time.RFC3339),
-			}, reasons, nil
-		}
-	}
-	return nil, nil, nil
 }
 
 func rejectionReasons(current []Reason, reasons []moderation.Reason) []Reason {

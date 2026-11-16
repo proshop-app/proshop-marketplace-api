@@ -56,6 +56,7 @@ func TestStatusMachineScopeAndLimits(t *testing.T) {
 		{"t1/status?ids=p1&ids=p2", "server-token", 400, 0},
 		{"bad%20tenant/status", "server-token", 400, 0},
 		{"t1/status", "server-token", 200, 0},
+		{"t2/status", "server-token", 200, 0},
 		{"t2/status?ids=p1", "server-token", 200, 0},
 		{"t1/status/products/p1", "server-token", 404, 0},
 	} {
@@ -80,9 +81,9 @@ func TestStatusMachineScopeAndLimits(t *testing.T) {
 			if tc.items > 0 && (snapshot.Items[0].Status != "hidden" || snapshot.Items[0].Revision != 7) {
 				t.Fatal("товар без допуска не скрыт", w.Body.String())
 			}
-			if strings.HasPrefix(tc.path, "t2/") {
+			if strings.Contains(tc.path, "?ids=") || strings.HasPrefix(tc.path, "t2/") {
 				if snapshot.Participant != nil {
-					t.Fatal("ответ содержит чужого участника")
+					t.Fatal("ответ содержит лишнего участника")
 				}
 			} else if snapshot.Participant == nil || snapshot.Participant.TenantID != "t1" {
 				t.Fatal(w.Body.String())

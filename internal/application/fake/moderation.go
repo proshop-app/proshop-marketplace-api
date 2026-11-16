@@ -123,6 +123,16 @@ func (r moderationCases) Get(_ context.Context, id ids.UUID) (*moderation.Case, 
 	return moderation.RestoreCase(state), nil
 }
 
+func (r moderationCases) Reasons(_ context.Context, cases []ids.UUID) (map[ids.UUID][]moderation.Reason, error) {
+	result := make(map[ids.UUID][]moderation.Reason)
+	for _, id := range cases {
+		if state, ok := r.d.cases[id]; ok {
+			result[id] = slices.Clone(state.Reasons)
+		}
+	}
+	return result, nil
+}
+
 func (r moderationCases) Open(_ context.Context, t ids.TenantID, p ids.ProductID) (*moderation.Case, error) {
 	for _, c := range r.d.cases {
 		if c.TenantID == t && c.ProductID == p && c.Status == moderation.Open {
@@ -194,6 +204,29 @@ func (r moderationDecisions) List(_ context.Context, t ids.TenantID, p ids.Produ
 		}
 		return result[i].At.After(result[j].At)
 	})
+	return result, nil
+}
+
+func (r moderationDecisions) Latest(
+	_ context.Context,
+	tenant ids.TenantID,
+	products []ids.ProductID,
+) (map[ids.ProductID]moderation.Decision, error) {
+	wanted := make(map[ids.ProductID]bool, len(products))
+	for _, product := range products {
+		wanted[product] = true
+	}
+	result := make(map[ids.ProductID]moderation.Decision)
+	for _, d := range r.d.decisions {
+		c := r.d.cases[d.CaseID]
+		if c.TenantID != tenant || !wanted[c.ProductID] {
+			continue
+		}
+		latest, ok := result[c.ProductID]
+		if !ok || d.At.After(latest.At) || d.At.Equal(latest.At) && d.ID > latest.ID {
+			result[c.ProductID] = d
+		}
+	}
 	return result, nil
 }
 
