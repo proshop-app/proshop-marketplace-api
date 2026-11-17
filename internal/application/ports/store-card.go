@@ -99,7 +99,7 @@ type StoreRecord struct {
 // StoreCards — хранение производной карточки без чтения каталога на запросе.
 type StoreCards interface {
 	// CacheVersion меняется вместе с публичной видимостью и оформлением, но не продажами.
-	CacheVersion(context.Context) (int64, error)
+	CacheVersion(context.Context, ...ids.TenantID) (int64, error)
 	// BatchPublic возвращает только публичные карточки выбранных магазинов.
 	BatchPublic(context.Context, []ids.TenantID) ([]ShopCard, error)
 	// UpdateProfile немедленно применяет постмодерацию к публичному снимку и hidden.

@@ -5,6 +5,7 @@ package reference
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -39,6 +40,8 @@ type Config struct {
 
 // Service — сценарии реестра поверх транзакций, часов и идентификаторов.
 type Service struct {
+	statsMu   sync.Mutex
+	stats     map[string]Stats
 	uow       ports.UnitOfWork
 	clock     ports.Clock
 	ids       ports.IDs

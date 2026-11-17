@@ -16,6 +16,10 @@ import (
 )
 
 const (
+	candidateCounts = `SELECT requested.code, count(e.id) FROM unnest($1::text[]) requested(code)
+        LEFT JOIN reference.entries e ON e.dictionary_code = requested.code AND e.status = 'candidate'
+        GROUP BY requested.code`
+
 	insertReferenceDictionary = `
 		INSERT INTO reference.dictionaries (code, kind, identity, alias_kinds, limits)
 		VALUES ($1, $2, $3, $4, $5)
@@ -698,4 +702,28 @@ func uuidStrings(list []ids.UUID) []string {
 // likePrefix — шаблон LIKE «начинается с ключа»: спецсимволы ключа экранируются.
 func likePrefix(key string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(key) + "%"
+}
+
+// CandidateCounts агрегирует только изменившиеся словари одной пачкой, включая нулевые очереди.
+func (r *References) CandidateCounts(ctx context.Context, codes []string) (map[string]int64, error) {
+	result := map[string]int64{}
+	if len(codes) == 0 {
+		return result, nil
+	}
+	rows, err := rawSQL(ctx, r.db, candidateCounts, codes).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	for rows.Next() {
+		var code string
+		var count int64
+		if err := rows.Scan(&code, &count); err != nil {
+			return nil, err
+		}
+		result[code] = count
+	}
+	return result, rows.Err()
 }

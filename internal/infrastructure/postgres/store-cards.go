@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	getStoreCardCacheVersion = `SELECT version FROM store_card_cache_generation WHERE id = 1`
-	batchPublicCards         = `SELECT card FROM store_cards WHERE tenant_id = ANY($1) AND page_public
+	getAllStoreCardCacheVersion = `SELECT version FROM store_card_cache_generation WHERE id = 1`
+	getStoreCardCacheVersion    = `SELECT COALESCE(sum(version), 0)::bigint FROM store_card_cache_versions
+        WHERE tenant_id = ANY($1::text[])`
+	batchPublicCards = `SELECT card FROM store_cards WHERE tenant_id = ANY($1) AND page_public
 		ORDER BY array_position($1::text[], tenant_id)`
 	lockStoreSummary = `SELECT pg_advisory_xact_lock(hashtextextended($1, 38))`
 	saveStoreSummary = `
@@ -57,13 +59,8 @@ const (
 		ELSE EXCLUDED.card END,
 		profile_version = GREATEST(store_cards.profile_version, EXCLUDED.profile_version)`
 	deleteStoreCategories = `DELETE FROM store_card_categories WHERE tenant_id = $1`
-	insertStoreCategory   = `
-		INSERT INTO store_card_categories (category_id, tenant_id, name, count) VALUES (
-		$1,
-		$2,
-		$3,
-		$4
-		)`
+	insertStoreCategories = `INSERT INTO store_card_categories (category_id, tenant_id, name, count)
+        SELECT id, $1, name, count FROM jsonb_to_recordset($2::jsonb) AS c(id text, name text, count integer)`
 	getStoreSummary = `SELECT summary, header, card, public, profile_version, page_public
 		FROM store_cards WHERE tenant_id = $1`
 	getShopHeader = `SELECT header
@@ -106,9 +103,17 @@ type StoreCards struct {
 }
 
 // CacheVersion читается из той же базы, что и проекция: отказ Redis не скрывает обновления.
-func (r *StoreCards) CacheVersion(ctx context.Context) (int64, error) {
+func (r *StoreCards) CacheVersion(ctx context.Context, tenants ...ids.TenantID) (int64, error) {
 	var version int64
-	err := rawSQL(ctx, r.db, getStoreCardCacheVersion).Row().Scan(&version)
+	query, args := getAllStoreCardCacheVersion, []any{}
+	if tenants != nil {
+		keys := make([]string, len(tenants))
+		for i, tenant := range tenants {
+			keys[i] = string(tenant)
+		}
+		query, args = getStoreCardCacheVersion, []any{keys}
+	}
+	err := rawSQL(ctx, r.db, query, args...).Row().Scan(&version)
 	return version, err
 }
 
@@ -156,20 +161,19 @@ func (r *StoreCards) Save(ctx context.Context, record ports.StoreRecord) error {
 	if _, err := execSQL(ctx, r.db, deleteStoreCategories, string(h.TenantID)); err != nil {
 		return err
 	}
-	for _, category := range record.Summary.CategoryCounts {
-		if _, err := execSQL(
-			ctx,
-			r.db,
-			insertStoreCategory,
-			category.ID,
-			string(h.TenantID),
-			category.Name,
-			category.Count,
-		); err != nil {
-			return err
-		}
+	if len(record.Summary.CategoryCounts) == 0 {
+		return nil
 	}
-	return nil
+	categories := make([]ports.StoreCategory, 0, len(record.Summary.CategoryCounts))
+	for _, category := range record.Summary.CategoryCounts {
+		categories = append(categories, category)
+	}
+	raw, err := json.Marshal(categories)
+	if err != nil {
+		return err
+	}
+	_, err = execSQL(ctx, r.db, insertStoreCategories, string(h.TenantID), string(raw))
+	return err
 }
 
 // Get читает внутреннюю сводку магазина.

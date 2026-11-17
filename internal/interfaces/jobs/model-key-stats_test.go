@@ -3,6 +3,7 @@ package jobs_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -12,6 +13,25 @@ import (
 
 type identityStats struct {
 	report ports.ModelKeyReport
+}
+
+type deadlineStats struct {
+	bounded bool
+}
+
+func (s *deadlineStats) Report(ctx context.Context, _ bool) (ports.ModelKeyReport, error) {
+	deadline, ok := ctx.Deadline()
+	s.bounded = ok && time.Until(deadline) > 0 && time.Until(deadline) <= time.Minute
+	return ports.ModelKeyReport{}, nil
+}
+
+func TestModelKeyStatsHasBackgroundDeadline(t *testing.T) {
+	stats := &deadlineStats{}
+	runner := jobs.NewModelKeyStatsRunner(stats, quiet, prometheus.NewRegistry())
+	runner.RunOnce(context.Background())
+	if !stats.bounded {
+		t.Fatal("полный фоновый отчёт не ограничен временем")
+	}
 }
 
 func (s *identityStats) Report(context.Context, bool) (ports.ModelKeyReport, error) {

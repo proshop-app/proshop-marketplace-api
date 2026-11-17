@@ -2,12 +2,12 @@ package catalog
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // Версионное сохранение не позволяет пересборке затереть более новое событие.
@@ -24,26 +24,56 @@ func (i *Indexer) refreshModelKeys(ctx context.Context, states []ports.OfferStat
 			return nil, err
 		}
 	}
+	models := i.models.forBatch(ctx, states, definition)
+	changed := map[ids.OfferID]bool{}
+	products := []*catalog.Product{}
+	for _, state := range states {
+		if state.Product != nil && models.Apply(ctx, state.Product, definition) {
+			p := state.Product.State()
+			key := ids.OfferID{Tenant: p.TenantID, Product: p.ProductID}
+			if !changed[key] {
+				products = append(products, state.Product)
+				changed[key] = true
+			}
+		}
+	}
+	saved, err := i.saveModelKeys(ctx, products)
+	if err != nil {
+		return nil, err
+	}
 	ready := make([]ports.OfferState, 0, len(states))
 	for _, state := range states {
-		if state.Product != nil && i.models.Apply(ctx, state.Product, definition) {
-			err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-				return tx.Products().Save(ctx, state.Product)
-			})
-			if errors.Is(err, catalog.ErrConflict) {
-				product := state.Product.State()
-				slog.Warn("конфликт расчёта ключа модели", "tenantId", product.TenantID, "productId", product.ProductID)
-				if i.models != nil && i.models.observer != nil {
-					i.models.observer.Conflict()
-				}
+		if state.Product != nil {
+			p := state.Product.State()
+			key := ids.OfferID{Tenant: p.TenantID, Product: p.ProductID}
+			if changed[key] && !saved[key] {
+				i.modelKeyConflict(key)
 				continue
-			}
-			if err != nil {
-				return nil, err
 			}
 		}
 		ready = append(ready, state)
 	}
-
 	return ready, nil
+}
+
+func (i *Indexer) saveModelKeys(ctx context.Context, products []*catalog.Product) (map[ids.OfferID]bool, error) {
+	saved := map[ids.OfferID]bool{}
+	if len(products) == 0 {
+		return saved, nil
+	}
+	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		keys, err := tx.Products().SaveIdentities(ctx, products)
+		for _, key := range keys {
+			saved[key] = true
+		}
+		return err
+	})
+	return saved, err
+}
+
+func (i *Indexer) modelKeyConflict(key ids.OfferID) {
+	slog.Warn("конфликт расчёта ключа модели", "tenantId", key.Tenant, "productId", key.Product)
+	if i.models != nil && i.models.observer != nil {
+		i.models.observer.Conflict()
+	}
 }

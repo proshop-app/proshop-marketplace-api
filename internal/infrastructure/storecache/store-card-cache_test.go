@@ -72,7 +72,9 @@ func (u sourceUOW) Do(ctx context.Context, fn func(context.Context, ports.Tx) er
 
 func (t sourceTx) StoreCards() ports.StoreCards { return t.cards }
 
-func (c *sourceCards) CacheVersion(context.Context) (int64, error) { return c.version.Load(), nil }
+func (c *sourceCards) CacheVersion(context.Context, ...ids.TenantID) (int64, error) {
+	return c.version.Load(), nil
+}
 
 func (c *sourceCards) List(ctx context.Context, _ string, limit, offset int) (ports.ShopPage, error) {
 	c.calls.Add(1)

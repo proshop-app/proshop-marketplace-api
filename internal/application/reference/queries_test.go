@@ -125,3 +125,24 @@ func TestListOrdersCandidatesByMeetings(t *testing.T) {
 		t.Fatal("страница больше потолка")
 	}
 }
+
+func TestResolveBatchMatchesExactResolveAndSkipsInvalidInputs(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "Запись", reference.StatusConfirmed, "Синоним")
+	h.create(t, "Кандидат", reference.StatusCandidate)
+	texts := []string{"Запись", "Синоним", "синоним", "Кандидат", "Нет записи", "", strings.Repeat("я", 201)}
+	resolved, err := h.service.ResolveBatch(context.Background(), testDict, texts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range texts {
+		single, _ := h.service.Resolve(context.Background(), testDict, text)
+		if single.Match == nil {
+			if resolved[text] != "" {
+				t.Fatalf("%s: неожиданное совпадение", text)
+			}
+		} else if resolved[text] != single.Match.EntryID {
+			t.Fatalf("%s: %v вместо %v", text, resolved[text], single.Match.EntryID)
+		}
+	}
+}

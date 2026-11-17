@@ -8,6 +8,8 @@ import (
 
 // ProductRepository — проекция товаров магазинов.
 type ProductRepository interface {
+	// SaveIdentities сохраняет только ключи модели условно по версии; конфликты исключены из результата.
+	SaveIdentities(context.Context, []*Product) ([]ids.OfferID, error)
 	Page(ctx context.Context, tenant ids.TenantID, product ids.ProductID, limit int) ([]*Product, error)
 	// Get — запись; нет — ErrProductNotFound.
 	Get(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) (*Product, error)

@@ -11,6 +11,11 @@ import (
 )
 
 const (
+	listMissingParticipants = `SELECT t.tenant_id, t.slug, t.status, t.cell, t.plan, t.hosts,
+        t.event_at, t.version, t.updated_at, t.name FROM tenants t
+        WHERE t.status = 'active' AND t.tenant_id > $1
+        AND NOT EXISTS (SELECT 1 FROM participants p WHERE p.tenant_id = t.tenant_id)
+        ORDER BY t.tenant_id LIMIT $2`
 	listActiveTenants = `
 		SELECT tenant_id, slug, status, cell, plan, hosts, event_at, version, updated_at, name
 		FROM tenants WHERE status = 'active' AND tenant_id > $1
@@ -124,7 +129,16 @@ func (r *Registry) Save(ctx context.Context, tenant *participant.Tenant) error {
 
 // List обходит активный реестр по устойчивому ключу.
 func (r *Registry) List(ctx context.Context, after ids.TenantID, limit int) ([]*participant.Tenant, error) {
-	rows, err := rawSQL(ctx, r.db, listActiveTenants, after, limit).Rows()
+	return r.list(ctx, listActiveTenants, after, limit)
+}
+
+func (r *Registry) list(
+	ctx context.Context,
+	query string,
+	after ids.TenantID,
+	limit int,
+) ([]*participant.Tenant, error) {
+	rows, err := rawSQL(ctx, r.db, query, after, limit).Rows()
 	if err != nil {
 		return nil, err
 	}
@@ -140,4 +154,13 @@ func (r *Registry) List(ctx context.Context, after ids.TenantID, limit int) ([]*
 		result = append(result, tenant)
 	}
 	return result, rows.Err()
+}
+
+// MissingParticipants не повторяет вставку кандидатов, уже появившихся из событий или предыдущей сверки.
+func (r *Registry) MissingParticipants(
+	ctx context.Context,
+	after ids.TenantID,
+	limit int,
+) ([]*participant.Tenant, error) {
+	return r.list(ctx, listMissingParticipants, after, limit)
 }

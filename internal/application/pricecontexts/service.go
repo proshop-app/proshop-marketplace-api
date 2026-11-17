@@ -84,6 +84,11 @@ func (p *DisplayPlatform) PriceContexts(
 	return p.contexts.PriceContexts(ctx, buyer, tenants)
 }
 
+// Preload позволяет повторить загрузку, если после чтения снимка появился новый магазин.
+func (p *DisplayPlatform) Preload(buyer ids.UUID) {
+	p.contexts.Preload(buyer)
+}
+
 // PriceContexts сразу выбирает публичные профили при отсутствии подтверждённого контекста.
 func (s *Service) PriceContexts(
 	ctx context.Context,
@@ -106,6 +111,11 @@ func (s *Service) PriceContexts(
 		outcome = "hit"
 	}
 	result := make(map[ids.TenantID]string, len(tenants))
+	if tenants == nil && usable {
+		for tenant, profile := range entry.Profiles {
+			result[tenant] = profile
+		}
+	}
 	complete := usable
 	for _, tenant := range tenants {
 		result[tenant] = catalog.DefaultPriceProfile

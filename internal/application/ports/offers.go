@@ -30,6 +30,8 @@ type OfferKey struct {
 
 // OfferStates — чтение проекции для индекса.
 type OfferStates interface {
+	// WalkStoreSummaryOffers читает единый снимок пачками, с соседними вариантами для подсчёта рейтинга.
+	WalkStoreSummaryOffers(context.Context, ids.TenantID, func([]OfferState) error) error
 	// Batch читает проекции выбранных предложений одной пачкой.
 	Batch(context.Context, []ids.OfferID) ([]OfferState, error)
 	// StoreCardOffers — отмеченные к публикации товары для пересчёта сводки.

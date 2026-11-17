@@ -57,7 +57,7 @@ func (r cards) List(ctx context.Context, category string, limit, offset int) (po
 		return json.Unmarshal(raw, &page) == nil && page.Items != nil &&
 			page.Limit == limit && page.Offset == offset && page.Total >= len(page.Items) && validCards(page.Items)
 	}
-	raw, err := r.read(ctx, "list", args, valid, func() (any, error) {
+	raw, err := r.read(ctx, "list", args, nil, valid, func() (any, error) {
 		return r.StoreCards.List(ctx, category, limit, offset)
 	})
 	var result ports.ShopPage
@@ -68,11 +68,14 @@ func (r cards) List(ctx context.Context, category string, limit, offset int) (po
 }
 
 func (r cards) BatchPublic(ctx context.Context, tenants []ids.TenantID) ([]ports.ShopCard, error) {
+	if len(tenants) == 0 {
+		return []ports.ShopCard{}, nil
+	}
 	valid := func(raw []byte) bool {
 		var items []ports.ShopCard
 		return json.Unmarshal(raw, &items) == nil && items != nil && validCards(items)
 	}
-	raw, err := r.read(ctx, "batch", tenants, valid, func() (any, error) {
+	raw, err := r.read(ctx, "batch", tenants, tenants, valid, func() (any, error) {
 		return r.StoreCards.BatchPublic(ctx, tenants)
 	})
 	var result []ports.ShopCard
@@ -86,10 +89,11 @@ func (r cards) read(
 	ctx context.Context,
 	kind string,
 	args any,
+	tenants []ids.TenantID,
 	valid func([]byte) bool,
 	source func() (any, error),
 ) ([]byte, error) {
-	version, err := r.CacheVersion(ctx)
+	version, err := r.CacheVersion(ctx, tenants...)
 	if err != nil {
 		return r.load(source)
 	}
@@ -97,7 +101,7 @@ func (r cards) read(
 	if err != nil {
 		return nil, err
 	}
-	key := fmt.Sprintf("v1:%d:%s:%x", version, kind, sha256.Sum256(encoded))
+	key := fmt.Sprintf("v2:%d:%s:%x", version, kind, sha256.Sum256(encoded))
 	if raw, hit, err := r.cached(ctx, key, valid); err != nil {
 		return r.load(source)
 	} else if hit {

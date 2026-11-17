@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -10,10 +11,15 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
-const modelKeyStatsInterval = 10 * time.Minute
+const (
+	// ModelKeyStatsInterval задаёт редкий диагностический срез вместо учёта каждого события товара.
+	ModelKeyStatsInterval = 30 * time.Minute
+	modelKeyStatsTimeout  = time.Minute
+)
 
 // ModelKeyStatsRunner периодически обновляет метрики покрытия ключами.
 type ModelKeyStatsRunner struct {
+	schedule   ports.IndexRebuildLock
 	stats      ports.ModelKeyStats
 	logger     *slog.Logger
 	offers     *prometheus.GaugeVec
@@ -73,8 +79,10 @@ func NewModelKeyStatsRunner(
 	return runner
 }
 
-// RunOnce обновляет метрики по текущему состоянию каталога.
-func (r *ModelKeyStatsRunner) RunOnce(ctx context.Context) {
+// runOnce обновляет метрики по текущему состоянию каталога в пределах бюджета фонового чтения.
+func (r *ModelKeyStatsRunner) runOnce(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, modelKeyStatsTimeout)
+	defer cancel()
 	report, err := r.stats.Report(ctx, false)
 	if err != nil {
 		r.logger.Warn("ключи моделей: метрики не обновлены", "error", err)
@@ -107,8 +115,29 @@ func (r *ModelKeyStatsRunner) RunOnce(ctx context.Context) {
 func (r *ModelKeyStatsRunner) Run(ctx context.Context) error {
 	for {
 		r.RunOnce(ctx)
-		if !wait(ctx, modelKeyStatsInterval) {
+		if !wait(ctx, ModelKeyStatsInterval) {
 			return nil
 		}
+	}
+}
+
+// WithSchedule назначает общее расписание для реплик.
+func (r *ModelKeyStatsRunner) WithSchedule(schedule ports.IndexRebuildLock) *ModelKeyStatsRunner {
+	r.schedule = schedule
+	return r
+}
+
+// RunOnce выполняет работу только у владельца текущего интервала.
+func (r *ModelKeyStatsRunner) RunOnce(ctx context.Context) {
+	if r.schedule == nil {
+		r.runOnce(ctx)
+		return
+	}
+	err := r.schedule.WithLock(ctx, func(ctx context.Context) error {
+		r.runOnce(ctx)
+		return nil
+	})
+	if err != nil && !errors.Is(err, ports.ErrRebuildBusy) && ctx.Err() == nil {
+		r.logger.Warn("расписание фоновой сверки: сбой", slog.Any("error", err))
 	}
 }

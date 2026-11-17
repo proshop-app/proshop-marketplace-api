@@ -2,6 +2,7 @@ package participant_test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -116,4 +117,29 @@ func cardProductIDs(products []ports.StoreCardProduct) []string {
 		ids = append(ids, product.ProductID)
 	}
 	return ids
+}
+
+func TestStoreSummaryAcrossPagesKeepsOneRatingPerVariantGroup(t *testing.T) {
+	store, service := seedStoreCard(t)
+	template, _ := store.Product("t1", "p1")
+	for i := 0; i < 450; i++ {
+		product := template
+		product.ProductID = ids.ProductID(fmt.Sprintf("bulk-%03d", i))
+		product.Card.VariantsID = "shared"
+		product.AverageRating = 4
+		product.RatingsCount = 10
+		product.SalesCount = int64(i)
+		store.SeedProduct(product)
+		store.SeedVerdict(moderation.VerdictState{
+			TenantID:  "t1",
+			ProductID: product.ProductID,
+			Status:    moderation.Allowed,
+		})
+	}
+	refreshStore(t, service)
+	summary, err := service.StoreSummary(context.Background(), "t1")
+	if err != nil || summary.Offers != 454 || summary.Rating == nil || summary.Rating.Count != 10 ||
+		summary.Rating.Value != 4 || len(summary.Products) != 3 || summary.Products[0].ProductID != "bulk-449" {
+		t.Fatal(summary, err)
+	}
 }

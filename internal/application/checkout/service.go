@@ -405,16 +405,16 @@ func (s *Service) subsidies(
 ) (map[ids.TenantID]participant.State, error) {
 	subsidies := make(map[ids.TenantID]participant.State, len(groups))
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		for _, group := range groups {
-			p, err := tx.Participants().Get(ctx, group.TenantID)
-			if errors.Is(err, participant.ErrNotFound) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-
-			subsidies[group.TenantID] = p.State()
+		keys := make([]ids.TenantID, len(groups))
+		for i, group := range groups {
+			keys[i] = group.TenantID
+		}
+		participants, err := tx.Participants().Batch(ctx, keys)
+		if err != nil {
+			return err
+		}
+		for tenant, p := range participants {
+			subsidies[tenant] = p.State()
 		}
 
 		return nil

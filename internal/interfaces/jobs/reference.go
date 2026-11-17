@@ -2,11 +2,13 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 )
 
@@ -19,6 +21,7 @@ type ReferenceStats interface {
 // записей и длину очереди кандидатов: по ним видно, что поставка прошла и
 // что очередь оператора растёт.
 type ReferenceStatsRunner struct {
+	schedule   ports.IndexRebuildLock
 	stats      ReferenceStats
 	interval   time.Duration
 	logger     *slog.Logger
@@ -70,7 +73,7 @@ func NewReferenceStatsRunner(
 }
 
 // RunOnce читает состояние словарей и выставляет метрики.
-func (r *ReferenceStatsRunner) RunOnce(ctx context.Context) {
+func (r *ReferenceStatsRunner) runOnce(ctx context.Context) {
 	stats, err := r.stats.Stats(ctx)
 	if err != nil {
 		r.failures.Inc()
@@ -91,5 +94,26 @@ func (r *ReferenceStatsRunner) Run(ctx context.Context) error {
 		if !wait(ctx, r.interval) {
 			return nil
 		}
+	}
+}
+
+// WithSchedule назначает общее расписание для реплик.
+func (r *ReferenceStatsRunner) WithSchedule(schedule ports.IndexRebuildLock) *ReferenceStatsRunner {
+	r.schedule = schedule
+	return r
+}
+
+// RunOnce выполняет работу только у владельца текущего интервала.
+func (r *ReferenceStatsRunner) RunOnce(ctx context.Context) {
+	if r.schedule == nil {
+		r.runOnce(ctx)
+		return
+	}
+	err := r.schedule.WithLock(ctx, func(ctx context.Context) error {
+		r.runOnce(ctx)
+		return nil
+	})
+	if err != nil && !errors.Is(err, ports.ErrRebuildBusy) && ctx.Err() == nil {
+		r.logger.Warn("расписание фоновой сверки: сбой", slog.Any("error", err))
 	}
 }
