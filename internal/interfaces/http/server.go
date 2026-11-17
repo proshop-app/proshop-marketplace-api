@@ -7,7 +7,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -27,12 +26,11 @@ import (
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 )
 
-const checkTimeout = 2 * time.Second
-
-// Check — проверка зависимости для /health.
+// Check — проверка зависимости; Optional не закрывает готовность при частичном отказе.
 type Check struct {
-	Name  string
-	Probe func(ctx context.Context) error
+	Optional bool
+	Name     string
+	Probe    func(ctx context.Context) error
 }
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
@@ -246,7 +244,9 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/operator/events/{eventId}/retry", operator(gateway.retry)},
 		{http.MethodPost, "/api/v1/operator/events/{eventId}/resolve", operator(gateway.resolve)},
 		{http.MethodPut, "/api/v1/operator/participants/{tenantId}/delivery", operator(participants.delivery)},
-		{http.MethodGet, "/health", health(deps.Checks)},
+		{http.MethodGet, "/live", health(nil, false)},
+		{http.MethodGet, "/ready", health(deps.Checks, true)},
+		{http.MethodGet, "/health", health(deps.Checks, false)},
 		{http.MethodGet, "/metrics", metrics},
 
 		{http.MethodGet, "/api/v1/taxonomy/dictionary-bindings", taxonomy.dictionaryBindings},
@@ -360,33 +360,4 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeError(w, r, ErrRouteNotFound) })
 
 	return observe(deps.Logger, newHTTPMetrics(deps.Registerer), mux)
-}
-
-// health — 200, если все зависимости отвечают, иначе 503; подробности сбоя — в журнале.
-func health(checks []Check) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		body := healthJSON{Status: "ok", Checks: make(map[string]string, len(checks))}
-		status := http.StatusOK
-
-		for _, check := range checks {
-			ctx, cancel := context.WithTimeout(r.Context(), checkTimeout)
-			err := check.Probe(ctx)
-			cancel()
-
-			if err != nil {
-				body.Status, body.Checks[check.Name], status = "unavailable", "fail", http.StatusServiceUnavailable
-				loggerFrom(r.Context()).Warn(
-					"health: зависимость не отвечает",
-					slog.String("check", check.Name),
-					slog.Any("error", err),
-				)
-
-				continue
-			}
-
-			body.Checks[check.Name] = "ok"
-		}
-
-		writeJSON(w, status, body)
-	}
 }

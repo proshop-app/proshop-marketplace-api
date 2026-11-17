@@ -2065,6 +2065,33 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  /live:
+    get:
+      tags: [service]
+      summary: Живость процесса без обращений к зависимостям
+      operationId: live
+      responses:
+        '200':
+          description: Процесс принимает HTTP
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+  /ready:
+    get:
+      tags: [service]
+      summary: Готовность витрины — PostgreSQL и поиск; Kafka и Redis допускают деградацию
+      operationId: ready
+      responses:
+        '200':
+          description: Витрина готова; status degraded указывает отказ вспомогательной зависимости
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        '503':
+          description: Недоступна база или поиск
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
   /health:
     get:
       tags: [service]
@@ -7079,7 +7106,7 @@ components:
       type: object
       required: [status, checks]
       properties:
-        status: { type: string, enum: [ok, unavailable] }
+        status: { type: string, enum: [ok, degraded, unavailable] }
         checks:
           type: object
           additionalProperties: { type: string, enum: [ok, fail] }

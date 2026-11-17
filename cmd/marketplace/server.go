@@ -556,8 +556,12 @@ func (s *server) httpServer() *http.Server {
 			Name:  "search",
 			Probe: s.store.index.Ping,
 		},
-		{Name: "redis", Probe: func(ctx context.Context) error { return s.cache.Ping(ctx).Err() }},
-		{Name: "kafka", Probe: func(ctx context.Context) error { return infrakafka.Ping(ctx, cfg.Kafka.Brokers) }},
+		{Name: "redis", Optional: true, Probe: func(ctx context.Context) error { return s.cache.Ping(ctx).Err() }},
+		{
+			Name:     "kafka",
+			Optional: true,
+			Probe:    func(ctx context.Context) error { return infrakafka.Ping(ctx, cfg.Kafka.Brokers) },
+		},
 	}
 	handler := transport.NewHandler(transport.Deps{
 		Statuses: s.app.statuses,
