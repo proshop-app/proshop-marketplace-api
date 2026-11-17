@@ -226,7 +226,7 @@ func TestInboxParkedRetention(t *testing.T) {
 		CartsBefore:      at(10),
 		Batch:            1,
 	})
-	if err != nil || result.Processed != 1 || result.OutboxDone != 1 || result.Parked != 1 {
+	if err != nil || result.Processed != 1 || result.OutboxDone != 1 || result.Parked != 0 {
 		t.Fatalf("чистка пачками: %+v, %v", result, err)
 	}
 

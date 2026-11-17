@@ -406,7 +406,7 @@ func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.Purg
 	s.data.outbox = kept
 
 	for key, event := range s.data.parked {
-		if event.ParkedAt.Before(request.ParkedBefore) && event.Control.Status != "queued" {
+		if event.Control.Status == "resolved" && event.Control.UpdatedAt.Before(request.ParkedBefore) {
 			delete(s.data.parked, key)
 			result.Parked++
 		}
