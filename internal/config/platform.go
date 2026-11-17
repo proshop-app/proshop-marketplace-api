@@ -4,7 +4,8 @@ import "time"
 
 func (r *reader) platform() Platform {
 	total := r.positive("PLATFORM_MAX_CONCURRENT", 128)
-	reads := r.positive("PLATFORM_READ_MAX_CONCURRENT", max(1, total/4))
+	// Пулы равны: расчёт для пика утверждённого профиля — docs/platform-dependency.md, «Профиль на 1000 магазинов».
+	reads := r.positive("PLATFORM_READ_MAX_CONCURRENT", max(1, total/2))
 	return Platform{
 		URL:                   r.httpURL("PLATFORM_API_URL"),
 		Token:                 r.required("SERVICE_TOKEN_MARKETPLACE"),

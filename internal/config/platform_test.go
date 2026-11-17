@@ -23,7 +23,7 @@ func TestPlatformProtectionDefaults(t *testing.T) {
 	if p.MaxConcurrent != 128 || p.TenantMaxConcurrent != 8 || p.FailureThreshold != 5 {
 		t.Fatal(p)
 	}
-	if p.CheckoutMaxConcurrent != 96 || p.ReadMaxConcurrent != 32 || p.QueueSize != 1024 || p.TenantQueueSize != 32 {
+	if p.CheckoutMaxConcurrent != 64 || p.ReadMaxConcurrent != 64 || p.QueueSize != 1024 || p.TenantQueueSize != 32 {
 		t.Fatal(p)
 	}
 	if p.FailureWindow != 30*time.Second || p.FailureMinCalls != 20 || p.FailurePercent != 50 {
@@ -98,7 +98,7 @@ func TestPlatformSharesFollowConfiguredTotal(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := cfg.Platform
-	if p.CheckoutMaxConcurrent != 48 || p.ReadMaxConcurrent != 16 || p.TenantMaxConcurrent != 4 {
+	if p.CheckoutMaxConcurrent != 32 || p.ReadMaxConcurrent != 32 || p.TenantMaxConcurrent != 4 {
 		t.Fatal(p)
 	}
 	values["PLATFORM_CHECKOUT_MAX_CONCURRENT"] = "32"

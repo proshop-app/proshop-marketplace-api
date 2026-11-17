@@ -93,7 +93,7 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `PLATFORM_CACHE_TTL` / `PLATFORM_STALE_TTL` | | `30s` / `5m` | свежесть и окно stale |
 | `PLATFORM_CACHE_SIZE` | | `1024` | предел записей кэша отзывов |
 | `PLATFORM_MAX_CONCURRENT` | | `128` | общий предел исходящих вызовов процесса |
-| `PLATFORM_CHECKOUT_MAX_CONCURRENT` / `PLATFORM_READ_MAX_CONCURRENT` | | `96` / `32` | независимые пулы; сумма равна общему пределу |
+| `PLATFORM_CHECKOUT_MAX_CONCURRENT` / `PLATFORM_READ_MAX_CONCURRENT` | | `64` / `64` | независимые пулы; сумма равна общему пределу |
 | `PLATFORM_TENANT_MAX_CONCURRENT` | | `8` | доля магазина, разделённая между пулами (6/2) |
 | `PLATFORM_QUEUE_SIZE` / `PLATFORM_TENANT_QUEUE_SIZE` | | `1024` / `32` | очередь каждого класса и доля магазина в ней |
 | `PLATFORM_TENANT_STATE_SIZE` / `PLATFORM_TENANT_IDLE_TTL` | | `10000` / `10m` | предел состояний магазинов и срок неактивности |
