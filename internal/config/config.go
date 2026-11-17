@@ -144,9 +144,10 @@ type Settings struct {
 
 // HTTP — сервер REST.
 type HTTP struct {
-	RequestTimeout  time.Duration
-	Addr            string
-	ShutdownTimeout time.Duration
+	RequestTimeout         time.Duration
+	ReferenceImportTimeout time.Duration
+	Addr                   string
+	ShutdownTimeout        time.Duration
 	// TrustedProxies — сколько прокси перед сервисом дописывают X-Forwarded-For. От него
 	// зависит адрес клиента, а с ним лимиты по адресу: больше, чем прокси на деле, — и
 	// клиент снова подставляет адрес сам.
@@ -242,10 +243,11 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		Promotion:     r.promotion(),
 		Identity:      r.identity(),
 		HTTP: HTTP{
-			RequestTimeout:  r.duration("HTTP_REQUEST_TIMEOUT", 25*time.Second),
-			Addr:            r.str("HTTP_ADDR", ":8080"),
-			ShutdownTimeout: r.duration("SHUTDOWN_TIMEOUT", 20*time.Second),
-			TrustedProxies:  r.nonNegative("HTTP_TRUST_PROXY", 0),
+			RequestTimeout:         r.duration("HTTP_REQUEST_TIMEOUT", 25*time.Second),
+			ReferenceImportTimeout: r.duration("HTTP_REFERENCE_IMPORT_TIMEOUT", 120*time.Second),
+			Addr:                   r.str("HTTP_ADDR", ":8080"),
+			ShutdownTimeout:        r.duration("SHUTDOWN_TIMEOUT", 20*time.Second),
+			TrustedProxies:         r.nonNegative("HTTP_TRUST_PROXY", 0),
 		},
 		Database: r.database(),
 		Search: Search{

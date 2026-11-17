@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,33 +10,60 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
-func TestRequestBudgetCancelsWorkAndSelectsDatabaseClass(t *testing.T) {
-	read := ports.DatabaseBudget{Statement: time.Millisecond, Transaction: time.Second}
-	checkout := ports.DatabaseBudget{Statement: 2 * time.Millisecond, Transaction: time.Second}
+func TestEveryRouteHasExplicitBudgetAndUniformTimeoutStatus(t *testing.T) {
 	deps := Deps{
-		RequestTimeout:  20 * time.Millisecond,
-		DatabaseBudgets: ports.DatabaseBudgets{Read: read, Checkout: checkout},
+		RequestTimeout:         time.Millisecond,
+		ReferenceImportTimeout: 2 * time.Millisecond,
+		DatabaseBudgets: ports.DatabaseBudgets{
+			Read:       ports.DatabaseBudget{Statement: time.Second, Transaction: 5 * time.Second},
+			Checkout:   ports.DatabaseBudget{Statement: 2 * time.Second, Transaction: 5 * time.Second},
+			Ingestion:  ports.DatabaseBudget{Statement: 3 * time.Second, Transaction: 5 * time.Second},
+			Background: ports.DatabaseBudget{Statement: 4 * time.Second, Transaction: 5 * time.Second},
+		},
 	}
-	for _, path := range []string{"/api/v1/catalog/offers", "/api/v1/checkout"} {
-		t.Run(path, func(t *testing.T) {
-			next := func(_ http.ResponseWriter, r *http.Request) {
-				want := read
-				if path == "/api/v1/checkout" {
-					want = checkout
-				}
-				if got := ports.DatabaseBudgetFrom(r.Context(), ports.DatabaseBudget{}); got != want {
-					t.Fatal(got, want)
-				}
-				select {
-				case <-r.Context().Done():
-					if !errors.Is(r.Context().Err(), context.DeadlineExceeded) {
-						t.Error(r.Context().Err())
+	budgets := map[requestClass]ports.DatabaseBudget{
+		readRequest:       deps.DatabaseBudgets.Read,
+		checkoutRequest:   deps.DatabaseBudgets.Checkout,
+		ingestionRequest:  deps.DatabaseBudgets.Ingestion,
+		backgroundRequest: deps.DatabaseBudgets.Background,
+		importRequest:     deps.DatabaseBudgets.Background,
+	}
+	for _, route := range routes(deps) {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			budget, ok := budgets[route.class]
+			if !ok {
+				t.Fatal("не задан класс маршрута")
+			}
+			for _, lateSuccess := range []bool{false, true} {
+				next := func(w http.ResponseWriter, r *http.Request) {
+					if got := ports.DatabaseBudgetFrom(r.Context(), ports.DatabaseBudget{}); got != budget {
+						t.Fatal(got, budget)
 					}
-				case <-time.After(time.Second):
-					t.Error("срок HTTP не дошёл до обработчика")
+					<-r.Context().Done()
+					if lateSuccess {
+						writeJSON(w, http.StatusOK, true)
+						return
+					}
+					writeError(w, r, context.DeadlineExceeded)
+				}
+				recorder := httptest.NewRecorder()
+				request := httptest.NewRequest(route.method, "/any-path/operator/checkout", nil)
+				requestBudget(route.class, deps, next)(recorder, request)
+				if recorder.Code != http.StatusServiceUnavailable {
+					t.Fatal("срок должен отвечать 503 для любого маршрута", recorder.Code, recorder.Body.String())
 				}
 			}
-			requestBudget(path, deps, next)(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, nil))
 		})
+	}
+}
+
+func TestDeadlineErrorUses503BeforeWritingHeaders(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	request := httptest.NewRequest(http.MethodGet, "/any", nil).WithContext(ctx)
+	recorder := httptest.NewRecorder()
+	writeError(recorder, request, context.DeadlineExceeded)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatal("истечение срока стало внутренней ошибкой", recorder.Code, recorder.Body.String())
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -52,11 +53,13 @@ func newReferenceEnv(t *testing.T) *referenceEnv {
 	service := appreference.NewService(store, fake.NewClock(t0), &fake.IDs{}, &fake.Publisher{}, config)
 	registry := prometheus.NewRegistry()
 	handler := transport.NewHandler(transport.Deps{
-		Reference:          service,
-		OperatorToken:      token,
-		ReferenceReadToken: readToken,
-		Registerer:         registry,
-		Logger:             slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Reference:              service,
+		OperatorToken:          token,
+		ReferenceReadToken:     readToken,
+		Registerer:             registry,
+		Logger:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	e := &referenceEnv{server: httptest.NewServer(handler), registry: registry}
 	t.Cleanup(e.server.Close)
@@ -136,10 +139,27 @@ func TestReferenceReadTokenOpensOnlyReads(t *testing.T) {
 		}
 	}
 	writes := []referenceCall{
-		{method: http.MethodPost, path: "/internal/reference/b1/entries", body: `{"canonical":"Бренд Два"}`},
-		{method: http.MethodPatch, path: "/internal/reference/b1/entries/" + id, body: `{}`, ifMatch: created.etag},
-		{method: http.MethodPost, path: "/internal/reference/b1/entries/" + id + "/merge", body: `{"into":"b1"}`},
-		{method: http.MethodPost, path: "/internal/reference/b1/entries/" + id + "/aliases", body: `{"text":"Brend"}`},
+		{
+			method: http.MethodPost,
+			path:   "/internal/reference/b1/entries",
+			body:   `{"canonical":"Бренд Два"}`,
+		},
+		{
+			method:  http.MethodPatch,
+			path:    "/internal/reference/b1/entries/" + id,
+			body:    `{}`,
+			ifMatch: created.etag,
+		},
+		{
+			method: http.MethodPost,
+			path:   "/internal/reference/b1/entries/" + id + "/merge",
+			body:   `{"into":"b1"}`,
+		},
+		{
+			method: http.MethodPost,
+			path:   "/internal/reference/b1/entries/" + id + "/aliases",
+			body:   `{"text":"Brend"}`,
+		},
 		{method: http.MethodDelete, path: "/internal/reference/b1/aliases/" + id},
 	}
 	for _, call := range writes {

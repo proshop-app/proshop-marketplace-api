@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -27,9 +28,11 @@ func TestPublicDeliverySettings(t *testing.T) {
 			appcheckout.Config{DeliverySubsidyMinPercent: percent},
 		)
 		handler := transport.NewHandler(transport.Deps{
-			Checkouts:  service,
-			Registerer: prometheus.NewRegistry(),
-			Logger:     slog.Default(),
+			RequestTimeout:         time.Minute,
+			ReferenceImportTimeout: time.Minute,
+			Checkouts:              service,
+			Registerer:             prometheus.NewRegistry(),
+			Logger:                 slog.Default(),
 		})
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/api/v1/delivery/settings", nil)

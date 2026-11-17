@@ -20,7 +20,6 @@ import (
 const (
 	maxReferenceImportBody       = 32 << 20
 	maxReferenceImportDepth      = 64
-	referenceImportTimeout       = 120 * time.Second
 	referenceImportResponseGrace = 5 * time.Second
 )
 
@@ -70,12 +69,11 @@ func (h *referenceHandlers) importPackage(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, referenceImportResponse{SchemaVersion: 1, Dictionaries: results})
 }
 
-// referenceImportBudget действует после проверки оператора: общий бюджет
-// загрузки и транзакции не меняет короткие таймауты обычных HTTP-маршрутов.
+// referenceImportBudget после проверки оператора продлевает сроки соединения
+// до общего бюджета маршрута; обычные соединения сохраняют короткие сроки.
 func referenceImportBudget(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), referenceImportTimeout)
-		defer cancel()
+		ctx := r.Context()
 		deadline, _ := ctx.Deadline()
 		controller := http.NewResponseController(w)
 		if err := controller.SetReadDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {

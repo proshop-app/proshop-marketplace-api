@@ -570,9 +570,10 @@ func (s *server) httpServer() *http.Server {
 			Ingestion:  ports.DatabaseBudget(cfg.Database.Ingestion),
 			Background: ports.DatabaseBudget(cfg.Database.Background),
 		},
-		RequestTimeout: cfg.HTTP.RequestTimeout,
-		Statuses:       s.app.statuses,
-		Features:       s.app.buyerFeatures,
+		RequestTimeout:         cfg.HTTP.RequestTimeout,
+		ReferenceImportTimeout: cfg.HTTP.ReferenceImportTimeout,
+		Statuses:               s.app.statuses,
+		Features:               s.app.buyerFeatures,
 
 		Promotion:      s.app.promotion,
 		ServerAPIToken: cfg.Promotion.ServerAPIToken,

@@ -89,9 +89,18 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 		QuoteTimeout: time.Second,
 	})
 	deps := transport.Deps{
-		Features:     appbuyer.NewFeatures(e.store, e.geo, e.platform, e.limiter, e.pickups),
-		Taxonomy:     apptaxonomy.NewService(e.store, e.clock, nil),
-		Catalog:      appcatalog.NewQueries(e.store, e.index, e.platform, nil, nil, fake.NewClock(time.Time{})),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Features:               appbuyer.NewFeatures(e.store, e.geo, e.platform, e.limiter, e.pickups),
+		Taxonomy:               apptaxonomy.NewService(e.store, e.clock, nil),
+		Catalog: appcatalog.NewQueries(
+			e.store,
+			e.index,
+			e.platform,
+			nil,
+			nil,
+			fake.NewClock(time.Time{}),
+		),
 		Participants: appparticipant.NewService(e.store, e.clock, &fake.IDs{}),
 		Auth: appbuyer.NewAuth(
 			e.store,

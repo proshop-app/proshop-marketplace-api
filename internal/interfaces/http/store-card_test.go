@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -69,7 +70,15 @@ func TestStoreCardHTTP(t *testing.T) {
 	}
 	refresh()
 	handler := transport.NewHandler(transport.Deps{
-		Features:       appbuyer.NewFeatures(store, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{}),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Features: appbuyer.NewFeatures(
+			store,
+			nil,
+			fake.NewPlatform(),
+			fake.NewLimiter(),
+			&fake.PickupLookup{},
+		),
 		Registerer:     prometheus.NewRegistry(),
 		Logger:         slog.Default(),
 		Participants:   service,
