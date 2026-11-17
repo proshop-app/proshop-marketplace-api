@@ -85,11 +85,24 @@ func TestBreakerRecoveryAndLogLimit(t *testing.T) {
 }
 
 func TestStrictTimeoutsAndCodes(t *testing.T) {
-	operations := []string{"price_group", "settings", "quote", "create_order", "get_order", "stub_payment"}
+	operations := []string{
+		"price_group",
+		"settings",
+		"quote",
+		"create_order",
+		"get_order",
+		"stub_payment",
+		"cancel_order",
+		"pickup_points",
+	}
 	for _, operation := range operations {
 		t.Run(operation, func(t *testing.T) {
 			upstream := fake.NewPlatform()
 			upstream.CallHook = func(ctx context.Context, _ string) error {
+				<-ctx.Done()
+				return ctx.Err()
+			}
+			upstream.BeforePickup = func(ctx context.Context, _ ids.TenantID) error {
 				<-ctx.Done()
 				return ctx.Err()
 			}
@@ -123,6 +136,12 @@ func strictCall(c *Client, operation string) error {
 		return err
 	case "get_order":
 		_, err := c.GetOrder(ctx, "t1", "o1")
+		return err
+	case "cancel_order":
+		_, err := c.CancelOrder(ctx, "t1", ports.CancelOrderRequest{})
+		return err
+	case "pickup_points":
+		_, err := c.PickupPoints(ctx, "t1", "carrier", "Город")
 		return err
 	default:
 		return c.StubPayment(ctx, "t1", "o1", money.Money{})

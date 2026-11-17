@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"errors"
+	"time"
 )
 
 type slotPool struct {
@@ -25,6 +26,7 @@ type waiter struct {
 	position *list.Element
 	all      *list.Element
 	done     chan admission
+	enqueued time.Time
 }
 
 func (c *Client) enqueue(ctx context.Context, state *tenantState, class operationClass) (admission, *waiter) {
@@ -32,7 +34,7 @@ func (c *Client) enqueue(ctx context.Context, state *tenantState, class operatio
 	if pool.queued >= c.cfg.QueueSize || state.queued[class].Len() >= c.cfg.TenantQueueSize {
 		return admission{reason: "queue_full"}, nil
 	}
-	w := &waiter{ctx: ctx, state: state, class: class, done: make(chan admission, 1)}
+	w := &waiter{ctx: ctx, state: state, class: class, done: make(chan admission, 1), enqueued: time.Now()}
 	c.pin(state)
 	w.position = state.queued[class].PushBack(w)
 	w.all = pool.waiting.PushBack(w)
@@ -43,6 +45,18 @@ func (c *Client) enqueue(ctx context.Context, state *tenantState, class operatio
 }
 
 func (c *Client) await(ctx context.Context, w *waiter) admission {
+	result := c.wait(ctx, w)
+	if c.metrics != nil {
+		outcome := result.reason
+		if outcome == "" {
+			outcome = "admitted"
+		}
+		c.metrics.PlatformQueueWait(w.class.String(), outcome, time.Since(w.enqueued))
+	}
+	return result
+}
+
+func (c *Client) wait(ctx context.Context, w *waiter) admission {
 	select {
 	case result := <-w.done:
 		return result

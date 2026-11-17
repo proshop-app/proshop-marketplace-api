@@ -125,16 +125,22 @@ min(контекст запроса, `PLATFORM_READ_TIMEOUT` или `PLATFORM_AP
 
 ## Наблюдаемость
 
-`marketplace_platform_calls_total{operation,outcome}` и
-`marketplace_platform_call_duration_seconds{operation,outcome}` используют операции
-`price_contexts`, `reviews`, `price_group`, `settings`, `quote`, `create_order`, `get_order`, `stub_payment`.
-Исходы: `ok`, `timeout`, `error`, `short_circuit`, `stale`. Гистограмма измеряет время вызова/немедленного
-отказа, для `stale` — время до возврата старого значения. Свежий cache hit не считается исходящим обращением.
-Возврат stale дополнительно учитывается после `error`/`timeout`/`short_circuit`: эти ряды нельзя суммировать
-как число сетевых запросов. `short_circuit` включает заполненный лимит, открытую цепь и уже идущее обновление ключа.
-В метках нет идентификаторов покупателей, URL, сырых ошибок или произвольных причин.
-Журнал ограничен по фиксированной паре операция/исход (общая ошибка, таймаут, немедленный отказ);
-для магазинных операций содержит `tenantId`. Публичные деградированные ответы не попадают в журнал HTTP 5xx.
+`marketplace_platform_calls_total{operation,class,outcome}` и
+`marketplace_platform_call_duration_seconds{operation,class,outcome}` используют операции
+`price_contexts`, `reviews`, `price_group`, `settings`, `pickup_points`, `quote`, `create_order`, `get_order`,
+`stub_payment`, `cancel_order`; классы — `checkout` и `read`.
+Исходы: `ok`, `timeout`, `error`, `queue_full`, `queue_timeout`, `tenant_breaker`, `server_breaker`,
+`canceled`, `short_circuit`, `stale`. Время обращения включает очередь и серверный вызов.
+`short_circuit` означает только уже идущее обновление того же ключа отзывов; переполнение и размыкатели
+учитываются отдельными причинами. Свежий cache hit не считается исходящим обращением.
+Возврат stale учитывается дополнительно: эти ряды нельзя суммировать как число сетевых запросов.
+
+`marketplace_platform_queue_wait_seconds{class,outcome}` измеряет только запросы, попавшие в очередь:
+`admitted` либо причина отказа/отмены. `marketplace_platform_rejections_total{class,reason}` отдельно считает
+`queue_full`, `queue_timeout`, `timeout` серверного вызова, `tenant_breaker`, `server_breaker`, `canceled`.
+Метки имеют фиксированный набор значений, без покупателей, магазинов, URL и сырых ошибок.
+Журнал ограничен по паре операция/исход, содержит класс операции и `tenantId`, когда магазин известен.
+Публичные деградированные ответы не попадают в журнал HTTP 5xx.
 
 ## Витрина proshop-marketplace-web
 

@@ -9,13 +9,15 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
 func TestWaitingAndCancellationReleaseQueuePlace(t *testing.T) {
 	cfg := testConfig()
 	cfg.QueueSize = 1
 	cfg.TenantQueueSize = 1
-	c := New(fake.NewPlatform(), cfg, fake.NewClock(time.Now()), nil, nil)
+	metrics := &fake.PlatformMetrics{}
+	c := New(fake.NewPlatform(), cfg, fake.NewClock(time.Now()), metrics, nil)
 	first := admit(t, c, "t1", checkoutClass)
 	second := admit(t, c, "t2", checkoutClass)
 	ctx, cancel := context.WithCancel(tenantContext("t3"))
@@ -29,12 +31,15 @@ func TestWaitingAndCancellationReleaseQueuePlace(t *testing.T) {
 	}
 	next := pending(tenantContext("t4"), t, c, checkoutClass)
 	c.release(first, nil)
-	granted := <-next.done
+	granted := c.await(tenantContext("t4"), next)
 	if granted.reason != "" {
 		t.Fatal(granted.reason)
 	}
 	c.release(granted.permit, nil)
 	c.release(second, nil)
+	if metrics.QueueCount("checkout", "canceled") != 1 || metrics.QueueCount("checkout", "admitted") != 1 {
+		t.Fatal("нет метрик ожидания")
+	}
 	if c.running != 0 || c.pools[checkoutClass].queued != 0 {
 		t.Fatal("место не освобождено")
 	}
@@ -84,7 +89,8 @@ func TestQueueDeadlineUsesOperationBudgetWithoutCallingServer(t *testing.T) {
 	}
 	c.release(first, nil)
 	c.release(second, nil)
-	if calls.Load() != 0 || metrics.Count("settings", "queue_timeout") != 2 {
+	if calls.Load() != 0 || metrics.Count("settings", "queue_timeout") != 2 ||
+		metrics.QueueCount("read", "queue_timeout") != 2 {
 		t.Fatal("ожидание вызвало сервер или потеряло метрику", calls.Load())
 	}
 	if c.pools[readClass].queued != 0 || c.tenants["t3"].breaker.failures != 0 {
@@ -137,4 +143,25 @@ func TestOpeningTenantBreakerRejectsOnlyItsQueue(t *testing.T) {
 	}
 	c.release(granted.permit, nil)
 	c.release(second, nil)
+}
+
+func TestServerBreakerReleasesQueuesOfBothClasses(t *testing.T) {
+	cfg := testConfig()
+	cfg.FailureThreshold = 1
+	c := New(fake.NewPlatform(), cfg, fake.NewClock(time.Now()), nil, nil)
+	checkout := admit(t, c, "t1", checkoutClass)
+	read := admit(t, c, "t2", readClass)
+	ownCheckout := pending(tenantContext("t1"), t, c, checkoutClass)
+	ownRead := pending(tenantContext("t2"), t, c, readClass)
+	failure := &ports.PlatformServerFailure{Cause: errors.New("нет соединения")}
+	c.release(checkout, failure)
+	for _, waiting := range []*waiter{ownCheckout, ownRead} {
+		if result := c.await(waiting.ctx, waiting); result.reason != "server_breaker" {
+			t.Fatal("очередь не освобождена при общем отказе", result.reason)
+		}
+	}
+	c.release(read, context.Canceled)
+	if c.pools[checkoutClass].queued != 0 || c.pools[readClass].queued != 0 || c.running != 0 {
+		t.Fatal("общий отказ оставил занятые места")
+	}
 }

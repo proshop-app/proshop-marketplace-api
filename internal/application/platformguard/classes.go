@@ -33,3 +33,10 @@ func (c *Client) tenantLimit(class operationClass) int {
 	}
 	return c.cfg.TenantMaxConcurrent - reads
 }
+
+func (class operationClass) String() string {
+	if class == checkoutClass {
+		return "checkout"
+	}
+	return "read"
+}
