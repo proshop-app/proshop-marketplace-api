@@ -15,6 +15,8 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+const promotionTickBatch = 200
+
 // Sponsored содержит выбранную карточку и обязательную маркировку.
 type Sponsored struct {
 	Position    int
@@ -64,7 +66,23 @@ func (s *Service) Sponsored(ctx context.Context, query ports.OfferQuery) ([]Spon
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		day := s.clock.Now().In(s.config.Location).Format(time.DateOnly)
 		filter := promotion.Filter{Status: promotion.Active, PlacementCode: code, From: day, To: day}
-		all, _, err := tx.Promotion().List(ctx, filter)
+		selection := promotion.Selection{Filter: filter, CategoryID: query.CategoryID}
+		if code == "search_slot" {
+			selection.CategoryID = ""
+			selection.Offers = make([]ids.OfferID, 0, len(relevant))
+			for id := range relevant {
+				offer, err := ids.ParseOfferID(id)
+				if err != nil {
+					return err
+				}
+				selection.Offers = append(selection.Offers, offer)
+			}
+		}
+		all, err := tx.Promotion().Select(ctx, selection)
+		if err != nil {
+			return err
+		}
+		states, err := campaignOffers(ctx, tx, all)
 		if err != nil {
 			return err
 		}
@@ -77,10 +95,7 @@ func (s *Service) Sponsored(ctx context.Context, query ports.OfferQuery) ([]Spon
 			if _, ok := relevant[c.Target.OfferID.String()]; code == "search_slot" && !ok {
 				continue
 			}
-			doc, ok, err := currentOffer(ctx, tx, c)
-			if err != nil {
-				return err
-			}
+			doc, ok := campaignOffer(states[c.Target.OfferID], c)
 			if !ok {
 				continue
 			}
@@ -119,17 +134,25 @@ func currentOffer(ctx context.Context, tx ports.Tx, c promotion.CampaignState) (
 	if err != nil {
 		return ports.OfferDocument{}, false, err
 	}
+	doc, listed := campaignOffer(state, c)
+	return doc, listed, nil
+}
+
+func campaignOffer(state ports.OfferState, c promotion.CampaignState) (ports.OfferDocument, bool) {
+	if state.Product == nil {
+		return ports.OfferDocument{}, false
+	}
 	doc, ok := appcatalog.Document(state)
 	card := state.Product.State().Card.Marketplace
 	if card == nil {
-		return doc, false, nil
+		return doc, false
 	}
 	if card.CategoryID != c.Target.CategoryID {
 		// Такой документ не выдаётся: категория нужна только для пояснения остановки.
 		doc.CategoryID = card.CategoryID
-		return doc, false, nil
+		return doc, false
 	}
-	return doc, ok && doc.Listed && doc.CategoryID == c.Target.CategoryID, nil
+	return doc, ok && doc.Listed && doc.CategoryID == c.Target.CategoryID
 }
 
 // Events обезличивает посетителя и атомарно учитывает пачку маячков.
@@ -175,58 +198,119 @@ func (s *Service) Events(ctx context.Context, visitor string, events []Event) er
 
 // Tick выбирает только живые размещения; просроченная очередь освобождает резерв.
 func (s *Service) Tick(ctx context.Context) error {
-	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		now := s.clock.Now().In(s.config.Location)
-		day := now.Format(time.DateOnly)
-		for _, status := range []promotion.Status{promotion.Active, promotion.Approved, promotion.Review} {
-			filter := promotion.Filter{Status: status}
-			if status == promotion.Review {
-				filter.To = day
-			}
-			all, _, err := tx.Promotion().List(ctx, filter)
+	day := s.clock.Now().In(s.config.Location).Format(time.DateOnly)
+	for _, status := range []promotion.Status{promotion.Active, promotion.Approved, promotion.Review} {
+		selection := promotion.Selection{
+			Filter: promotion.Filter{Status: status},
+			Limit:  promotionTickBatch,
+			ByID:   true,
+		}
+		if status == promotion.Review {
+			selection.EndBefore = day
+		}
+		for {
+			next, err := s.tickPage(ctx, selection)
 			if err != nil {
 				return err
 			}
-			for _, state := range all {
-				if status == promotion.Review && day <= state.Period.To {
-					continue
-				}
-				c := promotion.RestoreCampaign(state)
-				action, note := promotion.Activate, ""
-				changed := false
-				switch {
-				case status != promotion.Active && day > state.Period.To:
-					action, note = promotion.Stop, "период прошёл без оплаты/решения"
-					changed, err = c.Decide(action, note, "", promotion.Payment{}, now)
-				case status == promotion.Active && day > state.Period.To:
-					changed = c.Tick(now, s.config.Location)
-					action = promotion.Finish
-				default:
-					doc, listed, readErr := currentOffer(ctx, tx, state)
-					if readErr != nil {
-						return readErr
-					}
-					if !listed {
-						action, note = promotion.Stop, "товар больше не опубликован"
-						if doc.CategoryID != "" && doc.CategoryID != state.Target.CategoryID {
-							note = "категория товара изменилась"
-						}
-						changed, err = c.Decide(action, note, "", promotion.Payment{}, now)
-					} else {
-						changed = c.Tick(now, s.config.Location)
-					}
-				}
-				if err != nil {
-					return err
-				}
-				if changed {
-					err := s.saveDecision(ctx, tx, c, state.Status, promotion.ActorSystem, action, note)
-					if err != nil {
-						return err
-					}
-				}
+			if next == "" {
+				break
 			}
+			selection.After = next
+		}
+	}
+	return nil
+}
+
+func (s *Service) tickPage(ctx context.Context, selection promotion.Selection) (ids.UUID, error) {
+	var next ids.UUID
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		all, err := tx.Promotion().Select(ctx, selection)
+		if err != nil {
+			return err
+		}
+		current := make([]promotion.CampaignState, 0, len(all))
+		day := s.clock.Now().In(s.config.Location).Format(time.DateOnly)
+		for _, state := range all {
+			if state.Period.To >= day {
+				current = append(current, state)
+			}
+		}
+		offers, err := campaignOffers(ctx, tx, current)
+		if err != nil {
+			return err
+		}
+		for _, state := range all {
+			if err := s.tickCampaign(ctx, tx, state, offers[state.Target.OfferID]); err != nil {
+				return err
+			}
+		}
+		if len(all) == selection.Limit {
+			next = all[len(all)-1].ID
 		}
 		return nil
 	})
+	return next, err
+}
+
+func (s *Service) tickCampaign(
+	ctx context.Context,
+	tx ports.Tx,
+	state promotion.CampaignState,
+	offer ports.OfferState,
+) error {
+	now := s.clock.Now().In(s.config.Location)
+	expired := now.Format(time.DateOnly) > state.Period.To
+	campaign := promotion.RestoreCampaign(state)
+	action, note := promotion.Activate, ""
+	var changed bool
+	var err error
+	switch {
+	case expired && state.Status != promotion.Active:
+		action, note = promotion.Stop, "период прошёл без оплаты/решения"
+		changed, err = campaign.Decide(action, note, "", promotion.Payment{}, now)
+	case expired:
+		action = promotion.Finish
+		changed = campaign.Tick(now, s.config.Location)
+	default:
+		doc, listed := campaignOffer(offer, state)
+		if listed {
+			changed = campaign.Tick(now, s.config.Location)
+		} else {
+			action, note = promotion.Stop, "товар больше не опубликован"
+			if doc.CategoryID != "" && doc.CategoryID != state.Target.CategoryID {
+				note = "категория товара изменилась"
+			}
+			changed, err = campaign.Decide(action, note, "", promotion.Payment{}, now)
+		}
+	}
+	if err != nil || !changed {
+		return err
+	}
+	return s.saveDecision(ctx, tx, campaign, state.Status, promotion.ActorSystem, action, note)
+}
+
+func campaignOffers(
+	ctx context.Context,
+	tx ports.Tx,
+	campaigns []promotion.CampaignState,
+) (map[ids.OfferID]ports.OfferState, error) {
+	keys := make([]ids.OfferID, 0, len(campaigns))
+	seen := map[ids.OfferID]bool{}
+	for _, c := range campaigns {
+		if !seen[c.Target.OfferID] {
+			keys = append(keys, c.Target.OfferID)
+			seen[c.Target.OfferID] = true
+		}
+	}
+	result := map[ids.OfferID]ports.OfferState{}
+	if len(keys) == 0 {
+		return result, nil
+	}
+	states, err := tx.Offers().Batch(ctx, keys)
+	for _, state := range states {
+		p := state.Product.State()
+		result[ids.OfferID{Tenant: p.TenantID, Product: p.ProductID}] = state
+	}
+	return result, err
 }

@@ -19,8 +19,15 @@ const (
  AND ($6='' OR date_from<=NULLIF($6,'')::date) AND ($7='' OR product_id=$7)`
 	promotionList = `SELECT state, price, payment_amount FROM promotion_campaigns` + promotionWhere +
 		` ORDER BY created_at DESC, id DESC LIMIT NULLIF($8,0) OFFSET $9`
-	promotionTotal  = `SELECT count(*) FROM promotion_campaigns` + promotionWhere
-	promotionInsert = `INSERT INTO promotion_campaigns
+	promotionSelection = `SELECT state, price, payment_amount FROM promotion_campaigns` + promotionWhere + `
+ AND ($8='' OR category_id=$8) AND (NOT $9 OR status IN ('review','approved','active'))
+ AND ($10='' OR id>NULLIF($10,'')::uuid) AND ($12='' OR date_to<NULLIF($12,'')::date)
+ `
+	promotionSelectOffers = ` AND (tenant_id,product_id) IN (SELECT * FROM unnest($13::text[], $14::text[]))`
+	promotionSelectOrder  = ` ORDER BY created_at DESC, id DESC LIMIT NULLIF($11,0)`
+	promotionSelectCursor = ` ORDER BY id LIMIT NULLIF($11,0)`
+	promotionTotal        = `SELECT count(*) FROM promotion_campaigns` + promotionWhere
+	promotionInsert       = `INSERT INTO promotion_campaigns
  (id,tenant_id,kind,placement_code,position,category_id,date_from,date_to,price,payment_amount,status,version,state,
  created_at,updated_at,product_id)
  VALUES ($1,$2,$3,$4,$5,$6,$7::text::date,$8::text::date,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT DO NOTHING`
@@ -176,6 +183,55 @@ func (r *Promotions) Occupancy(
 			return nil, err
 		}
 		result = append(result, week)
+	}
+	return result, rows.Err()
+}
+
+// Select отбирает кампании до чтения товаров и не считает ненужное общее число.
+func (r *Promotions) Select(ctx context.Context, q promotion.Selection) ([]promotion.CampaignState, error) {
+	f := q.Filter
+	args := []any{
+		f.Status,
+		f.Kind,
+		f.TenantID,
+		f.PlacementCode,
+		f.From,
+		f.To,
+		f.ProductID,
+		q.CategoryID,
+		q.Occupying,
+		q.After,
+		q.Limit,
+		q.EndBefore,
+	}
+	query := promotionSelection
+	if q.Offers != nil {
+		tenants, products := make([]string, len(q.Offers)), make([]string, len(q.Offers))
+		for i, offer := range q.Offers {
+			tenants[i], products[i] = string(offer.Tenant), string(offer.Product)
+		}
+		// Отдельная форма без OR позволяет построить индексный JOIN от выбранных товаров.
+		query += promotionSelectOffers
+		args = append(args, tenants, products)
+	}
+	order := promotionSelectOrder
+	if q.ByID {
+		order = promotionSelectCursor
+	}
+	rows, err := rawSQL(ctx, r.db, query+order, args...).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	result := []promotion.CampaignState{}
+	for rows.Next() {
+		c, err := scanPromotion(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, c.State())
 	}
 	return result, rows.Err()
 }

@@ -315,3 +315,37 @@ func (r promotionRepo) ReportGroups(ctx context.Context, from, to string) ([]pro
 	}
 	return result, err
 }
+
+func (r promotionRepo) Select(ctx context.Context, q promotion.Selection) ([]promotion.CampaignState, error) {
+	all, _, err := r.List(ctx, q.Filter)
+	if err != nil {
+		return nil, err
+	}
+	result := []promotion.CampaignState{}
+	for _, c := range all {
+		if (q.EndBefore != "" && c.Period.To >= q.EndBefore) || c.ID <= q.After ||
+			(q.CategoryID != "" && c.Target.CategoryID != q.CategoryID) ||
+			(q.Occupying && !promotion.Occupies(c.Status)) {
+			continue
+		}
+		if q.Offers != nil {
+			found := false
+			for _, offer := range q.Offers {
+				found = found || offer == c.Target.OfferID
+			}
+			if !found {
+				continue
+			}
+		}
+		result = append(result, c)
+	}
+	if q.ByID {
+		sort.Slice(result, func(i, j int) bool {
+			return result[i].ID < result[j].ID
+		})
+	}
+	if q.Limit > 0 {
+		result = result[:min(q.Limit, len(result))]
+	}
+	return result, nil
+}

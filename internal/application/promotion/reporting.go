@@ -103,7 +103,11 @@ func (s *Service) Calendar(ctx context.Context, code, from, to, category string)
 		if err != nil {
 			return err
 		}
-		all, _, err := tx.Promotion().List(ctx, promotion.Filter{PlacementCode: code, From: from, To: to})
+		all, err := tx.Promotion().Select(ctx, promotion.Selection{
+			Filter:     promotion.Filter{PlacementCode: code, From: from, To: to},
+			CategoryID: category,
+			Occupying:  true,
+		})
 		if err != nil {
 			return err
 		}

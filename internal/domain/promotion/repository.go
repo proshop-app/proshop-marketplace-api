@@ -19,6 +19,18 @@ type Filter struct {
 	Offset        int
 }
 
+// Selection — внутренний отбор без COUNT и OFFSET; пустой список Offers исключает все товары.
+type Selection struct {
+	ByID       bool
+	EndBefore  string
+	Filter     Filter
+	CategoryID string
+	Offers     []ids.OfferID
+	Occupying  bool
+	After      ids.UUID
+	Limit      int
+}
+
 // Counter представляет суточные счётчики позиции.
 type Counter struct {
 	Day         string `json:"day"`
@@ -47,6 +59,7 @@ type Repository interface {
 	Placement(context.Context, string) (*Placement, error)
 	SavePlacement(context.Context, *Placement) error
 	Get(context.Context, ids.UUID) (*Campaign, error)
+	Select(context.Context, Selection) ([]CampaignState, error)
 	List(context.Context, Filter) ([]CampaignState, int, error)
 	Save(context.Context, *Campaign) error
 	Delete(context.Context, *Campaign) error
