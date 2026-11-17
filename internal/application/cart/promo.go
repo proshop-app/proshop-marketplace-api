@@ -58,7 +58,8 @@ func PriceGroups(
 					Quantity:  line.Quantity,
 				})
 			}
-			result, err := platform.PriceGroup(ctx, group.TenantID, request)
+			callCtx := ports.WithPlatformCallClass(ctx, ports.PlatformCheckout)
+			result, err := platform.PriceGroup(callCtx, group.TenantID, request)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {

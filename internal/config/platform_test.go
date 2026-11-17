@@ -17,7 +17,7 @@ func TestPlatformProtectionDefaults(t *testing.T) {
 	if p.ReadTimeout != 300*time.Millisecond || p.CacheTTL != 30*time.Second || p.StaleTTL != 5*time.Minute {
 		t.Fatal(p)
 	}
-	if p.TenantStateSize != 10000 || p.TenantIdleTTL != 10*time.Minute || p.CacheSize != 1024 {
+	if p.TenantStateSize != 10000 || p.TenantIdleTTL != 10*time.Minute || p.CacheSize != 33000 {
 		t.Fatal(p)
 	}
 	if p.MaxConcurrent != 128 || p.TenantMaxConcurrent != 8 || p.FailureThreshold != 5 {

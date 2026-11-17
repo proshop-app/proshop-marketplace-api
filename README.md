@@ -91,7 +91,7 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `PLATFORM_API_TIMEOUT` | | `5s` | ожидание строгого ответа сервера |
 | `PLATFORM_READ_TIMEOUT` | | `300ms` | бюджет необязательных витринных блоков |
 | `PLATFORM_CACHE_TTL` / `PLATFORM_STALE_TTL` | | `30s` / `5m` | свежесть и окно stale |
-| `PLATFORM_CACHE_SIZE` | | `1024` | предел записей кэша отзывов |
+| `PLATFORM_CACHE_SIZE` | | `33000` | предел записей кэша отзывов |
 | `PLATFORM_MAX_CONCURRENT` | | `128` | общий предел исходящих вызовов процесса |
 | `PLATFORM_CHECKOUT_MAX_CONCURRENT` / `PLATFORM_READ_MAX_CONCURRENT` | | `64` / `64` | независимые пулы; сумма равна общему пределу |
 | `PLATFORM_TENANT_MAX_CONCURRENT` | | `8` | доля магазина, разделённая между пулами (6/2) |

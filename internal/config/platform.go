@@ -4,7 +4,7 @@ import "time"
 
 func (r *reader) platform() Platform {
 	total := r.positive("PLATFORM_MAX_CONCURRENT", 128)
-	// Пулы равны: расчёт для пика утверждённого профиля — docs/platform-dependency.md, «Профиль на 1000 магазинов».
+	// Стартовые пулы равны; пересчёт по числу вызовов и длительностям — docs/platform-dependency.md.
 	reads := r.positive("PLATFORM_READ_MAX_CONCURRENT", max(1, total/2))
 	return Platform{
 		URL:                   r.httpURL("PLATFORM_API_URL"),
@@ -13,7 +13,7 @@ func (r *reader) platform() Platform {
 		ReadTimeout:           r.duration("PLATFORM_READ_TIMEOUT", 300*time.Millisecond),
 		CacheTTL:              r.duration("PLATFORM_CACHE_TTL", 30*time.Second),
 		StaleTTL:              r.duration("PLATFORM_STALE_TTL", 5*time.Minute),
-		CacheSize:             r.positive("PLATFORM_CACHE_SIZE", 1024),
+		CacheSize:             r.positive("PLATFORM_CACHE_SIZE", 33000),
 		MaxConcurrent:         total,
 		TenantMaxConcurrent:   r.positive("PLATFORM_TENANT_MAX_CONCURRENT", max(2, total/16)),
 		CheckoutMaxConcurrent: r.positive("PLATFORM_CHECKOUT_MAX_CONCURRENT", max(1, total-reads)),

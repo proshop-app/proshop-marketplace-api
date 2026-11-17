@@ -12,6 +12,7 @@ const priceContextBatchSize = 100
 
 type batchedPricing struct {
 	pricing ports.CatalogPricing
+	known   map[ids.TenantID]string
 }
 
 func (q *Queries) priceContexts(
@@ -122,8 +123,9 @@ func LoadPriceContexts(
 	uow ports.UnitOfWork,
 	pricing ports.CatalogPricing,
 	buyer ids.UUID,
+	known map[ids.TenantID]string,
 ) (map[ids.TenantID]string, error) {
-	return PriceContexts(ctx, uow, batchedPricing{pricing: pricing}, buyer, nil)
+	return PriceContexts(ctx, uow, batchedPricing{pricing: pricing, known: known}, buyer, nil)
 }
 
 func (p batchedPricing) PriceContexts(
@@ -132,9 +134,17 @@ func (p batchedPricing) PriceContexts(
 	tenants []ids.TenantID,
 ) (map[ids.TenantID]string, error) {
 	contexts := make(map[ids.TenantID]string, len(tenants))
-	for start := 0; start < len(tenants); start += priceContextBatchSize {
-		end := min(start+priceContextBatchSize, len(tenants))
-		batch, err := p.pricing.PriceContexts(ctx, buyerID, tenants[start:end])
+	missing := make([]ids.TenantID, 0, len(tenants))
+	for _, tenant := range tenants {
+		if profile := p.known[tenant]; profile != "" {
+			contexts[tenant] = profile
+		} else {
+			missing = append(missing, tenant)
+		}
+	}
+	for start := 0; start < len(missing); start += priceContextBatchSize {
+		end := min(start+priceContextBatchSize, len(missing))
+		batch, err := p.pricing.PriceContexts(ctx, buyerID, missing[start:end])
 		if err != nil {
 			return nil, err
 		}

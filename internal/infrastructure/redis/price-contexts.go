@@ -29,7 +29,7 @@ if excess > 0 then
         redis.call('ZREM', KEYS[2], key)
     end
 end
-return redis.call('ZCARD', KEYS[2])
+return {redis.call('ZCARD', KEYS[2]), redis.call('HGET', KEYS[1], 'entry') or ''}
 `)
 
 var storePriceContext = goredis.NewScript(`
@@ -97,10 +97,15 @@ func (c *PriceContexts) Get(ctx context.Context, buyer ids.UUID) (ports.PriceCon
 }
 
 // Begin атомарно задаёт токен и ограничивает число записей.
-func (c *PriceContexts) Begin(ctx context.Context, buyer ids.UUID, token string, ttl time.Duration) error {
+func (c *PriceContexts) Begin(
+	ctx context.Context,
+	buyer ids.UUID,
+	token string,
+	ttl time.Duration,
+) (ports.PriceContextEntry, error) {
 	ctx, cancel := context.WithTimeout(ctx, priceContextCacheTimeout)
 	defer cancel()
-	size, err := beginPriceContext.Run(
+	values, err := beginPriceContext.Run(
 		ctx,
 		c.client,
 		[]string{c.key(buyer), c.prefix + "active"},
@@ -108,12 +113,31 @@ func (c *PriceContexts) Begin(ctx context.Context, buyer ids.UUID, token string,
 		ttl.Milliseconds(),
 		time.Now().UnixMilli(),
 		c.capacity,
-	).Int()
+	).Slice()
 	if err != nil {
-		return ErrUnavailable.Wrap(err)
+		return ports.PriceContextEntry{}, ErrUnavailable.Wrap(err)
 	}
-	c.size(size)
-	return nil
+	return c.beginEntry(values)
+}
+
+func (c *PriceContexts) beginEntry(values []any) (ports.PriceContextEntry, error) {
+	if len(values) != 2 {
+		return ports.PriceContextEntry{}, ErrUnavailable
+	}
+	size, validSize := values[0].(int64)
+	raw, validEntry := values[1].(string)
+	if !validSize || !validEntry {
+		return ports.PriceContextEntry{}, ErrUnavailable
+	}
+	c.size(int(size))
+	var entry ports.PriceContextEntry
+	if raw == "" {
+		return entry, nil
+	}
+	if err := json.Unmarshal([]byte(raw), &entry); err != nil {
+		return entry, ErrUnavailable.Wrap(err)
+	}
+	return entry, nil
 }
 
 // Store сохраняет результат только при неизменившемся токене загрузки.

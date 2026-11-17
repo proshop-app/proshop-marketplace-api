@@ -100,6 +100,7 @@ func (s *Service) freshGroupQuote(
 ) delivery.Quote {
 	callCtx, cancel := context.WithTimeout(ctx, s.config.QuoteTimeout)
 	defer cancel()
+	callCtx = ports.WithPlatformCallClass(callCtx, ports.PlatformCheckout)
 	settings, err := s.platform.MarketplaceSettings(callCtx, group.TenantID)
 	if err != nil {
 		return delivery.Unreachable(s.clock.Now())

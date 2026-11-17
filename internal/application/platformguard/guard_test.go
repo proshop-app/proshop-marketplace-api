@@ -123,7 +123,10 @@ func TestStrictTimeoutsAndCodes(t *testing.T) {
 }
 
 func strictCall(c *Client, operation string) error {
-	ctx := context.Background()
+	return strictCallContext(context.Background(), c, operation)
+}
+
+func strictCallContext(ctx context.Context, c *Client, operation string) error {
 	switch operation {
 	case "price_group":
 		_, err := c.PriceGroup(ctx, "t1", ports.GroupPricingRequest{})
@@ -258,8 +261,8 @@ func TestConcurrentCacheLoadsDoNotWaitAndRemainBounded(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			_, _ = c.ProductReviews(context.Background(), "t1", ids.ProductID(fmt.Sprint(i)), 20, 0)
-			c.mu.Lock()
-			defer c.mu.Unlock()
+			c.cacheMu.Lock()
+			defer c.cacheMu.Unlock()
 			if len(c.cache) > cfg.CacheSize {
 				t.Error("кэш превысил предел", len(c.cache))
 			}

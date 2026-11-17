@@ -1,6 +1,7 @@
 package platformguard
 
 import (
+	"container/list"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -18,7 +19,7 @@ type cacheKey struct {
 type cacheEntry struct {
 	value   any
 	loaded  time.Time
-	used    uint64
+	node    *list.Element
 	loading bool
 }
 
@@ -30,7 +31,7 @@ func (c *Client) ProductReviews(
 	limit, offset int,
 ) (ports.ReviewPage, error) {
 	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
-	key := newCacheKey("reviews", []any{tenant, product, limit, offset})
+	key := reviewKey([]any{tenant, product, limit, offset})
 	empty := ports.ReviewPage{Items: []ports.Review{}}
 	value := cached(ctx, c, key, empty, func(ctx context.Context) (ports.ReviewPage, error) {
 		return c.upstream.ProductReviews(ctx, tenant, product, limit, offset)
@@ -39,46 +40,45 @@ func (c *Client) ProductReviews(
 	return value, nil
 }
 
-func newCacheKey(operation string, values []any) cacheKey {
+func reviewKey(values []any) cacheKey {
 	// Здесь только строки, числа и срезы идентификаторов; сериализация не может завершиться ошибкой.
 	raw, _ := json.Marshal(values)
-	return cacheKey{operation: operation, digest: sha256.Sum256(raw)}
+	return cacheKey{operation: "reviews", digest: sha256.Sum256(raw)}
 }
 
 func cached[T any](ctx context.Context, c *Client, key cacheKey, empty T, load func(context.Context) (T, error)) T {
 	started := time.Now()
-	c.mu.Lock()
+	c.cacheMu.Lock()
 	entry := c.cache[key]
 	now := c.clock.Now()
-	c.sequence++
 	if entry != nil {
-		entry.used = c.sequence
+		c.cacheLRU.MoveToBack(entry.node)
 		if entry.value != nil && now.Sub(entry.loaded) < c.cfg.CacheTTL {
 			value := entry.value.(T)
-			c.mu.Unlock()
+			c.cacheMu.Unlock()
 			return value
 		}
 		if entry.loading {
-			c.mu.Unlock()
-			c.observe(ctx, key.operation, "short_circuit", started)
+			c.cacheMu.Unlock()
+			c.observe(ctx, readClass, key.operation, "short_circuit", started)
 			return stale(ctx, c, key, entry, empty, started)
 		}
 	} else {
 		c.evict()
-		entry = &cacheEntry{used: c.sequence}
+		entry = &cacheEntry{node: c.cacheLRU.PushBack(key)}
 		c.cache[key] = entry
 	}
 	entry.loading = true
-	c.mu.Unlock()
+	c.cacheMu.Unlock()
 
-	value, err := call(ctx, c, key.operation, c.cfg.ReadTimeout, load)
-	c.mu.Lock()
+	value, err := call(ctx, c, readClass, key.operation, c.cfg.ReadTimeout, load)
+	c.cacheMu.Lock()
 	entry.loading = false
 	if err == nil {
 		entry.value = value
 		entry.loaded = c.clock.Now()
 	}
-	c.mu.Unlock()
+	c.cacheMu.Unlock()
 	if err != nil {
 		return stale(ctx, c, key, entry, empty, started)
 	}
@@ -86,28 +86,23 @@ func cached[T any](ctx context.Context, c *Client, key cacheKey, empty T, load f
 }
 
 func stale[T any](ctx context.Context, c *Client, key cacheKey, entry *cacheEntry, empty T, started time.Time) T {
-	c.mu.Lock()
+	c.cacheMu.Lock()
 	value := entry.value
 	usable := value != nil && c.clock.Now().Sub(entry.loaded) < c.cfg.CacheTTL+c.cfg.StaleTTL
-	c.mu.Unlock()
+	c.cacheMu.Unlock()
 	if usable {
-		c.observe(ctx, key.operation, "stale", started)
+		c.observe(ctx, readClass, key.operation, "stale", started)
 		return value.(T)
 	}
 	return empty
 }
 
-// evict вызывается под mu; вытеснение LRU ограничивает также записи текущих загрузок.
+// evict вызывается под cacheMu; вытеснение LRU ограничивает также записи текущих загрузок.
 func (c *Client) evict() {
 	if len(c.cache) < c.cfg.CacheSize {
 		return
 	}
-	var oldest cacheKey
-	var used uint64
-	for key, entry := range c.cache {
-		if used == 0 || entry.used < used {
-			oldest, used = key, entry.used
-		}
-	}
-	delete(c.cache, oldest)
+	oldest := c.cacheLRU.Front()
+	delete(c.cache, oldest.Value.(cacheKey))
+	c.cacheLRU.Remove(oldest)
 }

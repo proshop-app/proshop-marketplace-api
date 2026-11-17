@@ -41,7 +41,7 @@ func TestPriceContextCacheCapacityTTLAndCompareToken(t *testing.T) {
 		Profiles: map[ids.TenantID]string{"t1": "marketplace:default"},
 	}
 	for _, buyer := range []ids.UUID{"b1", "b2", "b3"} {
-		if err := cache.Begin(ctx, buyer, "token", time.Minute); err != nil {
+		if _, err := cache.Begin(ctx, buyer, "token", time.Minute); err != nil {
 			t.Fatal(err)
 		}
 		if saved, err := cache.Store(ctx, buyer, "token", entry, time.Minute); err != nil || !saved {
@@ -51,11 +51,22 @@ func TestPriceContextCacheCapacityTTLAndCompareToken(t *testing.T) {
 	if _, found, err := cache.Get(ctx, "b1"); err != nil || found {
 		t.Fatal("не ограничен размер Redis", found, err)
 	}
+	snapshot, err := cache.Begin(ctx, "b3", "refresh", time.Minute)
+	if err != nil || !snapshot.LoadedAt.Equal(entry.LoadedAt) || snapshot.Profiles["t1"] != entry.Profiles["t1"] {
+		t.Fatal("начало загрузки не вернуло сохранённый снимок", snapshot, err)
+	}
+	if saved, err := cache.Store(ctx, "b3", "token", entry, time.Minute); err != nil || saved {
+		t.Fatal("старый загрузчик перезаписал новый токен", saved, err)
+	}
 	if err := cache.Delete(ctx, "b2"); err != nil {
 		t.Fatal(err)
 	}
 	if saved, err := cache.Store(ctx, "b2", "token", entry, time.Minute); err != nil || saved {
 		t.Fatal("удаление не отменило загрузку", saved, err)
+	}
+	if snapshot, err := cache.Begin(ctx, "b2", "after-event", time.Minute); err != nil ||
+		!snapshot.LoadedAt.IsZero() || len(snapshot.Profiles) != 0 {
+		t.Fatal("сброс вернул старый снимок при загрузке", snapshot, err)
 	}
 	key := namespace + "{price-contexts}:b3"
 	if ttl, err := client.PTTL(ctx, key).Result(); err != nil || ttl <= 0 || ttl > time.Minute {

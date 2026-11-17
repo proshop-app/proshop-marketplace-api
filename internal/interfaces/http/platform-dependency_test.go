@@ -352,7 +352,7 @@ func TestPlatformDependencyReadRoutes(t *testing.T) {
 				t.Run(name, func(t *testing.T) {
 					f := newDependencyFixture(t)
 					if stale {
-						if err := f.contextCache.Begin(context.Background(), "b1", "seed", time.Minute); err != nil {
+						if _, err := f.contextCache.Begin(context.Background(), "b1", "seed", time.Minute); err != nil {
 							t.Fatal(err)
 						}
 						_, err := f.contextCache.Store(

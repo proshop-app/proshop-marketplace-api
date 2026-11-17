@@ -84,7 +84,8 @@ func (s *Settings) Sync(ctx context.Context) (SettingsResult, error) {
 
 // SyncOne сверяет одного участника; true — сохранённые настройки изменились.
 func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, error) {
-	settings, err := s.platform.MarketplaceSettings(ctx, tenantID)
+	callCtx := ports.WithPlatformCallClass(ctx, ports.PlatformRead)
+	settings, err := s.platform.MarketplaceSettings(callCtx, tenantID)
 	validCard := err == nil
 	var invalid error
 	if errors.Is(err, ports.ErrInvalidSettings) {

@@ -20,5 +20,5 @@ func (c *Client) PriceContexts(
 	load := func(ctx context.Context) (map[ids.TenantID]string, error) {
 		return c.upstream.PriceContexts(ctx, buyer, tenants)
 	}
-	return call(ctx, c, "price_contexts", c.cfg.ReadTimeout, load)
+	return call(ctx, c, readClass, "price_contexts", c.cfg.ReadTimeout, load)
 }

@@ -15,7 +15,7 @@ import (
 func put(t *testing.T, cache ports.PriceContextCache, buyer ids.UUID, clock *fake.Clock) {
 	t.Helper()
 	ctx := context.Background()
-	if err := cache.Begin(ctx, buyer, "token", time.Minute); err != nil {
+	if _, err := cache.Begin(ctx, buyer, "token", time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	saved, err := cache.Store(
@@ -95,7 +95,7 @@ func TestSharedInvalidationRejectsPendingLocalCopy(t *testing.T) {
 	primary := &fake.PriceContextCache{}
 	memory := contextcache.NewMemory(2, clock, nil)
 	cache := contextcache.NewFallback(primary, memory)
-	if err := cache.Begin(ctx, "b1", "token", time.Minute); err != nil {
+	if _, err := cache.Begin(ctx, "b1", "token", time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	// Событие обработала другая реплика, локальный токен пока о нём не знает.
@@ -109,5 +109,28 @@ func TestSharedInvalidationRejectsPendingLocalCopy(t *testing.T) {
 	primary.GetError = errs.New(errs.Unavailable, "cache.failed", "отказ")
 	if _, found, err := cache.Get(ctx, "b1"); err != nil || found {
 		t.Fatal("запись ожила через резерв после общего сброса", found, err)
+	}
+}
+
+func TestBeginUsesSharedSnapshotAfterInvalidation(t *testing.T) {
+	ctx := context.Background()
+	clock := fake.NewClock(time.Now())
+	primary := &fake.PriceContextCache{}
+	memory := contextcache.NewMemory(2, clock, nil)
+	cache := contextcache.NewFallback(primary, memory)
+	put(t, cache, "b1", clock)
+	entry, err := cache.Begin(ctx, "b1", "refresh", time.Minute)
+	if err != nil || entry.Profiles["t1"] != "marketplace:buyer" {
+		t.Fatal("атомарный снимок потерян", entry, err)
+	}
+	if err := primary.Delete(ctx, "b1"); err != nil {
+		t.Fatal(err)
+	}
+	entry, err = cache.Begin(ctx, "b1", "after-event", time.Minute)
+	if err != nil || !entry.LoadedAt.IsZero() || len(entry.Profiles) != 0 {
+		t.Fatal("общий сброс оживил локальный профиль при загрузке", entry, err)
+	}
+	if _, found, _ := memory.Get(ctx, "b1"); found {
+		t.Fatal("сброшенный профиль остался в резерве")
 	}
 }
