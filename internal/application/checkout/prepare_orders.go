@@ -10,7 +10,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -35,7 +34,7 @@ func (s *Service) prepareOrders(
 	if c.Status() == checkout.StatusDraft {
 		return c.State(), checkout.ErrTransition
 	}
-	quotes := s.freshQuotes(ctx, buyerID, c.Groups(), *c.Delivery())
+	quotes := s.groupQuotes(ctx, buyerID, c.Groups(), c.Delivery())
 	expected := c.State().Version
 	deliveryChanged := false
 	begin := func(current *checkout.Checkout, now time.Time) error {
@@ -68,56 +67,47 @@ func (s *Service) prepareOrders(
 	return state, nil
 }
 
-// freshQuotes всегда читает настройки сервера, даже если локальная проекция и quote ещё свежие.
-func (s *Service) freshQuotes(
+// groupQuotes рассчитывает каждый магазин ровно один раз через предохранитель.
+func (s *Service) groupQuotes(
 	ctx context.Context,
 	buyerID ids.UUID,
 	groups []checkout.Group,
-	selection checkout.Selection,
+	fallback *checkout.Selection,
 ) map[ids.TenantID]delivery.Quote {
 	quotes := make(map[ids.TenantID]delivery.Quote, len(groups))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for _, group := range groups {
-		wg.Add(1)
-		go func(g checkout.Group) {
-			defer wg.Done()
-			q := s.freshGroupQuote(ctx, buyerID, g, selection)
+	for _, g := range groups {
+		// Отказавшая при выборе группа исключена из подтверждённого покупателем состава.
+		if g.Quote != nil && g.Quote.Status == delivery.QuoteUnavailable {
 			mu.Lock()
-			quotes[g.TenantID] = q
+			quotes[g.TenantID] = *g.Quote
 			mu.Unlock()
-		}(group)
+			continue
+		}
+		selected := g.Selection(fallback)
+		if selected == nil || (g.Delivery == nil && g.Quote != nil &&
+			g.Quote.Reason == delivery.ReasonCarrierNotConnected) {
+			mu.Lock()
+			quotes[g.TenantID] = delivery.Quote{
+				Status:    delivery.QuoteUnavailable,
+				Reason:    delivery.ReasonCarrierNotConnected,
+				ExpiresAt: s.clock.Now().Add(s.config.QuoteTTL),
+			}
+			mu.Unlock()
+			continue
+		}
+		wg.Add(1)
+		go func(group checkout.Group, selection checkout.Selection) {
+			defer wg.Done()
+			q := s.quoteGroup(ctx, buyerID, group, selection)
+			mu.Lock()
+			quotes[group.TenantID] = q
+			mu.Unlock()
+		}(g, *selected)
 	}
 	wg.Wait()
 	return quotes
-}
-
-func (s *Service) freshGroupQuote(
-	ctx context.Context,
-	buyerID ids.UUID,
-	group checkout.Group,
-	selection checkout.Selection,
-) delivery.Quote {
-	callCtx, cancel := context.WithTimeout(ctx, s.config.QuoteTimeout)
-	defer cancel()
-	callCtx = ports.WithPlatformCallClass(callCtx, ports.PlatformCheckout)
-	settings, err := s.platform.MarketplaceSettings(callCtx, group.TenantID)
-	if err != nil {
-		return delivery.Unreachable(s.clock.Now())
-	}
-	if settings.Delivery.Validate() != nil || !settings.Subsidy.Enabled ||
-		settings.Subsidy.Validate() != nil || settings.FreeDeliveryFrom.IsNegative() {
-		return delivery.Quote{
-			Status:    delivery.QuoteUnavailable,
-			Reason:    delivery.ReasonPickupPointUnavailable,
-			ExpiresAt: s.clock.Now().Add(s.config.QuoteTTL),
-		}
-	}
-	return s.quoteGroup(callCtx, buyerID, group, selection, participant.State{
-		FreeDeliveryFrom: settings.FreeDeliveryFrom,
-		Delivery:         settings.Delivery,
-		Subsidy:          settings.Subsidy,
-	})
 }
 
 func (s *Service) enqueueCreation(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
@@ -128,6 +118,9 @@ func (s *Service) enqueueCreation(ctx context.Context, tx ports.Tx, c *checkout.
 		return err
 	}
 	for _, g := range c.Groups() {
+		if g.CreateExhausted {
+			continue
+		}
 		if err := enqueueOrderTask(ctx, tx, TaskCreateOrder, c.State(), g, s.clock.Now()); err != nil {
 			return err
 		}

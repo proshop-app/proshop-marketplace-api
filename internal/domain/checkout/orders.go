@@ -9,6 +9,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -91,7 +92,14 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 	c.state.Contact = contact
 	c.state.Status = StatusCreatingOrders
 	for i := range c.state.Groups {
-		c.state.Groups[i].Status = GroupCreating
+		g := &c.state.Groups[i]
+		if g.Quote != nil && g.Quote.Status != delivery.QuoteAvailable {
+			g.Status = GroupDeliveryUnavailable
+			g.Reason = g.Quote.Reason
+			g.CreateExhausted = true
+		} else {
+			g.Status = GroupCreating
+		}
 	}
 	return true, c.touch(now)
 }
@@ -249,6 +257,14 @@ func cloneState(state State) State {
 		g.Lines = append([]Line(nil), g.Lines...)
 		for j := range g.Lines {
 			g.Lines[j].Discounts = append([]cart.Discount(nil), g.Lines[j].Discounts...)
+		}
+		if g.Carriers != nil {
+			g.Carriers = append([]string{}, g.Carriers...)
+		}
+		g.Regions = append([]string(nil), g.Regions...)
+		if g.Delivery != nil {
+			selection := *g.Delivery
+			g.Delivery = &selection
 		}
 		g.Tracking = cloneTracking(g.Tracking)
 		g.CurrentPrices = append([]PriceChange(nil), g.CurrentPrices...)

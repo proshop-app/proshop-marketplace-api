@@ -4,7 +4,6 @@ package delivery
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"slices"
 	"strings"
 	"sync"
@@ -57,6 +56,28 @@ func (s *Service) Carriers() []delivery.CarrierInfo {
 
 // Search возвращает первый успешный список; отказ службы позволяет перейти к следующему магазину.
 func (s *Service) Search(ctx context.Context, carrier delivery.Carrier, city string) ([]delivery.PickupPoint, error) {
+	return s.search(ctx, carrier, city, nil)
+}
+
+// SearchFor ограничивает источник магазинами текущей покупки.
+func (s *Service) SearchFor(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	city string,
+	tenants []ids.TenantID,
+) ([]delivery.PickupPoint, error) {
+	if len(tenants) == 0 {
+		return []delivery.PickupPoint{}, nil
+	}
+	return s.search(ctx, carrier, city, tenants)
+}
+
+func (s *Service) search(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	city string,
+	tenants []ids.TenantID,
+) ([]delivery.PickupPoint, error) {
 	if _, err := delivery.ParseCarrier(string(carrier)); err != nil {
 		return nil, err
 	}
@@ -64,7 +85,14 @@ func (s *Service) Search(ctx context.Context, carrier delivery.Carrier, city str
 	if err != nil {
 		return nil, err
 	}
-	key := string(carrier) + ":" + strings.ToLower(city)
+	candidates, err := s.candidates(ctx, carrier, tenants)
+	if err != nil {
+		return nil, err
+	}
+	if len(candidates) == 0 {
+		return []delivery.PickupPoint{}, nil
+	}
+	key := "v2:" + string(carrier) + ":" + strings.ToLower(city)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -76,7 +104,7 @@ func (s *Service) Search(ctx context.Context, carrier delivery.Carrier, city str
 		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
 		f = &flight{done: make(chan struct{}), cancel: cancel}
 		s.flights[key] = f
-		go s.load(loadCtx, key, carrier, city, f)
+		go s.load(loadCtx, key, carrier, city, candidates, f)
 	}
 	f.waiters++
 	s.mu.Unlock()
@@ -100,9 +128,16 @@ func (s *Service) Search(ctx context.Context, carrier delivery.Carrier, city str
 	}
 }
 
-func (s *Service) load(ctx context.Context, key string, carrier delivery.Carrier, city string, f *flight) {
+func (s *Service) load(
+	ctx context.Context,
+	key string,
+	carrier delivery.Carrier,
+	city string,
+	tenants []ids.TenantID,
+	f *flight,
+) {
 	defer f.cancel()
-	f.points, f.err = s.cached(ctx, key, carrier, city)
+	f.points, f.err = s.cached(ctx, key, carrier, city, tenants)
 	s.mu.Lock()
 	if s.flights[key] == f {
 		delete(s.flights, key)
@@ -116,6 +151,7 @@ func (s *Service) cached(
 	key string,
 	carrier delivery.Carrier,
 	city string,
+	tenants []ids.TenantID,
 ) ([]delivery.PickupPoint, error) {
 	if value, hit, err := s.cache.Get(ctx, key); err == nil && hit {
 		var points []delivery.PickupPoint
@@ -123,7 +159,7 @@ func (s *Service) cached(
 			return points, nil
 		}
 	}
-	points, err := s.fetch(ctx, carrier, city)
+	points, err := s.fetch(ctx, carrier, city, tenants)
 	if err == nil && len(points) > 0 {
 		if value, marshalErr := json.Marshal(points); marshalErr == nil {
 			// Кэш необязателен: отказ Redis не скрывает успешный ответ магазина.
@@ -133,31 +169,42 @@ func (s *Service) cached(
 	return points, err
 }
 
-func (s *Service) candidates(ctx context.Context, carrier delivery.Carrier) ([]ids.TenantID, error) {
+func (s *Service) candidates(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	filter []ids.TenantID,
+) ([]ids.TenantID, error) {
 	var tenants []ids.TenantID
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		for offset := 0; ; offset += 200 {
-			page, total, err := tx.Participants().List(ctx, participant.Page{Limit: 200, Offset: offset})
-			if err != nil {
-				return err
-			}
-			for _, p := range page {
-				if !p.Enabled() || !slices.Contains(p.State().Delivery.Carriers, string(carrier)) {
-					continue
-				}
-				tenant, err := tx.Registry().Get(ctx, p.TenantID())
-				if errors.Is(err, participant.ErrTenantNotFound) {
-					continue
-				}
+		keys := filter
+		if keys == nil {
+			after := ids.TenantID("")
+			for {
+				page, err := tx.Participants().PublicTenants(ctx, nil, after, 200)
 				if err != nil {
 					return err
 				}
-				if participant.VisibilityOf(p, tenant).CheckoutAvailable {
-					tenants = append(tenants, p.TenantID())
+				keys = append(keys, page...)
+				if len(page) < 200 {
+					break
 				}
+				after = page[len(page)-1]
 			}
-			if offset+len(page) >= total || len(page) == 0 {
-				break
+		}
+
+		participants, err := tx.Participants().Batch(ctx, keys)
+		if err != nil {
+			return err
+		}
+		registry, err := tx.Registry().Batch(ctx, keys)
+		if err != nil {
+			return err
+		}
+		for _, key := range keys {
+			p, tenant := participants[key], registry[key]
+			if p != nil && tenant != nil && slices.Contains(p.State().Delivery.Carriers, string(carrier)) &&
+				participant.VisibilityOf(p, tenant).CheckoutAvailable {
+				tenants = append(tenants, key)
 			}
 		}
 		return nil
@@ -166,11 +213,12 @@ func (s *Service) candidates(ctx context.Context, carrier delivery.Carrier) ([]i
 	return tenants, err
 }
 
-func (s *Service) fetch(ctx context.Context, carrier delivery.Carrier, city string) ([]delivery.PickupPoint, error) {
-	tenants, err := s.candidates(ctx, carrier)
-	if err != nil {
-		return nil, err
-	}
+func (s *Service) fetch(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	city string,
+	tenants []ids.TenantID,
+) ([]delivery.PickupPoint, error) {
 	failed := 0
 	attempted := 0
 	for _, tenant := range tenants {
@@ -204,8 +252,9 @@ func (s *Service) Point(
 	ctx context.Context,
 	carrier delivery.Carrier,
 	code, city string,
+	tenants ...ids.TenantID,
 ) (delivery.PickupPoint, error) {
-	points, err := s.Search(ctx, carrier, city)
+	points, err := s.search(ctx, carrier, city, tenants)
 	if err != nil {
 		return delivery.PickupPoint{}, err
 	}

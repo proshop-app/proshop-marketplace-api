@@ -44,6 +44,8 @@ type quoteJSON struct {
 }
 
 type checkoutGroupJSON struct {
+	Delivery                  *selectionJSON       `json:"delivery"`
+	Carriers                  []string             `json:"carriers"`
 	CreationStatus            string               `json:"creationStatus,omitempty"`
 	ReconciliationRequired    bool                 `json:"reconciliationRequired"`
 	CreationDeadline          *time.Time           `json:"creationDeadline,omitempty"`
@@ -112,9 +114,11 @@ type checkoutHandlers struct {
 }
 
 type quoteRequestJSON struct {
-	City            string `json:"city"`
-	Carrier         string `json:"carrier"`
-	PickupPointCode string `json:"pickupPointCode"`
+	TenantIDs       []ids.TenantID `json:"tenantIds"`
+	TenantID        string         `json:"tenantId"`
+	City            string         `json:"city"`
+	Carrier         string         `json:"carrier"`
+	PickupPointCode string         `json:"pickupPointCode"`
 }
 
 type returnLineJSON struct {
@@ -159,6 +163,8 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 	for _, group := range state.Groups {
 		g := checkoutGroupJSON{
 			TenantID:                  string(group.TenantID),
+			Carriers:                  append([]string{}, group.Carriers...),
+			Delivery:                  selectionResponse(group.Selection(state.Delivery)),
 			ReconciliationRequired:    group.ReconciliationRequired,
 			CreationStatus:            creationStatus(group.CreationResult()),
 			ExternalCheckoutID:        group.ExternalCheckoutID,
@@ -358,14 +364,33 @@ func (h *checkoutHandlers) quote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	state, err := h.checkouts.Quote(
-		r.Context(),
-		BuyerID(r.Context()),
-		checkoutID,
-		carrier,
-		body.PickupPointCode,
-		body.City,
-	)
+	var state checkout.State
+	if len(body.TenantIDs) > 0 && body.TenantID != "" {
+		writeError(w, r, ErrInvalidQuery)
+		return
+	}
+	if len(body.TenantIDs) > 0 {
+		state, err = h.checkouts.QuoteGroups(
+			r.Context(),
+			BuyerID(r.Context()),
+			checkoutID,
+			body.TenantIDs,
+			carrier,
+			body.PickupPointCode,
+			body.City,
+		)
+	} else {
+		state, err = h.checkouts.QuoteGroup(
+			r.Context(),
+			BuyerID(r.Context()),
+			checkoutID,
+			ids.TenantID(body.TenantID),
+			carrier,
+			body.PickupPointCode,
+			body.City,
+		)
+	}
+
 	h.respond(w, r, http.StatusOK, state, err)
 }
 
@@ -423,5 +448,17 @@ func creationStatus(result checkout.CreationResult) string {
 		return "rejected"
 	default:
 		return ""
+	}
+}
+
+func selectionResponse(d *checkout.Selection) *selectionJSON {
+	if d == nil {
+		return nil
+	}
+	return &selectionJSON{
+		Carrier:         string(d.Carrier),
+		PickupPointCode: d.PickupPointCode,
+		City:            d.City,
+		Address:         d.Address,
 	}
 }

@@ -49,8 +49,8 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		PromoCode:          group.PromoCode,
 		ExternalCheckoutID: group.ExternalCheckoutID,
 		GroupID:            tenant,
-		Carrier:            string(state.Delivery.Carrier),
-		PickupPointCode:    state.Delivery.PickupPointCode,
+		Carrier:            string(group.Selection(state.Delivery).Carrier),
+		PickupPointCode:    group.Selection(state.Delivery).PickupPointCode,
 		Contact:            state.Contact,
 		DeliveryPrice:      group.DeliveryPrice,
 	}

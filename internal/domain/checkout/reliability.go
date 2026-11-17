@@ -31,15 +31,20 @@ func (c *Checkout) RecheckDelivery(quotes map[ids.TenantID]delivery.Quote, now t
 		return false, ErrInvalidQuotes
 	}
 	changed := false
+	available := 0
 	for _, g := range c.state.Groups {
 		q, ok := quotes[g.TenantID]
 		if !ok {
 			return false, ErrInvalidQuotes
 		}
-		if q.Status != delivery.QuoteAvailable || q.Expired(now) || q.BuyerCost != g.DeliveryPrice {
+		if q.Status == delivery.QuoteAvailable {
+			available++
+		}
+		if q.Status == delivery.QuoteAvailable && (q.Expired(now) || q.BuyerCost != g.DeliveryPrice) {
 			changed = true
 		}
 	}
+	changed = changed || available == 0
 	for i := range c.state.Groups {
 		q := quotes[c.state.Groups[i].TenantID]
 		c.state.Groups[i].Quote = &q

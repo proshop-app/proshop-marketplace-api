@@ -260,8 +260,8 @@ func TestCreateRefusesUnpayableSeller(t *testing.T) {
 		},
 	})
 
-	if _, err := e.service.Create(context.Background(), buyerID, key); !errors.Is(err, checkout.ErrOfferUnavailable) {
-		t.Fatalf("продавец без оплаты через маркетплейс в покупку не попадает: %v", err)
+	if _, err := e.service.Create(context.Background(), buyerID, key); err != nil {
+		t.Fatalf("доставка проверяется по настройкам и ответу магазина: %v", err)
 	}
 }
 
@@ -276,13 +276,13 @@ func TestQuote(t *testing.T) {
 	}
 
 	t1, t2 := state.Groups[0].Quote, state.Groups[1].Quote
-	if t1.Status != delivery.QuoteAvailable || t1.Subsidy.Kopecks() != 15000 || t1.BuyerCost.Kopecks() != 15000 {
-		t.Fatalf("субсидия продавца — половина доставки: %+v", t1)
+	if t1.Status != delivery.QuoteAvailable || t1.Subsidy.Kopecks() != 30000 || t1.BuyerCost.Kopecks() != 0 {
+		t.Fatalf("продавец оплачивает всю доставку: %+v", t1)
 	}
-	if t2.Subsidy.Kopecks() != 7500 || !t2.ExpiresAt.Equal(t0.Add(10*time.Minute)) {
-		t.Fatalf("действует порог 30%%, срок магазина короче своего: %+v", t2)
+	if t2.Subsidy.Kopecks() != 25000 || !t2.ExpiresAt.Equal(t0.Add(10*time.Minute)) {
+		t.Fatalf("весь тариф продавцу, срок расчёта магазина короче своего: %+v", t2)
 	}
-	if state.DeliveryTotal.Kopecks() != 15000+17500 || state.Delivery.City != "Город" {
+	if state.DeliveryTotal.Kopecks() != 0 || state.Delivery.City != "Город" {
 		t.Fatalf("итог доставки и выбранный пункт: %+v", state)
 	}
 	request := e.platform.QuoteRequests()[0]
@@ -343,7 +343,7 @@ func TestConfirm(t *testing.T) {
 		t.Fatal(err)
 	}
 	if state.Status != checkout.StatusConfirmed || state.Groups[1].Quote.Cost.Kopecks() != 26000 ||
-		state.Total.Kopecks() != 2*199000+35000+15000+18200 {
+		state.Total.Kopecks() != 2*199000+35000 {
 		t.Fatalf("устаревший расчёт пересчитан, покупка подтверждена: %+v", state)
 	}
 

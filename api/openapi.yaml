@@ -2786,6 +2786,37 @@ paths:
         "200": { $ref: "#/components/responses/Checkout" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/delivery/pickup-points:
+    get:
+      tags: [checkout]
+      summary: Страница общей карты ПВЗ магазинов покупки
+      operationId: checkoutPickupPoints
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
+        - { $ref: "#/components/parameters/CheckoutId" }
+        - { name: carrier, in: query, required: true, schema: { type: string, enum: [cdek, yandex] } }
+        - { name: city, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 120 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        "200":
+          description: Страница ПВЗ
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, offset, limit]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/PickupPoint" } }
+                  total: { type: integer, minimum: 0 }
+                  offset: { type: integer, minimum: 0 }
+                  limit: { type: integer, minimum: 1, maximum: 200 }
+        "409": { $ref: "#/components/responses/Error" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/checkout/{checkoutId}/delivery/quotes:
     post:
       tags: [checkout]
@@ -2809,6 +2840,8 @@ paths:
               additionalProperties: false
               required: [carrier, pickupPointCode, city]
               properties:
+                tenantId: { type: string }
+                tenantIds: { type: array, minItems: 1, uniqueItems: true, items: { type: string } }
                 carrier: { type: string }
                 pickupPointCode: { type: string }
                 city: { type: string, minLength: 1, maxLength: 120 }
@@ -7785,6 +7818,14 @@ components:
       - discount
       - total
       properties:
+        carriers:
+          type: array
+          items: { type: string, enum: [cdek, yandex] }
+        delivery:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Selection'
+
         creationStatus:
           type: string
           enum: [creating, created, unconfirmed, rejected]

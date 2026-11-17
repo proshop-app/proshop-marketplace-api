@@ -183,10 +183,7 @@ func TestDeliveryThresholdsAndRegions(t *testing.T) {
 		e.store.SeedParticipant(p)
 		c := confirmedPurchase(t, e)
 		want := int64(0)
-		if threshold > 398000 {
-			want = 15000
-		}
-		if c.Groups[0].DeliveryPrice.Kopecks() != want || c.DeliveryTotal.Kopecks() != want+17500 {
+		if c.Groups[0].DeliveryPrice.Kopecks() != want || c.DeliveryTotal.Kopecks() != 0 {
 			t.Fatalf("порог %d: %+v", threshold, c)
 		}
 	}

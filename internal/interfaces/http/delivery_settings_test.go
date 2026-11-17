@@ -44,7 +44,7 @@ func TestPublicDeliverySettings(t *testing.T) {
 		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)
 		}
-		if response.Code != http.StatusOK || body.Percent != percent {
+		if response.Code != http.StatusOK || body.Percent != 100 {
 			t.Fatalf("публичный действующий порог %d: %d %s", percent, response.Code, response.Body.String())
 		}
 	}

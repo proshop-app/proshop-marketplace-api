@@ -12,62 +12,24 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-func TestBeginOrdersRechecksSellerDeliveryBeforeAnyOrder(t *testing.T) {
-	for _, change := range []string{"minimum", "subsidy", "cost"} {
-		t.Run(change, func(t *testing.T) {
-			e := setup(t)
-			// 10000 − 30% = прежние 7000 копеек.
-			p, _ := e.store.Participant("t1")
-			p.Subsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
-			e.store.SeedParticipant(p)
-			settings := ports.ShopSettings{
-				Subsidy:          p.Subsidy,
-				FreeDeliveryFrom: p.FreeDeliveryFrom,
-				Delivery:         p.Delivery,
-			}
-			e.platform.SetSettings("t1", settings)
-			e.platform.SetQuote("t1", delivery.Offered{Available: true, Cost: money.FromKopecks(10000)})
-			c := confirmedPurchase(t, e)
-			if c.Groups[0].DeliveryPrice.Kopecks() != 7000 {
-				t.Fatal(c.Groups[0])
-			}
-			switch change {
-			case "minimum":
-				settings.FreeDeliveryFrom = money.Money{}
-			case "subsidy":
-				settings.Subsidy.Value = 10000
-			case "cost":
-				e.platform.SetQuote("t1", delivery.Offered{Available: true, Cost: money.FromKopecks(20000)})
-			}
-			e.platform.SetSettings("t1", settings)
-			// Не ждём TTL: настройки нужно перечитать и при ещё действующем quote.
-			state, err := beginAndExecute(context.Background(), e, buyerID, c.ID, orderContact)
-			if !errors.Is(err, checkout.ErrDeliveryChanged) || state.Status != checkout.StatusDraft ||
-				state.Groups[0].DeliveryPrice.Kopecks() == 7000 || e.platform.OrderCount() != 0 {
-				t.Fatalf("новая доставка требует подтверждения: %+v %v", state, err)
-			}
-			if len(e.platform.OrderRequests("t1")) != 0 || len(e.platform.OrderRequests("t2")) != 0 {
-				t.Fatal("ни один магазин не должен получить старую сумму")
-			}
-			basket, err := e.carts.Get(context.Background(), buyerID)
-			if err != nil || len(basket.Lines) != 2 {
-				t.Fatalf("корзина ещё не изъята: %+v %v", basket, err)
-			}
-			if _, err := e.service.Confirm(context.Background(), buyerID, c.ID); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := beginAndExecute(context.Background(), e, buyerID, c.ID, orderContact); err != nil {
-				t.Fatal(err)
-			}
-			if e.platform.OrderCount() != 2 {
-				t.Fatal("после нового согласия создаются оба заказа")
-			}
-		})
+func TestSellerDeliveryCostDoesNotChangeBuyerPayment(t *testing.T) {
+	e := setup(t)
+	c := confirmedPurchase(t, e)
+	e.platform.SetQuote("t1", delivery.Offered{
+		Available: true,
+		Cost:      money.FromKopecks(20000),
+		MinDays:   2,
+		MaxDays:   4,
+	})
+	state, err := beginAndExecute(context.Background(), e, buyerID, c.ID, orderContact)
+	if err != nil || state.Status != checkout.StatusAwaitingPayment ||
+		state.DeliveryTotal.Kopecks() != 0 || state.Total != state.GoodsTotal ||
+		state.Groups[0].Quote.Cost.Kopecks() != 20000 || e.platform.OrderCount() != 2 {
+		t.Fatalf("тариф продавца не меняет сумму покупателя: %+v %v", state, err)
 	}
 }
 
@@ -249,13 +211,14 @@ func TestFailedPollBackoffAndRecovery(t *testing.T) {
 func TestConcurrentBeginOrdersUsesCASAndSingleSetOfRequests(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
-	arrived := make(chan struct{}, 2)
+	arrived := make(chan struct{}, 4)
 	release := make(chan struct{})
-	e.platform.BeforeSettings = func(tenant ids.TenantID) {
-		if tenant == "t1" {
+	e.platform.CallHook = func(_ context.Context, operation string) error {
+		if operation == "quote" {
 			arrived <- struct{}{}
 			<-release
 		}
+		return nil
 	}
 	var wg sync.WaitGroup
 	failures := make(chan error, 2)
@@ -322,7 +285,7 @@ func TestCreationRetryKeepsIdenticalBodyAfterSettingsChange(t *testing.T) {
 		t.Fatalf("тело изменилось: %+v", requests)
 	}
 	state, err := e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || state.Groups[0].Status != checkout.GroupDeliveryUnavailable {
-		t.Fatalf("сервер отклоняет изменившуюся доставку без заказа: %+v %v", state, err)
+	if err != nil || state.Groups[0].Status != checkout.GroupAwaitingPayment {
+		t.Fatalf("повтор сохраняет бесплатную доставку и прежний ПВЗ: %+v %v", state, err)
 	}
 }

@@ -97,7 +97,7 @@ func routes(deps Deps) []route {
 	}
 	auth := &authHandlers{auth: deps.Auth, trustedProxies: deps.TrustedProxies}
 	carts := &cartHandlers{carts: deps.Carts}
-	shipping := &deliveryHandlers{directory: deps.Directory}
+	shipping := &deliveryHandlers{directory: deps.Directory, checkouts: deps.Checkouts}
 	checkouts := &checkoutHandlers{checkouts: deps.Checkouts}
 	registry := newReferenceHandlers(deps.Reference, deps.Registerer)
 	gateway := &operatorHandlers{
@@ -609,6 +609,12 @@ func routes(deps Deps) []route {
 
 		{checkoutRequest, http.MethodPost, "/api/v1/checkout", signedIn(checkouts.create)},
 		{checkoutRequest, http.MethodGet, "/api/v1/checkout/{checkoutId}", signedIn(checkouts.get)},
+		{
+			checkoutRequest,
+			http.MethodGet,
+			"/api/v1/checkout/{checkoutId}/delivery/pickup-points",
+			signedIn(shipping.checkoutPickupPoints),
+		},
 		{
 			checkoutRequest,
 			http.MethodPost,

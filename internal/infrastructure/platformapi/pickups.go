@@ -27,7 +27,7 @@ func (c *Client) PickupPoints(
 	if !answer.Available && answer.Reason != delivery.ReasonCarrierNotConnected {
 		return ports.PickupPoints{}, ErrInvalidResponse
 	}
-	if len(answer.Items) > 5000 || (answer.Available && answer.Reason != "") {
+	if answer.Available && answer.Reason != "" {
 		return ports.PickupPoints{}, ErrInvalidResponse
 	}
 	for _, point := range answer.Items {

@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"strings"
+	"slices"
 	"sync"
 	"time"
 
@@ -26,7 +26,7 @@ const updateRetryDelay = 10 * time.Millisecond
 type Config struct {
 	// OrderCallTimeout — уже настроенный HTTP-бюджет адаптера; аренда не должна пережидать его.
 	OrderCallTimeout time.Duration
-	// DeliverySubsidyMinPercent — нижняя граница субсидии продавца, 0–100.
+	// DeliverySubsidyMinPercent оставлен для прежней конфигурации; новая доставка всегда за счёт продавца.
 	DeliverySubsidyMinPercent int
 	// QuoteTTL — дольше этого цена доставки не держится, что бы ни обещал магазин.
 	QuoteTTL time.Duration
@@ -131,12 +131,32 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 		return checkout.State{}, err
 	}
 
-	if err := s.visible(ctx, lines); err != nil {
+	created, err := checkout.New(s.ids.NewUUID(), buyerID, key, lines, s.clock.Now())
+	if err != nil {
 		return checkout.State{}, err
 	}
 
-	created, err := checkout.New(s.ids.NewUUID(), buyerID, key, lines, s.clock.Now())
+	settings, err := s.deliverySettings(ctx, created.Groups())
 	if err != nil {
+		return checkout.State{}, err
+	}
+	options := make(map[ids.TenantID][]string, len(settings))
+	regions := make(map[ids.TenantID][]string, len(settings))
+	for tenant, setting := range settings {
+		options[tenant] = setting.Delivery.Carriers
+		regions[tenant] = setting.Delivery.Regions
+	}
+	if err := created.SetDeliveryOptions(options, regions, s.clock.Now()); err != nil {
+		return checkout.State{}, err
+	}
+
+	availableLines := make([]checkout.Line, 0, len(lines))
+	for _, group := range created.Groups() {
+		if len(group.Carriers) > 0 {
+			availableLines = append(availableLines, group.Lines...)
+		}
+	}
+	if err := s.visible(ctx, availableLines); err != nil {
 		return checkout.State{}, err
 	}
 
@@ -189,6 +209,44 @@ func (s *Service) Quote(
 	carrier delivery.Carrier,
 	pointCode, city string,
 ) (checkout.State, error) {
+	return s.selectDelivery(ctx, buyerID, checkoutID, nil, carrier, pointCode, city)
+}
+
+// QuoteGroup выбирает ПВЗ одного магазина, не меняя снимки остальных.
+func (s *Service) QuoteGroup(
+	ctx context.Context,
+	buyerID, checkoutID ids.UUID,
+	tenant ids.TenantID,
+	carrier delivery.Carrier,
+	pointCode, city string,
+) (checkout.State, error) {
+	if tenant == "" {
+		return s.selectDelivery(ctx, buyerID, checkoutID, nil, carrier, pointCode, city)
+	}
+	return s.selectDelivery(ctx, buyerID, checkoutID, []ids.TenantID{tenant}, carrier, pointCode, city)
+}
+
+// QuoteGroups рассчитывает общий ПВЗ выбранных магазинов параллельно.
+func (s *Service) QuoteGroups(
+	ctx context.Context,
+	buyerID, checkoutID ids.UUID,
+	tenants []ids.TenantID,
+	carrier delivery.Carrier,
+	pointCode, city string,
+) (checkout.State, error) {
+	if len(tenants) == 0 {
+		return checkout.State{}, checkout.ErrNotFound
+	}
+	return s.selectDelivery(ctx, buyerID, checkoutID, tenants, carrier, pointCode, city)
+}
+
+func (s *Service) selectDelivery(
+	ctx context.Context,
+	buyerID, checkoutID ids.UUID,
+	targets []ids.TenantID,
+	carrier delivery.Carrier,
+	pointCode, city string,
+) (checkout.State, error) {
 	if _, err := delivery.NormalizeCity(city); err != nil {
 		return checkout.State{}, err
 	}
@@ -200,7 +258,28 @@ func (s *Service) Quote(
 		return checkout.State{}, checkout.ErrNotDraft
 	}
 
-	point, err := s.points.Point(ctx, carrier, pointCode, city)
+	groups := c.Groups()
+	tenants := make([]ids.TenantID, 0, len(groups))
+	if targets != nil {
+		groups = nil
+		unique := make(map[ids.TenantID]bool, len(targets))
+		for _, tenant := range targets {
+			unique[tenant] = true
+		}
+		for _, group := range c.Groups() {
+			if unique[group.TenantID] {
+				groups = append(groups, group)
+			}
+		}
+		if len(groups) != len(unique) {
+			return checkout.State{}, checkout.ErrNotFound
+		}
+	}
+
+	for _, g := range groups {
+		tenants = append(tenants, g.TenantID)
+	}
+	point, err := s.points.Point(ctx, carrier, pointCode, city, tenants...)
 	if err != nil {
 		return checkout.State{}, err
 	}
@@ -212,13 +291,15 @@ func (s *Service) Quote(
 		RegionCode:      point.RegionCode,
 	}
 
-	quotes, err := s.quote(ctx, buyerID, c.Groups(), selection)
-	if err != nil {
-		return checkout.State{}, err
-	}
+	quotes := s.quote(ctx, buyerID, groups, selection)
 
-	choose := func(c *checkout.Checkout, now time.Time) error { return c.SelectDelivery(selection, quotes, now) }
-	return s.updateSelection(ctx, buyerID, checkoutID, saveBuyerPickup, choose)
+	choose := func(c *checkout.Checkout, now time.Time) error {
+		if targets != nil {
+			return c.SelectDeliveries(selection, quotes, now)
+		}
+		return c.SelectDelivery(selection, quotes, now)
+	}
+	return s.retrySelection(ctx, buyerID, checkoutID, saveBuyerPickup, choose)
 }
 
 // Confirm перепроверяет цены и наличие у магазинов, пересчитывает
@@ -236,10 +317,14 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 	if c.Delivery() == nil {
 		return checkout.State{}, checkout.ErrDeliveryNotSelected
 	}
-	if undeliverable := c.Undeliverable(); len(undeliverable) > 0 {
-		message := "не доставляют в выбранный пункт: " + joinTenants(undeliverable)
-
-		return checkout.State{}, checkout.ErrDeliveryUnavailable.WithMessage(message)
+	available := false
+	for _, g := range c.Groups() {
+		if g.Quote != nil && g.Quote.Status == delivery.QuoteAvailable {
+			available = true
+		}
+	}
+	if !available {
+		return c.State(), checkout.ErrDeliveryUnavailable
 	}
 
 	checks, err := s.check(ctx, buyerID, c.Groups())
@@ -281,14 +366,12 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 	if len(stale) > 0 {
 		var groups []checkout.Group
 		for _, group := range c.Groups() {
-			if stale[group.TenantID] {
+			if stale[group.TenantID] && (group.Quote == nil || group.Quote.Status == delivery.QuoteAvailable) {
 				groups = append(groups, group)
 			}
 		}
 
-		if requoted, err = s.quote(ctx, buyerID, groups, *c.Delivery()); err != nil {
-			return checkout.State{}, err
-		}
+		requoted = s.groupQuotes(ctx, buyerID, groups, c.Delivery())
 	}
 
 	var confirmErr error
@@ -319,12 +402,7 @@ func (s *Service) quote(
 	buyerID ids.UUID,
 	groups []checkout.Group,
 	selection checkout.Selection,
-) (map[ids.TenantID]delivery.Quote, error) {
-	subsidies, err := s.subsidies(ctx, groups)
-	if err != nil {
-		return nil, err
-	}
-
+) map[ids.TenantID]delivery.Quote {
 	var (
 		mu     sync.Mutex
 		wg     sync.WaitGroup
@@ -336,7 +414,7 @@ func (s *Service) quote(
 
 		go func(group checkout.Group) {
 			defer wg.Done()
-			quote := s.quoteGroup(ctx, buyerID, group, selection, subsidies[group.TenantID])
+			quote := s.quoteGroup(ctx, buyerID, group, selection)
 
 			mu.Lock()
 			quotes[group.TenantID] = quote
@@ -346,7 +424,7 @@ func (s *Service) quote(
 
 	wg.Wait()
 
-	return quotes, nil
+	return quotes
 }
 
 func (s *Service) quoteGroup(
@@ -354,15 +432,16 @@ func (s *Service) quoteGroup(
 	buyerID ids.UUID,
 	group checkout.Group,
 	selection checkout.Selection,
-	settings participant.State,
 ) delivery.Quote {
-	if !settings.Delivery.Allows(string(selection.Carrier), selection.RegionCode) {
+	if group.Carriers != nil && (!slices.Contains(group.Carriers, string(selection.Carrier)) ||
+		!slices.Contains(group.Regions, selection.RegionCode)) {
 		return delivery.Quote{
 			Status:    delivery.QuoteUnavailable,
 			Reason:    delivery.ReasonPickupPointUnavailable,
 			ExpiresAt: s.clock.Now().Add(s.config.QuoteTTL),
 		}
 	}
+
 	callCtx, cancel := context.WithTimeout(ctx, s.config.QuoteTimeout)
 	defer cancel()
 	items := make([]ports.ItemRequest, 0, len(group.Lines))
@@ -382,12 +461,7 @@ func (s *Service) quoteGroup(
 		return delivery.Unreachable(now)
 	}
 	apply := func(cost money.Money) (money.Money, error) {
-		return group.DeliverySubsidy(
-			settings.FreeDeliveryFrom,
-			settings.Subsidy,
-			cost,
-			s.config.DeliverySubsidyMinPercent,
-		)
+		return cost, nil
 	}
 
 	quote, err := delivery.NewQuote(offered, apply, now, s.config.QuoteTTL)
@@ -398,12 +472,12 @@ func (s *Service) quoteGroup(
 	return quote
 }
 
-// subsidies — обязательные настройки продавцов; без участника доставка недоступна.
-func (s *Service) subsidies(
+// deliverySettings читает службы и регионы магазинов одним запросом проекции.
+func (s *Service) deliverySettings(
 	ctx context.Context,
 	groups []checkout.Group,
 ) (map[ids.TenantID]participant.State, error) {
-	subsidies := make(map[ids.TenantID]participant.State, len(groups))
+	settings := make(map[ids.TenantID]participant.State, len(groups))
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		keys := make([]ids.TenantID, len(groups))
 		for i, group := range groups {
@@ -414,13 +488,13 @@ func (s *Service) subsidies(
 			return err
 		}
 		for tenant, p := range participants {
-			subsidies[tenant] = p.State()
+			settings[tenant] = p.State()
 		}
 
 		return nil
 	})
 
-	return subsidies, err
+	return settings, err
 }
 
 // check спрашивает у магазинов цену и наличие позиций покупки.
@@ -430,8 +504,21 @@ func (s *Service) check(
 	groups []checkout.Group,
 ) (map[ids.OfferID]checkout.PriceCheck, error) {
 	cartGroups := make([]cart.Group, 0, len(groups))
+	checks := make(map[ids.OfferID]checkout.PriceCheck)
 
 	for _, group := range groups {
+		if group.Quote != nil && group.Quote.Status == delivery.QuoteUnavailable {
+			for _, line := range group.Lines {
+				checks[line.Offer] = checkout.PriceCheck{
+					Exists:    true,
+					Price:     line.Price,
+					Available: line.Quantity,
+					Discounts: line.Discounts,
+				}
+			}
+			continue
+		}
+
 		cartGroup := cart.Group{TenantID: group.TenantID}
 		if group.PromoCode != "" {
 			cartGroup.PromoCode = &cart.PromoCode{Code: group.PromoCode}
@@ -450,7 +537,6 @@ func (s *Service) check(
 	if err != nil {
 		return nil, err
 	}
-	checks := make(map[ids.OfferID]checkout.PriceCheck)
 	for tenant, result := range results {
 		if result.PromoCode != nil && !result.PromoCode.Valid {
 			if result.PromoCode.Message != nil {
@@ -480,11 +566,6 @@ func (s *Service) visible(ctx context.Context, lines []checkout.Line) error {
 		}
 		if !found || !doc.Visible {
 			return checkout.ErrOfferUnavailable.WithMessage("предложение больше недоступно: " + line.Offer.String())
-		}
-		if !doc.CheckoutAvailable {
-			message := "продавец ещё не готов к оформлению: " + line.Offer.String()
-
-			return checkout.ErrOfferUnavailable.WithMessage(message)
 		}
 	}
 
@@ -582,17 +663,10 @@ func (s *Service) updateSelection(
 	return state, err
 }
 
-func joinTenants(tenants []ids.TenantID) string {
-	parts := make([]string, 0, len(tenants))
-	for _, tenant := range tenants {
-		parts = append(parts, string(tenant))
-	}
-
-	return strings.Join(parts, ", ")
-}
-
 // DeliverySubsidyMinPercent — действующий порог для админки магазина.
-func (s *Service) DeliverySubsidyMinPercent() int { return s.config.DeliverySubsidyMinPercent }
+func (s *Service) DeliverySubsidyMinPercent() int {
+	return 100
+}
 
 func (s *Service) verifyOnPromoError(ctx context.Context, buyerID ids.UUID, cause error) error {
 	if errors.Is(cause, checkout.ErrPromoInvalid) {

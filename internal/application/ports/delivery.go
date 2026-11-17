@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // PickupPoints — ответ магазина без транспортной обёртки.
@@ -22,5 +23,5 @@ type PickupCache interface {
 
 // PickupLookup проверяет выбор по текущему списку магазина.
 type PickupLookup interface {
-	Point(context.Context, delivery.Carrier, string, string) (delivery.PickupPoint, error)
+	Point(context.Context, delivery.Carrier, string, string, ...ids.TenantID) (delivery.PickupPoint, error)
 }

@@ -48,6 +48,9 @@ type Line struct {
 
 // Group — заказ одного продавца в покупке.
 type Group struct {
+	Delivery *Selection
+	Carriers []string
+	Regions  []string
 	// CreationDeadline фиксирует обещанный срок и не продлевается повтором команды.
 	CreationDeadline time.Time
 	// Abandoned запрещает позднему ответу повторно открыть оплату после отказа покупателя или срока.
@@ -252,6 +255,7 @@ func (c *Checkout) SelectDelivery(selection Selection, quotes map[ids.TenantID]d
 		}
 
 		c.state.Groups[i].Quote = &quote
+		c.state.Groups[i].Delivery = &selection
 	}
 
 	c.state.Delivery = &selection
@@ -262,9 +266,6 @@ func (c *Checkout) SelectDelivery(selection Selection, quotes map[ids.TenantID]d
 // NeedsQuote — продавцы, чей расчёт нужно получить заново: его нет, цена
 // доставки устарела или магазин не ответил. Без выбранной доставки — никто.
 func (c *Checkout) NeedsQuote(now time.Time) []ids.TenantID {
-	if c.state.Delivery == nil {
-		return nil
-	}
 
 	var tenants []ids.TenantID
 
@@ -380,21 +381,23 @@ func (c *Checkout) Confirm(now time.Time) error {
 		return ErrDeliveryNotSelected
 	}
 
-	var unavailable []string
+	available := 0
 
 	for _, group := range c.state.Groups {
 		switch {
 		case group.Quote == nil:
 			return ErrQuoteExpired
 		case group.Quote.Status != delivery.QuoteAvailable:
-			unavailable = append(unavailable, string(group.TenantID))
+			continue
 		case group.Quote.Expired(now):
 			return ErrQuoteExpired
+		default:
+			available++
 		}
 	}
 
-	if len(unavailable) > 0 {
-		return ErrDeliveryUnavailable.WithMessage("не доставляют в выбранный пункт: " + strings.Join(unavailable, ", "))
+	if available == 0 {
+		return ErrDeliveryUnavailable
 	}
 
 	c.state.Status = StatusConfirmed

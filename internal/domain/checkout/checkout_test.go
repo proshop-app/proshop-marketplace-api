@@ -105,8 +105,8 @@ func TestSelectDeliveryAndConfirm(t *testing.T) {
 	if state := c.State(); state.DeliveryTotal.Kopecks() != 20000 || state.Total.Kopecks() != 45700 {
 		t.Fatalf("итоги с долей покупателя: %+v", state)
 	}
-	if err := c.Confirm(t0); !errors.Is(err, checkout.ErrDeliveryUnavailable) {
-		t.Fatalf("продавец не везёт в пункт: %v", err)
+	if err := checkout.Restore(c.State()).Confirm(t0); err != nil {
+		t.Fatalf("доступная группа подтверждается независимо: %v", err)
 	}
 	if out := c.Undeliverable(); len(out) != 1 || out[0] != "t2" {
 		t.Fatalf("кто не везёт: %v", out)

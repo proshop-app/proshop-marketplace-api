@@ -12,6 +12,7 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 type paymentConflictUOW struct {
@@ -419,7 +420,7 @@ func TestFakePaymentContract(t *testing.T) {
 		}
 	}
 	for _, id := range []string{g.OrderID, "missing"} {
-		err := e.platform.StubPayment(ctx, g.TenantID, id, g.Goods)
+		err := e.platform.StubPayment(ctx, g.TenantID, id, money.FromKopecks(1))
 		want := "MARKETPLACE_STUB_PAYMENT_AMOUNT"
 		if id == "missing" {
 			want = "ORDER_NOT_FOUND"
