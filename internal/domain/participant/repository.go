@@ -42,6 +42,7 @@ type Repository interface {
 
 // Registry — зеркало реестра магазинов платформы.
 type Registry interface {
+	Batch(context.Context, []ids.TenantID) (map[ids.TenantID]*Tenant, error)
 	// List возвращает активные записи по ключу, независимо от наличия участника.
 	List(context.Context, ids.TenantID, int) ([]*Tenant, error)
 	// Get — запись; нет — ErrTenantNotFound.

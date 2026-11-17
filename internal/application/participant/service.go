@@ -164,13 +164,22 @@ func (s *Service) List(ctx context.Context, page participant.Page) (List, error)
 			return err
 		}
 
+		keys := make([]ids.TenantID, len(items))
+		for i, p := range items {
+			keys[i] = p.TenantID()
+		}
+		tenants, err := tx.Registry().Batch(ctx, keys)
+		if err != nil {
+			return err
+		}
 		list = List{Items: make([]View, 0, len(items)), Total: total}
 		for _, p := range items {
-			view, err := s.withTenant(ctx, tx, p)
-			if err != nil {
-				return err
+			tenant := tenants[p.TenantID()]
+			if tenant == nil {
+				return participant.ErrTenantNotFound
 			}
-
+			view := viewOf(p, tenant)
+			view.ProbationOffers = s.probationOffers
 			list.Items = append(list.Items, view)
 		}
 
