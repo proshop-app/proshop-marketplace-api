@@ -446,3 +446,15 @@ func trigrams(text string) map[string]bool {
 	}
 	return set
 }
+
+func (r references) CandidateCounts(ctx context.Context, codes []string) (map[string]int64, error) {
+	result := map[string]int64{}
+	for _, code := range codes {
+		count, err := r.CountStatus(ctx, code, reference.StatusCandidate)
+		if err != nil {
+			return nil, err
+		}
+		result[code] = count
+	}
+	return result, nil
+}

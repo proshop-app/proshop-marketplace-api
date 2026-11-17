@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 
 // ReferenceCandidatesRunner пополняет открытые словари наблюдениями каталога.
 type ReferenceCandidatesRunner struct {
+	schedule ports.IndexRebuildLock
 	service  *appreference.Service
 	search   ports.ReferenceCandidates
 	interval time.Duration
@@ -57,7 +59,7 @@ func NewReferenceCandidatesRunner(
 }
 
 // RunOnce продолжает обход остальных словарей после ошибки страницы.
-func (r *ReferenceCandidatesRunner) RunOnce(ctx context.Context) {
+func (r *ReferenceCandidatesRunner) runOnce(ctx context.Context) {
 	dictionaries, err := r.service.Dictionaries(ctx)
 	if err != nil {
 		r.failed("", err)
@@ -95,5 +97,26 @@ func (r *ReferenceCandidatesRunner) Run(ctx context.Context) error {
 		if !wait(ctx, r.interval) {
 			return nil
 		}
+	}
+}
+
+// WithSchedule назначает общее расписание для реплик.
+func (r *ReferenceCandidatesRunner) WithSchedule(schedule ports.IndexRebuildLock) *ReferenceCandidatesRunner {
+	r.schedule = schedule
+	return r
+}
+
+// RunOnce выполняет работу только у владельца текущего интервала.
+func (r *ReferenceCandidatesRunner) RunOnce(ctx context.Context) {
+	if r.schedule == nil {
+		r.runOnce(ctx)
+		return
+	}
+	err := r.schedule.WithLock(ctx, func(ctx context.Context) error {
+		r.runOnce(ctx)
+		return nil
+	})
+	if err != nil && !errors.Is(err, ports.ErrRebuildBusy) && ctx.Err() == nil {
+		r.logger.Warn("расписание фоновой сверки: сбой", slog.Any("error", err))
 	}
 }

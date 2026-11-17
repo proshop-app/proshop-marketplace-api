@@ -166,28 +166,45 @@ func (s *Service) Snapshot(ctx context.Context, code string, since *int64) (Snap
 
 // Stats — ревизия и длина очереди кандидатов каждого словаря.
 func (s *Service) Stats(ctx context.Context) ([]Stats, error) {
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
 	var out []Stats
+	updated := map[string]Stats{}
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		repo := tx.Reference()
 		dictionaries, err := repo.Dictionaries(ctx)
 		if err != nil {
 			return err
 		}
+		changed := []string{}
 		for _, dict := range dictionaries {
-			candidates, err := repo.CountStatus(ctx, dict.Code(), reference.StatusCandidate)
-			if err != nil {
-				return err
+			previous, found := s.stats[dict.Code()]
+			if !found || previous.Revision != dict.Revision() || previous.Entries != dict.State().Entries {
+				changed = append(changed, dict.Code())
 			}
-			state := dict.State()
-			out = append(out, Stats{
+		}
+		counts, err := repo.CandidateCounts(ctx, changed)
+		if err != nil {
+			return err
+		}
+		for _, dict := range dictionaries {
+			row := Stats{
 				Dictionary: dict.Code(),
-				Revision:   state.Revision,
-				Entries:    state.Entries,
-				Candidates: candidates,
-			})
+				Revision:   dict.Revision(),
+				Entries:    dict.State().Entries,
+				Candidates: s.stats[dict.Code()].Candidates,
+			}
+			if count, changed := counts[dict.Code()]; changed {
+				row.Candidates = count
+			}
+			out = append(out, row)
+			updated[row.Dictionary] = row
 		}
 		return nil
 	})
+	if err == nil {
+		s.stats = updated
+	}
 	return out, err
 }
 

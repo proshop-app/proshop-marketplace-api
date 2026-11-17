@@ -499,7 +499,11 @@ func (s *server) jobs() []func(context.Context) error {
 			cfg.Reference.CandidatesInterval,
 			s.logger,
 			s.metrics,
-		).Run)
+		).WithSchedule(postgres.NewScheduledWork(
+			s.store.pool,
+			"reference-candidates",
+			cfg.Reference.CandidatesInterval,
+		)).Run)
 	}
 	outbox := jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics)
 	return append(runners, []func(context.Context) error{
@@ -519,8 +523,10 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).
 			WithSchedule(postgres.NewScheduledWork(s.store.pool, "settings-sync", cfg.Settings.SyncInterval)).Run,
-		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).Run,
-		jobs.NewModelKeyStatsRunner(postgres.NewModelKeyStats(s.store.pool), s.logger, s.metrics).Run,
+		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).
+			WithSchedule(postgres.NewScheduledWork(s.store.pool, "reference-stats", referenceStatsInterval)).Run,
+		jobs.NewModelKeyStatsRunner(postgres.NewModelKeyStats(s.store.pool), s.logger, s.metrics).
+			WithSchedule(postgres.NewScheduledWork(s.store.pool, "model-key-stats", jobs.ModelKeyStatsInterval)).Run,
 	}...)
 }
 
