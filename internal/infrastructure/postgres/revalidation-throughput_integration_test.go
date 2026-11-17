@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	seedThroughputProducts = `INSERT INTO catalog_products
+	throughputPostgresVersion = `SHOW server_version`
+	seedThroughputProducts    = `INSERT INTO catalog_products
         (tenant_id, product_id, revision, deleted, card, price, available,
             projected_at, version, updated_at, price_profiles)
         SELECT 't' || t, 'p' || lpad(n::text, 5, '0'), 1, false, $1::jsonb -> ((n-1) % 10), 100, 1,
@@ -35,6 +36,11 @@ func TestTaxonomyRevalidationThroughput(t *testing.T) {
 		t.Skip("явный замер: TAXONOMY_REVALIDATION_BENCH=1")
 	}
 	pool := pgtest.Pool(t)
+	var version string
+	if err := pool.QueryRow(context.Background(), throughputPostgresVersion).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("PostgreSQL server_version:", version)
 	uow := postgres.NewUnitOfWork(pool)
 	evaluator := appmoderation.NewService(uow, clock.System{}, random.IDs{}, appmoderation.Config{})
 	service := apptaxonomy.NewService(uow, clock.System{}, evaluator)

@@ -9,6 +9,11 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+type revalidationCursor struct {
+	TenantID  ids.TenantID  `json:"tenantId"`
+	ProductID ids.ProductID `json:"productId"`
+}
+
 func (h *taxonomyHandlers) revalidationFailures(w http.ResponseWriter, r *http.Request) {
 	limit := 50
 	if value := r.URL.Query().Get("limit"); value != "" {
@@ -28,9 +33,14 @@ func (h *taxonomyHandlers) revalidationFailures(w http.ResponseWriter, r *http.R
 		writeError(w, r, err)
 		return
 	}
+	var next *revalidationCursor
+	if len(failures) == limit {
+		last := failures[len(failures)-1]
+		next = &revalidationCursor{TenantID: last.TenantID, ProductID: last.ProductID}
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "unverified",
-		"items":  failures,
+		"items": failures,
+		"next":  next,
 	})
 }

@@ -44,6 +44,7 @@ type OutboxRow struct {
 }
 
 type data struct {
+	databaseNow          func() time.Time
 	revalidationFailures map[productKey]ports.RevalidationFailure
 	features             *buyerFeaturesData
 	storeCards           map[ids.TenantID]ports.StoreRecord
@@ -86,6 +87,7 @@ type Store struct {
 
 func (d *data) clone() *data {
 	return &data{
+		databaseNow:          d.databaseNow,
 		features:             d.features.clone(),
 		storeCards:           maps.Clone(d.storeCards),
 		promotion:            d.promotion.clone(),
@@ -117,6 +119,7 @@ func (d *data) clone() *data {
 // NewStore — пустое хранилище.
 func NewStore() *Store {
 	return &Store{data: &data{
+		databaseNow:          time.Now,
 		features:             newBuyerFeaturesData(),
 		taxonomyVersions:     map[int64]taxonomy.Definition{},
 		revalidationFailures: map[productKey]ports.RevalidationFailure{},
@@ -137,6 +140,13 @@ func NewStore() *Store {
 		leases:               map[string]lease{},
 		reference:            newReferenceData(),
 	}}
+}
+
+// SetDatabaseClock задаёт часы fake-БД для проверки аренды без реального ожидания.
+func (s *Store) SetDatabaseClock(clock ports.Clock) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.databaseNow = clock.Now
 }
 
 // Do выполняет fn на копии данных и фиксирует её, только если fn вернула nil.

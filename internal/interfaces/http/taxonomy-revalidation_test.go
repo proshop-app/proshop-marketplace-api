@@ -106,6 +106,7 @@ func TestRevalidationFailureResponseHasDefaultAndMaximum(t *testing.T) {
 		handler.ServeHTTP(response, req)
 		var body struct {
 			Items []ports.RevalidationFailure `json:"items"`
+			Next  *revalidationCursor         `json:"next"`
 		}
 		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)
@@ -113,10 +114,19 @@ func TestRevalidationFailureResponseHasDefaultAndMaximum(t *testing.T) {
 		if response.Code != http.StatusOK || len(body.Items) != test.count {
 			t.Fatal(response.Code, len(body.Items))
 		}
+		if strings.Contains(response.Body.String(), `"status":`) {
+			t.Fatal("ответ содержит общий статус вместо записей отказов")
+		}
+		if test.count < 50 && body.Next != nil || test.count >= 50 && body.Next == nil {
+			t.Fatal("неверный признак окончания страницы", body.Next)
+		}
 		if test.count > 0 {
 			last := body.Items[len(body.Items)-1]
 			if string(last.TenantID)+"~"+string(last.ProductID) != test.last {
 				t.Fatal("страница перескочила ключ", last)
+			}
+			if body.Next != nil && (body.Next.TenantID != last.TenantID || body.Next.ProductID != last.ProductID) {
+				t.Fatal("next не указывает на последнюю запись", body.Next)
 			}
 		}
 	}

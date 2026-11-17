@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
@@ -43,7 +42,7 @@ func (r *Taxonomy) QueueRevalidation(ctx context.Context, version int64, categor
 }
 
 // NextRevalidation выдаёт короткую аренду, которая фиксируется до начала страницы.
-func (r *Taxonomy) NextRevalidation(ctx context.Context, _ time.Time) (*taxonomy.Revalidation, error) {
+func (r *Taxonomy) NextRevalidation(ctx context.Context) (*taxonomy.Revalidation, error) {
 	return r.revalidation(ctx, nextRevalidation)
 }
 

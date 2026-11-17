@@ -77,13 +77,17 @@ func reviewCardWithDefinition(
 	if err != nil {
 		return ReviewCard{}, err
 	}
+	return reviewCardFromState(state, definition), nil
+}
+
+func reviewCardFromState(state ports.OfferState, definition taxonomy.Definition) ReviewCard {
 	result := snapshotReviewCard(state)
 	for _, categoryID := range result.Publication.CategoryPath {
 		if category, _, ok := definition.Category(categoryID); ok {
 			result.CategoryPath = append(result.CategoryPath, category.Name)
 		}
 	}
-	return result, nil
+	return result
 }
 
 func snapshotReviewCard(state ports.OfferState) ReviewCard {

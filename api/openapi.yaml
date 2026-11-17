@@ -1907,9 +1907,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [status, items]
+                required: [items, next]
                 properties:
-                  status: { type: string, enum: [unverified] }
+                  next:
+                    description: Курсор для afterTenant/afterProduct; null завершает обход. Полная страница может требовать пустого запроса.
+                    type: object
+                    nullable: true
+                    required: [tenantId, productId]
+                    properties:
+                      tenantId: { type: string }
+                      productId: { type: string }
                   items:
                     type: array
                     maxItems: 100

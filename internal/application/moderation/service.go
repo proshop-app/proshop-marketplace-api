@@ -3,7 +3,6 @@ package moderation
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
@@ -12,7 +11,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
 // Config передаёт политику допуска без зависимости от окружения.
@@ -71,172 +69,16 @@ func (s *Service) evaluate(
 	previous *catalog.ProductState,
 	now time.Time,
 ) (bool, error) {
-	p := product.State()
-	if p.Deleted || p.Card.Marketplace == nil || !p.Card.Publication.Published {
-		return s.closeUnpublishedCase(ctx, tx, p, now)
-	}
-	if member == nil {
-		var err error
-		member, err = tx.Participants().Get(ctx, p.TenantID)
-		if errors.Is(err, participant.ErrNotFound) {
-			return false, nil
-		}
-		if err != nil {
-			return false, err
-		}
-	}
-	definition, err := tx.Taxonomy().Current(ctx)
+	input, err := s.readEvaluation(ctx, tx, product, member, previous, now)
 	if err != nil {
 		return false, err
 	}
-	rules, err := tx.ModerationRules().Current(ctx)
-	if err != nil {
+	decision := decideVerdict(input)
+	if err := readEvaluationCase(ctx, tx, &input, decision); err != nil {
 		return false, err
 	}
-	rules.RequireImage = s.config.RequireImage
-	policy := definition.ModerationPolicy(p.Card.Marketplace.CategoryID)
-	return s.evaluatePrepared(ctx, tx, product, member, previous, definition, rules, policy, now)
-}
-
-func (s *Service) evaluatePrepared(
-	ctx context.Context,
-	tx ports.Tx,
-	product *catalog.Product,
-	member *participant.Participant,
-	previous *catalog.ProductState,
-	definition taxonomy.Definition,
-	rules moderation.Rules,
-	policy string,
-	now time.Time,
-) (bool, error) {
-	p := product.State()
-	if p.Deleted || p.Card.Marketplace == nil || !p.Card.Publication.Published {
-		return s.closeUnpublishedCase(ctx, tx, p, now)
-	}
-	if member == nil {
-		return false, nil
-	}
-	verdict, err := tx.ModerationVerdicts().Get(ctx, p.TenantID, p.ProductID)
-	if errors.Is(err, moderation.ErrNotFound) {
-		verdict, err = moderation.NewVerdict(p.TenantID, p.ProductID), nil
-	}
-	if err != nil {
-		return false, err
-	}
-	input := moderation.Input{
-		Policy:      policy,
-		Name:        p.Card.Name,
-		Description: p.Card.Description,
-		Image:       p.Card.Image,
-		Probation:   member.State().Trust == participant.Probation,
-	}
-	changed := false
-	if previous != nil && previous.Revision == verdict.State().Revision &&
-		catalog.IdenticalProjectionContent(*previous, p) {
-		changed, err = s.carryReviewedProjection(
-			ctx,
-			tx,
-			verdict,
-			verdict.State(),
-			p.Revision,
-			definition,
-			rules,
-			input,
-			now,
-		)
-		if err != nil {
-			return false, err
-		}
-	}
-	if !changed {
-		changed = verdict.Evaluate(p.Revision, definition.Version, rules, input, now)
-	}
-	if !changed {
-		if verdict.State().Status != moderation.Pending {
-			return false, nil
-		}
-		return s.syncEvaluationCase(ctx, tx, p, verdict, definition, false, now)
-	}
-	return s.saveEvaluation(ctx, tx, p, verdict, definition, now)
-}
-
-func (s *Service) saveEvaluation(
-	ctx context.Context,
-	tx ports.Tx,
-	p catalog.ProductState,
-	verdict *moderation.Verdict,
-	definition taxonomy.Definition,
-	now time.Time,
-) (bool, error) {
-	if err := tx.ModerationVerdicts().Save(ctx, verdict); err != nil {
-		return false, err
-	}
-	s.recordVerdict(tx, verdict.State())
-	return s.syncEvaluationCase(ctx, tx, p, verdict, definition, true, now)
-}
-
-func (s *Service) syncEvaluationCase(
-	ctx context.Context,
-	tx ports.Tx,
-	p catalog.ProductState,
-	verdict *moderation.Verdict,
-	definition taxonomy.Definition,
-	verdictChanged bool,
-	now time.Time,
-) (bool, error) {
-	c, err := tx.ModerationCases().Open(ctx, p.TenantID, p.ProductID)
-	if err != nil && !errors.Is(err, moderation.ErrNotFound) {
-		return false, err
-	}
-	var card *moderation.ReviewCard
-	// Снимок нужен только новому делу или новой ревизии существующего дела.
-	if (c == nil && verdict.State().Status == moderation.Pending) ||
-		(c != nil && c.State().Revision != verdict.State().Revision) {
-		snapshot, err := reviewCardWithDefinition(ctx, tx, p.TenantID, p.ProductID, definition)
-		if err != nil {
-			return false, err
-		}
-		card = &snapshot
-	}
-	switch {
-	case c != nil:
-		if c.Refresh(verdict.State(), now, card) {
-			if err := tx.ModerationCases().Save(ctx, c); err != nil {
-				return false, err
-			}
-		} else if !verdictChanged {
-			return false, nil
-		}
-	case verdict.State().Status == moderation.Pending:
-		c = moderation.NewCase(s.ids.NewUUID(), verdict.State(), moderation.Rule, "", now, card)
-		if err := tx.ModerationCases().Save(ctx, c); err != nil {
-			return false, err
-		}
-	case !verdictChanged:
-		return false, nil
-	}
-	return true, nil
-}
-
-func (s *Service) closeUnpublishedCase(
-	ctx context.Context,
-	tx ports.Tx,
-	p catalog.ProductState,
-	now time.Time,
-) (bool, error) {
-	c, err := tx.ModerationCases().Open(ctx, p.TenantID, p.ProductID)
-	if errors.Is(err, moderation.ErrNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	// Вердикт сохраняем: временное снятие публикации не отменяет решение оператора.
-	c.Supersede(now)
-	if err := tx.ModerationCases().Save(ctx, c); err != nil {
-		return false, err
-	}
-	return true, nil
+	decision = s.completeEvaluation(input, decision)
+	return decision.Changed, saveDecision(ctx, tx, decision)
 }
 
 func (s *Service) enqueueEvaluation(

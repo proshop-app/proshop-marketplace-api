@@ -38,6 +38,7 @@ func TestRevalidationResumesAndUsesLatestVersion(t *testing.T) {
 	definition := revalidationSchema()
 	store.SeedTaxonomy(definition)
 	clock := fake.NewClock(time.Now())
+	store.SetDatabaseClock(clock)
 	for i := 0; i < 120; i++ {
 		seedRevalidationProduct(store, definition, ids.ProductID(fmt.Sprintf("p%03d", i)), "c1")
 	}
@@ -146,6 +147,7 @@ func TestTransientPageDefersOnlyItsCategory(t *testing.T) {
 	definition := revalidationSchema()
 	store.SeedTaxonomy(definition)
 	clock := fake.NewClock(time.Now())
+	store.SetDatabaseClock(clock)
 	seedRevalidationProduct(store, definition, "p1", "c1")
 	seedRevalidationProduct(store, definition, "p2", "c2")
 	service := apptaxonomy.NewService(store, clock, nil)
@@ -174,11 +176,40 @@ func TestTransientPageDefersOnlyItsCategory(t *testing.T) {
 	}
 }
 
+func TestRevalidationLeaseUsesDatabaseClock(t *testing.T) {
+	ctx := context.Background()
+	store := fake.NewStore()
+	databaseClock := fake.NewClock(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC))
+	store.SetDatabaseClock(databaseClock)
+	applicationClock := fake.NewClock(databaseClock.Now().Add(24 * time.Hour))
+	definition := revalidationSchema()
+	store.SeedTaxonomy(definition)
+	seedRevalidationProduct(store, definition, "p1", "c1")
+	service := apptaxonomy.NewService(store, applicationClock, nil)
+	definition.Attributes[0].Name = "Новое имя"
+	if _, err := service.LoadPart(ctx, "attributes", definition, 1); err != nil {
+		t.Fatal(err)
+	}
+	failing := apptaxonomy.NewService(&failPageOnceUOW{UnitOfWork: store}, applicationClock, nil)
+	if _, err := failing.RevalidateNext(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	applicationClock.Advance(24 * time.Hour)
+	if job, err := service.RevalidateNext(ctx); err != nil || job != nil {
+		t.Fatal("часы приложения досрочно завершили аренду БД", job, err)
+	}
+	databaseClock.Advance(time.Second)
+	if job, err := service.RevalidateNext(ctx); err != nil || job == nil || !job.Done {
+		t.Fatal("часы БД не освободили задание", job, err)
+	}
+}
+
 func TestSupersedingKeepsOtherCategoryJobs(t *testing.T) {
 	store := fake.NewStore()
 	definition := revalidationSchema()
 	store.SeedTaxonomy(definition)
 	clock := fake.NewClock(time.Now())
+	store.SetDatabaseClock(clock)
 	seedRevalidationProduct(store, definition, "p1", "c1")
 	seedRevalidationProduct(store, definition, "p2", "c2")
 	service := apptaxonomy.NewService(store, clock, nil)
@@ -207,6 +238,7 @@ func TestUnchangedPublicationVersionRemainsValidForReaders(t *testing.T) {
 	definition := revalidationSchema()
 	store.SeedTaxonomy(definition)
 	clock := fake.NewClock(time.Now())
+	store.SetDatabaseClock(clock)
 	seedRevalidationProduct(store, definition, "p2", "c2")
 	service := apptaxonomy.NewService(store, clock, nil)
 	definition.Attributes[0].Name = "Изменено только для c1"

@@ -109,7 +109,7 @@ func TestTaxonomyPendingPagesAllowReadsAndEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		job, err := tx.Taxonomy().NextRevalidation(ctx, time.Now())
+		job, err := tx.Taxonomy().NextRevalidation(ctx)
 		if err != nil {
 			return err
 		}

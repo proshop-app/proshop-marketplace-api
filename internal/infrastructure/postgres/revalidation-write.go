@@ -303,6 +303,10 @@ func revalidationWrites(items []preparedRevalidation) (
 }
 
 func permanentRevalidationSQL(err error) bool {
+	// Класс 22 — ошибка значения/кодирования строки; 23502/23503/23514 — нарушение
+	// NOT NULL, внешнего ключа или CHECK. Повтор той же карточки их не исправит.
+	// 23505 может быть гонкой вставки; 40001 (сериализация) и 40P01 (deadlock)
+	// требуют повтора всей транзакции, сохраняя прежний курсор и атомарность страницы.
 	var pgError *pgconn.PgError
 	if !errors.As(err, &pgError) {
 		return false

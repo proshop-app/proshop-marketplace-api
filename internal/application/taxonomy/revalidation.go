@@ -22,7 +22,7 @@ func (s *Service) RevalidateNext(ctx context.Context) (*taxonomy.Revalidation, e
 	var claimed *taxonomy.Revalidation
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
-		claimed, err = tx.Taxonomy().NextRevalidation(ctx, s.clock.Now())
+		claimed, err = tx.Taxonomy().NextRevalidation(ctx)
 		return err
 	})
 	if err != nil || claimed == nil {
@@ -82,7 +82,6 @@ func (s *Service) revalidatePage(
 	}
 	job.Processed += int64(len(items))
 	job.Done = len(items) < revalidationBatch
-	job.AvailableAt = s.clock.Now()
 	return tx.Taxonomy().AdvanceRevalidation(ctx, *job)
 }
 

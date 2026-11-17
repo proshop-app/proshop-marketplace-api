@@ -15,14 +15,16 @@ func (r taxonomies) QueueRevalidation(_ context.Context, version int64, categori
 			}
 		}
 		r.d.revalidations = append(r.d.revalidations, taxonomy.Revalidation{
-			Version:  version,
-			Category: category,
+			Version:     version,
+			Category:    category,
+			AvailableAt: r.d.databaseNow(),
 		})
 	}
 	return nil
 }
 
-func (r taxonomies) NextRevalidation(_ context.Context, now time.Time) (*taxonomy.Revalidation, error) {
+func (r taxonomies) NextRevalidation(_ context.Context) (*taxonomy.Revalidation, error) {
+	now := r.d.databaseNow()
 	selected := -1
 	for i, job := range r.d.revalidations {
 		if job.Done || job.AvailableAt.After(now) {
@@ -62,6 +64,7 @@ func (r taxonomies) LockRevalidation(_ context.Context, claimed taxonomy.Revalid
 func (r taxonomies) AdvanceRevalidation(_ context.Context, job taxonomy.Revalidation) error {
 	for i, existing := range r.d.revalidations {
 		if existing.Version == job.Version && existing.Category == job.Category {
+			job.AvailableAt = r.d.databaseNow()
 			r.d.revalidations[i] = job
 			return nil
 		}
