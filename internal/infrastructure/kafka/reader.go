@@ -7,9 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -302,61 +300,23 @@ func (r *Reader) topicsAppeared(ctx context.Context, missing []string) bool {
 
 // existing — все топики брокера. Запрос метаданных без списка топиков ничего не создаёт.
 func (r *Reader) existing(ctx context.Context) ([]string, error) {
-	var lastErr error
-
-	for _, broker := range r.config.Brokers {
-		partitions, err := readPartitions(ctx, strings.TrimSpace(broker))
-		if err != nil {
-			lastErr = err
-
-			continue
-		}
-
-		topics := make([]string, 0, len(partitions))
-		for _, partition := range partitions {
-			if !slices.Contains(topics, partition.Topic) {
-				topics = append(topics, partition.Topic)
-			}
-		}
-
-		return topics, nil
-	}
-
-	return nil, fmt.Errorf("список топиков: %w", lastErr)
-}
-
-// Сетевое ожидание метаданных тоже заканчивается при остановке или переподписке.
-func readPartitions(ctx context.Context, broker string) ([]kafkago.Partition, error) {
-	dialer := kafkago.Dialer{Timeout: 5 * time.Second}
-	conn, err := dialer.DialContext(ctx, "tcp", broker)
+	partitions, err := readPartitions(ctx, r.config.Brokers, 5*time.Second)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = conn.Close() }()
-	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	defer stop()
-	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		return nil, err
+	topics := make([]string, 0, len(partitions))
+	for _, partition := range partitions {
+		if !slices.Contains(topics, partition.Topic) {
+			topics = append(topics, partition.Topic)
+		}
 	}
-	return conn.ReadPartitions()
+	return topics, nil
 }
 
-// Ping проверяет, что хотя бы один брокер принимает соединение.
+// Ping проверяет ответ протокола Kafka, а не только принятие TCP-соединения.
 func Ping(ctx context.Context, brokers []string) error {
-	var lastErr error
-
-	for _, broker := range brokers {
-		dialer := net.Dialer{Timeout: 2 * time.Second}
-
-		conn, err := dialer.DialContext(ctx, "tcp", strings.TrimSpace(broker))
-		if err == nil {
-			return conn.Close()
-		}
-
-		lastErr = err
-	}
-
-	return fmt.Errorf("брокеры недоступны: %w", lastErr)
+	_, err := readPartitions(ctx, brokers, 2*time.Second)
+	return err
 }
 
 func sleep(ctx context.Context, d time.Duration) bool {
