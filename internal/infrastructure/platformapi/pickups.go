@@ -18,7 +18,7 @@ func (c *Client) PickupPoints(
 	carrier delivery.Carrier,
 	city string,
 ) (ports.PickupPoints, error) {
-	query := url.Values{"carrier": {string(carrier)}, "city": {city}, "page": {"1"}}
+	query := url.Values{"carrier": {string(carrier)}, "city": {city}}
 	var collected ports.PickupPoints
 	seen := make(map[string]bool)
 	for {

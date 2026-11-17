@@ -19,8 +19,8 @@ func TestPickupCatalogLargerThanResponseLimit(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if r.URL.Query().Get("page") != "1" {
-			t.Error("ожидалась внутренняя страница")
+		if r.URL.Query().Has("page") {
+			t.Error("неожиданный флаг переходного договора")
 		}
 		offset, _ := strconv.Atoi(r.URL.Query().Get("cursor"))
 		count := min(512, total-offset)

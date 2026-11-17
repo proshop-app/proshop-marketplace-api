@@ -45,7 +45,6 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		}
 	}
 	request := ports.CreateOrderRequest{
-		CheckoutCreatedAt:  state.CreatedAt,
 		BuyerID:            buyerID,
 		PromoCode:          group.PromoCode,
 		ExternalCheckoutID: group.ExternalCheckoutID,

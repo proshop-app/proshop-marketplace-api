@@ -37,7 +37,6 @@ func (c *Client) newRequest(
 	}
 	request.Header.Set(HeaderToken, c.token)
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("X-Marketplace-Contract", "pickup-v2")
 	if payload != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}

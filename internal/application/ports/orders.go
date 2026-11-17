@@ -2,7 +2,6 @@ package ports
 
 import (
 	"context"
-	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -57,7 +56,6 @@ type OrderItem struct {
 
 // CreateOrderRequest — сохранённая команда магазина с ключом группы.
 type CreateOrderRequest struct {
-	CheckoutCreatedAt  time.Time        `json:"checkoutCreatedAt,omitempty"`
 	PromoCode          string           `json:"promoCode,omitempty"`
 	BuyerID            ids.UUID         `json:"buyerId,omitempty"`
 	ExternalCheckoutID string           `json:"externalCheckoutId"`

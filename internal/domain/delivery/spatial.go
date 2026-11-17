@@ -17,7 +17,7 @@ type Bounds [4]float64
 
 type pickupCell struct {
 	row     int
-	regions map[string]*pickupNode
+	regions map[string][]int
 }
 
 type pickupColumn struct {
@@ -55,24 +55,24 @@ func (b Bounds) contains(p Location) bool {
 	return p.Lat >= b[0] && p.Lat <= b[2] && p.Lon >= b[1] && p.Lon <= b[3]
 }
 
-// NewPickupIndex строит сетку и деревья плотных ячеек один раз на снимок.
+// NewPickupIndex строит сетку один раз на снимок.
 func NewPickupIndex(points []PickupPoint) *PickupIndex {
 	index := &PickupIndex{
 		bounds:  make(map[string]Bounds),
 		points:  points,
 		regions: make(map[string][]int),
 	}
-	grid := make(map[int]map[int]map[string][]PickupPoint)
+	grid := make(map[int]map[int]map[string][]int)
 	for position, point := range points {
 		index.regions[point.RegionCode] = append(index.regions[point.RegionCode], position)
 		col, row := pickupCellAt(point.Location.Lon), pickupCellAt(point.Location.Lat)
 		if grid[col] == nil {
-			grid[col] = make(map[int]map[string][]PickupPoint)
+			grid[col] = make(map[int]map[string][]int)
 		}
 		if grid[col][row] == nil {
-			grid[col][row] = make(map[string][]PickupPoint)
+			grid[col][row] = make(map[string][]int)
 		}
-		grid[col][row][point.RegionCode] = append(grid[col][row][point.RegionCode], point)
+		grid[col][row][point.RegionCode] = append(grid[col][row][point.RegionCode], position)
 		b, found := index.bounds[point.RegionCode]
 		if !found {
 			b = Bounds{point.Location.Lat, point.Location.Lon, point.Location.Lat, point.Location.Lon}
@@ -84,11 +84,7 @@ func NewPickupIndex(points []PickupPoint) *PickupIndex {
 	for col, rows := range grid {
 		column := pickupColumn{col: col}
 		for row, regions := range rows {
-			buckets := make(map[string]*pickupNode, len(regions))
-			for region, points := range regions {
-				buckets[region] = newPickupNode(points, 0)
-			}
-			column.cells = append(column.cells, pickupCell{row: row, regions: buckets})
+			column.cells = append(column.cells, pickupCell{row: row, regions: regions})
 		}
 		slices.SortFunc(column.cells, func(a, b pickupCell) int { return a.row - b.row })
 		index.columns = append(index.columns, column)
@@ -118,14 +114,25 @@ func (i *PickupIndex) Area(box Bounds, regions []string) PickupArea {
 				box[0] <= float64(cell.row)*pickupCellDegrees && box[2] >= float64(cell.row+1)*pickupCellDegrees
 			for _, region := range regions {
 				bucket := cell.regions[region]
-				if bucket == nil {
+				if len(bucket) == 0 {
 					continue
 				}
 				if full {
-					result.Total += bucket.count
-					bucket.sample(&result)
+					result.Total += len(bucket)
+					count := min(len(bucket), PickupMapLimit-len(result.Items))
+					for _, position := range bucket[:count] {
+						result.Items = append(result.Items, i.points[position])
+					}
 				} else {
-					bucket.query(box, &result)
+					for _, position := range bucket {
+						point := &i.points[position]
+						if box.contains(point.Location) {
+							result.Total++
+							if len(result.Items) < PickupMapLimit {
+								result.Items = append(result.Items, *point)
+							}
+						}
+					}
 				}
 			}
 		}

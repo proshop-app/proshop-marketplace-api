@@ -54,3 +54,55 @@ func BenchmarkPickupArea(b *testing.B) {
 		})
 	}
 }
+
+// Все 20 000 точек находятся в одной ячейке: плотный центр ~600 × 600 м.
+func denseSpatialPoints() []delivery.PickupPoint {
+	points := make([]delivery.PickupPoint, 20000)
+	for n := range points {
+		points[n] = delivery.PickupPoint{
+			Code:       fmt.Sprint(n),
+			RegionCode: "RU-MOW",
+			Location: delivery.Location{
+				Lat: 55.741 + float64(n/200)*0.00005,
+				Lon: 37.601 + float64(n%200)*0.00005,
+			},
+		}
+	}
+	return points
+}
+
+func TestDensePickupAreaCountsBoundaryCellWithoutTruncation(t *testing.T) {
+	index := delivery.NewPickupIndex(denseSpatialPoints())
+	narrow := index.Area(delivery.Bounds{55.74301, 37.60501, 55.74399, 37.60599}, []string{"RU-MOW"})
+	if narrow.Total != 361 || len(narrow.Items) != 361 || narrow.Refine {
+		t.Fatal(narrow.Total, len(narrow.Items), narrow.Refine)
+	}
+	wide := index.Area(delivery.Bounds{55.7405, 37.6005, 55.7465, 37.6115}, []string{"RU-MOW"})
+	if wide.Total != 20000 || len(wide.Items) != delivery.PickupMapLimit || !wide.Refine {
+		t.Fatal(wide.Total, len(wide.Items), wide.Refine)
+	}
+}
+
+func BenchmarkDensePickupArea(b *testing.B) {
+	index := delivery.NewPickupIndex(denseSpatialPoints())
+	for _, test := range []struct {
+		name string
+		box  delivery.Bounds
+	}{
+		{
+			name: "narrow",
+			box:  delivery.Bounds{55.74301, 37.60501, 55.74399, 37.60599},
+		},
+		{
+			name: "wide",
+			box:  delivery.Bounds{55.7405, 37.6005, 55.7465, 37.6115},
+		},
+	} {
+		b.Run(test.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for n := 0; n < b.N; n++ {
+				index.Area(test.box, []string{"RU-MOW"})
+			}
+		})
+	}
+}

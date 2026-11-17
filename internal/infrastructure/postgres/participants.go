@@ -53,7 +53,6 @@ const (
 		ORDER BY tenant_id = $1 DESC
 		LIMIT 1`
 
-	// Старые столбцы цены не обновляем: их ещё читают процессы v1 во время перехода.
 	updateParticipant = `
         UPDATE participants
         SET slug = $4,
