@@ -169,6 +169,8 @@ func (s *server) services(ctx context.Context) (services, error) {
 			TenantMaxConcurrent:   cfg.Platform.TenantMaxConcurrent,
 			CheckoutMaxConcurrent: cfg.Platform.CheckoutMaxConcurrent,
 			ReadMaxConcurrent:     cfg.Platform.ReadMaxConcurrent,
+			QueueSize:             cfg.Platform.QueueSize,
+			TenantQueueSize:       cfg.Platform.TenantQueueSize,
 			TenantStateSize:       cfg.Platform.TenantStateSize,
 			TenantIdleTTL:         cfg.Platform.TenantIdleTTL,
 			FailureThreshold:      cfg.Platform.FailureThreshold,

@@ -32,6 +32,8 @@ type Config struct {
 	TenantMaxConcurrent   int
 	CheckoutMaxConcurrent int
 	ReadMaxConcurrent     int
+	QueueSize             int
+	TenantQueueSize       int
 	TenantStateSize       int
 	TenantIdleTTL         time.Duration
 	FailureThreshold      int
@@ -46,8 +48,8 @@ type Client struct {
 	clock    ports.Clock
 	metrics  ports.PlatformMetrics
 	logger   *slog.Logger
-	slots    chan struct{}
-	active   [classCount]int
+	running  int
+	pools    [classCount]slotPool
 	batch    *tenantState
 	mu       sync.Mutex
 	server   breaker
@@ -81,7 +83,6 @@ func New(
 		clock:    clock,
 		metrics:  metrics,
 		logger:   logger,
-		slots:    make(chan struct{}, cfg.MaxConcurrent),
 		batch:    &tenantState{},
 		tenants:  make(map[ids.TenantID]*tenantState),
 		idle:     list.New(),
@@ -98,16 +99,21 @@ func call[T any](
 	load func(context.Context) (T, error),
 ) (T, error) {
 	started := time.Now()
-	p, allowed := c.acquire(ctx, classOf(operation))
-	if !allowed {
-		c.observe(ctx, operation, "short_circuit", started)
-		var zero T
-		return zero, ErrUnavailable
-	}
 	callCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	p, reason := c.acquire(callCtx, classOf(operation))
+	if reason != "" {
+		c.observe(ctx, operation, reason, started)
+		var zero T
+		if callCtx.Err() != nil {
+			return zero, callError(callCtx.Err())
+		}
+		return zero, ErrUnavailable
+	}
 	value, err := load(callCtx)
-	if callCtx.Err() != nil {
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	} else if err == nil && callCtx.Err() != nil {
 		err = callCtx.Err()
 	}
 	c.release(p, err)
@@ -116,13 +122,10 @@ func call[T any](
 		outcome = "error"
 		if errors.Is(err, context.DeadlineExceeded) {
 			outcome = "timeout"
-			err = ErrTimeout.Wrap(err)
-		} else if errs.CodeOf(err) == errs.Internal {
-			err = ErrUnavailable.Wrap(err)
 		}
 	}
 	c.observe(ctx, operation, outcome, started)
-	return value, err
+	return value, callError(err)
 }
 
 func (c *Client) observe(ctx context.Context, operation, outcome string, started time.Time) {
@@ -151,4 +154,14 @@ func (c *Client) observe(ctx context.Context, operation, outcome string, started
 			slog.Any("tenantId", ctx.Value(tenantContextKey{})),
 		)
 	}
+}
+
+func callError(err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ErrTimeout.Wrap(err)
+	}
+	if err != nil && errs.CodeOf(err) == errs.Internal && !errors.Is(err, context.Canceled) {
+		return ErrUnavailable.Wrap(err)
+	}
+	return err
 }

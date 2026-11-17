@@ -11,6 +11,8 @@ type tenantState struct {
 	id       ids.TenantID
 	breaker  breaker
 	active   [classCount]int
+	queued   [classCount]list.List
+	ready    [classCount]*list.Element
 	idle     *list.Element
 	lastUsed time.Time
 }
@@ -54,7 +56,7 @@ func (c *Client) pin(state *tenantState) {
 }
 
 func (c *Client) unpin(state *tenantState) {
-	if state.id == "" {
+	if state.id == "" || state.idle != nil {
 		return
 	}
 	state.lastUsed = c.clock.Now()
@@ -62,5 +64,6 @@ func (c *Client) unpin(state *tenantState) {
 }
 
 func (s *tenantState) inactive() bool {
-	return s.active[checkoutClass] == 0 && s.active[readClass] == 0
+	return s.active[checkoutClass] == 0 && s.active[readClass] == 0 &&
+		s.queued[checkoutClass].Len() == 0 && s.queued[readClass].Len() == 0
 }

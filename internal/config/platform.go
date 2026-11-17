@@ -19,6 +19,12 @@ func (r *reader) validatePlatform(cfg Platform) {
 	if cfg.TenantMaxConcurrent > cfg.MaxConcurrent {
 		r.fail("PLATFORM_TENANT_MAX_CONCURRENT", "не больше PLATFORM_MAX_CONCURRENT")
 	}
+	if cfg.QueueSize > 100000 {
+		r.fail("PLATFORM_QUEUE_SIZE", "не больше 100000 ожидающих на класс")
+	}
+	if cfg.TenantQueueSize > cfg.QueueSize {
+		r.fail("PLATFORM_TENANT_QUEUE_SIZE", "не больше PLATFORM_QUEUE_SIZE")
+	}
 	if cfg.TenantStateSize > 100000 {
 		r.fail("PLATFORM_TENANT_STATE_SIZE", "не больше 100000 магазинов")
 	}

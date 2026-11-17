@@ -13,68 +13,66 @@ func tenantContext(id ids.TenantID) context.Context {
 	return context.WithValue(context.Background(), tenantContextKey{}, id)
 }
 
+func admit(t *testing.T, c *Client, tenant ids.TenantID, class operationClass) permit {
+	t.Helper()
+	result, waiting := c.request(tenantContext(tenant), class)
+	if waiting != nil || result.reason != "" {
+		t.Fatal("нет немедленного допуска", tenant, result.reason)
+	}
+	return result.permit
+}
+
+func pending(ctx context.Context, t *testing.T, c *Client, class operationClass) *waiter {
+	t.Helper()
+	result, waiting := c.request(ctx, class)
+	if waiting == nil || result.reason != "" {
+		t.Fatal("нет ожидающего запроса", result.reason)
+	}
+	return waiting
+}
+
 func TestSlowTenantCannotOccupyAllSlots(t *testing.T) {
 	c := New(fake.NewPlatform(), testConfig(), fake.NewClock(time.Now()), nil, nil)
-	first, allowed := c.acquire(tenantContext("t1"), checkoutClass)
-	if !allowed {
-		t.Fatal("первый вызов не допущен")
-	}
-	defer c.release(first, nil)
-	if _, allowed := c.acquire(tenantContext("t1"), checkoutClass); allowed {
+	first := admit(t, c, "t1", checkoutClass)
+	waiting := pending(tenantContext("t1"), t, c, checkoutClass)
+	other := admit(t, c, "t2", checkoutClass)
+	c.release(other, nil)
+	select {
+	case <-waiting.done:
 		t.Fatal("магазин превысил свою долю")
+	default:
 	}
-	other, allowed := c.acquire(tenantContext("t2"), checkoutClass)
-	if !allowed {
-		t.Fatal("медленный магазин занял все места")
-	}
-	defer c.release(other, nil)
-	if _, allowed := c.acquire(tenantContext("t3"), checkoutClass); allowed {
-		t.Fatal("превышен общий предел")
-	}
+	c.release(first, nil)
+	granted := <-waiting.done
+	c.release(granted.permit, nil)
 }
 
 func TestActiveTenantStateCannotBeEvicted(t *testing.T) {
 	cfg := testConfig()
 	cfg.TenantStateSize = 1
 	c := New(fake.NewPlatform(), cfg, fake.NewClock(time.Now()), nil, nil)
-	first, allowed := c.acquire(tenantContext("t1"), checkoutClass)
-	if !allowed {
-		t.Fatal("первый вызов не допущен")
-	}
-	if _, allowed := c.acquire(tenantContext("t2"), checkoutClass); allowed {
-		t.Fatal("активное состояние вытеснено")
+	first := admit(t, c, "t1", checkoutClass)
+	if result, _ := c.request(tenantContext("t2"), checkoutClass); result.reason != "queue_full" {
+		t.Fatal("активное состояние вытеснено", result.reason)
 	}
 	c.release(first, nil)
-	other, allowed := c.acquire(tenantContext("t2"), checkoutClass)
-	if !allowed {
-		t.Fatal("неактивное состояние не вытесняется")
-	}
+	other := admit(t, c, "t2", checkoutClass)
 	c.release(other, nil)
 }
 
 func TestCheckoutPassesWhenReadPoolIsFull(t *testing.T) {
 	c := New(fake.NewPlatform(), testConfig(), fake.NewClock(time.Now()), nil, nil)
-	first, allowed := c.acquire(tenantContext("t1"), readClass)
-	if !allowed {
-		t.Fatal("первое чтение не допущено")
-	}
-	defer c.release(first, nil)
-	second, allowed := c.acquire(tenantContext("t2"), readClass)
-	if !allowed {
-		t.Fatal("второе чтение не допущено")
-	}
-	defer c.release(second, nil)
-	if _, allowed := c.acquire(tenantContext("t3"), readClass); allowed {
-		t.Fatal("превышен пул чтений")
-	}
+	first := admit(t, c, "t1", readClass)
+	second := admit(t, c, "t2", readClass)
+	waiting := pending(tenantContext("t3"), t, c, readClass)
 	// Даже у того же магазина чтения не занимают резерв оформления.
 	for _, operation := range []string{"quote", "create_order", "get_order", "stub_payment", "cancel_order"} {
-		p, allowed := c.acquire(tenantContext("t1"), classOf(operation))
-		if !allowed {
-			t.Fatal("чтения остановили оформление", operation)
-		}
+		p := admit(t, c, "t1", classOf(operation))
 		c.release(p, nil)
 	}
+	c.release(first, nil)
+	c.release((<-waiting.done).permit, nil)
+	c.release(second, nil)
 }
 
 func TestOperationClasses(t *testing.T) {

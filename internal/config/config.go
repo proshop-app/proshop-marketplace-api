@@ -103,6 +103,8 @@ type Platform struct {
 	TenantMaxConcurrent   int
 	CheckoutMaxConcurrent int
 	ReadMaxConcurrent     int
+	QueueSize             int
+	TenantQueueSize       int
 	TenantStateSize       int
 	TenantIdleTTL         time.Duration
 	FailureThreshold      int
@@ -296,6 +298,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			TenantMaxConcurrent:   r.positive("PLATFORM_TENANT_MAX_CONCURRENT", 2),
 			CheckoutMaxConcurrent: r.positive("PLATFORM_CHECKOUT_MAX_CONCURRENT", 12),
 			ReadMaxConcurrent:     r.positive("PLATFORM_READ_MAX_CONCURRENT", 4),
+			QueueSize:             r.positive("PLATFORM_QUEUE_SIZE", 1024),
+			TenantQueueSize:       r.positive("PLATFORM_TENANT_QUEUE_SIZE", 32),
 			TenantStateSize:       r.positive("PLATFORM_TENANT_STATE_SIZE", 10000),
 			TenantIdleTTL:         r.duration("PLATFORM_TENANT_IDLE_TTL", 10*time.Minute),
 			FailureThreshold:      r.positive("PLATFORM_FAILURE_THRESHOLD", 5),

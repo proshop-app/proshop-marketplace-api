@@ -55,6 +55,8 @@ func setup(t *testing.T, cfg pricecontexts.Config) *fixture {
 			TenantMaxConcurrent:   2,
 			CheckoutMaxConcurrent: 2,
 			ReadMaxConcurrent:     2,
+			QueueSize:             8,
+			TenantQueueSize:       2,
 			TenantStateSize:       100,
 			TenantIdleTTL:         time.Minute,
 			MaxConcurrent:         4,
