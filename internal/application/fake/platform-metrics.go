@@ -10,10 +10,11 @@ import (
 type PlatformMetrics struct {
 	mu       sync.Mutex
 	outcomes map[string]int
+	queues   map[string]int
 }
 
 // PlatformCall потокобезопасно учитывает исход операции.
-func (m *PlatformMetrics) PlatformCall(operation, outcome string, _ time.Duration) {
+func (m *PlatformMetrics) PlatformCall(operation, _, outcome string, _ time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.outcomes == nil {
@@ -34,4 +35,21 @@ func (p *Platform) platformCall(ctx context.Context, operation string) error {
 		return p.CallHook(ctx, operation)
 	}
 	return ctx.Err()
+}
+
+// PlatformQueueWait учитывает ожидание отдельно от времени всего обращения.
+func (m *PlatformMetrics) PlatformQueueWait(class, outcome string, _ time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.queues == nil {
+		m.queues = make(map[string]int)
+	}
+	m.queues[class+":"+outcome]++
+}
+
+// QueueCount возвращает число ожиданий данного класса и исхода.
+func (m *PlatformMetrics) QueueCount(class, outcome string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.queues[class+":"+outcome]
 }

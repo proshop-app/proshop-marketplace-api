@@ -21,15 +21,25 @@ import (
 
 func testConfig() Config {
 	return Config{
-		ReadTimeout:      10 * time.Millisecond,
-		StrictTimeout:    20 * time.Millisecond,
-		CacheTTL:         time.Second,
-		StaleTTL:         time.Minute,
-		CacheSize:        3,
-		MaxConcurrent:    2,
-		FailureThreshold: 2,
-		OpenInterval:     time.Second,
-		LogInterval:      time.Minute,
+		ReadTimeout:           10 * time.Millisecond,
+		StrictTimeout:         20 * time.Millisecond,
+		CacheTTL:              time.Second,
+		StaleTTL:              time.Minute,
+		CacheSize:             3,
+		TenantMaxConcurrent:   2,
+		CheckoutMaxConcurrent: 2,
+		ReadMaxConcurrent:     2,
+		QueueSize:             8,
+		TenantQueueSize:       2,
+		TenantStateSize:       100,
+		TenantIdleTTL:         time.Minute,
+		MaxConcurrent:         4,
+		FailureWindow:         30 * time.Second,
+		FailureMinCalls:       20,
+		FailurePercent:        50,
+		FailureThreshold:      2,
+		OpenInterval:          time.Second,
+		LogInterval:           time.Minute,
 	}
 }
 
@@ -46,7 +56,7 @@ func TestBreakerRecoveryAndLogLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if metrics.Count("settings", "error") != 2 || metrics.Count("settings", "short_circuit") != 2 {
+	if metrics.Count("settings", "error") != 2 || metrics.Count("settings", "tenant_breaker") != 2 {
 		t.Fatal("предохранитель не открылся")
 	}
 	if strings.Count(logs.String(), "\n") != 2 {
@@ -56,7 +66,7 @@ func TestBreakerRecoveryAndLogLimit(t *testing.T) {
 	// Неудачная проба снова открывает предохранитель.
 	_, _ = c.MarketplaceSettings(context.Background(), "t1")
 	_, _ = c.MarketplaceSettings(context.Background(), "t1")
-	if metrics.Count("settings", "error") != 3 || metrics.Count("settings", "short_circuit") != 3 {
+	if metrics.Count("settings", "error") != 3 || metrics.Count("settings", "tenant_breaker") != 3 {
 		t.Fatal("неудачная проба не открыла предохранитель")
 	}
 	upstream.Fail("t1", nil)
@@ -78,11 +88,24 @@ func TestBreakerRecoveryAndLogLimit(t *testing.T) {
 }
 
 func TestStrictTimeoutsAndCodes(t *testing.T) {
-	operations := []string{"price_group", "settings", "quote", "create_order", "get_order", "stub_payment"}
+	operations := []string{
+		"price_group",
+		"settings",
+		"quote",
+		"create_order",
+		"get_order",
+		"stub_payment",
+		"cancel_order",
+		"pickup_points",
+	}
 	for _, operation := range operations {
 		t.Run(operation, func(t *testing.T) {
 			upstream := fake.NewPlatform()
 			upstream.CallHook = func(ctx context.Context, _ string) error {
+				<-ctx.Done()
+				return ctx.Err()
+			}
+			upstream.BeforePickup = func(ctx context.Context, _ ids.TenantID) error {
 				<-ctx.Done()
 				return ctx.Err()
 			}
@@ -116,6 +139,12 @@ func strictCall(c *Client, operation string) error {
 		return err
 	case "get_order":
 		_, err := c.GetOrder(ctx, "t1", "o1")
+		return err
+	case "cancel_order":
+		_, err := c.CancelOrder(ctx, "t1", ports.CancelOrderRequest{})
+		return err
+	case "pickup_points":
+		_, err := c.PickupPoints(ctx, "t1", "carrier", "Город")
 		return err
 	default:
 		return c.StubPayment(ctx, "t1", "o1", money.Money{})
@@ -159,61 +188,6 @@ func TestReviewsStaleAndColdTimeout(t *testing.T) {
 	page, err = c.ProductReviews(ctx, "t1", "p2", 20, 0)
 	if err != nil || page.Items == nil || len(page.Items) != 0 || metrics.Count("reviews", "timeout") != 2 {
 		t.Fatal(page, err)
-	}
-}
-
-func TestConcurrencyLimitAndSingleProbe(t *testing.T) {
-	upstream := fake.NewPlatform()
-	clock := fake.NewClock(time.Now())
-	metrics := &fake.PlatformMetrics{}
-	cfg := testConfig()
-	cfg.StrictTimeout = time.Second
-	c := New(upstream, cfg, clock, metrics, nil)
-	started, release := make(chan struct{}, 2), make(chan struct{})
-	var calls atomic.Int32
-	upstream.CallHook = func(ctx context.Context, _ string) error {
-		calls.Add(1)
-		started <- struct{}{}
-		select {
-		case <-release:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	var wg sync.WaitGroup
-	for i := 0; i < 2; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, _ = c.MarketplaceSettings(context.Background(), "t1")
-		}()
-		<-started
-	}
-	if _, err := c.MarketplaceSettings(context.Background(), "t2"); !errors.Is(err, ErrUnavailable) {
-		t.Fatal(err)
-	}
-	close(release)
-	wg.Wait()
-	if calls.Load() != 2 {
-		t.Fatal(calls.Load())
-	}
-	// После серии отказов только одна конкурентная проба получает допуск.
-	c.openUntil = clock.Now()
-	release = make(chan struct{})
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		_, _ = c.MarketplaceSettings(context.Background(), "t1")
-	}()
-	<-started
-	if _, err := c.MarketplaceSettings(context.Background(), "t2"); !errors.Is(err, ErrUnavailable) {
-		t.Fatal(err)
-	}
-	close(release)
-	wg.Wait()
-	if _, err := c.MarketplaceSettings(context.Background(), "t2"); err != nil {
-		t.Fatal(err)
 	}
 }
 

@@ -4,5 +4,6 @@ import "time"
 
 // PlatformMetrics не раскрывает приложению реализацию Prometheus.
 type PlatformMetrics interface {
-	PlatformCall(operation, outcome string, elapsed time.Duration)
+	PlatformCall(operation, class, outcome string, elapsed time.Duration)
+	PlatformQueueWait(class, outcome string, elapsed time.Duration)
 }

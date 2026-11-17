@@ -4,7 +4,6 @@
 package platformapi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,7 +11,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -302,35 +300,14 @@ func (c *Client) callWithRefusal(
 	parseRefusal func(string, string, ids.TenantID, *http.Response) error,
 	logTenant ...ids.TenantID,
 ) error {
-	var body io.Reader
-
-	if payload != nil {
-		encoded, err := json.Marshal(payload)
-		if err != nil {
-			return fmt.Errorf("запрос к серверу: %w", err)
-		}
-
-		body = bytes.NewReader(encoded)
-	}
-	endpoint := c.baseURL + "/api/v1/internal/marketplace" + path
-	if tenantID != "" {
-		endpoint = c.baseURL + "/api/v1/internal/marketplace/tenants/" + url.PathEscape(string(tenantID)) + path
-	}
-
-	request, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	request, err := c.newRequest(ctx, method, tenantID, path, payload)
 	if err != nil {
-		return fmt.Errorf("запрос к серверу: %w", err)
-	}
-
-	request.Header.Set(HeaderToken, c.token)
-	request.Header.Set("Accept", "application/json")
-	if payload != nil {
-		request.Header.Set("Content-Type", "application/json")
+		return err
 	}
 
 	reply, err := c.http.Do(request)
 	if err != nil {
-		return ErrUnavailable.Wrap(err)
+		return transportFailure(err)
 	}
 	defer func() { _ = reply.Body.Close() }()
 
@@ -338,18 +315,9 @@ func (c *Client) callWithRefusal(
 		if len(logTenant) > 0 {
 			tenantID = logTenant[0]
 		}
-		return parseRefusal(method, path, tenantID, reply)
+		return responseRefusal(method, path, tenantID, reply, parseRefusal)
 	}
-
-	raw, err := io.ReadAll(io.LimitReader(reply.Body, (4<<20)+1))
-	if err != nil || len(raw) > 4<<20 {
-		return ErrInvalidResponse
-	}
-	if err := json.Unmarshal(raw, out); err != nil {
-		return ErrInvalidResponse.Wrap(err)
-	}
-
-	return nil
+	return decodeResponse(reply.Body, out)
 }
 
 // refusal разбирает словарь отказов; неизвестный код сохраняется отдельно от терминального отказа.
