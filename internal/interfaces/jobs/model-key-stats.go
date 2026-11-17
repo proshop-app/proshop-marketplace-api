@@ -11,8 +11,11 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
-// ModelKeyStatsInterval — общий интервал периодического отчёта.
-const ModelKeyStatsInterval = 10 * time.Minute
+const (
+	// ModelKeyStatsInterval задаёт редкий диагностический срез вместо учёта каждого события товара.
+	ModelKeyStatsInterval = 30 * time.Minute
+	modelKeyStatsTimeout  = time.Minute
+)
 
 // ModelKeyStatsRunner периодически обновляет метрики покрытия ключами.
 type ModelKeyStatsRunner struct {
@@ -76,8 +79,10 @@ func NewModelKeyStatsRunner(
 	return runner
 }
 
-// RunOnce обновляет метрики по текущему состоянию каталога.
+// runOnce обновляет метрики по текущему состоянию каталога в пределах бюджета фонового чтения.
 func (r *ModelKeyStatsRunner) runOnce(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, modelKeyStatsTimeout)
+	defer cancel()
 	report, err := r.stats.Report(ctx, false)
 	if err != nil {
 		r.logger.Warn("ключи моделей: метрики не обновлены", "error", err)

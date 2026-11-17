@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
@@ -11,13 +10,6 @@ import (
 )
 
 const (
-	cachedModelKeyReport = `SELECT COALESCE(sum(c.version), 0)::bigint,
-        (SELECT version FROM read_reports WHERE name = 'model-keys'),
-        (SELECT payload FROM read_reports WHERE name = 'model-keys') FROM read_report_changes c`
-	saveModelKeyReport = `INSERT INTO read_reports(name, version, payload) VALUES ('model-keys', $1, $2)
-        ON CONFLICT (name) DO UPDATE SET version = EXCLUDED.version, payload = EXCLUDED.payload
-        WHERE read_reports.version <= EXCLUDED.version`
-
 	publishedModelKeys = `
         SELECT p.tenant_id, p.product_id, p.model_key,
             COALESCE(p.model_key_source, 'none') AS source,
@@ -96,10 +88,7 @@ func (s *ModelKeyStats) Report(ctx context.Context, samples bool) (ports.ModelKe
 	}
 
 	err := s.source.withConnection(ctx, func(db *gorm.DB) error {
-		if samples {
-			return loadModelKeyReport(ctx, db, true, &report)
-		}
-		return cachedModelKeyCounts(ctx, db, &report)
+		return loadModelKeyReport(ctx, db, samples, &report)
 	})
 
 	return report, err
@@ -158,26 +147,4 @@ func loadModelKeyReport(ctx context.Context, db *gorm.DB, samples bool, report *
 	}
 
 	return records.Err()
-}
-
-func cachedModelKeyCounts(ctx context.Context, db *gorm.DB, report *ports.ModelKeyReport) error {
-	var version int64
-	var cachedVersion *int64
-	var payload []byte
-	err := rawSQL(ctx, db, cachedModelKeyReport).Row().Scan(&version, &cachedVersion, &payload)
-	if err != nil {
-		return err
-	}
-	if cachedVersion != nil && *cachedVersion == version {
-		return json.Unmarshal(payload, report)
-	}
-	if err := loadModelKeyReport(ctx, db, false, report); err != nil {
-		return err
-	}
-	payload, err = json.Marshal(report)
-	if err != nil {
-		return err
-	}
-	_, err = execSQL(ctx, db, saveModelKeyReport, version, string(payload))
-	return err
 }
