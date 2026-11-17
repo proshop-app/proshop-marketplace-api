@@ -91,8 +91,12 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `PLATFORM_API_TIMEOUT` | | `5s` | ожидание строгого ответа сервера |
 | `PLATFORM_READ_TIMEOUT` | | `300ms` | бюджет необязательных витринных блоков |
 | `PLATFORM_CACHE_TTL` / `PLATFORM_STALE_TTL` | | `30s` / `5m` | свежесть и окно stale |
-| `PLATFORM_CACHE_SIZE` | | `1024` | предел записей кэша контекстов и отзывов |
-| `PLATFORM_MAX_CONCURRENT` | | `16` | общий лимит обращений к ячейке |
+| `PLATFORM_CACHE_SIZE` | | `1024` | предел записей кэша отзывов |
+| `PLATFORM_MAX_CONCURRENT` | | `128` | общий предел исходящих вызовов процесса |
+| `PLATFORM_CHECKOUT_MAX_CONCURRENT` / `PLATFORM_READ_MAX_CONCURRENT` | | `96` / `32` | независимые пулы; сумма равна общему пределу |
+| `PLATFORM_TENANT_MAX_CONCURRENT` | | `8` | доля магазина, разделённая между пулами (6/2) |
+| `PLATFORM_QUEUE_SIZE` / `PLATFORM_TENANT_QUEUE_SIZE` | | `1024` / `32` | очередь каждого класса и доля магазина в ней |
+| `PLATFORM_TENANT_STATE_SIZE` / `PLATFORM_TENANT_IDLE_TTL` | | `10000` / `10m` | предел состояний магазинов и срок неактивности |
 | `PLATFORM_FAILURE_THRESHOLD` | | `5` | число отказов до открытия предохранителя |
 | `PLATFORM_OPEN_INTERVAL` / `PLATFORM_LOG_INTERVAL` | | `5s` / `30s` | пауза предохранителя и журнала |
 | `CART_TTL` | | `720h` | срок жизни корзины без изменений |
