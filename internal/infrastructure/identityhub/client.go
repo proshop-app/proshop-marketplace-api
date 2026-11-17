@@ -48,6 +48,7 @@ type Client struct {
 	keysUntil time.Time
 	retryAt   time.Time
 	unknownAt time.Time
+	refresh   *keyRefresh
 }
 
 type codeResponse struct {
@@ -67,6 +68,9 @@ type tokenResponse struct {
 // New использует фиксированные OIDC пути identity-hub, без discovery с чужими URL.
 func New(config Config, transport *http.Client) *Client {
 	client := *transport
+	if client.Timeout <= 0 {
+		client.Timeout = 5 * time.Second
+	}
 	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
 		return http.ErrUseLastResponse
 	}

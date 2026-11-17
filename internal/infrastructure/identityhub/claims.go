@@ -54,6 +54,11 @@ type jwk struct {
 	Y         string `json:"y"`
 }
 
+type keyRefresh struct {
+	done chan struct{}
+	err  error
+}
+
 // Claims проверяет подпись и все границы до различения истёкшего access.
 func (c *Client) Claims(ctx context.Context, token string, allowExpired bool) (ports.HubClaims, error) {
 	claims, err := c.verify(ctx, token, allowExpired, true)
@@ -115,57 +120,84 @@ func (c *Client) verify(ctx context.Context, token string, allowExpired, accessO
 
 func (c *Client) key(ctx context.Context, kid string) (publicKey, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	now := c.now()
 	known := c.keys[kid]
-	expired := !now.Before(c.keysUntil)
-	unknownDue := known == nil && !now.Before(c.unknownAt)
-	if (expired || unknownDue) && !now.Before(c.retryAt) {
+	pending := c.refresh
+	due := !now.Before(c.keysUntil) || (known == nil && !now.Before(c.unknownAt))
+	if pending == nil && due && !now.Before(c.retryAt) {
+		pending = &keyRefresh{done: make(chan struct{})}
+		c.refresh = pending
 		c.unknownAt = now.Add(keyRetryDelay)
-		if err := c.loadKeys(ctx); err != nil {
-			c.retryAt = now.Add(keyRetryDelay)
-			if known == nil {
-				return nil, err
-			}
-		} else {
-			c.keysUntil = now.Add(keyCacheTTL)
-			c.retryAt = time.Time{}
-			known = c.keys[kid]
-		}
+		// Общее обновление переживает отмену одного ожидающего запроса, но имеет свой срок.
+		go c.refreshKeys(context.WithoutCancel(ctx), pending)
 	}
+	unavailable := now.Before(c.retryAt)
+	c.mu.Unlock()
 
-	if known == nil {
-		if now.Before(c.retryAt) {
-			return nil, ErrUnavailable
-		}
-
-		return nil, buyer.ErrSessionNotFound
+	if known != nil {
+		return known, nil
 	}
-
-	return known, nil
+	if pending != nil {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-pending.done:
+		}
+		c.mu.Lock()
+		known = c.keys[kid]
+		c.mu.Unlock()
+		if known != nil {
+			return known, nil
+		}
+		if pending.err != nil {
+			return nil, pending.err
+		}
+	} else if unavailable {
+		return nil, ErrUnavailable
+	}
+	return nil, buyer.ErrSessionNotFound
 }
 
-func (c *Client) loadKeys(ctx context.Context) error {
+func (c *Client) refreshKeys(ctx context.Context, pending *keyRefresh) {
+	ctx, cancel := context.WithTimeout(ctx, c.http.Timeout)
+	defer cancel()
+	keys, err := c.loadKeys(ctx)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := c.now()
+	if err != nil {
+		c.retryAt = now.Add(keyRetryDelay)
+	} else {
+		c.keys = keys
+		c.keysUntil = now.Add(keyCacheTTL)
+		c.retryAt = time.Time{}
+	}
+	pending.err = err
+	c.refresh = nil
+	close(pending.done)
+}
+
+func (c *Client) loadKeys(ctx context.Context) (map[string]publicKey, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.issuer+"/keys", nil)
 	if err != nil {
-		return ErrUnavailable
+		return nil, ErrUnavailable
 	}
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return ErrUnavailable
+		return nil, ErrUnavailable
 	}
 	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
-		return ErrUnavailable
+		return nil, ErrUnavailable
 	}
 
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponse+1))
 	var document jwksDocument
 	if err != nil || len(raw) > maxResponse || json.Unmarshal(raw, &document) != nil {
-		return ErrUnavailable
+		return nil, ErrUnavailable
 	}
 
 	keys := make(map[string]publicKey)
@@ -179,12 +211,12 @@ func (c *Client) loadKeys(ctx context.Context) error {
 		x, xerr := base64.RawURLEncoding.DecodeString(candidate.X)
 		y, yerr := base64.RawURLEncoding.DecodeString(candidate.Y)
 		if xerr != nil || yerr != nil || len(x) != 32 || len(y) != 32 {
-			return ErrUnavailable
+			return nil, ErrUnavailable
 		}
 
 		pointX, pointY := new(big.Int).SetBytes(x), new(big.Int).SetBytes(y)
 		if !elliptic.P256().IsOnCurve(pointX, pointY) || keys[candidate.KeyID] != nil {
-			return ErrUnavailable
+			return nil, ErrUnavailable
 		}
 
 		keys[candidate.KeyID] = &ecdsa.PublicKey{
@@ -195,12 +227,10 @@ func (c *Client) loadKeys(ctx context.Context) error {
 	}
 
 	if len(keys) == 0 {
-		return ErrUnavailable
+		return nil, ErrUnavailable
 	}
 
-	c.keys = keys
-
-	return nil
+	return keys, nil
 }
 
 func decode(value string, target any) bool {
