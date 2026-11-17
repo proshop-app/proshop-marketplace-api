@@ -89,6 +89,9 @@ func TestOperatorCookieRoutesAndCSRF(t *testing.T) {
 	if r := call("GET", participantsPath, "", cookie); r.status != http.StatusOK {
 		t.Fatal(r)
 	}
+	if r := call("GET", "/api/v1/operator/taxonomy/revalidation-failures", "", cookie); r.status != http.StatusOK {
+		t.Fatal(r)
+	}
 	e.seedTenant("t1", "s1")
 	createBody := `{"tenantId":"t1","name":"Магазин"}`
 	crossCreate := operatorCall(t, e, "POST", participantsPath, createBody, cookie, "https://other.example")

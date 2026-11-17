@@ -259,6 +259,7 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/taxonomy/categories", taxonomy.categories},
 		{http.MethodGet, "/api/v1/taxonomy/categories/{id}/schema", taxonomy.schema},
 		{http.MethodGet, "/api/v1/taxonomy/version", taxonomy.version},
+		{http.MethodGet, "/api/v1/operator/taxonomy/revalidation-failures", operator(taxonomy.revalidationFailures)},
 		{http.MethodGet, "/api/v1/operator/taxonomy", operator(taxonomy.current)},
 		{http.MethodPut, "/api/v1/operator/taxonomy/{part}", operator(taxonomy.load)},
 		{http.MethodGet, "/api/v1/operator/taxonomy/{part}", operator(taxonomy.download)},

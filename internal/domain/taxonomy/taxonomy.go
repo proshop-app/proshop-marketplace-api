@@ -410,9 +410,11 @@ func (d Definition) Category(id string) (CategorySchema, []string, bool) {
 		return Category{}, nil, false
 	}
 	category, path, ok := find(d.Categories, nil)
+	return categorySchema(category, d.Fields(), d.Schemas[category.Schema]), path, ok
+}
+
+func categorySchema(category Category, fields map[string]Attribute, schema Schema) CategorySchema {
 	result := CategorySchema{Category: category, Attributes: []SchemaAttribute{}}
-	fields := d.Fields()
-	schema := d.Schemas[category.Schema]
 	result.Identity = schema.Identity
 	for _, code := range schema.Attributes {
 		result.Attributes = append(result.Attributes, SchemaAttribute{
@@ -420,13 +422,23 @@ func (d Definition) Category(id string) (CategorySchema, []string, bool) {
 			Required:  !slices.Contains(schema.Optional, code),
 		})
 	}
-	return result, path, ok
+	return result
 }
 
 // Check проверяет все поля, собирая ошибки в детерминированном порядке.
 func (d Definition) Check(card *Card) Publication {
+	var category CategorySchema
+	var path []string
+	found := false
+	if card != nil {
+		category, path, found = d.Category(card.CategoryID)
+	}
+	return checkCategory(d.Version, category, path, found, card)
+}
+
+func checkCategory(version int64, category CategorySchema, path []string, found bool, card *Card) Publication {
 	p := Publication{
-		Version:              d.Version,
+		Version:              version,
 		Attributes:           map[string]json.RawMessage{},
 		AttributeSearchTerms: map[string][]string{},
 		AttributeFacetValues: map[string][]string{},
@@ -437,8 +449,7 @@ func (d Definition) Check(card *Card) Publication {
 		return p
 	}
 	p.CategoryID = card.CategoryID
-	category, path, ok := d.Category(card.CategoryID)
-	if !ok {
+	if !found {
 		p.Issues = append(p.Issues, Issue{Code: "taxonomy.category_unknown"})
 		return p
 	}

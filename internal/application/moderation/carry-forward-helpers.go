@@ -22,6 +22,22 @@ func (s *Service) carryReviewedProjection(
 	input moderation.Input,
 	now time.Time,
 ) (bool, error) {
+	allowed, err := s.reviewedProjectionProof(ctx, tx, approved, definition, rules, input)
+	if err != nil || !allowed {
+		return false, err
+	}
+	return verdict.CarryForward(approved, revision, definition.Version, now), nil
+}
+
+// reviewedProjectionProof сохраняет все проверки исторического допуска; мутация — у решения.
+func (s *Service) reviewedProjectionProof(
+	ctx context.Context,
+	tx ports.Tx,
+	approved moderation.VerdictState,
+	definition taxonomy.Definition,
+	rules moderation.Rules,
+	input moderation.Input,
+) (bool, error) {
 	if approved.DecidedBy != moderation.Operator || approved.Status != moderation.Allowed ||
 		approved.Decision == nil || approved.Decision.Action != moderation.Allow || approved.Operator.ID == "" ||
 		approved.ManualReject || approved.RulesRevision != rules.Revision {
@@ -72,14 +88,14 @@ func (s *Service) carryReviewedProjection(
 	if previousDefinition.ModerationPolicy(category) != definition.ModerationPolicy(category) {
 		return false, nil
 	}
-	current, err := reviewCard(ctx, tx, approved.TenantID, approved.ProductID)
+	current, err := reviewCardWithDefinition(ctx, tx, approved.TenantID, approved.ProductID, definition)
 	if err != nil {
 		return false, err
 	}
 	if !sameSemanticReviewCard(*closed.Card, current) || !current.Publication.Published {
 		return false, nil
 	}
-	return verdict.CarryForward(approved, revision, definition.Version, now), nil
+	return true, nil
 }
 
 func sameSemanticReviewCard(previous, current moderation.ReviewCard) bool {

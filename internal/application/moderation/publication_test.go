@@ -90,6 +90,7 @@ func TestPublicationTaxonomyReturn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	revalidateTaxonomy(t, service)
 	view := e.view(t, "p1")
 	if view.Case == nil || view.Verdict.Revision != 1 || view.Verdict.TaxonomyVersion != 2 {
 		t.Fatal(view)
@@ -106,6 +107,7 @@ func TestPublicationTaxonomyReturn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	revalidateTaxonomy(t, service)
 	assertClosedPublication(t, e, view.Case.ID)
 }
 

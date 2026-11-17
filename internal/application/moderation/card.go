@@ -7,6 +7,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -58,21 +59,35 @@ func (s *Service) CaseDetails(ctx context.Context, id ids.UUID) (CaseView, error
 }
 
 func reviewCard(ctx context.Context, tx ports.Tx, tenant ids.TenantID, product ids.ProductID) (ReviewCard, error) {
-	state, err := tx.Offers().Offer(ctx, tenant, product)
-	if err != nil {
-		return ReviewCard{}, err
-	}
-	result := snapshotReviewCard(state)
 	definition, err := tx.Taxonomy().Current(ctx)
 	if err != nil {
 		return ReviewCard{}, err
 	}
+	return reviewCardWithDefinition(ctx, tx, tenant, product, definition)
+}
+
+func reviewCardWithDefinition(
+	ctx context.Context,
+	tx ports.Tx,
+	tenant ids.TenantID,
+	product ids.ProductID,
+	definition taxonomy.Definition,
+) (ReviewCard, error) {
+	state, err := tx.Offers().Offer(ctx, tenant, product)
+	if err != nil {
+		return ReviewCard{}, err
+	}
+	return reviewCardFromState(state, definition), nil
+}
+
+func reviewCardFromState(state ports.OfferState, definition taxonomy.Definition) ReviewCard {
+	result := snapshotReviewCard(state)
 	for _, categoryID := range result.Publication.CategoryPath {
 		if category, _, ok := definition.Category(categoryID); ok {
 			result.CategoryPath = append(result.CategoryPath, category.Name)
 		}
 	}
-	return result, nil
+	return result
 }
 
 func snapshotReviewCard(state ports.OfferState) ReviewCard {

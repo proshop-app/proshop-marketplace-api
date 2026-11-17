@@ -44,29 +44,32 @@ type OutboxRow struct {
 }
 
 type data struct {
-	features         *buyerFeaturesData
-	storeCards       map[ids.TenantID]ports.StoreRecord
-	promotion        *promotionData
-	moderation       *moderationData
-	decisions        map[string]ports.EventDecision
-	taxonomy         taxonomy.Definition
-	taxonomyVersions map[int64]taxonomy.Definition
-	taxonomyRelease  *taxonomy.ReleaseRecord
-	participants     map[ids.TenantID]participant.State
-	tenants          map[ids.TenantID]participant.TenantState
-	products         map[productKey]catalog.ProductState
-	signals          map[productKey]catalog.SignalsState
-	outbox           []OutboxRow
-	nextTaskID       int64
-	nextParkedID     int64
-	processed        map[string]time.Time
-	parked           map[parkedKey]ports.ParkedEvent
-	buyers           map[ids.UUID]buyer.Buyer
-	challenges       map[ids.UUID]buyer.ChallengeState
-	carts            map[ids.UUID]cart.State
-	checkouts        map[ids.UUID]checkout.State
-	leases           map[string]lease
-	reference        *referenceData
+	databaseNow          func() time.Time
+	revalidationFailures map[productKey]ports.RevalidationFailure
+	features             *buyerFeaturesData
+	storeCards           map[ids.TenantID]ports.StoreRecord
+	promotion            *promotionData
+	moderation           *moderationData
+	decisions            map[string]ports.EventDecision
+	taxonomy             taxonomy.Definition
+	taxonomyVersions     map[int64]taxonomy.Definition
+	taxonomyRelease      *taxonomy.ReleaseRecord
+	revalidations        []taxonomy.Revalidation
+	participants         map[ids.TenantID]participant.State
+	tenants              map[ids.TenantID]participant.TenantState
+	products             map[productKey]catalog.ProductState
+	signals              map[productKey]catalog.SignalsState
+	outbox               []OutboxRow
+	nextTaskID           int64
+	nextParkedID         int64
+	processed            map[string]time.Time
+	parked               map[parkedKey]ports.ParkedEvent
+	buyers               map[ids.UUID]buyer.Buyer
+	challenges           map[ids.UUID]buyer.ChallengeState
+	carts                map[ids.UUID]cart.State
+	checkouts            map[ids.UUID]checkout.State
+	leases               map[string]lease
+	reference            *referenceData
 }
 
 type lease struct {
@@ -84,54 +87,66 @@ type Store struct {
 
 func (d *data) clone() *data {
 	return &data{
-		features:         d.features.clone(),
-		storeCards:       maps.Clone(d.storeCards),
-		promotion:        d.promotion.clone(),
-		moderation:       d.moderation.clone(),
-		taxonomy:         d.taxonomy,
-		taxonomyVersions: maps.Clone(d.taxonomyVersions),
-		taxonomyRelease:  cloneRelease(d.taxonomyRelease),
-		decisions:        maps.Clone(d.decisions),
-		participants:     maps.Clone(d.participants),
-		tenants:          maps.Clone(d.tenants),
-		products:         maps.Clone(d.products),
-		signals:          maps.Clone(d.signals),
-		outbox:           append([]OutboxRow(nil), d.outbox...),
-		nextTaskID:       d.nextTaskID,
-		nextParkedID:     d.nextParkedID,
-		processed:        maps.Clone(d.processed),
-		parked:           maps.Clone(d.parked),
-		buyers:           maps.Clone(d.buyers),
-		challenges:       maps.Clone(d.challenges),
-		carts:            maps.Clone(d.carts),
-		checkouts:        maps.Clone(d.checkouts),
-		leases:           maps.Clone(d.leases),
-		reference:        d.reference.clone(),
+		databaseNow:          d.databaseNow,
+		features:             d.features.clone(),
+		storeCards:           maps.Clone(d.storeCards),
+		promotion:            d.promotion.clone(),
+		moderation:           d.moderation.clone(),
+		taxonomy:             d.taxonomy,
+		revalidations:        slices.Clone(d.revalidations),
+		revalidationFailures: maps.Clone(d.revalidationFailures),
+		taxonomyVersions:     maps.Clone(d.taxonomyVersions),
+		taxonomyRelease:      cloneRelease(d.taxonomyRelease),
+		decisions:            maps.Clone(d.decisions),
+		participants:         maps.Clone(d.participants),
+		tenants:              maps.Clone(d.tenants),
+		products:             maps.Clone(d.products),
+		signals:              maps.Clone(d.signals),
+		outbox:               append([]OutboxRow(nil), d.outbox...),
+		nextTaskID:           d.nextTaskID,
+		nextParkedID:         d.nextParkedID,
+		processed:            maps.Clone(d.processed),
+		parked:               maps.Clone(d.parked),
+		buyers:               maps.Clone(d.buyers),
+		challenges:           maps.Clone(d.challenges),
+		carts:                maps.Clone(d.carts),
+		checkouts:            maps.Clone(d.checkouts),
+		leases:               maps.Clone(d.leases),
+		reference:            d.reference.clone(),
 	}
 }
 
 // NewStore — пустое хранилище.
 func NewStore() *Store {
 	return &Store{data: &data{
-		features:         newBuyerFeaturesData(),
-		taxonomyVersions: map[int64]taxonomy.Definition{},
-		storeCards:       map[ids.TenantID]ports.StoreRecord{},
-		promotion:        newPromotionData(),
-		moderation:       newModerationData(),
-		decisions:        map[string]ports.EventDecision{},
-		participants:     map[ids.TenantID]participant.State{},
-		tenants:          map[ids.TenantID]participant.TenantState{},
-		products:         map[productKey]catalog.ProductState{},
-		signals:          map[productKey]catalog.SignalsState{},
-		processed:        map[string]time.Time{},
-		parked:           map[parkedKey]ports.ParkedEvent{},
-		buyers:           map[ids.UUID]buyer.Buyer{},
-		challenges:       map[ids.UUID]buyer.ChallengeState{},
-		carts:            map[ids.UUID]cart.State{},
-		checkouts:        map[ids.UUID]checkout.State{},
-		leases:           map[string]lease{},
-		reference:        newReferenceData(),
+		databaseNow:          time.Now,
+		features:             newBuyerFeaturesData(),
+		taxonomyVersions:     map[int64]taxonomy.Definition{},
+		revalidationFailures: map[productKey]ports.RevalidationFailure{},
+		storeCards:           map[ids.TenantID]ports.StoreRecord{},
+		promotion:            newPromotionData(),
+		moderation:           newModerationData(),
+		decisions:            map[string]ports.EventDecision{},
+		participants:         map[ids.TenantID]participant.State{},
+		tenants:              map[ids.TenantID]participant.TenantState{},
+		products:             map[productKey]catalog.ProductState{},
+		signals:              map[productKey]catalog.SignalsState{},
+		processed:            map[string]time.Time{},
+		parked:               map[parkedKey]ports.ParkedEvent{},
+		buyers:               map[ids.UUID]buyer.Buyer{},
+		challenges:           map[ids.UUID]buyer.ChallengeState{},
+		carts:                map[ids.UUID]cart.State{},
+		checkouts:            map[ids.UUID]checkout.State{},
+		leases:               map[string]lease{},
+		reference:            newReferenceData(),
 	}}
+}
+
+// SetDatabaseClock задаёт часы fake-БД для проверки аренды без реального ожидания.
+func (s *Store) SetDatabaseClock(clock ports.Clock) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.databaseNow = clock.Now
 }
 
 // Do выполняет fn на копии данных и фиксирует её, только если fn вернула nil.
@@ -363,6 +378,13 @@ func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.Purg
 	defer s.mu.Unlock()
 
 	var result ports.PurgeResult
+	for key, failure := range s.data.revalidationFailures {
+		state, exists := s.data.products[key]
+		if !exists || !activeRevalidationFailure(state, failure) {
+			delete(s.data.revalidationFailures, key)
+			result.RevalidationFailures++
+		}
+	}
 
 	for id, at := range s.data.processed {
 		if at.Before(request.ProcessedBefore) {

@@ -290,6 +290,7 @@ func TestTaxonomyAndMissingVerdict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	revalidateTaxonomy(t, service)
 	if e.view(t, "p1").Verdict.Status != moderation.Rejected {
 		t.Fatal("политика не применена")
 	}
@@ -411,5 +412,18 @@ func TestConcurrentIdempotentDecisions(t *testing.T) {
 	cmd.Operator.ID = "o2"
 	if _, err := e.service.Allow(context.Background(), cmd); !errors.Is(err, moderation.ErrCaseConflict) {
 		t.Fatal("ключ другого оператора должен проверить версию дела", err)
+	}
+}
+
+func revalidateTaxonomy(t *testing.T, service *apptaxonomy.Service) {
+	t.Helper()
+	for {
+		job, err := service.RevalidateNext(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if job == nil {
+			return
+		}
 	}
 }

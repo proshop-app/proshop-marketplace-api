@@ -212,6 +212,10 @@ func (r *Products) Save(ctx context.Context, product *catalog.Product) error {
 }
 
 func (r *productRow) targets() []any {
+	return r.targetsWithTimes(&r.projectedAt, &r.updatedAt)
+}
+
+func (r *productRow) targetsWithTimes(projected, updated any) []any {
 	return []any{
 		&r.tenantID,
 		&r.productID,
@@ -221,9 +225,9 @@ func (r *productRow) targets() []any {
 		&r.price,
 		&r.promo,
 		&r.available,
-		&r.projectedAt,
+		projected,
 		&r.version,
-		&r.updatedAt,
+		updated,
 		&r.priceProfiles,
 		&r.salesCount,
 		&r.averageRating,

@@ -30,6 +30,7 @@ type UnitOfWork interface {
 
 // Tx — хранилища, привязанные к одной транзакции.
 type Tx interface {
+	Revalidation() RevalidationStore
 	BuyerFeatures() BuyerFeatures
 	Promotion() promotion.Repository
 	// AfterCommit откладывает наблюдение до успешной фиксации данных.

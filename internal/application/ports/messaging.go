@@ -151,12 +151,13 @@ type PurgeRequest struct {
 
 // PurgeResult — сколько записей удалено.
 type PurgeResult struct {
-	Processed      int64
-	OutboxDone     int64
-	Parked         int64
-	Challenges     int64
-	Carts          int64
-	PromotionViews int64
+	RevalidationFailures int64
+	Processed            int64
+	OutboxDone           int64
+	Parked               int64
+	Challenges           int64
+	Carts                int64
+	PromotionViews       int64
 }
 
 // Retention — чистка служебных записей по сроку.
