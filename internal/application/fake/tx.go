@@ -461,3 +461,18 @@ func (o offers) Batch(_ context.Context, keys []ids.OfferID) ([]ports.OfferState
 	}
 	return result, nil
 }
+
+func (t *tx) Revalidation() ports.RevalidationStore { return revalidations{t.data} }
+
+func (r participants) Batch(
+	ctx context.Context,
+	tenants []ids.TenantID,
+) (map[ids.TenantID]*participant.Participant, error) {
+	result := map[ids.TenantID]*participant.Participant{}
+	for _, tenant := range tenants {
+		if state, ok := r.d.participants[tenant]; ok {
+			result[tenant] = participant.Restore(state)
+		}
+	}
+	return result, nil
+}

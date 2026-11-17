@@ -72,7 +72,7 @@ func (s *Service) carryReviewedProjection(
 	if previousDefinition.ModerationPolicy(category) != definition.ModerationPolicy(category) {
 		return false, nil
 	}
-	current, err := reviewCard(ctx, tx, approved.TenantID, approved.ProductID)
+	current, err := reviewCardWithDefinition(ctx, tx, approved.TenantID, approved.ProductID, definition)
 	if err != nil {
 		return false, err
 	}

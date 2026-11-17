@@ -144,7 +144,7 @@ func (s *Service) RecoverProjection(
 		if !cmd.Apply {
 			return nil
 		}
-		saved, err := s.saveEvaluation(ctx, tx, p, verdict, s.clock.Now())
+		saved, err := s.saveEvaluation(ctx, tx, p, verdict, definition, s.clock.Now())
 		if err != nil || !saved {
 			return err
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
 // Config передаёт политику допуска без зависимости от окружения.
@@ -93,6 +94,28 @@ func (s *Service) evaluate(
 		return false, err
 	}
 	rules.RequireImage = s.config.RequireImage
+	policy := definition.ModerationPolicy(p.Card.Marketplace.CategoryID)
+	return s.evaluatePrepared(ctx, tx, product, member, previous, definition, rules, policy, now)
+}
+
+func (s *Service) evaluatePrepared(
+	ctx context.Context,
+	tx ports.Tx,
+	product *catalog.Product,
+	member *participant.Participant,
+	previous *catalog.ProductState,
+	definition taxonomy.Definition,
+	rules moderation.Rules,
+	policy string,
+	now time.Time,
+) (bool, error) {
+	p := product.State()
+	if p.Deleted || p.Card.Marketplace == nil || !p.Card.Publication.Published {
+		return s.closeUnpublishedCase(ctx, tx, p, now)
+	}
+	if member == nil {
+		return false, nil
+	}
 	verdict, err := tx.ModerationVerdicts().Get(ctx, p.TenantID, p.ProductID)
 	if errors.Is(err, moderation.ErrNotFound) {
 		verdict, err = moderation.NewVerdict(p.TenantID, p.ProductID), nil
@@ -101,7 +124,7 @@ func (s *Service) evaluate(
 		return false, err
 	}
 	input := moderation.Input{
-		Policy:      definition.ModerationPolicy(p.Card.Marketplace.CategoryID),
+		Policy:      policy,
 		Name:        p.Card.Name,
 		Description: p.Card.Description,
 		Image:       p.Card.Image,
@@ -132,9 +155,9 @@ func (s *Service) evaluate(
 		if verdict.State().Status != moderation.Pending {
 			return false, nil
 		}
-		return s.syncEvaluationCase(ctx, tx, p, verdict, false, now)
+		return s.syncEvaluationCase(ctx, tx, p, verdict, definition, false, now)
 	}
-	return s.saveEvaluation(ctx, tx, p, verdict, now)
+	return s.saveEvaluation(ctx, tx, p, verdict, definition, now)
 }
 
 func (s *Service) saveEvaluation(
@@ -142,13 +165,14 @@ func (s *Service) saveEvaluation(
 	tx ports.Tx,
 	p catalog.ProductState,
 	verdict *moderation.Verdict,
+	definition taxonomy.Definition,
 	now time.Time,
 ) (bool, error) {
 	if err := tx.ModerationVerdicts().Save(ctx, verdict); err != nil {
 		return false, err
 	}
 	s.recordVerdict(tx, verdict.State())
-	return s.syncEvaluationCase(ctx, tx, p, verdict, true, now)
+	return s.syncEvaluationCase(ctx, tx, p, verdict, definition, true, now)
 }
 
 func (s *Service) syncEvaluationCase(
@@ -156,6 +180,7 @@ func (s *Service) syncEvaluationCase(
 	tx ports.Tx,
 	p catalog.ProductState,
 	verdict *moderation.Verdict,
+	definition taxonomy.Definition,
 	verdictChanged bool,
 	now time.Time,
 ) (bool, error) {
@@ -167,7 +192,7 @@ func (s *Service) syncEvaluationCase(
 	// Снимок нужен только новому делу или новой ревизии существующего дела.
 	if (c == nil && verdict.State().Status == moderation.Pending) ||
 		(c != nil && c.State().Revision != verdict.State().Revision) {
-		snapshot, err := reviewCard(ctx, tx, p.TenantID, p.ProductID)
+		snapshot, err := reviewCardWithDefinition(ctx, tx, p.TenantID, p.ProductID, definition)
 		if err != nil {
 			return false, err
 		}

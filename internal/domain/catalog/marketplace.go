@@ -12,7 +12,18 @@ func (p *Product) Revalidate(definition taxonomy.Definition, now time.Time) bool
 	if p.state.Deleted {
 		return false
 	}
-	publication := definition.Check(p.state.Card.Marketplace)
+	return p.applyPublication(definition.Check(p.state.Card.Marketplace), now)
+}
+
+// RevalidateWith использует общий контекст проверки страницы без нового поиска схемы.
+func (p *Product) RevalidateWith(checker taxonomy.Checker, now time.Time) bool {
+	if p.state.Deleted {
+		return false
+	}
+	return p.applyPublication(checker.Check(p.state.Card.Marketplace), now)
+}
+
+func (p *Product) applyPublication(publication taxonomy.Publication, now time.Time) bool {
 	if reflect.DeepEqual(publication, p.state.Card.Publication) {
 		return false
 	}

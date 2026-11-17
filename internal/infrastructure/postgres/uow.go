@@ -166,3 +166,5 @@ func (s *scope) ParticipantDecisions() participant.DecisionRepository {
 }
 
 func (s *scope) Promotion() promotion.Repository { return &Promotions{db: s.db} }
+
+func (s *scope) Revalidation() ports.RevalidationStore { return &Revalidations{db: s.db} }

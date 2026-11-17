@@ -2,13 +2,18 @@ package fake
 
 import (
 	"context"
+	"time"
 
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
 func (r taxonomies) QueueRevalidation(_ context.Context, version int64, categories []string) error {
 	for _, category := range categories {
+		for i, job := range r.d.revalidations {
+			if job.Category == category && job.Version < version {
+				r.d.revalidations[i].Done = true
+			}
+		}
 		r.d.revalidations = append(r.d.revalidations, taxonomy.Revalidation{
 			Version:  version,
 			Category: category,
@@ -17,9 +22,37 @@ func (r taxonomies) QueueRevalidation(_ context.Context, version int64, categori
 	return nil
 }
 
-func (r taxonomies) NextRevalidation(context.Context) (*taxonomy.Revalidation, error) {
+func (r taxonomies) NextRevalidation(_ context.Context, now time.Time) (*taxonomy.Revalidation, error) {
+	selected := -1
+	for i, job := range r.d.revalidations {
+		if job.Done || job.AvailableAt.After(now) {
+			continue
+		}
+		if selected < 0 || earlierRevalidation(job, r.d.revalidations[selected]) {
+			selected = i
+		}
+	}
+	if selected < 0 {
+		return nil, nil
+	}
+	job := r.d.revalidations[selected]
+	job.Lease++
+	job.AvailableAt = now.Add(time.Second)
+	r.d.revalidations[selected] = job
+	return &job, nil
+}
+
+func earlierRevalidation(a, b taxonomy.Revalidation) bool {
+	if !a.AvailableAt.Equal(b.AvailableAt) {
+		return a.AvailableAt.Before(b.AvailableAt)
+	}
+	return a.Version < b.Version || a.Version == b.Version && a.Category < b.Category
+}
+
+func (r taxonomies) LockRevalidation(_ context.Context, claimed taxonomy.Revalidation) (*taxonomy.Revalidation, error) {
 	for _, job := range r.d.revalidations {
-		if !job.Done {
+		if job.Version == claimed.Version && job.Category == claimed.Category &&
+			job.Lease == claimed.Lease && !job.Done {
 			return &job, nil
 		}
 	}
@@ -34,23 +67,4 @@ func (r taxonomies) AdvanceRevalidation(_ context.Context, job taxonomy.Revalida
 		}
 	}
 	return taxonomy.ErrConflict
-}
-
-func (r products) RevalidationPage(
-	_ context.Context,
-	job taxonomy.Revalidation,
-	limit int,
-) ([]*catalog.Product, error) {
-	keys := offers(r).keys(func(key productKey) bool {
-		state := r.d.products[key]
-		card := state.Card.Marketplace
-		return card != nil && card.CategoryID == job.Category &&
-			(string(key.tenant) > job.TenantCursor ||
-				string(key.tenant) == job.TenantCursor && string(key.product) > job.ProductCursor)
-	})
-	items := []*catalog.Product{}
-	for _, key := range keys[:min(limit, len(keys))] {
-		items = append(items, catalog.RestoreProduct(r.d.products[key]))
-	}
-	return items, nil
 }

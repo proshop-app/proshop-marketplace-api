@@ -3,14 +3,11 @@ package catalog
 import (
 	"context"
 
-	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
-
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // ProductRepository — проекция товаров магазинов.
 type ProductRepository interface {
-	RevalidationPage(context.Context, taxonomy.Revalidation, int) ([]*Product, error)
 	Page(ctx context.Context, tenant ids.TenantID, product ids.ProductID, limit int) ([]*Product, error)
 	// Get — запись; нет — ErrProductNotFound.
 	Get(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) (*Product, error)

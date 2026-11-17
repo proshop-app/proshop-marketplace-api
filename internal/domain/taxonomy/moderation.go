@@ -5,10 +5,7 @@ func (d Definition) ModerationPolicy(id string) string {
 	var walk func([]Category, string) (string, bool)
 	walk = func(nodes []Category, inherited string) (string, bool) {
 		for _, node := range nodes {
-			policy := inherited
-			if node.Moderation != "" {
-				policy = node.Moderation
-			}
+			policy := inheritModerationPolicy(inherited, node.Moderation)
 			if node.ID == id {
 				return policy, true
 			}
@@ -20,4 +17,11 @@ func (d Definition) ModerationPolicy(id string) string {
 	}
 	policy, _ := walk(d.Categories, "auto")
 	return policy
+}
+
+func inheritModerationPolicy(inherited, local string) string {
+	if local != "" {
+		return local
+	}
+	return inherited
 }

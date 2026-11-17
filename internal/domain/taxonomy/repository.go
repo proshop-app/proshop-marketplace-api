@@ -1,11 +1,15 @@
 package taxonomy
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Repository — снимки таксономии в транзакции. Пустое хранилище имеет версию 0.
 type Repository interface {
 	QueueRevalidation(ctx context.Context, version int64, categories []string) error
-	NextRevalidation(context.Context) (*Revalidation, error)
+	NextRevalidation(context.Context, time.Time) (*Revalidation, error)
+	LockRevalidation(context.Context, Revalidation) (*Revalidation, error)
 	AdvanceRevalidation(context.Context, Revalidation) error
 	Version(ctx context.Context, version int64) (Definition, error)
 	LatestRelease(ctx context.Context) (*ReleaseRecord, error)

@@ -78,6 +78,9 @@ func TestTaxonomyPageRollbackAndResume(t *testing.T) {
 	if _, err := pool.Exec(ctx, allowRevalidationProgress); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, "UPDATE taxonomy_revalidation SET available_at = now()"); err != nil {
+		t.Fatal(err)
+	}
 	service = apptaxonomy.NewService(uow, clock.System{}, nil)
 	job, err = service.RevalidateNext(ctx)
 	if err != nil || job == nil || job.Processed != 55 || !job.Done || job.ProductCursor != "p054" {
@@ -106,7 +109,7 @@ func TestTaxonomyPendingPagesAllowReadsAndEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		job, err := tx.Taxonomy().NextRevalidation(ctx)
+		job, err := tx.Taxonomy().NextRevalidation(ctx, time.Now())
 		if err != nil {
 			return err
 		}
@@ -117,7 +120,7 @@ func TestTaxonomyPendingPagesAllowReadsAndEvents(t *testing.T) {
 			return err
 		}
 		// Активный worker держит голову FOR SHARE и строки своей страницы.
-		if _, err := tx.Products().RevalidationPage(ctx, *job, 50); err != nil {
+		if _, err := tx.Revalidation().Page(ctx, *job, 50); err != nil {
 			return err
 		}
 		other, err := service.RevalidateNext(ctx)

@@ -108,15 +108,19 @@ func (r *Signals) Save(ctx context.Context, signals *catalog.Signals) error {
 }
 
 func (r *signalsRow) targets() []any {
+	return r.targetsWithTimes(&r.stockAt, &r.priceAt, &r.updatedAt)
+}
+
+func (r *signalsRow) targetsWithTimes(stock, price, updated any) []any {
 	return []any{
 		&r.tenantID,
 		&r.productID,
 		&r.available,
-		&r.stockAt,
+		stock,
 		&r.price,
-		&r.priceAt,
+		price,
 		&r.version,
-		&r.updatedAt,
+		updated,
 	}
 }
 
