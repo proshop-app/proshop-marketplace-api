@@ -371,7 +371,7 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 	if json.Unmarshal(raw, &body) == nil && body.Code != "" {
 		switch {
 		case reply.StatusCode == http.StatusServiceUnavailable && body.Code == "MARKETPLACE_TEMPORARY_FAILURE":
-			return &ports.OrderRefusal{Code: body.Code}
+			return ErrUnavailable.Wrap(&ports.OrderRefusal{Code: body.Code})
 		case reply.StatusCode == http.StatusConflict && strings.HasSuffix(path, "/stub-payment") &&
 			(body.Code == "MARKETPLACE_STUB_PAYMENT_AMOUNT" || body.Code == "MARKETPLACE_STUB_PAYMENT_STATE"):
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
@@ -391,7 +391,11 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 				slog.Int("status", reply.StatusCode),
 			)
 		}
-		return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason, Unexpected: true}
+		failure := &ports.OrderRefusal{Code: body.Code, Reason: body.Reason, Unexpected: true}
+		if reply.StatusCode >= http.StatusInternalServerError {
+			return ErrUnavailable.Wrap(failure)
+		}
+		return failure
 	}
 	return ErrUnavailable.WithMessage(message)
 }

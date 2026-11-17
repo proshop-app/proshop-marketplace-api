@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -70,6 +71,9 @@ func writeErrorWithState(
 	checkout *checkoutJSON,
 	event *parkedEventJSON,
 ) {
+	if errors.Is(r.Context().Err(), context.DeadlineExceeded) {
+		err = ErrRequestTimeout
+	}
 	code := errs.CodeOf(err)
 	status := statusByCode[code]
 

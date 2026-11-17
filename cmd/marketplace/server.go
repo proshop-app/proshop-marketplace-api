@@ -332,6 +332,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		postgres.NewTaskQueue(s.store.pool),
 		now,
 		messaging.DispatcherConfig{
+			MaxAttempts: cfg.Outbox.MaxAttempts,
 			ExcludeKinds: []string{
 				appcheckout.TaskCreateOrder,
 				appcheckout.TaskExpireCreation,
@@ -409,12 +410,17 @@ func (s *server) services(ctx context.Context) (services, error) {
 		directory:         pickups,
 		checkouts:         checkouts,
 		dispatcher:        dispatcher,
-		creation:          appcheckout.NewExecutor(postgres.NewTaskQueue(s.store.pool), now, checkouts),
-		janitor:           janitor,
-		parker:            messaging.NewParker(uow),
-		reference:         references,
-		candidates:        candidates,
-		writer:            writer,
+		creation: appcheckout.NewExecutor(
+			postgres.NewTaskQueue(s.store.pool),
+			now,
+			checkouts,
+			cfg.Outbox.MaxAttempts,
+		),
+		janitor:    janitor,
+		parker:     messaging.NewParker(uow),
+		reference:  references,
+		candidates: candidates,
+		writer:     writer,
 	}, nil
 }
 
@@ -476,7 +482,7 @@ func (s *server) run(ctx context.Context) error {
 		return httpServer.Shutdown(shutdownCtx)
 	})
 	group.Go(func() error {
-		err := consumer.Run(groupCtx)
+		err := consumer.Run(ports.WithDatabaseBudget(groupCtx, ports.DatabaseBudget(cfg.Database.Ingestion)))
 
 		if closeErr := reader.Close(); closeErr != nil {
 			s.logger.Warn("kafka: читатель закрылся с ошибкой", slog.Any("error", closeErr))
@@ -530,6 +536,13 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
 		jobs.NewCreationRunner(s.app.creation, s.logger, outbox.RecordOutcome).Run,
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
+		jobs.NewOutboxRetryStatsRunner(
+			s.app.dispatcher,
+			clock.System{},
+			cfg.Outbox.RetryMetricsInterval,
+			s.logger,
+			s.metrics,
+		).Run,
 		outbox.Run,
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).
@@ -550,12 +563,24 @@ func (s *server) httpServer() *http.Server {
 			Name:  "search",
 			Probe: s.store.index.Ping,
 		},
-		{Name: "redis", Probe: func(ctx context.Context) error { return s.cache.Ping(ctx).Err() }},
-		{Name: "kafka", Probe: func(ctx context.Context) error { return infrakafka.Ping(ctx, cfg.Kafka.Brokers) }},
+		{Name: "redis", Optional: true, Probe: func(ctx context.Context) error { return s.cache.Ping(ctx).Err() }},
+		{
+			Name:     "kafka",
+			Optional: true,
+			Probe:    func(ctx context.Context) error { return infrakafka.Ping(ctx, cfg.Kafka.Brokers) },
+		},
 	}
 	handler := transport.NewHandler(transport.Deps{
-		Statuses: s.app.statuses,
-		Features: s.app.buyerFeatures,
+		DatabaseBudgets: ports.DatabaseBudgets{
+			Read:       ports.DatabaseBudget(cfg.Database.Read),
+			Checkout:   ports.DatabaseBudget(cfg.Database.Checkout),
+			Ingestion:  ports.DatabaseBudget(cfg.Database.Ingestion),
+			Background: ports.DatabaseBudget(cfg.Database.Background),
+		},
+		RequestTimeout:         cfg.HTTP.RequestTimeout,
+		ReferenceImportTimeout: cfg.HTTP.ReferenceImportTimeout,
+		Statuses:               s.app.statuses,
+		Features:               s.app.buyerFeatures,
 
 		Promotion:      s.app.promotion,
 		ServerAPIToken: cfg.Promotion.ServerAPIToken,
@@ -574,6 +599,7 @@ func (s *server) httpServer() *http.Server {
 		ReferenceReadToken: cfg.Reference.ReadToken,
 		OperatorAuth:       s.app.operatorAuth,
 		Events:             s.app.events,
+		Dispatcher:         s.app.dispatcher,
 		OperatorOrigin:     cfg.Operator.Origin,
 		TrustedProxies:     cfg.HTTP.TrustedProxies,
 		Checks:             checks,
@@ -587,7 +613,7 @@ func (s *server) httpServer() *http.Server {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      cfg.HTTP.RequestTimeout + 5*time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
 }

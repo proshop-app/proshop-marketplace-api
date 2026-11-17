@@ -50,6 +50,8 @@ func newScope(db *gorm.DB, snapshots *snapshots) *scope {
 
 // Do открывает транзакцию, выполняет fn и фиксирует; ошибка или паника fn откатывают.
 func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx ports.Tx) error) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, ports.DatabaseBudgetFrom(ctx, u.source.budget).Transaction)
+	defer cancel()
 	shared, err := u.source.begin(ctx)
 	if err != nil {
 		return ErrUnavailable.Wrap(err)
@@ -60,13 +62,13 @@ func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx por
 
 	defer func() {
 		if err != nil {
-			_ = tx.WithContext(context.WithoutCancel(ctx)).Rollback().Error
+			_ = tx.Rollback().Error
 		}
 	}()
 
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			_ = tx.WithContext(context.WithoutCancel(ctx)).Rollback().Error
+			_ = tx.Rollback().Error
 			panic(recovered)
 		}
 	}()

@@ -30,29 +30,36 @@ const (
 
 // TaskResult публикуется после отметки задачи; позволяет циклу сразу заполнить свободное место.
 type TaskResult struct {
-	Task ports.Task
-	Err  error
-	Lag  time.Duration
+	FailureReason string
+	Task          ports.Task
+	Err           error
+	Lag           time.Duration
 }
 
 // Executor разделяет создание, закрытие срока, отмену и сверку на независимые полосы.
 // Dispatch вызывается одним циклом, результаты каждого вызова сохраняются независимо.
 type Executor struct {
-	queue   ports.TaskQueue
-	clock   ports.Clock
-	service *Service
-	mu      sync.Mutex
-	active  map[string]map[ids.TenantID]int
-	results chan TaskResult
-	wg      sync.WaitGroup
+	maxAttempts int
+	queue       ports.TaskQueue
+	clock       ports.Clock
+	service     *Service
+	mu          sync.Mutex
+	active      map[string]map[ids.TenantID]int
+	results     chan TaskResult
+	wg          sync.WaitGroup
 }
 
 // NewExecutor собирает отдельный пул поверх существующей очереди.
-func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service) *Executor {
+func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service, attempts ...int) *Executor {
+	maxAttempts := messaging.DefaultMaxAttempts
+	if len(attempts) > 0 && attempts[0] > 0 {
+		maxAttempts = attempts[0]
+	}
 	return &Executor{
-		queue:   queue,
-		clock:   clock,
-		service: service,
+		maxAttempts: maxAttempts,
+		queue:       queue,
+		clock:       clock,
+		service:     service,
 		active: map[string]map[ids.TenantID]int{
 			TaskCreateOrder:    {},
 			TaskExpireCreation: {},
@@ -115,20 +122,24 @@ func (e *Executor) Dispatch(ctx context.Context) error {
 func (e *Executor) execute(ctx context.Context, task ports.Task) {
 	defer e.wg.Done()
 	err := e.service.HandleOrderTask(ctx, task)
-	var saved error
-	if err == nil {
-		saved = e.queue.Complete(ctx, task.ID, task.Attempts, e.clock.Now())
-	} else {
-		next := e.clock.Now().Add(messaging.Backoff(task.Attempts))
-		if CreationPending(err) {
-			next = e.clock.Now().Add(checkout.CreationRetryDelay)
-		}
+	resolution := messaging.Resolution(task, err, e.clock.Now(), e.maxAttempts)
+	if CreationPending(err) {
+		resolution.FailureReason = ""
+		next := e.clock.Now().Add(checkout.CreationRetryDelay)
 		var pending *creationPendingUntil
 		if errors.As(err, &pending) {
 			next = pending.at
 		}
-		saved = e.queue.Retry(ctx, task.ID, task.Attempts, next, err.Error())
+		resolution.NextAt = &next
 	}
+	var saved error
+	if ctx.Err() != nil {
+		// Не записываем отказ при SIGTERM: задача остаётся арендованной до повторного Claim.
+		saved = ctx.Err()
+	} else {
+		saved = e.queue.Resolve(ctx, []ports.TaskResolution{resolution})
+	}
+	reason := resolution.FailureReason
 	e.mu.Lock()
 	e.active[task.Kind][task.TenantID]--
 	if e.active[task.Kind][task.TenantID] == 0 {
@@ -137,9 +148,15 @@ func (e *Executor) execute(ctx context.Context, task ports.Task) {
 	e.mu.Unlock()
 	if saved != nil {
 		err = saved
+		reason = ""
 	}
 	select {
-	case e.results <- TaskResult{Task: task, Err: err, Lag: e.clock.Now().Sub(task.CreatedAt)}:
+	case e.results <- TaskResult{
+		Task:          task,
+		Err:           err,
+		Lag:           e.clock.Now().Sub(task.CreatedAt),
+		FailureReason: reason,
+	}:
 	case <-ctx.Done():
 	}
 }

@@ -80,8 +80,10 @@ func newModerationEnv(t *testing.T) moderationEnv {
 		t.Fatal(view, err)
 	}
 	handler := NewHandler(Deps{
-		Moderation:   service,
-		Participants: appparticipant.NewService(store, clock, &fake.IDs{}),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Moderation:             service,
+		Participants:           appparticipant.NewService(store, clock, &fake.IDs{}),
 		Catalog: appcatalog.NewQueries(
 			store,
 			fake.NewIndex(),

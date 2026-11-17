@@ -15,6 +15,7 @@ import (
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	app "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	domaintaxonomy "github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
@@ -127,7 +128,7 @@ func run(args []string, output, diagnostics io.Writer) int {
 	defer stop()
 	ctx, cancel := context.WithTimeout(signalCtx, commandTimeout)
 	defer cancel()
-	pool, err := postgres.Open(ctx, database.URL, 2)
+	pool, err := postgres.Open(ctx, database.URL, 2, ports.DatabaseBudget(database.Maintenance))
 	if err != nil {
 		return failure(diagnostics, "не удалось подключиться к PostgreSQL", 1)
 	}

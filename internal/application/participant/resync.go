@@ -51,8 +51,8 @@ func (p *ResyncingPlatform) QuoteDelivery(
 }
 
 // resync ставит сверку настроек, если сервер ответил, что магазин не
-// участвует. Задача ставится и при отменённом запросе покупателя;
-// повторный отказ до её разбора склеивается с ней по ключу.
+// участвует. Повторный отказ до её разбора склеивается с ней по ключу.
+// Отменённый запрос не должен удерживать соединение для необязательной сверки.
 func (p *ResyncingPlatform) resync(ctx context.Context, tenantID ids.TenantID, err error) error {
 	if !errors.Is(err, ports.ErrMarketplaceDisabled) {
 		return err
@@ -62,7 +62,7 @@ func (p *ResyncingPlatform) resync(ctx context.Context, tenantID ids.TenantID, e
 		return tx.Outbox().Enqueue(ctx, task)
 	}
 
-	if failed := p.uow.Do(context.WithoutCancel(ctx), enqueue); failed != nil {
+	if failed := p.uow.Do(ctx, enqueue); failed != nil {
 		return errors.Join(err, fmt.Errorf("сверка настроек %s не поставлена: %w", tenantID, failed))
 	}
 

@@ -66,7 +66,7 @@ func TestReferenceDirectory(t *testing.T) {
 
 func TestReferenceConfigNeedsOnlyDatabase(t *testing.T) {
 	env := func(key string) (string, bool) {
-		if key == "DATABASE_MAX_CONNS" {
+		if strings.HasPrefix(key, "DATABASE_") && key != "DATABASE_URL" {
 			return "", false
 		}
 		if key != "DATABASE_URL" {

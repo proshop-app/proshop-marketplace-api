@@ -9,6 +9,7 @@ import (
 	"os"
 
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
@@ -70,7 +71,7 @@ func openProjectionRecovery(
 	ctx context.Context,
 	cfg config.Config,
 ) (projectionRecoveryExecutor, func(), error) {
-	pool, err := postgres.Open(ctx, cfg.Database.URL, 2)
+	pool, err := postgres.Open(ctx, cfg.Database.URL, 2, ports.DatabaseBudget(cfg.Database.Maintenance))
 	if err != nil {
 		return nil, nil, err
 	}

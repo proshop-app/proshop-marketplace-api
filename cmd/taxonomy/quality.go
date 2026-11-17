@@ -19,7 +19,7 @@ func qualityCommand(output, diagnostics io.Writer) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
-	pool, err := postgres.Open(ctx, database.URL, 2)
+	pool, err := postgres.Open(ctx, database.URL, 2, ports.DatabaseBudget(database.Maintenance))
 	if err != nil {
 		return failure(diagnostics, "не удалось подключиться к PostgreSQL", 1)
 	}

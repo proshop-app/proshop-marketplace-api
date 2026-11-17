@@ -38,7 +38,7 @@ func NewScheduledWork(pool *pgxpool.Pool, name string, interval time.Duration) *
 func (s *ScheduledWork) WithLock(ctx context.Context, run func(context.Context) error) error {
 	return s.lock.WithLock(ctx, func(ctx context.Context) error {
 		var claimed bool
-		err := s.source.withConnection(ctx, func(db *gorm.DB) error {
+		err := s.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 			affected, err := execSQL(ctx, db, claimScheduledWork, s.name, s.interval.Seconds())
 			claimed = affected > 0
 			return err

@@ -119,7 +119,12 @@ func TestMoneyContractRejectsOldClientsBeforeMutation(t *testing.T) {
 		{http.MethodPut, "/api/v1/operator/promotion/placements/x"},
 	} {
 		response := httptest.NewRecorder()
-		handler := NewHandler(Deps{Registerer: prometheus.NewRegistry(), Logger: slog.Default()})
+		handler := NewHandler(Deps{
+			RequestTimeout:         time.Minute,
+			ReferenceImportTimeout: time.Minute,
+			Registerer:             prometheus.NewRegistry(),
+			Logger:                 slog.Default(),
+		})
 		handler.ServeHTTP(response, httptest.NewRequest(tc.method, tc.path, nil))
 		if response.Code != http.StatusConflict {
 			t.Fatalf("защита не подключена к маршрутам: %s %d", tc.path, response.Code)
@@ -354,7 +359,9 @@ func TestCheckoutPaidTotalKeepsLastConfirmedStatus(t *testing.T) {
 
 func TestOpenAPIMoneyGuardMatchesServedRoutes(t *testing.T) {
 	doc, _ := loadSpec(t)
-	for _, route := range routes(Deps{}) {
+	for _, route := range routes(Deps{
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute}) {
 		operation := doc.Paths[route.path][strings.ToLower(route.method)].(map[string]any)
 		hasGuard := false
 		parameters, _ := operation["parameters"].([]any)

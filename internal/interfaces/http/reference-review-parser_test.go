@@ -60,10 +60,12 @@ func TestDictionaryRevisionParserUsesStrictSingleDictionaryETagIncludingZero(t *
 func TestReviewDeadlineIsBoundedBeforeOpeningUnitOfWork(t *testing.T) {
 	uow := &reviewDeadlineUOW{}
 	handler := NewHandler(Deps{
-		Reference:     appreference.NewService(uow, nil, nil, nil, appreference.Config{}),
-		OperatorToken: "token",
-		Registerer:    prometheus.NewRegistry(),
-		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Reference:              appreference.NewService(uow, nil, nil, nil, appreference.Config{}),
+		OperatorToken:          "token",
+		Registerer:             prometheus.NewRegistry(),
+		Logger:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	request := httptest.NewRequest(
 		"POST",

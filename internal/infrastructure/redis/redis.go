@@ -52,17 +52,22 @@ func NewClient(url string) (*goredis.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("адрес Redis: %w", err)
 	}
+	// go-redis по умолчанию заменяет контекст на Background при сетевом I/O.
+	// Запрещаем также отключать сроки через URL: у каждой команды есть бюджет.
+	if options.ReadTimeout < 0 || options.WriteTimeout < 0 || options.DialTimeout < 0 {
+		return nil, fmt.Errorf("сетевые сроки Redis должны быть положительными")
+	}
+	options.ContextTimeoutEnabled = true
 	return goredis.NewClient(options), nil
 }
 
 // Open — клиент с проверкой связи; prefix отделяет ключи маркетплейса.
 func Open(ctx context.Context, url string) (*goredis.Client, error) {
-	options, err := goredis.ParseURL(url)
+	client, err := NewClient(url)
 	if err != nil {
-		return nil, fmt.Errorf("адрес Redis: %w", err)
+		return nil, err
 	}
 
-	client := goredis.NewClient(options)
 	if err := client.Ping(ctx).Err(); err != nil {
 		_ = client.Close()
 

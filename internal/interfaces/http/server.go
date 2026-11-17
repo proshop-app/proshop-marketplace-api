@@ -27,34 +27,37 @@ import (
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 )
 
-const checkTimeout = 2 * time.Second
-
-// Check — проверка зависимости для /health.
+// Check — проверка зависимости; Optional не закрывает готовность при частичном отказе.
 type Check struct {
-	Name  string
-	Probe func(ctx context.Context) error
+	Optional bool
+	Name     string
+	Probe    func(ctx context.Context) error
 }
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
-	Statuses       *moderationstatus.Service
-	Features       *appbuyer.Features
-	Promotion      *apppromotion.Service
-	ServerAPIToken string
-	Moderation     *appmoderation.Service
-	Taxonomy       *apptaxonomy.Service
-	SellersCounts  ports.SellersCounts
-	Catalog        *appcatalog.Queries
-	Participants   *appparticipant.Service
-	Auth           *appbuyer.Auth
-	Carts          *appcart.Service
-	Directory      *appdelivery.Service
-	Checkouts      *appcheckout.Service
-	Reference      *appreference.Service
-	OperatorToken  string
+	DatabaseBudgets        ports.DatabaseBudgets
+	RequestTimeout         time.Duration
+	ReferenceImportTimeout time.Duration
+	Statuses               *moderationstatus.Service
+	Features               *appbuyer.Features
+	Promotion              *apppromotion.Service
+	ServerAPIToken         string
+	Moderation             *appmoderation.Service
+	Taxonomy               *apptaxonomy.Service
+	SellersCounts          ports.SellersCounts
+	Catalog                *appcatalog.Queries
+	Participants           *appparticipant.Service
+	Auth                   *appbuyer.Auth
+	Carts                  *appcart.Service
+	Directory              *appdelivery.Service
+	Checkouts              *appcheckout.Service
+	Reference              *appreference.Service
+	OperatorToken          string
 	// ReferenceReadToken — токен читателя реестра: снимок, resolve и чтение записей без прав оператора.
 	ReferenceReadToken string
 	OperatorAuth       *appoperator.Auth
+	Dispatcher         *messaging.Dispatcher
 	Events             *messaging.Events
 	OperatorOrigin     string
 	// TrustedProxies — сколько прокси перед сервисом дописывают X-Forwarded-For; 0 — заголовок не читается.
@@ -65,8 +68,9 @@ type Deps struct {
 	Logger         *slog.Logger
 }
 
-// route — маршрут: метод, шаблон пути и обработчик.
+// route — маршрут: класс срока, метод, шаблон пути и обработчик.
 type route struct {
+	class   requestClass
 	method  string
 	path    string
 	handler http.HandlerFunc
@@ -99,6 +103,7 @@ func routes(deps Deps) []route {
 	gateway := &operatorHandlers{
 		auth:           deps.OperatorAuth,
 		events:         deps.Events,
+		dispatcher:     deps.Dispatcher,
 		origin:         deps.OperatorOrigin,
 		trustedProxies: deps.TrustedProxies,
 	}
@@ -110,280 +115,651 @@ func routes(deps Deps) []route {
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
-		{http.MethodGet, "/api/v1/buyer/profile", privateBuyer(signedIn(features.profile))},
-		{http.MethodPatch, "/api/v1/buyer/profile", privateBuyer(signedIn(features.patchProfile))},
-		{http.MethodGet, "/api/v1/buyer/favorites", privateBuyer(signedIn(features.favorites))},
+		{readRequest, http.MethodGet, "/api/v1/buyer/profile", privateBuyer(signedIn(features.profile))},
 		{
+			ingestionRequest,
+			http.MethodPatch,
+			"/api/v1/buyer/profile",
+			privateBuyer(signedIn(features.patchProfile)),
+		},
+		{readRequest, http.MethodGet, "/api/v1/buyer/favorites", privateBuyer(signedIn(features.favorites))},
+		{
+			ingestionRequest,
 			http.MethodPut,
 			"/api/v1/buyer/favorites/{offerId}",
 			privateBuyer(signedIn(features.putSaved(ports.Favorites))),
 		},
 		{
+			ingestionRequest,
 			http.MethodDelete,
 			"/api/v1/buyer/favorites/{offerId}",
 			privateBuyer(signedIn(features.deleteSaved(ports.Favorites))),
 		},
-		{http.MethodGet, "/api/v1/buyer/price-watches", privateBuyer(signedIn(features.watches))},
 		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/buyer/price-watches",
+			privateBuyer(signedIn(features.watches)),
+		},
+		{
+			ingestionRequest,
 			http.MethodPut,
 			"/api/v1/buyer/price-watches/{offerId}",
 			privateBuyer(signedIn(features.putSaved(ports.PriceWatches))),
 		},
 		{
+			ingestionRequest,
 			http.MethodDelete,
 			"/api/v1/buyer/price-watches/{offerId}",
 			privateBuyer(signedIn(features.deleteSaved(ports.PriceWatches))),
 		},
-		{http.MethodGet, "/api/v1/buyer/subscriptions/shops", privateBuyer(signedIn(features.subscriptions))},
 		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/buyer/subscriptions/shops",
+			privateBuyer(signedIn(features.subscriptions)),
+		},
+		{
+			ingestionRequest,
 			http.MethodPut,
 			"/api/v1/buyer/subscriptions/shops/{tenantId}",
 			privateBuyer(signedIn(features.putSubscription)),
 		},
 		{
+			ingestionRequest,
 			http.MethodDelete,
 			"/api/v1/buyer/subscriptions/shops/{tenantId}",
 			privateBuyer(signedIn(features.deleteSubscription)),
 		},
-		{http.MethodGet, "/api/v1/region", publicBuyer(deps.Auth, features.region)},
+		{readRequest, http.MethodGet, "/api/v1/region", publicBuyer(deps.Auth, features.region)},
 
-		{http.MethodGet, "/api/v1/shops", participants.shops},
-		{http.MethodGet, "/api/v1/shops/{slug}", publicBuyer(deps.Auth, participants.shop)},
-		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/store-card", machine(participants.storeCard)},
+		{readRequest, http.MethodGet, "/api/v1/shops", participants.shops},
+		{readRequest, http.MethodGet, "/api/v1/shops/{slug}", publicBuyer(deps.Auth, participants.shop)},
 		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/internal/tenants/{tenantId}/store-card",
+			machine(participants.storeCard),
+		},
+		{
+			readRequest,
 			http.MethodGet,
 			"/api/v1/internal/tenants/{tenantId}/store-card/products",
 			machine(participants.cardCandidates),
 		},
 		{
+			ingestionRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/settings/sync",
 			machine(participants.syncSettings),
 		},
 		{
+			backgroundRequest,
 			http.MethodPost,
 			"/api/v1/operator/participants/{tenantId}/card/hide",
 			operator(participants.moderateCard),
 		},
 		{
+			backgroundRequest,
 			http.MethodDelete,
 			"/api/v1/operator/participants/{tenantId}/card/hide/{key}",
 			operator(participants.moderateCard),
 		},
-		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/participation", machine(participants.participation)},
-		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/status", machine(statuses.get)},
 		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/internal/tenants/{tenantId}/participation",
+			machine(participants.participation),
+		},
+		{readRequest, http.MethodGet, "/api/v1/internal/tenants/{tenantId}/status", machine(statuses.get)},
+		{
+			ingestionRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/participation/submit",
 			machine(participants.participation),
 		},
-		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/return", operator(participants.returnParticipant)},
-		{http.MethodGet, "/api/v1/operator/promotion/overview", operator(promotion.overview)},
-		{http.MethodGet, "/api/v1/operator/promotion/campaigns", operator(promotion.list)},
-		{http.MethodPost, "/api/v1/operator/promotion/campaigns", operator(promotion.create)},
-		{http.MethodGet, "/api/v1/operator/promotion/campaigns/{id}", operator(promotion.campaign)},
-		{http.MethodPatch, "/api/v1/operator/promotion/campaigns/{id}", operator(promotion.edit)},
-		{http.MethodDelete, "/api/v1/operator/promotion/campaigns/{id}", operator(promotion.delete)},
-		{http.MethodPost, "/api/v1/operator/promotion/campaigns/{id}/decisions", operator(promotion.decide)},
-		{http.MethodGet, "/api/v1/operator/promotion/campaigns/{id}/decisions", operator(promotion.decisions)},
-		{http.MethodGet, "/api/v1/operator/promotion/campaigns/{id}/stats", operator(promotion.stats)},
-		{http.MethodGet, "/api/v1/operator/promotion/placements", operator(promotion.placements)},
-		{http.MethodPut, "/api/v1/operator/promotion/placements/{code}", operator(promotion.configure)},
-		{http.MethodGet, "/api/v1/operator/promotion/placements/{code}/calendar", operator(promotion.calendar)},
-		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/promotion/placements", machine(promotion.placements)},
-		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/promotion/availability", machine(promotion.availability)},
-		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns", machine(promotion.list)},
-		{http.MethodPost, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns", machine(promotion.create)},
-		{http.MethodGet, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}", machine(promotion.campaign)},
-		{http.MethodPatch, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}", machine(promotion.edit)},
-		{http.MethodDelete, "/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}", machine(promotion.delete)},
 		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/participants/{tenantId}/return",
+			operator(participants.returnParticipant),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/promotion/overview",
+			operator(promotion.overview),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/promotion/campaigns",
+			operator(promotion.list),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/promotion/campaigns",
+			operator(promotion.create),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/promotion/campaigns/{id}",
+			operator(promotion.campaign),
+		},
+		{
+			backgroundRequest,
+			http.MethodPatch,
+			"/api/v1/operator/promotion/campaigns/{id}",
+			operator(promotion.edit),
+		},
+		{
+			backgroundRequest,
+			http.MethodDelete,
+			"/api/v1/operator/promotion/campaigns/{id}",
+			operator(promotion.delete),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/promotion/campaigns/{id}/decisions",
+			operator(promotion.decide),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/promotion/campaigns/{id}/decisions",
+			operator(promotion.decisions),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/promotion/campaigns/{id}/stats",
+			operator(promotion.stats),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/promotion/placements",
+			operator(promotion.placements),
+		},
+		{
+			backgroundRequest,
+			http.MethodPut,
+			"/api/v1/operator/promotion/placements/{code}",
+			operator(promotion.configure),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/promotion/placements/{code}/calendar",
+			operator(promotion.calendar),
+		},
+		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/internal/tenants/{tenantId}/promotion/placements",
+			machine(promotion.placements),
+		},
+		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/internal/tenants/{tenantId}/promotion/availability",
+			machine(promotion.availability),
+		},
+		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns",
+			machine(promotion.list),
+		},
+		{
+			ingestionRequest,
+			http.MethodPost,
+			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns",
+			machine(promotion.create),
+		},
+		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}",
+			machine(promotion.campaign),
+		},
+		{
+			ingestionRequest,
+			http.MethodPatch,
+			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}",
+			machine(promotion.edit),
+		},
+		{
+			ingestionRequest,
+			http.MethodDelete,
+			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}",
+			machine(promotion.delete),
+		},
+		{
+			ingestionRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/submit",
 			machine(promotion.decide),
 		},
 		{
+			ingestionRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/revise",
 			machine(promotion.decide),
 		},
 		{
+			ingestionRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/stop",
 			machine(promotion.decide),
 		},
 		{
+			readRequest,
 			http.MethodGet,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/stats",
 			machine(promotion.stats),
 		},
-		{http.MethodGet, "/api/v1/catalog/sponsored", publicBuyer(deps.Auth, promotion.sponsored)},
-		{http.MethodPost, "/api/v1/promotion/events", publicBuyer(deps.Auth, promotion.events)},
-		{http.MethodPut, "/api/v1/operator/participants/{tenantId}/trust", operator(participants.decision)},
-		{http.MethodGet, "/api/v1/operator/participants/{tenantId}/decisions", operator(participants.decisions)},
-		{http.MethodGet, "/api/v1/operator/moderation/cases", operator(moderation.cases)},
-		{http.MethodPost, "/api/v1/operator/moderation/cases", operator(moderation.open)},
-		{http.MethodGet, "/api/v1/operator/moderation/cases/{caseId}", operator(moderation.getCase)},
-		{http.MethodPost, "/api/v1/operator/moderation/cases/{caseId}/allow", operator(moderation.decide)},
-		{http.MethodPost, "/api/v1/operator/moderation/cases/{caseId}/reject", operator(moderation.decide)},
-		{http.MethodGet, "/api/v1/operator/moderation/offers/{offerId}", operator(moderation.offer)},
-		{http.MethodGet, "/api/v1/operator/moderation/verdicts", operator(moderation.verdicts)},
-		{http.MethodGet, "/api/v1/operator/moderation/rules", operator(moderation.rules)},
-		{http.MethodGet, "/api/v1/operator/moderation/stop-phrases", operator(moderation.phrases)},
-		{http.MethodPost, "/api/v1/operator/moderation/stop-phrases", operator(moderation.addPhrase)},
-		{http.MethodDelete, "/api/v1/operator/moderation/stop-phrases/{key}", operator(moderation.removePhrase)},
-		{http.MethodGet, "/api/v1/operator/moderation/reasons", operator(moderation.reasons)},
-		{http.MethodPut, "/api/v1/operator/moderation/reasons/{code}", operator(moderation.putReason)},
-		{http.MethodPost, "/api/v1/operator/moderation/reasons", operator(moderation.addReason)},
-		{http.MethodPost, "/api/v1/operator/session", gateway.login},
-		{http.MethodPost, "/api/v1/operator/session/refresh", gateway.refresh},
-		{http.MethodGet, "/api/v1/operator/session", gateway.session},
-		{http.MethodDelete, "/api/v1/operator/session", gateway.logout},
-		{http.MethodGet, "/api/v1/operator/events", operator(gateway.listEvents)},
-		{http.MethodPost, "/api/v1/operator/events/{eventId}/retry", operator(gateway.retry)},
-		{http.MethodPost, "/api/v1/operator/events/{eventId}/resolve", operator(gateway.resolve)},
-		{http.MethodPut, "/api/v1/operator/participants/{tenantId}/delivery", operator(participants.delivery)},
-		{http.MethodGet, "/health", health(deps.Checks)},
-		{http.MethodGet, "/metrics", metrics},
-
-		{http.MethodGet, "/api/v1/taxonomy/dictionary-bindings", taxonomy.dictionaryBindings},
-		{http.MethodGet, "/api/v1/taxonomy/dictionary-sources", taxonomy.dictionarySources},
 		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/catalog/sponsored",
+			publicBuyer(deps.Auth, promotion.sponsored),
+		},
+		{
+			ingestionRequest,
+			http.MethodPost,
+			"/api/v1/promotion/events",
+			publicBuyer(deps.Auth, promotion.events),
+		},
+		{
+			backgroundRequest,
+			http.MethodPut,
+			"/api/v1/operator/participants/{tenantId}/trust",
+			operator(participants.decision),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/participants/{tenantId}/decisions",
+			operator(participants.decisions),
+		},
+		{backgroundRequest, http.MethodGet, "/api/v1/operator/moderation/cases", operator(moderation.cases)},
+		{backgroundRequest, http.MethodPost, "/api/v1/operator/moderation/cases", operator(moderation.open)},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/moderation/cases/{caseId}",
+			operator(moderation.getCase),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/moderation/cases/{caseId}/allow",
+			operator(moderation.decide),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/moderation/cases/{caseId}/reject",
+			operator(moderation.decide),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/moderation/offers/{offerId}",
+			operator(moderation.offer),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/moderation/verdicts",
+			operator(moderation.verdicts),
+		},
+		{backgroundRequest, http.MethodGet, "/api/v1/operator/moderation/rules", operator(moderation.rules)},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/moderation/stop-phrases",
+			operator(moderation.phrases),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/moderation/stop-phrases",
+			operator(moderation.addPhrase),
+		},
+		{
+			backgroundRequest,
+			http.MethodDelete,
+			"/api/v1/operator/moderation/stop-phrases/{key}",
+			operator(moderation.removePhrase),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/moderation/reasons",
+			operator(moderation.reasons),
+		},
+		{
+			backgroundRequest,
+			http.MethodPut,
+			"/api/v1/operator/moderation/reasons/{code}",
+			operator(moderation.putReason),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/moderation/reasons",
+			operator(moderation.addReason),
+		},
+		{backgroundRequest, http.MethodPost, "/api/v1/operator/session", gateway.login},
+		{backgroundRequest, http.MethodPost, "/api/v1/operator/session/refresh", gateway.refresh},
+		{backgroundRequest, http.MethodGet, "/api/v1/operator/session", gateway.session},
+		{backgroundRequest, http.MethodDelete, "/api/v1/operator/session", gateway.logout},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/outbox/failures",
+			operator(gateway.outboxFailures),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/outbox/failures/retry",
+			operator(gateway.requeueTasks),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/outbox/failures/{taskId}/retry",
+			operator(gateway.requeueTask),
+		},
+		{backgroundRequest, http.MethodGet, "/api/v1/operator/events", operator(gateway.listEvents)},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/events/{eventId}/retry",
+			operator(gateway.retry),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/events/{eventId}/resolve",
+			operator(gateway.resolve),
+		},
+		{
+			backgroundRequest,
+			http.MethodPut,
+			"/api/v1/operator/participants/{tenantId}/delivery",
+			operator(participants.delivery),
+		},
+		{readRequest, http.MethodGet, "/live", health(nil, false)},
+		{readRequest, http.MethodGet, "/ready", health(deps.Checks, true)},
+		{readRequest, http.MethodGet, "/health", health(deps.Checks, false)},
+		{readRequest, http.MethodGet, "/metrics", metrics},
+
+		{readRequest, http.MethodGet, "/api/v1/taxonomy/dictionary-bindings", taxonomy.dictionaryBindings},
+		{readRequest, http.MethodGet, "/api/v1/taxonomy/dictionary-sources", taxonomy.dictionarySources},
+		{
+			backgroundRequest,
 			http.MethodPut,
 			"/api/v1/operator/taxonomy/dictionary-bindings/{attributeCode}",
-			operator(taxonomy.putDictionaryBinding)},
+			operator(taxonomy.putDictionaryBinding),
+		},
 		{
+			backgroundRequest,
 			http.MethodDelete,
 			"/api/v1/operator/taxonomy/dictionary-bindings/{attributeCode}",
-			operator(taxonomy.deleteDictionaryBinding)},
-		{http.MethodGet, "/api/v1/taxonomy/categories", taxonomy.categories},
-		{http.MethodGet, "/api/v1/taxonomy/categories/{id}/schema", taxonomy.schema},
-		{http.MethodGet, "/api/v1/taxonomy/version", taxonomy.version},
-		{http.MethodGet, "/api/v1/operator/taxonomy/revalidation-failures", operator(taxonomy.revalidationFailures)},
-		{http.MethodGet, "/api/v1/operator/taxonomy", operator(taxonomy.current)},
-		{http.MethodPut, "/api/v1/operator/taxonomy/{part}", operator(taxonomy.load)},
-		{http.MethodGet, "/api/v1/operator/taxonomy/{part}", operator(taxonomy.download)},
-		{http.MethodGet, "/api/v1/taxonomy/attributes", taxonomy.attributes},
-		{http.MethodGet, "/api/v1/taxonomy/schemas", taxonomy.schemas},
-		{http.MethodGet, "/api/v1/operator/catalog/offers/{offerId}/publication", operator(taxonomy.publication)},
-
-		{http.MethodGet, "/api/v1/recommendations", publicBuyer(deps.Auth, catalog.recommendations)},
-		{http.MethodGet, "/api/v1/catalog/offers/{offerId}/reviews", catalog.reviews},
-		{http.MethodGet, "/api/v1/catalog/offers", publicBuyer(deps.Auth, catalog.list)},
-		{http.MethodGet, "/api/v1/catalog/offers/{offerId}", publicBuyer(deps.Auth, catalog.card)},
-		{http.MethodGet, "/api/v1/catalog/variants/{tenantId}/{groupId}", publicBuyer(deps.Auth, catalog.variants)},
-
-		{http.MethodGet, "/api/v1/operator/participants", operator(participants.list)},
-		{http.MethodPost, "/api/v1/operator/participants", operator(participants.create)},
-		{http.MethodGet, "/api/v1/operator/participants/{tenantId}", operator(participants.get)},
-		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/enable", operator(participants.decision)},
-		{http.MethodPost, "/api/v1/operator/participants/{tenantId}/disable", operator(participants.decision)},
-
-		{http.MethodPost, "/api/v1/auth/call", auth.start},
-		{http.MethodPost, "/api/v1/auth/call/check", auth.check},
-		{http.MethodPost, "/api/v1/auth/logout", auth.logout},
-		{http.MethodPost, "/api/v1/auth/refresh", auth.refresh},
-		{http.MethodPost, "/api/v1/auth/webhooks/smsru", auth.smsruWebhook},
-		{http.MethodGet, "/api/v1/me", auth.me},
-
-		{http.MethodGet, "/api/v1/cart", signedIn(carts.get)},
-		{http.MethodPost, "/api/v1/cart/lines", signedIn(carts.add)},
-		{http.MethodPut, "/api/v1/cart/lines/{offerId}", signedIn(carts.setQuantity)},
-		{http.MethodDelete, "/api/v1/cart/lines/{offerId}", signedIn(carts.remove)},
-		{http.MethodPost, "/api/v1/cart/verify", signedIn(carts.verify)},
-		{http.MethodPut, "/api/v1/cart/groups/{tenantId}/promo-code", signedIn(carts.promo)},
-		{http.MethodDelete, "/api/v1/cart/groups/{tenantId}/promo-code", signedIn(carts.promo)},
-
-		{http.MethodGet, "/api/v1/delivery/carriers", shipping.carriers},
-		{http.MethodGet, "/api/v1/delivery/settings", checkouts.deliverySettings},
-		{http.MethodGet, "/api/v1/delivery/pickup-points", shipping.pickupPoints},
-
-		{http.MethodPost, "/api/v1/checkout", signedIn(checkouts.create)},
-		{http.MethodGet, "/api/v1/checkout/{checkoutId}", signedIn(checkouts.get)},
-		{http.MethodPost, "/api/v1/checkout/{checkoutId}/delivery/quotes", signedIn(checkouts.quote)},
-		{http.MethodPost, "/api/v1/checkout/{checkoutId}/confirm", signedIn(checkouts.confirm)},
-		{http.MethodPost, "/api/v1/checkout/{checkoutId}/orders", signedIn(checkouts.createOrders)},
-		{http.MethodPost, "/api/v1/checkout/{checkoutId}/cancel", signedIn(checkouts.cancel)},
-		{http.MethodPost, "/api/v1/checkout/{checkoutId}/pay", signedIn(checkouts.pay)},
+			operator(taxonomy.deleteDictionaryBinding),
+		},
+		{readRequest, http.MethodGet, "/api/v1/taxonomy/categories", taxonomy.categories},
+		{readRequest, http.MethodGet, "/api/v1/taxonomy/categories/{id}/schema", taxonomy.schema},
+		{readRequest, http.MethodGet, "/api/v1/taxonomy/version", taxonomy.version},
 		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/taxonomy/revalidation-failures",
+			operator(taxonomy.revalidationFailures),
+		},
+		{backgroundRequest, http.MethodGet, "/api/v1/operator/taxonomy", operator(taxonomy.current)},
+		{backgroundRequest, http.MethodPut, "/api/v1/operator/taxonomy/{part}", operator(taxonomy.load)},
+		{backgroundRequest, http.MethodGet, "/api/v1/operator/taxonomy/{part}", operator(taxonomy.download)},
+		{readRequest, http.MethodGet, "/api/v1/taxonomy/attributes", taxonomy.attributes},
+		{readRequest, http.MethodGet, "/api/v1/taxonomy/schemas", taxonomy.schemas},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/catalog/offers/{offerId}/publication",
+			operator(taxonomy.publication),
+		},
+
+		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/recommendations",
+			publicBuyer(deps.Auth, catalog.recommendations),
+		},
+		{readRequest, http.MethodGet, "/api/v1/catalog/offers/{offerId}/reviews", catalog.reviews},
+		{readRequest, http.MethodGet, "/api/v1/catalog/offers", publicBuyer(deps.Auth, catalog.list)},
+		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/catalog/offers/{offerId}",
+			publicBuyer(deps.Auth, catalog.card),
+		},
+		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/catalog/variants/{tenantId}/{groupId}",
+			publicBuyer(deps.Auth, catalog.variants),
+		},
+
+		{backgroundRequest, http.MethodGet, "/api/v1/operator/participants", operator(participants.list)},
+		{backgroundRequest, http.MethodPost, "/api/v1/operator/participants", operator(participants.create)},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/participants/{tenantId}",
+			operator(participants.get),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/participants/{tenantId}/enable",
+			operator(participants.decision),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/participants/{tenantId}/disable",
+			operator(participants.decision),
+		},
+
+		{ingestionRequest, http.MethodPost, "/api/v1/auth/call", auth.start},
+		{ingestionRequest, http.MethodPost, "/api/v1/auth/call/check", auth.check},
+		{ingestionRequest, http.MethodPost, "/api/v1/auth/logout", auth.logout},
+		{ingestionRequest, http.MethodPost, "/api/v1/auth/refresh", auth.refresh},
+		{ingestionRequest, http.MethodPost, "/api/v1/auth/webhooks/smsru", auth.smsruWebhook},
+		{readRequest, http.MethodGet, "/api/v1/me", auth.me},
+
+		{checkoutRequest, http.MethodGet, "/api/v1/cart", signedIn(carts.get)},
+		{checkoutRequest, http.MethodPost, "/api/v1/cart/lines", signedIn(carts.add)},
+		{checkoutRequest, http.MethodPut, "/api/v1/cart/lines/{offerId}", signedIn(carts.setQuantity)},
+		{checkoutRequest, http.MethodDelete, "/api/v1/cart/lines/{offerId}", signedIn(carts.remove)},
+		{checkoutRequest, http.MethodPost, "/api/v1/cart/verify", signedIn(carts.verify)},
+		{
+			checkoutRequest,
+			http.MethodPut,
+			"/api/v1/cart/groups/{tenantId}/promo-code",
+			signedIn(carts.promo),
+		},
+		{
+			checkoutRequest,
+			http.MethodDelete,
+			"/api/v1/cart/groups/{tenantId}/promo-code",
+			signedIn(carts.promo),
+		},
+
+		{readRequest, http.MethodGet, "/api/v1/delivery/carriers", shipping.carriers},
+		{readRequest, http.MethodGet, "/api/v1/delivery/settings", checkouts.deliverySettings},
+		{readRequest, http.MethodGet, "/api/v1/delivery/pickup-points", shipping.pickupPoints},
+
+		{checkoutRequest, http.MethodPost, "/api/v1/checkout", signedIn(checkouts.create)},
+		{checkoutRequest, http.MethodGet, "/api/v1/checkout/{checkoutId}", signedIn(checkouts.get)},
+		{
+			checkoutRequest,
+			http.MethodPost,
+			"/api/v1/checkout/{checkoutId}/delivery/quotes",
+			signedIn(checkouts.quote),
+		},
+		{
+			checkoutRequest,
+			http.MethodPost,
+			"/api/v1/checkout/{checkoutId}/confirm",
+			signedIn(checkouts.confirm),
+		},
+		{
+			checkoutRequest,
+			http.MethodPost,
+			"/api/v1/checkout/{checkoutId}/orders",
+			signedIn(checkouts.createOrders),
+		},
+		{
+			checkoutRequest,
+			http.MethodPost,
+			"/api/v1/checkout/{checkoutId}/cancel",
+			signedIn(checkouts.cancel),
+		},
+		{checkoutRequest, http.MethodPost, "/api/v1/checkout/{checkoutId}/pay", signedIn(checkouts.pay)},
+		{
+			checkoutRequest,
 			http.MethodGet,
 			"/api/v1/payment-stub/{checkoutId}",
 			checkouts.paymentBrowser(signedIn(checkouts.paymentStub)),
 		},
 		{
+			checkoutRequest,
 			http.MethodPost,
 			"/api/v1/payment-stub/{checkoutId}/confirm",
 			checkouts.paymentBrowser(signedIn(checkouts.confirmPayment)),
 		},
 		{
+			checkoutRequest,
 			http.MethodPost,
 			"/api/v1/payment-stub/{checkoutId}/cancel",
 			checkouts.paymentBrowser(signedIn(checkouts.cancelPayment)),
 		},
-		{http.MethodGet, "/api/v1/checkout/{checkoutId}/return", signedIn(checkouts.paymentReturn)},
-		{http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
-		{http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},
+		{
+			checkoutRequest,
+			http.MethodGet,
+			"/api/v1/checkout/{checkoutId}/return",
+			signedIn(checkouts.paymentReturn),
+		},
+		{readRequest, http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
+		{backgroundRequest, http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},
 
-		{http.MethodGet, "/api/v1/operator/reference", operator(registry.summaries)},
-		{http.MethodPost, "/api/v1/operator/reference/import", operator(referenceImportBudget(registry.importPackage))},
-		{http.MethodGet, "/api/v1/operator/reference/{dict}/entries", operator(registry.list)},
-		{http.MethodPost, "/api/v1/operator/reference/{dict}/entries/review", operator(registry.review)},
-		{http.MethodGet, "/api/v1/operator/reference/{dict}/entries/{id}", operator(registry.get)},
-		{http.MethodPatch, "/api/v1/operator/reference/{dict}/entries/{id}", operator(registry.update)},
-		{http.MethodGet, "/internal/reference", reader(registry.discovery)},
-		{http.MethodGet, "/api/v1/internal/reference", reader(registry.discovery)},
-		{http.MethodGet, "/api/v1/internal/reference/{dict}/snapshot", reader(registry.snapshot)},
-		{http.MethodGet, "/api/v1/internal/reference/{dict}/entries/{id}", reader(registry.get)},
-		{http.MethodGet, "/internal/reference/{dict}/snapshot", reader(registry.snapshot)},
-		{http.MethodPost, "/internal/reference/{dict}/resolve", reader(registry.resolve)},
-		{http.MethodGet, "/internal/reference/{dict}/entries", reader(registry.list)},
-		{http.MethodPost, "/internal/reference/{dict}/entries", operator(registry.create)},
-		{http.MethodGet, "/internal/reference/{dict}/entries/{id}", reader(registry.get)},
-		{http.MethodPatch, "/internal/reference/{dict}/entries/{id}", operator(registry.update)},
-		{http.MethodPost, "/internal/reference/{dict}/entries/{id}/merge", operator(registry.merge)},
-		{http.MethodPost, "/internal/reference/{dict}/entries/{id}/aliases", operator(registry.addAlias)},
-		{http.MethodDelete, "/internal/reference/{dict}/aliases/{id}", operator(registry.removeAlias)},
+		{backgroundRequest, http.MethodGet, "/api/v1/operator/reference", operator(registry.summaries)},
+		{
+			importRequest,
+			http.MethodPost,
+			"/api/v1/operator/reference/import",
+			operator(referenceImportBudget(registry.importPackage)),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/reference/{dict}/entries",
+			operator(registry.list),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/reference/{dict}/entries/review",
+			operator(registry.review),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/reference/{dict}/entries/{id}",
+			operator(registry.get),
+		},
+		{
+			backgroundRequest,
+			http.MethodPatch,
+			"/api/v1/operator/reference/{dict}/entries/{id}",
+			operator(registry.update),
+		},
+		{backgroundRequest, http.MethodGet, "/internal/reference", reader(registry.discovery)},
+		{backgroundRequest, http.MethodGet, "/api/v1/internal/reference", reader(registry.discovery)},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/internal/reference/{dict}/snapshot",
+			reader(registry.snapshot),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/internal/reference/{dict}/entries/{id}",
+			reader(registry.get),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/internal/reference/{dict}/snapshot",
+			reader(registry.snapshot),
+		},
+		{backgroundRequest, http.MethodPost, "/internal/reference/{dict}/resolve", reader(registry.resolve)},
+		{backgroundRequest, http.MethodGet, "/internal/reference/{dict}/entries", reader(registry.list)},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/internal/reference/{dict}/entries",
+			operator(registry.create),
+		},
+		{backgroundRequest, http.MethodGet, "/internal/reference/{dict}/entries/{id}", reader(registry.get)},
+		{
+			backgroundRequest,
+			http.MethodPatch,
+			"/internal/reference/{dict}/entries/{id}",
+			operator(registry.update),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/internal/reference/{dict}/entries/{id}/merge",
+			operator(registry.merge),
+		},
+		{
+			backgroundRequest,
+			http.MethodPost,
+			"/internal/reference/{dict}/entries/{id}/aliases",
+			operator(registry.addAlias),
+		},
+		{
+			backgroundRequest,
+			http.MethodDelete,
+			"/internal/reference/{dict}/aliases/{id}",
+			operator(registry.removeAlias),
+		},
 	}
 }
 
 // NewHandler — маршруты маркетплейса.
 func NewHandler(deps Deps) http.Handler {
+	if deps.RequestTimeout <= 0 || deps.ReferenceImportTimeout <= 0 {
+		panic("сроки HTTP должны быть положительными")
+	}
 	mux := http.NewServeMux()
 
 	for _, r := range routes(deps) {
-		mux.HandleFunc(r.method+" "+r.path, moneyContract(r.path, r.handler))
+		mux.HandleFunc(r.method+" "+r.path, requestBudget(r.class, deps, moneyContract(r.path, r.handler)))
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeError(w, r, ErrRouteNotFound) })
 
 	return observe(deps.Logger, newHTTPMetrics(deps.Registerer), mux)
-}
-
-// health — 200, если все зависимости отвечают, иначе 503; подробности сбоя — в журнале.
-func health(checks []Check) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		body := healthJSON{Status: "ok", Checks: make(map[string]string, len(checks))}
-		status := http.StatusOK
-
-		for _, check := range checks {
-			ctx, cancel := context.WithTimeout(r.Context(), checkTimeout)
-			err := check.Probe(ctx)
-			cancel()
-
-			if err != nil {
-				body.Status, body.Checks[check.Name], status = "unavailable", "fail", http.StatusServiceUnavailable
-				loggerFrom(r.Context()).Warn(
-					"health: зависимость не отвечает",
-					slog.String("check", check.Name),
-					slog.Any("error", err),
-				)
-
-				continue
-			}
-
-			body.Checks[check.Name] = "ok"
-		}
-
-		writeJSON(w, status, body)
-	}
 }

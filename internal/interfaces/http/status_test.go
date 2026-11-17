@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -33,10 +34,12 @@ func TestStatusMachineScopeAndLimits(t *testing.T) {
 	})
 	service := moderationstatus.NewService(store, fake.NewClock(t0), &fake.Publisher{}, "offer", "participant")
 	handler := transport.NewHandler(transport.Deps{
-		Statuses:       service,
-		ServerAPIToken: "server-token",
-		Registerer:     prometheus.NewRegistry(),
-		Logger:         slog.Default(),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Statuses:               service,
+		ServerAPIToken:         "server-token",
+		Registerer:             prometheus.NewRegistry(),
+		Logger:                 slog.Default(),
 	})
 	for _, tc := range []struct {
 		path   string
@@ -100,9 +103,11 @@ func TestStatusMachineScopeAndLimits(t *testing.T) {
 	}
 	for _, machine := range []string{"", "server-token"} {
 		handler = transport.NewHandler(transport.Deps{
-			ServerAPIToken: machine,
-			Registerer:     prometheus.NewRegistry(),
-			Logger:         slog.Default(),
+			RequestTimeout:         time.Minute,
+			ReferenceImportTimeout: time.Minute,
+			ServerAPIToken:         machine,
+			Registerer:             prometheus.NewRegistry(),
+			Logger:                 slog.Default(),
 		})
 		r := httptest.NewRequest(http.MethodGet, "/api/v1/internal/tenants/t1/status", nil)
 		w := httptest.NewRecorder()

@@ -7,8 +7,6 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"golang.org/x/sync/singleflight"
-
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -51,15 +49,15 @@ type OfferList struct {
 
 // Queries — чтение выдачи и карточек.
 type Queries struct {
-	clock                ports.Clock
-	recommendationFlight singleflight.Group
-	recommendationMu     sync.Mutex
-	recommendationCache  map[string]recommendationCacheEntry
-	platform             ports.PlatformAPI
-	interests            ports.BuyerInterests
-	recommendations      ports.RecommendationOffers
-	uow                  ports.UnitOfWork
-	index                ports.OfferIndex
+	clock               ports.Clock
+	recommendationLoads map[string]*recommendationLoad
+	recommendationMu    sync.Mutex
+	recommendationCache map[string]recommendationCacheEntry
+	platform            ports.PlatformAPI
+	interests           ports.BuyerInterests
+	recommendations     ports.RecommendationOffers
+	uow                 ports.UnitOfWork
+	index               ports.OfferIndex
 }
 
 // PublicationView объединяет структурные и модерационные причины скрытия.

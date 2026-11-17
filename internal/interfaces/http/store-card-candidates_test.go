@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -54,11 +55,13 @@ func TestStoreCardCandidatesHTTP(t *testing.T) {
 	})
 	service := app.NewService(store, fake.NewClock(t0), &fake.IDs{})
 	handler := transport.NewHandler(transport.Deps{
-		Registerer:     prometheus.NewRegistry(),
-		Logger:         slog.Default(),
-		Participants:   service,
-		OperatorToken:  token,
-		ServerAPIToken: "server-token",
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Registerer:             prometheus.NewRegistry(),
+		Logger:                 slog.Default(),
+		Participants:           service,
+		OperatorToken:          token,
+		ServerAPIToken:         "server-token",
 	})
 	path := "/api/v1/internal/tenants/t1/store-card/products"
 	call := func(query, bearer string, want int) *httptest.ResponseRecorder {

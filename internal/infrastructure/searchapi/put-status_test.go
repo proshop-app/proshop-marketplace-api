@@ -3,6 +3,7 @@ package searchapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -66,5 +67,19 @@ func TestPutBatchClassifiesDocumentRejectionWithoutSockets(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSearchNetworkFailuresRemainRetryable(t *testing.T) {
+	cause := errors.New("соединение разорвано")
+	index := &Index{
+		base: "http://search.example.test/api/v1/internal/marketplace",
+		client: &http.Client{Transport: featureTransport(func(*http.Request) (*http.Response, error) {
+			return nil, cause
+		})},
+	}
+	err := index.Put(context.Background(), []ports.OfferDocument{{ID: "t1~p1", Version: 1}})
+	if errs.CodeOf(err) != errs.Unavailable || !errors.Is(err, cause) {
+		t.Fatal("сбой транспорта потерял класс или причину", err)
 	}
 }

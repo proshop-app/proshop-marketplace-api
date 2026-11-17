@@ -26,7 +26,7 @@ const (
 
 	purgeParkedEvents = `
 		DELETE FROM parked_events
-		WHERE id IN (SELECT id FROM parked_events WHERE parked_at < $1 AND status <> 'queued' LIMIT $2)`
+		WHERE id IN (SELECT id FROM parked_events WHERE status = 'resolved' AND updated_at < $1 LIMIT $2)`
 
 	purgeChallenges = `
 		DELETE FROM phone_challenges
@@ -67,7 +67,7 @@ func (r *Retention) Purge(ctx context.Context, request ports.PurgeRequest) (port
 		{sql: purgePromotionViews, before: request.PromotionBefore, count: &result.PromotionViews},
 	}
 
-	err = r.source.withConnection(ctx, func(db *gorm.DB) error {
+	err = r.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		for _, step := range steps {
 			if *step.count, err = r.purge(ctx, db, step.sql, step.before, request.Batch); err != nil {
 				return err

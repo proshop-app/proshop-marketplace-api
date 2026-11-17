@@ -32,10 +32,12 @@ func hintHTTP(t *testing.T) (*fake.Store, http.Handler) {
 		store.SeedReferenceDictionary(reference.DictionaryState{Code: code, Kind: reference.KindOpen})
 	}
 	return store, NewHandler(Deps{
-		Registerer:    prometheus.NewRegistry(),
-		Taxonomy:      apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
-		OperatorToken: "token",
-		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Registerer:             prometheus.NewRegistry(),
+		Taxonomy:               apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
+		OperatorToken:          "token",
+		Logger:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 }
 

@@ -35,10 +35,12 @@ func TestEveryOperatorRouteChecksServerRole(t *testing.T) {
 		cfg,
 	)
 	deps := Deps{
-		OperatorAuth:   auth,
-		OperatorOrigin: "https://admin.example",
-		Registerer:     prometheus.NewRegistry(),
-		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		OperatorAuth:           auth,
+		OperatorOrigin:         "https://admin.example",
+		Registerer:             prometheus.NewRegistry(),
+		Logger:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 	handler := NewHandler(deps)
 	for _, route := range routes(deps) {

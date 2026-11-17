@@ -1466,6 +1466,113 @@ paths:
                   $ref: '#/components/schemas/ParticipationDelivery'
       description: Сверяет version атомарно. PATCH участника по-прежнему меняет только name. Плановая сверка с магазином
         заменяет покрытие его авторитетными настройками.
+  /api/v1/operator/outbox/failures:
+    get:
+      tags: [operator]
+      operationId: outboxFailures
+      summary: Карантин outbox без исходного payload и текста внутренних ошибок
+      security: *id001
+      parameters:
+      - name: after
+        in: query
+        schema: {type: string, pattern: '^[0-9]+$', default: '0'}
+      - name: limit
+        in: query
+        schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+      responses:
+        '200':
+          description: Страница по возрастанию id; следующий курсор — id последней записи
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, kind, tenantId, attempts, reason, failedAt, createdAt]
+                      properties:
+                        id: {type: string}
+                        kind: {type: string}
+                        tenantId: {type: string}
+                        attempts: {type: integer}
+                        reason: {type: string}
+                        failedAt: {type: string, format: date-time}
+                        createdAt: {type: string, format: date-time}
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /api/v1/operator/outbox/failures/retry:
+    post:
+      tags: [operator]
+      operationId: retryOutboxKind
+      summary: Вернуть страницу карантина одного вида в очередь
+      description: Повторять с after из ответа до пустого ids. Исходный payload сохраняется.
+      security: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: {type: string, minLength: 1}
+                after: {type: string, pattern: '^[0-9]+$', default: '0'}
+                limit: {type: integer, minimum: 1, maximum: 100, default: 100}
+      responses:
+        '200':
+          description: Возвращённые id и следующий курсор
+          content:
+            application/json:
+              schema: &outboxRetryResponse
+                type: object
+                required: [ids, after]
+                properties:
+                  ids: {type: array, items: {type: string}}
+                  after: {type: string}
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /api/v1/operator/outbox/failures/{taskId}/retry:
+    post:
+      tags: [operator]
+      operationId: retryOutboxTask
+      summary: Вернуть одну задачу из карантина в очередь
+      security: *id001
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: {type: string, pattern: '^[1-9][0-9]*$'}
+      responses:
+        '200':
+          description: Возвращённая задача
+          content:
+            application/json:
+              schema: *outboxRetryResponse
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
   /api/v1/operator/events:
     get:
       tags:
@@ -2022,6 +2129,33 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  /live:
+    get:
+      tags: [service]
+      summary: Живость процесса без обращений к зависимостям
+      operationId: live
+      responses:
+        '200':
+          description: Процесс принимает HTTP
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+  /ready:
+    get:
+      tags: [service]
+      summary: Готовность витрины — PostgreSQL и поиск; Kafka и Redis допускают деградацию
+      operationId: ready
+      responses:
+        '200':
+          description: Витрина готова; status degraded указывает отказ вспомогательной зависимости
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        '503':
+          description: Недоступна база или поиск
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
   /health:
     get:
       tags: [service]
@@ -7036,7 +7170,7 @@ components:
       type: object
       required: [status, checks]
       properties:
-        status: { type: string, enum: [ok, unavailable] }
+        status: { type: string, enum: [ok, degraded, unavailable] }
         checks:
           type: object
           additionalProperties: { type: string, enum: [ok, fail] }

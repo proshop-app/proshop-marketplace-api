@@ -275,7 +275,7 @@ func TestGuestRecommendationsShareMissAndDoNotCacheErrors(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			ready <- struct{}{}
-			if _, err := q.Recommend(callCtx, request); err != nil {
+			if _, err := q.Recommend(callCtx, request); err != nil && !errors.Is(err, callCtx.Err()) {
 				t.Error(err)
 			}
 		}()
@@ -338,5 +338,33 @@ func TestViewedRecommendationsForGuestAndBuyer(t *testing.T) {
 		if len(features.Filter.Categories) != wantCategories || result.Items[0].Offer.ID == viewed.String() {
 			t.Fatal(features.Filter, result)
 		}
+	}
+}
+
+func TestGuestRecommendationsCancelSQLWhenLastWaiterLeaves(t *testing.T) {
+	started, stopped := make(chan struct{}), make(chan struct{})
+	features := &fake.CatalogFeatures{RecommendHook: func(ctx context.Context) error {
+		close(started)
+		<-ctx.Done()
+		close(stopped)
+		return ctx.Err()
+	}}
+	q := app.NewQueries(fake.NewStore(), fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(t0))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := q.Recommend(ctx, app.RecommendationRequest{Context: "home"})
+		done <- err
+	}()
+	<-started
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("SQL общей загрузки пережил последнего клиента")
 	}
 }

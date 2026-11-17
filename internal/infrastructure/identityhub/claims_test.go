@@ -156,6 +156,12 @@ func TestKeysOutageAndUnknownKidCooldown(t *testing.T) {
 		t.Fatalf("известный ключ должен работать без hub: %v", err)
 	}
 
+	f.client.mu.Lock()
+	pending := f.client.refresh
+	f.client.mu.Unlock()
+	if pending != nil {
+		<-pending.done
+	}
 	reads := f.reads.Load()
 	for range 10 {
 		_, err := f.client.Claims(ctx, f.sign(t, f.validClaims(), "unknown"), false)

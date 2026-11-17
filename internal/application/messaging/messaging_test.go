@@ -203,7 +203,7 @@ func TestJanitorPurgesByPolicy(t *testing.T) {
 	})
 
 	result, err := janitor.Purge(ctx)
-	if err != nil || result.Processed != 1 || result.OutboxDone != 1 || result.Parked != 1 {
+	if err != nil || result.Processed != 1 || result.OutboxDone != 1 || result.Parked != 0 {
 		t.Fatalf("чистка: %+v, %v", result, err)
 	}
 	if !store.Processed("new") {

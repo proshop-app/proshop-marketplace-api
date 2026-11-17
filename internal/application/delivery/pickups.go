@@ -38,9 +38,11 @@ type Service struct {
 }
 
 type flight struct {
-	done   chan struct{}
-	points []delivery.PickupPoint
-	err    error
+	cancel  context.CancelFunc
+	waiters int
+	done    chan struct{}
+	points  []delivery.PickupPoint
+	err     error
 }
 
 // NewService собирает поиск пунктов и общий кэш.
@@ -69,12 +71,26 @@ func (s *Service) Search(ctx context.Context, carrier delivery.Carrier, city str
 	s.mu.Lock()
 	f, ok := s.flights[key]
 	if !ok {
-		f = &flight{done: make(chan struct{})}
+		// Общая загрузка живёт, пока есть ожидающие, и имеет конечный общий срок.
+		budget := time.Duration(s.config.Attempts)*s.config.QuoteTimeout + 5*time.Second
+		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
+		f = &flight{done: make(chan struct{}), cancel: cancel}
 		s.flights[key] = f
-		// Общая загрузка переживает отключение любого клиента; попытки имеют свои дедлайны.
-		go s.load(context.WithoutCancel(ctx), key, carrier, city, f)
+		go s.load(loadCtx, key, carrier, city, f)
 	}
+	f.waiters++
 	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		f.waiters--
+		if f.waiters == 0 {
+			f.cancel()
+			if s.flights[key] == f {
+				delete(s.flights, key)
+			}
+		}
+	}()
 
 	select {
 	case <-ctx.Done():
@@ -85,9 +101,12 @@ func (s *Service) Search(ctx context.Context, carrier delivery.Carrier, city str
 }
 
 func (s *Service) load(ctx context.Context, key string, carrier delivery.Carrier, city string, f *flight) {
+	defer f.cancel()
 	f.points, f.err = s.cached(ctx, key, carrier, city)
 	s.mu.Lock()
-	delete(s.flights, key)
+	if s.flights[key] == f {
+		delete(s.flights, key)
+	}
 	close(f.done)
 	s.mu.Unlock()
 }

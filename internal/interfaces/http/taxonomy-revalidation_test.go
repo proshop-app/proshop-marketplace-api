@@ -134,9 +134,11 @@ func TestRevalidationFailureResponseHasDefaultAndMaximum(t *testing.T) {
 
 func revalidationFailureHandler(store *fake.Store) http.Handler {
 	return NewHandler(Deps{
-		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Taxonomy:      apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
-		OperatorToken: "token",
-		Registerer:    prometheus.NewRegistry(),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Logger:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Taxonomy:               apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
+		OperatorToken:          "token",
+		Registerer:             prometheus.NewRegistry(),
 	})
 }

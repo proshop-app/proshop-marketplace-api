@@ -51,7 +51,12 @@ func (r *CreationRunner) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case result := <-r.executor.Results():
-			r.record(messaging.Outcome{Task: result.Task, Err: result.Err, Lag: result.Lag})
+			r.record(messaging.Outcome{
+				Task:          result.Task,
+				Err:           result.Err,
+				Lag:           result.Lag,
+				FailureReason: result.FailureReason,
+			})
 		case <-ticker.C:
 		}
 	}

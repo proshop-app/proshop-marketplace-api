@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"gorm.io/gorm"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
@@ -27,13 +29,24 @@ var migrations embed.FS
 var ErrUnavailable = errs.New(errs.Unavailable, "storage.unavailable", "хранилище недоступно")
 
 // Open — пул соединений с проверкой связи.
-func Open(ctx context.Context, url string, maxConns int32) (*pgxpool.Pool, error) {
+func Open(ctx context.Context, url string, maxConns int32, budgets ...ports.DatabaseBudget) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, fmt.Errorf("адрес базы: %w", err)
 	}
 
 	cfg.MaxConns = maxConns
+	budget := defaultDatabaseBudget(ports.DatabaseBudget{})
+	if len(budgets) > 0 {
+		budget = budgets[0]
+	}
+	if err := validateDatabaseBudget(budget); err != nil {
+		return nil, err
+	}
+	prepareBudgets(cfg, budget)
+	if cfg.ConnConfig.ConnectTimeout <= 0 {
+		cfg.ConnConfig.ConnectTimeout = 5 * time.Second
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -51,7 +64,7 @@ func Open(ctx context.Context, url string, maxConns int32) (*pgxpool.Pool, error
 
 // Migrate применяет миграции из репозитория до последней версии.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	return runGoose(ctx, pool, func(provider *goose.Provider) error {
+	return runGoose(ctx, pool, migrationUp, func(provider *goose.Provider) error {
 		results, err := provider.Up(ctx)
 		if err != nil {
 			return err
@@ -69,7 +82,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 func MigrationStatus(ctx context.Context, pool *pgxpool.Pool) ([]*goose.MigrationStatus, error) {
 	var statuses []*goose.MigrationStatus
 
-	err := runGoose(ctx, pool, func(provider *goose.Provider) error {
+	err := runGoose(ctx, pool, migrationRead, func(provider *goose.Provider) error {
 		var err error
 		statuses, err = provider.Status(ctx)
 
@@ -81,7 +94,7 @@ func MigrationStatus(ctx context.Context, pool *pgxpool.Pool) ([]*goose.Migratio
 
 // MigrateDown откатывает последнюю миграцию.
 func MigrateDown(ctx context.Context, pool *pgxpool.Pool) error {
-	return runGoose(ctx, pool, func(provider *goose.Provider) error {
+	return runGoose(ctx, pool, migrationDown, func(provider *goose.Provider) error {
 		_, err := provider.Down(ctx)
 
 		return err
@@ -90,14 +103,19 @@ func MigrateDown(ctx context.Context, pool *pgxpool.Pool) error {
 
 // MigrateDownTo откатывает миграции новее указанной версии, сохраняя её применённой.
 func MigrateDownTo(ctx context.Context, pool *pgxpool.Pool, version int64) error {
-	return runGoose(ctx, pool, func(provider *goose.Provider) error {
+	return runGoose(ctx, pool, migrationDown, func(provider *goose.Provider) error {
 		_, err := provider.DownTo(ctx, version)
 
 		return err
 	})
 }
 
-func runGoose(ctx context.Context, pool *pgxpool.Pool, run func(*goose.Provider) error) error {
+func runGoose(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	direction migrationDirection,
+	run func(*goose.Provider) error,
+) error {
 	// закрытие *sql.DB поверх пула не закрывает сам пул
 	db := stdlib.OpenDBFromPool(pool)
 	defer func() { _ = db.Close() }()
@@ -111,7 +129,11 @@ func runGoose(ctx context.Context, pool *pgxpool.Pool, run func(*goose.Provider)
 		return fmt.Errorf("миграции: %w", err)
 	}
 
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, files)
+	locker, err := migrationLocker(direction)
+	if err != nil {
+		return err
+	}
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, files, goose.WithSessionLocker(locker))
 	if err != nil {
 		return fmt.Errorf("миграции: %w", err)
 	}
@@ -125,9 +147,7 @@ func runGoose(ctx context.Context, pool *pgxpool.Pool, run func(*goose.Provider)
 
 // logDeliveryMigrationReport читает сохранённый отчёт после фиксации миграции.
 func logDeliveryMigrationReport(ctx context.Context, pool *pgxpool.Pool) error {
-	return newConnectionSource(pool).withConnection(ctx, func(db *gorm.DB) error {
-		return readDeliveryMigrationReport(ctx, db)
-	})
+	return newConnectionSource(pool).withConnection(ctx, readDeliveryMigrationReport)
 }
 
 func readDeliveryMigrationReport(ctx context.Context, db *gorm.DB) error {

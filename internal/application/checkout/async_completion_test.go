@@ -305,13 +305,16 @@ func TestExecutorBacksOffNonPendingFailures(t *testing.T) {
 		return tx.Outbox().Enqueue(ctx, ports.NewTask{
 			Kind:     appcheckout.TaskCreateOrder,
 			TenantID: "t1",
-			Payload:  []byte("invalid"),
+			Payload:  []byte(`{}`),
 			At:       e.clock.Now(),
 		})
 	}); err != nil {
 		t.Fatal(err)
 	}
-	executor := appcheckout.NewExecutor(e.store, e.clock, e.service)
+	unavailable := errs.New(errs.Unavailable, "test.storage", "база недоступна")
+	uow := &resultUOW{UnitOfWork: e.store, failure: unavailable, remaining: 100}
+	service := appcheckout.NewService(uow, e.index, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
+	executor := appcheckout.NewExecutor(e.store, e.clock, service)
 	for _, delay := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second} {
 		now := e.clock.Now()
 		if err := executor.Dispatch(ctx); err != nil {

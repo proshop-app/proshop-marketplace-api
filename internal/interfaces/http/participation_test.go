@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -31,11 +32,13 @@ func TestParticipationMachineAndReturn(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := transport.NewHandler(transport.Deps{
-		Registerer:     prometheus.NewRegistry(),
-		Logger:         slog.Default(),
-		Participants:   service,
-		OperatorToken:  token,
-		ServerAPIToken: "server-token",
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Registerer:             prometheus.NewRegistry(),
+		Logger:                 slog.Default(),
+		Participants:           service,
+		OperatorToken:          token,
+		ServerAPIToken:         "server-token",
 	})
 	machine := "/api/v1/internal/tenants/t1/participation"
 	operator := "/api/v1/operator/participants/t1"
@@ -78,9 +81,11 @@ func TestParticipationMachineAndReturn(t *testing.T) {
 		t.Fatal(body)
 	}
 	handler = transport.NewHandler(transport.Deps{
-		Registerer:   prometheus.NewRegistry(),
-		Logger:       slog.Default(),
-		Participants: service,
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Registerer:             prometheus.NewRegistry(),
+		Logger:                 slog.Default(),
+		Participants:           service,
 	})
 	call("GET", machine, "", "server-token", http.StatusNotFound)
 }

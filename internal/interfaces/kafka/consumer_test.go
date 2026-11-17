@@ -17,6 +17,7 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
 type source struct {
@@ -31,6 +32,7 @@ type parker struct {
 }
 
 type flaky struct {
+	failure error
 	recorder
 	failures int
 }
@@ -88,7 +90,10 @@ func (f *flaky) ApplyPrice(ctx context.Context, e appcatalog.PriceEvent) error {
 			f.failures--
 		}
 
-		return errors.New("временный сбой")
+		if f.failure != nil {
+			return f.failure
+		}
+		return errors.New("неизвестный сбой")
 	}
 
 	return f.recorder.ApplyPrice(ctx, e)
@@ -295,4 +300,16 @@ func sum(t *testing.T, registry *prometheus.Registry, name string) float64 {
 	}
 
 	return total
+}
+
+func TestConsumerDoesNotParkDependencyOutageAfterAttemptBudget(t *testing.T) {
+	projections := &flaky{failures: 30, failure: errs.New(errs.Unavailable, "test.down", "отказ")}
+	parked := &parker{}
+	c, _ := consumer(&source{}, projections, parked, nil)
+	if err := c.Process(context.Background(), priceMessage(1, tenantHeader("t1"))); err != nil {
+		t.Fatal(err)
+	}
+	if projections.failures != 0 || len(parked.events) != 0 {
+		t.Fatal("отказ зависимости превратился в карантин", projections.failures, parked.events)
+	}
 }

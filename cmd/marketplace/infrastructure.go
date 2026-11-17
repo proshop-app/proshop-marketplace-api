@@ -32,7 +32,12 @@ type storage struct {
 
 // openStorage подключает PostgreSQL и API поиска.
 func openStorage(ctx context.Context, cfg config.Config) (*storage, error) {
-	pool, err := postgres.Open(ctx, cfg.Database.URL, cfg.Database.MaxConns)
+	pool, err := postgres.Open(
+		ctx,
+		cfg.Database.URL,
+		cfg.Database.MaxConns,
+		ports.DatabaseBudget(cfg.Database.Background),
+	)
 	if err != nil {
 		return nil, err
 	}

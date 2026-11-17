@@ -34,7 +34,9 @@ func TestReferenceImportBudgetExtendsOnlyItsConnectionDeadlines(t *testing.T) {
 	delayed := 3 * ordinaryTimeout
 	deadlines := make(chan time.Duration, 1)
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /import", referenceImportBudget(func(w http.ResponseWriter, r *http.Request) {
+	importTimeout := time.Second
+	deps := Deps{RequestTimeout: ordinaryTimeout, ReferenceImportTimeout: importTimeout}
+	importHandler := referenceImportBudget(func(w http.ResponseWriter, r *http.Request) {
 		deadline, ok := r.Context().Deadline()
 		if !ok {
 			http.Error(w, "нет общего бюджета", http.StatusInternalServerError)
@@ -48,7 +50,8 @@ func TestReferenceImportBudgetExtendsOnlyItsConnectionDeadlines(t *testing.T) {
 		}
 		time.Sleep(delayed)
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-	}))
+	})
+	mux.HandleFunc("POST /import", requestBudget(importRequest, deps, importHandler))
 	mux.HandleFunc("GET /regular", func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(delayed)
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -71,7 +74,7 @@ func TestReferenceImportBudgetExtendsOnlyItsConnectionDeadlines(t *testing.T) {
 		t.Fatal(response.StatusCode, result, err)
 	}
 	remaining := <-deadlines
-	if remaining < referenceImportTimeout-time.Second || remaining > referenceImportTimeout {
+	if remaining < importTimeout-delayed || remaining > importTimeout {
 		t.Fatal("у импорта неверный бюджет", remaining)
 	}
 	if server.Config.ReadTimeout != ordinaryTimeout || server.Config.WriteTimeout != ordinaryTimeout {
@@ -88,10 +91,11 @@ func TestReferenceImportBudgetExtendsOnlyItsConnectionDeadlines(t *testing.T) {
 func TestReferenceImportBudgetRespectsEarlierContextAndReports503(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
-	handler := referenceImportBudget(func(w http.ResponseWriter, r *http.Request) {
+	next := referenceImportBudget(func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
 		writeReferenceImportError(w, r, r.Context().Err())
 	})
+	handler := requestBudget(importRequest, Deps{ReferenceImportTimeout: time.Second}, next)
 	request := httptest.NewRequest(http.MethodPost, "/import", nil).WithContext(ctx)
 	recorder := httptest.NewRecorder()
 	handler(recorder, request)
@@ -99,7 +103,7 @@ func TestReferenceImportBudgetRespectsEarlierContextAndReports503(t *testing.T) 
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if recorder.Code != http.StatusServiceUnavailable || body.Error.Code != "reference.import_timeout" {
+	if recorder.Code != http.StatusServiceUnavailable || body.Error.Code != "http.request_timeout" {
 		t.Fatal(recorder.Code, body)
 	}
 }

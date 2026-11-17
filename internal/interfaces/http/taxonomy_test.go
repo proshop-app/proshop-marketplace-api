@@ -65,9 +65,18 @@ func TestTaxonomyHTTP(t *testing.T) {
 	clock := fake.NewClock(time.Now())
 	index := fake.NewIndex()
 	handler := NewHandler(Deps{
-		Registerer:    prometheus.NewRegistry(),
-		Taxonomy:      apptaxonomy.NewService(store, clock, nil),
-		Catalog:       appcatalog.NewQueries(store, index, fake.NewPlatform(), nil, nil, fake.NewClock(time.Time{})),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Registerer:             prometheus.NewRegistry(),
+		Taxonomy:               apptaxonomy.NewService(store, clock, nil),
+		Catalog: appcatalog.NewQueries(
+			store,
+			index,
+			fake.NewPlatform(),
+			nil,
+			nil,
+			fake.NewClock(time.Time{}),
+		),
 		OperatorToken: "token",
 		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
@@ -304,9 +313,11 @@ func TestTaxonomyAttributeFormatHTTP(t *testing.T) {
 		Categories: []taxonomy.Category{{ID: "c1", Name: "Категория", Slug: "c1", Schema: "s1"}},
 	})
 	handler := NewHandler(Deps{
-		Registerer: prometheus.NewRegistry(),
-		Taxonomy:   apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
-		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Registerer:             prometheus.NewRegistry(),
+		Taxonomy:               apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
+		Logger:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	for _, path := range []string{"/api/v1/taxonomy/attributes", "/api/v1/taxonomy/categories/c1/schema"} {
 		response := httptest.NewRecorder()
@@ -339,9 +350,11 @@ func TestTaxonomyFacetSnapshotHTTP(t *testing.T) {
 		}},
 	})
 	handler := NewHandler(Deps{
-		Registerer: prometheus.NewRegistry(),
-		Taxonomy:   apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
-		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Registerer:             prometheus.NewRegistry(),
+		Taxonomy:               apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
+		Logger:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/taxonomy/attributes", nil))

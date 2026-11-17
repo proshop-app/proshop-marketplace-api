@@ -31,16 +31,19 @@ type parkedKey struct {
 
 // OutboxRow — задача outbox в памяти.
 type OutboxRow struct {
-	ID        int64
-	Kind      string
-	TenantID  ids.TenantID
-	DedupKey  string
-	Payload   []byte
-	Attempts  int
-	NextAt    time.Time
-	DoneAt    *time.Time
-	LastError string
-	CreatedAt time.Time
+	UnknownFailures int
+	FailedAt        *time.Time
+	FailureReason   string
+	ID              int64
+	Kind            string
+	TenantID        ids.TenantID
+	DedupKey        string
+	Payload         []byte
+	Attempts        int
+	NextAt          time.Time
+	DoneAt          *time.Time
+	LastError       string
+	CreatedAt       time.Time
 }
 
 type data struct {
@@ -281,7 +284,7 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Ta
 
 	due := make([]int, 0)
 	for i, row := range s.data.outbox {
-		if row.DoneAt == nil && !row.NextAt.After(request.Now) &&
+		if row.DoneAt == nil && row.FailedAt == nil && !row.NextAt.After(request.Now) &&
 			(len(request.Kinds) == 0 || slices.Contains(request.Kinds, row.Kind)) &&
 			!slices.Contains(request.ExcludeKinds, row.Kind) {
 			due = append(due, i)
@@ -324,12 +327,13 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Ta
 		row.Attempts++
 		row.NextAt = request.LeaseUntil
 		tasks = append(tasks, ports.Task{
-			ID:        row.ID,
-			Kind:      row.Kind,
-			TenantID:  row.TenantID,
-			Payload:   row.Payload,
-			Attempts:  row.Attempts,
-			CreatedAt: row.CreatedAt,
+			ID:              row.ID,
+			Kind:            row.Kind,
+			TenantID:        row.TenantID,
+			Payload:         row.Payload,
+			Attempts:        row.Attempts,
+			UnknownFailures: row.UnknownFailures,
+			CreatedAt:       row.CreatedAt,
 		})
 	}
 
@@ -343,7 +347,7 @@ func (s *Store) Complete(_ context.Context, id int64, attempts int, at time.Time
 
 	for i := range s.data.outbox {
 		row := &s.data.outbox[i]
-		if row.ID == id && row.Attempts == attempts && attempts > 0 && row.DoneAt == nil {
+		if row.ID == id && row.Attempts == attempts && attempts > 0 && row.DoneAt == nil && row.FailedAt == nil {
 			row.DoneAt = &at
 			row.LastError = ""
 
@@ -361,7 +365,7 @@ func (s *Store) Retry(_ context.Context, id int64, attempts int, nextAt time.Tim
 
 	for i := range s.data.outbox {
 		row := &s.data.outbox[i]
-		if row.ID == id && row.Attempts == attempts && attempts > 0 && row.DoneAt == nil {
+		if row.ID == id && row.Attempts == attempts && attempts > 0 && row.DoneAt == nil && row.FailedAt == nil {
 			row.NextAt = nextAt
 			row.LastError = reason
 
@@ -406,7 +410,7 @@ func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.Purg
 	s.data.outbox = kept
 
 	for key, event := range s.data.parked {
-		if event.ParkedAt.Before(request.ParkedBefore) && event.Control.Status != "queued" {
+		if event.Control.Status == "resolved" && event.Control.UpdatedAt.Before(request.ParkedBefore) {
 			delete(s.data.parked, key)
 			result.Parked++
 		}

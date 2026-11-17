@@ -37,7 +37,7 @@ func NewLeases(pool *pgxpool.Pool) *Leases {
 func (l *Leases) Acquire(ctx context.Context, name, holder string, ttl time.Duration) (bool, error) {
 	var acquired bool
 
-	err := l.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := l.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		affected, err := execSQL(ctx, db, acquireLease, name, holder, ttl.Seconds())
 		if err != nil {
 			return fmt.Errorf("аренда %s: %w", name, err)
@@ -52,7 +52,7 @@ func (l *Leases) Acquire(ctx context.Context, name, holder string, ttl time.Dura
 
 // Release отпускает свою аренду.
 func (l *Leases) Release(ctx context.Context, name, holder string) error {
-	return l.source.withConnection(ctx, func(db *gorm.DB) error {
+	return l.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		if _, err := execSQL(ctx, db, releaseLease, name, holder); err != nil {
 			return fmt.Errorf("аренда %s: %w", name, err)
 		}

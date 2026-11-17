@@ -48,10 +48,12 @@ func TestRelease10ActualFilesThroughHTTP(t *testing.T) {
 	seedRelease10Dictionaries(t, store, generator, input.Attributes, false)
 	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
 	handler := NewHandler(Deps{
-		Registerer:    prometheus.NewRegistry(),
-		Taxonomy:      service,
-		OperatorToken: "token",
-		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RequestTimeout:         time.Minute,
+		ReferenceImportTimeout: time.Minute,
+		Registerer:             prometheus.NewRegistry(),
+		Taxonomy:               service,
+		OperatorToken:          "token",
+		Logger:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	call := func(part string, body []byte, version int64, query string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPut, "/api/v1/operator/taxonomy/"+part+query, bytes.NewReader(body))

@@ -156,7 +156,10 @@ func (r *Reader) Fetch(ctx context.Context) (kafkago.Message, error) {
 	case <-ctx.Done():
 		return kafkago.Message{}, ctx.Err()
 	case result := <-session.messages:
-		return result.message, result.err
+		if result.err != nil {
+			return result.message, ErrUnavailable.Wrap(result.err)
+		}
+		return result.message, nil
 	}
 }
 
@@ -196,7 +199,10 @@ func (r *Reader) Commit(ctx context.Context, messages ...kafkago.Message) error 
 			message.Offset+1,
 		)
 	}
-	return session.commit(ctx, offsets)
+	if err := session.commit(ctx, offsets); err != nil {
+		return ErrUnavailable.Wrap(err)
+	}
+	return nil
 }
 
 // GenerationActive отличает остановку обработки от отзыва назначения.

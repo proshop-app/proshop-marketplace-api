@@ -60,7 +60,7 @@ func NewOutboxRunner(
 		tasks: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "marketplace_outbox_tasks_total",
-				Help: "Задачи outbox по итогу: done — выполнена, retry — отложена на повтор.",
+				Help: "Задачи outbox по итогу: done — выполнена, retry — повтор, quarantined — отказ.",
 			},
 			[]string{"kind", "tenant", "result"},
 		),
@@ -149,12 +149,17 @@ func (r *OutboxRunner) RecordOutcome(outcome messaging.Outcome) {
 		return
 	}
 
-	r.tasks.WithLabelValues(outcome.Task.Kind, tenant, "retry").Inc()
+	result, message := "retry", "outbox: задача отложена"
+	if outcome.FailureReason != "" {
+		result, message = "quarantined", "outbox: задача в карантине"
+	}
+	r.tasks.WithLabelValues(outcome.Task.Kind, tenant, result).Inc()
 	if appcheckout.CreationPending(outcome.Err) {
 		return
 	}
 	r.logger.Warn(
-		"outbox: задача отложена",
+		message,
+		slog.String("reason", outcome.FailureReason),
 		slog.String("kind", outcome.Task.Kind),
 		slog.String("tenantId", tenant),
 		slog.Int64(
