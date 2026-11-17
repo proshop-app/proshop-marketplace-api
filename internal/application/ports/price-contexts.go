@@ -23,7 +23,8 @@ type PriceContextEntry struct {
 // PriceContextCache ограничивает жизнь записи; токен загрузки защищает от записи после сброса.
 type PriceContextCache interface {
 	Get(context.Context, ids.UUID) (PriceContextEntry, bool, error)
-	Begin(context.Context, ids.UUID, string, time.Duration) error
+	// Begin атомарно назначает токен и возвращает снимок после всех предшествующих сбросов.
+	Begin(context.Context, ids.UUID, string, time.Duration) (PriceContextEntry, error)
 	Store(context.Context, ids.UUID, string, PriceContextEntry, time.Duration) (bool, error)
 	Delete(context.Context, ids.UUID) error
 }

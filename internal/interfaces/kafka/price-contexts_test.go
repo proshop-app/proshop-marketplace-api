@@ -25,7 +25,7 @@ func TestPriceContextContractInvalidatesAndParksInvalid(t *testing.T) {
 	cache := &fake.PriceContextCache{}
 	clock := fake.NewClock(time.Now())
 	service := pricecontexts.New(ctx, pricecontexts.Config{}, fake.NewStore(), nil, cache, clock, &fake.IDs{}, nil)
-	if err := cache.Begin(ctx, buyer, "seed", time.Minute); err != nil {
+	if _, err := cache.Begin(ctx, buyer, "seed", time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	_, err = cache.Store(ctx, buyer, "seed", ports.PriceContextEntry{LoadedAt: clock.Now()}, time.Minute)

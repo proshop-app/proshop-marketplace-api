@@ -55,7 +55,12 @@ func (m *Memory) Get(_ context.Context, buyer ids.UUID) (ports.PriceContextEntry
 }
 
 // Begin регистрирует загрузку и вытесняет наименее используемого покупателя.
-func (m *Memory) Begin(_ context.Context, buyer ids.UUID, token string, ttl time.Duration) error {
+func (m *Memory) Begin(
+	_ context.Context,
+	buyer ids.UUID,
+	token string,
+	ttl time.Duration,
+) (ports.PriceContextEntry, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.prune()
@@ -76,7 +81,8 @@ func (m *Memory) Begin(_ context.Context, buyer ids.UUID, token string, ttl time
 	value.expires = m.clock.Now().Add(ttl)
 	m.records[buyer] = value
 	m.size()
-	return nil
+	value.entry.Profiles = maps.Clone(value.entry.Profiles)
+	return value.entry, nil
 }
 
 // Store не допускает завершения загрузки после удаления или вытеснения.

@@ -177,37 +177,52 @@ func (s *Service) load(buyer ids.UUID) {
 	defer cancel()
 	token := string(s.ids.NewUUID())
 	lifetime := s.cfg.TTL + s.cfg.StaleTTL
-	if err := s.cache.Begin(ctx, buyer, token, lifetime+s.cfg.LoadTimeout); err != nil {
-		outcome = "cache_error"
-		return
+	outcome = s.refresh(ctx, buyer, token, lifetime)
+}
+
+func (s *Service) refresh(ctx context.Context, buyer ids.UUID, token string, lifetime time.Duration) string {
+	previous, err := s.cache.Begin(ctx, buyer, token, lifetime+s.cfg.LoadTimeout)
+	if err != nil {
+		return "cache_error"
 	}
-	// Полный снимок покупателя одинаков для каталога, карточки, рекомендаций и панели.
-	loadedAt := s.clock.Now()
-	profiles, err := appcatalog.LoadPriceContexts(ctx, s.uow, s.upstream, buyer)
+	entry, err := s.loadSnapshot(ctx, buyer, previous)
 	if err == nil {
 		var saved bool
 		saved, err = s.cache.Store(
 			ctx,
 			buyer,
 			token,
-			ports.PriceContextEntry{
-				Profiles: profiles,
-				LoadedAt: loadedAt,
-			},
-			lifetime,
+			entry,
+			max(time.Millisecond, entry.LoadedAt.Add(lifetime).Sub(s.clock.Now())),
 		)
 		if err == nil && !saved {
-			outcome = "invalidated"
-			return
+			return "invalidated"
 		}
 	}
-	outcome = "ok"
-	if err != nil {
-		outcome = "error"
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			outcome = "timeout"
-		}
+	if err == nil {
+		return "ok"
 	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return "timeout"
+	}
+	return "error"
+}
+
+func (s *Service) loadSnapshot(
+	ctx context.Context,
+	buyer ids.UUID,
+	previous ports.PriceContextEntry,
+) (ports.PriceContextEntry, error) {
+	loadedAt := s.clock.Now()
+	var known map[ids.TenantID]string
+	age := loadedAt.Sub(previous.LoadedAt)
+	if !previous.LoadedAt.IsZero() && age >= 0 && age < s.cfg.TTL && len(previous.Profiles) > 0 {
+		known = previous.Profiles
+		// Добавление магазина не продлевает свежесть уже подтверждённых профилей.
+		loadedAt = previous.LoadedAt
+	}
+	profiles, err := appcatalog.LoadPriceContexts(ctx, s.uow, s.upstream, buyer, known)
+	return ports.PriceContextEntry{Profiles: profiles, LoadedAt: loadedAt}, err
 }
 
 func (s *Service) observe(operation, outcome string, elapsed time.Duration) {

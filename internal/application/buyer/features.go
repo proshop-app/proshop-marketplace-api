@@ -261,14 +261,20 @@ func (s *Features) savedOfferViews(
 		return []SavedView{}, nil
 	}
 	keys := make([]ids.OfferID, 0, len(saved))
+	tenants := make([]ids.TenantID, 0, len(saved))
+	seen := make(map[ids.TenantID]bool, len(saved))
 	for _, item := range saved {
 		key, err := ids.ParseOfferID(item.Offer.ID)
 		if err != nil {
 			return nil, err
 		}
 		keys = append(keys, key)
+		if !seen[key.Tenant] {
+			tenants = append(tenants, key.Tenant)
+			seen[key.Tenant] = true
+		}
 	}
-	contexts, err := appcatalog.PriceContexts(ctx, s.uow, s.pricing, id, nil)
+	contexts, err := appcatalog.PriceContexts(ctx, s.uow, s.pricing, id, tenants)
 	if err != nil {
 		return nil, err
 	}

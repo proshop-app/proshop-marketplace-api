@@ -34,6 +34,32 @@ type checkedFeaturePricing struct {
 	calls int
 }
 
+func TestFavoritesOnlyRequestContextsOfDisplayedShops(t *testing.T) {
+	ctx := context.Background()
+	store := fake.NewStore()
+	seedFeatureOffer(store, 100, true)
+	store.SeedTenant(participant.TenantState{TenantID: "t2", Status: participant.TenantActive})
+	store.SeedParticipant(participant.State{
+		TenantID: "t2",
+		Enabled:  true,
+		Stage:    participant.StageConnected,
+		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+	})
+	platform := fake.NewPlatform()
+	service := app.NewFeatures(store, nil, platform, fake.NewLimiter(), &fake.PickupLookup{})
+	offer := ids.OfferID{Tenant: "t1", Product: "p1"}
+	if err := service.PutSaved(ctx, featureBuyer, ports.Favorites, offer, nil); err != nil {
+		t.Fatal(err)
+	}
+	before := len(platform.PriceContextCalls())
+	items, total, err := service.Favorites(ctx, featureBuyer, 20, 0)
+	calls := platform.PriceContextCalls()[before:]
+	if err != nil || total != 1 || len(items) != 1 || len(calls) != 1 || calls[0] != "t1" {
+		t.Fatal("избранное опросило посторонний магазин", calls, total, err)
+	}
+}
+
 func (u *trackedFeatureUOW) Do(ctx context.Context, fn func(context.Context, ports.Tx) error) error {
 	return u.UnitOfWork.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		u.active = true

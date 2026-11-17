@@ -46,14 +46,21 @@ func (c *PriceContextCache) Get(_ context.Context, buyer ids.UUID) (ports.PriceC
 }
 
 // Begin запоминает токен новой загрузки.
-func (c *PriceContextCache) Begin(_ context.Context, buyer ids.UUID, token string, _ time.Duration) error {
+func (c *PriceContextCache) Begin(
+	_ context.Context,
+	buyer ids.UUID,
+	token string,
+	_ time.Duration,
+) (ports.PriceContextEntry, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.tokens == nil {
 		c.tokens = make(map[ids.UUID]string)
 	}
 	c.tokens[buyer] = token
-	return nil
+	entry := c.entries[buyer]
+	entry.Profiles = maps.Clone(entry.Profiles)
+	return entry, nil
 }
 
 // Store сохраняет запись только с актуальным токеном.

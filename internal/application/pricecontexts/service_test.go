@@ -98,7 +98,7 @@ func wait(t *testing.T, f *fixture, outcome string) {
 func seed(t *testing.T, f *fixture, loaded time.Time) {
 	t.Helper()
 	ctx := context.Background()
-	if err := f.cache.Begin(ctx, buyerID, "seed", time.Minute); err != nil {
+	if _, err := f.cache.Begin(ctx, buyerID, "seed", time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	_, err := f.cache.Store(

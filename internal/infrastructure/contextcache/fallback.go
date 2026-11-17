@@ -34,15 +34,24 @@ func (c *Fallback) Get(ctx context.Context, buyer ids.UUID) (ports.PriceContextE
 }
 
 // Begin допускает загрузку при отказе общего кэша.
-func (c *Fallback) Begin(ctx context.Context, buyer ids.UUID, token string, ttl time.Duration) error {
-	if err := c.memory.Begin(ctx, buyer, token, ttl); err != nil {
-		return err
-	}
+func (c *Fallback) Begin(
+	ctx context.Context,
+	buyer ids.UUID,
+	token string,
+	ttl time.Duration,
+) (ports.PriceContextEntry, error) {
 	if c.primary != nil {
-		// Память продолжает обслуживать процесс при отказе общего кэша.
-		_ = c.primary.Begin(ctx, buyer, token, ttl)
+		entry, err := c.primary.Begin(ctx, buyer, token, ttl)
+		if err == nil {
+			if entry.LoadedAt.IsZero() {
+				_ = c.memory.Delete(ctx, buyer)
+			}
+			_, err = c.memory.Begin(ctx, buyer, token, ttl)
+			return entry, err
+		}
 	}
-	return nil
+	// Память продолжает обслуживать процесс при отказе общего кэша.
+	return c.memory.Begin(ctx, buyer, token, ttl)
 }
 
 // Store проверяет токен в обоих хранилищах и не возрождает сброшенную запись.
