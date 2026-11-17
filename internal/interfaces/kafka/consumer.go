@@ -26,6 +26,8 @@ type Source interface {
 	Run(ctx context.Context, consume func(context.Context) error) error
 	// Fetch ограничивает число выданных сообщений отдельно для каждой партиции.
 	Fetch(ctx context.Context) (kafkago.Message, error)
+	// GenerationActive отличает остановку процесса от отзыва назначения.
+	GenerationActive(ctx context.Context) bool
 	// Release освобождает место в окне чтения после записи итога, независимо от коммита Kafka.
 	Release(ctx context.Context, message kafkago.Message)
 	Commit(ctx context.Context, messages ...kafkago.Message) error

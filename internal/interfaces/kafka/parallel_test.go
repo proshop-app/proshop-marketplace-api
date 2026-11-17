@@ -20,9 +20,12 @@ import (
 )
 
 type parallelSource struct {
-	messages chan kafkago.Message
-	commits  chan []kafkago.Message
-	run      func(context.Context, func(context.Context) error) error
+	messages   chan kafkago.Message
+	commits    chan []kafkago.Message
+	commit     func(context.Context, ...kafkago.Message) error
+	run        func(context.Context, func(context.Context) error) error
+	generation context.Context
+	released   chan kafkago.Message
 }
 
 type controlledProjection struct {
@@ -68,9 +71,23 @@ func (s *parallelSource) Fetch(ctx context.Context) (kafkago.Message, error) {
 	}
 }
 
-func (s *parallelSource) Release(context.Context, kafkago.Message) {}
+func (s *parallelSource) GenerationActive(context.Context) bool {
+	return s.generation == nil || s.generation.Err() == nil
+}
+
+func (s *parallelSource) Release(ctx context.Context, message kafkago.Message) {
+	if s.released != nil {
+		select {
+		case s.released <- message:
+		case <-ctx.Done():
+		}
+	}
+}
 
 func (s *parallelSource) Commit(ctx context.Context, messages ...kafkago.Message) error {
+	if s.commit != nil {
+		return s.commit(ctx, messages...)
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}

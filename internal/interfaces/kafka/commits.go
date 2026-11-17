@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	commitBatchSize = 100
-	commitInterval  = time.Second
+	commitBatchSize    = 100
+	commitInterval     = time.Second
+	finalCommitTimeout = time.Second
 )
 
 // Сбой коммита оставляет весь префикс на повтор; обработка других ключей продолжается.
@@ -36,4 +37,21 @@ func (c *offsetCommitter) flush(ctx context.Context, timed bool) {
 	}
 	c.progress.committed()
 	c.retrying = false
+}
+
+// Незавершённые сообщения остаются разрывами. Отозванное поколение не фиксируется.
+func (c *offsetCommitter) finish(ctx context.Context, source Source, completed <-chan *delivery) {
+	for {
+		select {
+		case item := <-completed:
+			item.offset.complete()
+		default:
+			if source.GenerationActive(ctx) {
+				finalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finalCommitTimeout)
+				defer cancel()
+				c.flush(finalCtx, true)
+			}
+			return
+		}
+	}
 }

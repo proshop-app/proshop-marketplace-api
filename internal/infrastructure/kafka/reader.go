@@ -42,7 +42,9 @@ type Config struct {
 // топики проверяются по полному списку метаданных, который ничего не
 // создаёт; появились — читатель пересоздаётся с расширенной подпиской.
 type Reader struct {
-	config Config
+	config    Config
+	client    *kafkago.Client
+	transport *kafkago.Transport
 
 	mu         sync.Mutex
 	group      *kafkago.ConsumerGroup
@@ -62,7 +64,16 @@ func NewReader(cfg Config) *Reader {
 		cfg.RefreshInterval = DefaultRefreshInterval
 	}
 
-	return &Reader{config: cfg}
+	transport := &kafkago.Transport{DialTimeout: 5 * time.Second}
+	return &Reader{
+		config:    cfg,
+		transport: transport,
+		client: &kafkago.Client{
+			Addr:      kafkago.TCP(cfg.Brokers...),
+			Timeout:   5 * time.Second,
+			Transport: transport,
+		},
+	}
 }
 
 // Run привязывает обработку к поколению группы. Возврат consume означает,
@@ -104,6 +115,7 @@ func (r *Reader) Close() error {
 	}
 	group := r.group
 	r.mu.Unlock()
+	defer r.transport.CloseIdleConnections()
 	if group == nil {
 		return nil
 	}

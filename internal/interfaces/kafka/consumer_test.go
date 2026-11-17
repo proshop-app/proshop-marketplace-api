@@ -55,6 +55,8 @@ func (s *source) Run(ctx context.Context, consume func(context.Context) error) e
 	return consume(ctx)
 }
 
+func (s *source) GenerationActive(context.Context) bool { return true }
+
 func (s *source) Release(context.Context, kafkago.Message) {}
 
 func (s *source) Commit(_ context.Context, messages ...kafkago.Message) error {

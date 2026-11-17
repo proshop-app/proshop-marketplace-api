@@ -38,7 +38,7 @@ func TestCommitUsesOriginalGenerationAndNextOffsets(t *testing.T) {
 	calls := 0
 	session := &readSession{
 		generation: generation,
-		commit: func(offsets map[string]map[int]int64) error {
+		commit: func(_ context.Context, offsets map[string]map[int]int64) error {
 			calls++
 			got = offsets
 			return nil
@@ -122,5 +122,21 @@ func TestReleaseKeepsPartitionWindowsAndGenerationsIndependent(t *testing.T) {
 	reader.Release(cancelled, kafkago.Message{Topic: "topic", Partition: 0})
 	if len(blocked) != partitionWindow {
 		t.Fatal("позднее завершение вмешалось в окно после отмены")
+	}
+}
+
+func TestGenerationActiveSurvivesProcessCancellationOnly(t *testing.T) {
+	generation, revoke := context.WithCancel(context.Background())
+	defer revoke()
+	parent, stop := context.WithCancel(context.Background())
+	ctx := context.WithValue(parent, generationKey{}, &readSession{generation: generation})
+	reader := NewReader(Config{})
+	stop()
+	if !reader.GenerationActive(ctx) {
+		t.Fatal("остановка процесса выдана за отзыв партиций")
+	}
+	revoke()
+	if reader.GenerationActive(context.WithoutCancel(ctx)) {
+		t.Fatal("отмена родителя скрыла отзыв назначения")
 	}
 }

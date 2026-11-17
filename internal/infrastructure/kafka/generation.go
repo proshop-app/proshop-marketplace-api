@@ -19,7 +19,7 @@ type readSession struct {
 	generation context.Context
 	messages   chan fetchResult
 	windows    map[string]map[int]chan struct{}
-	commit     func(map[string]map[int]int64) error
+	commit     func(context.Context, map[string]map[int]int64) error
 }
 
 type fetchResult struct {
@@ -63,7 +63,9 @@ func (r *Reader) consumeGeneration(
 		generation: generationCtx,
 		messages:   make(chan fetchResult),
 		windows:    make(map[string]map[int]chan struct{}),
-		commit:     generation.CommitOffsets,
+		commit: func(ctx context.Context, offsets map[string]map[int]int64) error {
+			return r.commitOffsets(ctx, generation, offsets)
+		},
 	}
 	ctx = context.WithValue(ctx, generationKey{}, session)
 	var readers sync.WaitGroup
@@ -194,5 +196,11 @@ func (r *Reader) Commit(ctx context.Context, messages ...kafkago.Message) error 
 			message.Offset+1,
 		)
 	}
-	return session.commit(offsets)
+	return session.commit(ctx, offsets)
+}
+
+// GenerationActive отличает остановку обработки от отзыва назначения.
+func (r *Reader) GenerationActive(ctx context.Context) bool {
+	session, ok := ctx.Value(generationKey{}).(*readSession)
+	return ok && session.generation.Err() == nil
 }

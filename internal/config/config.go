@@ -322,6 +322,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
 	}
 
+	r.kafkaCapacity(&cfg)
+
 	if secret := cfg.DaData.CacheSecret; secret != "" && len(secret) < minGeoIPCacheSecretLength {
 		r.fail("GEOIP_CACHE_SECRET", fmt.Sprintf("не короче %d байт", minGeoIPCacheSecretLength))
 	}

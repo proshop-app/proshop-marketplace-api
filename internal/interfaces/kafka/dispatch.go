@@ -11,7 +11,6 @@ import (
 func (c *Consumer) runGeneration(parent context.Context) error {
 	ctx, cancel := context.WithCancel(parent)
 	var running sync.WaitGroup
-	defer running.Wait()
 	defer cancel()
 
 	incoming := make(chan kafkago.Message)
@@ -26,6 +25,9 @@ func (c *Consumer) runGeneration(parent context.Context) error {
 
 	commits := &offsetCommitter{progress: make(offsetProgress), commit: c.source.Commit, logger: c.logger}
 	c.dispatch(ctx, incoming, jobs, completed, commits)
+	cancel()
+	running.Wait()
+	commits.finish(parent, c.source, completed)
 	return nil
 }
 

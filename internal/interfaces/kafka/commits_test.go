@@ -6,9 +6,17 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
 )
+
+type finishingSource struct {
+	Source
+	active bool
+}
+
+func (s finishingSource) GenerationActive(context.Context) bool { return s.active }
 
 func TestCommitterBatchesByCountAndTimeAndRetriesWholePrefix(t *testing.T) {
 	progress := make(offsetProgress)
@@ -62,5 +70,38 @@ func TestCommitterBatchesByCountAndTimeAndRetriesWholePrefix(t *testing.T) {
 	commits.flush(cancelled, true)
 	if len(calls) != 3 || progress.count() != 1 {
 		t.Fatal("остановка фиксирует смещения")
+	}
+}
+
+func TestFinalCommitOnlyWhileGenerationLivesAndWithOwnDeadline(t *testing.T) {
+	for _, active := range []bool{false, true} {
+		progress := make(offsetProgress)
+		progress.add(offsetMessage(0, 0)).complete()
+		progress.add(offsetMessage(0, 1)) // Незавершённая транзакция не должна быть перекрыта.
+		tail := progress.add(offsetMessage(0, 2))
+		completed := make(chan *delivery, 1)
+		completed <- &delivery{offset: tail}
+		calls := 0
+		commits := &offsetCommitter{
+			progress: progress,
+			logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+			commit: func(ctx context.Context, messages ...kafkago.Message) error {
+				calls++
+				deadline, bounded := ctx.Deadline()
+				if ctx.Err() != nil || !bounded || time.Until(deadline) > finalCommitTimeout {
+					t.Fatal("финальный коммит использует отменённый контекст или не имеет своего срока")
+				}
+				if len(messages) != 1 || messages[0].Offset != 0 {
+					t.Fatal("финальный коммит перескочил незавершённое сообщение", messages)
+				}
+				return nil
+			},
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		commits.finish(ctx, finishingSource{active: active}, completed)
+		if active && calls != 1 || !active && calls != 0 {
+			t.Fatalf("живое поколение %v: финальных коммитов %d", active, calls)
+		}
 	}
 }
