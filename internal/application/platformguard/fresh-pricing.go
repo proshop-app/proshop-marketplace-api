@@ -12,6 +12,11 @@ func (c *Client) PriceContexts(
 	buyer ids.UUID,
 	tenants []ids.TenantID,
 ) (map[ids.TenantID]string, error) {
+	// В ошибке пачки нет tenantId: её нельзя начислять всем магазинам.
+	// Единственный магазин известен точно и получает обычную изоляцию.
+	if len(tenants) == 1 {
+		ctx = context.WithValue(ctx, tenantContextKey{}, tenants[0])
+	}
 	load := func(ctx context.Context) (map[ids.TenantID]string, error) {
 		return c.upstream.PriceContexts(ctx, buyer, tenants)
 	}

@@ -92,17 +92,27 @@ type Login struct {
 
 // Platform — внутренний API сервера установки.
 type Platform struct {
-	URL              string
-	Token            string
-	Timeout          time.Duration
-	ReadTimeout      time.Duration
-	CacheTTL         time.Duration
-	StaleTTL         time.Duration
-	CacheSize        int
-	MaxConcurrent    int
-	FailureThreshold int
-	OpenInterval     time.Duration
-	LogInterval      time.Duration
+	URL                   string
+	Token                 string
+	Timeout               time.Duration
+	ReadTimeout           time.Duration
+	CacheTTL              time.Duration
+	StaleTTL              time.Duration
+	CacheSize             int
+	MaxConcurrent         int
+	TenantMaxConcurrent   int
+	CheckoutMaxConcurrent int
+	ReadMaxConcurrent     int
+	QueueSize             int
+	TenantQueueSize       int
+	TenantStateSize       int
+	TenantIdleTTL         time.Duration
+	FailureThreshold      int
+	FailureWindow         time.Duration
+	FailureMinCalls       int
+	FailurePercent        int
+	OpenInterval          time.Duration
+	LogInterval           time.Duration
 }
 
 // Cart — корзины.
@@ -279,20 +289,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			PhoneLimit:    r.limit("LOGIN_PHONE_LIMIT", Limit{Count: 3, Window: 10 * time.Minute}),
 			IPLimit:       r.limit("LOGIN_IP_LIMIT", Limit{Count: 20, Window: time.Hour}),
 		},
-		Platform: Platform{
-			URL:              r.httpURL("PLATFORM_API_URL"),
-			Token:            r.required("SERVICE_TOKEN_MARKETPLACE"),
-			Timeout:          r.duration("PLATFORM_API_TIMEOUT", 5*time.Second),
-			ReadTimeout:      r.duration("PLATFORM_READ_TIMEOUT", 300*time.Millisecond),
-			CacheTTL:         r.duration("PLATFORM_CACHE_TTL", 30*time.Second),
-			StaleTTL:         r.duration("PLATFORM_STALE_TTL", 5*time.Minute),
-			CacheSize:        r.positive("PLATFORM_CACHE_SIZE", 1024),
-			MaxConcurrent:    r.positive("PLATFORM_MAX_CONCURRENT", 16),
-			FailureThreshold: r.positive("PLATFORM_FAILURE_THRESHOLD", 5),
-			OpenInterval:     r.duration("PLATFORM_OPEN_INTERVAL", 5*time.Second),
-			LogInterval:      r.duration("PLATFORM_LOG_INTERVAL", 30*time.Second),
-		},
-		Cart: Cart{TTL: r.duration("CART_TTL", 30*24*time.Hour)},
+		Platform: r.platform(),
+		Cart:     Cart{TTL: r.duration("CART_TTL", 30*24*time.Hour)},
 		Checkout: Checkout{
 			DeliverySubsidyMinPercent: r.subsidyPercent(),
 			PaymentStub:               r.boolean("PAYMENT_STUB", false),
