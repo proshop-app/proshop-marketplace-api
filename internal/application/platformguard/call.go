@@ -12,6 +12,7 @@ import (
 func call[T any](
 	ctx context.Context,
 	c *Client,
+	class operationClass,
 	operation string,
 	timeout time.Duration,
 	load func(context.Context) (T, error),
@@ -19,9 +20,9 @@ func call[T any](
 	started := time.Now()
 	callCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	p, reason := c.acquire(callCtx, classOf(operation))
+	p, reason := c.acquire(callCtx, class)
 	if reason != "" {
-		c.observe(ctx, operation, reason, started)
+		c.observe(ctx, class, operation, reason, started)
 		var zero T
 		if callCtx.Err() != nil {
 			return zero, callError(callCtx.Err())
@@ -29,7 +30,7 @@ func call[T any](
 		return zero, ErrUnavailable
 	}
 	value, err := execute(ctx, callCtx, c, p, load)
-	c.observe(ctx, operation, callOutcome(err), started)
+	c.observe(ctx, class, operation, callOutcome(err), started)
 	return value, callError(err)
 }
 

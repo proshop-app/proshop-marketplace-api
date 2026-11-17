@@ -1,5 +1,11 @@
 package platformguard
 
+import (
+	"context"
+
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+)
+
 type operationClass int
 
 const (
@@ -8,13 +14,11 @@ const (
 	classCount
 )
 
-func classOf(operation string) operationClass {
-	switch operation {
-	case "quote", "create_order", "get_order", "stub_payment", "cancel_order":
+func callerClass(ctx context.Context) operationClass {
+	if ports.PlatformClassFromContext(ctx) == ports.PlatformCheckout {
 		return checkoutClass
-	default:
-		return readClass
 	}
+	return readClass
 }
 
 func (c *Client) classLimit(class operationClass) int {

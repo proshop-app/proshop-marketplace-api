@@ -60,7 +60,7 @@ func cached[T any](ctx context.Context, c *Client, key cacheKey, empty T, load f
 		}
 		if entry.loading {
 			c.cacheMu.Unlock()
-			c.observe(ctx, key.operation, "short_circuit", started)
+			c.observe(ctx, readClass, key.operation, "short_circuit", started)
 			return stale(ctx, c, key, entry, empty, started)
 		}
 	} else {
@@ -71,7 +71,7 @@ func cached[T any](ctx context.Context, c *Client, key cacheKey, empty T, load f
 	entry.loading = true
 	c.cacheMu.Unlock()
 
-	value, err := call(ctx, c, key.operation, c.cfg.ReadTimeout, load)
+	value, err := call(ctx, c, readClass, key.operation, c.cfg.ReadTimeout, load)
 	c.cacheMu.Lock()
 	entry.loading = false
 	if err == nil {
@@ -91,7 +91,7 @@ func stale[T any](ctx context.Context, c *Client, key cacheKey, entry *cacheEntr
 	usable := value != nil && c.clock.Now().Sub(entry.loaded) < c.cfg.CacheTTL+c.cfg.StaleTTL
 	c.cacheMu.Unlock()
 	if usable {
-		c.observe(ctx, key.operation, "stale", started)
+		c.observe(ctx, readClass, key.operation, "stale", started)
 		return value.(T)
 	}
 	return empty

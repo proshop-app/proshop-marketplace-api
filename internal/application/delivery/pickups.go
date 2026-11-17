@@ -160,6 +160,7 @@ func (s *Service) fetch(ctx context.Context, carrier delivery.Carrier, city stri
 		}
 		attempted++
 		callCtx, cancel := context.WithTimeout(ctx, s.config.QuoteTimeout)
+		callCtx = ports.WithPlatformCallClass(callCtx, ports.PlatformCheckout)
 		answer, err := s.platform.PickupPoints(callCtx, tenant, carrier, city)
 		cancel()
 		if ctx.Err() != nil {

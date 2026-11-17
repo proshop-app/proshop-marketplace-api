@@ -14,13 +14,14 @@ type PlatformMetrics struct {
 }
 
 // PlatformCall потокобезопасно учитывает исход операции.
-func (m *PlatformMetrics) PlatformCall(operation, _, outcome string, _ time.Duration) {
+func (m *PlatformMetrics) PlatformCall(operation, class, outcome string, _ time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.outcomes == nil {
 		m.outcomes = make(map[string]int)
 	}
 	m.outcomes[operation+":"+outcome]++
+	m.outcomes[operation+":"+class+":"+outcome]++
 }
 
 // Count возвращает число наблюдений исхода.
@@ -28,6 +29,13 @@ func (m *PlatformMetrics) Count(operation, outcome string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.outcomes[operation+":"+outcome]
+}
+
+// CountClass возвращает число исходов операции в выбранном вызывающим классе.
+func (m *PlatformMetrics) CountClass(operation, class, outcome string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.outcomes[operation+":"+class+":"+outcome]
 }
 
 func (p *Platform) platformCall(ctx context.Context, operation string) error {

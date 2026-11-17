@@ -17,6 +17,24 @@ import (
 
 var w3SettingsDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
 
+func TestSettingsSyncUsesReadClassEvenFromCheckoutContext(t *testing.T) {
+	platform := fake.NewPlatform()
+	stop := errors.New("ответ магазина")
+	called := false
+	platform.CallHook = func(ctx context.Context, operation string) error {
+		called = true
+		if operation != "settings" || ports.PlatformClassFromContext(ctx) != ports.PlatformRead {
+			t.Error("фоновая сверка заняла оформление", operation)
+		}
+		return stop
+	}
+	settings := appparticipant.NewSettings(fake.NewStore(), platform, fake.NewClock(t0), &fake.IDs{})
+	ctx := ports.WithPlatformCallClass(context.Background(), ports.PlatformCheckout)
+	if _, err := settings.SyncOne(ctx, "t1"); !errors.Is(err, stop) || !called {
+		t.Fatal("сверка не обратилась к серверу", err)
+	}
+}
+
 func TestSettingsSync(t *testing.T) {
 	store, clock, service := setup(t)
 	ctx := context.Background()

@@ -123,7 +123,10 @@ func TestStrictTimeoutsAndCodes(t *testing.T) {
 }
 
 func strictCall(c *Client, operation string) error {
-	ctx := context.Background()
+	return strictCallContext(context.Background(), c, operation)
+}
+
+func strictCallContext(ctx context.Context, c *Client, operation string) error {
 	switch operation {
 	case "price_group":
 		_, err := c.PriceGroup(ctx, "t1", ports.GroupPricingRequest{})
