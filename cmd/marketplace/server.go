@@ -517,7 +517,8 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
 		outbox.Run,
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
-		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).Run,
+		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).
+			WithSchedule(postgres.NewScheduledWork(s.store.pool, "settings-sync", cfg.Settings.SyncInterval)).Run,
 		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).Run,
 		jobs.NewModelKeyStatsRunner(postgres.NewModelKeyStats(s.store.pool), s.logger, s.metrics).Run,
 	}...)

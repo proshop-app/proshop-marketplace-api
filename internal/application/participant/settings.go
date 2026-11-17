@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -44,14 +47,12 @@ func (s *Settings) Sync(ctx context.Context) (SettingsResult, error) {
 		return result, err
 	}
 
-	for offset := 0; ; offset += settingsPage {
+	for after := ids.TenantID(""); ; {
 		var tenants []ids.TenantID
 
 		err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-			items, _, err := tx.Participants().List(ctx, participant.Page{Limit: settingsPage, Offset: offset})
-			for _, p := range items {
-				tenants = append(tenants, p.TenantID())
-			}
+			var err error
+			tenants, err = tx.Participants().ScanIDs(ctx, after, settingsPage)
 
 			return err
 		})
@@ -59,16 +60,9 @@ func (s *Settings) Sync(ctx context.Context) (SettingsResult, error) {
 			return result, err
 		}
 
-		for _, tenant := range tenants {
-			changed, err := s.SyncOne(ctx, tenant)
-			result.Checked++
-
-			switch {
-			case err != nil:
-				result.Failed[tenant] = err
-			case changed:
-				result.Changed++
-			}
+		s.syncTenants(ctx, tenants, &result)
+		if len(tenants) > 0 {
+			after = tenants[len(tenants)-1]
 		}
 
 		if len(tenants) < settingsPage {
@@ -165,12 +159,11 @@ func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, er
 			}
 		}
 
-		// Время сверки сохраняется и без изменений: по нему оператор видит, что сервер отвечает.
+		if !changed {
+			return tx.Participants().SettingsChecked(ctx, p)
+		}
 		if err := tx.Participants().Update(ctx, p); err != nil {
 			return err
-		}
-		if !changed {
-			return nil
 		}
 		if err := tx.Outbox().Enqueue(ctx, ports.StoreCardTask(tenantID, now)); err != nil {
 			return err
@@ -201,4 +194,25 @@ func (s *Settings) HandleTask(ctx context.Context, task ports.Task) error {
 	}
 
 	return err
+}
+
+func (s *Settings) syncTenants(ctx context.Context, tenants []ids.TenantID, result *SettingsResult) {
+	var workers errgroup.Group
+	var mu sync.Mutex
+	workers.SetLimit(8)
+	for _, tenant := range tenants {
+		workers.Go(func() error {
+			changed, err := s.SyncOne(ctx, tenant)
+			mu.Lock()
+			defer mu.Unlock()
+			result.Checked++
+			if err != nil {
+				result.Failed[tenant] = err
+			} else if changed {
+				result.Changed++
+			}
+			return nil
+		})
+	}
+	_ = workers.Wait()
 }

@@ -23,6 +23,8 @@ type Seller struct {
 
 // Repository — хранилище участников.
 type Repository interface {
+	ScanIDs(context.Context, ids.TenantID, int) ([]ids.TenantID, error)
+	SettingsChecked(context.Context, *Participant) error
 	Batch(context.Context, []ids.TenantID) (map[ids.TenantID]*Participant, error)
 	// PublicTenants отбирает видимые магазины в хранилище; nil — все, пустой фильтр — ни одного.
 	PublicTenants(context.Context, []ids.TenantID, ids.TenantID, int) ([]ids.TenantID, error)
@@ -42,6 +44,7 @@ type Repository interface {
 
 // Registry — зеркало реестра магазинов платформы.
 type Registry interface {
+	MissingParticipants(context.Context, ids.TenantID, int) ([]*Tenant, error)
 	Batch(context.Context, []ids.TenantID) (map[ids.TenantID]*Tenant, error)
 	// List возвращает активные записи по ключу, независимо от наличия участника.
 	List(context.Context, ids.TenantID, int) ([]*Tenant, error)

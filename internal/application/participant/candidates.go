@@ -72,7 +72,7 @@ func (s *Settings) backfill(ctx context.Context, failed map[ids.TenantID]error) 
 		var tenants []*participant.Tenant
 		err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var err error
-			tenants, err = tx.Registry().List(ctx, after, settingsPage)
+			tenants, err = tx.Registry().MissingParticipants(ctx, after, settingsPage)
 			return err
 		})
 		if err != nil {
