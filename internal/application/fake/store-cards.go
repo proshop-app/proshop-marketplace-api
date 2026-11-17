@@ -11,7 +11,7 @@ import (
 
 type storeCards struct{ d *data }
 
-func (r storeCards) CacheVersion(context.Context) (int64, error) { return 0, nil }
+func (r storeCards) CacheVersion(context.Context, ...ids.TenantID) (int64, error) { return 0, nil }
 
 func (r storeCards) Lock(_ context.Context, _ ids.TenantID) error {
 	return nil

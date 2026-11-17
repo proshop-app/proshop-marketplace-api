@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	getStoreCardCacheVersion = `SELECT version FROM store_card_cache_generation WHERE id = 1`
-	batchPublicCards         = `SELECT card FROM store_cards WHERE tenant_id = ANY($1) AND page_public
+	getAllStoreCardCacheVersion = `SELECT COALESCE(sum(version), 0)::bigint FROM store_card_cache_versions`
+	getStoreCardCacheVersion    = getAllStoreCardCacheVersion + ` WHERE tenant_id = ANY($1::text[])`
+	batchPublicCards            = `SELECT card FROM store_cards WHERE tenant_id = ANY($1) AND page_public
 		ORDER BY array_position($1::text[], tenant_id)`
 	lockStoreSummary = `SELECT pg_advisory_xact_lock(hashtextextended($1, 38))`
 	saveStoreSummary = `
@@ -101,9 +102,17 @@ type StoreCards struct {
 }
 
 // CacheVersion читается из той же базы, что и проекция: отказ Redis не скрывает обновления.
-func (r *StoreCards) CacheVersion(ctx context.Context) (int64, error) {
+func (r *StoreCards) CacheVersion(ctx context.Context, tenants ...ids.TenantID) (int64, error) {
 	var version int64
-	err := rawSQL(ctx, r.db, getStoreCardCacheVersion).Row().Scan(&version)
+	query, args := getAllStoreCardCacheVersion, []any{}
+	if tenants != nil {
+		keys := make([]string, len(tenants))
+		for i, tenant := range tenants {
+			keys[i] = string(tenant)
+		}
+		query, args = getStoreCardCacheVersion, []any{keys}
+	}
+	err := rawSQL(ctx, r.db, query, args...).Row().Scan(&version)
 	return version, err
 }
 
