@@ -28,3 +28,11 @@ func NormalizeRating(value float64, count int64) (Rating, error) {
 
 	return Rating{Value: math.Round(math.Max(0, math.Min(5, value))*10) / 10, Count: count}, nil
 }
+
+// RatingGroup объединяет варианты при подсчёте рейтинга магазина.
+func RatingGroup(state ProductState) string {
+	if state.Card.VariantsID != "" {
+		return "variants:" + state.Card.VariantsID
+	}
+	return "product:" + string(state.ProductID)
+}

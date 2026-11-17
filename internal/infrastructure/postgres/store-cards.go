@@ -57,13 +57,8 @@ const (
 		ELSE EXCLUDED.card END,
 		profile_version = GREATEST(store_cards.profile_version, EXCLUDED.profile_version)`
 	deleteStoreCategories = `DELETE FROM store_card_categories WHERE tenant_id = $1`
-	insertStoreCategory   = `
-		INSERT INTO store_card_categories (category_id, tenant_id, name, count) VALUES (
-		$1,
-		$2,
-		$3,
-		$4
-		)`
+	insertStoreCategories = `INSERT INTO store_card_categories (category_id, tenant_id, name, count)
+        SELECT id, $1, name, count FROM jsonb_to_recordset($2::jsonb) AS c(id text, name text, count integer)`
 	getStoreSummary = `SELECT summary, header, card, public, profile_version, page_public
 		FROM store_cards WHERE tenant_id = $1`
 	getShopHeader = `SELECT header
@@ -156,20 +151,19 @@ func (r *StoreCards) Save(ctx context.Context, record ports.StoreRecord) error {
 	if _, err := execSQL(ctx, r.db, deleteStoreCategories, string(h.TenantID)); err != nil {
 		return err
 	}
-	for _, category := range record.Summary.CategoryCounts {
-		if _, err := execSQL(
-			ctx,
-			r.db,
-			insertStoreCategory,
-			category.ID,
-			string(h.TenantID),
-			category.Name,
-			category.Count,
-		); err != nil {
-			return err
-		}
+	if len(record.Summary.CategoryCounts) == 0 {
+		return nil
 	}
-	return nil
+	categories := make([]ports.StoreCategory, 0, len(record.Summary.CategoryCounts))
+	for _, category := range record.Summary.CategoryCounts {
+		categories = append(categories, category)
+	}
+	raw, err := json.Marshal(categories)
+	if err != nil {
+		return err
+	}
+	_, err = execSQL(ctx, r.db, insertStoreCategories, string(h.TenantID), string(raw))
+	return err
 }
 
 // Get читает внутреннюю сводку магазина.
