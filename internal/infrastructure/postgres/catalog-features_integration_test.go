@@ -260,6 +260,8 @@ func TestRecommendationsCollapseGroupsAndGeneratedColumns(t *testing.T) {
 			}
 			snap := snapshot("t1", id, 2, 0)
 			snap.Card.VariantsID = "v1"
+			// Проверка из снимка заменяет прежнюю только вместе с изменением проверяемой карточки.
+			snap.Card.Description = "Описание для категории c2"
 			snap.Card.Publication = taxonomy.Publication{Published: true, CategoryID: "c2"}
 			snap.SalesCount = 20
 			if _, err := p.Apply(snap, at(1)); err != nil {
