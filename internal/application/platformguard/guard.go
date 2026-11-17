@@ -23,17 +23,18 @@ var (
 
 // Config приходит из точки сборки; окружение проверяется до создания клиента.
 type Config struct {
-	ReadTimeout      time.Duration
-	StrictTimeout    time.Duration
-	CacheTTL         time.Duration
-	StaleTTL         time.Duration
-	CacheSize        int
-	MaxConcurrent    int
-	TenantStateSize  int
-	TenantIdleTTL    time.Duration
-	FailureThreshold int
-	OpenInterval     time.Duration
-	LogInterval      time.Duration
+	ReadTimeout         time.Duration
+	StrictTimeout       time.Duration
+	CacheTTL            time.Duration
+	StaleTTL            time.Duration
+	CacheSize           int
+	MaxConcurrent       int
+	TenantMaxConcurrent int
+	TenantStateSize     int
+	TenantIdleTTL       time.Duration
+	FailureThreshold    int
+	OpenInterval        time.Duration
+	LogInterval         time.Duration
 }
 
 // Client оборачивает порт, поэтому защита проверяется без HTTP и настоящего сервера.
@@ -93,7 +94,7 @@ func (c *Client) acquire(ctx context.Context) (permit, bool) {
 	}
 	tenant, _ := ctx.Value(tenantContextKey{}).(ids.TenantID)
 	state := c.tenantState(tenant, now)
-	if tenant != "" && (state == nil || !state.breaker.available(now)) {
+	if tenant != "" && (state == nil || state.active >= c.cfg.TenantMaxConcurrent || !state.breaker.available(now)) {
 		return permit{}, false
 	}
 	select {

@@ -21,17 +21,18 @@ import (
 
 func testConfig() Config {
 	return Config{
-		ReadTimeout:      10 * time.Millisecond,
-		StrictTimeout:    20 * time.Millisecond,
-		CacheTTL:         time.Second,
-		StaleTTL:         time.Minute,
-		CacheSize:        3,
-		TenantStateSize:  100,
-		TenantIdleTTL:    time.Minute,
-		MaxConcurrent:    2,
-		FailureThreshold: 2,
-		OpenInterval:     time.Second,
-		LogInterval:      time.Minute,
+		ReadTimeout:         10 * time.Millisecond,
+		StrictTimeout:       20 * time.Millisecond,
+		CacheTTL:            time.Second,
+		StaleTTL:            time.Minute,
+		CacheSize:           3,
+		TenantMaxConcurrent: 1,
+		TenantStateSize:     100,
+		TenantIdleTTL:       time.Minute,
+		MaxConcurrent:       2,
+		FailureThreshold:    2,
+		OpenInterval:        time.Second,
+		LogInterval:         time.Minute,
 	}
 }
 
@@ -170,6 +171,7 @@ func TestConcurrencyLimitAndSingleProbe(t *testing.T) {
 	metrics := &fake.PlatformMetrics{}
 	cfg := testConfig()
 	cfg.StrictTimeout = time.Second
+	cfg.TenantMaxConcurrent = cfg.MaxConcurrent
 	c := New(upstream, cfg, clock, metrics, nil)
 	started, release := make(chan struct{}, 2), make(chan struct{})
 	var calls atomic.Int32
