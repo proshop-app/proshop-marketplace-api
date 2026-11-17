@@ -18,6 +18,8 @@ import (
 )
 
 const (
+	readPlanSeedGenerations = `INSERT INTO store_card_cache_versions (tenant_id, version)
+ SELECT 't' || n::text, 1 FROM generate_series(1, 1000) n`
 	readPlanSeedProducts = `INSERT INTO catalog_products
  (tenant_id, product_id, revision, deleted, card, price, available, projected_at, version, updated_at)
  SELECT tenant_id, 'p' || lpad(n::text, 6, '0'), 1, false,
@@ -82,6 +84,37 @@ func (trace *readPlanTrace) TraceQueryStart(
 }
 
 func (*readPlanTrace) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+func TestStoreCardGlobalGenerationPlan(t *testing.T) {
+	ctx := context.Background()
+	pool := testPool(t)
+	if _, err := pool.Exec(ctx, readPlanSeedGenerations); err != nil {
+		t.Fatal(err)
+	}
+	trace := &readPlanTrace{match: "FROM store_card_cache_generation"}
+	config := pool.Config()
+	config.ConnConfig.Tracer = trace
+	traced, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer traced.Close()
+	err = postgres.NewUnitOfWork(traced).Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		_, err := tx.StoreCards().CacheVersion(ctx)
+		return err
+	})
+	if err != nil || trace.sql == "" {
+		t.Fatal("не перехвачено адресное чтение поколения списка", err)
+	}
+	var raw []byte
+	if err := pool.QueryRow(ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+trace.sql).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "store_card_cache_versions") {
+		t.Fatalf("публичное чтение обходит поколения магазинов: %s", raw)
+	}
+	t.Logf("1000 поколений магазинов; EXPLAIN общего поколения: %s", raw)
+}
 
 // Проверяем стоимостной выбор на заполненных таблицах, не выключая последовательное чтение.
 func TestMarketplaceReadIndexPlans(t *testing.T) {

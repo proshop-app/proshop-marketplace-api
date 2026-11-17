@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	getAllStoreCardCacheVersion = `SELECT COALESCE(sum(version), 0)::bigint FROM store_card_cache_versions`
-	getStoreCardCacheVersion    = getAllStoreCardCacheVersion + ` WHERE tenant_id = ANY($1::text[])`
-	batchPublicCards            = `SELECT card FROM store_cards WHERE tenant_id = ANY($1) AND page_public
+	getAllStoreCardCacheVersion = `SELECT version FROM store_card_cache_generation WHERE id = 1`
+	getStoreCardCacheVersion    = `SELECT COALESCE(sum(version), 0)::bigint FROM store_card_cache_versions
+        WHERE tenant_id = ANY($1::text[])`
+	batchPublicCards = `SELECT card FROM store_cards WHERE tenant_id = ANY($1) AND page_public
 		ORDER BY array_position($1::text[], tenant_id)`
 	lockStoreSummary = `SELECT pg_advisory_xact_lock(hashtextextended($1, 38))`
 	saveStoreSummary = `

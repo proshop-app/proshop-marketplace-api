@@ -36,13 +36,39 @@ func TestStoreCardCacheVersionOnlyUsesRequestedTenants(t *testing.T) {
 		}
 		return value
 	}
-	if version("t1") != 2 || version() != 5 || version([]ids.TenantID{}...) != 0 {
+	global := version()
+	if version("t1") != 2 || version([]ids.TenantID{}...) != 0 {
 		t.Fatal("неверная область поколений")
 	}
 	if _, err := pool.Exec(ctx, changeOtherCacheVersion); err != nil {
 		t.Fatal(err)
 	}
-	if version("t1") != 2 || version("t1", "t2") != 6 {
+	if version("t1") != 2 || version("t1", "t2") != 6 || version() != global {
 		t.Fatal("чужое обновление изменило адресное поколение")
+	}
+}
+
+func TestStoreCardGenerationsMigrationDoesNotReviveDeletedCacheKey(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	seedReadParticipant(t, postgres.NewUnitOfWork(pool), "t1", false)
+	if _, err := pool.Exec(ctx, cacheGenerationSeed); err != nil {
+		t.Fatal(err)
+	}
+	before := cacheMetadata(t, pool)
+	if _, err := pool.Exec(ctx, cacheGenerationDelete); err != nil {
+		t.Fatal(err)
+	}
+	if err := postgres.MigrateDownTo(ctx, pool, 52); err != nil {
+		t.Fatal(err)
+	}
+	if err := postgres.Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, cacheGenerationSeed); err != nil {
+		t.Fatal(err)
+	}
+	if after := cacheMetadata(t, pool); after[0] <= before[0] || after[1] <= before[1] || after[2] != 1 {
+		t.Fatalf("повтор миграции/создание магазина вернули прежний ключ: %v → %v", before, after)
 	}
 }
