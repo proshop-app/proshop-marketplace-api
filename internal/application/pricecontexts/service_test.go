@@ -44,7 +44,7 @@ func setup(t *testing.T, cfg pricecontexts.Config) *fixture {
 		TenantID: "t1",
 		Enabled:  true,
 		Stage:    participant.StageConnected,
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
 	})
 	f.platform.SetBuyerProfile(buyerID, "t1", "marketplace:buyer")

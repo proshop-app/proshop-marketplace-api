@@ -22,6 +22,17 @@ func (s *Service) Payment(ctx context.Context, buyerID, id ids.UUID) (checkout.S
 	if !s.config.PaymentStub {
 		return state, checkout.ErrPaymentUnavailable
 	}
+	if !checkout.Restore(state).PaymentComplete() {
+		var awaiting []checkout.Group
+		for _, group := range state.Groups {
+			if group.EffectiveStatus() == checkout.GroupAwaitingPayment {
+				awaiting = append(awaiting, group)
+			}
+		}
+		if err := s.ready(ctx, awaiting); err != nil {
+			return state, err
+		}
+	}
 	return state, checkout.Restore(state).CheckPaymentWindow(s.clock.Now())
 }
 

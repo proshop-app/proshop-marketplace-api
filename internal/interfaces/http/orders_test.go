@@ -19,6 +19,12 @@ import (
 
 func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 	t.Helper()
+	e.store.SeedReadyOffer(ids.OfferID{Tenant: "t1", Product: "p1"}, money.FromKopecks(10000))
+	e.store.SeedTenant(participant.TenantState{TenantID: "t1", Status: participant.TenantActive})
+	e.store.SeedParticipant(participant.State{
+		TenantID: "t1",
+		Stage:    participant.StageConnected,
+		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}}})
 	c, err := checkout.New(
 		id,
 		owner,
@@ -53,9 +59,8 @@ func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 		t.Fatal(err)
 	}
 	e.platform.SetSettings("t1", ports.ShopSettings{
-		FreeDeliveryFrom: money.Money{},
-		Subsidy:          participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
-		Delivery:         participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}},
+
+		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}},
 	})
 	e.platform.SetQuote("t1", delivery.Offered{Available: true})
 	if err := c.Confirm(t0); err != nil {
@@ -175,7 +180,6 @@ func TestCatalogShowsDeliveryUnavailableOutsideSellerRegions(t *testing.T) {
 		Enabled:  true,
 		Version:  1,
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 	})
 	e.seedOffer(t, "t1", "p1", 10000)
 	for _, selected := range []struct {

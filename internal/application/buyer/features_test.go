@@ -43,7 +43,7 @@ func TestFavoritesOnlyRequestContextsOfDisplayedShops(t *testing.T) {
 		TenantID: "t2",
 		Enabled:  true,
 		Stage:    participant.StageConnected,
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
 	})
 	platform := fake.NewPlatform()
@@ -86,7 +86,7 @@ func seedFeatureOffer(store *fake.Store, price int64, visible bool) {
 		TenantID: "t1",
 		Enabled:  true,
 		Stage:    participant.StageConnected,
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
 	})
 	store.SeedProduct(catalog.ProductState{
@@ -543,7 +543,7 @@ func TestProfilePricingOnlyWatchedTenants(t *testing.T) {
 		TenantID: "t2",
 		Enabled:  true,
 		Stage:    participant.StageConnected,
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
 	})
 	platform := fake.NewPlatform()

@@ -113,8 +113,6 @@ func (s *Settings) SyncOne(ctx context.Context, tenantID ids.TenantID) (bool, er
 		cardBefore := p.State().StoreCard
 		hiddenBefore := cardBefore.Hidden
 		shopChanged, err := p.ApplyShopSettings(
-			settings.Subsidy,
-			settings.FreeDeliveryFrom,
 			settings.Delivery,
 			now,
 		)

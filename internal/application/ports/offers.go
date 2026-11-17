@@ -66,7 +66,6 @@ type OfferDocument struct {
 	SellerSlug           string
 	SellerName           string
 	Delivery             participant.DeliverySettings
-	FreeDeliveryFrom     int64
 	Name                 string
 	Description          string
 	Image                string

@@ -513,3 +513,23 @@ func (s *Store) Checkout(id ids.UUID) (checkout.State, bool) {
 
 	return state, ok
 }
+
+// RemoveParticipant моделирует исчезнувшую запись проекции.
+func (s *Store) RemoveParticipant(id ids.TenantID) {
+	s.read(func(d *data) { delete(d.participants, id) })
+}
+
+// RemoveTenant моделирует исчезнувшую запись реестра.
+func (s *Store) RemoveTenant(id ids.TenantID) {
+	s.read(func(d *data) { delete(d.tenants, id) })
+}
+
+// RemoveProduct моделирует отсутствие проекции товара.
+func (s *Store) RemoveProduct(tenant ids.TenantID, product ids.ProductID) {
+	s.read(func(d *data) { delete(d.products, productKey{tenant, product}) })
+}
+
+// RemoveVerdict моделирует ещё не оценённое предложение.
+func (s *Store) RemoveVerdict(tenant ids.TenantID, product ids.ProductID) {
+	s.read(func(d *data) { delete(d.moderation.verdicts, productKey{tenant, product}) })
+}

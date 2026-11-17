@@ -10,9 +10,11 @@ import (
 
 // PickupPoints — ответ магазина без транспортной обёртки.
 type PickupPoints struct {
-	Available bool                   `json:"available"`
-	Reason    string                 `json:"reason,omitempty"`
-	Items     []delivery.PickupPoint `json:"items"`
+	NextCursor *string                `json:"nextCursor,omitempty"`
+	Total      *int                   `json:"total,omitempty"`
+	Available  bool                   `json:"available"`
+	Reason     string                 `json:"reason,omitempty"`
+	Items      []delivery.PickupPoint `json:"items"`
 }
 
 // PickupCache хранит неперсональные списки по службе и нормализованному городу.

@@ -1,11 +1,4 @@
 {
-  "subsidy": {
-    "enabled": true,
-    "type": "percent",
-    "value": 50,
-    "maxAmount": 30000
-  },
-  "freeDeliveryFrom": 0,
   "delivery": {
     "regions": [],
     "carriers": [

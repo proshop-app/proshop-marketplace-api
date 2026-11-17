@@ -16,6 +16,9 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+// Бюджет сериализованных справочников, без обрезания большого города: он остаётся один.
+const pickupCacheMemoryBytes = 64 * 1024 * 1024
+
 // ErrSellerUnreachable — все опрошенные магазины недоступны.
 var ErrSellerUnreachable = errs.New(errs.Unavailable, "seller_unreachable", "магазины не ответили")
 
@@ -28,25 +31,42 @@ type Config struct {
 
 // Service объединяет одновременные промахи одного ключа в пределах процесса.
 type Service struct {
-	uow      ports.UnitOfWork
-	platform ports.PlatformAPI
-	cache    ports.PickupCache
-	config   Config
-	mu       sync.Mutex
-	flights  map[string]*flight
+	uow        ports.UnitOfWork
+	platform   ports.PlatformAPI
+	cache      ports.PickupCache
+	config     Config
+	mu         sync.Mutex
+	flights    map[string]*flight
+	catalogs   map[string]*pickupCatalog
+	cacheBytes int
+}
+
+type pickupCatalog struct {
+	Points    []delivery.PickupPoint `json:"points"`
+	ExpiresAt time.Time              `json:"expiresAt"`
+	index     *delivery.PickupIndex
+	bytes     int
+	lastUsed  time.Time
 }
 
 type flight struct {
 	cancel  context.CancelFunc
 	waiters int
 	done    chan struct{}
-	points  []delivery.PickupPoint
+	catalog *pickupCatalog
 	err     error
 }
 
 // NewService собирает поиск пунктов и общий кэш.
 func NewService(uow ports.UnitOfWork, platform ports.PlatformAPI, cache ports.PickupCache, cfg Config) *Service {
-	return &Service{uow: uow, platform: platform, cache: cache, config: cfg, flights: make(map[string]*flight)}
+	return &Service{
+		uow:      uow,
+		platform: platform,
+		cache:    cache,
+		config:   cfg,
+		flights:  make(map[string]*flight),
+		catalogs: make(map[string]*pickupCatalog),
+	}
 }
 
 // Carriers — службы, поддерживаемые контрактом настроек магазинов.
@@ -78,6 +98,19 @@ func (s *Service) search(
 	city string,
 	tenants []ids.TenantID,
 ) ([]delivery.PickupPoint, error) {
+	catalog, err := s.catalogue(ctx, carrier, city, tenants)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(catalog.Points), nil
+}
+
+func (s *Service) catalogue(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	city string,
+	tenants []ids.TenantID,
+) (*pickupCatalog, error) {
 	if _, err := delivery.ParseCarrier(string(carrier)); err != nil {
 		return nil, err
 	}
@@ -90,13 +123,25 @@ func (s *Service) search(
 		return nil, err
 	}
 	if len(candidates) == 0 {
-		return []delivery.PickupPoint{}, nil
+		return &pickupCatalog{Points: []delivery.PickupPoint{}, index: delivery.NewPickupIndex(nil)}, nil
 	}
-	key := "v2:" + string(carrier) + ":" + strings.ToLower(city)
+	key := "v3:" + string(carrier) + ":" + strings.ToLower(city)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
+	now := time.Now()
+	for cacheKey, entry := range s.catalogs {
+		if !entry.ExpiresAt.After(now) {
+			s.cacheBytes -= entry.bytes
+			delete(s.catalogs, cacheKey)
+		}
+	}
+	if cached := s.catalogs[key]; cached != nil {
+		cached.lastUsed = now
+		s.mu.Unlock()
+		return cached, nil
+	}
 	f, ok := s.flights[key]
 	if !ok {
 		// Общая загрузка живёт, пока есть ожидающие, и имеет конечный общий срок.
@@ -124,7 +169,7 @@ func (s *Service) search(
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-f.done:
-		return slices.Clone(f.points), f.err
+		return f.catalog, f.err
 	}
 }
 
@@ -137,13 +182,37 @@ func (s *Service) load(
 	f *flight,
 ) {
 	defer f.cancel()
-	f.points, f.err = s.cached(ctx, key, carrier, city, tenants)
+	f.catalog, f.err = s.cached(ctx, key, carrier, city, tenants)
+	if f.err == nil {
+		f.catalog.index = delivery.NewPickupIndex(f.catalog.Points)
+	}
 	s.mu.Lock()
+	if f.err == nil && ctx.Err() == nil && len(f.catalog.Points) > 0 {
+		s.remember(key, f.catalog)
+	}
 	if s.flights[key] == f {
 		delete(s.flights, key)
 	}
 	close(f.done)
 	s.mu.Unlock()
+}
+
+// remember вызывается под mu; индекс и список остаются неизменяемыми для читателей.
+func (s *Service) remember(key string, catalog *pickupCatalog) {
+	for len(s.catalogs) > 0 && s.cacheBytes+catalog.bytes > pickupCacheMemoryBytes {
+		oldestKey := ""
+		var oldest time.Time
+		for storedKey, value := range s.catalogs {
+			if oldest.IsZero() || value.lastUsed.Before(oldest) {
+				oldestKey, oldest = storedKey, value.lastUsed
+			}
+		}
+		s.cacheBytes -= s.catalogs[oldestKey].bytes
+		delete(s.catalogs, oldestKey)
+	}
+	catalog.lastUsed = time.Now()
+	s.catalogs[key] = catalog
+	s.cacheBytes += catalog.bytes
 }
 
 func (s *Service) cached(
@@ -152,21 +221,46 @@ func (s *Service) cached(
 	carrier delivery.Carrier,
 	city string,
 	tenants []ids.TenantID,
-) ([]delivery.PickupPoint, error) {
+) (*pickupCatalog, error) {
 	if value, hit, err := s.cache.Get(ctx, key); err == nil && hit {
-		var points []delivery.PickupPoint
-		if json.Unmarshal(value, &points) == nil && len(points) > 0 {
-			return points, nil
+		var catalog pickupCatalog
+		if json.Unmarshal(value, &catalog) == nil && catalog.ExpiresAt.After(time.Now()) {
+			catalog.bytes = len(value)
+			return &catalog, nil
 		}
 	}
 	points, err := s.fetch(ctx, carrier, city, tenants)
-	if err == nil && len(points) > 0 {
-		if value, marshalErr := json.Marshal(points); marshalErr == nil {
-			// Кэш необязателен: отказ Redis не скрывает успешный ответ магазина.
+	if err != nil {
+		return nil, err
+	}
+	catalog := &pickupCatalog{Points: points, ExpiresAt: time.Now().Add(s.config.TTL)}
+	if len(points) > 0 {
+		if value, marshalErr := json.Marshal(catalog); marshalErr == nil {
+			catalog.bytes = len(value)
 			_ = s.cache.Set(ctx, key, value, s.config.TTL)
 		}
 	}
-	return points, err
+	return catalog, nil
+}
+
+// QueryFor фильтрует по уже построенной сетке, не декодируя Redis и не копируя город.
+func (s *Service) QueryFor(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	city string,
+	tenants []ids.TenantID,
+	regions []string,
+	box *delivery.Bounds,
+	offset, limit int,
+) (delivery.PickupArea, error) {
+	catalog, err := s.catalogue(ctx, carrier, city, tenants)
+	if err != nil {
+		return delivery.PickupArea{}, err
+	}
+	if box != nil {
+		return catalog.index.Area(*box, regions), nil
+	}
+	return catalog.index.List(regions, offset, limit), nil
 }
 
 func (s *Service) candidates(

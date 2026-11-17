@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -130,30 +131,64 @@ func (h *deliveryHandlers) checkoutPickupPoints(w http.ResponseWriter, r *http.R
 			return
 		}
 	}
-	tenants := make([]ids.TenantID, 0, len(state.Groups))
-	for _, g := range state.Groups {
-		tenants = append(tenants, g.TenantID)
+	var box *delivery.Bounds
+	if values.Has("bbox") {
+		parsed, err := parsePickupBounds(values.Get("bbox"))
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		box = &parsed
+		offset, limit = 0, delivery.PickupMapLimit
 	}
-	points, err := h.directory.SearchFor(r.Context(), carrier, values.Get("city"), tenants)
+	groups := state.Groups
+	if tenant := values.Get("tenantId"); tenant != "" {
+		groups = slices.DeleteFunc(slices.Clone(groups), func(group checkout.Group) bool {
+			return string(group.TenantID) != tenant
+		})
+		if len(groups) == 0 {
+			writeError(w, r, checkout.ErrNotFound)
+			return
+		}
+	}
+	tenants := make([]ids.TenantID, 0, len(groups))
+	regions := []string{}
+	for _, group := range groups {
+		tenants = append(tenants, group.TenantID)
+		if slices.Contains(group.Carriers, string(carrier)) {
+			regions = append(regions, group.Regions...)
+		}
+	}
+	result, err := h.directory.QueryFor(r.Context(), carrier, values.Get("city"), tenants, regions, box, offset, limit)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	// Справочник общий, но покупатель видит только регионы магазинов своей покупки.
-	filtered := make([]delivery.PickupPoint, 0, len(points))
-	for _, point := range points {
-		if slices.ContainsFunc(state.Groups, func(g checkout.Group) bool {
-			return slices.Contains(g.Carriers, string(carrier)) && slices.Contains(g.Regions, point.RegionCode)
-		}) {
-			filtered = append(filtered, point)
-		}
-	}
-	start := min(offset, len(filtered))
-	end := start + min(limit, len(filtered)-start)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items":  pickupResponse(filtered[start:end]),
-		"total":  len(filtered),
-		"offset": offset,
-		"limit":  limit,
+		"items":      pickupResponse(result.Items),
+		"total":      result.Total,
+		"refineArea": result.Refine,
+		"bounds":     result.Bounds,
+		"offset":     offset,
+		"limit":      limit,
 	})
+}
+
+func parsePickupBounds(raw string) (delivery.Bounds, error) {
+	var bounds delivery.Bounds
+	parts := strings.Split(raw, ",")
+	if len(parts) != len(bounds) {
+		return bounds, ErrInvalidQuery
+	}
+	for index, value := range parts {
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			return bounds, ErrInvalidQuery
+		}
+		bounds[index] = parsed
+	}
+	if !bounds.Valid() {
+		return bounds, ErrInvalidQuery
+	}
+	return bounds, nil
 }

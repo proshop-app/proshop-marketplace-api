@@ -68,7 +68,6 @@ func newDependencyFixture(t *testing.T) *dependencyFixture {
 		Stage:    participant.StageConnected,
 		Enabled:  true,
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 	})
 	profiles := []catalog.PriceProfile{
 		{

@@ -68,6 +68,9 @@ func orderBody(r ports.CreateOrderRequest) map[string]any {
 		"contact":            map[string]string{"name": r.Contact.Name, "phone": r.Contact.Phone},
 		"deliveryPrice":      r.DeliveryPrice.Kopecks(),
 	}
+	if !r.CheckoutCreatedAt.IsZero() {
+		body["checkoutCreatedAt"] = r.CheckoutCreatedAt
+	}
 	if r.BuyerID != "" {
 		body["buyerId"] = r.BuyerID
 	}

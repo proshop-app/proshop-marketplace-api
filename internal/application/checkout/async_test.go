@@ -237,10 +237,9 @@ func TestAsyncIntentRollback(t *testing.T) {
 	failure := errors.New("фиксация недоступна")
 	uow := failingEnqueueUOW{UnitOfWork: e.store, failure: failure}
 	cfg := appcheckout.Config{
-		PaymentStub:               true,
-		QuoteTTL:                  30 * time.Minute,
-		QuoteTimeout:              time.Second,
-		DeliverySubsidyMinPercent: 30,
+		PaymentStub:  true,
+		QuoteTTL:     30 * time.Minute,
+		QuoteTimeout: time.Second,
 	}
 	service := appcheckout.NewService(uow, e.index, e.platform, nil, nil, &fake.IDs{}, e.clock, cfg)
 	if _, err := service.CreateOrders(ctx, buyerID, c.ID, orderContact); !errors.Is(err, failure) {

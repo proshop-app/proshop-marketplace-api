@@ -48,13 +48,6 @@ func TestParticipantShopSettings(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	seedTenant(t, uow, "t1", "shop-one", participant.TenantActive)
 
-	subsidy := participant.Subsidy{
-		Enabled:   true,
-		Type:      participant.SubsidyPercent,
-		Value:     30,
-		MaxAmount: money.FromKopecks(50000),
-	}
-
 	err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		tenant, _ := tx.Registry().Get(ctx, "t1")
 		p, _ := participant.New(tenant, "Магазин", at(0))
@@ -62,7 +55,7 @@ func TestParticipantShopSettings(t *testing.T) {
 			return err
 		}
 
-		if _, err := p.ApplyShopSettings(subsidy, money.Money{}, w3Week2IntegrationDelivery, at(1)); err != nil {
+		if _, err := p.ApplyShopSettings(w3Week2IntegrationDelivery, at(1)); err != nil {
 			return err
 		}
 
@@ -74,7 +67,7 @@ func TestParticipantShopSettings(t *testing.T) {
 
 	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		p, err := tx.Participants().Get(ctx, "t1")
-		if err != nil || !p.DeliveryValid() || p.Subsidy() != subsidy || !p.State().SettingsSyncedAt.Equal(at(1)) {
+		if err != nil || !p.DeliveryValid() || !p.State().SettingsSyncedAt.Equal(at(1)) {
 			return fmt.Errorf("настройки магазина после хранения: %+v %w", p.State(), err)
 		}
 

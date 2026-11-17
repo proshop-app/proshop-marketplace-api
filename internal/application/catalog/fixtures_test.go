@@ -21,7 +21,6 @@ var (
 )
 
 var w3FixturesDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
-var w3FixturesSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at time.Time) catalog.Snapshot {
 	return catalog.Snapshot{
@@ -83,13 +82,13 @@ func seedSeller(store *fake.Store, tenant ids.TenantID, status participant.Tenan
 		stage = participant.StageConnected
 	}
 	store.SeedParticipant(participant.State{
-		TenantID:  tenant,
-		Slug:      "slug-" + string(tenant),
-		Name:      "Магазин " + string(tenant),
-		Stage:     stage,
-		Enabled:   enabled,
-		Delivery:  w3FixturesDelivery,
-		Subsidy:   w3FixturesSubsidy,
+		TenantID: tenant,
+		Slug:     "slug-" + string(tenant),
+		Name:     "Магазин " + string(tenant),
+		Stage:    stage,
+		Enabled:  enabled,
+		Delivery: w3FixturesDelivery,
+
 		Version:   1,
 		CreatedAt: t0,
 		UpdatedAt: t0,

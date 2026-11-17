@@ -17,6 +17,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -40,6 +41,9 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 	ctx := context.Background()
 	clock := fake.NewClock(time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC))
 	store, platform := fake.NewStore(), fake.NewPlatform()
+	for _, tenant := range []ids.TenantID{"t1", "t2"} {
+		seedReadyPaymentSeller(store, tenant)
+	}
 	order, err := platform.CreateOrder(ctx, "t1", ports.CreateOrderRequest{
 		ExternalCheckoutID: string(paymentTestID),
 		GroupID:            "t1",
@@ -394,4 +398,14 @@ func TestCancellationDiagnosticsJSON(t *testing.T) {
 		!strings.Contains(string(raw), `"cancellationLastErrorCode":"checkout.cancellation_order_mismatch"`) {
 		t.Fatal(string(raw))
 	}
+}
+
+func seedReadyPaymentSeller(store *fake.Store, tenant ids.TenantID) {
+	store.SeedReadyOffer(ids.OfferID{Tenant: tenant, Product: "p1"}, money.FromKopecks(12345))
+	store.SeedTenant(participant.TenantState{TenantID: tenant, Status: participant.TenantActive})
+	store.SeedParticipant(participant.State{
+		TenantID: tenant,
+		Stage:    participant.StageConnected,
+		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}},
+	})
 }

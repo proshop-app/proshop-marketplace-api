@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 var (
@@ -16,7 +15,6 @@ var (
 )
 
 var w3ParticipantDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
-var w3ParticipantSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func activeTenant(t *testing.T, status participant.TenantStatus) *participant.Tenant {
 	t.Helper()
@@ -180,7 +178,7 @@ func TestVisibility(t *testing.T) {
 		t.Fatalf("без доставки магазин скрыт: %+v", got)
 	}
 
-	if _, err := p.ApplyShopSettings(w3ParticipantSubsidy, money.Money{}, w3ParticipantDelivery, t1); err != nil {
+	if _, err := p.ApplyShopSettings(w3ParticipantDelivery, t1); err != nil {
 		t.Fatal(err)
 	}
 	if got := participant.VisibilityOf(p, active); !got.Visible || !got.CheckoutAvailable {
@@ -200,73 +198,54 @@ func TestVisibility(t *testing.T) {
 
 func TestApplyShopSettings(t *testing.T) {
 	p := restored(t)
-	subsidy := participant.Subsidy{
-		Enabled:   true,
-		Type:      participant.SubsidyPercent,
-		Value:     50,
-		MaxAmount: money.FromKopecks(30000),
-	}
 
-	changed, err := p.ApplyShopSettings(subsidy, money.Money{}, w3ParticipantDelivery, t1)
-	if err != nil || !changed || !p.DeliveryValid() || p.Subsidy() != subsidy || p.Version() != 2 {
+	changed, err := p.ApplyShopSettings(w3ParticipantDelivery, t1)
+	if err != nil || !changed || !p.DeliveryValid() || p.Version() != 2 {
 		t.Fatalf("настройки магазина: changed=%v err=%v %+v", changed, err, p.State())
 	}
 	p.MarkSaved()
 
-	changed, err = p.ApplyShopSettings(subsidy, money.Money{}, w3ParticipantDelivery, t1.Add(time.Hour))
+	changed, err = p.ApplyShopSettings(w3ParticipantDelivery, t1.Add(time.Hour))
 	if err != nil || changed || p.Version() != 2 || !p.State().SettingsSyncedAt.Equal(t1.Add(time.Hour)) {
 		t.Fatalf("те же настройки не меняют версию, но время сверки обновляется: %+v", p.State())
 	}
 
-	overPercent := participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 101}
-
-	_, err = p.ApplyShopSettings(overPercent, money.Money{}, w3ParticipantDelivery, t1)
-	if !errors.Is(err, participant.ErrInvalidSubsidy) {
-		t.Fatalf("процент больше 100: %v", err)
-	}
 }
 
-func TestSubsidyApply(t *testing.T) {
-	cost := money.FromKopecks(40000)
-	cases := map[string]struct {
-		subsidy participant.Subsidy
-		want    int64
-	}{
-		"выключена": {participant.Subsidy{Type: participant.SubsidyFixed, Value: 10000}, 0},
-		"фиксированная": {
-			participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 15000},
-			15000,
-		},
-		"больше стоимости": {
-			participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 99999},
-			40000,
-		},
-		"процент": {participant.Subsidy{Enabled: true, Type: participant.SubsidyPercent, Value: 25}, 10000},
-		"процент под потолок": {
-			participant.Subsidy{
-				Enabled:   true,
-				Type:      participant.SubsidyPercent,
-				Value:     50,
-				MaxAmount: money.FromKopecks(12000),
-			},
-			12000,
-		},
+func TestVisibilityRequiresMatchingActiveTenant(t *testing.T) {
+	p := participant.Restore(participant.State{
+		TenantID: "t1",
+		Stage:    participant.StageConnected,
+		Delivery: w3ParticipantDelivery,
+	})
+	if got := participant.VisibilityOf(p, nil); got.CheckoutAvailable {
+		t.Fatal("нет записи реестра", got)
 	}
-
-	for name, tc := range cases {
-		got, err := tc.subsidy.Apply(cost)
-		if err != nil || got.Kopecks() != tc.want {
-			t.Fatalf("%s: %d, %v, ожидалось %d", name, got.Kopecks(), err, tc.want)
+	mismatched := participant.RestoreTenant(participant.TenantState{TenantID: "t2", Status: participant.TenantActive})
+	if got := participant.VisibilityOf(p, mismatched); got.CheckoutAvailable {
+		t.Fatal("чужая запись реестра", got)
+	}
+	for _, status := range []participant.TenantStatus{
+		participant.TenantCreating,
+		participant.TenantSuspended,
+		participant.TenantDeleting,
+		participant.TenantDeleted,
+	} {
+		tenant := activeTenant(t, status)
+		if got := participant.VisibilityOf(p, tenant); got.CheckoutAvailable {
+			t.Fatal(status, got)
 		}
 	}
-
-	fixed := participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed, Value: 100}
-	if got, _ := fixed.Apply(money.Money{}); !got.IsZero() {
-		t.Fatal("бесплатная доставка — субсидии нет")
-	}
-
-	err := (participant.Subsidy{Enabled: true, Type: "gift"}).Validate()
-	if !errors.Is(err, participant.ErrInvalidSubsidy) {
-		t.Fatalf("неизвестный вид субсидии: %v", err)
+	for _, stage := range []participant.Stage{
+		participant.StageCandidate,
+		participant.StageReturned,
+		participant.StageDisconnected,
+	} {
+		state := p.State()
+		state.Stage = stage
+		got := participant.VisibilityOf(participant.Restore(state), activeTenant(t, participant.TenantActive))
+		if got.CheckoutAvailable {
+			t.Fatal(stage, got)
+		}
 	}
 }

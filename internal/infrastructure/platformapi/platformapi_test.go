@@ -117,9 +117,7 @@ func TestMarketplaceSettings(t *testing.T) {
 	)
 
 	settings, err := client.MarketplaceSettings(context.Background(), "t1")
-	if err != nil || settings.Subsidy.Type != participant.SubsidyPercent ||
-		settings.Subsidy.Value != 50 ||
-		settings.Subsidy.MaxAmount.Kopecks() != 30000 || settings.Profile.Name != "Магазин" ||
+	if err != nil || settings.Delivery.Validate() != nil || settings.Profile.Name != "Магазин" ||
 		!settings.Card.Ready || settings.Returns == nil ||
 		settings.Profile.Appearance != participant.DefaultCardAppearance() {
 		t.Fatalf("настройки: %+v %v", settings, err)
@@ -204,7 +202,7 @@ func TestCandidateProfileWithoutDelivery(t *testing.T) {
 }
 
 func TestNonNullInvalidSettings(t *testing.T) {
-	for _, name := range []string{"delivery", "subsidy", "subsidy_disabled"} {
+	for _, name := range []string{"delivery"} {
 		t.Run(name, func(t *testing.T) {
 			fixture := "settings_invalid_" + name + ".json"
 			client := server(

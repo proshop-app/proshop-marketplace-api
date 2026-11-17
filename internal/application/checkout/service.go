@@ -26,8 +26,6 @@ const updateRetryDelay = 10 * time.Millisecond
 type Config struct {
 	// OrderCallTimeout — уже настроенный HTTP-бюджет адаптера; аренда не должна пережидать его.
 	OrderCallTimeout time.Duration
-	// DeliverySubsidyMinPercent оставлен для прежней конфигурации; новая доставка всегда за счёт продавца.
-	DeliverySubsidyMinPercent int
 	// QuoteTTL — дольше этого цена доставки не держится, что бы ни обещал магазин.
 	QuoteTTL time.Duration
 	// PaymentStub включает единственную доступную сейчас оплату без движения денег.
@@ -155,6 +153,9 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 		if len(group.Carriers) > 0 {
 			availableLines = append(availableLines, group.Lines...)
 		}
+	}
+	if err := s.ready(ctx, created.Groups()); err != nil {
+		return checkout.State{}, err
 	}
 	if err := s.visible(ctx, availableLines); err != nil {
 		return checkout.State{}, err
@@ -327,6 +328,9 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 		return c.State(), checkout.ErrDeliveryUnavailable
 	}
 
+	if err := s.ready(ctx, c.Groups()); err != nil {
+		return c.State(), err
+	}
 	checks, err := s.check(ctx, buyerID, c.Groups())
 	if err != nil {
 		return checkout.State{}, s.verifyOnPromoError(ctx, buyerID, err)
@@ -567,6 +571,9 @@ func (s *Service) visible(ctx context.Context, lines []checkout.Line) error {
 		if !found || !doc.Visible {
 			return checkout.ErrOfferUnavailable.WithMessage("предложение больше недоступно: " + line.Offer.String())
 		}
+		if !doc.CheckoutAvailable {
+			return checkout.ErrOfferUnavailable.WithMessage("продавец не готов к оформлению: " + line.Offer.String())
+		}
 	}
 
 	return nil
@@ -661,11 +668,6 @@ func (s *Service) updateSelection(
 	})
 
 	return state, err
-}
-
-// DeliverySubsidyMinPercent — действующий порог для админки магазина.
-func (s *Service) DeliverySubsidyMinPercent() int {
-	return 100
 }
 
 func (s *Service) verifyOnPromoError(ctx context.Context, buyerID ids.UUID, cause error) error {

@@ -1,1 +1,3 @@
-{"enabled":true,"subsidy":{"enabled":true,"type":"fixed","value":100}}
+{
+  "enabled": true
+}

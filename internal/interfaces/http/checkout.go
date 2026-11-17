@@ -45,6 +45,7 @@ type quoteJSON struct {
 
 type checkoutGroupJSON struct {
 	Delivery                  *selectionJSON       `json:"delivery"`
+	Regions                   []string             `json:"regions"`
 	Carriers                  []string             `json:"carriers"`
 	CreationStatus            string               `json:"creationStatus,omitempty"`
 	ReconciliationRequired    bool                 `json:"reconciliationRequired"`
@@ -83,6 +84,7 @@ type priceChangeJSON struct {
 }
 
 type selectionJSON struct {
+	RegionCode      string `json:"regionCode"`
 	Carrier         string `json:"carrier"`
 	PickupPointCode string `json:"pickupPointCode"`
 	City            string `json:"city"`
@@ -155,6 +157,7 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 		out.Delivery = &selectionJSON{
 			Carrier:         string(d.Carrier),
 			PickupPointCode: d.PickupPointCode,
+			RegionCode:      d.RegionCode,
 			City:            d.City,
 			Address:         d.Address,
 		}
@@ -164,6 +167,7 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 		g := checkoutGroupJSON{
 			TenantID:                  string(group.TenantID),
 			Carriers:                  append([]string{}, group.Carriers...),
+			Regions:                   append([]string{}, group.Regions...),
 			Delivery:                  selectionResponse(group.Selection(state.Delivery)),
 			ReconciliationRequired:    group.ReconciliationRequired,
 			CreationStatus:            creationStatus(group.CreationResult()),
@@ -458,6 +462,7 @@ func selectionResponse(d *checkout.Selection) *selectionJSON {
 	return &selectionJSON{
 		Carrier:         string(d.Carrier),
 		PickupPointCode: d.PickupPointCode,
+		RegionCode:      d.RegionCode,
 		City:            d.City,
 		Address:         d.Address,
 	}

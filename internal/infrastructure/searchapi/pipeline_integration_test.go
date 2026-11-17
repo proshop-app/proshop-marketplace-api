@@ -35,10 +35,6 @@ var w3PipelineIntegrationDelivery = participant.DeliverySettings{
 	Regions:  []string{"RU-MOW"},
 	Carriers: []string{"cdek"},
 }
-var w3PipelineIntegrationSubsidy = participant.Subsidy{
-	Enabled: true,
-	Type:    participant.SubsidyFixed,
-}
 
 func TestProjectionToIndex(t *testing.T) {
 	pool := pgtest.Pool(t)
@@ -250,9 +246,9 @@ func TestProjectionToIndex(t *testing.T) {
 	}
 
 	platform.SetSettings("t1", ports.ShopSettings{
-		Profile:  participant.Profile{Name: "Первый магазин"},
-		Card:     participant.CardReadiness{Ready: true},
-		Subsidy:  w3PipelineIntegrationSubsidy,
+		Profile: participant.Profile{Name: "Первый магазин"},
+		Card:    participant.CardReadiness{Ready: true},
+
 		Delivery: w3PipelineIntegrationDelivery,
 	})
 

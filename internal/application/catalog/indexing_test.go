@@ -20,7 +20,6 @@ import (
 )
 
 var w3IndexingDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
-var w3IndexingSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 type unavailableBrandResolver struct {
 	started chan struct{}
@@ -164,7 +163,7 @@ func TestDocumentVersionIncludesSignals(t *testing.T) {
 	if _, err := owner.Enable(t0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := owner.ApplyShopSettings(w3IndexingSubsidy, money.Money{}, w3IndexingDelivery, t0); err != nil {
+	if _, err := owner.ApplyShopSettings(w3IndexingDelivery, t0); err != nil {
 		t.Fatal(err)
 	}
 	state := ports.OfferState{

@@ -111,18 +111,11 @@ type settingsProductsJSON struct {
 }
 
 type settingsJSON struct {
-	Products         *settingsProductsJSON         `json:"products"`
-	Profile          *settingsProfileJSON          `json:"profile"`
-	Card             *participant.CardReadiness    `json:"card"`
-	Returns          *participant.Returns          `json:"returns"`
-	FreeDeliveryFrom *int64                        `json:"freeDeliveryFrom"`
-	Delivery         *participant.DeliverySettings `json:"delivery"`
-	Subsidy          *struct {
-		Enabled   bool   `json:"enabled"`
-		Type      string `json:"type"`
-		Value     int64  `json:"value"`
-		MaxAmount int64  `json:"maxAmount"`
-	} `json:"subsidy"`
+	Products *settingsProductsJSON         `json:"products"`
+	Profile  *settingsProfileJSON          `json:"profile"`
+	Card     *participant.CardReadiness    `json:"card"`
+	Returns  *participant.Returns          `json:"returns"`
+	Delivery *participant.DeliverySettings `json:"delivery"`
 }
 
 // New — клиент API сервера.
@@ -225,37 +218,11 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 		settings.Card.Ready = len(settings.Card.Missing) == 0
 	}
 
-	if answer.FreeDeliveryFrom != nil {
-		if *answer.FreeDeliveryFrom < 0 {
-			return ports.ShopSettings{}, ports.ErrInvalidSettings
-		}
-		settings.FreeDeliveryFrom = money.FromKopecks(*answer.FreeDeliveryFrom)
-	}
 	if answer.Delivery != nil {
 		if err := answer.Delivery.Validate(); err != nil {
 			return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
 		}
 		settings.Delivery = answer.Delivery.Clone()
-	}
-
-	if s := answer.Subsidy; s != nil {
-		if !s.Enabled {
-			return ports.ShopSettings{}, ports.ErrInvalidSettings
-		}
-		settings.Subsidy = participant.Subsidy{
-			Enabled:   s.Enabled,
-			Type:      participant.SubsidyType(s.Type),
-			Value:     s.Value,
-			MaxAmount: money.FromKopecks(s.MaxAmount),
-		}
-	}
-
-	if err := settings.Subsidy.Validate(); err != nil {
-		return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
-	}
-	// Неполный набор настроек не разрешает торговлю, но профиль кандидата сохраняется.
-	if answer.FreeDeliveryFrom == nil || answer.Subsidy == nil || answer.Delivery == nil {
-		settings.Delivery = participant.DeliverySettings{}
 	}
 
 	return settings, nil

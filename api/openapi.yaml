@@ -571,11 +571,11 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ModerationCase'
-                  total: &id001
+                  total: &schema1
                     type: integer
                     format: int64
-                  limit: *id001
-                  offset: *id001
+                  limit: *schema1
+                  offset: *schema1
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -594,7 +594,7 @@ paths:
           $ref: '#/components/responses/Error'
       parameters:
       - { $ref: "#/components/parameters/MoneyUnit" }
-      - &id005
+      - &schema2
         name: limit
         in: query
         required: false
@@ -603,7 +603,7 @@ paths:
           default: 50
           minimum: 1
           maximum: 200
-      - &id006
+      - &schema3
         name: offset
         in: query
         required: false
@@ -626,7 +626,7 @@ paths:
       - name: tenantId
         in: query
         required: false
-        schema: &id002
+        schema: &schema4
           type: string
       - name: source
         in: query
@@ -685,8 +685,8 @@ paths:
               - offerId
               - note
               properties:
-                offerId: *id002
-                note: &id003
+                offerId: *schema4
+                note: &schema5
                   type: string
                   minLength: 1
                   maxLength: 2000
@@ -728,7 +728,7 @@ paths:
       - name: caseId
         in: path
         required: true
-        schema: *id002
+        schema: *schema4
   /api/v1/operator/moderation/cases/{caseId}/allow:
     post:
       tags:
@@ -766,17 +766,17 @@ paths:
       - name: caseId
         in: path
         required: true
-        schema: *id002
+        schema: *schema4
       - name: Idempotency-Key
         in: header
         required: false
-        schema: *id002
+        schema: *schema4
         description: Ключ ограничен оператором. Исходный ответ хранится 24 часа; изменение запроса — 409 IDEMPOTENCY_KEY_REUSED.
       requestBody:
         required: true
         content:
           application/json:
-            schema: &id004
+            schema: &schema6
               type: object
               required:
               - expectedVersion
@@ -786,8 +786,8 @@ paths:
                   type: integer
                   format: int64
                   minimum: 1
-                reason: *id002
-                note: *id003
+                reason: *schema4
+                note: *schema5
   /api/v1/operator/moderation/cases/{caseId}/reject:
     post:
       tags:
@@ -825,17 +825,17 @@ paths:
       - name: caseId
         in: path
         required: true
-        schema: *id002
+        schema: *schema4
       - name: Idempotency-Key
         in: header
         required: false
-        schema: *id002
+        schema: *schema4
         description: Ключ ограничен оператором. Исходный ответ хранится 24 часа; изменение запроса — 409 IDEMPOTENCY_KEY_REUSED.
       requestBody:
         required: true
         content:
           application/json:
-            schema: *id004
+            schema: *schema6
   /api/v1/operator/moderation/offers/{offerId}:
     get:
       tags:
@@ -869,7 +869,7 @@ paths:
       - name: offerId
         in: path
         required: true
-        schema: *id002
+        schema: *schema4
   /api/v1/operator/moderation/verdicts:
     get:
       tags:
@@ -896,9 +896,9 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ModerationVerdict'
-                  total: *id001
-                  limit: *id001
-                  offset: *id001
+                  total: *schema1
+                  limit: *schema1
+                  offset: *schema1
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -913,8 +913,8 @@ paths:
           $ref: '#/components/responses/Error'
       parameters:
       - { $ref: "#/components/parameters/MoneyUnit" }
-      - *id005
-      - *id006
+      - *schema2
+      - *schema3
       - name: status
         in: query
         required: true
@@ -927,7 +927,7 @@ paths:
       - name: tenantId
         in: query
         required: false
-        schema: *id002
+        schema: *schema4
       - name: decidedBy
         in: query
         schema: {type: string, enum: [rule, operator]}
@@ -1056,7 +1056,7 @@ paths:
       - name: key
         in: path
         required: true
-        schema: *id002
+        schema: *schema4
   /api/v1/operator/moderation/reasons:
     get:
       tags:
@@ -1157,7 +1157,7 @@ paths:
       - name: code
         in: path
         required: true
-        schema: *id002
+        schema: *schema4
       requestBody:
         required: true
         content:
@@ -1204,7 +1204,7 @@ paths:
       - name: tenantId
         in: path
         required: true
-        schema: *id002
+        schema: *schema4
       requestBody:
         required: true
         content:
@@ -1220,8 +1220,8 @@ paths:
                   enum:
                   - probation
                   - trusted
-                reason: *id002
-                note: *id003
+                reason: *schema4
+                note: *schema5
   /api/v1/operator/participants/{tenantId}/decisions:
     get:
       tags:
@@ -1264,8 +1264,8 @@ paths:
                           - id
                           - name
                           properties:
-                            id: *id002
-                            name: *id002
+                            id: *schema4
+                            name: *schema4
                         action:
                           type: string
                           enum:
@@ -1276,7 +1276,7 @@ paths:
                           - return
                           - card_hide
                           - card_show
-                        value: *id002
+                        value: *schema4
                         previousValue: {type: string, description: Прежнее значение; у старых записей пусто.}
                         reason:
                           anyOf:
@@ -1285,13 +1285,13 @@ paths:
                         by:
                           type: string
                           enum: [operator, system]
-                        note: *id002
+                        note: *schema4
                         at:
                           type: string
                           format: date-time
-                  total: *id001
-                  limit: *id001
-                  offset: *id001
+                  total: *schema1
+                  limit: *schema1
+                  offset: *schema1
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -1308,9 +1308,9 @@ paths:
       - name: tenantId
         in: path
         required: true
-        schema: *id002
-      - *id005
-      - *id006
+        schema: *schema4
+      - *schema2
+      - *schema3
   /api/v1/operator/session/refresh:
     post:
       operationId: refreshOperatorAccess
@@ -1420,7 +1420,7 @@ paths:
       tags:
       - operator
       operationId: updateParticipantDelivery
-      security: &id001
+      security: &schema7
       - operatorToken: []
       - operatorSession: []
       responses:
@@ -1471,7 +1471,7 @@ paths:
       tags: [operator]
       operationId: outboxFailures
       summary: Карантин outbox без исходного payload и текста внутренних ошибок
-      security: *id001
+      security: *schema7
       parameters:
       - name: after
         in: query
@@ -1515,7 +1515,7 @@ paths:
       operationId: retryOutboxKind
       summary: Вернуть страницу карантина одного вида в очередь
       description: Повторять с after из ответа до пустого ids. Исходный payload сохраняется.
-      security: *id001
+      security: *schema7
       requestBody:
         required: true
         content:
@@ -1551,7 +1551,7 @@ paths:
       tags: [operator]
       operationId: retryOutboxTask
       summary: Вернуть одну задачу из карантина в очередь
-      security: *id001
+      security: *schema7
       parameters:
       - name: taskId
         in: path
@@ -1578,7 +1578,7 @@ paths:
       tags:
       - operator
       operationId: parkedEvents
-      security: *id001
+      security: *schema7
       responses:
         '200':
           description: Успешно
@@ -1645,7 +1645,7 @@ paths:
       tags:
       - operator
       operationId: retryParkedEvent
-      security: *id001
+      security: *schema7
       responses:
         '200':
           description: Успешно
@@ -1711,7 +1711,7 @@ paths:
       tags:
       - operator
       operationId: resolveParkedEvent
-      security: *id001
+      security: *schema7
       responses:
         '200':
           description: Успешно
@@ -2789,7 +2789,7 @@ paths:
   /api/v1/checkout/{checkoutId}/delivery/pickup-points:
     get:
       tags: [checkout]
-      summary: Страница общей карты ПВЗ магазинов покупки
+      summary: Пункты магазинов покупки в области карты или странице списка
       operationId: checkoutPickupPoints
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       parameters:
@@ -2797,6 +2797,11 @@ paths:
         - { $ref: "#/components/parameters/CheckoutId" }
         - { name: carrier, in: query, required: true, schema: { type: string, enum: [cdek, yandex] } }
         - { name: city, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 120 } }
+        - { name: tenantId, in: query, schema: { type: string }, description: Ограничить службами и регионами одной группы покупки }
+        - name: bbox
+          in: query
+          description: Юг,запад,север,восток WGS84 через запятую. При наличии limit=500, offset=0.
+          schema: { type: string, examples: ["55.6,37.4,55.9,37.8"] }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
       responses:
@@ -2806,12 +2811,19 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, offset, limit]
+                required: [items, total, offset, limit, refineArea, bounds]
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/PickupPoint" } }
-                  total: { type: integer, minimum: 0 }
+                  total: { type: integer, minimum: 0, description: Точное число разрешённых точек в области или списке }
+                  refineArea: { type: boolean, description: В области больше 500 точек; увеличьте карту }
+                  bounds:
+                    type: [array, 'null']
+                    minItems: 4
+                    maxItems: 4
+                    items: { type: number }
+                    description: Охват разрешённых регионов города, юг/запад/север/восток
                   offset: { type: integer, minimum: 0 }
-                  limit: { type: integer, minimum: 1, maximum: 200 }
+                  limit: { type: integer, minimum: 1, maximum: 500 }
         "409": { $ref: "#/components/responses/Error" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
@@ -3248,28 +3260,6 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
 
-  /api/v1/delivery/settings:
-    get:
-      tags: [delivery]
-      summary: Действующий минимальный процент субсидии продавца для PR-A1
-      operationId: getDeliverySettings
-      security: []
-      description: Настройка продавца ниже порога принимается; нижняя граница применяется после maxAmount.
-      responses:
-        "200":
-          description: Публичные правила доставки площадки
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [deliverySubsidyMinPercent]
-                properties:
-                  deliverySubsidyMinPercent:
-                    type: integer
-                    minimum: 0
-                    maximum: 100
-                    default: 30
-                    description: DELIVERY_SUBSIDY_MIN_PERCENT; действующая субсидия — max настройки с потолком и процента cost.
 
   /api/v1/operator/reference:
     get:
@@ -6245,9 +6235,9 @@ components:
                   - key
                   - message
                   properties:
-                    key: &id001
+                    key: &schema8
                       type: string
-                    message: *id001
+                    message: *schema8
     ModerationCase:
       type: object
       required:
@@ -6296,13 +6286,13 @@ components:
         id:
           type: string
           format: uuid
-        offerId: &id001
+        offerId: &schema9
           type: string
         tenantId:
           type: string
         productId:
           type: string
-        revision: &id002
+        revision: &schema10
           type: integer
           format: int64
         source:
@@ -6317,7 +6307,7 @@ components:
           - allowed
           - rejected
           - superseded
-        reasons: &id003
+        reasons: &schema11
           type: array
           items:
             type: object
@@ -6528,14 +6518,14 @@ components:
       - revision
       - at
       properties:
-        operator: &id004
+        operator: &schema12
           type: object
           required:
           - id
           - name
           properties:
-            id: *id001
-            name: *id001
+            id: *schema9
+            name: *schema9
         action:
           type: string
           enum:
@@ -6545,8 +6535,8 @@ components:
           anyOf:
           - $ref: '#/components/schemas/ModerationReason'
           - type: 'null'
-        note: *id001
-        revision: *id002
+        note: *schema9
+        revision: *schema10
         at:
           type: string
           format: date-time
@@ -6558,9 +6548,9 @@ components:
       - operator
       - createdAt
       properties:
-        key: *id001
-        text: *id001
-        operator: *id004
+        key: *schema9
+        text: *schema9
+        operator: *schema12
         createdAt:
           type: string
           format: date-time
@@ -6664,8 +6654,8 @@ components:
           - code
           - message
           properties:
-            code: *id001
-            message: *id001
+            code: *schema9
+            message: *schema9
         case:
           $ref: '#/components/schemas/ModerationCase'
     Operator:
@@ -7213,16 +7203,9 @@ components:
       - slug
       - name
       - delivery
-      - freeDeliveryFrom
       properties:
         delivery:
           $ref: '#/components/schemas/ParticipantDelivery'
-        freeDeliveryFrom:
-          type: number
-          minimum: 0
-          multipleOf: 0.01
-          maximum: 9999999999999.99
-          description: Сумма в рублях
         slug:
           type: string
         name:
@@ -7799,6 +7782,8 @@ components:
     CheckoutGroup:
       type: object
       required:
+      - carriers
+      - regions
       - reconciliationRequired
       - tenantId
       - externalCheckoutId
@@ -7818,6 +7803,9 @@ components:
       - discount
       - total
       properties:
+        regions:
+          type: array
+          items: { type: string }
         carriers:
           type: array
           items: { type: string, enum: [cdek, yandex] }
@@ -7966,8 +7954,9 @@ components:
           maximum: 9999999999999.99
     Selection:
       type: object
-      required: [carrier, pickupPointCode, city, address]
+      required: [carrier, pickupPointCode, city, address, regionCode]
       properties:
+        regionCode: { type: string }
         carrier: { type: string }
         pickupPointCode: { type: string }
         city: { type: string }
@@ -8075,32 +8064,6 @@ components:
           multipleOf: 0.01
           minimum: 0
           maximum: 9999999999999.99
-    Subsidy:
-      type: object
-      required:
-      - enabled
-      - value
-      - maxAmount
-      properties:
-        enabled:
-          type: boolean
-        type:
-          type: string
-          enum:
-          - fixed
-          - percent
-        value:
-          description: Рубли для fixed; целый процент от 0 до 100 для percent
-          type: number
-          multipleOf: 0.01
-          minimum: 0
-          maximum: 9999999999999.99
-        maxAmount:
-          type: number
-          description: Потолок в рублях; 0 — без потолка
-          multipleOf: 0.01
-          minimum: 0
-          maximum: 9999999999999.99
     Participant:
       type: object
       required:
@@ -8118,9 +8081,7 @@ components:
       - lastDecision
       - deliveryValid
       - enabled
-      - freeDeliveryFrom
       - delivery
-      - subsidy
       - settingsSyncedAt
       - tenantStatus
       - visible
@@ -8177,16 +8138,8 @@ components:
         enabled:
           type: boolean
           description: Включён оператором
-        freeDeliveryFrom:
-          type: number
-          minimum: 0
-          multipleOf: 0.01
-          maximum: 9999999999999.99
-          description: Сумма в рублях
         delivery:
           $ref: '#/components/schemas/ParticipantDelivery'
-        subsidy:
-          $ref: '#/components/schemas/Subsidy'
         settingsSyncedAt:
           type:
           - string

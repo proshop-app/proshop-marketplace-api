@@ -32,7 +32,7 @@ func pickupHTTP(t *testing.T) (*appdelivery.Service, *fake.Platform, *fake.Store
 		TenantID: "t1",
 		Stage:    participant.StageConnected,
 		Enabled:  true,
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
 	})
 	platform.SetPickupPoints("t1", ports.PickupPoints{
@@ -159,19 +159,26 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 		id,
 		owner,
 		"pickup-pages-key",
-		[]checkout.Line{{
-			Offer:    ids.OfferID{Tenant: "t1", Product: "p1"},
-			Name:     "Товар",
-			Quantity: 1,
-		}},
+		[]checkout.Line{
+			{
+				Offer:    ids.OfferID{Tenant: "t1", Product: "p1"},
+				Name:     "Товар",
+				Quantity: 1,
+			},
+			{
+				Offer:    ids.OfferID{Tenant: "t2", Product: "p1"},
+				Name:     "Товар",
+				Quantity: 1,
+			},
+		},
 		now,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := purchase.SetDeliveryOptions(
-		map[ids.TenantID][]string{"t1": {"cdek"}},
-		map[ids.TenantID][]string{"t1": {"RU-AD"}},
+		map[ids.TenantID][]string{"t1": {"cdek"}, "t2": {"cdek"}},
+		map[ids.TenantID][]string{"t1": {"RU-AD"}, "t2": {"RU-MOS"}},
 		now,
 	); err != nil {
 		t.Fatal(err)
@@ -193,7 +200,10 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 			Location:   delivery.Location{Lat: 55, Lon: 37},
 		}
 	}
-	platform.SetPickupPoints("t1", ports.PickupPoints{Available: true, Items: points})
+	outsideRegion := points[0]
+	outsideRegion.Code = "outside-region"
+	outsideRegion.RegionCode = "RU-MOS"
+	platform.SetPickupPoints("t1", ports.PickupPoints{Available: true, Items: append(points, outsideRegion)})
 	handler := &deliveryHandlers{
 		directory: directory,
 		checkouts: appcheckout.NewService(
@@ -207,9 +217,15 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 			appcheckout.Config{},
 		),
 	}
+	store.SeedTenant(participant.TenantState{TenantID: "t2", Status: participant.TenantActive})
+	store.SeedParticipant(participant.State{
+		TenantID: "t2",
+		Stage:    participant.StageConnected,
+		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOS"}},
+	})
 	for _, offset := range []int{0, 200} {
 		response := httptest.NewRecorder()
-		query := "/?carrier=cdek&city=Город&limit=200&offset=" + strconv.Itoa(offset)
+		query := "/?carrier=cdek&city=Город&tenantId=t1&limit=200&offset=" + strconv.Itoa(offset)
 		request := httptest.NewRequest(http.MethodGet, query, nil)
 		request.SetPathValue("checkoutId", string(id))
 		request = request.WithContext(context.WithValue(request.Context(), keyBuyer, owner))
@@ -221,6 +237,37 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != http.StatusOK ||
 			len(body.Items) != 200 || body.Total != len(points) || body.Items[0].Code != strconv.Itoa(offset) {
 			t.Fatal(response.Code, body, err)
+		}
+	}
+	for _, query := range []string{
+		"/?carrier=cdek&city=Город&tenantId=t1&bbox=54,36,56,38",
+		"/?carrier=cdek&city=Город&tenantId=t1&bbox=0,0,1,1",
+		"/?carrier=cdek&city=Город&tenantId=t2&bbox=54,36,56,38",
+	} {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, query, nil)
+		request.SetPathValue("checkoutId", string(id))
+		request = request.WithContext(context.WithValue(request.Context(), keyBuyer, owner))
+		handler.checkoutPickupPoints(response, request)
+		var body struct {
+			Items      []pickupPointJSON
+			Total      int
+			RefineArea bool
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != http.StatusOK {
+			t.Fatal(response.Code, response.Body, err)
+		}
+		switch {
+		case strings.Contains(query, "tenantId=t2"):
+			if body.Total != 1 || len(body.Items) != 1 || body.Items[0].RegionCode != "RU-MOS" || body.RefineArea {
+				t.Fatal("пункты другого региона группы", body)
+			}
+		case strings.Contains(query, "bbox=54"):
+			if body.Total != len(points) || len(body.Items) != delivery.PickupMapLimit || !body.RefineArea {
+				t.Fatal(body.Total, len(body.Items), body.RefineArea)
+			}
+		case body.Total != 0 || len(body.Items) != 0:
+			t.Fatal("точки вне bbox", body)
 		}
 	}
 	if calls := platform.PickupCalls(); len(calls) != 1 || calls[0].Tenant != "t1" {

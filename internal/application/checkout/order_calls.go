@@ -45,6 +45,7 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		}
 	}
 	request := ports.CreateOrderRequest{
+		CheckoutCreatedAt:  state.CreatedAt,
 		BuyerID:            buyerID,
 		PromoCode:          group.PromoCode,
 		ExternalCheckoutID: group.ExternalCheckoutID,
@@ -65,7 +66,11 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 	// Повтор команды должен вернуть сохранённый заказ, даже если код уже истёк.
 	// Сервер сравнивает снимок discounts внутри транзакции создания.
 	callCtx, cancel := context.WithTimeout(ctx, min(s.orderCallBudget(), group.CreationDeadline.Sub(s.clock.Now())))
-	answer, failed := s.platform.CreateOrder(callCtx, tenant, request)
+	var answer checkout.SellerOrder
+	failed := s.ready(callCtx, []checkout.Group{group})
+	if failed == nil {
+		answer, failed = s.platform.CreateOrder(callCtx, tenant, request)
+	}
 	cancel()
 	// Полученный orderId сохраняем даже при остановке процесса, но ограничиваем время завершения.
 	saveCtx := ctx
@@ -94,7 +99,9 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		if errors.As(failed, &refusal) && refusal.Reason != "" {
 			reason = refusal.Reason
 		}
-		_, err := c.FailCreation(tenant, token, code, reason, terminal, code == "IDEMPOTENCY_CONFLICT", prices, now)
+		// Прежняя попытка могла создать заказ и потерять ответ до отзыва готовности.
+		reconcile := code == "IDEMPOTENCY_CONFLICT" || errors.Is(failed, checkout.ErrOfferUnavailable)
+		_, err := c.FailCreation(tenant, token, code, reason, terminal, reconcile, prices, now)
 		return err
 	})
 	if err != nil {
@@ -146,6 +153,9 @@ func (s *Service) saveOrderResult(
 }
 
 func creationFailure(err error) (string, checkout.GroupStatus, []checkout.PriceChange) {
+	if errors.Is(err, checkout.ErrOfferUnavailable) {
+		return checkout.ErrOfferUnavailable.Key(), checkout.GroupRejected, nil
+	}
 	if errors.Is(err, checkout.ErrPromoInvalid) {
 		return checkout.ErrPromoInvalid.Key(), checkout.GroupPriceChanged, nil
 	}

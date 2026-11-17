@@ -17,8 +17,6 @@ var (
 		"checkout.delivery_changed",
 		"условия доставки изменились, подтвердите заново",
 	)
-	// ErrInvalidSubsidyPercent — порог площадки вне допустимого диапазона.
-	ErrInvalidSubsidyPercent = errs.New(errs.Invalid, "checkout.invalid_subsidy_percent", "порог субсидии: от 0 до 100")
 
 	// ErrTransition — команда не подходит текущему состоянию покупки или группы.
 	ErrTransition = errs.New(errs.Conflict, "checkout.transition", "недопустимый переход покупки или группы")

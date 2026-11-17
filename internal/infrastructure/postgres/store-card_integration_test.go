@@ -23,7 +23,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres/pgtest"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestStoreCardRepositoryRoundTripAndConflict(t *testing.T) {
@@ -43,8 +42,6 @@ func TestStoreCardRepositoryRoundTripAndConflict(t *testing.T) {
 			return err
 		}
 		if _, err := p.ApplyShopSettings(
-			w3RepositoriesIntegrationSubsidy,
-			money.Money{},
 			w3RepositoriesIntegrationDelivery,
 			at(1),
 		); err != nil {
@@ -126,8 +123,6 @@ func TestStoreCardOfferProjection(t *testing.T) {
 			return err
 		}
 		if _, err := p.ApplyShopSettings(
-			w3RepositoriesIntegrationSubsidy,
-			money.Money{},
 			w3RepositoriesIntegrationDelivery,
 			at(0),
 		); err != nil {

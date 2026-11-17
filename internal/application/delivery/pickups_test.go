@@ -38,7 +38,7 @@ func setup(t *testing.T, attempts int) (*app.Service, *fake.Platform, *fake.Stor
 			TenantID: tenant,
 			Stage:    participant.StageConnected,
 			Enabled:  true,
-			Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 			Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
 		})
 	}

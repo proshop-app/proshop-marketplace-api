@@ -37,7 +37,7 @@ func setup() environment {
 	clock := fake.NewClock(time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC))
 	store.SeedParticipant(participant.State{
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		TenantID: "t1",
 		Slug:     "t1",
 		Name:     "Магазин",

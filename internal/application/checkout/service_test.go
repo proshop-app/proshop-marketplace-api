@@ -42,7 +42,6 @@ type env struct {
 }
 
 var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
-var w3ServiceSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func setup(t *testing.T) *env {
 	t.Helper()
@@ -65,14 +64,15 @@ func setup(t *testing.T) *env {
 		identities,
 		e.clock,
 		appcheckout.Config{
-			DeliverySubsidyMinPercent: 30,
-			QuoteTTL:                  30 * time.Minute,
-			QuoteTimeout:              time.Second,
-			ReturnBaseURL:             "https://market.example",
-			PaymentStub:               true,
+			QuoteTTL:      30 * time.Minute,
+			QuoteTimeout:  time.Second,
+			ReturnBaseURL: "https://market.example",
+			PaymentStub:   true,
 		},
 	)
 	ctx := context.Background()
+	e.store.SeedReadyOffer(p1, money.FromKopecks(199000))
+	e.store.SeedReadyOffer(p2, money.FromKopecks(35000))
 	err := e.index.Put(ctx, []ports.OfferDocument{
 		{
 			ID:                p1.String(),
@@ -136,18 +136,14 @@ func setup(t *testing.T) *env {
 	}
 
 	e.store.SeedParticipant(participant.State{
-		TenantID:         "t1",
-		Delivery:         w3ServiceDelivery,
-		FreeDeliveryFrom: money.FromKopecks(1000000),
-		Slug:             "s1",
-		Name:             "Первый",
-		Stage:            participant.StageConnected,
-		Enabled:          true,
-		Subsidy: participant.Subsidy{
-			Enabled: true,
-			Type:    participant.SubsidyPercent,
-			Value:   50,
-		},
+		TenantID: "t1",
+		Delivery: w3ServiceDelivery,
+
+		Slug:    "s1",
+		Name:    "Первый",
+		Stage:   participant.StageConnected,
+		Enabled: true,
+
 		Version:   1,
 		CreatedAt: t0,
 		UpdatedAt: t0,
@@ -155,19 +151,16 @@ func setup(t *testing.T) *env {
 
 	e.platform.OrderNow = t0
 	e.store.SeedParticipant(participant.State{
-		Stage:            participant.StageConnected,
-		TenantID:         "t2",
-		Enabled:          true,
-		Delivery:         w3ServiceDelivery,
-		Subsidy:          w3ServiceSubsidy,
-		FreeDeliveryFrom: money.FromKopecks(1000000),
+		Stage:    participant.StageConnected,
+		TenantID: "t2",
+		Enabled:  true,
+		Delivery: w3ServiceDelivery,
 	})
 	for _, tenant := range []ids.TenantID{"t1", "t2"} {
 		p, _ := e.store.Participant(tenant)
 		e.platform.SetSettings(tenant, ports.ShopSettings{
-			FreeDeliveryFrom: p.FreeDeliveryFrom,
-			Subsidy:          p.Subsidy,
-			Delivery:         p.Delivery,
+
+			Delivery: p.Delivery,
 		})
 	}
 	e.platform.SetItem(
@@ -260,8 +253,8 @@ func TestCreateRefusesUnpayableSeller(t *testing.T) {
 		},
 	})
 
-	if _, err := e.service.Create(context.Background(), buyerID, key); err != nil {
-		t.Fatalf("доставка проверяется по настройкам и ответу магазина: %v", err)
+	if _, err := e.service.Create(context.Background(), buyerID, key); !errors.Is(err, checkout.ErrOfferUnavailable) {
+		t.Fatalf("готовность продавца обязательна: %v", err)
 	}
 }
 

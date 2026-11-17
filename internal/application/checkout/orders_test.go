@@ -179,7 +179,6 @@ func TestDeliveryThresholdsAndRegions(t *testing.T) {
 	for _, threshold := range []int64{0, 398000, 398001} {
 		e := setup(t)
 		p, _ := e.store.Participant("t1")
-		p.FreeDeliveryFrom = money.FromKopecks(threshold)
 		e.store.SeedParticipant(p)
 		c := confirmedPurchase(t, e)
 		want := int64(0)

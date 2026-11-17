@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +27,8 @@ import (
 )
 
 type pickupCheckoutServer struct {
+	mu       sync.Mutex
+	tariffs  map[string]money.Money
 	platform *fake.Platform
 	quote    delivery.Offered
 	points   ports.PickupPoints
@@ -92,6 +95,16 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		if err == nil {
 			var order checkout.SellerOrder
 			order, err = s.platform.CreateOrder(ctx, tenant, body)
+			if err == nil {
+				s.mu.Lock()
+				if s.tariffs == nil {
+					s.tariffs = make(map[string]money.Money)
+				}
+				if _, saved := s.tariffs[order.OrderID]; !saved {
+					s.tariffs[order.OrderID] = s.quote.Cost
+				}
+				s.mu.Unlock()
+			}
 			result = map[string]any{
 				"orderId":   order.OrderID,
 				"expiresAt": order.ExpiresAt,
@@ -138,6 +151,7 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 			basket := cart.New("00000000-0000-4000-8000-000000000003", buyer, now, time.Hour)
 			carriers := map[ids.TenantID]string{"t1": "cdek", "t2": "yandex"}
 			for tenant, carrier := range carriers {
+				store.SeedReadyOffer(ids.OfferID{Tenant: tenant, Product: "p1"}, money.FromKopecks(199000))
 				store.SeedTenant(participant.TenantState{
 					TenantID: tenant,
 					Status:   participant.TenantActive,
@@ -149,10 +163,6 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 					Delivery: participant.DeliverySettings{
 						Carriers: []string{carrier},
 						Regions:  []string{"RU-AD"},
-					},
-					Subsidy: participant.Subsidy{
-						Enabled: true,
-						Type:    participant.SubsidyFixed,
 					},
 				})
 				offer := cart.Offer{
@@ -255,6 +265,17 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 					t.Fatal("повтор HTTP изменил заказ", err)
 				}
 			}
+			state, err = service.Get(ctx, buyer, state.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			upstream.mu.Lock()
+			for _, group := range state.Groups {
+				if upstream.tariffs[group.OrderID] != upstream.quote.Cost || group.DeliveryPrice.Kopecks() != 0 {
+					t.Error("расход продавца потерян или попал в сумму покупателя", group)
+				}
+			}
+			upstream.mu.Unlock()
 			if action == "pay" {
 				if err := service.ConfirmPayment(ctx, buyer, state.ID); err != nil {
 					t.Fatal(err)

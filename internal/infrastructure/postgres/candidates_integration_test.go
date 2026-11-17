@@ -14,7 +14,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 // Барьер гарантирует, что событие и догон оба дошли до вставки отсутствующего участника.
@@ -83,8 +82,6 @@ func TestCandidateRepositoryQueueAndConflict(t *testing.T) {
 			return fmt.Errorf("%+v", count)
 		}
 		if _, err := p.ApplyShopSettings(
-			w3RepositoriesIntegrationSubsidy,
-			money.Money{},
 			w3RepositoriesIntegrationDelivery,
 			at(1),
 		); err != nil {
@@ -232,7 +229,6 @@ func TestCandidateRegistryBackfillRace(t *testing.T) {
 	platform := fake.NewPlatform()
 	platform.SetSettings("t1", ports.ShopSettings{
 		Delivery: w3RepositoriesIntegrationDelivery,
-		Subsidy:  w3RepositoriesIntegrationSubsidy,
 	})
 	settings := appparticipant.NewSettings(uow, platform, clock, identities)
 	done := make(chan error, 2)

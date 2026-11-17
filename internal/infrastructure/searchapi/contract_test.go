@@ -99,7 +99,6 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 		CategoryID:           "c2",
 		CategoryPath:         []string{"c1", "c2"},
 		Price:                price,
-		FreeDeliveryFrom:     price,
 		Delivery: participant.DeliverySettings{
 			Regions:  []string{},
 			Carriers: []string{"cdek"},
@@ -152,7 +151,7 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 	}
 	got := page.Items[0]
 
-	if got.Price != price || got.FreeDeliveryFrom != price || !reflect.DeepEqual(got.Attributes, doc.Attributes) ||
+	if got.Price != price || !reflect.DeepEqual(got.Attributes, doc.Attributes) ||
 		!reflect.DeepEqual(got.PriceProfiles, doc.PriceProfiles) || !reflect.DeepEqual(got.Delivery, doc.Delivery) ||
 		!reflect.DeepEqual(got.CategoryPath, doc.CategoryPath) {
 		t.Fatalf("изменились данные после HTTP-передачи: %+v", got)

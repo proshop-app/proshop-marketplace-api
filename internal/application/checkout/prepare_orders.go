@@ -34,6 +34,9 @@ func (s *Service) prepareOrders(
 	if c.Status() == checkout.StatusDraft {
 		return c.State(), checkout.ErrTransition
 	}
+	if err := s.ready(ctx, c.Groups()); err != nil {
+		return c.State(), err
+	}
 	quotes := s.groupQuotes(ctx, buyerID, c.Groups(), c.Delivery())
 	expected := c.State().Version
 	deliveryChanged := false

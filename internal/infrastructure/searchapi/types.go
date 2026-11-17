@@ -31,7 +31,6 @@ type offerDocument struct {
 	PriceProfiles     []priceProfile               `json:"priceProfiles"`
 	CategoryPath      []string                     `json:"categoryPath"`
 	Delivery          participant.DeliverySettings `json:"delivery"`
-	FreeDeliveryFrom  int64                        `json:"freeDeliveryFrom"`
 	Categories        []category                   `json:"categories"`
 	TenantID          string                       `json:"tenantId"`
 	ProductID         string                       `json:"productId"`

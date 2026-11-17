@@ -65,7 +65,6 @@ func TestOfferIDsResponse(t *testing.T) {
 			Carriers: []string{"cdek"},
 			Regions:  []string{"RU-MOW"},
 		},
-		Subsidy: participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 	})
 	platform.SetBuyerProfile("buyer", "t1", "personal")
 	for _, product := range []string{"p1", "p2"} {

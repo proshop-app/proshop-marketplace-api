@@ -7,9 +7,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 var contact = checkout.Contact{Phone: "79251234567", Name: "Покупатель"}
@@ -152,26 +150,5 @@ func TestOrdersRequireConfirmedContactAndValidResponse(t *testing.T) {
 	}
 	if _, err := c.AttachOrder("t1", checkout.SellerOrder{}, t0); !errors.Is(err, checkout.ErrInvalidOrder) {
 		t.Fatal(err)
-	}
-}
-
-func TestGroupDeliveryThresholdAndSellerSubsidy(t *testing.T) {
-	c := draft(t)
-	g := c.Groups()[0]
-	subsidy := participant.Subsidy{
-		Enabled:   true,
-		Type:      participant.SubsidyPercent,
-		Value:     50,
-		MaxAmount: money.FromKopecks(120),
-	}
-	for _, threshold := range []int64{0, 25000, 25001} {
-		amount, err := g.DeliverySubsidy(money.FromKopecks(threshold), subsidy, money.FromKopecks(300), 0)
-		want := int64(300)
-		if threshold == 25001 {
-			want = 120
-		}
-		if err != nil || amount.Kopecks() != want {
-			t.Fatalf("порог %d: %v %v", threshold, amount, err)
-		}
 	}
 }

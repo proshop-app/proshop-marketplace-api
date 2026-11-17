@@ -268,7 +268,7 @@ func assertCatalogOfferCounters(t *testing.T, registry *prometheus.Registry, sel
 }
 
 func TestCatalogFacetResponseBytesAfterRublesMigration(t *testing.T) {
-	// Исходная фикстура master 5ae2d7a сохранена; новая отличается только денежными единицами.
+	// Историческая фикстура сохранена; актуальная использует рубли и не содержит удалённого порога доставки.
 	want, err := os.ReadFile("testdata/catalog-offers-rubles.json")
 	if err != nil {
 		t.Fatal(err)

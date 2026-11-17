@@ -26,7 +26,7 @@ func seedStoreCard(t *testing.T) (*fake.Store, *app.Service) {
 		Stage:    participant.StageConnected,
 		Version:  1,
 		Delivery: w3SettingsDelivery,
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		StoreCard: participant.StoreCard{
 			Readiness: participant.CardReadiness{Ready: true},
 		},
@@ -130,7 +130,6 @@ func TestStoreCardSettingsAndJournal(t *testing.T) {
 		Profile:  participant.Profile{Name: "Имя сервера", Logo: &logo},
 		Card:     participant.CardReadiness{Ready: true},
 		Delivery: w3SettingsDelivery,
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 	}
 	platform.SetSettings("t1", settings)
 	syncer := app.NewSettings(store, platform, fake.NewClock(t0), &fake.IDs{})

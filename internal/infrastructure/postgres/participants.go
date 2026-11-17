@@ -10,13 +10,12 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 const (
 	participantColumns = `
-		tenant_id, slug, name, stage, enabled, awaiting_review, subsidy,
-		settings_synced_at, version, created_at, updated_at, free_delivery_from,
+		tenant_id, slug, name, stage, enabled, awaiting_review,
+		settings_synced_at, version, created_at, updated_at,
 		delivery_settings, trust, approved_offers, last_decision, store_card`
 
 	selectParticipant = `
@@ -38,11 +37,11 @@ const (
 
 	insertParticipant = `
 		INSERT INTO participants (
-			tenant_id, slug, name, stage, enabled, awaiting_review, subsidy,
-			settings_synced_at, version, created_at, updated_at, free_delivery_from,
+			tenant_id, slug, name, stage, enabled, awaiting_review,
+			settings_synced_at, version, created_at, updated_at,
 			delivery_settings, trust, approved_offers, delivery_valid, last_decision, store_card, card_ready
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		ON CONFLICT DO NOTHING`
 
 	// selectInsertConflict говорит, чья строка помешала вставке: тот же магазин или
@@ -54,26 +53,25 @@ const (
 		ORDER BY tenant_id = $1 DESC
 		LIMIT 1`
 
+	// Старые столбцы цены не обновляем: их ещё читают процессы v1 во время перехода.
 	updateParticipant = `
-		UPDATE participants
-		SET slug = $4,
-			name = $5,
-			stage = $6,
-			enabled = $7,
-			awaiting_review = $8,
-			subsidy = $9,
-			settings_synced_at = $10,
-			version = $11,
-			updated_at = $12,
-			free_delivery_from = $13,
-			delivery_settings = $14,
-			trust = $15,
-			approved_offers = $16,
-			delivery_valid = $17,
-			last_decision = $18,
-			store_card = $19,
-			card_ready = $20
-		WHERE tenant_id = $1 AND stage = $2 AND version = $3`
+        UPDATE participants
+        SET slug = $4,
+            name = $5,
+            stage = $6,
+            enabled = $7,
+            awaiting_review = $8,
+            settings_synced_at = $9,
+            version = $10,
+            updated_at = $11,
+            delivery_settings = $12,
+            trust = $13,
+            approved_offers = $14,
+            delivery_valid = $15,
+            last_decision = $16,
+            store_card = $17,
+            card_ready = $18
+        WHERE tenant_id = $1 AND stage = $2 AND version = $3`
 )
 
 // Participants — участники в PostgreSQL.
@@ -84,14 +82,6 @@ type Participants struct {
 // rowScanner объединяет чтение одной строки и набора строк database/sql.
 type rowScanner interface {
 	Scan(dest ...any) error
-}
-
-// subsidyJSON — субсидия в колонке jsonb: value — копейки или процент, maxAmount — копейки.
-type subsidyJSON struct {
-	Enabled   bool   `json:"enabled"`
-	Type      string `json:"type,omitempty"`
-	Value     int64  `json:"value"`
-	MaxAmount int64  `json:"maxAmount"`
 }
 
 // Get — участник.
@@ -154,11 +144,6 @@ func (r *Participants) List(ctx context.Context, page participant.Page) ([]*part
 func (r *Participants) Add(ctx context.Context, p *participant.Participant) error {
 	s := p.State()
 
-	subsidy, err := encodeSubsidy(s.Subsidy)
-	if err != nil {
-		return fmt.Errorf("субсидия участника %s: %w", s.TenantID, err)
-	}
-
 	card, err := encodeStoreCard(s.StoreCard)
 	if err != nil {
 		return fmt.Errorf("карточка участника %s: %w", s.TenantID, err)
@@ -174,12 +159,10 @@ func (r *Participants) Add(ctx context.Context, p *participant.Participant) erro
 		string(s.Stage),
 		s.Enabled,
 		s.AwaitingReview,
-		subsidy,
 		nullTime(s.SettingsSyncedAt),
 		s.Version,
 		s.CreatedAt,
 		s.UpdatedAt,
-		s.FreeDeliveryFrom.Kopecks(),
 		encodeDelivery(s.Delivery),
 		s.Trust,
 		s.ApprovedOffers,
@@ -209,11 +192,6 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 	s := p.State()
 	origin := p.Origin()
 
-	subsidy, err := encodeSubsidy(s.Subsidy)
-	if err != nil {
-		return fmt.Errorf("субсидия участника %s: %w", s.TenantID, err)
-	}
-
 	card, err := encodeStoreCard(s.StoreCard)
 	if err != nil {
 		return fmt.Errorf("карточка участника %s: %w", s.TenantID, err)
@@ -231,11 +209,9 @@ func (r *Participants) Update(ctx context.Context, p *participant.Participant) e
 		string(s.Stage),
 		s.Enabled,
 		s.AwaitingReview,
-		subsidy,
 		nullTime(s.SettingsSyncedAt),
 		s.Version,
 		s.UpdatedAt,
-		s.FreeDeliveryFrom.Kopecks(),
 		encodeDelivery(s.Delivery),
 		s.Trust,
 		s.ApprovedOffers,
@@ -264,9 +240,7 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 		state    participant.State
 		tenantID string
 		stage    string
-		subsidy  []byte
 		synced   *time.Time
-		free     int64
 		delivery []byte
 		decision []byte
 		card     []byte
@@ -279,12 +253,10 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 		&stage,
 		&state.Enabled,
 		&state.AwaitingReview,
-		&subsidy,
 		&synced,
 		&state.Version,
 		&state.CreatedAt,
 		&state.UpdatedAt,
-		&free,
 		&delivery,
 		&state.Trust,
 		&state.ApprovedOffers,
@@ -303,7 +275,6 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 			return nil, err
 		}
 	}
-	state.FreeDeliveryFrom = money.FromKopecks(free)
 	if err := json.Unmarshal(delivery, &state.Delivery); err != nil {
 		return nil, err
 	}
@@ -314,44 +285,7 @@ func scanParticipant(row rowScanner) (*participant.Participant, error) {
 		state.SettingsSyncedAt = *synced
 	}
 
-	if state.Subsidy, err = decodeSubsidy(subsidy); err != nil {
-		return nil, fmt.Errorf("субсидия участника %s: %w", tenantID, err)
-	}
-
 	return participant.Restore(state), nil
-}
-
-func encodeSubsidy(s participant.Subsidy) (string, error) {
-	doc := subsidyJSON{
-		Enabled:   s.Enabled,
-		Type:      string(s.Type),
-		Value:     s.Value,
-		MaxAmount: s.MaxAmount.Kopecks(),
-	}
-
-	encoded, err := json.Marshal(doc)
-
-	return string(encoded), err
-}
-
-func decodeSubsidy(raw []byte) (participant.Subsidy, error) {
-	if len(raw) == 0 {
-		return participant.Subsidy{}, nil
-	}
-
-	var doc subsidyJSON
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		return participant.Subsidy{}, err
-	}
-
-	subsidy := participant.Subsidy{
-		Enabled:   doc.Enabled,
-		Type:      participant.SubsidyType(doc.Type),
-		Value:     doc.Value,
-		MaxAmount: money.FromKopecks(doc.MaxAmount),
-	}
-
-	return subsidy, nil
 }
 
 func encodeDelivery(d participant.DeliverySettings) string {

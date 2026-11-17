@@ -15,10 +15,9 @@ import (
 )
 
 type sellerJSON struct {
-	Delivery         participant.DeliverySettings `json:"delivery"`
-	FreeDeliveryFrom rubles                       `json:"freeDeliveryFrom"`
-	Slug             string                       `json:"slug"`
-	Name             string                       `json:"name"`
+	Delivery participant.DeliverySettings `json:"delivery"`
+	Slug     string                       `json:"slug"`
+	Name     string                       `json:"name"`
 }
 
 type categoryJSON struct {
@@ -85,10 +84,9 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 		TenantID:     doc.TenantID,
 		ProductID:    doc.ProductID,
 		Seller: sellerJSON{
-			Slug:             doc.SellerSlug,
-			Name:             doc.SellerName,
-			Delivery:         doc.Delivery.Clone(),
-			FreeDeliveryFrom: rubles(doc.FreeDeliveryFrom),
+			Slug:     doc.SellerSlug,
+			Name:     doc.SellerName,
+			Delivery: doc.Delivery.Clone(),
 		},
 		Name:              doc.Name,
 		Image:             doc.Image,

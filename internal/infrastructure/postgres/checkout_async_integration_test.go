@@ -32,7 +32,7 @@ func (u *rollbackCheckoutUOW) Do(ctx context.Context, fn func(context.Context, p
 		if err := fn(ctx, tx); err != nil {
 			return err
 		}
-		if u.calls > 1 {
+		if u.calls > 2 {
 			return u.failure
 		}
 		return nil
@@ -42,6 +42,7 @@ func (u *rollbackCheckoutUOW) Do(ctx context.Context, fn func(context.Context, p
 func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
+	seedRecommendationProducts(t, uow, "t1", 1)
 	queue := postgres.NewTaskQueue(pool)
 	seedBuyer(t, uow, buyerA, "79251234567")
 	ctx := context.Background()
@@ -102,7 +103,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 		t.Fatal(err)
 	}
 	platform.SetSettings("t1", ports.ShopSettings{
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}},
 	})
 	platform.SetQuote("t1", delivery.Offered{Available: true})

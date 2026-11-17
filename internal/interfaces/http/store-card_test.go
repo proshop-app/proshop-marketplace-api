@@ -36,7 +36,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		Stage:    participant.StageConnected,
 		Version:  1,
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		StoreCard: participant.StoreCard{
 			Readiness: participant.CardReadiness{Ready: true},
 			Profile:   participant.Profile{Logo: &logo},

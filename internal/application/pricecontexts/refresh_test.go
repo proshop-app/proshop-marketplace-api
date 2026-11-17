@@ -24,7 +24,7 @@ func TestFreshPreloadOnlyFetchesMissingShopsAndKeepsOriginalAge(t *testing.T) {
 		TenantID: "t2",
 		Enabled:  true,
 		Stage:    participant.StageConnected,
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
 	})
 	f.service.Preload(buyerID)

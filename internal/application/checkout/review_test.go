@@ -273,7 +273,6 @@ func TestCreationRetryKeepsIdenticalBodyAfterSettingsChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	settings.FreeDeliveryFrom = money.Money{}
 	e.platform.SetSettings("t1", settings)
 	e.platform.FailCreate("t1", nil)
 	e.clock.Advance(time.Second)
