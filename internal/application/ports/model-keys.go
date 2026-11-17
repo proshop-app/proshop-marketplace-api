@@ -17,3 +17,8 @@ type ModelKeyObserver interface {
 	ResolveFailed()
 	Conflict()
 }
+
+// DictionaryBatchResolver разрешает уникальные значения одного словаря без нечёткого поиска.
+type DictionaryBatchResolver interface {
+	ResolveDictionaryBatch(context.Context, string, []string) (map[string]string, error)
+}

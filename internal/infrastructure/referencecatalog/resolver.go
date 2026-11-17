@@ -33,3 +33,17 @@ func (r *Resolver) ResolveDictionary(ctx context.Context, dictionary, text strin
 
 	return string(result.Match.EntryID), true, nil
 }
+
+// ResolveDictionaryBatch использует три чтения словаря вместо resolve на каждый товар.
+func (r *Resolver) ResolveDictionaryBatch(
+	ctx context.Context,
+	dictionary string,
+	texts []string,
+) (map[string]string, error) {
+	resolved, err := r.service.ResolveBatch(ctx, dictionary, texts)
+	result := make(map[string]string, len(resolved))
+	for text, id := range resolved {
+		result[text] = string(id)
+	}
+	return result, err
+}
