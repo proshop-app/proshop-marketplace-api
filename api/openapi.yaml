@@ -1466,6 +1466,49 @@ paths:
                   $ref: '#/components/schemas/ParticipationDelivery'
       description: Сверяет version атомарно. PATCH участника по-прежнему меняет только name. Плановая сверка с магазином
         заменяет покрытие его авторитетными настройками.
+  /api/v1/operator/outbox/failures:
+    get:
+      tags: [operator]
+      operationId: outboxFailures
+      summary: Карантин outbox без исходного payload и текста внутренних ошибок
+      security: *id001
+      parameters:
+      - name: after
+        in: query
+        schema: {type: string, pattern: '^[0-9]+$', default: '0'}
+      - name: limit
+        in: query
+        schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+      responses:
+        '200':
+          description: Страница по возрастанию id; следующий курсор — id последней записи
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, kind, tenantId, attempts, reason, failedAt, createdAt]
+                      properties:
+                        id: {type: string}
+                        kind: {type: string}
+                        tenantId: {type: string}
+                        attempts: {type: integer}
+                        reason: {type: string}
+                        failedAt: {type: string, format: date-time}
+                        createdAt: {type: string, format: date-time}
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
   /api/v1/operator/events:
     get:
       tags:

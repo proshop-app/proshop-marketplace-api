@@ -332,6 +332,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		postgres.NewTaskQueue(s.store.pool),
 		now,
 		messaging.DispatcherConfig{
+			MaxAttempts: cfg.Outbox.MaxAttempts,
 			ExcludeKinds: []string{
 				appcheckout.TaskCreateOrder,
 				appcheckout.TaskExpireCreation,
@@ -409,12 +410,17 @@ func (s *server) services(ctx context.Context) (services, error) {
 		directory:         pickups,
 		checkouts:         checkouts,
 		dispatcher:        dispatcher,
-		creation:          appcheckout.NewExecutor(postgres.NewTaskQueue(s.store.pool), now, checkouts),
-		janitor:           janitor,
-		parker:            messaging.NewParker(uow),
-		reference:         references,
-		candidates:        candidates,
-		writer:            writer,
+		creation: appcheckout.NewExecutor(
+			postgres.NewTaskQueue(s.store.pool),
+			now,
+			checkouts,
+			cfg.Outbox.MaxAttempts,
+		),
+		janitor:    janitor,
+		parker:     messaging.NewParker(uow),
+		reference:  references,
+		candidates: candidates,
+		writer:     writer,
 	}, nil
 }
 
@@ -574,6 +580,7 @@ func (s *server) httpServer() *http.Server {
 		ReferenceReadToken: cfg.Reference.ReadToken,
 		OperatorAuth:       s.app.operatorAuth,
 		Events:             s.app.events,
+		Dispatcher:         s.app.dispatcher,
 		OperatorOrigin:     cfg.Operator.Origin,
 		TrustedProxies:     cfg.HTTP.TrustedProxies,
 		Checks:             checks,

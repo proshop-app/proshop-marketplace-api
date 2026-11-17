@@ -55,6 +55,7 @@ type Deps struct {
 	// ReferenceReadToken — токен читателя реестра: снимок, resolve и чтение записей без прав оператора.
 	ReferenceReadToken string
 	OperatorAuth       *appoperator.Auth
+	Dispatcher         *messaging.Dispatcher
 	Events             *messaging.Events
 	OperatorOrigin     string
 	// TrustedProxies — сколько прокси перед сервисом дописывают X-Forwarded-For; 0 — заголовок не читается.
@@ -99,6 +100,7 @@ func routes(deps Deps) []route {
 	gateway := &operatorHandlers{
 		auth:           deps.OperatorAuth,
 		events:         deps.Events,
+		dispatcher:     deps.Dispatcher,
 		origin:         deps.OperatorOrigin,
 		trustedProxies: deps.TrustedProxies,
 	}
@@ -239,6 +241,7 @@ func routes(deps Deps) []route {
 		{http.MethodPost, "/api/v1/operator/session/refresh", gateway.refresh},
 		{http.MethodGet, "/api/v1/operator/session", gateway.session},
 		{http.MethodDelete, "/api/v1/operator/session", gateway.logout},
+		{http.MethodGet, "/api/v1/operator/outbox/failures", operator(gateway.outboxFailures)},
 		{http.MethodGet, "/api/v1/operator/events", operator(gateway.listEvents)},
 		{http.MethodPost, "/api/v1/operator/events/{eventId}/retry", operator(gateway.retry)},
 		{http.MethodPost, "/api/v1/operator/events/{eventId}/resolve", operator(gateway.resolve)},

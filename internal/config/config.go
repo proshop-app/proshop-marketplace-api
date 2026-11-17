@@ -182,6 +182,7 @@ type Kafka struct {
 
 // Outbox — разбор очереди задач.
 type Outbox struct {
+	MaxAttempts  int
 	PollInterval time.Duration
 	Batch        int
 	PerTenant    int
@@ -252,6 +253,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			ParticipantStatusTopic: r.topic("KAFKA_TOPIC_PARTICIPANT_STATUS", "marketplace.participant.status"),
 		},
 		Outbox: Outbox{
+			MaxAttempts:  r.positive("OUTBOX_MAX_ATTEMPTS", 10),
 			PollInterval: r.duration("OUTBOX_POLL_INTERVAL", time.Second),
 			Batch:        r.positive("OUTBOX_BATCH", 200),
 			PerTenant:    r.positive("OUTBOX_PER_TENANT", 200),

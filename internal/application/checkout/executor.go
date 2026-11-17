@@ -30,29 +30,36 @@ const (
 
 // TaskResult публикуется после отметки задачи; позволяет циклу сразу заполнить свободное место.
 type TaskResult struct {
-	Task ports.Task
-	Err  error
-	Lag  time.Duration
+	FailureReason string
+	Task          ports.Task
+	Err           error
+	Lag           time.Duration
 }
 
 // Executor разделяет создание, закрытие срока, отмену и сверку на независимые полосы.
 // Dispatch вызывается одним циклом, результаты каждого вызова сохраняются независимо.
 type Executor struct {
-	queue   ports.TaskQueue
-	clock   ports.Clock
-	service *Service
-	mu      sync.Mutex
-	active  map[string]map[ids.TenantID]int
-	results chan TaskResult
-	wg      sync.WaitGroup
+	maxAttempts int
+	queue       ports.TaskQueue
+	clock       ports.Clock
+	service     *Service
+	mu          sync.Mutex
+	active      map[string]map[ids.TenantID]int
+	results     chan TaskResult
+	wg          sync.WaitGroup
 }
 
 // NewExecutor собирает отдельный пул поверх существующей очереди.
-func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service) *Executor {
+func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service, attempts ...int) *Executor {
+	maxAttempts := messaging.DefaultMaxAttempts
+	if len(attempts) > 0 && attempts[0] > 0 {
+		maxAttempts = attempts[0]
+	}
 	return &Executor{
-		queue:   queue,
-		clock:   clock,
-		service: service,
+		maxAttempts: maxAttempts,
+		queue:       queue,
+		clock:       clock,
+		service:     service,
 		active: map[string]map[ids.TenantID]int{
 			TaskCreateOrder:    {},
 			TaskExpireCreation: {},
@@ -116,9 +123,22 @@ func (e *Executor) execute(ctx context.Context, task ports.Task) {
 	defer e.wg.Done()
 	err := e.service.HandleOrderTask(ctx, task)
 	var saved error
-	if err == nil {
+	reason := ""
+	if err != nil && !CreationPending(err) {
+		reason = messaging.FailureReason(err, task.Attempts, e.maxAttempts)
+	}
+	switch {
+	case reason != "":
+		saved = e.queue.Resolve(ctx, []ports.TaskResolution{{
+			ID:            task.ID,
+			Attempts:      task.Attempts,
+			At:            e.clock.Now(),
+			Error:         err.Error(),
+			FailureReason: reason,
+		}})
+	case err == nil:
 		saved = e.queue.Complete(ctx, task.ID, task.Attempts, e.clock.Now())
-	} else {
+	default:
 		next := e.clock.Now().Add(messaging.Backoff(task.Attempts))
 		if CreationPending(err) {
 			next = e.clock.Now().Add(checkout.CreationRetryDelay)
@@ -137,9 +157,15 @@ func (e *Executor) execute(ctx context.Context, task ports.Task) {
 	e.mu.Unlock()
 	if saved != nil {
 		err = saved
+		reason = ""
 	}
 	select {
-	case e.results <- TaskResult{Task: task, Err: err, Lag: e.clock.Now().Sub(task.CreatedAt)}:
+	case e.results <- TaskResult{
+		Task:          task,
+		Err:           err,
+		Lag:           e.clock.Now().Sub(task.CreatedAt),
+		FailureReason: reason,
+	}:
 	case <-ctx.Done():
 	}
 }

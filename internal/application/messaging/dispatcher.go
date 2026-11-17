@@ -10,13 +10,19 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
+// ErrInvalidTask — сохранённое намерение нельзя исполнить с теми же данными.
+var ErrInvalidTask = errs.New(errs.Invalid, "messaging.invalid_task", "некорректная задача повтора")
+
 // ErrUnknownTask — для вида задачи нет обработчика.
-var ErrUnknownTask = errs.New(errs.Internal, "messaging.unknown_task", "нет обработчика задачи")
+var ErrUnknownTask = errs.New(errs.Invalid, "messaging.unknown_task", "нет обработчика задачи")
 
 // MaxBackoff — наибольшая пауза перед повтором задачи.
 const MaxBackoff = 10 * time.Minute
 
-// Handler выполняет задачу; ошибка откладывает её на повтор.
+// DefaultMaxAttempts — конечный бюджет временных ошибок.
+const DefaultMaxAttempts = 10
+
+// Handler выполняет задачу; класс ошибки определяет повтор или карантин.
 type Handler func(ctx context.Context, task ports.Task) error
 
 // BatchHandler возвращает ошибки в порядке задач; nil означает успех всей пачки.
@@ -24,14 +30,16 @@ type BatchHandler func(context.Context, []ports.Task) []error
 
 // Outcome — итог одной задачи для журналов и метрик.
 type Outcome struct {
-	Task ports.Task
-	Err  error
+	Task          ports.Task
+	FailureReason string
+	Err           error
 	// Lag — сколько задача ждала с постановки до завершения.
 	Lag time.Duration
 }
 
 // DispatcherConfig — размеры пачки и аренда.
 type DispatcherConfig struct {
+	MaxAttempts  int
 	ExcludeKinds []string
 	Batch        int
 	PerTenant    int
@@ -55,6 +63,9 @@ func NewDispatcher(
 	config DispatcherConfig,
 	handlers map[string]Handler,
 ) *Dispatcher {
+	if config.MaxAttempts <= 0 {
+		config.MaxAttempts = DefaultMaxAttempts
+	}
 	return &Dispatcher{queue: queue, clock: clock, handlers: handlers, config: config}
 }
 
@@ -120,13 +131,21 @@ func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
 			finished := d.clock.Now()
 			outcome := Outcome{Task: task, Lag: finished.Sub(task.CreatedAt)}
 			if len(failures) > 0 {
-				outcome.Err = failures[n]
+				if len(failures) != len(group) {
+					outcome.Err = errs.New(errs.Internal, "messaging.batch_result", "неполный результат пачки")
+				} else {
+					outcome.Err = failures[n]
+				}
 			}
 			resolution := ports.TaskResolution{ID: task.ID, Attempts: task.Attempts, At: finished}
 			if outcome.Err != nil {
-				next := finished.Add(Backoff(task.Attempts))
-				resolution.NextAt = &next
 				resolution.Error = outcome.Err.Error()
+				resolution.FailureReason = FailureReason(outcome.Err, task.Attempts, d.config.MaxAttempts)
+				outcome.FailureReason = resolution.FailureReason
+				if resolution.FailureReason == "" {
+					next := finished.Add(Backoff(task.Attempts))
+					resolution.NextAt = &next
+				}
 			}
 			results = append(results, outcome)
 			resolutions = append(resolutions, resolution)
@@ -140,7 +159,7 @@ func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
 }
 
 func (d *Dispatcher) resolve(ctx context.Context, results []ports.TaskResolution) error {
-	if len(results) != 1 {
+	if len(results) != 1 || results[0].FailureReason != "" {
 		return d.queue.Resolve(ctx, results)
 	}
 	// Одиночным обработчикам не нужны сериализация пачки и дополнительная транзакция.
@@ -188,4 +207,24 @@ func Backoff(attempts int) time.Duration {
 	}
 
 	return delay
+}
+
+// FailureReason отделяет постоянный отказ и исчерпание попыток от повторяемого сбоя.
+func FailureReason(err error, attempts, maxAttempts int) string {
+	if errs.CodeOf(err) == errs.Invalid || errs.CodeOf(err) == errs.NotFound {
+		typed, _ := errs.As(err)
+		return typed.Key()
+	}
+	if attempts >= maxAttempts {
+		return "attempts_exhausted"
+	}
+	return ""
+}
+
+// Failures читает карантин по курсору без COUNT и обхода живой очереди.
+func (d *Dispatcher) Failures(ctx context.Context, after int64, limit int) ([]ports.TaskFailure, error) {
+	if after < 0 || limit < 1 || limit > 100 {
+		return nil, errs.New(errs.Invalid, "messaging.failure_filter", "некорректная страница карантина")
+	}
+	return d.queue.Failures(ctx, after, limit)
 }

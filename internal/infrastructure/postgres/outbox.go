@@ -26,7 +26,7 @@ const (
 		WITH due_tenants AS (
 			SELECT DISTINCT tenant_id
 			FROM outbox
-			WHERE done_at IS NULL AND next_at <= $1
+			WHERE done_at IS NULL AND failed_at IS NULL AND next_at <= $1
 				AND (cardinality($5::text[]) = 0 OR kind = ANY($5::text[]))
 				AND NOT (kind = ANY($6::text[]))
 		), candidates AS (
@@ -35,7 +35,7 @@ const (
 			CROSS JOIN LATERAL (
 				SELECT id, next_at, row_number() OVER (ORDER BY next_at, id) AS position
 				FROM outbox
-				WHERE tenant_id = t.tenant_id AND done_at IS NULL AND next_at <= $1
+				WHERE tenant_id = t.tenant_id AND done_at IS NULL AND failed_at IS NULL AND next_at <= $1
 				AND (cardinality($5::text[]) = 0 OR kind = ANY($5::text[]))
 				AND NOT (kind = ANY($6::text[]))
 				ORDER BY next_at, id
@@ -47,7 +47,7 @@ const (
 			SELECT o.id
 			FROM outbox o
 			JOIN candidates c ON c.id = o.id
-			WHERE o.done_at IS NULL AND o.next_at <= $1
+			WHERE o.done_at IS NULL AND o.failed_at IS NULL AND o.next_at <= $1
 			FOR UPDATE OF o SKIP LOCKED
 		), updated AS (
 			UPDATE outbox
@@ -64,13 +64,13 @@ const (
 		UPDATE outbox
 		SET done_at = $3,
 			last_error = NULL
-		WHERE id = $1 AND attempts = $2 AND attempts > 0 AND done_at IS NULL`
+		WHERE id = $1 AND attempts = $2 AND attempts > 0 AND done_at IS NULL AND failed_at IS NULL`
 
 	retryTask = `
 		UPDATE outbox
 		SET next_at = $3,
 			last_error = $4
-		WHERE id = $1 AND attempts = $2 AND attempts > 0 AND done_at IS NULL`
+		WHERE id = $1 AND attempts = $2 AND attempts > 0 AND done_at IS NULL AND failed_at IS NULL`
 )
 
 // Outbox — запись задач в транзакции изменения.

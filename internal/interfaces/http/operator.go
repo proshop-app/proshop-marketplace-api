@@ -24,6 +24,7 @@ const (
 )
 
 type operatorHandlers struct {
+	dispatcher     *messaging.Dispatcher
 	auth           *appoperator.Auth
 	events         *messaging.Events
 	origin         string

@@ -181,7 +181,10 @@ func (s *Events) DecideWithKey(
 func (s *Events) HandleTask(ctx context.Context, task ports.Task) error {
 	var decision replayTask
 	if err := json.Unmarshal(task.Payload, &decision); err != nil {
-		return err
+		return ErrInvalidTask.Wrap(err)
+	}
+	if decision.EventID <= 0 || decision.DecisionVersion <= 0 {
+		return ErrInvalidTask
 	}
 	var stored ports.ParkedEvent
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
