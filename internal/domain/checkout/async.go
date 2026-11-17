@@ -1,6 +1,10 @@
 package checkout
 
-import "time"
+import (
+	"time"
+
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+)
 
 // CreationResult — результат создания, независимо от дальнейшего исполнения.
 type CreationResult uint8
@@ -16,11 +20,16 @@ const (
 
 // SetCreationDeadline сохраняет единый срок вместе с намерением, до публикации задач.
 func (c *Checkout) SetCreationDeadline(deadline, now time.Time) error {
+	if c.Status() == StatusAwaitingPayment {
+		return nil
+	}
 	if c.Status() != StatusCreatingOrders || !deadline.After(now) {
 		return ErrTransition
 	}
 	for i := range c.state.Groups {
-		c.state.Groups[i].CreationDeadline = deadline
+		if c.state.Groups[i].OrderID == "" && !c.state.Groups[i].Excluded() {
+			c.state.Groups[i].CreationDeadline = deadline
+		}
 	}
 	return c.touch(now)
 }
@@ -39,15 +48,15 @@ func (c *Checkout) ExpireCreation(now time.Time) (bool, error) {
 		if !g.CreationExpired(now) || (g.CreateToken != "" && now.Before(g.NextCreateAt)) {
 			continue
 		}
-		g.ReconciliationRequired = g.CreateToken != "" || g.CreateFailures > 0
-		g.Abandoned, g.CreateExhausted = true, true
-		g.Status, g.Reason = GroupUnconfirmed, "creation_deadline_exceeded"
+		// Истечение бюджета не доказывает отказ магазина: состав и корзина сохраняются.
+		g.Status, g.Reason = GroupSellerUnreachable, delivery.ReasonSellerUnreachable
+		g.CreationDeadline = time.Time{}
 		changed = true
 	}
 	if !changed {
 		return false, nil
 	}
-	c.rollup()
+	c.state.Status, c.state.ConfirmedAt = StatusDraft, time.Time{}
 	return true, c.touch(now)
 }
 
@@ -99,7 +108,7 @@ func (c *Checkout) Cancel(now time.Time) (bool, error) {
 	if c.state.PaymentStarted || c.Status() == StatusPaid || c.Status() == StatusPartiallyPaid {
 		return false, ErrTransition
 	}
-	if c.Status() == StatusDraft || c.Status() == StatusConfirmed {
+	if (c.Status() == StatusDraft || c.Status() == StatusConfirmed) && !c.state.CartConsumed {
 		return false, ErrTransition
 	}
 	changed := false
@@ -116,9 +125,10 @@ func (c *Checkout) Cancel(now time.Time) (bool, error) {
 		}
 		changed = true
 	}
-	if !changed {
+	if !changed && c.Status() != StatusDraft && c.Status() != StatusConfirmed {
 		return false, nil
 	}
+	c.state.Status = StatusCreatingOrders
 	c.rollup()
 	return true, c.touch(now)
 }

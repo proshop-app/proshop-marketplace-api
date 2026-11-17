@@ -62,7 +62,6 @@ func TestSellerResponsesBatchAndNull(t *testing.T) {
 	carts := appcart.NewService(uow, fake.NewIndex(), fake.NewPlatform(), &fake.IDs{}, clock, time.Hour)
 	checkouts := appcheckout.NewService(
 		uow,
-		fake.NewIndex(),
 		fake.NewPlatform(),
 		nil,
 		carts,

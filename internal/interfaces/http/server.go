@@ -97,7 +97,7 @@ func routes(deps Deps) []route {
 	}
 	auth := &authHandlers{auth: deps.Auth, trustedProxies: deps.TrustedProxies}
 	carts := &cartHandlers{carts: deps.Carts}
-	shipping := &deliveryHandlers{directory: deps.Directory, checkouts: deps.Checkouts}
+	shipping := &deliveryHandlers{directory: deps.Directory}
 	checkouts := &checkoutHandlers{checkouts: deps.Checkouts}
 	registry := newReferenceHandlers(deps.Reference, deps.Registerer)
 	gateway := &operatorHandlers{

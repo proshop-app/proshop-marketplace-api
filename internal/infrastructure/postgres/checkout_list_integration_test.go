@@ -483,15 +483,14 @@ func TestGroupPickupSnapshotsSurvivePostgres(t *testing.T) {
 		"t2": {Carrier: "yandex", PickupPointCode: "P2", City: "Город", Address: "Адрес 2"},
 	}
 	for tenant, selected := range selections {
-		if err := purchase.SelectGroupDelivery(
-			tenant,
+		if err := purchase.SelectDeliveries(
 			selected,
-			delivery.Quote{
+			map[ids.TenantID]delivery.Quote{tenant: {
 				Status:    delivery.QuoteAvailable,
 				Cost:      money.FromKopecks(30000),
 				Subsidy:   money.FromKopecks(30000),
 				ExpiresAt: at(60),
-			},
+			}},
 			at(0),
 		); err != nil {
 			t.Fatal(err)

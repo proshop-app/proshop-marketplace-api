@@ -92,6 +92,10 @@ func TestPriceChangedKeepsSnapshotAndReturnsGroup(t *testing.T) {
 	})
 	ctx := context.Background()
 	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
+	if state.Status != checkout.StatusDraft || e.platform.OrderCount() != 0 {
+		t.Fatal("окончательный отказ должен остановить оформление до нового согласия", state.Status, err)
+	}
+	state = reconfirmPurchase(t, e, c.ID)
 	if err != nil || state.Groups[0].Status != checkout.GroupPriceChanged ||
 		state.Groups[0].Lines[0].Price.Kopecks() != 199000 ||
 		state.Groups[0].CurrentPrices[0].Price.Kopecks() != 209000 || e.platform.OrderCount() != 1 {

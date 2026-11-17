@@ -92,10 +92,18 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 	owner, _ := tokens.Open(ctx, string(paymentTestBuyer))
 	foreign, _ := tokens.Open(ctx, "f0000000-0000-4000-8000-000000000003")
 	auth := appbuyer.NewAuth(store, nil, tokens, nil, nil, clock, appbuyer.AuthConfig{})
-	service := appcheckout.NewService(store, nil, platform, nil, nil, &fake.IDs{}, clock, appcheckout.Config{
-		PaymentStub:   enabled,
-		ReturnBaseURL: "https://market.example",
-	})
+	service := appcheckout.NewService(
+		store,
+		platform,
+		nil,
+		nil,
+		&fake.IDs{},
+		clock,
+		appcheckout.Config{
+			PaymentStub:   enabled,
+			ReturnBaseURL: "https://market.example",
+		},
+	)
 	mux := http.NewServeMux()
 	for _, route := range routes(Deps{Auth: auth, Checkouts: service}) {
 		if strings.Contains(route.path, "payment-stub") || strings.HasSuffix(route.path, "/pay") ||

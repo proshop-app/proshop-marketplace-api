@@ -96,7 +96,8 @@ func TestReadinessBeforeOrdersAndPayment(t *testing.T) {
 					}
 					current, err := e.service.Get(ctx, buyerID, state.ID)
 					if err != nil || current.Groups[0].Status != checkout.GroupRejected ||
-						!current.Groups[0].ReconciliationRequired || e.platform.OrderCount() != 1 {
+						!current.Groups[0].ReconciliationRequired || current.Status != checkout.StatusDraft ||
+						e.platform.OrderCount() != 0 {
 						t.Fatal(current.Groups, err, e.platform.OrderCount())
 					}
 					return
@@ -107,10 +108,11 @@ func TestReadinessBeforeOrdersAndPayment(t *testing.T) {
 				default:
 					_, err = e.service.CreateOrders(ctx, buyerID, state.ID, orderContact)
 				}
-				if !errors.Is(err, checkout.ErrOfferUnavailable) {
+				if !errors.Is(err, checkout.ErrDeliveryChanged) {
 					t.Fatal(err)
 				}
-			})
+			},
+			)
 		}
 	}
 }

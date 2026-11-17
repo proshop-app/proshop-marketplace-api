@@ -102,19 +102,16 @@ func TestSelectDeliveryAndConfirm(t *testing.T) {
 	if err := c.SelectDelivery(selection, quotes, t0); err != nil {
 		t.Fatal(err)
 	}
-	if state := c.State(); state.DeliveryTotal.Kopecks() != 20000 || state.Total.Kopecks() != 45700 {
+	if state := c.State(); state.DeliveryTotal.Kopecks() != 20000 || state.Total.Kopecks() != 45000 {
 		t.Fatalf("итоги с долей покупателя: %+v", state)
 	}
 	if err := checkout.Restore(c.State()).Confirm(t0); err != nil {
 		t.Fatalf("доступная группа подтверждается независимо: %v", err)
 	}
-	if out := c.Undeliverable(); len(out) != 1 || out[0] != "t2" {
-		t.Fatalf("кто не везёт: %v", out)
-	}
 
 	quotes["t2"] = delivery.Unreachable(t0)
 	_ = c.SelectDelivery(selection, quotes, t0)
-	if need := c.NeedsQuote(t0); len(need) != 1 || need[0] != "t2" || len(c.Undeliverable()) != 0 {
+	if need := c.NeedsQuote(t0); len(need) != 1 || need[0] != "t2" {
 		t.Fatalf("не ответивший магазин пересчитывается: %v", need)
 	}
 

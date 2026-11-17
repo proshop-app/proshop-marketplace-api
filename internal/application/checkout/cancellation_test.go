@@ -57,7 +57,7 @@ func (p delayedCancellation) CancelOrder(
 	return p.PlatformAPI.CancelOrder(ctx, tenant, request)
 }
 
-func TestDeadlineCancelsLostAndLateOrders(t *testing.T) {
+func TestBuyerCancelsLostAndLateOrdersAfterDeadline(t *testing.T) {
 	for _, lost := range []bool{false, true} {
 		e := setup(t)
 		c := confirmedPurchase(t, e)
@@ -103,13 +103,16 @@ func TestDeadlineCancelsLostAndLateOrders(t *testing.T) {
 		if err != nil || (before.Groups[0].OrderID == "") != lost {
 			t.Fatal(before, err)
 		}
+		if _, err := e.service.Cancel(ctx, buyerID, c.ID); err != nil {
+			t.Fatal(err)
+		}
 		if err := executeTasks(ctx, e); err != nil {
 			t.Fatal(err)
 		}
 		state, err := e.service.Get(ctx, buyerID, c.ID)
 		g := state.Groups[0]
 		if err != nil || g.ReconciliationRequired || !g.CancellationConfirmed || g.OrderID == "" ||
-			g.Status != checkout.GroupUnconfirmed {
+			g.Status != checkout.GroupCancelled {
 			t.Fatal(state, err)
 		}
 		remote, err := e.platform.GetOrder(ctx, g.TenantID, g.OrderID)
@@ -117,7 +120,7 @@ func TestDeadlineCancelsLostAndLateOrders(t *testing.T) {
 			t.Fatal(remote, err)
 		}
 		requests := e.platform.CancellationRequests(g.TenantID)
-		if len(requests) != 1 || requests[0].Reason != "creation_timeout" {
+		if len(requests) != 1 || requests[0].Reason != "buyer_cancelled" {
 			t.Fatal(requests)
 		}
 	}
@@ -134,6 +137,9 @@ func TestCancellationAbsentBlocksLateCreation(t *testing.T) {
 	request := e.platform.OrderRequests("t1")[0]
 	e.clock.Advance(appcheckout.CreationTimeout)
 	if err := executeTasks(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.service.Cancel(ctx, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := executeTasks(ctx, e); err != nil {
@@ -267,7 +273,7 @@ func TestCancellationRetriesAndDoesNotBlockHealthySeller(t *testing.T) {
 	e.platform.FailCancel("t1", &ports.OrderRefusal{Code: "MARKETPLACE_TEMPORARY_FAILURE"})
 	started, release := make(chan struct{}, 1), make(chan struct{})
 	platform := delayedCancellation{PlatformAPI: e.platform, started: started, release: release}
-	service := appcheckout.NewService(e.store, e.index, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
+	service := appcheckout.NewService(e.store, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
 	executor := appcheckout.NewExecutor(e.store, e.clock, service)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
@@ -317,7 +323,7 @@ func TestCancellationTaskAndTransitionRollbackTogether(t *testing.T) {
 	}
 	failure := errors.New("постановка недоступна")
 	uow := failingEnqueueUOW{UnitOfWork: e.store, failure: failure}
-	service := appcheckout.NewService(uow, e.index, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
+	service := appcheckout.NewService(uow, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
 	if _, err := service.Cancel(ctx, buyerID, c.ID); !errors.Is(err, failure) {
 		t.Fatal(err)
 	}
@@ -407,7 +413,6 @@ func TestCancellationInvalidResultStopsRetries(t *testing.T) {
 			platform := cancellationAnswer{PlatformAPI: e.platform, answer: tc.answer, failure: tc.failure}
 			e.service = appcheckout.NewService(
 				e.store,
-				e.index,
 				platform,
 				nil,
 				nil,
@@ -434,7 +439,8 @@ func TestCancellationInvalidResultStopsRetries(t *testing.T) {
 				!g.ReconciliationRequired || !g.CancellationBlocked || g.OrderID != before.Groups[0].OrderID {
 				t.Fatal(g)
 			}
-		})
+		},
+		)
 	}
 }
 

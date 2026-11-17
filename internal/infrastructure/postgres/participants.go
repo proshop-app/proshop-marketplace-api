@@ -54,23 +54,23 @@ const (
 		LIMIT 1`
 
 	updateParticipant = `
-        UPDATE participants
-        SET slug = $4,
-            name = $5,
-            stage = $6,
-            enabled = $7,
-            awaiting_review = $8,
-            settings_synced_at = $9,
-            version = $10,
-            updated_at = $11,
-            delivery_settings = $12,
-            trust = $13,
-            approved_offers = $14,
-            delivery_valid = $15,
-            last_decision = $16,
-            store_card = $17,
-            card_ready = $18
-        WHERE tenant_id = $1 AND stage = $2 AND version = $3`
+		UPDATE participants
+		SET slug = $4,
+			name = $5,
+			stage = $6,
+			enabled = $7,
+			awaiting_review = $8,
+			settings_synced_at = $9,
+			version = $10,
+			updated_at = $11,
+			delivery_settings = $12,
+			trust = $13,
+			approved_offers = $14,
+			delivery_valid = $15,
+			last_decision = $16,
+			store_card = $17,
+			card_ready = $18
+		WHERE tenant_id = $1 AND stage = $2 AND version = $3`
 )
 
 // Participants — участники в PostgreSQL.

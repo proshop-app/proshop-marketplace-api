@@ -128,7 +128,14 @@ func (c *Client) PickupPoints(
 		"pickup_points",
 		c.cfg.StrictTimeout,
 		func(ctx context.Context) (ports.PickupPoints, error) {
-			return c.upstream.PickupPoints(ctx, tenant, carrier, city)
+			answer, err := c.upstream.PickupPoints(ctx, tenant, carrier, city)
+			if err == nil {
+				err = ctx.Err()
+			}
+			if err != nil {
+				return answer, &ports.PickupCatalogFailure{Cause: err}
+			}
+			return answer, nil
 		},
 	)
 }

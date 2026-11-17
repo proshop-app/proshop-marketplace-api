@@ -248,6 +248,11 @@ func (c *Checkout) SelectDelivery(selection Selection, quotes map[ids.TenantID]d
 		return ErrInvalidQuotes
 	}
 
+	for _, group := range c.state.Groups {
+		if group.Status != "" || group.Abandoned {
+			return ErrTransition
+		}
+	}
 	for i := range c.state.Groups {
 		quote, ok := quotes[c.state.Groups[i].TenantID]
 		if !ok {
@@ -270,27 +275,15 @@ func (c *Checkout) NeedsQuote(now time.Time) []ids.TenantID {
 	var tenants []ids.TenantID
 
 	for _, group := range c.state.Groups {
+		if group.Excluded() || group.OrderID != "" {
+			continue
+		}
 		quote := group.Quote
 
 		switch {
 		case quote == nil,
 			quote.Status == delivery.QuoteAvailable && quote.Expired(now),
 			quote.Status == delivery.QuoteUnavailable && quote.Reason == delivery.ReasonSellerUnreachable:
-			tenants = append(tenants, group.TenantID)
-		}
-	}
-
-	return tenants
-}
-
-// Undeliverable — продавцы, которые ответили, что в выбранный пункт не везут.
-// Их не исправит ни перепроверка цен, ни пересчёт: нужен другой пункт.
-func (c *Checkout) Undeliverable() []ids.TenantID {
-	var tenants []ids.TenantID
-
-	for _, group := range c.state.Groups {
-		if q := group.Quote; q != nil && q.Status == delivery.QuoteUnavailable &&
-			q.Reason != delivery.ReasonSellerUnreachable {
 			tenants = append(tenants, group.TenantID)
 		}
 	}
@@ -325,6 +318,9 @@ func (c *Checkout) Reprice(checks map[ids.OfferID]PriceCheck, now time.Time) (bo
 	var missing []string
 
 	for _, group := range c.state.Groups {
+		if group.Excluded() || group.Status != "" {
+			continue
+		}
 		for _, line := range group.Lines {
 			check, ok := checks[line.Offer]
 			if ok {
@@ -346,6 +342,9 @@ func (c *Checkout) Reprice(checks map[ids.OfferID]PriceCheck, now time.Time) (bo
 
 	for gi := range c.state.Groups {
 		group := &c.state.Groups[gi]
+		if group.Excluded() || group.Status != "" {
+			continue
+		}
 		groupChanged := false
 
 		for li := range group.Lines {
@@ -384,6 +383,16 @@ func (c *Checkout) Confirm(now time.Time) error {
 	available := 0
 
 	for _, group := range c.state.Groups {
+		if group.Excluded() {
+			continue
+		}
+		if group.QuotePending() {
+			return ErrSellerUnavailable
+		}
+		if group.OrderID != "" {
+			available++
+			continue
+		}
 		switch {
 		case group.Quote == nil:
 			return ErrQuoteExpired
@@ -440,6 +449,9 @@ func (c *Checkout) recount() error {
 		group.DeliveryPrice = money.Money{}
 
 		var err error
+		if group.Excluded() {
+			continue
+		}
 		if goodsTotal, err = goodsTotal.Add(goods); err != nil {
 			return err
 		}

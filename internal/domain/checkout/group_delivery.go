@@ -25,16 +25,6 @@ func (c *Checkout) SetDeliveryOptions(options, regions map[ids.TenantID][]string
 	return c.touch(now)
 }
 
-// SelectGroupDelivery меняет только выбранный магазин; CAS защищает остальные группы.
-func (c *Checkout) SelectGroupDelivery(
-	tenant ids.TenantID,
-	selection Selection,
-	quote delivery.Quote,
-	now time.Time,
-) error {
-	return c.SelectDeliveries(selection, map[ids.TenantID]delivery.Quote{tenant: quote}, now)
-}
-
 // SelectDeliveries атомарно применяет общий ПВЗ выбранным группам покупки.
 func (c *Checkout) SelectDeliveries(
 	selection Selection,
@@ -45,8 +35,10 @@ func (c *Checkout) SelectDeliveries(
 		return ErrNotDraft
 	}
 	for tenant := range quotes {
-		if c.group(tenant) == nil {
+		if group := c.group(tenant); group == nil {
 			return ErrNotFound
+		} else if group.Status != "" || group.Abandoned {
+			return ErrSnapshotChanged
 		}
 	}
 	for tenant, quote := range quotes {

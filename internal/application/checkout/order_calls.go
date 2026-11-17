@@ -30,6 +30,9 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		return err
 	}
 	if !claimed {
+		if state.Status == checkout.StatusDraft || state.Status == checkout.StatusConfirmed {
+			return nil
+		}
 		for _, g := range state.Groups {
 			if g.TenantID == tenant && g.OrderID == "" && !g.CreateExhausted &&
 				!g.Abandoned && !g.CreationExpired(s.clock.Now()) {
@@ -99,10 +102,12 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 			reason = refusal.Reason
 		}
 		// Прежняя попытка могла создать заказ и потерять ответ до отзыва готовности.
-		reconcile := code == "IDEMPOTENCY_CONFLICT" || errors.Is(failed, checkout.ErrOfferUnavailable)
+		reconcile := code == "IDEMPOTENCY_CONFLICT" || errors.Is(failed, checkout.ErrOfferUnavailable) ||
+			(terminal != "" && group.CreateFailures > 0)
 		_, err := c.FailCreation(tenant, token, code, reason, terminal, reconcile, prices, now)
 		return err
-	})
+	},
+	)
 	if err != nil {
 		return err
 	}

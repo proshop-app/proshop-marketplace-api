@@ -26,7 +26,7 @@ func TestDeliveryChangedIncludesSnapshot(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/checkout/id/orders", nil)
 	request.Header.Set("X-Marketplace-Money-Unit", "RUB")
-	service := appcheckout.NewService(fake.NewStore(), nil, nil, nil, nil, nil, nil, appcheckout.Config{})
+	service := appcheckout.NewService(fake.NewStore(), nil, nil, nil, nil, nil, appcheckout.Config{})
 	handler := checkoutHandlers{checkouts: service}
 	handler.respond(response, request, http.StatusOK, state, checkout.ErrDeliveryChanged)
 	var body struct {

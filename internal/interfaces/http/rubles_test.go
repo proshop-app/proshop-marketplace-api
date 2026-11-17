@@ -348,11 +348,11 @@ func TestCheckoutPaidTotalKeepsLastConfirmedStatus(t *testing.T) {
 		}
 		state.Groups = append(state.Groups, group)
 	}
-	state.GoodsTotal = money.FromKopecks(700)
-	state.DeliveryTotal = money.FromKopecks(70)
-	state.Total = money.FromKopecks(770)
+	state.GoodsTotal = money.FromKopecks(600)
+	state.DeliveryTotal = money.FromKopecks(60)
+	state.Total = money.FromKopecks(660)
 	body, err := toCheckoutJSON(state)
-	if err != nil || body.PaidTotal != 440 || body.BaseTotal != 700 || body.Discount != 0 || body.Total != 770 {
+	if err != nil || body.PaidTotal != 440 || body.BaseTotal != 600 || body.Discount != 0 || body.Total != 660 {
 		t.Fatalf("смешанные статусы: %+v, %v", body, err)
 	}
 }

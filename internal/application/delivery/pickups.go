@@ -51,7 +51,6 @@ type pickupCatalog struct {
 
 type flight struct {
 	cancel  context.CancelFunc
-	waiters int
 	done    chan struct{}
 	catalog *pickupCatalog
 	err     error
@@ -77,19 +76,6 @@ func (s *Service) Carriers() []delivery.CarrierInfo {
 // Search возвращает первый успешный список; отказ службы позволяет перейти к следующему магазину.
 func (s *Service) Search(ctx context.Context, carrier delivery.Carrier, city string) ([]delivery.PickupPoint, error) {
 	return s.search(ctx, carrier, city, nil)
-}
-
-// SearchFor ограничивает источник магазинами текущей покупки.
-func (s *Service) SearchFor(
-	ctx context.Context,
-	carrier delivery.Carrier,
-	city string,
-	tenants []ids.TenantID,
-) ([]delivery.PickupPoint, error) {
-	if len(tenants) == 0 {
-		return []delivery.PickupPoint{}, nil
-	}
-	return s.search(ctx, carrier, city, tenants)
 }
 
 func (s *Service) search(
@@ -118,13 +104,6 @@ func (s *Service) catalogue(
 	if err != nil {
 		return nil, err
 	}
-	candidates, err := s.candidates(ctx, carrier, tenants)
-	if err != nil {
-		return nil, err
-	}
-	if len(candidates) == 0 {
-		return &pickupCatalog{Points: []delivery.PickupPoint{}, index: delivery.NewPickupIndex(nil)}, nil
-	}
 	key := "v3:" + string(carrier) + ":" + strings.ToLower(city)
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -144,26 +123,14 @@ func (s *Service) catalogue(
 	}
 	f, ok := s.flights[key]
 	if !ok {
-		// Общая загрузка живёт, пока есть ожидающие, и имеет конечный общий срок.
+		// Общая загрузка завершается в своём бюджете, даже если карта уже сменила область.
 		budget := time.Duration(s.config.Attempts)*s.config.QuoteTimeout + 5*time.Second
 		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
 		f = &flight{done: make(chan struct{}), cancel: cancel}
 		s.flights[key] = f
-		go s.load(loadCtx, key, carrier, city, candidates, f)
+		go s.load(loadCtx, key, carrier, city, tenants, f)
 	}
-	f.waiters++
 	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		f.waiters--
-		if f.waiters == 0 {
-			f.cancel()
-			if s.flights[key] == f {
-				delete(s.flights, key)
-			}
-		}
-	}()
 
 	select {
 	case <-ctx.Done():
@@ -229,7 +196,11 @@ func (s *Service) cached(
 			return &catalog, nil
 		}
 	}
-	points, err := s.fetch(ctx, carrier, city, tenants)
+	candidates, err := s.candidates(ctx, carrier, tenants)
+	if err != nil {
+		return nil, err
+	}
+	points, err := s.fetch(ctx, carrier, city, candidates)
 	if err != nil {
 		return nil, err
 	}
@@ -256,6 +227,9 @@ func (s *Service) QueryFor(
 	catalog, err := s.catalogue(ctx, carrier, city, tenants)
 	if err != nil {
 		return delivery.PickupArea{}, err
+	}
+	if regions == nil {
+		regions = catalog.index.Regions()
 	}
 	if box != nil {
 		return catalog.index.Area(*box, regions), nil

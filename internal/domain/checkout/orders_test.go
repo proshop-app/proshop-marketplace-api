@@ -117,12 +117,21 @@ func TestAllCancelledAndSnapshotIsolation(t *testing.T) {
 	if _, err := c.BeginOrders(contact, t0); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := c.MarkCartConsumed(t0); err != nil {
+		t.Fatal(err)
+	}
 	for i := range c.Groups() {
 		order := attach(t, c, i)
 		order.Status, order.Reason = checkout.GroupCancelled, "payment_expired"
 		if _, err := c.Observe(c.Groups()[i].TenantID, order, t0, t0); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if c.Status() != checkout.StatusDraft {
+		t.Fatal("отмена магазина меняет состав", c.Status())
+	}
+	if _, err := c.Cancel(t0); err != nil {
+		t.Fatal(err)
 	}
 	if c.Status() != checkout.StatusCancelled {
 		t.Fatal(c.Status())

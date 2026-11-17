@@ -271,7 +271,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 	carts := appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL)
 	checkouts := appcheckout.NewService(
 		uow,
-		s.store.index,
 		resyncing,
 		pickups,
 		carts,

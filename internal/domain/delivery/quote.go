@@ -28,6 +28,7 @@ const (
 	ReasonNoRate = "no_rate"
 	// ReasonSellerUnreachable — магазин не ответил на расчёт.
 	ReasonSellerUnreachable = "seller_unreachable"
+	ReasonSellerNotReady    = "seller_not_ready"
 )
 
 // sellerReasons — причины, которые вправе прислать магазин.

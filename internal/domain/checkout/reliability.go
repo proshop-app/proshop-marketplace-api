@@ -37,10 +37,13 @@ func (c *Checkout) RecheckDelivery(quotes map[ids.TenantID]delivery.Quote, now t
 		if !ok {
 			return false, ErrInvalidQuotes
 		}
+		if g.QuotePending() || q.Reason == delivery.ReasonSellerUnreachable {
+			return false, ErrSellerUnavailable
+		}
 		if q.Status == delivery.QuoteAvailable {
 			available++
 		}
-		if q.Status == delivery.QuoteAvailable && (q.Expired(now) || q.BuyerCost != g.DeliveryPrice) {
+		if !g.Excluded() && g.DeliveryChanged(q) {
 			changed = true
 		}
 	}
@@ -89,7 +92,7 @@ func (c *Checkout) ClaimCreation(tenant ids.TenantID, token string, leaseUntil, 
 	if g == nil {
 		return false, ErrNotFound
 	}
-	if !g.CreationDue(now) {
+	if c.Status() == StatusDraft || c.Status() == StatusConfirmed || !g.CreationDue(now) {
 		return false, nil
 	}
 	g.CreateToken, g.NextCreateAt = token, leaseUntil
@@ -159,6 +162,9 @@ func (c *Checkout) FailCreation(
 		g.CreateExhausted = true
 	}
 	c.rollup()
+	if terminal != "" {
+		c.state.Status, c.state.ConfirmedAt = StatusDraft, time.Time{}
+	}
 	return true, c.touch(now)
 }
 

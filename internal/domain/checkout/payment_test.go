@@ -56,6 +56,12 @@ func TestPaymentInvalidatesInFlightPoll(t *testing.T) {
 	if _, err := c.Observe("t2", second, t0, t0); err != nil {
 		t.Fatal(err)
 	}
+	if err := c.Confirm(t0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.BeginOrders(contact, t0); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := c.ClaimPoll("t1", "old-poll", t0); err != nil {
 		t.Fatal(err)
 	}

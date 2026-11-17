@@ -571,11 +571,11 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ModerationCase'
-                  total: &schema1
+                  total: &id001
                     type: integer
                     format: int64
-                  limit: *schema1
-                  offset: *schema1
+                  limit: *id001
+                  offset: *id001
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -594,7 +594,7 @@ paths:
           $ref: '#/components/responses/Error'
       parameters:
       - { $ref: "#/components/parameters/MoneyUnit" }
-      - &schema2
+      - &id005
         name: limit
         in: query
         required: false
@@ -603,7 +603,7 @@ paths:
           default: 50
           minimum: 1
           maximum: 200
-      - &schema3
+      - &id006
         name: offset
         in: query
         required: false
@@ -626,7 +626,7 @@ paths:
       - name: tenantId
         in: query
         required: false
-        schema: &schema4
+        schema: &id002
           type: string
       - name: source
         in: query
@@ -685,8 +685,8 @@ paths:
               - offerId
               - note
               properties:
-                offerId: *schema4
-                note: &schema5
+                offerId: *id002
+                note: &id003
                   type: string
                   minLength: 1
                   maxLength: 2000
@@ -728,7 +728,7 @@ paths:
       - name: caseId
         in: path
         required: true
-        schema: *schema4
+        schema: *id002
   /api/v1/operator/moderation/cases/{caseId}/allow:
     post:
       tags:
@@ -766,17 +766,17 @@ paths:
       - name: caseId
         in: path
         required: true
-        schema: *schema4
+        schema: *id002
       - name: Idempotency-Key
         in: header
         required: false
-        schema: *schema4
+        schema: *id002
         description: Ключ ограничен оператором. Исходный ответ хранится 24 часа; изменение запроса — 409 IDEMPOTENCY_KEY_REUSED.
       requestBody:
         required: true
         content:
           application/json:
-            schema: &schema6
+            schema: &id004
               type: object
               required:
               - expectedVersion
@@ -786,8 +786,8 @@ paths:
                   type: integer
                   format: int64
                   minimum: 1
-                reason: *schema4
-                note: *schema5
+                reason: *id002
+                note: *id003
   /api/v1/operator/moderation/cases/{caseId}/reject:
     post:
       tags:
@@ -825,17 +825,17 @@ paths:
       - name: caseId
         in: path
         required: true
-        schema: *schema4
+        schema: *id002
       - name: Idempotency-Key
         in: header
         required: false
-        schema: *schema4
+        schema: *id002
         description: Ключ ограничен оператором. Исходный ответ хранится 24 часа; изменение запроса — 409 IDEMPOTENCY_KEY_REUSED.
       requestBody:
         required: true
         content:
           application/json:
-            schema: *schema6
+            schema: *id004
   /api/v1/operator/moderation/offers/{offerId}:
     get:
       tags:
@@ -869,7 +869,7 @@ paths:
       - name: offerId
         in: path
         required: true
-        schema: *schema4
+        schema: *id002
   /api/v1/operator/moderation/verdicts:
     get:
       tags:
@@ -896,9 +896,9 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ModerationVerdict'
-                  total: *schema1
-                  limit: *schema1
-                  offset: *schema1
+                  total: *id001
+                  limit: *id001
+                  offset: *id001
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -913,8 +913,8 @@ paths:
           $ref: '#/components/responses/Error'
       parameters:
       - { $ref: "#/components/parameters/MoneyUnit" }
-      - *schema2
-      - *schema3
+      - *id005
+      - *id006
       - name: status
         in: query
         required: true
@@ -927,7 +927,7 @@ paths:
       - name: tenantId
         in: query
         required: false
-        schema: *schema4
+        schema: *id002
       - name: decidedBy
         in: query
         schema: {type: string, enum: [rule, operator]}
@@ -1056,7 +1056,7 @@ paths:
       - name: key
         in: path
         required: true
-        schema: *schema4
+        schema: *id002
   /api/v1/operator/moderation/reasons:
     get:
       tags:
@@ -1157,7 +1157,7 @@ paths:
       - name: code
         in: path
         required: true
-        schema: *schema4
+        schema: *id002
       requestBody:
         required: true
         content:
@@ -1204,7 +1204,7 @@ paths:
       - name: tenantId
         in: path
         required: true
-        schema: *schema4
+        schema: *id002
       requestBody:
         required: true
         content:
@@ -1220,8 +1220,8 @@ paths:
                   enum:
                   - probation
                   - trusted
-                reason: *schema4
-                note: *schema5
+                reason: *id002
+                note: *id003
   /api/v1/operator/participants/{tenantId}/decisions:
     get:
       tags:
@@ -1264,8 +1264,8 @@ paths:
                           - id
                           - name
                           properties:
-                            id: *schema4
-                            name: *schema4
+                            id: *id002
+                            name: *id002
                         action:
                           type: string
                           enum:
@@ -1276,7 +1276,7 @@ paths:
                           - return
                           - card_hide
                           - card_show
-                        value: *schema4
+                        value: *id002
                         previousValue: {type: string, description: Прежнее значение; у старых записей пусто.}
                         reason:
                           anyOf:
@@ -1285,13 +1285,13 @@ paths:
                         by:
                           type: string
                           enum: [operator, system]
-                        note: *schema4
+                        note: *id002
                         at:
                           type: string
                           format: date-time
-                  total: *schema1
-                  limit: *schema1
-                  offset: *schema1
+                  total: *id001
+                  limit: *id001
+                  offset: *id001
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -1308,9 +1308,9 @@ paths:
       - name: tenantId
         in: path
         required: true
-        schema: *schema4
-      - *schema2
-      - *schema3
+        schema: *id002
+      - *id005
+      - *id006
   /api/v1/operator/session/refresh:
     post:
       operationId: refreshOperatorAccess
@@ -1420,7 +1420,7 @@ paths:
       tags:
       - operator
       operationId: updateParticipantDelivery
-      security: &schema7
+      security: &id001
       - operatorToken: []
       - operatorSession: []
       responses:
@@ -1471,7 +1471,7 @@ paths:
       tags: [operator]
       operationId: outboxFailures
       summary: Карантин outbox без исходного payload и текста внутренних ошибок
-      security: *schema7
+      security: *id001
       parameters:
       - name: after
         in: query
@@ -1515,7 +1515,7 @@ paths:
       operationId: retryOutboxKind
       summary: Вернуть страницу карантина одного вида в очередь
       description: Повторять с after из ответа до пустого ids. Исходный payload сохраняется.
-      security: *schema7
+      security: *id001
       requestBody:
         required: true
         content:
@@ -1551,7 +1551,7 @@ paths:
       tags: [operator]
       operationId: retryOutboxTask
       summary: Вернуть одну задачу из карантина в очередь
-      security: *schema7
+      security: *id001
       parameters:
       - name: taskId
         in: path
@@ -1578,7 +1578,7 @@ paths:
       tags:
       - operator
       operationId: parkedEvents
-      security: *schema7
+      security: *id001
       responses:
         '200':
           description: Успешно
@@ -1645,7 +1645,7 @@ paths:
       tags:
       - operator
       operationId: retryParkedEvent
-      security: *schema7
+      security: *id001
       responses:
         '200':
           description: Успешно
@@ -1711,7 +1711,7 @@ paths:
       tags:
       - operator
       operationId: resolveParkedEvent
-      security: *schema7
+      security: *id001
       responses:
         '200':
           description: Успешно
@@ -2723,26 +2723,86 @@ paths:
     get:
       tags: [delivery]
       summary: Пункты выдачи перевозчика
-      description: Список через активный магазин; кэш по службе и городу на час.
+      description: Справочник перевозчика в городе; кэш на час. Без bbox — страницы списка, с bbox — до 500 точек и точное
+        число совпадений.
       operationId: listPickupPoints
       parameters:
-        - { name: carrier, in: query, required: true, schema: { type: string, examples: [cdek, yandex] } }
+        - name: carrier
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - cdek
+              - yandex
         - name: city
           in: query
           required: true
-          schema: { type: string, minLength: 1, maxLength: 120 }
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+        - name: bbox
+          in: query
+          description: Юг,запад,север,восток WGS84 через запятую. При наличии limit=500, offset=0.
+          schema:
+            type: string
+            examples:
+              - 55.6,37.4,55.9,37.8
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
       responses:
         "200":
-          description: Пункты
+          description: Страница ПВЗ
           content:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required:
+                  - items
+                  - total
+                  - offset
+                  - limit
+                  - refineArea
+                  - bounds
                 properties:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/PickupPoint" }
+                  total:
+                    type: integer
+                    minimum: 0
+                    description: Точное число разрешённых точек в области или списке
+                  refineArea:
+                    type: boolean
+                    description: В области больше 500 точек; увеличьте карту
+                  bounds:
+                    type:
+                      - array
+                      - 'null'
+                    minItems: 4
+                    maxItems: 4
+                    items:
+                      type: number
+                    description: Охват разрешённых регионов города, юг/запад/север/восток
+                  offset:
+                    type: integer
+                    minimum: 0
+                  limit:
+                    type: integer
+                    minimum: 1
+                    maximum: 500
         "400": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
   /api/v1/checkout:
@@ -2786,49 +2846,6 @@ paths:
         "200": { $ref: "#/components/responses/Checkout" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
-  /api/v1/checkout/{checkoutId}/delivery/pickup-points:
-    get:
-      tags: [checkout]
-      summary: Пункты магазинов покупки в области карты или странице списка
-      operationId: checkoutPickupPoints
-      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
-      parameters:
-        - { $ref: "#/components/parameters/MoneyUnit" }
-        - { $ref: "#/components/parameters/CheckoutId" }
-        - { name: carrier, in: query, required: true, schema: { type: string, enum: [cdek, yandex] } }
-        - { name: city, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 120 } }
-        - { name: tenantId, in: query, schema: { type: string }, description: Ограничить службами и регионами одной группы покупки }
-        - name: bbox
-          in: query
-          description: Юг,запад,север,восток WGS84 через запятую. При наличии limit=500, offset=0.
-          schema: { type: string, examples: ["55.6,37.4,55.9,37.8"] }
-        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
-      responses:
-        "200":
-          description: Страница ПВЗ
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items, total, offset, limit, refineArea, bounds]
-                properties:
-                  items: { type: array, items: { $ref: "#/components/schemas/PickupPoint" } }
-                  total: { type: integer, minimum: 0, description: Точное число разрешённых точек в области или списке }
-                  refineArea: { type: boolean, description: В области больше 500 точек; увеличьте карту }
-                  bounds:
-                    type: [array, 'null']
-                    minItems: 4
-                    maxItems: 4
-                    items: { type: number }
-                    description: Охват разрешённых регионов города, юг/запад/север/восток
-                  offset: { type: integer, minimum: 0 }
-                  limit: { type: integer, minimum: 1, maximum: 500 }
-        "409": { $ref: "#/components/responses/Error" }
-        "400": { $ref: "#/components/responses/Error" }
-        "401": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/Error" }
-        "503": { $ref: "#/components/responses/Error" }
   /api/v1/checkout/{checkoutId}/delivery/quotes:
     post:
       tags: [checkout]
@@ -2852,11 +2869,17 @@ paths:
               additionalProperties: false
               required: [carrier, pickupPointCode, city]
               properties:
-                tenantId: { type: string }
-                tenantIds: { type: array, minItems: 1, uniqueItems: true, items: { type: string } }
                 carrier: { type: string }
                 pickupPointCode: { type: string }
                 city: { type: string, minLength: 1, maxLength: 120 }
+                tenantId:
+                  type: string
+                tenantIds:
+                  type: array
+                  minItems: 1
+                  uniqueItems: true
+                  items:
+                    type: string
       responses:
         "200": { $ref: "#/components/responses/Checkout" }
         "400": { $ref: "#/components/responses/Error" }
@@ -3259,7 +3282,6 @@ paths:
               schema: { $ref: "#/components/schemas/PurchaseList" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
-
 
   /api/v1/operator/reference:
     get:
@@ -4919,6 +4941,110 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SponsoredPage"
+  /api/v1/checkout/{checkoutId}/delivery/pickup-points:
+    get:
+      tags:
+        - checkout
+      summary: Пункты магазинов покупки в области карты или странице списка
+      operationId: checkoutPickupPoints
+      security:
+        - sessionCookie: []
+        - sessionBearer: []
+      parameters:
+        - $ref: '#/components/parameters/MoneyUnit'
+        - $ref: '#/components/parameters/CheckoutId'
+        - name: carrier
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - cdek
+              - yandex
+        - name: city
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+        - name: tenantId
+          in: query
+          schema:
+            type: string
+          description: Ограничить службами и регионами одной группы покупки
+        - name: bbox
+          in: query
+          description: Юг,запад,север,восток WGS84 через запятую. При наличии limit=500, offset=0.
+          schema:
+            type: string
+            examples:
+              - 55.6,37.4,55.9,37.8
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+      responses:
+        '200':
+          description: Страница ПВЗ
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - total
+                  - offset
+                  - limit
+                  - refineArea
+                  - bounds
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PickupPoint'
+                  total:
+                    type: integer
+                    minimum: 0
+                    description: Точное число разрешённых точек в области или списке
+                  refineArea:
+                    type: boolean
+                    description: В области больше 500 точек; увеличьте карту
+                  bounds:
+                    type:
+                      - array
+                      - 'null'
+                    minItems: 4
+                    maxItems: 4
+                    items:
+                      type: number
+                    description: Охват разрешённых регионов города, юг/запад/север/восток
+                  offset:
+                    type: integer
+                    minimum: 0
+                  limit:
+                    type: integer
+                    minimum: 1
+                    maximum: 500
+        '409':
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     serverApiToken:
@@ -6235,9 +6361,9 @@ components:
                   - key
                   - message
                   properties:
-                    key: &schema8
+                    key: &id001
                       type: string
-                    message: *schema8
+                    message: *id001
     ModerationCase:
       type: object
       required:
@@ -6286,13 +6412,13 @@ components:
         id:
           type: string
           format: uuid
-        offerId: &schema9
+        offerId: &id001
           type: string
         tenantId:
           type: string
         productId:
           type: string
-        revision: &schema10
+        revision: &id002
           type: integer
           format: int64
         source:
@@ -6307,7 +6433,7 @@ components:
           - allowed
           - rejected
           - superseded
-        reasons: &schema11
+        reasons: &id003
           type: array
           items:
             type: object
@@ -6518,14 +6644,14 @@ components:
       - revision
       - at
       properties:
-        operator: &schema12
+        operator: &id004
           type: object
           required:
           - id
           - name
           properties:
-            id: *schema9
-            name: *schema9
+            id: *id001
+            name: *id001
         action:
           type: string
           enum:
@@ -6535,8 +6661,8 @@ components:
           anyOf:
           - $ref: '#/components/schemas/ModerationReason'
           - type: 'null'
-        note: *schema9
-        revision: *schema10
+        note: *id001
+        revision: *id002
         at:
           type: string
           format: date-time
@@ -6548,9 +6674,9 @@ components:
       - operator
       - createdAt
       properties:
-        key: *schema9
-        text: *schema9
-        operator: *schema12
+        key: *id001
+        text: *id001
+        operator: *id004
         createdAt:
           type: string
           format: date-time
@@ -6654,8 +6780,8 @@ components:
           - code
           - message
           properties:
-            code: *schema9
-            message: *schema9
+            code: *id001
+            message: *id001
         case:
           $ref: '#/components/schemas/ModerationCase'
     Operator:
@@ -7200,9 +7326,9 @@ components:
     Seller:
       type: object
       required:
-      - slug
-      - name
-      - delivery
+        - slug
+        - name
+        - delivery
       properties:
         delivery:
           $ref: '#/components/schemas/ParticipantDelivery'
@@ -7673,13 +7799,11 @@ components:
     Quote:
       type: object
       required:
-      - status
-      - cost
-      - subsidy
-      - buyerCost
-      - minDays
-      - maxDays
-      - expiresAt
+        - status
+        - buyerCost
+        - minDays
+        - maxDays
+        - expiresAt
       properties:
         status:
           type: string
@@ -7689,10 +7813,11 @@ components:
         reason:
           type: string
           enum:
-          - carrier_not_connected
-          - pickup_point_unavailable
-          - no_rate
-          - seller_unreachable
+            - carrier_not_connected
+            - pickup_point_unavailable
+            - no_rate
+            - seller_unreachable
+            - seller_not_ready
           description: 'Только при status unavailable. Закрытый словарь docs/server-contract.md:
 
             carrier_not_connected — у продавца нет этого перевозчика;
@@ -7704,18 +7829,6 @@ components:
             seller_unreachable — продавец не ответил, повтор при подтверждении.
 
             '
-        cost:
-          type: number
-          description: Стоимость по договору продавца
-          multipleOf: 0.01
-          minimum: 0
-          maximum: 9999999999999.99
-        subsidy:
-          type: number
-          description: Сколько оплачивает продавец
-          multipleOf: 0.01
-          minimum: 0
-          maximum: 9999999999999.99
         buyerCost:
           type: number
           description: Доля покупателя
@@ -7782,38 +7895,27 @@ components:
     CheckoutGroup:
       type: object
       required:
-      - carriers
-      - regions
-      - reconciliationRequired
-      - tenantId
-      - externalCheckoutId
-      - lines
-      - goods
-      - quote
-      - status
-      - deliveryPrice
-      - returnFailed
-      - pollFailures
-      - nextPollAt
-      - createFailures
-      - createExhausted
-      - seller
-      - tracking
-      - baseTotal
-      - discount
-      - total
+        - carriers
+        - regions
+        - reconciliationRequired
+        - tenantId
+        - externalCheckoutId
+        - lines
+        - goods
+        - quote
+        - status
+        - deliveryPrice
+        - returnFailed
+        - pollFailures
+        - nextPollAt
+        - createFailures
+        - createExhausted
+        - seller
+        - tracking
+        - baseTotal
+        - discount
+        - total
       properties:
-        regions:
-          type: array
-          items: { type: string }
-        carriers:
-          type: array
-          items: { type: string, enum: [cdek, yandex] }
-        delivery:
-          nullable: true
-          allOf:
-            - $ref: '#/components/schemas/Selection'
-
         creationStatus:
           type: string
           enum: [creating, created, unconfirmed, rejected]
@@ -7824,7 +7926,7 @@ components:
         creationDeadline:
           type: string
           format: date-time
-          description: Срок 15 секунд от намерения; закрытие ждёт завершения активной аренды попытки (запас до 100 ms).
+          description: Бюджет создания 15 секунд. Временный сбой сохраняет состав и сумму; повтор требует подтверждения покупателя.
         seller:
           $ref: '#/components/schemas/OrderSeller'
         tracking:
@@ -7857,7 +7959,7 @@ components:
         deliveryPrice:
           type: number
           minimum: 0
-          description: Доставка группы в составе единого платежа; 0 — строка доставки скрыта
+          description: 'Плата покупателя площадки за доставку до ПВЗ: 0, Бесплатно.'
           multipleOf: 0.01
           maximum: 9999999999999.99
         reason:
@@ -7952,15 +8054,36 @@ components:
           multipleOf: 0.01
           minimum: 0
           maximum: 9999999999999.99
+        regions:
+          type: array
+          items:
+            type: string
+        carriers:
+          type: array
+          items:
+            type: string
+            enum:
+              - cdek
+              - yandex
+        delivery:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Selection'
     Selection:
       type: object
-      required: [carrier, pickupPointCode, city, address, regionCode]
+      required:
+        - carrier
+        - pickupPointCode
+        - city
+        - address
+        - regionCode
       properties:
-        regionCode: { type: string }
         carrier: { type: string }
         pickupPointCode: { type: string }
         city: { type: string }
         address: { type: string }
+        regionCode:
+          type: string
     Checkout:
       type: object
       required:
@@ -8067,28 +8190,28 @@ components:
     Participant:
       type: object
       required:
-      - card
-      - cardReady
-      - cardMissing
-      - trust
-      - probationOffers
-      - approvedOffers
-      - tenantId
-      - slug
-      - name
-      - stage
-      - awaitingReview
-      - lastDecision
-      - deliveryValid
-      - enabled
-      - delivery
-      - settingsSyncedAt
-      - tenantStatus
-      - visible
-      - checkoutAvailable
-      - version
-      - createdAt
-      - updatedAt
+        - card
+        - cardReady
+        - cardMissing
+        - trust
+        - probationOffers
+        - approvedOffers
+        - tenantId
+        - slug
+        - name
+        - stage
+        - awaitingReview
+        - lastDecision
+        - deliveryValid
+        - enabled
+        - delivery
+        - settingsSyncedAt
+        - tenantStatus
+        - visible
+        - checkoutAvailable
+        - version
+        - createdAt
+        - updatedAt
       properties:
         card:
           type: object
@@ -8969,6 +9092,7 @@ components:
           - pickup_point_unavailable
           - no_rate
           - seller_unreachable
+          - seller_not_ready
           description: 'Только при status unavailable. Закрытый словарь docs/server-contract.md:
 
             carrier_not_connected — у продавца нет этого перевозчика;

@@ -8,8 +8,8 @@ ALTER TABLE participants
     DROP COLUMN IF EXISTS free_delivery_from;
 
 -- +goose Down
--- Удалённые значения невосстановимы; nullable-колонки нужны для отката схемы.
+-- Удалённые значения невосстановимы; DEFAULT 0 NOT NULL совместим с прежним чтением в int64.
 LOCK TABLE participants IN ACCESS EXCLUSIVE MODE NOWAIT;
 ALTER TABLE participants
     ADD COLUMN IF NOT EXISTS subsidy jsonb,
-    ADD COLUMN IF NOT EXISTS free_delivery_from bigint CHECK (free_delivery_from >= 0);
+    ADD COLUMN IF NOT EXISTS free_delivery_from bigint NOT NULL DEFAULT 0 CHECK (free_delivery_from >= 0);

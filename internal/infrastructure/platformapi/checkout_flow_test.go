@@ -196,7 +196,6 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 			}
 			service := appcheckout.NewService(
 				store,
-				index,
 				guarded,
 				directory,
 				&fake.CartVerifier{},
@@ -213,12 +212,17 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			for tenant, carrier := range carriers {
-				points, err := directory.SearchFor(
+				page, err := directory.QueryFor(
 					ctx,
 					delivery.Carrier(carrier),
 					"Город & район",
 					[]ids.TenantID{tenant},
+					[]string{"RU-AD"},
+					nil,
+					0,
+					200,
 				)
+				points := page.Items
 				if err != nil || len(points) != 1 {
 					t.Fatal(points, err)
 				}
@@ -302,7 +306,8 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 					}
 				}
 			}
-		})
+		},
+		)
 	}
 }
 

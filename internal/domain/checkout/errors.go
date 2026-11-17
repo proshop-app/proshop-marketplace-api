@@ -69,6 +69,18 @@ var (
 	)
 	// ErrConflict — покупку изменили параллельно.
 	ErrConflict = errs.New(errs.Conflict, "checkout.version_conflict", "покупка изменена параллельно, повторите")
+	// ErrSnapshotChanged — повтор сохраняет получателя и ПВЗ ранее отправленного намерения.
+	ErrSnapshotChanged = errs.New(
+		errs.Conflict,
+		"checkout.order_snapshot_changed",
+		"получатель и ПВЗ начатой покупки сохранены: для их изменения отмените её и оформите заново",
+	)
+	// ErrSellerUnavailable — временный сбой не меняет подтверждённый состав.
+	ErrSellerUnavailable = errs.New(
+		errs.Unavailable,
+		"checkout.seller_unreachable",
+		"магазин не ответил; повторите расчёт",
+	)
 	// ErrPromoInvalid — сервер отклонил промокод при оформлении покупки.
 	ErrPromoInvalid = errs.New(errs.Invalid, "checkout.promo_invalid", "промокод больше не действует: измените корзину")
 )

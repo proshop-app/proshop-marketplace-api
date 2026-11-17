@@ -42,7 +42,6 @@ type Service struct {
 	observer ports.CheckoutObserver
 	carts    ports.CartVerifier
 	uow      ports.UnitOfWork
-	index    ports.OfferIndex
 	platform ports.PlatformAPI
 	points   ports.PickupLookup
 	ids      ports.IDs
@@ -53,7 +52,6 @@ type Service struct {
 // NewService — сценарии покупки.
 func NewService(
 	uow ports.UnitOfWork,
-	index ports.OfferIndex,
 	platform ports.PlatformAPI,
 	points ports.PickupLookup,
 	carts ports.CartVerifier,
@@ -64,7 +62,6 @@ func NewService(
 	return &Service{
 		carts:    carts,
 		uow:      uow,
-		index:    index,
 		platform: platform,
 		points:   points,
 		ids:      identities,
@@ -148,16 +145,7 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 		return checkout.State{}, err
 	}
 
-	availableLines := make([]checkout.Line, 0, len(lines))
-	for _, group := range created.Groups() {
-		if len(group.Carriers) > 0 {
-			availableLines = append(availableLines, group.Lines...)
-		}
-	}
 	if err := s.ready(ctx, created.Groups()); err != nil {
-		return checkout.State{}, err
-	}
-	if err := s.visible(ctx, availableLines); err != nil {
 		return checkout.State{}, err
 	}
 
@@ -265,6 +253,9 @@ func (s *Service) selectDelivery(
 		groups = nil
 		unique := make(map[ids.TenantID]bool, len(targets))
 		for _, tenant := range targets {
+			if unique[tenant] {
+				return checkout.State{}, checkout.ErrInvalidQuotes
+			}
 			unique[tenant] = true
 		}
 		for _, group := range c.Groups() {
@@ -278,6 +269,9 @@ func (s *Service) selectDelivery(
 	}
 
 	for _, g := range groups {
+		if g.Status != "" {
+			return c.State(), checkout.ErrSnapshotChanged
+		}
 		tenants = append(tenants, g.TenantID)
 	}
 	point, err := s.points.Point(ctx, carrier, pointCode, city, tenants...)
@@ -328,8 +322,12 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 		return c.State(), checkout.ErrDeliveryUnavailable
 	}
 
-	if err := s.ready(ctx, c.Groups()); err != nil {
-		return c.State(), err
+	reviewed, reviewChanged, err := s.reviewReadiness(ctx, c)
+	if err != nil {
+		return reviewed, err
+	}
+	if reviewChanged {
+		return reviewed, checkout.ErrDeliveryChanged
 	}
 	checks, err := s.check(ctx, buyerID, c.Groups())
 	if err != nil {
@@ -360,6 +358,7 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 	}
 
 	c = checkout.Restore(repriced)
+	expected = repriced.Version
 	stale := map[ids.TenantID]bool{}
 	for _, tenant := range c.NeedsQuote(s.clock.Now()) {
 		stale[tenant] = true
@@ -379,8 +378,20 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 	}
 
 	var confirmErr error
+	deliveryChanged := false
+	for _, group := range c.Groups() {
+		if q, found := requoted[group.TenantID]; found && !group.Excluded() {
+			if q.Reason == delivery.ReasonSellerUnreachable {
+				return c.State(), checkout.ErrSellerUnavailable
+			}
+			deliveryChanged = deliveryChanged || group.DeliveryChanged(q)
+		}
+	}
 
 	state, err := s.update(ctx, buyerID, checkoutID, func(c *checkout.Checkout, now time.Time) error {
+		if c.State().Version != expected {
+			return checkout.ErrConflict
+		}
 		if len(requoted) > 0 {
 			if err := c.Requote(requoted, now); err != nil {
 				return err
@@ -388,10 +399,15 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 		}
 
 		// расчёты сохраняются, даже если подтверждение не прошло: покупатель увидит причину
-		confirmErr = c.Confirm(now)
+		if deliveryChanged {
+			confirmErr = checkout.ErrDeliveryChanged
+		} else {
+			confirmErr = c.Confirm(now)
+		}
 
 		return nil
-	})
+	},
+	)
 	if err != nil {
 		return checkout.State{}, err
 	}
@@ -407,27 +423,54 @@ func (s *Service) quote(
 	groups []checkout.Group,
 	selection checkout.Selection,
 ) map[ids.TenantID]delivery.Quote {
-	var (
-		mu     sync.Mutex
-		wg     sync.WaitGroup
-		quotes = make(map[ids.TenantID]delivery.Quote, len(groups))
-	)
-
-	for _, group := range groups {
-		wg.Add(1)
-
-		go func(group checkout.Group) {
-			defer wg.Done()
-			quote := s.quoteGroup(ctx, buyerID, group, selection)
-
-			mu.Lock()
-			quotes[group.TenantID] = quote
-			mu.Unlock()
-		}(group)
+	fresh := slices.Clone(groups)
+	for i := range fresh {
+		if !fresh[i].Abandoned && fresh[i].OrderID == "" {
+			fresh[i].Quote = nil
+		}
 	}
+	return s.quoteSelections(ctx, buyerID, fresh, func(checkout.Group) *checkout.Selection { return &selection })
+}
 
+func (s *Service) quoteSelections(
+	ctx context.Context,
+	buyerID ids.UUID,
+	groups []checkout.Group,
+	selection func(checkout.Group) *checkout.Selection,
+) map[ids.TenantID]delivery.Quote {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	quotes := make(map[ids.TenantID]delivery.Quote, len(groups))
+	for _, group := range groups {
+		if group.Excluded() || group.OrderID != "" {
+			if group.Quote != nil {
+				mu.Lock()
+				quotes[group.TenantID] = *group.Quote
+				mu.Unlock()
+			}
+			continue
+		}
+		selected := selection(group)
+		if selected == nil {
+			mu.Lock()
+			quotes[group.TenantID] = delivery.Quote{
+				Status:    delivery.QuoteUnavailable,
+				Reason:    delivery.ReasonCarrierNotConnected,
+				ExpiresAt: s.clock.Now().Add(s.config.QuoteTTL),
+			}
+			mu.Unlock()
+			continue
+		}
+		wg.Add(1)
+		go func(group checkout.Group, selected checkout.Selection) {
+			defer wg.Done()
+			q := s.quoteGroup(ctx, buyerID, group, selected)
+			mu.Lock()
+			quotes[group.TenantID] = q
+			mu.Unlock()
+		}(group, *selected)
+	}
 	wg.Wait()
-
 	return quotes
 }
 
@@ -511,7 +554,7 @@ func (s *Service) check(
 	checks := make(map[ids.OfferID]checkout.PriceCheck)
 
 	for _, group := range groups {
-		if group.Quote != nil && group.Quote.Status == delivery.QuoteUnavailable {
+		if group.Excluded() || group.Status != "" {
 			for _, line := range group.Lines {
 				checks[line.Offer] = checkout.PriceCheck{
 					Exists:    true,
@@ -559,24 +602,6 @@ func (s *Service) check(
 	}
 
 	return checks, nil
-}
-
-// visible проверяет по индексу, что все позиции ещё открыты покупателю.
-func (s *Service) visible(ctx context.Context, lines []checkout.Line) error {
-	for _, line := range lines {
-		doc, found, err := s.index.Get(ctx, line.Offer.String())
-		if err != nil {
-			return err
-		}
-		if !found || !doc.Visible {
-			return checkout.ErrOfferUnavailable.WithMessage("предложение больше недоступно: " + line.Offer.String())
-		}
-		if !doc.CheckoutAvailable {
-			return checkout.ErrOfferUnavailable.WithMessage("продавец не готов к оформлению: " + line.Offer.String())
-		}
-	}
-
-	return nil
 }
 
 func (s *Service) load(ctx context.Context, buyerID, checkoutID ids.UUID) (*checkout.Checkout, error) {

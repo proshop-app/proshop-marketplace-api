@@ -35,8 +35,6 @@ type checkoutLineJSON struct {
 type quoteJSON struct {
 	Status    string    `json:"status"`
 	Reason    string    `json:"reason,omitempty"`
-	Cost      rubles    `json:"cost"`
-	Subsidy   rubles    `json:"subsidy"`
 	BuyerCost rubles    `json:"buyerCost"`
 	MinDays   int       `json:"minDays"`
 	MaxDays   int       `json:"maxDays"`
@@ -244,8 +242,6 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 			g.Quote = &quoteJSON{
 				Status:    string(q.Status),
 				Reason:    q.Reason,
-				Cost:      rubles(q.Cost.Kopecks()),
-				Subsidy:   rubles(q.Subsidy.Kopecks()),
 				BuyerCost: rubles(q.BuyerCost.Kopecks()),
 				MinDays:   q.MinDays,
 				MaxDays:   q.MaxDays,
@@ -274,11 +270,13 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 			}
 			out.PaidTotal = rubles(paidTotal.Kopecks())
 		}
-		baseTotal, err := money.FromKopecks(int64(out.BaseTotal)).Add(money.FromKopecks(int64(g.BaseTotal)))
-		if err != nil {
-			return checkoutJSON{}, err
+		if !group.Excluded() {
+			baseTotal, err := money.FromKopecks(int64(out.BaseTotal)).Add(money.FromKopecks(int64(g.BaseTotal)))
+			if err != nil {
+				return checkoutJSON{}, err
+			}
+			out.BaseTotal = rubles(baseTotal.Kopecks())
 		}
-		out.BaseTotal = rubles(baseTotal.Kopecks())
 		out.Groups = append(out.Groups, g)
 	}
 
@@ -369,6 +367,14 @@ func (h *checkoutHandlers) quote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var state checkout.State
+	unique := make(map[ids.TenantID]bool, len(body.TenantIDs))
+	for _, tenant := range body.TenantIDs {
+		if unique[tenant] {
+			writeError(w, r, ErrInvalidQuery)
+			return
+		}
+		unique[tenant] = true
+	}
 	if len(body.TenantIDs) > 0 && body.TenantID != "" {
 		writeError(w, r, ErrInvalidQuery)
 		return

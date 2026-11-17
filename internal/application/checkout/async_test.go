@@ -147,11 +147,12 @@ func TestAsyncIntentAndDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err = e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || !checkout.Restore(state).CreationComplete() || e.platform.OrderCount() != 0 {
+	if err != nil || state.Status != checkout.StatusDraft || checkout.Restore(state).CreationComplete() ||
+		e.platform.OrderCount() != 0 {
 		t.Fatal(state, err)
 	}
 	for _, g := range state.Groups {
-		if g.Status != checkout.GroupUnconfirmed || !g.CartReturned || g.ReconciliationRequired {
+		if g.Status != checkout.GroupSellerUnreachable || g.CartReturned || g.ReconciliationRequired || g.Excluded() {
 			t.Fatal(g)
 		}
 	}
@@ -165,7 +166,7 @@ func TestAsyncSuccessBeforeDeadlineClosure(t *testing.T) {
 		t.Fatal(err)
 	}
 	uow := &delayedCommitUOW{UnitOfWork: e.store, clock: e.clock}
-	e.service = appcheckout.NewService(uow, e.index, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
+	e.service = appcheckout.NewService(uow, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
 	e.platform.AfterCreate = func() { e.clock.Advance(14900 * time.Millisecond); uow.advance = true }
 	if err := executeTasks(ctx, e); err != nil {
 		t.Fatal(err)
@@ -194,11 +195,11 @@ func TestAsyncPartialCancelAndCabinet(t *testing.T) {
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.Pay(ctx, buyerID, c.ID); err != nil {
-		t.Fatal("итог позволяет оплату созданного заказа", err)
+	if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
+		t.Fatal("неизменённая покупка с временным сбоем не допускает частичной оплаты", err)
 	}
 	purchases, err := e.service.Purchases(ctx, buyerID, "")
-	if err != nil || len(purchases) != 1 || purchases[0].State().Status != checkout.StatusAwaitingPayment {
+	if err != nil || len(purchases) != 1 || purchases[0].State().Status != checkout.StatusDraft {
 		t.Fatal(purchases, err)
 	}
 	state, err := e.service.Cancel(ctx, buyerID, c.ID)
@@ -241,7 +242,7 @@ func TestAsyncIntentRollback(t *testing.T) {
 		QuoteTTL:     30 * time.Minute,
 		QuoteTimeout: time.Second,
 	}
-	service := appcheckout.NewService(uow, e.index, e.platform, nil, nil, &fake.IDs{}, e.clock, cfg)
+	service := appcheckout.NewService(uow, e.platform, nil, nil, &fake.IDs{}, e.clock, cfg)
 	if _, err := service.CreateOrders(ctx, buyerID, c.ID, orderContact); !errors.Is(err, failure) {
 		t.Fatal(err)
 	}
@@ -430,8 +431,8 @@ func TestExecutorRetriesRespectDeadline(t *testing.T) {
 	}
 	executor.Wait()
 	state, err := e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || state.Groups[0].Status != checkout.GroupUnconfirmed ||
-		len(e.platform.OrderRequests("t1")) != 2 || !state.Groups[0].CartReturned {
+	if err != nil || state.Status != checkout.StatusDraft || state.Groups[0].Excluded() ||
+		len(e.platform.OrderRequests("t1")) != 2 || state.Groups[0].CartReturned {
 		t.Fatal(state, err)
 	}
 }
@@ -444,7 +445,7 @@ func TestCreationResultSurvivesMoreThanThreeCASConflicts(t *testing.T) {
 		t.Fatal(err)
 	}
 	uow := &paymentConflictUOW{UnitOfWork: e.store}
-	e.service = appcheckout.NewService(uow, e.index, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
+	e.service = appcheckout.NewService(uow, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
 	e.platform.AfterCreate = func() { uow.remaining = 5 }
 	if err := executeTasks(ctx, e); err != nil {
 		t.Fatal(err)
@@ -464,7 +465,7 @@ func TestCancellationRetriesCAS(t *testing.T) {
 		t.Fatal(err)
 	}
 	uow := &paymentConflictUOW{UnitOfWork: e.store, remaining: 5}
-	service := appcheckout.NewService(uow, e.index, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
+	service := appcheckout.NewService(uow, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
 	state, err := service.Cancel(ctx, buyerID, c.ID)
 	if err != nil || state.Status != checkout.StatusCancelled || uow.attempts != 5 {
 		t.Fatal(state, err)
@@ -483,9 +484,17 @@ func TestCreationLeaseRespectsShorterTransportTimeout(t *testing.T) {
 	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
-	e.service = appcheckout.NewService(e.store, e.index, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{
-		OrderCallTimeout: time.Second,
-	})
+	e.service = appcheckout.NewService(
+		e.store,
+		e.platform,
+		nil,
+		nil,
+		&fake.IDs{},
+		e.clock,
+		appcheckout.Config{
+			OrderCallTimeout: time.Second,
+		},
+	)
 	e.platform.AfterCreate = func() {
 		state, err := e.service.Get(ctx, buyerID, c.ID)
 		if err != nil {

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	appbuyer "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
-	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -21,6 +20,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func pickupHTTP(t *testing.T) (*appdelivery.Service, *fake.Platform, *fake.Store) {
@@ -65,8 +65,8 @@ func TestPickupPublicContract(t *testing.T) {
 		"carrier=CDEK&city=Город",
 		"carrier=cdek",
 		"carrier=cdek&city=" + strings.Repeat("а", 121),
-		"carrier=cdek&city=Город&bbox=1,2,3,4",
-		"carrier=cdek&city=Город&limit=1",
+		"carrier=cdek&city=Город&bbox=3,2,1,4",
+		"carrier=cdek&city=Город&limit=201",
 	} {
 		response := httptest.NewRecorder()
 		handler.pickupPoints(response, httptest.NewRequest(http.MethodGet, "/?"+query, nil))
@@ -95,7 +95,7 @@ func TestPickupPublicContract(t *testing.T) {
 	}
 	response = httptest.NewRecorder()
 	handler.pickupPoints(response, httptest.NewRequest(http.MethodGet, "/?carrier=yandex&city=Город", nil))
-	if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != `{"items":[]}` {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"total":0`) {
 		t.Fatal(response.Code, response.Body)
 	}
 }
@@ -206,16 +206,6 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 	platform.SetPickupPoints("t1", ports.PickupPoints{Available: true, Items: append(points, outsideRegion)})
 	handler := &deliveryHandlers{
 		directory: directory,
-		checkouts: appcheckout.NewService(
-			store,
-			nil,
-			nil,
-			nil,
-			nil,
-			&fake.IDs{},
-			fake.NewClock(now),
-			appcheckout.Config{},
-		),
 	}
 	store.SeedTenant(participant.TenantState{TenantID: "t2", Status: participant.TenantActive})
 	store.SeedParticipant(participant.State{
@@ -280,5 +270,55 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 	handler.checkoutPickupPoints(response, request)
 	if response.Code != http.StatusNotFound || len(platform.PickupCalls()) != 1 {
 		t.Fatal("чужая покупка не открывает выдачу", response.Code)
+	}
+}
+
+func TestPickupQuotesRejectRepeatedTenantIDs(t *testing.T) {
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/",
+		strings.NewReader(
+			`{"carrier":"cdek","pickupPointCode":"P1","city":"Город","tenantIds":["t1","t1"]}`,
+		),
+	)
+	request.SetPathValue("checkoutId", "00000000-0000-4000-8000-000000000001")
+	response := httptest.NewRecorder()
+	handler := &checkoutHandlers{}
+	handler.quote(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatal(response.Code, response.Body)
+	}
+}
+
+func TestPublicQuoteNeverDisclosesSellerCost(t *testing.T) {
+	doc, _ := loadSpec(t)
+	properties := doc.Components["schemas"]["Quote"].(map[string]any)["properties"].(map[string]any)
+	for _, field := range []string{"cost", "subsidy"} {
+		if _, found := properties[field]; found {
+			t.Fatal("публичная схема раскрывает расход продавца", field)
+		}
+	}
+
+	state := checkout.State{Groups: []checkout.Group{{
+		Quote: &delivery.Quote{
+			Status:  delivery.QuoteAvailable,
+			Cost:    money.FromKopecks(30000),
+			Subsidy: money.FromKopecks(30000),
+			MinDays: 2,
+			MaxDays: 4,
+		},
+	}}}
+	body, err := toCheckoutJSON(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if strings.Contains(text, `"cost"`) || strings.Contains(text, `"subsidy"`) ||
+		!strings.Contains(text, `"buyerCost":0.00`) || !strings.Contains(text, `"minDays":2`) {
+		t.Fatal(text)
 	}
 }

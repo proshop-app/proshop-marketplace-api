@@ -2,11 +2,9 @@ package http
 
 import (
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 
-	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 
@@ -37,7 +35,6 @@ type pickupPointJSON struct {
 
 type deliveryHandlers struct {
 	directory *appdelivery.Service
-	checkouts *appcheckout.Service
 }
 
 // carriers — подключённые перевозчики для переключателя карты.
@@ -54,27 +51,13 @@ func (h *deliveryHandlers) carriers(w http.ResponseWriter, _ *http.Request) {
 
 // pickupPoints — пункты перевозчика: ?carrier=&city=
 func (h *deliveryHandlers) pickupPoints(w http.ResponseWriter, r *http.Request) {
-	values := r.URL.Query()
-
-	carrier, err := delivery.ParseCarrier(values.Get("carrier"))
+	query, err := pickupQuery(r)
 	if err != nil {
 		writeError(w, r, err)
-
 		return
 	}
-
-	if values.Has("bbox") || values.Has("limit") {
-		writeError(w, r, ErrInvalidQuery.WithMessage("bbox и limit больше не поддерживаются"))
-		return
-	}
-	points, err := h.directory.Search(r.Context(), carrier, values.Get("city"))
-	if err != nil {
-		writeError(w, r, err)
-
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{"items": pickupResponse(points)})
+	result, err := h.directory.Query(r.Context(), query)
+	writePickupArea(w, r, query, result, err)
 }
 
 func pickupResponse(points []delivery.PickupPoint) []pickupPointJSON {
@@ -105,73 +88,74 @@ func (h *deliveryHandlers) checkoutPickupPoints(w http.ResponseWriter, r *http.R
 		writeError(w, r, checkout.ErrNotFound)
 		return
 	}
-	state, err := h.checkouts.Get(r.Context(), BuyerID(r.Context()), id)
+	query, err := pickupQuery(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
+	result, err := h.directory.CheckoutPoints(
+		r.Context(),
+		BuyerID(r.Context()),
+		id,
+		ids.TenantID(r.URL.Query().Get("tenantId")),
+		query,
+	)
+	writePickupArea(w, r, query, result, err)
+}
+
+func pickupQuery(r *http.Request) (appdelivery.PickupQuery, error) {
 	values := r.URL.Query()
 	carrier, err := delivery.ParseCarrier(values.Get("carrier"))
+	query := appdelivery.PickupQuery{Carrier: carrier, City: values.Get("city"), Limit: 100}
 	if err != nil {
-		writeError(w, r, err)
-		return
+		return query, err
 	}
-	offset, limit := 0, 100
 	if values.Has("offset") {
-		offset, err = strconv.Atoi(values.Get("offset"))
-		if err != nil || offset < 0 {
-			writeError(w, r, ErrInvalidQuery)
-			return
+		query.Offset, err = strconv.Atoi(values.Get("offset"))
+		if err != nil || query.Offset < 0 {
+			return query, ErrInvalidQuery
 		}
 	}
 	if values.Has("limit") {
-		limit, err = strconv.Atoi(values.Get("limit"))
-		if err != nil || limit < 1 || limit > 200 {
-			writeError(w, r, ErrInvalidQuery)
-			return
+		query.Limit, err = strconv.Atoi(values.Get("limit"))
+		if err != nil || query.Limit < 1 || query.Limit > 200 {
+			return query, ErrInvalidQuery
 		}
 	}
-	var box *delivery.Bounds
 	if values.Has("bbox") {
-		parsed, err := parsePickupBounds(values.Get("bbox"))
+		bounds, err := parsePickupBounds(values.Get("bbox"))
 		if err != nil {
-			writeError(w, r, err)
-			return
+			return query, err
 		}
-		box = &parsed
-		offset, limit = 0, delivery.PickupMapLimit
+		query.Bounds = &bounds
+		query.Offset, query.Limit = 0, delivery.PickupMapLimit
 	}
-	groups := state.Groups
-	if tenant := values.Get("tenantId"); tenant != "" {
-		groups = slices.DeleteFunc(slices.Clone(groups), func(group checkout.Group) bool {
-			return string(group.TenantID) != tenant
-		})
-		if len(groups) == 0 {
-			writeError(w, r, checkout.ErrNotFound)
-			return
-		}
-	}
-	tenants := make([]ids.TenantID, 0, len(groups))
-	regions := []string{}
-	for _, group := range groups {
-		tenants = append(tenants, group.TenantID)
-		if slices.Contains(group.Carriers, string(carrier)) {
-			regions = append(regions, group.Regions...)
-		}
-	}
-	result, err := h.directory.QueryFor(r.Context(), carrier, values.Get("city"), tenants, regions, box, offset, limit)
+	return query, nil
+}
+
+func writePickupArea(
+	w http.ResponseWriter,
+	r *http.Request,
+	query appdelivery.PickupQuery,
+	result delivery.PickupArea,
+	err error,
+) {
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items":      pickupResponse(result.Items),
-		"total":      result.Total,
-		"refineArea": result.Refine,
-		"bounds":     result.Bounds,
-		"offset":     offset,
-		"limit":      limit,
-	})
+	writeJSON(
+		w,
+		http.StatusOK,
+		map[string]any{
+			"items":      pickupResponse(result.Items),
+			"total":      result.Total,
+			"refineArea": result.Refine,
+			"bounds":     result.Bounds,
+			"offset":     query.Offset,
+			"limit":      query.Limit,
+		},
+	)
 }
 
 func parsePickupBounds(raw string) (delivery.Bounds, error) {

@@ -57,7 +57,6 @@ func setup(t *testing.T) *env {
 	e.verifier = &fake.CartVerifier{CartVerifier: e.carts}
 	e.service = appcheckout.NewService(
 		e.store,
-		e.index,
 		e.platform,
 		e.pickups,
 		e.verifier,
@@ -253,6 +252,9 @@ func TestCreateRefusesUnpayableSeller(t *testing.T) {
 		},
 	})
 
+	p, _ := e.store.Participant("t2")
+	p.Stage = participant.StageDisconnected
+	e.store.SeedParticipant(p)
 	if _, err := e.service.Create(context.Background(), buyerID, key); !errors.Is(err, checkout.ErrOfferUnavailable) {
 		t.Fatalf("готовность продавца обязательна: %v", err)
 	}

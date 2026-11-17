@@ -102,6 +102,9 @@ func (s *Service) consumeCart(ctx context.Context, tx ports.Tx, c *checkout.Chec
 	now, ttl := s.clock.Now(), s.cartTTL()
 	if basket != nil && !basket.Expired(now) {
 		for _, g := range c.Groups() {
+			if g.Excluded() {
+				continue
+			}
 			for _, line := range g.Lines {
 				basket.Consume(line.Offer, line.Quantity, now, ttl)
 			}

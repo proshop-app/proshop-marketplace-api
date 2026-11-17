@@ -9,7 +9,6 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -89,18 +88,35 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 		return false, ErrInvalidContact
 	}
 	contact.Phone, contact.Name = string(phone), strings.TrimSpace(contact.Name)
+	if c.state.CartConsumed && c.state.Contact != contact {
+		return false, ErrSnapshotChanged
+	}
 	c.state.Contact = contact
 	c.state.Status = StatusCreatingOrders
 	for i := range c.state.Groups {
 		g := &c.state.Groups[i]
-		if g.Quote != nil && g.Quote.Status != delivery.QuoteAvailable {
-			g.Status = GroupDeliveryUnavailable
-			g.Reason = g.Quote.Reason
+		if g.OrderID != "" || g.Abandoned {
+			continue
+		}
+		if g.QuotePending() {
+			return false, ErrSellerUnavailable
+		}
+		if g.Excluded() {
+			if !g.Returnable() {
+				g.Status = GroupDeliveryUnavailable
+				if g.Quote != nil {
+					g.Reason = g.Quote.Reason
+				}
+			}
 			g.CreateExhausted = true
+			if !c.state.CartConsumed {
+				g.CartReturned = true
+			}
 		} else {
 			g.Status = GroupCreating
 		}
 	}
+	c.rollup()
 	return true, c.touch(now)
 }
 
@@ -174,6 +190,10 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 		g.ReconciliationRequired = false
 	}
 	c.rollup()
+	if order.Status == GroupCancelled && !g.Abandoned && !c.state.PaymentStarted &&
+		c.Status() != StatusPaid && c.Status() != StatusPartiallyPaid {
+		c.state.Status, c.state.ConfirmedAt = StatusDraft, time.Time{}
+	}
 	return true, c.touch(now)
 }
 
@@ -199,6 +219,9 @@ func (c *Checkout) group(tenant ids.TenantID) *Group {
 }
 
 func (c *Checkout) rollup() {
+	if c.Status() == StatusDraft || c.Status() == StatusConfirmed {
+		return
+	}
 	paid, cancelled, pending := 0, 0, 0
 	for _, g := range c.state.Groups {
 		switch g.EffectiveStatus() {

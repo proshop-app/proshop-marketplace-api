@@ -39,6 +39,10 @@ func TestPromoOrderSnapshotAndInvalidation(t *testing.T) {
 			}
 			state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 			if invalid {
+				if state.Status != checkout.StatusDraft || e.platform.OrderCount() != 0 {
+					t.Fatal("нужно новое подтверждение состава", state.Status, err)
+				}
+				state = reconfirmPurchase(t, e, c.ID)
 				if err != nil || e.platform.OrderCount() != 1 ||
 					state.Groups[0].LastErrorCode != checkout.ErrPromoInvalid.Key() ||
 					!state.Groups[0].CartReturned || state.Groups[1].Status != checkout.GroupAwaitingPayment {
@@ -62,7 +66,8 @@ func TestPromoOrderSnapshotAndInvalidation(t *testing.T) {
 			if state.Groups[0].Status != checkout.GroupAwaitingPayment {
 				t.Fatal(state.Groups[0])
 			}
-		})
+		},
+		)
 	}
 }
 
@@ -119,7 +124,9 @@ func TestPromoOrderRetryAfterCodeExpired(t *testing.T) {
 	ctx := context.Background()
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{
 		PromoCode: &cart.PromoCode{Code: "SAVE", Valid: true, Discount: money.FromKopecks(101)},
-		Discounts: map[ids.ProductID][]cart.Discount{"p1": {{PromotionID: "promo1", Amount: money.FromKopecks(101)}}},
+		Discounts: map[ids.ProductID][]cart.Discount{
+			"p1": {{PromotionID: "promo1", Amount: money.FromKopecks(101)}},
+		},
 	})
 	if _, err := e.carts.SetPromo(ctx, buyerID, "t1", "SAVE"); err != nil {
 		t.Fatal(err)
@@ -150,7 +157,9 @@ func TestConfirmRepricesDiscountsAndLowerPrice(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{
-		Discounts: map[ids.ProductID][]cart.Discount{"p1": {{PromotionID: "auto", Amount: money.FromKopecks(1000)}}},
+		Discounts: map[ids.ProductID][]cart.Discount{
+			"p1": {{PromotionID: "auto", Amount: money.FromKopecks(1000)}},
+		},
 	})
 	if _, err := e.carts.Verify(ctx, buyerID); err != nil {
 		t.Fatal(err)
@@ -203,7 +212,9 @@ func TestCreateChangedDiscountRefreshesCart(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{
-		Discounts: map[ids.ProductID][]cart.Discount{"p1": {{PromotionID: "auto", Amount: money.FromKopecks(1000)}}},
+		Discounts: map[ids.ProductID][]cart.Discount{
+			"p1": {{PromotionID: "auto", Amount: money.FromKopecks(1000)}},
+		},
 	})
 	if _, err := e.service.Create(ctx, buyerID, key); !errors.Is(err, checkout.ErrChanged) {
 		t.Fatal(err)

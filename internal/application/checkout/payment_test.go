@@ -166,7 +166,6 @@ func TestPaymentWithoutStubPreservesCart(t *testing.T) {
 	before, _ := e.store.Cart(buyerID)
 	service := appcheckout.NewService(
 		e.store,
-		e.index,
 		e.platform,
 		nil,
 		nil,
@@ -241,41 +240,29 @@ func TestExpiredPaymentMakesNoServerCalls(t *testing.T) {
 	}
 }
 
-func TestPaymentAfterExhaustedCreation(t *testing.T) {
-	for _, refusal := range []error{
-		&ports.OrderRefusal{Code: "IDEMPOTENCY_CONFLICT"},
-		ports.ErrMarketplaceDisabled,
-		errors.New("нет связи"),
-	} {
+func TestTemporaryCreationFailureNeverShrinksPayment(t *testing.T) {
+	for _, refusal := range []error{ports.ErrMarketplaceDisabled, errors.New("нет связи")} {
 		e := setup(t)
 		c := confirmedPurchase(t, e)
 		ctx := context.Background()
 		e.platform.FailCreate("t1", refusal)
-		state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
-		if err != nil {
+		if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 			t.Fatal(err)
 		}
-		for !state.Groups[0].CreateExhausted {
-			e.clock.Advance(state.Groups[0].NextCreateAt.Sub(e.clock.Now()))
-			if err := resumeAndExecute(ctx, e); err != nil {
-				t.Fatal(err)
-			}
-			state, err = e.service.Get(ctx, buyerID, c.ID)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-		if !state.Groups[0].CartReturned {
-			t.Fatal("группа не вернулась в корзину")
-		}
-		if _, err := e.service.Pay(ctx, buyerID, c.ID); err != nil {
+		e.clock.Advance(appcheckout.CreationTimeout)
+		if err := resumeAndExecute(ctx, e); err != nil {
 			t.Fatal(err)
 		}
-		if err := e.service.ConfirmPayment(ctx, buyerID, c.ID); err != nil {
+		state, err := e.service.Get(ctx, buyerID, c.ID)
+		if err != nil || state.Status != checkout.StatusDraft || state.Groups[0].Excluded() ||
+			state.Groups[0].CartReturned || state.Total != c.Total {
+			t.Fatal(state, err)
+		}
+		if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
 			t.Fatal(err)
 		}
-		if calls := e.platform.StubPaymentCalls(); len(calls) != 1 || calls[0] != "t2" {
-			t.Fatal(calls)
+		if len(e.platform.StubPaymentCalls()) != 0 {
+			t.Fatal("снятие денег без нового согласия")
 		}
 	}
 }
@@ -357,7 +344,6 @@ func TestPaymentRetriesLocalConflict(t *testing.T) {
 		uow := &paymentConflictUOW{UnitOfWork: e.store}
 		service := appcheckout.NewService(
 			uow,
-			e.index,
 			e.platform,
 			nil,
 			nil,

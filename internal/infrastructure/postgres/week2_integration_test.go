@@ -329,7 +329,7 @@ func TestCheckouts(t *testing.T) {
 
 		state := c.State()
 		if *state.Delivery != selection || state.DeliveryTotal.Kopecks() != 20000 ||
-			state.Total.Kopecks() != 2*199000+35000+20000 {
+			state.Total.Kopecks() != 2*199000+20000 {
 			return fmt.Errorf("покупка после хранения: %+v", state)
 		}
 		if q := state.Groups[0].Quote; q == nil || q.Subsidy.Kopecks() != 10000 || q.MaxDays != 4 ||
@@ -346,7 +346,8 @@ func TestCheckouts(t *testing.T) {
 		}
 
 		return nil
-	}); err != nil {
+	},
+	); err != nil {
 		t.Fatal(err)
 	}
 }

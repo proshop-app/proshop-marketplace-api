@@ -186,7 +186,9 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 		if state.ID <= f.AfterID || (f.BuyerID != "" && state.BuyerID != f.BuyerID) {
 			continue
 		}
-		if f.OrdersOnly && (state.Status == checkout.StatusDraft || state.Status == checkout.StatusConfirmed) {
+		if f.OrdersOnly && !state.CartConsumed &&
+			(state.Status == checkout.StatusDraft ||
+				state.Status == checkout.StatusConfirmed) {
 			continue
 		}
 		if f.HasOrders && !checkout.Restore(state).HasOrders() {

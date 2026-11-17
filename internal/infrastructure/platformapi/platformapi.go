@@ -342,6 +342,8 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 		case reply.StatusCode == http.StatusConflict && strings.HasSuffix(path, "/stub-payment") &&
 			(body.Code == "MARKETPLACE_STUB_PAYMENT_AMOUNT" || body.Code == "MARKETPLACE_STUB_PAYMENT_STATE"):
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
+		case reply.StatusCode == http.StatusConflict && body.Code == "MARKETPLACE_PICKUP_CATALOG_CHANGED":
+			return &ports.PickupCatalogFailure{Cause: &ports.OrderRefusal{Code: body.Code}}
 		case reply.StatusCode == http.StatusConflict && (body.Code == "DELIVERY_UNAVAILABLE" ||
 			body.Code == "DELIVERY_CHANGED" || body.Code == "OUT_OF_STOCK" ||
 			body.Code == "IDEMPOTENCY_CONFLICT" || body.Code == "ORDER_CHECKOUT_CANCELLED"):

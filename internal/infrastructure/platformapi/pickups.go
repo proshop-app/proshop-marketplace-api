@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/regions"
 )
+
+const pickupCatalogRestartLimit = 2
 
 // PickupPoints получает список по договору магазина с перевозчиком.
 func (c *Client) PickupPoints(
@@ -21,11 +24,21 @@ func (c *Client) PickupPoints(
 	query := url.Values{"carrier": {string(carrier)}, "city": {city}}
 	var collected ports.PickupPoints
 	seen := make(map[string]bool)
+	restarts := 0
 	for {
 		var answer ports.PickupPoints
 		path := "/delivery/pickup-points?" + query.Encode()
 		if err := c.call(ctx, http.MethodGet, tenant, path, nil, &answer); err != nil {
-			return ports.PickupPoints{}, err
+			var refusal *ports.OrderRefusal
+			if errors.As(err, &refusal) && refusal.Code == "MARKETPLACE_PICKUP_CATALOG_CHANGED" &&
+				restarts < pickupCatalogRestartLimit {
+				restarts++
+				collected = ports.PickupPoints{}
+				seen = make(map[string]bool)
+				query.Del("cursor")
+				continue
+			}
+			return ports.PickupPoints{}, &ports.PickupCatalogFailure{Cause: err}
 		}
 		if err := validatePickupPage(answer, carrier); err != nil {
 			return ports.PickupPoints{}, err

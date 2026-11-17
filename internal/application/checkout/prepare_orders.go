@@ -3,7 +3,6 @@ package checkout
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -34,10 +33,19 @@ func (s *Service) prepareOrders(
 	if c.Status() == checkout.StatusDraft {
 		return c.State(), checkout.ErrTransition
 	}
-	if err := s.ready(ctx, c.Groups()); err != nil {
-		return c.State(), err
+	reviewed, changed, err := s.reviewReadiness(ctx, c)
+	if err != nil {
+		return reviewed, err
+	}
+	if changed {
+		return reviewed, checkout.ErrDeliveryChanged
 	}
 	quotes := s.groupQuotes(ctx, buyerID, c.Groups(), c.Delivery())
+	for _, quote := range quotes {
+		if quote.Reason == delivery.ReasonSellerUnreachable {
+			return c.State(), checkout.ErrSellerUnavailable
+		}
+	}
 	expected := c.State().Version
 	deliveryChanged := false
 	begin := func(current *checkout.Checkout, now time.Time) error {
@@ -77,51 +85,21 @@ func (s *Service) groupQuotes(
 	groups []checkout.Group,
 	fallback *checkout.Selection,
 ) map[ids.TenantID]delivery.Quote {
-	quotes := make(map[ids.TenantID]delivery.Quote, len(groups))
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	for _, g := range groups {
-		// Отказавшая при выборе группа исключена из подтверждённого покупателем состава.
-		if g.Quote != nil && g.Quote.Status == delivery.QuoteUnavailable {
-			mu.Lock()
-			quotes[g.TenantID] = *g.Quote
-			mu.Unlock()
-			continue
-		}
-		selected := g.Selection(fallback)
-		if selected == nil || (g.Delivery == nil && g.Quote != nil &&
-			g.Quote.Reason == delivery.ReasonCarrierNotConnected) {
-			mu.Lock()
-			quotes[g.TenantID] = delivery.Quote{
-				Status:    delivery.QuoteUnavailable,
-				Reason:    delivery.ReasonCarrierNotConnected,
-				ExpiresAt: s.clock.Now().Add(s.config.QuoteTTL),
-			}
-			mu.Unlock()
-			continue
-		}
-		wg.Add(1)
-		go func(group checkout.Group, selection checkout.Selection) {
-			defer wg.Done()
-			q := s.quoteGroup(ctx, buyerID, group, selection)
-			mu.Lock()
-			quotes[group.TenantID] = q
-			mu.Unlock()
-		}(g, *selected)
-	}
-	wg.Wait()
-	return quotes
+	return s.quoteSelections(ctx, buyerID, groups, func(g checkout.Group) *checkout.Selection {
+		return g.Selection(fallback)
+	},
+	)
 }
 
 func (s *Service) enqueueCreation(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
-	if c.Status() != checkout.StatusCreatingOrders || c.State().CartConsumed {
+	if c.Status() != checkout.StatusCreatingOrders {
 		return nil
 	}
 	if err := s.consumeCart(ctx, tx, c); err != nil {
 		return err
 	}
 	for _, g := range c.Groups() {
-		if g.CreateExhausted {
+		if g.Excluded() || g.OrderID != "" {
 			continue
 		}
 		if err := enqueueOrderTask(ctx, tx, TaskCreateOrder, c.State(), g, s.clock.Now()); err != nil {

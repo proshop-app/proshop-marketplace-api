@@ -123,7 +123,6 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 		Directory: directory,
 		Checkouts: appcheckout.NewService(
 			e.store,
-			e.index,
 			e.platform,
 			e.pickups,
 			appcart.NewService(e.store, e.index, e.platform, identities, e.clock, time.Hour),

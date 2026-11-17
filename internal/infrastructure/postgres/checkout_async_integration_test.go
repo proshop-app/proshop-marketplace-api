@@ -110,7 +110,6 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	cfg := appcheckout.Config{PaymentStub: true, QuoteTimeout: time.Second, QuoteTTL: time.Hour}
 	service := appcheckout.NewService(
 		uow,
-		nil,
 		platform,
 		nil,
 		nil,
@@ -122,7 +121,6 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	failure := errors.New("откат после выполнения сценария")
 	failed := appcheckout.NewService(
 		&rollbackCheckoutUOW{UnitOfWork: uow, failure: failure},
-		nil,
 		platform,
 		nil,
 		nil,

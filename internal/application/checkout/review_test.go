@@ -39,6 +39,10 @@ func TestDeliveryUnavailableIsTerminalAndReturnsGroup(t *testing.T) {
 	e.platform.FailCreate("t1", &ports.OrderRefusal{Code: "DELIVERY_UNAVAILABLE"})
 	ctx := context.Background()
 	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
+	if state.Status != checkout.StatusDraft || e.platform.OrderCount() != 0 {
+		t.Fatal("нужно новое подтверждение", state.Status, err)
+	}
+	state = reconfirmPurchase(t, e, c.ID)
 	if err != nil || state.Groups[0].Status != checkout.GroupDeliveryUnavailable || !state.Groups[0].CartReturned ||
 		state.Groups[1].Status != checkout.GroupAwaitingPayment {
 		t.Fatalf("окончательный отказ: %+v %v", state, err)
@@ -88,7 +92,8 @@ func TestUnknownCreationErrorRetriesOnlyBeforeDeadline(t *testing.T) {
 		}
 	}
 	state, err := e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || !state.Groups[0].CreateExhausted || state.Groups[0].Reason != "creation_deadline_exceeded" ||
+	if err != nil || state.Status != checkout.StatusDraft || state.Groups[0].Excluded() ||
+		state.Groups[0].Reason != "seller_unreachable" ||
 		len(e.platform.OrderRequests("t1")) != beforeDeadline {
 		t.Fatalf("ограничение повторов: %+v %v", state, err)
 	}
@@ -114,6 +119,10 @@ func TestPartialCartReturnDoesNotBlockShippedOrPayment(t *testing.T) {
 	if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
+		t.Fatal("отмена магазина требует нового подтверждения", err)
+	}
+	reconfirmPurchase(t, e, c.ID)
 	if _, err := e.service.Pay(ctx, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}

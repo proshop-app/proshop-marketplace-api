@@ -184,3 +184,13 @@ func (i *PickupIndex) List(regions []string, offset, limit int) PickupArea {
 	}
 	return result
 }
+
+// Regions читает только ключи регионов индекса, не перебирая точки города.
+func (i *PickupIndex) Regions() []string {
+	regions := make([]string, 0, len(i.regions))
+	for region := range i.regions {
+		regions = append(regions, region)
+	}
+	slices.Sort(regions)
+	return regions
+}
