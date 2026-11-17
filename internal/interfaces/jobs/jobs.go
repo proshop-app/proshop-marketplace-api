@@ -185,6 +185,7 @@ func (r *RetentionRunner) Run(ctx context.Context) error {
 				slog.Int64("processedEvents", result.Processed),
 				slog.Int64("outboxDone", result.OutboxDone),
 				slog.Int64("parkedEvents", result.Parked),
+				slog.Int64("revalidationFailures", result.RevalidationFailures),
 			)
 		}
 

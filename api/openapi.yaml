@@ -1922,7 +1922,7 @@ paths:
                         sourceRevision: { type: integer, format: int64 }
                         productVersion: { type: integer, format: int64 }
                         taxonomyVersion: { type: integer, format: int64 }
-                        diagnostic: { type: string }
+                        diagnostic: { type: string, maxLength: 2048 }
                         at: { type: string, format: date-time }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }

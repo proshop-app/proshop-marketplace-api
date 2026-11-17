@@ -70,6 +70,7 @@ func (s *Service) revalidatePage(
 	for i := range failures {
 		failures[i].TaxonomyVersion = definition.Version
 		failures[i].At = s.clock.Now()
+		failures[i].Diagnostic = revalidationDiagnostic(failures[i].Diagnostic)
 	}
 	if err := tx.Revalidation().RecordFailures(ctx, failures); err != nil {
 		return err
@@ -83,6 +84,17 @@ func (s *Service) revalidatePage(
 	job.Done = len(items) < revalidationBatch
 	job.AvailableAt = s.clock.Now()
 	return tx.Taxonomy().AdvanceRevalidation(ctx, *job)
+}
+
+func revalidationDiagnostic(message string) string {
+	count := 0
+	for offset := range message {
+		if count == ports.RevalidationDiagnosticLimit {
+			return message[:offset]
+		}
+		count++
+	}
+	return message
 }
 
 func (s *Service) planRevalidation(

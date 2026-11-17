@@ -90,6 +90,8 @@ func (r revalidations) Save(
 
 func (r revalidations) RecordFailures(_ context.Context, failures []ports.RevalidationFailure) error {
 	for _, failure := range failures {
+		runes := []rune(failure.Diagnostic)
+		failure.Diagnostic = string(runes[:min(ports.RevalidationDiagnosticLimit, len(runes))])
 		key := productKey{tenant: failure.TenantID, product: failure.ProductID}
 		r.d.revalidationFailures[key] = failure
 	}
@@ -103,9 +105,8 @@ func (r revalidations) Failures(
 ) ([]ports.RevalidationFailure, error) {
 	result := []ports.RevalidationFailure{}
 	for key, failure := range r.d.revalidationFailures {
-		state := r.d.products[key]
-		verified := state.Version != failure.ProductVersion && state.Card.Publication.Version >= failure.TaxonomyVersion
-		if state.Revision == failure.SourceRevision && !verified && after(key, cursor) {
+		state, exists := r.d.products[key]
+		if exists && activeRevalidationFailure(state, failure) && after(key, cursor) {
 			result = append(result, failure)
 		}
 	}
@@ -114,4 +115,9 @@ func (r revalidations) Failures(
 			result[i].TenantID == result[j].TenantID && result[i].ProductID < result[j].ProductID
 	})
 	return result[:min(limit, len(result))], nil
+}
+
+func activeRevalidationFailure(state catalog.ProductState, failure ports.RevalidationFailure) bool {
+	verified := state.Version != failure.ProductVersion && state.Card.Publication.Version >= failure.TaxonomyVersion
+	return state.Revision == failure.SourceRevision && !verified
 }

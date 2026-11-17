@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,6 +18,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 func TestRevalidationFailuresAreOperatorOnlyAndPaginated(t *testing.T) {
@@ -37,12 +40,7 @@ func TestRevalidationFailuresAreOperatorOnlyAndPaginated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewHandler(Deps{
-		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Taxonomy:      apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
-		OperatorToken: "token",
-		Registerer:    prometheus.NewRegistry(),
-	})
+	handler := revalidationFailureHandler(store)
 	for _, test := range []struct {
 		token    string
 		query    string
@@ -50,9 +48,13 @@ func TestRevalidationFailuresAreOperatorOnlyAndPaginated(t *testing.T) {
 		contains string
 	}{
 		{code: 401},
+		{token: "wrong", code: 401},
 		{token: "token", query: "?limit=1", code: 200, contains: "decode: invalid assets"},
 		{token: "token", query: "?afterTenant=t1&afterProduct=p1", code: 200, contains: `"items":[]`},
 		{token: "token", query: "?limit=101", code: 400},
+		{token: "token", query: "?limit=0", code: 400},
+		{token: "token", query: "?limit=-1", code: 400},
+		{token: "token", query: "?limit=abc", code: 400},
 	} {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operator/taxonomy/revalidation-failures"+test.query, nil)
 		if test.token != "" {
@@ -64,4 +66,67 @@ func TestRevalidationFailuresAreOperatorOnlyAndPaginated(t *testing.T) {
 			t.Fatal(response.Code, response.Body.String())
 		}
 	}
+}
+
+func TestRevalidationFailureResponseHasDefaultAndMaximum(t *testing.T) {
+	store := fake.NewStore()
+	failures := []ports.RevalidationFailure{}
+	for i := 0; i < 130; i++ {
+		tenant := ids.TenantID(fmt.Sprintf("t%d", i/65+1))
+		product := ids.ProductID(fmt.Sprintf("p%03d", i%65))
+		store.SeedProduct(catalog.ProductState{TenantID: tenant, ProductID: product, Revision: 1, Version: 1})
+		failures = append(failures, ports.RevalidationFailure{
+			TenantID:       tenant,
+			ProductID:      product,
+			SourceRevision: 1,
+			ProductVersion: 1,
+			Diagnostic:     strings.Repeat("я", 5000),
+		})
+	}
+	err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
+		return tx.Revalidation().RecordFailures(ctx, failures)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := revalidationFailureHandler(store)
+	for _, test := range []struct {
+		query string
+		count int
+		last  string
+	}{
+		{count: 50, last: "t1~p049"},
+		{query: "?limit=100", count: 100, last: "t2~p034"},
+		{query: "?afterTenant=t2&afterProduct=p034", count: 30, last: "t2~p064"},
+		{query: "?afterTenant=t2&afterProduct=p064", count: 0},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/operator/taxonomy/revalidation-failures"+test.query, nil)
+		req.Header.Set("Authorization", "Bearer token")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		var body struct {
+			Items []ports.RevalidationFailure `json:"items"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if response.Code != http.StatusOK || len(body.Items) != test.count {
+			t.Fatal(response.Code, len(body.Items))
+		}
+		if test.count > 0 {
+			last := body.Items[len(body.Items)-1]
+			if string(last.TenantID)+"~"+string(last.ProductID) != test.last {
+				t.Fatal("страница перескочила ключ", last)
+			}
+		}
+	}
+}
+
+func revalidationFailureHandler(store *fake.Store) http.Handler {
+	return NewHandler(Deps{
+		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Taxonomy:      apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil),
+		OperatorToken: "token",
+		Registerer:    prometheus.NewRegistry(),
+	})
 }

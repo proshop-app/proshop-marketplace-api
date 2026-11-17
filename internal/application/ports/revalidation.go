@@ -10,6 +10,9 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+// RevalidationDiagnosticLimit ограничивает число символов причины в хранилище и ответе оператора.
+const RevalidationDiagnosticLimit = 2048
+
 // RevalidationItem сохраняет ключ даже при повреждённом JSON проекции.
 type RevalidationItem struct {
 	Revision int64

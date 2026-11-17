@@ -368,6 +368,13 @@ func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.Purg
 	defer s.mu.Unlock()
 
 	var result ports.PurgeResult
+	for key, failure := range s.data.revalidationFailures {
+		state, exists := s.data.products[key]
+		if !exists || !activeRevalidationFailure(state, failure) {
+			delete(s.data.revalidationFailures, key)
+			result.RevalidationFailures++
+		}
+	}
 
 	for id, at := range s.data.processed {
 		if at.Before(request.ProcessedBefore) {

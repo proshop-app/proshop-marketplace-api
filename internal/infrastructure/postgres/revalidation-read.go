@@ -14,6 +14,10 @@ import (
 )
 
 const (
+	activeRevalidationFailure = `p.revision = f.source_revision
+        AND (p.version = f.product_version OR
+            CASE WHEN jsonb_typeof(p.card->'publication'->'version') = 'number'
+            THEN (p.card->'publication'->>'version')::numeric ELSE 0 END < f.taxonomy_version)`
 	readRevalidationModeration = `SELECT k.tenant_id, k.product_id,
         to_jsonb(v) || jsonb_build_object('operator', jsonb_build_object('id', v.operator_id, 'name', v.operator_name)),
         CASE WHEN c.id IS NULL THEN NULL ELSE to_jsonb(c) || jsonb_build_object(
@@ -26,7 +30,7 @@ const (
 	recordRevalidationFailures = `INSERT INTO taxonomy_revalidation_failures
         (tenant_id, product_id, product_version, source_revision, taxonomy_version, diagnostic, failed_at)
         SELECT x."tenantId", x."productId", x."productVersion", x."sourceRevision",
-            x."taxonomyVersion", x.diagnostic, x.at
+            x."taxonomyVersion", left(x.diagnostic, $2), x.at
         FROM jsonb_to_recordset($1::jsonb) AS x("tenantId" text, "productId" text,
             "productVersion" bigint, "sourceRevision" bigint, "taxonomyVersion" bigint, diagnostic text, at timestamptz)
         ON CONFLICT (tenant_id, product_id) DO UPDATE
@@ -36,12 +40,9 @@ const (
             diagnostic = EXCLUDED.diagnostic,
             failed_at = EXCLUDED.failed_at`
 	listRevalidationFailures = `SELECT f.tenant_id, f.product_id, f.product_version, f.source_revision,
-        f.taxonomy_version, f.diagnostic, f.failed_at FROM taxonomy_revalidation_failures f
+        f.taxonomy_version, left(f.diagnostic, $4), f.failed_at FROM taxonomy_revalidation_failures f
         JOIN catalog_products p ON p.tenant_id = f.tenant_id AND p.product_id = f.product_id
-            AND p.revision = f.source_revision
-            AND (p.version = f.product_version OR
-                CASE WHEN jsonb_typeof(p.card->'publication'->'version') = 'number'
-                THEN (p.card->'publication'->>'version')::numeric ELSE 0 END < f.taxonomy_version)
+            AND ` + activeRevalidationFailure + `
         WHERE (f.tenant_id, f.product_id) > ($1, $2)
         ORDER BY f.tenant_id, f.product_id LIMIT $3`
 )
@@ -161,7 +162,7 @@ func (r *Revalidations) RecordFailures(ctx context.Context, failures []ports.Rev
 	if err != nil {
 		return err
 	}
-	_, err = execSQL(ctx, r.db, recordRevalidationFailures, string(raw))
+	_, err = execSQL(ctx, r.db, recordRevalidationFailures, string(raw), ports.RevalidationDiagnosticLimit)
 	return err
 }
 
@@ -171,7 +172,15 @@ func (r *Revalidations) Failures(
 	after ports.OfferKey,
 	limit int,
 ) ([]ports.RevalidationFailure, error) {
-	rows, err := rawSQL(ctx, r.db, listRevalidationFailures, after.TenantID, after.ProductID, limit).Rows()
+	rows, err := rawSQL(
+		ctx,
+		r.db,
+		listRevalidationFailures,
+		after.TenantID,
+		after.ProductID,
+		limit,
+		ports.RevalidationDiagnosticLimit,
+	).Rows()
 	if err != nil {
 		return nil, err
 	}

@@ -74,7 +74,8 @@ func (r *Retention) Purge(ctx context.Context, request ports.PurgeRequest) (port
 			}
 		}
 
-		return nil
+		result.RevalidationFailures, err = r.purgeRevalidationFailures(ctx, db, request.Batch)
+		return err
 	})
 
 	return result, err
