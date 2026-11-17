@@ -64,7 +64,7 @@ func Open(ctx context.Context, url string, maxConns int32, budgets ...ports.Data
 
 // Migrate применяет миграции из репозитория до последней версии.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	return runGoose(ctx, pool, func(provider *goose.Provider) error {
+	return runGoose(ctx, pool, migrationUp, func(provider *goose.Provider) error {
 		results, err := provider.Up(ctx)
 		if err != nil {
 			return err
@@ -82,7 +82,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 func MigrationStatus(ctx context.Context, pool *pgxpool.Pool) ([]*goose.MigrationStatus, error) {
 	var statuses []*goose.MigrationStatus
 
-	err := runGoose(ctx, pool, func(provider *goose.Provider) error {
+	err := runGoose(ctx, pool, migrationRead, func(provider *goose.Provider) error {
 		var err error
 		statuses, err = provider.Status(ctx)
 
@@ -94,7 +94,7 @@ func MigrationStatus(ctx context.Context, pool *pgxpool.Pool) ([]*goose.Migratio
 
 // MigrateDown откатывает последнюю миграцию.
 func MigrateDown(ctx context.Context, pool *pgxpool.Pool) error {
-	return runGoose(ctx, pool, func(provider *goose.Provider) error {
+	return runGoose(ctx, pool, migrationDown, func(provider *goose.Provider) error {
 		_, err := provider.Down(ctx)
 
 		return err
@@ -103,14 +103,19 @@ func MigrateDown(ctx context.Context, pool *pgxpool.Pool) error {
 
 // MigrateDownTo откатывает миграции новее указанной версии, сохраняя её применённой.
 func MigrateDownTo(ctx context.Context, pool *pgxpool.Pool, version int64) error {
-	return runGoose(ctx, pool, func(provider *goose.Provider) error {
+	return runGoose(ctx, pool, migrationDown, func(provider *goose.Provider) error {
 		_, err := provider.DownTo(ctx, version)
 
 		return err
 	})
 }
 
-func runGoose(ctx context.Context, pool *pgxpool.Pool, run func(*goose.Provider) error) error {
+func runGoose(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	direction migrationDirection,
+	run func(*goose.Provider) error,
+) error {
 	// закрытие *sql.DB поверх пула не закрывает сам пул
 	db := stdlib.OpenDBFromPool(pool)
 	defer func() { _ = db.Close() }()
@@ -124,7 +129,11 @@ func runGoose(ctx context.Context, pool *pgxpool.Pool, run func(*goose.Provider)
 		return fmt.Errorf("миграции: %w", err)
 	}
 
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, files)
+	locker, err := migrationLocker(direction)
+	if err != nil {
+		return err
+	}
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, files, goose.WithSessionLocker(locker))
 	if err != nil {
 		return fmt.Errorf("миграции: %w", err)
 	}

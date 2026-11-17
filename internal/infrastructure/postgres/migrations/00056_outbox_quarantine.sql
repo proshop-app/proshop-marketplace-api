@@ -33,6 +33,23 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS outbox_quarantine_id_idx
     ON outbox (id) WHERE failed_at IS NOT NULL;
 CREATE INDEX CONCURRENTLY IF NOT EXISTS outbox_quarantine_kind_id_idx
     ON outbox (kind, id) WHERE failed_at IS NOT NULL;
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM unnest(ARRAY[
+            'outbox_pending_due_idx',
+            'outbox_pending_tenant_due_idx',
+            'outbox_quarantine_id_idx',
+            'outbox_quarantine_kind_id_idx'
+        ]) AS expected(name)
+        LEFT JOIN pg_index i ON i.indexrelid = to_regclass(expected.name)
+        WHERE i.indisvalid IS DISTINCT FROM true
+    ) THEN
+        RAISE EXCEPTION 'новые индексы не valid; старые индексы сохранены, повторите штатную миграцию';
+    END IF;
+END $$;
+-- +goose StatementEnd
 DROP INDEX CONCURRENTLY IF EXISTS outbox_due_idx;
 DROP INDEX CONCURRENTLY IF EXISTS outbox_tenant_due_idx;
 
@@ -40,6 +57,21 @@ DROP INDEX CONCURRENTLY IF EXISTS outbox_tenant_due_idx;
 CREATE INDEX CONCURRENTLY IF NOT EXISTS outbox_due_idx ON outbox (done_at, next_at);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS outbox_tenant_due_idx
     ON outbox (tenant_id, next_at, id) WHERE done_at IS NULL;
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM unnest(ARRAY[
+            'outbox_due_idx',
+            'outbox_tenant_due_idx'
+        ]) AS expected(name)
+        LEFT JOIN pg_index i ON i.indexrelid = to_regclass(expected.name)
+        WHERE i.indisvalid IS DISTINCT FROM true
+    ) THEN
+        RAISE EXCEPTION 'новые индексы не valid; старые индексы сохранены, повторите штатную миграцию';
+    END IF;
+END $$;
+-- +goose StatementEnd
 DROP INDEX CONCURRENTLY IF EXISTS outbox_quarantine_kind_id_idx;
 DROP INDEX CONCURRENTLY IF EXISTS outbox_quarantine_id_idx;
 DROP INDEX CONCURRENTLY IF EXISTS outbox_pending_tenant_due_idx;
