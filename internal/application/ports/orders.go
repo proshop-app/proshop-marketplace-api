@@ -14,7 +14,20 @@ import (
 var ErrPriceChanged = errs.New(errs.Conflict, "checkout.price_changed", "цена магазина изменилась")
 
 // ErrOrderRefusal — магазин отклонил команду или сверку заказа.
-var ErrOrderRefusal = errs.New(errs.Unavailable, "platform.order_refusal", "магазин отклонил заказ")
+var ErrOrderRefusal = errs.New(errs.Invalid, "platform.order_refusal", "магазин отклонил заказ")
+
+// ErrUnknownOrderRefusal — неизвестный ответ требует ограниченного разбора и диагностики.
+var ErrUnknownOrderRefusal = errs.New(errs.Internal, "platform.unknown_order_refusal", "неизвестный отказ магазина")
+
+// ErrOrderNotFound — исходного заказа больше нет на сервере.
+var ErrOrderNotFound = errs.New(errs.NotFound, "platform.order_not_found", "заказ магазина не найден")
+
+// ErrTemporaryOrderRefusal — отказ магазина допускает повтор после восстановления.
+var ErrTemporaryOrderRefusal = errs.New(
+	errs.Unavailable,
+	"platform.temporary_order_refusal",
+	"временный отказ магазина",
+)
 
 // ErrInvalidOrderStatus — сервер вернул статус вне словаря §4.
 var ErrInvalidOrderStatus = errs.New(
@@ -94,7 +107,22 @@ func (e *PriceChanged) Unwrap() error { return ErrPriceChanged }
 
 func (e *OrderRefusal) Error() string { return "platform.order_refusal: " + e.Code }
 
-func (e *OrderRefusal) Unwrap() error { return ErrOrderRefusal }
+func (e *OrderRefusal) Unwrap() error {
+	if e.Unexpected {
+		return ErrUnknownOrderRefusal
+	}
+	switch e.Code {
+	case "ORDER_NOT_FOUND":
+		return ErrOrderNotFound
+	case "MARKETPLACE_TEMPORARY_FAILURE":
+		return ErrTemporaryOrderRefusal
+	case "DELIVERY_UNAVAILABLE", "DELIVERY_CHANGED", "OUT_OF_STOCK", "IDEMPOTENCY_CONFLICT",
+		"ORDER_CHECKOUT_CANCELLED", "MARKETPLACE_STUB_PAYMENT_AMOUNT", "MARKETPLACE_STUB_PAYMENT_STATE":
+		return ErrOrderRefusal
+	default:
+		return ErrUnknownOrderRefusal
+	}
+}
 
 func (e *OrderNotCancellable) Error() string {
 	return "platform.order_not_cancellable: " + string(e.Status)

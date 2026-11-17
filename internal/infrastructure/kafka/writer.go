@@ -8,7 +8,11 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
+
+// ErrUnavailable — сетевой отказ брокера допускает повтор исходного намерения.
+var ErrUnavailable = errs.New(errs.Unavailable, "kafka.unavailable", "брокер недоступен")
 
 // writerBatchTimeout — сколько писатель ждёт попутчиков; событие реестра не должно ждать секунду.
 const writerBatchTimeout = 50 * time.Millisecond
@@ -44,7 +48,7 @@ func (w *Writer) Publish(ctx context.Context, message ports.Message) error {
 		Headers: headers,
 	})
 	if err != nil {
-		return fmt.Errorf("kafka: публикация в %s: %w", message.Topic, err)
+		return ErrUnavailable.Wrap(fmt.Errorf("публикация в %s: %w", message.Topic, err))
 	}
 	return nil
 }

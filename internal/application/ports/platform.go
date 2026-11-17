@@ -11,9 +11,9 @@ import (
 )
 
 // ErrMarketplaceDisabled — сервер отказал: магазин не участвует в маркетплейсе
-// (403 MARKETPLACE_DISABLED). Для покупателя это недоступность магазина.
+// (403 MARKETPLACE_DISABLED). Повтор той же команды не восстановит участие.
 var ErrMarketplaceDisabled = errs.New(
-	errs.Unavailable,
+	errs.Forbidden,
 	"platform.marketplace_disabled",
 	"магазин не участвует в маркетплейсе",
 )

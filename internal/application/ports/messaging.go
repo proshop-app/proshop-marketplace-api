@@ -32,10 +32,11 @@ type NewTask struct {
 
 // Task — задача, взятая из outbox на разбор.
 type Task struct {
-	ID       int64
-	Kind     string
-	TenantID ids.TenantID
-	Payload  []byte
+	UnknownFailures int
+	ID              int64
+	Kind            string
+	TenantID        ids.TenantID
+	Payload         []byte
 	// Attempts растёт при каждом Claim и служит токеном владельца для Complete и Retry.
 	Attempts  int
 	CreatedAt time.Time
@@ -60,12 +61,22 @@ type ClaimRequest struct {
 
 // TaskResolution — результат с токеном аренды; NextAt задан только при повторе.
 type TaskResolution struct {
-	FailureReason string
-	ID            int64
-	Attempts      int
-	At            time.Time
-	NextAt        *time.Time
-	Error         string
+	UnknownFailures int
+	FailureReason   string
+	ID              int64
+	Attempts        int
+	At              time.Time
+	NextAt          *time.Time
+	Error           string
+}
+
+// TaskRequeue возвращает одну задачу либо ограниченную страницу одного вида.
+type TaskRequeue struct {
+	ID    int64
+	Kind  string
+	After int64
+	Limit int
+	At    time.Time
 }
 
 // TaskFailure — безопасная диагностика карантина; payload и подробная ошибка остаются в базе.
@@ -94,6 +105,7 @@ type TaskQueue interface {
 	// ReadyCounts считает только созревшие задачи, без завершённых и арендованных.
 	ReadyCounts(context.Context, time.Time) (map[string]int64, error)
 	Failures(context.Context, int64, int) ([]TaskFailure, error)
+	Requeue(context.Context, TaskRequeue) ([]int64, error)
 }
 
 // Inbox — учёт обработанных событий для дедупа.

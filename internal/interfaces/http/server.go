@@ -243,6 +243,8 @@ func routes(deps Deps) []route {
 		{http.MethodGet, "/api/v1/operator/session", gateway.session},
 		{http.MethodDelete, "/api/v1/operator/session", gateway.logout},
 		{http.MethodGet, "/api/v1/operator/outbox/failures", operator(gateway.outboxFailures)},
+		{http.MethodPost, "/api/v1/operator/outbox/failures/retry", operator(gateway.requeueTasks)},
+		{http.MethodPost, "/api/v1/operator/outbox/failures/{taskId}/retry", operator(gateway.requeueTask)},
 		{http.MethodGet, "/api/v1/operator/events", operator(gateway.listEvents)},
 		{http.MethodPost, "/api/v1/operator/events/{eventId}/retry", operator(gateway.retry)},
 		{http.MethodPost, "/api/v1/operator/events/{eventId}/resolve", operator(gateway.resolve)},

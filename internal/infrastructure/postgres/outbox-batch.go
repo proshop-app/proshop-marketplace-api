@@ -15,10 +15,12 @@ const (
 	resolveTasks = `
 		WITH results AS (
 			SELECT * FROM jsonb_to_recordset($1::jsonb)
-			AS r(id bigint, attempts integer, at timestamptz, next_at timestamptz, error text, failure_reason text)
+			AS r(id bigint, attempts integer, at timestamptz, next_at timestamptz, error text, failure_reason text,
+				unknown_failures integer)
 		)
 		UPDATE outbox o
-		SET done_at = CASE WHEN r.next_at IS NULL AND r.failure_reason = '' THEN r.at ELSE NULL END,
+		SET unknown_failures = NULLIF(r.unknown_failures, 0),
+			done_at = CASE WHEN r.next_at IS NULL AND r.failure_reason = '' THEN r.at ELSE NULL END,
 			next_at = COALESCE(r.next_at, o.next_at),
 			failed_at = CASE WHEN r.failure_reason <> '' THEN r.at ELSE NULL END,
 			failure_reason = NULLIF(r.failure_reason, ''),
@@ -34,12 +36,13 @@ const (
 )
 
 type taskResolution struct {
-	FailureReason string     `json:"failure_reason"`
-	ID            int64      `json:"id"`
-	Attempts      int        `json:"attempts"`
-	At            time.Time  `json:"at"`
-	NextAt        *time.Time `json:"next_at"`
-	Error         string     `json:"error"`
+	UnknownFailures int        `json:"unknown_failures"`
+	FailureReason   string     `json:"failure_reason"`
+	ID              int64      `json:"id"`
+	Attempts        int        `json:"attempts"`
+	At              time.Time  `json:"at"`
+	NextAt          *time.Time `json:"next_at"`
+	Error           string     `json:"error"`
 }
 
 // Resolve проверяет токены всей пачки в транзакции: конфликт откатывает все отметки.

@@ -1,5 +1,6 @@
 -- +goose Up
 ALTER TABLE outbox
+    ADD COLUMN unknown_failures integer,
     ADD COLUMN failed_at timestamptz,
     ADD COLUMN failure_reason text,
     ADD CONSTRAINT outbox_failure_state CHECK ((failed_at IS NULL) = (failure_reason IS NULL)),
@@ -20,4 +21,5 @@ ALTER TABLE outbox
     DROP CONSTRAINT outbox_failure_not_done,
     DROP CONSTRAINT outbox_failure_state,
     DROP COLUMN failure_reason,
-    DROP COLUMN failed_at;
+    DROP COLUMN failed_at,
+    DROP COLUMN unknown_failures;

@@ -19,7 +19,7 @@ var ErrUnknownTask = errs.New(errs.Invalid, "messaging.unknown_task", "нет о
 // MaxBackoff — наибольшая пауза перед повтором задачи.
 const MaxBackoff = 10 * time.Minute
 
-// DefaultMaxAttempts — конечный бюджет временных ошибок.
+// DefaultMaxAttempts ограничивает только ошибки без установленной причины.
 const DefaultMaxAttempts = 10
 
 // Handler выполняет задачу; класс ошибки определяет повтор или карантин.
@@ -125,6 +125,10 @@ func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
 			failures = []error{d.run(ctx, tasks[0])}
 			tasks = tasks[1:]
 		}
+		if err := ctx.Err(); err != nil {
+			// При остановке аренда истечёт: отмена процесса не является отказом задачи.
+			return outcomes, err
+		}
 		results := make([]Outcome, 0, len(group))
 		resolutions := make([]ports.TaskResolution, 0, len(group))
 		for n, task := range group {
@@ -137,16 +141,8 @@ func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
 					outcome.Err = failures[n]
 				}
 			}
-			resolution := ports.TaskResolution{ID: task.ID, Attempts: task.Attempts, At: finished}
-			if outcome.Err != nil {
-				resolution.Error = outcome.Err.Error()
-				resolution.FailureReason = FailureReason(outcome.Err, task.Attempts, d.config.MaxAttempts)
-				outcome.FailureReason = resolution.FailureReason
-				if resolution.FailureReason == "" {
-					next := finished.Add(Backoff(task.Attempts))
-					resolution.NextAt = &next
-				}
-			}
+			resolution := Resolution(task, outcome.Err, finished, d.config.MaxAttempts)
+			outcome.FailureReason = resolution.FailureReason
 			results = append(results, outcome)
 			resolutions = append(resolutions, resolution)
 		}
@@ -159,7 +155,7 @@ func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
 }
 
 func (d *Dispatcher) resolve(ctx context.Context, results []ports.TaskResolution) error {
-	if len(results) != 1 || results[0].FailureReason != "" {
+	if len(results) != 1 || results[0].FailureReason != "" || results[0].UnknownFailures > 0 {
 		return d.queue.Resolve(ctx, results)
 	}
 	// Одиночным обработчикам не нужны сериализация пачки и дополнительная транзакция.
@@ -210,15 +206,41 @@ func Backoff(attempts int) time.Duration {
 }
 
 // FailureReason отделяет постоянный отказ и исчерпание попыток от повторяемого сбоя.
-func FailureReason(err error, attempts, maxAttempts int) string {
-	if errs.CodeOf(err) == errs.Invalid || errs.CodeOf(err) == errs.NotFound {
+func FailureReason(err error, unknownFailures, maxAttempts int) string {
+	if err == nil || errs.RetryKindOf(err) == errs.RetryTransient {
+		return ""
+	}
+	if errs.RetryKindOf(err) == errs.RetryPermanent {
 		typed, _ := errs.As(err)
 		return typed.Key()
 	}
-	if attempts >= maxAttempts {
+	if unknownFailures >= maxAttempts {
 		return "attempts_exhausted"
 	}
 	return ""
+}
+
+// Resolution считает неизвестные сбои отдельно от токена аренды и сетевых повторов.
+func Resolution(task ports.Task, err error, at time.Time, maxAttempts int) ports.TaskResolution {
+	result := ports.TaskResolution{
+		ID:              task.ID,
+		Attempts:        task.Attempts,
+		UnknownFailures: task.UnknownFailures,
+		At:              at,
+	}
+	if err == nil {
+		return result
+	}
+	if errs.RetryKindOf(err) == errs.RetryUnknown {
+		result.UnknownFailures++
+	}
+	result.Error = err.Error()
+	result.FailureReason = FailureReason(err, result.UnknownFailures, maxAttempts)
+	if result.FailureReason == "" {
+		next := at.Add(Backoff(task.Attempts))
+		result.NextAt = &next
+	}
+	return result
 }
 
 // Failures читает карантин по курсору без COUNT и обхода живой очереди.

@@ -981,3 +981,10 @@ FOR UPDATE не нужен: после исчерпания попыток со�
 ```
 Площадка сохраняет причину отказа и оставляет группу на сверке, не объявляя отмену успешной.
 Временный сбой: `503 MARKETPLACE_TEMPORARY_FAILURE`; повтор безопасен.
+
+Класс отказа для фонового повтора: сетевой сбой, срок HTTP и HTTP 5xx —
+`unavailable`, без предела числа повторов. Известные отказы намерения по договору
+(`DELIVERY_UNAVAILABLE`, `DELIVERY_CHANGED`, `OUT_OF_STOCK`, `IDEMPOTENCY_CONFLICT`,
+`ORDER_CHECKOUT_CANCELLED`, отказы болванки оплаты) — `invalid`,
+`ORDER_NOT_FOUND` — `not_found`, `MARKETPLACE_DISABLED` — `forbidden`.
+Неизвестный код вне 5xx — `internal` с отдельным бюджетом неизвестных ошибок. Исходные код и причина сохраняются для диагностики.

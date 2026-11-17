@@ -302,7 +302,7 @@ func (r *Reader) topicsAppeared(ctx context.Context, missing []string) bool {
 func (r *Reader) existing(ctx context.Context) ([]string, error) {
 	partitions, err := readPartitions(ctx, r.config.Brokers, 5*time.Second)
 	if err != nil {
-		return nil, err
+		return nil, ErrUnavailable.Wrap(err)
 	}
 	topics := make([]string, 0, len(partitions))
 	for _, partition := range partitions {
@@ -316,7 +316,10 @@ func (r *Reader) existing(ctx context.Context) ([]string, error) {
 // Ping проверяет ответ протокола Kafka, а не только принятие TCP-соединения.
 func Ping(ctx context.Context, brokers []string) error {
 	_, err := readPartitions(ctx, brokers, 2*time.Second)
-	return err
+	if err != nil {
+		return ErrUnavailable.Wrap(err)
+	}
+	return nil
 }
 
 func sleep(ctx context.Context, d time.Duration) bool {

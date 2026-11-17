@@ -44,7 +44,7 @@ type ConsumerConfig struct {
 	Workers int
 	// TopicPrefix — префикс установки в именах топиков.
 	TopicPrefix string
-	// MaxAttempts — после стольких неудач сообщение паркуется, если хранилище живо.
+	// MaxAttempts ограничивает только ошибки без установленной причины при живом хранилище.
 	MaxAttempts int
 	// Backoff — пауза перед повтором по номеру попытки.
 	Backoff func(attempt int) time.Duration
@@ -165,11 +165,15 @@ func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
 		slog.Int64("offset", message.Offset),
 	)
 
+	unknownFailures := 0
 	for attempt := 1; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		err := c.router.Handle(ctx, envelope)
+		if err != nil && errs.RetryKindOf(err) == errs.RetryUnknown {
+			unknownFailures++
+		}
 
 		switch {
 		case err == nil:
@@ -178,11 +182,12 @@ func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
 			return ctx.Err()
 		case ctx.Err() != nil:
 			return ctx.Err()
-		case permanent(err):
+		case errs.RetryKindOf(err) == errs.RetryPermanent:
 			if c.park(ctx, log, envelope, tenant, reasonOf(err), err, attempt) {
 				return ctx.Err()
 			}
-		case attempt >= c.config.MaxAttempts && c.config.Ready(ctx) == nil:
+		case unknownFailures >= c.config.MaxAttempts && errs.RetryKindOf(err) == errs.RetryUnknown &&
+			c.config.Ready(ctx) == nil:
 			if c.park(ctx, log, envelope, tenant, ReasonExhausted, err, attempt) {
 				return ctx.Err()
 			}
@@ -239,11 +244,7 @@ func (c *Consumer) park(
 	return true
 }
 
-// permanent — повтор с тем же сообщением не поможет.
-func permanent(err error) bool {
-	return errs.CodeOf(err) == errs.Invalid
-}
-
+// reasonOf сохраняет стабильный ключ ошибки в диагностике оператора.
 func reasonOf(err error) string {
 	if typed, ok := errs.As(err); ok {
 		return typed.Key()

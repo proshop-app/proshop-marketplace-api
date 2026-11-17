@@ -31,18 +31,19 @@ type parkedKey struct {
 
 // OutboxRow — задача outbox в памяти.
 type OutboxRow struct {
-	FailedAt      *time.Time
-	FailureReason string
-	ID            int64
-	Kind          string
-	TenantID      ids.TenantID
-	DedupKey      string
-	Payload       []byte
-	Attempts      int
-	NextAt        time.Time
-	DoneAt        *time.Time
-	LastError     string
-	CreatedAt     time.Time
+	UnknownFailures int
+	FailedAt        *time.Time
+	FailureReason   string
+	ID              int64
+	Kind            string
+	TenantID        ids.TenantID
+	DedupKey        string
+	Payload         []byte
+	Attempts        int
+	NextAt          time.Time
+	DoneAt          *time.Time
+	LastError       string
+	CreatedAt       time.Time
 }
 
 type data struct {
@@ -326,12 +327,13 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Ta
 		row.Attempts++
 		row.NextAt = request.LeaseUntil
 		tasks = append(tasks, ports.Task{
-			ID:        row.ID,
-			Kind:      row.Kind,
-			TenantID:  row.TenantID,
-			Payload:   row.Payload,
-			Attempts:  row.Attempts,
-			CreatedAt: row.CreatedAt,
+			ID:              row.ID,
+			Kind:            row.Kind,
+			TenantID:        row.TenantID,
+			Payload:         row.Payload,
+			Attempts:        row.Attempts,
+			UnknownFailures: row.UnknownFailures,
+			CreatedAt:       row.CreatedAt,
 		})
 	}
 

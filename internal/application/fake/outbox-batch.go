@@ -31,6 +31,7 @@ func (s *Store) Resolve(_ context.Context, results []ports.TaskResolution) error
 	}
 	for n, result := range results {
 		row := &s.data.outbox[positions[n]]
+		row.UnknownFailures = result.UnknownFailures
 		row.LastError = result.Error
 		switch {
 		case result.FailureReason != "":
@@ -78,4 +79,26 @@ func (s *Store) Failures(_ context.Context, after int64, limit int) ([]ports.Tas
 		}
 	}
 	return result, nil
+}
+
+// Requeue повышает токен аренды и возобновляет бюджет только неизвестных ошибок.
+func (s *Store) Requeue(_ context.Context, request ports.TaskRequeue) ([]int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	items := []int64{}
+	for i := range s.data.outbox {
+		row := &s.data.outbox[i]
+		if row.FailedAt == nil || row.ID <= request.After || len(items) == request.Limit ||
+			(request.ID > 0 && row.ID != request.ID) || (request.Kind != "" && row.Kind != request.Kind) {
+			continue
+		}
+		row.Attempts++
+		row.FailedAt = nil
+		row.FailureReason = ""
+		row.UnknownFailures = 0
+		row.LastError = ""
+		row.NextAt = request.At
+		items = append(items, row.ID)
+	}
+	return items, nil
 }

@@ -30,12 +30,18 @@ func (c *PickupCache) Get(ctx context.Context, key string) ([]byte, bool, error)
 	if errors.Is(err, goredis.Nil) {
 		return nil, false, nil
 	}
-	return value, err == nil, err
+	if err != nil {
+		return nil, false, ErrUnavailable.Wrap(err)
+	}
+	return value, true, nil
 }
 
 // Set ограничивает срок жизни любого варианта публичного списка.
 func (c *PickupCache) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, pickupCacheTimeout)
 	defer cancel()
-	return c.client.Set(ctx, c.prefix+key, value, ttl).Err()
+	if err := c.client.Set(ctx, c.prefix+key, value, ttl).Err(); err != nil {
+		return ErrUnavailable.Wrap(err)
+	}
+	return nil
 }

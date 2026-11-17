@@ -10,6 +10,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 func TestDispatcherStopsPoisonTaskAndReleasesTenant(t *testing.T) {
@@ -43,7 +44,7 @@ func TestDispatcherStopsPoisonTaskAndReleasesTenant(t *testing.T) {
 	}
 }
 
-func TestDispatcherExhaustsTransientFailures(t *testing.T) {
+func TestDispatcherExhaustsUnclassifiedFailures(t *testing.T) {
 	store, clock := fake.NewStore(), fake.NewClock(t0)
 	enqueue(t, store, "fail", "t1", "bad", t0)
 	d := messaging.NewDispatcher(store, clock, config(), map[string]messaging.Handler{
@@ -59,6 +60,64 @@ func TestDispatcherExhaustsTransientFailures(t *testing.T) {
 	outcomes, err := d.RunOnce(context.Background())
 	if err != nil || len(outcomes) != 0 {
 		t.Fatalf("исчерпавшая попытки задача ждёт оператора: %+v, %v", outcomes, err)
+	}
+}
+
+func TestDependencyOutageRecoversAllTasksAfterThirtyMinutes(t *testing.T) {
+	for _, batch := range []bool{false, true} {
+		store, clock := fake.NewStore(), fake.NewClock(t0)
+		outage := true
+		handlers := map[string]messaging.Handler{}
+		for _, kind := range []string{"index", "status", "reconcile"} {
+			for _, tenant := range []string{"t1", "t2"} {
+				enqueue(t, store, kind, ids.TenantID(tenant), kind+tenant, t0)
+			}
+			handlers[kind] = func(context.Context, ports.Task) error {
+				if outage {
+					return errs.New(errs.Unavailable, "test.dependency", "зависимость недоступна")
+				}
+				return nil
+			}
+		}
+		cfg := config()
+		cfg.PerTenant = 1
+		d := messaging.NewDispatcher(store, clock, cfg, handlers)
+		if batch {
+			d.RegisterBatch("index", func(ctx context.Context, tasks []ports.Task) []error {
+				result := make([]error, len(tasks))
+				for i, task := range tasks {
+					result[i] = handlers["index"](ctx, task)
+				}
+				return result
+			})
+		}
+		handlers["independent"] = func(context.Context, ports.Task) error { return nil }
+		for second := 0; second < 1800; second++ {
+			if second == 100 {
+				enqueue(t, store, "independent", "t1", "same-store", clock.Now())
+				enqueue(t, store, "independent", "t3", "other-store", clock.Now())
+			}
+			if _, err := d.RunOnce(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			clock.Advance(time.Second)
+		}
+		rows := store.OutboxRows()
+		if rows[6].DoneAt == nil || rows[7].DoneAt == nil {
+			t.Fatal("повтор удерживает соседей своего или другого магазина", rows)
+		}
+		outage = false
+		for range 601 {
+			if _, err := d.RunOnce(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			clock.Advance(time.Second)
+		}
+		for _, row := range store.OutboxRows() {
+			if row.DoneAt == nil || row.FailedAt != nil {
+				t.Fatalf("корректная задача не восстановилась: %+v", row)
+			}
+		}
 	}
 }
 

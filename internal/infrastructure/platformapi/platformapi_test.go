@@ -167,7 +167,7 @@ func TestMarketplaceDisabled(t *testing.T) {
 	_, err := disabled.PriceGroup(context.Background(), "t1", ports.GroupPricingRequest{
 		Items: []ports.ItemRequest{{ProductID: "p1", Quantity: 1}},
 	})
-	if !errors.Is(err, ports.ErrMarketplaceDisabled) || errs.CodeOf(err) != errs.Unavailable {
+	if !errors.Is(err, ports.ErrMarketplaceDisabled) || errs.CodeOf(err) != errs.Forbidden {
 		t.Fatalf("позиции у магазина-неучастника: %v", err)
 	}
 

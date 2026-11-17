@@ -122,33 +122,24 @@ func (e *Executor) Dispatch(ctx context.Context) error {
 func (e *Executor) execute(ctx context.Context, task ports.Task) {
 	defer e.wg.Done()
 	err := e.service.HandleOrderTask(ctx, task)
-	var saved error
-	reason := ""
-	if err != nil && !CreationPending(err) {
-		reason = messaging.FailureReason(err, task.Attempts, e.maxAttempts)
-	}
-	switch {
-	case reason != "":
-		saved = e.queue.Resolve(ctx, []ports.TaskResolution{{
-			ID:            task.ID,
-			Attempts:      task.Attempts,
-			At:            e.clock.Now(),
-			Error:         err.Error(),
-			FailureReason: reason,
-		}})
-	case err == nil:
-		saved = e.queue.Complete(ctx, task.ID, task.Attempts, e.clock.Now())
-	default:
-		next := e.clock.Now().Add(messaging.Backoff(task.Attempts))
-		if CreationPending(err) {
-			next = e.clock.Now().Add(checkout.CreationRetryDelay)
-		}
+	resolution := messaging.Resolution(task, err, e.clock.Now(), e.maxAttempts)
+	if CreationPending(err) {
+		resolution.FailureReason = ""
+		next := e.clock.Now().Add(checkout.CreationRetryDelay)
 		var pending *creationPendingUntil
 		if errors.As(err, &pending) {
 			next = pending.at
 		}
-		saved = e.queue.Retry(ctx, task.ID, task.Attempts, next, err.Error())
+		resolution.NextAt = &next
 	}
+	var saved error
+	if ctx.Err() != nil {
+		// Не записываем отказ при SIGTERM: задача остаётся арендованной до повторного Claim.
+		saved = ctx.Err()
+	} else {
+		saved = e.queue.Resolve(ctx, []ports.TaskResolution{resolution})
+	}
+	reason := resolution.FailureReason
 	e.mu.Lock()
 	e.active[task.Kind][task.TenantID]--
 	if e.active[task.Kind][task.TenantID] == 0 {

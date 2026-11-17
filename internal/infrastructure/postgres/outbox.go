@@ -55,7 +55,8 @@ const (
 				next_at = $4
 			FROM locked
 			WHERE outbox.id = locked.id
-			RETURNING outbox.id, outbox.kind, outbox.tenant_id, outbox.payload, outbox.attempts, outbox.created_at
+			RETURNING outbox.id, outbox.kind, outbox.tenant_id, outbox.payload, outbox.attempts, outbox.created_at,
+				COALESCE(outbox.unknown_failures, 0) AS unknown_failures
 		)
 		SELECT u.* FROM updated u JOIN candidates c ON c.id = u.id
 		ORDER BY c.position, c.next_at, c.id`
@@ -171,6 +172,7 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 			&task.Payload,
 			&task.Attempts,
 			&task.CreatedAt,
+			&task.UnknownFailures,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("взятие задач: %w", err)
