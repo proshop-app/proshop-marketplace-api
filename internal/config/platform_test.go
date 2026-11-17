@@ -15,7 +15,7 @@ func TestPlatformProtectionDefaults(t *testing.T) {
 	}
 	p := cfg.Platform
 	if p.ReadTimeout != 300*time.Millisecond || p.CacheTTL != 30*time.Second || p.StaleTTL != 5*time.Minute ||
-		p.CacheSize != 1024 || p.MaxConcurrent != 16 || p.FailureThreshold != 5 ||
+		p.TenantStateSize != 10000 || p.TenantIdleTTL != 10*time.Minute || p.CacheSize != 1024 || p.MaxConcurrent != 16 || p.FailureThreshold != 5 ||
 		p.OpenInterval != 5*time.Second || p.LogInterval != 30*time.Second {
 		t.Fatal(p)
 	}
@@ -26,6 +26,8 @@ func TestPlatformProtectionValidation(t *testing.T) {
 		"PLATFORM_READ_TIMEOUT":      "6s",
 		"PLATFORM_CACHE_TTL":         "0s",
 		"PLATFORM_STALE_TTL":         "-1s",
+		"PLATFORM_TENANT_STATE_SIZE": "100001",
+		"PLATFORM_TENANT_IDLE_TTL":   "1s",
 		"PLATFORM_CACHE_SIZE":        "100001",
 		"PLATFORM_MAX_CONCURRENT":    "1001",
 		"PLATFORM_FAILURE_THRESHOLD": "0",

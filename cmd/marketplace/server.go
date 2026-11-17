@@ -166,6 +166,8 @@ func (s *server) services(ctx context.Context) (services, error) {
 			StaleTTL:         cfg.Platform.StaleTTL,
 			CacheSize:        cfg.Platform.CacheSize,
 			MaxConcurrent:    cfg.Platform.MaxConcurrent,
+			TenantStateSize:  cfg.Platform.TenantStateSize,
+			TenantIdleTTL:    cfg.Platform.TenantIdleTTL,
 			FailureThreshold: cfg.Platform.FailureThreshold,
 			OpenInterval:     cfg.Platform.OpenInterval,
 			LogInterval:      cfg.Platform.LogInterval,

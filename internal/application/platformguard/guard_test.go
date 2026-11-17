@@ -26,6 +26,8 @@ func testConfig() Config {
 		CacheTTL:         time.Second,
 		StaleTTL:         time.Minute,
 		CacheSize:        3,
+		TenantStateSize:  100,
+		TenantIdleTTL:    time.Minute,
 		MaxConcurrent:    2,
 		FailureThreshold: 2,
 		OpenInterval:     time.Second,
@@ -199,7 +201,7 @@ func TestConcurrencyLimitAndSingleProbe(t *testing.T) {
 		t.Fatal(calls.Load())
 	}
 	// После серии отказов только одна конкурентная проба получает допуск.
-	c.openUntil = clock.Now()
+	c.server.openUntil = clock.Now()
 	release = make(chan struct{})
 	wg.Add(1)
 	go func() {

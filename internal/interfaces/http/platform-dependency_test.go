@@ -155,6 +155,8 @@ func newDependencyFixture(t *testing.T) *dependencyFixture {
 		CacheTTL:         time.Second,
 		StaleTTL:         time.Minute,
 		CacheSize:        16,
+		TenantStateSize:  100,
+		TenantIdleTTL:    time.Minute,
 		MaxConcurrent:    2,
 		FailureThreshold: 5,
 		OpenInterval:     time.Second,

@@ -100,6 +100,8 @@ type Platform struct {
 	StaleTTL         time.Duration
 	CacheSize        int
 	MaxConcurrent    int
+	TenantStateSize  int
+	TenantIdleTTL    time.Duration
 	FailureThreshold int
 	OpenInterval     time.Duration
 	LogInterval      time.Duration
@@ -288,6 +290,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			StaleTTL:         r.duration("PLATFORM_STALE_TTL", 5*time.Minute),
 			CacheSize:        r.positive("PLATFORM_CACHE_SIZE", 1024),
 			MaxConcurrent:    r.positive("PLATFORM_MAX_CONCURRENT", 16),
+			TenantStateSize:  r.positive("PLATFORM_TENANT_STATE_SIZE", 10000),
+			TenantIdleTTL:    r.duration("PLATFORM_TENANT_IDLE_TTL", 10*time.Minute),
 			FailureThreshold: r.positive("PLATFORM_FAILURE_THRESHOLD", 5),
 			OpenInterval:     r.duration("PLATFORM_OPEN_INTERVAL", 5*time.Second),
 			LogInterval:      r.duration("PLATFORM_LOG_INTERVAL", 30*time.Second),

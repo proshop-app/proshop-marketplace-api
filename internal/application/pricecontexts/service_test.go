@@ -52,6 +52,8 @@ func setup(t *testing.T, cfg pricecontexts.Config) *fixture {
 		f.platform,
 		platformguard.Config{
 			ReadTimeout:      200 * time.Millisecond,
+			TenantStateSize:  100,
+			TenantIdleTTL:    time.Minute,
 			MaxConcurrent:    4,
 			FailureThreshold: 2,
 			OpenInterval:     time.Second,
