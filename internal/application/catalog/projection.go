@@ -37,13 +37,13 @@ type PriceEvent struct {
 // транзакция: отметка в inbox, изменение проекции и задача синхронизации
 // индекса фиксируются вместе.
 type Projector struct {
-	evaluator ports.ModerationEvaluator
+	evaluator ports.ProjectionModerator
 	uow       ports.UnitOfWork
 	clock     ports.Clock
 }
 
 // NewProjector — приём проекций.
-func NewProjector(uow ports.UnitOfWork, clock ports.Clock, evaluator ports.ModerationEvaluator) *Projector {
+func NewProjector(uow ports.UnitOfWork, clock ports.Clock, evaluator ports.ProjectionModerator) *Projector {
 	return &Projector{
 		evaluator: evaluator,
 		uow:       uow,
@@ -60,49 +60,27 @@ func NewProjector(uow ports.UnitOfWork, clock ports.Clock, evaluator ports.Moder
 // товару склеиваются.
 func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error {
 	now := p.clock.Now()
-	snapshot := event.Snapshot
-
 	return p.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		definition, err := tx.Taxonomy().Current(ctx)
-		if err != nil {
-			return err
-		}
 		fresh, err := tx.Inbox().MarkProcessed(ctx, event.EventID, now)
 		if err != nil || !fresh {
 			return err
 		}
-
-		product, err := tx.Products().Get(ctx, snapshot.TenantID, snapshot.ProductID)
-		changed := true
-		var previous *catalog.ProductState
-
-		switch {
-		case errors.Is(err, catalog.ErrProductNotFound):
-			product, err = catalog.NewProduct(snapshot, now)
-		case err == nil:
-			state := product.State()
-			previous = &state
-			changed, err = product.Apply(snapshot, now)
-		}
-		if err != nil || !changed {
+		product, previous, err := projectedProduct(ctx, tx, event.Snapshot, now)
+		if err != nil || product == nil {
 			return err
 		}
-
-		product.Revalidate(definition, now)
-		if err := tx.Products().Save(ctx, product); err != nil {
+		reused, err := p.validateProjection(ctx, tx, product, previous, now)
+		if err != nil {
 			return err
 		}
-
-		if p.evaluator != nil {
-			if err := p.evaluator.Evaluate(ctx, tx, product, nil, previous, now); err != nil {
+		state := product.State()
+		if !reused {
+			task := moderationstatus.OfferTask(state.TenantID, state.ProductID, now)
+			if err := tx.Outbox().Enqueue(ctx, task); err != nil {
 				return err
 			}
 		}
-		statusTask := moderationstatus.OfferTask(snapshot.TenantID, snapshot.ProductID, now)
-		if err := tx.Outbox().Enqueue(ctx, statusTask); err != nil {
-			return err
-		}
-		return tx.Outbox().Enqueue(ctx, SyncOfferTask(snapshot.TenantID, snapshot.ProductID, now))
+		return tx.Outbox().Enqueue(ctx, SyncOfferTask(state.TenantID, state.ProductID, now))
 	})
 }
 

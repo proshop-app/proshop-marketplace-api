@@ -80,6 +80,17 @@ func (v *Verdict) Origin() VerdictState { return RestoreVerdict(v.origin).State(
 // MarkSaved начинает новый цикл изменений после успешного сохранения.
 func (v *Verdict) MarkSaved() { v.origin = v.State() }
 
+// ReuseProjection переносит прежнюю автоматическую оценку на новую ревизию тех же входных данных.
+// Актуальность таксономии, правил и внешней политики проверяет вызывающий сценарий.
+func (v *Verdict) ReuseProjection(revision int64, now time.Time) bool {
+	if v.state.DecidedBy != Rule || v.state.ManualReject || revision <= v.state.Revision {
+		return false
+	}
+	v.state.Revision = revision
+	v.touch(now)
+	return true
+}
+
 // Allowed закрывает доступ, если оценка ещё не выполнялась.
 func (v *Verdict) Allowed() bool { return v != nil && v.state.Status == Allowed }
 

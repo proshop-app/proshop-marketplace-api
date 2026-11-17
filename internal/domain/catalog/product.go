@@ -115,7 +115,11 @@ func (p *Product) Apply(snapshot Snapshot, now time.Time) (bool, error) {
 		return false, nil
 	}
 
+	previous := p.state
 	p.assign(snapshot, now)
+	if SameValidationContent(previous, p.state) {
+		p.state.Card.Publication = previous.Card.Publication
+	}
 
 	return true, nil
 }

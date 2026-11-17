@@ -144,7 +144,11 @@ func (s *Service) RecoverProjection(
 		if !cmd.Apply {
 			return nil
 		}
-		return s.saveEvaluation(ctx, tx, p, verdict, s.clock.Now())
+		saved, err := s.saveEvaluation(ctx, tx, p, verdict, s.clock.Now())
+		if err != nil || !saved {
+			return err
+		}
+		return s.enqueueEvaluation(ctx, tx, p, s.clock.Now())
 	})
 	return result, err
 }

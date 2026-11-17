@@ -43,6 +43,7 @@ type Input struct {
 }
 
 // Rules объединяет настройки оценки и ревизию операторского словаря.
+// Срез Phrases неизменяемый; настройки скалярны и меняются в локальной копии Rules.
 type Rules struct {
 	Revision     int64
 	RequireImage bool

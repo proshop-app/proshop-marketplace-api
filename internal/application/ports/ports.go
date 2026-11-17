@@ -38,6 +38,7 @@ type Tx interface {
 	ModerationCases() moderation.CaseRepository
 	ModerationDecisions() moderation.DecisionRepository
 	ModerationRules() moderation.RulesRepository
+	ProjectionValidation() ProjectionValidation
 	ParticipantDecisions() participant.DecisionRepository
 	Taxonomy() taxonomy.Repository
 	Participants() participant.Repository

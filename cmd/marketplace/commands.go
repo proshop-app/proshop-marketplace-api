@@ -40,7 +40,7 @@ func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 	references := appreference.NewService(uow, clock.System{}, random.IDs{}, nil, appreference.Config{})
 	models := appcatalog.NewModelKeys(referencecatalog.New(references), nil, cfg.ModelKeys)
 	indexer := appcatalog.NewIndexer(
-		postgres.NewUnitOfWork(store.pool),
+		uow,
 		store.index,
 		clock.System{},
 		indexBatch,

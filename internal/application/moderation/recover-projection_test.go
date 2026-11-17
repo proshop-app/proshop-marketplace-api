@@ -12,7 +12,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -186,13 +185,30 @@ func lostProjectionApproval(t *testing.T) (environment, appmoderation.RecoverPro
 	}
 }
 
-func (e revisionOnlyEvaluator) Evaluate(
+func (e revisionOnlyEvaluator) EvaluateProjection(
 	ctx context.Context,
 	tx ports.Tx,
 	product *catalog.Product,
-	member *participant.Participant,
 	_ *catalog.ProductState,
 	now time.Time,
 ) error {
-	return e.service.Evaluate(ctx, tx, product, member, nil, now)
+	return e.service.EvaluateProjection(ctx, tx, product, nil, now)
+}
+
+func (revisionOnlyEvaluator) PrepareReuse(
+	context.Context,
+	ports.Tx,
+	catalog.ProductState,
+) (*ports.ProjectionReuse, error) {
+	return nil, nil
+}
+
+func (revisionOnlyEvaluator) ReuseProjection(
+	context.Context,
+	ports.Tx,
+	*catalog.Product,
+	*ports.ProjectionReuse,
+	time.Time,
+) error {
+	return moderation.ErrConflict
 }
