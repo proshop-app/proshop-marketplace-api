@@ -13,7 +13,7 @@ func (r *reader) platform() Platform {
 		ReadTimeout:           r.duration("PLATFORM_READ_TIMEOUT", 300*time.Millisecond),
 		CacheTTL:              r.duration("PLATFORM_CACHE_TTL", 30*time.Second),
 		StaleTTL:              r.duration("PLATFORM_STALE_TTL", 5*time.Minute),
-		CacheSize:             r.positive("PLATFORM_CACHE_SIZE", 1024),
+		CacheSize:             r.positive("PLATFORM_CACHE_SIZE", 33000),
 		MaxConcurrent:         total,
 		TenantMaxConcurrent:   r.positive("PLATFORM_TENANT_MAX_CONCURRENT", max(2, total/16)),
 		CheckoutMaxConcurrent: r.positive("PLATFORM_CHECKOUT_MAX_CONCURRENT", max(1, total-reads)),

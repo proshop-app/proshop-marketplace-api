@@ -57,8 +57,9 @@ type Client struct {
 	tenants  map[ids.TenantID]*tenantState
 	idle     *list.List
 	logs     map[string]time.Time
+	cacheMu  sync.Mutex
 	cache    map[cacheKey]*cacheEntry
-	sequence uint64
+	cacheLRU list.List
 }
 
 type tenantContextKey struct{}
