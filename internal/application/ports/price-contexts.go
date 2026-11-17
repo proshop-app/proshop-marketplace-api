@@ -7,6 +7,13 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+// CachedCatalogPricing читает снимок до обхода магазинов; nil возвращает весь кэш покупателя.
+// Вызывающий проверяет текущую видимость и полноту снимка до показа личных цен.
+type CachedCatalogPricing interface {
+	CatalogPricing
+	PriceContextPreloader
+}
+
 // PriceContextEntry хранит только выбор профилей, без персональных данных покупателя.
 type PriceContextEntry struct {
 	Profiles map[ids.TenantID]string `json:"profiles"`

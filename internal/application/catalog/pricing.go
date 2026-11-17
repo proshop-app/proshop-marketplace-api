@@ -2,11 +2,9 @@ package catalog
 
 import (
 	"context"
-	"slices"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -62,38 +60,60 @@ func PriceContexts(
 	if buyerID == "" {
 		return nil, nil
 	}
-	tenants := []ids.TenantID{}
-	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		for offset := 0; ; offset += priceContextBatchSize {
-			list, _, err := tx.Participants().List(ctx, participant.Page{
-				Limit:  priceContextBatchSize,
-				Offset: offset,
-			})
-			if err != nil {
-				return err
-			}
-			for _, seller := range list {
-				state := seller.State()
-				if !state.Enabled || (tenantFilter != nil && !slices.Contains(tenantFilter, state.TenantID)) {
-					continue
-				}
-				tenant, err := tx.Registry().Get(ctx, state.TenantID)
-				if err != nil {
-					return err
-				}
-				if participant.VisibilityOf(seller, tenant).Visible {
-					tenants = append(tenants, state.TenantID)
-				}
-			}
-			if len(list) < priceContextBatchSize {
-				return nil
-			}
+	if tenantFilter != nil && len(tenantFilter) == 0 {
+		return map[ids.TenantID]string{}, nil
+	}
+	cached, isCached := pricing.(ports.CachedCatalogPricing)
+	var profiles map[ids.TenantID]string
+	if isCached {
+		var err error
+		profiles, err = cached.PriceContexts(ctx, buyerID, tenantFilter)
+		if err != nil {
+			return nil, err
 		}
-	})
+	}
+	tenants, err := publicPriceTenants(ctx, uow, tenantFilter)
 	if err != nil {
 		return nil, err
 	}
-	return pricing.PriceContexts(ctx, buyerID, tenants)
+	if !isCached {
+		return pricing.PriceContexts(ctx, buyerID, tenants)
+	}
+	result := make(map[ids.TenantID]string, len(tenants))
+	complete := true
+	for _, tenant := range tenants {
+		result[tenant] = profiles[tenant]
+		complete = complete && profiles[tenant] != ""
+	}
+	if !complete {
+		cached.Preload(buyerID)
+		for tenant := range result {
+			result[tenant] = catalog.DefaultPriceProfile
+		}
+	}
+	return result, nil
+}
+
+func publicPriceTenants(
+	ctx context.Context,
+	uow ports.UnitOfWork,
+	filter []ids.TenantID,
+) ([]ids.TenantID, error) {
+	tenants := []ids.TenantID{}
+	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		for after := ids.TenantID(""); ; {
+			batch, err := tx.Participants().PublicTenants(ctx, filter, after, priceContextBatchSize)
+			if err != nil {
+				return err
+			}
+			tenants = append(tenants, batch...)
+			if len(batch) < priceContextBatchSize {
+				return nil
+			}
+			after = batch[len(batch)-1]
+		}
+	})
+	return tenants, err
 }
 
 // LoadPriceContexts ограничивает пачку внутреннего API; показ читает единый снимок без разбиения.

@@ -24,6 +24,8 @@ type Seller struct {
 // Repository — хранилище участников.
 type Repository interface {
 	Batch(context.Context, []ids.TenantID) (map[ids.TenantID]*Participant, error)
+	// PublicTenants отбирает видимые магазины в хранилище; nil — все, пустой фильтр — ни одного.
+	PublicTenants(context.Context, []ids.TenantID, ids.TenantID, int) ([]ids.TenantID, error)
 	// Sellers читает продавцов одним запросом; отсутствующие участники не включаются.
 	Sellers(context.Context, []ids.TenantID) (map[ids.TenantID]*Seller, error)
 	// Count считает участников по фильтрам без загрузки агрегатов.
