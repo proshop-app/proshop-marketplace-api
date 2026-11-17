@@ -23,18 +23,20 @@ var (
 
 // Config приходит из точки сборки; окружение проверяется до создания клиента.
 type Config struct {
-	ReadTimeout         time.Duration
-	StrictTimeout       time.Duration
-	CacheTTL            time.Duration
-	StaleTTL            time.Duration
-	CacheSize           int
-	MaxConcurrent       int
-	TenantMaxConcurrent int
-	TenantStateSize     int
-	TenantIdleTTL       time.Duration
-	FailureThreshold    int
-	OpenInterval        time.Duration
-	LogInterval         time.Duration
+	ReadTimeout           time.Duration
+	StrictTimeout         time.Duration
+	CacheTTL              time.Duration
+	StaleTTL              time.Duration
+	CacheSize             int
+	MaxConcurrent         int
+	TenantMaxConcurrent   int
+	CheckoutMaxConcurrent int
+	ReadMaxConcurrent     int
+	TenantStateSize       int
+	TenantIdleTTL         time.Duration
+	FailureThreshold      int
+	OpenInterval          time.Duration
+	LogInterval           time.Duration
 }
 
 // Client оборачивает порт, поэтому защита проверяется без HTTP и настоящего сервера.
@@ -45,6 +47,8 @@ type Client struct {
 	metrics  ports.PlatformMetrics
 	logger   *slog.Logger
 	slots    chan struct{}
+	active   [classCount]int
+	batch    *tenantState
 	mu       sync.Mutex
 	server   breaker
 	tenants  map[ids.TenantID]*tenantState
@@ -60,6 +64,7 @@ type permit struct {
 	server breakerPermit
 	shop   breakerPermit
 	tenant *tenantState
+	class  operationClass
 }
 
 // New создаёт общие для процесса ограничитель, предохранитель и ограниченный кэш.
@@ -77,56 +82,11 @@ func New(
 		metrics:  metrics,
 		logger:   logger,
 		slots:    make(chan struct{}, cfg.MaxConcurrent),
+		batch:    &tenantState{},
 		tenants:  make(map[ids.TenantID]*tenantState),
 		idle:     list.New(),
 		logs:     make(map[string]time.Time),
 		cache:    make(map[cacheKey]*cacheEntry),
-	}
-}
-
-func (c *Client) acquire(ctx context.Context) (permit, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	now := c.clock.Now()
-	if !c.server.available(now) {
-		return permit{}, false
-	}
-	tenant, _ := ctx.Value(tenantContextKey{}).(ids.TenantID)
-	state := c.tenantState(tenant, now)
-	if tenant != "" && (state == nil || state.active >= c.cfg.TenantMaxConcurrent || !state.breaker.available(now)) {
-		return permit{}, false
-	}
-	select {
-	case c.slots <- struct{}{}:
-	default:
-		return permit{}, false
-	}
-	p := permit{server: c.server.start(), tenant: state}
-	if state != nil {
-		c.pin(state)
-		state.active++
-		p.shop = state.breaker.start()
-	}
-	return p, true
-}
-
-func (c *Client) release(p permit, err error) {
-	defer func() { <-c.slots }()
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	var serverFailure *ports.PlatformServerFailure
-	shared := errors.As(err, &serverFailure)
-	canceled := errors.Is(err, context.Canceled)
-	now := c.clock.Now()
-	c.server.finish(p.server, shared, canceled, c.cfg, now)
-	if p.tenant != nil {
-		p.tenant.breaker.finish(p.shop, tenantFailure(err), shared || canceled, c.cfg, now)
-		p.tenant.active--
-		if p.tenant.active == 0 {
-			c.unpin(p.tenant)
-		}
 	}
 }
 
@@ -138,7 +98,7 @@ func call[T any](
 	load func(context.Context) (T, error),
 ) (T, error) {
 	started := time.Now()
-	p, allowed := c.acquire(ctx)
+	p, allowed := c.acquire(ctx, classOf(operation))
 	if !allowed {
 		c.observe(ctx, operation, "short_circuit", started)
 		var zero T

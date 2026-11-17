@@ -10,6 +10,12 @@ func (r *reader) validatePlatform(cfg Platform) {
 	if cfg.MaxConcurrent > 1000 {
 		r.fail("PLATFORM_MAX_CONCURRENT", "не больше 1000 обращений")
 	}
+	if cfg.CheckoutMaxConcurrent+cfg.ReadMaxConcurrent != cfg.MaxConcurrent {
+		r.fail("PLATFORM_CHECKOUT_MAX_CONCURRENT", "сумма пулов должна равняться PLATFORM_MAX_CONCURRENT")
+	}
+	if cfg.TenantMaxConcurrent < 2 {
+		r.fail("PLATFORM_TENANT_MAX_CONCURRENT", "не меньше двух мест для независимых классов")
+	}
 	if cfg.TenantMaxConcurrent > cfg.MaxConcurrent {
 		r.fail("PLATFORM_TENANT_MAX_CONCURRENT", "не больше PLATFORM_MAX_CONCURRENT")
 	}

@@ -150,18 +150,20 @@ func newDependencyFixture(t *testing.T) *dependencyFixture {
 	upstream.Reviews = []ports.Review{{Author: "Имя", Rating: 5, CreatedAt: now}}
 	metrics := &fake.PlatformMetrics{}
 	guardConfig := platformguard.Config{
-		ReadTimeout:         50 * time.Millisecond,
-		StrictTimeout:       10 * time.Millisecond,
-		CacheTTL:            time.Second,
-		StaleTTL:            time.Minute,
-		CacheSize:           16,
-		TenantMaxConcurrent: 1,
-		TenantStateSize:     100,
-		TenantIdleTTL:       time.Minute,
-		MaxConcurrent:       2,
-		FailureThreshold:    5,
-		OpenInterval:        time.Second,
-		LogInterval:         time.Minute,
+		ReadTimeout:           50 * time.Millisecond,
+		StrictTimeout:         10 * time.Millisecond,
+		CacheTTL:              time.Second,
+		StaleTTL:              time.Minute,
+		CacheSize:             16,
+		TenantMaxConcurrent:   2,
+		CheckoutMaxConcurrent: 2,
+		ReadMaxConcurrent:     2,
+		TenantStateSize:       100,
+		TenantIdleTTL:         time.Minute,
+		MaxConcurrent:         4,
+		FailureThreshold:      5,
+		OpenInterval:          time.Second,
+		LogInterval:           time.Minute,
 	}
 	guarded := platformguard.New(upstream, guardConfig, clock, metrics, nil)
 	features := &fake.CatalogFeatures{States: []ports.OfferState{state}}

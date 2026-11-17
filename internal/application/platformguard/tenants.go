@@ -10,7 +10,7 @@ import (
 type tenantState struct {
 	id       ids.TenantID
 	breaker  breaker
-	active   int
+	active   [classCount]int
 	idle     *list.Element
 	lastUsed time.Time
 }
@@ -54,6 +54,13 @@ func (c *Client) pin(state *tenantState) {
 }
 
 func (c *Client) unpin(state *tenantState) {
+	if state.id == "" {
+		return
+	}
 	state.lastUsed = c.clock.Now()
 	state.idle = c.idle.PushBack(state)
+}
+
+func (s *tenantState) inactive() bool {
+	return s.active[checkoutClass] == 0 && s.active[readClass] == 0
 }

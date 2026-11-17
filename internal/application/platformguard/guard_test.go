@@ -21,18 +21,20 @@ import (
 
 func testConfig() Config {
 	return Config{
-		ReadTimeout:         10 * time.Millisecond,
-		StrictTimeout:       20 * time.Millisecond,
-		CacheTTL:            time.Second,
-		StaleTTL:            time.Minute,
-		CacheSize:           3,
-		TenantMaxConcurrent: 1,
-		TenantStateSize:     100,
-		TenantIdleTTL:       time.Minute,
-		MaxConcurrent:       2,
-		FailureThreshold:    2,
-		OpenInterval:        time.Second,
-		LogInterval:         time.Minute,
+		ReadTimeout:           10 * time.Millisecond,
+		StrictTimeout:         20 * time.Millisecond,
+		CacheTTL:              time.Second,
+		StaleTTL:              time.Minute,
+		CacheSize:             3,
+		TenantMaxConcurrent:   2,
+		CheckoutMaxConcurrent: 2,
+		ReadMaxConcurrent:     2,
+		TenantStateSize:       100,
+		TenantIdleTTL:         time.Minute,
+		MaxConcurrent:         4,
+		FailureThreshold:      2,
+		OpenInterval:          time.Second,
+		LogInterval:           time.Minute,
 	}
 }
 
