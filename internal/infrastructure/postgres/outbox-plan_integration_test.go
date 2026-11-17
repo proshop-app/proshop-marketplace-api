@@ -41,7 +41,11 @@ func TestOutboxMillionTaskPlans(t *testing.T) {
 	if _, err := conn.Exec(ctx, seedOutboxPlan); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, "ANALYZE outbox"); err != nil {
+	_, err = conn.Exec(ctx, `UPDATE outbox SET last_error = 'test.retry', attempts = 1 WHERE id % 10000 = 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, "VACUUM ANALYZE outbox"); err != nil {
 		t.Fatal(err)
 	}
 	var total, failed int
@@ -72,6 +76,11 @@ func TestOutboxMillionTaskPlans(t *testing.T) {
 			constant: "requeueFailedTasks",
 			args:     []any{0, 0, "index", 100, time.Now()},
 			indexes:  []string{"outbox_quarantine_kind_id_idx"},
+		},
+		{
+			file:     "outbox-retry-stats.go",
+			constant: "selectOutboxRetryStats",
+			indexes:  []string{"outbox_retry_kind_created_idx"},
 		},
 	}
 	for _, test := range tests {

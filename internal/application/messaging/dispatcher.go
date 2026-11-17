@@ -250,3 +250,8 @@ func (d *Dispatcher) Failures(ctx context.Context, after int64, limit int) ([]po
 	}
 	return d.queue.Failures(ctx, after, limit)
 }
+
+// RetryStats читает один диагностический срез по отдельному расписанию.
+func (d *Dispatcher) RetryStats(ctx context.Context) ([]ports.TaskRetryStats, error) {
+	return d.queue.RetryStats(ctx)
+}

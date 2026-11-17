@@ -56,6 +56,12 @@ func TestInterruptedConcurrentIndexMigrationRecovers(t *testing.T) {
 			file:    "migrations/00056_outbox_quarantine.sql",
 			insert:  interruptedOutboxInsert,
 		},
+		{
+			version: 57,
+			name:    "outbox_retry_kind_created_idx",
+			file:    "migrations/00057_outbox_retry_stats.sql",
+			insert:  interruptedOutboxInsert,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) { testInterruptedIndexRecovery(t, test) })

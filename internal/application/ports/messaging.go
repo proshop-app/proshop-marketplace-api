@@ -79,6 +79,13 @@ type TaskRequeue struct {
 	At    time.Time
 }
 
+// TaskRetryStats — число повторяемых намерений и время создания самого старого.
+type TaskRetryStats struct {
+	Kind   string
+	Count  int64
+	Oldest time.Time
+}
+
 // TaskFailure — безопасная диагностика карантина; payload и подробная ошибка остаются в базе.
 type TaskFailure struct {
 	ID        int64        `json:"id,string"`
@@ -104,6 +111,7 @@ type TaskQueue interface {
 	Resolve(context.Context, []TaskResolution) error
 	// ReadyCounts считает только созревшие задачи, без завершённых и арендованных.
 	ReadyCounts(context.Context, time.Time) (map[string]int64, error)
+	RetryStats(context.Context) ([]TaskRetryStats, error)
 	Failures(context.Context, int64, int) ([]TaskFailure, error)
 	Requeue(context.Context, TaskRequeue) ([]int64, error)
 }

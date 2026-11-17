@@ -28,3 +28,18 @@ func TestOutboxBatchBounds(t *testing.T) {
 		t.Fatal(cfg.Outbox, err)
 	}
 }
+
+func TestRetryMetricsIntervalIsConfiguredAndPositive(t *testing.T) {
+	env := validEnv()
+	env["OUTBOX_RETRY_METRICS_INTERVAL"] = "2m"
+	cfg, err := config.Load(envOf(env))
+	if err != nil || cfg.Outbox.RetryMetricsInterval != 2*time.Minute {
+		t.Fatal(cfg.Outbox, err)
+	}
+	for _, invalid := range []string{"0s", "-1s", "wrong"} {
+		env["OUTBOX_RETRY_METRICS_INTERVAL"] = invalid
+		if _, err := config.Load(envOf(env)); err == nil {
+			t.Fatal("принят неверный интервал", invalid)
+		}
+	}
+}

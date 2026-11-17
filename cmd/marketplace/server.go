@@ -536,6 +536,13 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
 		jobs.NewCreationRunner(s.app.creation, s.logger, outbox.RecordOutcome).Run,
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
+		jobs.NewOutboxRetryStatsRunner(
+			s.app.dispatcher,
+			clock.System{},
+			cfg.Outbox.RetryMetricsInterval,
+			s.logger,
+			s.metrics,
+		).Run,
 		outbox.Run,
 		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
 		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).
