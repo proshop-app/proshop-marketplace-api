@@ -144,6 +144,7 @@ func TestLoadValidatesValues(t *testing.T) {
 	env["OUTBOX_LEASE"] = "-1s"
 	env["LOG_LEVEL"] = "verbose"
 	env["KAFKA_MAX_ATTEMPTS"] = "0"
+	env["KAFKA_WORKERS"] = "0"
 
 	_, err := config.Load(envOf(env))
 	if err == nil {
@@ -157,6 +158,7 @@ func TestLoadValidatesValues(t *testing.T) {
 		"OUTBOX_LEASE",
 		"LOG_LEVEL",
 		"KAFKA_MAX_ATTEMPTS",
+		"KAFKA_WORKERS",
 	}
 
 	for _, name := range invalid {

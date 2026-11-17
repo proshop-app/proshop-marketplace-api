@@ -443,6 +443,7 @@ func (s *server) run(ctx context.Context) error {
 		Logger:  s.logger,
 	})
 	consumerConfig := kafka.ConsumerConfig{
+		Workers:     cfg.Kafka.Workers,
 		TopicPrefix: cfg.Kafka.TopicPrefix,
 		MaxAttempts: cfg.Kafka.MaxAttempts,
 		Backoff:     messaging.Backoff,

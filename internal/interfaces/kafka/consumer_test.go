@@ -51,11 +51,19 @@ func (s *source) Fetch(ctx context.Context) (kafkago.Message, error) {
 	return kafkago.Message{}, ctx.Err()
 }
 
-func (s *source) Commit(_ context.Context, message kafkago.Message) error {
+func (s *source) Run(ctx context.Context, consume func(context.Context) error) error {
+	return consume(ctx)
+}
+
+func (s *source) Release(context.Context, kafkago.Message) {}
+
+func (s *source) Commit(_ context.Context, messages ...kafkago.Message) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.commits = append(s.commits, message.Offset)
+	for _, message := range messages {
+		s.commits = append(s.commits, message.Offset)
+	}
 
 	return nil
 }
@@ -93,6 +101,7 @@ func consumer(
 	registry := prometheus.NewRegistry()
 	cfg := kafka.ConsumerConfig{
 		TopicPrefix: "shop",
+		Workers:     4,
 		MaxAttempts: 3,
 		Backoff:     func(int) time.Duration { return time.Millisecond },
 		Ready:       func(context.Context) error { return ready },
@@ -114,7 +123,7 @@ func priceMessage(offset int64, headers ...kafkago.Header) kafkago.Message {
 	return msg
 }
 
-func TestConsumerProcessesAndCommits(t *testing.T) {
+func TestConsumerProcessesWithoutCommitting(t *testing.T) {
 	rec := &recorder{}
 	src := &source{}
 	c, registry := consumer(src, rec, &parker{}, nil)
@@ -126,8 +135,8 @@ func TestConsumerProcessesAndCommits(t *testing.T) {
 	if len(rec.prices) != 1 || rec.prices[0].EventID != "shop.catalog.product.price-updated:2:5" {
 		t.Fatalf("идентификатор события — позиция в топике: %+v", rec.prices)
 	}
-	if len(src.commits) != 1 || src.commits[0] != 5 {
-		t.Fatalf("коммит после записи: %v", src.commits)
+	if len(src.commits) != 0 {
+		t.Fatalf("Process не фиксирует отдельные сообщения: %v", src.commits)
 	}
 	if got := sum(t, registry, "marketplace_kafka_messages_total"); got != 1 {
 		t.Fatalf("метрика обработанных: %v", got)
@@ -147,8 +156,8 @@ func TestConsumerParksMessageWithoutTenant(t *testing.T) {
 		park.events[0].Offset != 6 {
 		t.Fatalf("отравленное сообщение: %+v", park.events)
 	}
-	if len(src.commits) != 1 {
-		t.Fatalf("после парковки позиция фиксируется: %v", src.commits)
+	if len(src.commits) != 0 {
+		t.Fatalf("Process не фиксирует позицию: %v", src.commits)
 	}
 	if got := sum(t, registry, "marketplace_kafka_parked_total"); got != 1 {
 		t.Fatalf("метрика отравленных: %v", got)
@@ -164,8 +173,8 @@ func TestConsumerRetriesTransientFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(projections.prices) != 1 || len(src.commits) != 1 {
-		t.Fatalf("после повторов обработано и зафиксировано: %+v %v", projections.prices, src.commits)
+	if len(projections.prices) != 1 || len(src.commits) != 0 {
+		t.Fatalf("после повторов обработано без отдельного коммита: %+v %v", projections.prices, src.commits)
 	}
 }
 
@@ -182,8 +191,8 @@ func TestConsumerParksAfterAttemptsWhenStorageReady(t *testing.T) {
 		park.events[0].TenantID != "t1" {
 		t.Fatalf("исчерпанные попытки — в отравленные с магазином: %+v", park.events)
 	}
-	if len(src.commits) != 1 {
-		t.Fatalf("после парковки позиция фиксируется: %v", src.commits)
+	if len(src.commits) != 0 {
+		t.Fatalf("Process не фиксирует позицию: %v", src.commits)
 	}
 }
 
@@ -212,8 +221,8 @@ func TestConsumerRetriesFailedParking(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(park.events) != 1 || len(src.commits) != 1 {
-		t.Fatalf("парковка повторяется до записи, коммит — после: %+v %v", park.events, src.commits)
+	if len(park.events) != 1 || len(src.commits) != 0 {
+		t.Fatalf("парковка повторяется до записи, отдельного коммита нет: %+v %v", park.events, src.commits)
 	}
 }
 
@@ -227,13 +236,13 @@ func TestConsumerRunStopsOnCancel(t *testing.T) {
 
 	go func() { done <- c.Run(ctx) }()
 
-	deadline := time.Now().Add(time.Second)
+	deadline := time.Now().Add(3 * time.Second)
 	for {
 		src.mu.Lock()
 		committed := len(src.commits)
 		src.mu.Unlock()
 
-		if committed == 2 || time.Now().After(deadline) {
+		if committed == 1 || time.Now().After(deadline) {
 			break
 		}
 
@@ -245,8 +254,8 @@ func TestConsumerRunStopsOnCancel(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("остановка по отмене — без ошибки: %v", err)
 	}
-	if len(src.commits) != 2 {
-		t.Fatalf("оба сообщения зафиксированы: %v", src.commits)
+	if len(src.commits) != 1 || src.commits[0] != 2 {
+		t.Fatalf("оба сообщения зафиксированы одним префиксом: %v", src.commits)
 	}
 }
 

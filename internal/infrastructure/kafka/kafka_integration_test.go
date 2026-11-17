@@ -68,6 +68,51 @@ type pipeline struct {
 	reader   *infrakafka.Reader
 }
 
+type generationMessage struct {
+	kafkago.Message
+	ctx context.Context
+}
+
+func streamReader(ctx context.Context, t *testing.T, reader *infrakafka.Reader) <-chan generationMessage {
+	t.Helper()
+	messages := make(chan generationMessage)
+	done := make(chan error, 1)
+	go func() {
+		done <- reader.Run(ctx, func(ctx context.Context) error {
+			for {
+				message, err := reader.Fetch(ctx)
+				if err != nil {
+					return err
+				}
+				select {
+				case messages <- generationMessage{Message: message, ctx: ctx}:
+					reader.Release(ctx, message)
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+		})
+	}()
+	t.Cleanup(func() {
+		if err := reader.Close(); err != nil {
+			t.Error(err)
+		}
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	})
+	return messages
+}
+
+func fetchMessage(ctx context.Context, messages <-chan generationMessage) (generationMessage, error) {
+	select {
+	case message := <-messages:
+		return message, nil
+	case <-ctx.Done():
+		return generationMessage{}, ctx.Err()
+	}
+}
+
 func brokers() []string {
 	if list := os.Getenv("TEST_KAFKA_BROKERS"); list != "" {
 		return strings.Split(list, ",")
@@ -204,16 +249,17 @@ func TestReaderCommitsOnlyProcessed(t *testing.T) {
 	}
 
 	reader := infrakafka.NewReader(cfg)
+	messages := streamReader(ctx, t, reader)
 
-	first, err := reader.Fetch(ctx)
+	first, err := fetchMessage(ctx, messages)
 	if err != nil || string(first.Value) != "first" {
 		t.Fatalf("первое сообщение: %q, %v", first.Value, err)
 	}
-	if err := reader.Commit(ctx, first); err != nil {
+	if err := reader.Commit(first.ctx, first.Message); err != nil {
 		t.Fatal(err)
 	}
 
-	second, err := reader.Fetch(ctx)
+	second, err := fetchMessage(ctx, messages)
 	if err != nil || string(second.Value) != "second" {
 		t.Fatalf("второе сообщение: %q, %v", second.Value, err)
 	}
@@ -224,7 +270,7 @@ func TestReaderCommitsOnlyProcessed(t *testing.T) {
 	again := infrakafka.NewReader(cfg)
 	defer func() { _ = again.Close() }()
 
-	redelivered, err := again.Fetch(ctx)
+	redelivered, err := fetchMessage(ctx, streamReader(ctx, t, again))
 	if err != nil || string(redelivered.Value) != "second" {
 		t.Fatalf("незафиксированное сообщение приходит снова, зафиксированное — нет: %q, %v", redelivered.Value, err)
 	}
@@ -248,11 +294,12 @@ func TestReaderSubscribesOnlyExistingTopics(t *testing.T) {
 	})
 	defer func() { _ = reader.Close() }()
 
-	first, err := reader.Fetch(ctx)
+	messages := streamReader(ctx, t, reader)
+	first, err := fetchMessage(ctx, messages)
 	if err != nil || string(first.Value) != "из существующего" {
 		t.Fatalf("существующий топик читается без недостающего: %q, %v", first.Value, err)
 	}
-	if err := reader.Commit(ctx, first); err != nil {
+	if err := reader.Commit(first.ctx, first.Message); err != nil {
 		t.Fatal(err)
 	}
 
@@ -264,11 +311,11 @@ func TestReaderSubscribesOnlyExistingTopics(t *testing.T) {
 	createTopics(t, absent)
 	produce(t, kafkago.Message{Topic: absent, Value: []byte("из появившегося")})
 
-	next, err := reader.Fetch(ctx)
+	next, err := fetchMessage(ctx, messages)
 	if err != nil || string(next.Value) != "из появившегося" {
 		t.Fatalf("появившийся топик подхватывается без перезапуска: %q, %v", next.Value, err)
 	}
-	if err := reader.Commit(ctx, next); err != nil {
+	if err := reader.Commit(next.ctx, next.Message); err != nil {
 		t.Fatal(err)
 	}
 	if subscribed := reader.Subscribed(); len(subscribed) != 2 {
