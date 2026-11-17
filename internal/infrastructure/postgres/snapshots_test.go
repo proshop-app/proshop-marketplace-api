@@ -82,7 +82,7 @@ func readSnapshots(s *scope) error {
 
 func TestSnapshotsShareCommittedValuesAndAlwaysLock(t *testing.T) {
 	orm, database := snapshotORM(t, snapshotJSON(t, snapshotDefinition(1)))
-	snapshots := &Snapshots{}
+	snapshots := &snapshots{}
 	var first taxonomy.Definition
 	ctx := context.Background()
 	err := snapshotTransaction(orm, snapshots, func(s *scope) error {
@@ -132,7 +132,7 @@ func TestSnapshotsRollbackDoesNotPoisonReusedVersion(t *testing.T) {
 	for _, failure := range []string{"rollback", "panic", "commit"} {
 		t.Run(failure, func(t *testing.T) {
 			orm, database := snapshotORM(t, snapshotJSON(t, snapshotDefinition(1)))
-			snapshots := &Snapshots{}
+			snapshots := &snapshots{}
 			if err := snapshotTransaction(orm, snapshots, readSnapshots); err != nil {
 				t.Fatal(err)
 			}
@@ -173,7 +173,7 @@ func TestSnapshotsRollbackDoesNotPoisonReusedVersion(t *testing.T) {
 	}
 }
 
-func failSnapshotWrite(t *testing.T, orm *gorm.DB, snapshots *Snapshots, failure string) {
+func failSnapshotWrite(t *testing.T, orm *gorm.DB, snapshots *snapshots, failure string) {
 	t.Helper()
 	abort := errors.New("откат")
 	defer func() {
@@ -222,7 +222,7 @@ func snapshotPhrase() moderation.StopPhrase {
 
 func TestModerationSnapshotsTrackEveryPhraseChange(t *testing.T) {
 	orm, database := snapshotORM(t, snapshotJSON(t, snapshotDefinition(1)))
-	snapshots := &Snapshots{}
+	snapshots := &snapshots{}
 	ctx := context.Background()
 	if err := snapshotTransaction(orm, snapshots, readSnapshots); err != nil {
 		t.Fatal(err)
@@ -276,7 +276,7 @@ func TestSnapshotsDoNotCacheErrors(t *testing.T) {
 	for _, query := range []string{readTaxonomyVersion, selectTaxonomy, readModerationRules, listModerationPhrases} {
 		t.Run(query, func(t *testing.T) {
 			orm, database := snapshotORM(t, snapshotJSON(t, snapshotDefinition(1)))
-			snapshots := &Snapshots{}
+			snapshots := &snapshots{}
 			database.fail = query
 			if err := snapshotTransaction(orm, snapshots, readSnapshots); err == nil {
 				t.Fatal("ошибка базы потеряна")
@@ -298,7 +298,7 @@ func TestSnapshotsDoNotCacheErrors(t *testing.T) {
 
 func TestSnapshotsConcurrentReadersAndVersionChanges(t *testing.T) {
 	orm, _ := snapshotORM(t, snapshotJSON(t, snapshotDefinition(1)))
-	snapshots := &Snapshots{}
+	snapshots := &snapshots{}
 	ctx := context.Background()
 	start := make(chan struct{})
 	errors := make(chan error, 9)

@@ -246,7 +246,7 @@ func (d *snapshotDatabase) readVolume() (int, int) {
 	return reads, d.bytes
 }
 
-func snapshotTransaction(orm *gorm.DB, snapshots *Snapshots, run func(*scope) error) error {
+func snapshotTransaction(orm *gorm.DB, snapshots *snapshots, run func(*scope) error) error {
 	tx := orm.Begin()
 	if tx.Error != nil {
 		return tx.Error

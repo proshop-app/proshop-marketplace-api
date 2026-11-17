@@ -22,7 +22,7 @@ import (
 // Только снимки идут через SQL-драйвер; прочие агрегаты — через штатный fake приложения.
 type snapshotProductUOW struct {
 	orm       *gorm.DB
-	snapshots *Snapshots
+	snapshots *snapshots
 	store     *fake.Store
 	legacy    bool
 }
@@ -120,7 +120,7 @@ func snapshotProductPipeline(
 	orm, database := snapshotORM(t, snapshotJSON(t, largeSnapshot()))
 	uow := &snapshotProductUOW{
 		orm:       orm,
-		snapshots: &Snapshots{},
+		snapshots: &snapshots{},
 		store:     fake.NewStore(),
 		legacy:    legacy,
 	}

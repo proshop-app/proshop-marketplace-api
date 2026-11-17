@@ -7,9 +7,9 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
-// Snapshots хранит последние зафиксированные неизменяемые снимки одной базы.
-// Сборка процесса передаёт один объект всем UnitOfWork; нулевое значение готово к работе.
-type Snapshots struct {
+// snapshots хранит последние зафиксированные неизменяемые снимки одной базы.
+// Принадлежит UnitOfWork; нулевое значение готово к работе.
+type snapshots struct {
 	taxonomy   snapshot[taxonomy.Definition]
 	moderation snapshot[moderation.Rules]
 }

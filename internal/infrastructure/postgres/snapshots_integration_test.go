@@ -15,18 +15,16 @@ import (
 
 func TestSnapshotsDoNotPublishRolledBackWrites(t *testing.T) {
 	pool := testPool(t)
-	snapshots := &postgres.Snapshots{}
-	writer := postgres.NewUnitOfWorkWithSnapshots(pool, snapshots)
-	reader := postgres.NewUnitOfWorkWithSnapshots(pool, snapshots)
+	uow := postgres.NewUnitOfWork(pool)
 	ctx := context.Background()
-	if err := writer.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		return tx.Taxonomy().Save(ctx, testTaxonomy(1), 0)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	checkCommittedSnapshots(t, reader, 1, "Категория", 0)
+	checkCommittedSnapshots(t, uow, 1, "Категория", 0)
 	abort := errors.New("откат загрузки")
-	err := writer.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		if err := tx.Taxonomy().Lock(ctx); err != nil {
 			return err
 		}
@@ -55,8 +53,8 @@ func TestSnapshotsDoNotPublishRolledBackWrites(t *testing.T) {
 	if !errors.Is(err, abort) {
 		t.Fatal(err)
 	}
-	checkCommittedSnapshots(t, reader, 1, "Категория", 0)
-	if err := writer.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	checkCommittedSnapshots(t, uow, 1, "Категория", 0)
+	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		next := testTaxonomy(2)
 		next.Categories[0].Name = "Зафиксировано"
 		if err := tx.Taxonomy().Save(ctx, next, 1); err != nil {
@@ -66,7 +64,7 @@ func TestSnapshotsDoNotPublishRolledBackWrites(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	checkCommittedSnapshots(t, reader, 2, "Зафиксировано", 1)
+	checkCommittedSnapshots(t, uow, 2, "Зафиксировано", 1)
 }
 
 func checkCommittedSnapshots(t *testing.T, uow ports.UnitOfWork, version int64, name string, phrases int) {

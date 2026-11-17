@@ -25,31 +25,23 @@ import (
 // UnitOfWork — транзакция PostgreSQL на каждый вызов Do.
 type UnitOfWork struct {
 	source    *connectionSource
-	snapshots *Snapshots
+	snapshots snapshots
 }
 
 type scope struct {
 	afterCommit []func()
 	db          *gorm.DB
-	snapshots   *Snapshots
+	snapshots   *snapshots
 	taxonomy    *Taxonomy
 	moderation  *ModerationRules
 }
 
-// NewUnitOfWork — UnitOfWork поверх пула.
+// NewUnitOfWork — UnitOfWork поверх пула с общими снимками всех его транзакций.
 func NewUnitOfWork(pool *pgxpool.Pool) *UnitOfWork {
-	return NewUnitOfWorkWithSnapshots(pool, &Snapshots{})
+	return &UnitOfWork{source: newConnectionSource(pool)}
 }
 
-// NewUnitOfWorkWithSnapshots разделяет снимки между всеми транзакциями процесса.
-func NewUnitOfWorkWithSnapshots(pool *pgxpool.Pool, snapshots *Snapshots) *UnitOfWork {
-	return &UnitOfWork{
-		source:    newConnectionSource(pool),
-		snapshots: snapshots,
-	}
-}
-
-func newScope(db *gorm.DB, snapshots *Snapshots) *scope {
+func newScope(db *gorm.DB, snapshots *snapshots) *scope {
 	return &scope{
 		db:        db,
 		snapshots: snapshots,
@@ -79,7 +71,7 @@ func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx por
 		}
 	}()
 
-	scope := newScope(shared.orm, u.snapshots)
+	scope := newScope(shared.orm, &u.snapshots)
 	if err = fn(ctx, scope); err != nil {
 		return err
 	}

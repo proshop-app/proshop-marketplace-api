@@ -149,7 +149,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	now := clock.System{}
 	identities := random.IDs{}
 	uow := storecache.NewUnitOfWork(
-		postgres.NewUnitOfWorkWithSnapshots(s.store.pool, s.store.snapshots),
+		postgres.NewUnitOfWork(s.store.pool),
 		redis.NewStoreCardCache(s.cache, keyPrefix),
 	)
 	upstream := platformapi.New(platformapi.Config{
