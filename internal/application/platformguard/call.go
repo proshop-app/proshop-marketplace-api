@@ -28,17 +28,27 @@ func call[T any](
 		}
 		return zero, ErrUnavailable
 	}
-	value, err := execute(callCtx, c, p, load)
+	value, err := execute(ctx, callCtx, c, p, load)
 	c.observe(ctx, operation, callOutcome(err), started)
 	return value, callError(err)
 }
 
-func execute[T any](ctx context.Context, c *Client, p permit, load func(context.Context) (T, error)) (T, error) {
+func execute[T any](
+	parent, ctx context.Context,
+	c *Client,
+	p permit,
+	load func(context.Context) (T, error),
+) (T, error) {
 	value, err := load(ctx)
 	var serverFailure *ports.PlatformServerFailure
 	shared := errors.As(err, &serverFailure)
 	if ctx.Err() != nil && (!shared || errors.Is(ctx.Err(), context.Canceled)) {
 		err = ctx.Err()
+	}
+	if parent.Err() != nil {
+		// Более короткий бюджет вызывающего кода не доказывает отказ магазина или общего сервера.
+		c.release(p, context.Canceled)
+		return value, parent.Err()
 	}
 	c.release(p, err)
 	return value, err

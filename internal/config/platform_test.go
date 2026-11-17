@@ -26,6 +26,9 @@ func TestPlatformProtectionDefaults(t *testing.T) {
 	if p.CheckoutMaxConcurrent != 96 || p.ReadMaxConcurrent != 32 || p.QueueSize != 1024 || p.TenantQueueSize != 32 {
 		t.Fatal(p)
 	}
+	if p.FailureWindow != 30*time.Second || p.FailureMinCalls != 20 || p.FailurePercent != 50 {
+		t.Fatal(p)
+	}
 	if p.OpenInterval != 5*time.Second || p.LogInterval != 30*time.Second {
 		t.Fatal(p)
 	}
@@ -45,6 +48,9 @@ func TestPlatformProtectionValidation(t *testing.T) {
 		"PLATFORM_QUEUE_SIZE":              "100001",
 		"PLATFORM_TENANT_QUEUE_SIZE":       "1025",
 		"PLATFORM_MAX_CONCURRENT":          "1001",
+		"PLATFORM_FAILURE_WINDOW":          "301s",
+		"PLATFORM_FAILURE_MIN_CALLS":       "1000001",
+		"PLATFORM_FAILURE_PERCENT":         "101",
 		"PLATFORM_FAILURE_THRESHOLD":       "0",
 		"PLATFORM_OPEN_INTERVAL":           "invalid",
 		"PLATFORM_LOG_INTERVAL":            "0s",
@@ -63,6 +69,10 @@ func TestPlatformProtectionValidation(t *testing.T) {
 func TestPlatformProtectionConsistency(t *testing.T) {
 	for _, values := range []map[string]string{
 		{"PLATFORM_MAX_CONCURRENT": "1"},
+		{"PLATFORM_FAILURE_WINDOW": "500ms"},
+		{"PLATFORM_FAILURE_MIN_CALLS": "0"},
+		{"PLATFORM_FAILURE_PERCENT": "0"},
+		{"PLATFORM_TENANT_IDLE_TTL": "10s"},
 		{"PLATFORM_TENANT_MAX_CONCURRENT": "1"},
 		{"PLATFORM_TENANT_STATE_SIZE": "2175"},
 		{"PLATFORM_QUEUE_SIZE": "0"},

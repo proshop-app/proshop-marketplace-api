@@ -97,7 +97,9 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `PLATFORM_TENANT_MAX_CONCURRENT` | | `8` | доля магазина, разделённая между пулами (6/2) |
 | `PLATFORM_QUEUE_SIZE` / `PLATFORM_TENANT_QUEUE_SIZE` | | `1024` / `32` | очередь каждого класса и доля магазина в ней |
 | `PLATFORM_TENANT_STATE_SIZE` / `PLATFORM_TENANT_IDLE_TTL` | | `10000` / `10m` | предел состояний магазинов и срок неактивности |
-| `PLATFORM_FAILURE_THRESHOLD` | | `5` | число отказов до открытия предохранителя |
+| `PLATFORM_FAILURE_THRESHOLD` | | `5` | быстрый путь по последовательным отказам |
+| `PLATFORM_FAILURE_WINDOW` / `PLATFORM_FAILURE_MIN_CALLS` | | `30s` / `20` | окно и минимум вызовов для доли отказов |
+| `PLATFORM_FAILURE_PERCENT` | | `50` | процент отказов для открытия размыкателя |
 | `PLATFORM_OPEN_INTERVAL` / `PLATFORM_LOG_INTERVAL` | | `5s` / `30s` | пауза предохранителя и журнала |
 | `CART_TTL` | | `720h` | срок жизни корзины без изменений |
 | `QUOTE_TTL`, `QUOTE_TIMEOUT` | | `30m`, `5s` | наибольший срок расчёта доставки, ожидание магазина |

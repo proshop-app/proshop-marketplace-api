@@ -10,6 +10,7 @@ import (
 
 type breaker struct {
 	failures   int
+	window     failureWindow
 	generation uint64
 	openUntil  time.Time
 	probe      bool
@@ -38,21 +39,36 @@ func (b *breaker) finish(p breakerPermit, failed, neutral bool, cfg Config, now 
 		b.probe = false
 		return
 	}
-	if !failed {
-		b.failures = 0
-		b.openUntil = time.Time{}
-		b.probe = false
-		if p.probe {
-			b.generation++
-		}
+	if p.probe {
+		b.completeProbe(failed, cfg, now)
 		return
 	}
+	b.window.record(now, cfg.FailureWindow, failed)
 	b.failures++
-	if p.probe || b.failures >= cfg.FailureThreshold {
-		b.openUntil = now.Add(cfg.OpenInterval)
-		b.probe = false
-		b.generation++
+	if !failed {
+		b.failures = 0
 	}
+	if b.failures >= cfg.FailureThreshold || b.window.exceeded(cfg.FailureMinCalls, cfg.FailurePercent) {
+		b.open(cfg.OpenInterval, now)
+	}
+}
+
+func (b *breaker) completeProbe(failed bool, cfg Config, now time.Time) {
+	if failed {
+		b.open(cfg.OpenInterval, now)
+		return
+	}
+	b.failures = 0
+	b.window = failureWindow{}
+	b.openUntil = time.Time{}
+	b.probe = false
+	b.generation++
+}
+
+func (b *breaker) open(interval time.Duration, now time.Time) {
+	b.openUntil = now.Add(interval)
+	b.probe = false
+	b.generation++
 }
 
 func tenantFailure(err error) bool {

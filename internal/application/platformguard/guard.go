@@ -35,6 +35,9 @@ type Config struct {
 	TenantStateSize       int
 	TenantIdleTTL         time.Duration
 	FailureThreshold      int
+	FailureWindow         time.Duration
+	FailureMinCalls       int
+	FailurePercent        int
 	OpenInterval          time.Duration
 	LogInterval           time.Duration
 }
