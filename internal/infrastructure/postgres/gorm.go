@@ -10,12 +10,15 @@ import (
 	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
 const batchConnectionKey = "postgres.batch_connection"
 
 // connectionSource разделяет кэши ORM, но не удерживает соединения вне операции.
 type connectionSource struct {
+	budget      ports.DatabaseBudget
 	pool        *pgxpool.Pool
 	ormOnce     sync.Once
 	ormTemplate *gorm.DB
@@ -29,7 +32,7 @@ type gormConnection struct {
 }
 
 func newConnectionSource(pool *pgxpool.Pool) *connectionSource {
-	return &connectionSource{pool: pool}
+	return &connectionSource{pool: pool, budget: poolBudget(pool)}
 }
 
 func (s *connectionSource) open(ctx context.Context) (*gormConnection, error) {
@@ -95,14 +98,16 @@ func (s *connectionSource) begin(ctx context.Context) (*gormConnection, error) {
 	return connection, nil
 }
 
-func (s *connectionSource) withConnection(ctx context.Context, run func(*gorm.DB) error) error {
+func (s *connectionSource) withConnection(ctx context.Context, run func(context.Context, *gorm.DB) error) error {
+	ctx, cancel := context.WithTimeout(ctx, ports.DatabaseBudgetFrom(ctx, s.budget).Transaction)
+	defer cancel()
 	connection, err := s.open(ctx)
 	if err != nil {
 		return err
 	}
 	defer connection.close()
 
-	return run(connection.orm)
+	return run(ctx, connection.orm)
 }
 
 func (s *connectionSource) session(ctx context.Context, connection *sql.Conn) (*gorm.DB, error) {

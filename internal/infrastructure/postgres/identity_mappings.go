@@ -42,7 +42,7 @@ func NewIdentityMappings(pool *pgxpool.Pool, issuer, client string) *IdentityMap
 
 // Bind никогда не перепривязывает уже известный hub subject.
 func (s *IdentityMappings) Bind(ctx context.Context, subject string, id string) error {
-	err := s.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := s.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		if _, err := execSQL(ctx, db, bindBuyerIdentity, s.issuer, s.client, subject, id); err != nil {
 			return ErrIdentityStorage
 		}
@@ -68,7 +68,7 @@ func (s *IdentityMappings) Bind(ctx context.Context, subject string, id string) 
 func (s *IdentityMappings) Find(ctx context.Context, subject string) (string, error) {
 	var id string
 
-	err := s.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := s.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		var err error
 		id, err = s.find(ctx, db, subject)
 		return err

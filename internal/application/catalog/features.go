@@ -43,6 +43,14 @@ type recommendationCacheEntry struct {
 	expires time.Time
 }
 
+type recommendationLoad struct {
+	done    chan struct{}
+	cancel  context.CancelFunc
+	waiters int
+	states  []ports.OfferState
+	err     error
+}
+
 // Reviews не раскрывает отзывы скрытого предложения.
 func (q *Queries) Reviews(ctx context.Context, id ids.OfferID, limit, offset int) (ports.ReviewPage, error) {
 	query, err := normalize(ports.OfferQuery{Limit: limit, Offset: offset})
@@ -174,26 +182,66 @@ func (q *Queries) recommendCandidates(
 	if request.BuyerID != "" {
 		return q.recommendations.Recommend(ctx, filter)
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	raw, err := json.Marshal(filter)
 	if err != nil {
 		return nil, err
 	}
 	key := request.Context + ":" + string(raw)
-	value, err, _ := q.recommendationFlight.Do(key, func() (any, error) {
-		q.recommendationMu.Lock()
-		entry, found := q.recommendationCache[key]
+	q.recommendationMu.Lock()
+	entry, found := q.recommendationCache[key]
+	if found && q.clock.Now().Before(entry.expires) {
 		q.recommendationMu.Unlock()
-		if found && q.clock.Now().Before(entry.expires) {
-			return entry.states, nil
-		}
-		// Отмена первого клиента не должна срывать общую загрузку для остальных.
+		return entry.states, nil
+	}
+	pending := q.recommendationLoads[key]
+	if pending == nil {
+		// Общий SQL слушает срок загрузки и отмену последнего ожидающего клиента.
 		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recommendationLoadTimeout)
-		defer cancel()
-		states, err := q.recommendations.Recommend(loadCtx, filter)
-		if err != nil {
-			return nil, err
+		pending = &recommendationLoad{done: make(chan struct{}), cancel: cancel}
+		if q.recommendationLoads == nil {
+			q.recommendationLoads = make(map[string]*recommendationLoad)
 		}
+		q.recommendationLoads[key] = pending
+		go q.loadRecommendationCandidates(loadCtx, key, filter, pending)
+	}
+	pending.waiters++
+	q.recommendationMu.Unlock()
+	defer func() {
 		q.recommendationMu.Lock()
+		defer q.recommendationMu.Unlock()
+		pending.waiters--
+		if pending.waiters == 0 {
+			pending.cancel()
+			if q.recommendationLoads[key] == pending {
+				delete(q.recommendationLoads, key)
+			}
+		}
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-pending.done:
+		return pending.states, pending.err
+	}
+}
+
+func (q *Queries) loadRecommendationCandidates(
+	ctx context.Context,
+	key string,
+	filter ports.RecommendationFilter,
+	pending *recommendationLoad,
+) {
+	defer pending.cancel()
+	pending.states, pending.err = q.recommendations.Recommend(ctx, filter)
+	if pending.err == nil {
+		pending.err = ctx.Err()
+	}
+	q.recommendationMu.Lock()
+	defer q.recommendationMu.Unlock()
+	if pending.err == nil {
 		if len(q.recommendationCache) >= recommendationCacheCapacity {
 			q.recommendationCache = nil
 		}
@@ -201,16 +249,14 @@ func (q *Queries) recommendCandidates(
 			q.recommendationCache = make(map[string]recommendationCacheEntry)
 		}
 		q.recommendationCache[key] = recommendationCacheEntry{
-			states:  states,
+			states:  pending.states,
 			expires: q.clock.Now().Add(recommendationCacheTTL),
 		}
-		q.recommendationMu.Unlock()
-		return states, nil
-	})
-	if err != nil {
-		return nil, err
 	}
-	return value.([]ports.OfferState), nil
+	if q.recommendationLoads[key] == pending {
+		delete(q.recommendationLoads, key)
+	}
+	close(pending.done)
 }
 
 func priceProfileKey(contexts map[ids.TenantID]string, tenant ids.TenantID) string {

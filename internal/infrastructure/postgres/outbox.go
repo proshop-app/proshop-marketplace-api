@@ -123,7 +123,7 @@ func NewTaskQueue(pool *pgxpool.Pool) *TaskQueue {
 func (q *TaskQueue) Claim(ctx context.Context, request ports.ClaimRequest) ([]ports.Task, error) {
 	var tasks []ports.Task
 
-	err := q.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		var err error
 		tasks, err = claimOutboxTasks(ctx, db, request)
 		return err
@@ -189,7 +189,7 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 
 // Complete отмечает задачу выполненной.
 func (q *TaskQueue) Complete(ctx context.Context, id int64, attempts int, at time.Time) error {
-	return q.source.withConnection(ctx, func(db *gorm.DB) error {
+	return q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		affected, err := execSQL(ctx, db, completeTask, id, attempts, at)
 		if err != nil {
 			return fmt.Errorf("задача %d: %w", id, err)
@@ -204,7 +204,7 @@ func (q *TaskQueue) Complete(ctx context.Context, id int64, attempts int, at tim
 
 // Retry откладывает задачу с причиной.
 func (q *TaskQueue) Retry(ctx context.Context, id int64, attempts int, nextAt time.Time, reason string) error {
-	return q.source.withConnection(ctx, func(db *gorm.DB) error {
+	return q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		affected, err := execSQL(ctx, db, retryTask, id, attempts, nextAt, reason)
 		if err != nil {
 			return fmt.Errorf("задача %d: %w", id, err)

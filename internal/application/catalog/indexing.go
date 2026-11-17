@@ -237,7 +237,7 @@ func (i *Indexer) pages(
 	for {
 		var states []ports.OfferState
 
-		err := i.uow.Do(ctx, func(_ context.Context, tx ports.Tx) error {
+		err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var err error
 			states, err = read(tx, after)
 			if err != nil {

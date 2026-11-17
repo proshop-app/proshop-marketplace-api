@@ -222,3 +222,36 @@ func TestLeaderCancellationDoesNotCancelSharedLoad(t *testing.T) {
 		t.Fatal("ожидающий создал отдельную загрузку", platform.PickupCalls())
 	}
 }
+
+func TestSharedPickupLoadStopsAfterLastClientLeaves(t *testing.T) {
+	_, platform, store := setup(t, 3)
+	service := app.NewService(store, platform, fake.NewPickupCache(), app.Config{
+		Attempts:     3,
+		TTL:          time.Hour,
+		QuoteTimeout: time.Second,
+	})
+	started, stopped := make(chan struct{}), make(chan struct{})
+	platform.BeforePickup = func(ctx context.Context, _ ids.TenantID) error {
+		close(started)
+		<-ctx.Done()
+		close(stopped)
+		return ctx.Err()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := service.Search(ctx, "cdek", "Город")
+		done <- err
+	}()
+	<-started
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("общая загрузка пережила последнего клиента")
+	}
+}

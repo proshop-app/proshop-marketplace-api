@@ -37,7 +37,7 @@ func (s *SellersCounts) CountSellers(ctx context.Context, keys []string) (map[st
 	if len(keys) == 0 {
 		return counts, nil
 	}
-	err := s.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := s.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		rows, err := rawSQL(ctx, db, selectSellersCounts, keys).Rows()
 		if err != nil {
 			return err

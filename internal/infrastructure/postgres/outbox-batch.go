@@ -55,7 +55,7 @@ func (q *TaskQueue) Resolve(ctx context.Context, results []ports.TaskResolution)
 	if err != nil {
 		return fmt.Errorf("результаты задач: %w", err)
 	}
-	return q.source.withConnection(ctx, func(db *gorm.DB) error {
+	return q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		apply := func(tx *gorm.DB) error {
 			count, err := execSQL(ctx, tx, resolveTasks, string(body))
 			if err != nil {
@@ -76,7 +76,7 @@ func (q *TaskQueue) Resolve(ctx context.Context, results []ports.TaskResolution)
 // ReadyCounts не включает отложенные повторы и действующие аренды.
 func (q *TaskQueue) ReadyCounts(ctx context.Context, now time.Time) (map[string]int64, error) {
 	counts := map[string]int64{}
-	err := q.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		rows, err := rawSQL(ctx, db, countReadyTasks, now).Rows()
 		if err != nil {
 			return err

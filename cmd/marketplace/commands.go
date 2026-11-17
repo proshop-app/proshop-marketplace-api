@@ -13,6 +13,7 @@ import (
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
@@ -104,7 +105,7 @@ func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string,
 	if args[0] == "check" {
 		return json.NewEncoder(output).Encode(summary)
 	}
-	pool, err := postgres.Open(ctx, cfg.Database.URL, 2)
+	pool, err := postgres.Open(ctx, cfg.Database.URL, 2, ports.DatabaseBudget(cfg.Database.Maintenance))
 	if err != nil {
 		return errors.New("не удалось подключиться к PostgreSQL")
 	}
@@ -183,7 +184,7 @@ func runReferenceImport(ctx context.Context, cfg config.Config, args []string, o
 	if err != nil {
 		return deliveryFailure(err)
 	}
-	pool, err := postgres.Open(ctx, cfg.Database.URL, 2)
+	pool, err := postgres.Open(ctx, cfg.Database.URL, 2, ports.DatabaseBudget(cfg.Database.Maintenance))
 	if err != nil {
 		return errors.New("не удалось подключиться к PostgreSQL")
 	}

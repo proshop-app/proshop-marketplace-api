@@ -144,6 +144,7 @@ type Settings struct {
 
 // HTTP — сервер REST.
 type HTTP struct {
+	RequestTimeout  time.Duration
 	Addr            string
 	ShutdownTimeout time.Duration
 	// TrustedProxies — сколько прокси перед сервисом дописывают X-Forwarded-For. От него
@@ -152,10 +153,21 @@ type HTTP struct {
 	TrustedProxies int
 }
 
+// DatabaseBudget задаёт независимые пределы SQL и операции хранения.
+type DatabaseBudget struct {
+	Statement   time.Duration
+	Transaction time.Duration
+}
+
 // Database — PostgreSQL.
 type Database struct {
-	URL      string
-	MaxConns int32
+	Maintenance DatabaseBudget
+	Read        DatabaseBudget
+	Checkout    DatabaseBudget
+	Ingestion   DatabaseBudget
+	Background  DatabaseBudget
+	URL         string
+	MaxConns    int32
 }
 
 // Search — общий движок каталога площадки.
@@ -230,6 +242,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		Promotion:     r.promotion(),
 		Identity:      r.identity(),
 		HTTP: HTTP{
+			RequestTimeout:  r.duration("HTTP_REQUEST_TIMEOUT", 25*time.Second),
 			Addr:            r.str("HTTP_ADDR", ":8080"),
 			ShutdownTimeout: r.duration("SHUTDOWN_TIMEOUT", 20*time.Second),
 			TrustedProxies:  r.nonNegative("HTTP_TRUST_PROXY", 0),
@@ -432,7 +445,15 @@ func (r *reader) database() Database {
 		}
 	}
 
-	return Database{URL: raw, MaxConns: r.connections("DATABASE_MAX_CONNS", 10)}
+	return Database{
+		URL:         raw,
+		MaxConns:    r.connections("DATABASE_MAX_CONNS", 10),
+		Read:        r.databaseBudget("READ", 750*time.Millisecond, 2*time.Second),
+		Checkout:    r.databaseBudget("CHECKOUT", 2*time.Second, 5*time.Second),
+		Ingestion:   r.databaseBudget("INGESTION", 2*time.Second, 5*time.Second),
+		Background:  r.databaseBudget("BACKGROUND", 10*time.Second, 30*time.Second),
+		Maintenance: r.databaseBudget("MAINTENANCE", 5*time.Minute, 10*time.Minute),
+	}
 }
 
 func (r *reader) redisURL() string {
@@ -633,4 +654,16 @@ func (r *reader) topic(name, fallback string) string {
 		return fallback
 	}
 	return strings.TrimSpace(value)
+}
+
+func (r *reader) databaseBudget(class string, statement, transaction time.Duration) DatabaseBudget {
+	prefix := "DATABASE_" + class
+	budget := DatabaseBudget{
+		Statement:   r.duration(prefix+"_STATEMENT_TIMEOUT", statement),
+		Transaction: r.duration(prefix+"_TRANSACTION_TIMEOUT", transaction),
+	}
+	if budget.Statement > budget.Transaction {
+		r.fail(prefix+"_STATEMENT_TIMEOUT", "не должен превышать срок транзакции")
+	}
+	return budget
 }

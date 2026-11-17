@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -35,21 +36,23 @@ type Check struct {
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
-	Statuses       *moderationstatus.Service
-	Features       *appbuyer.Features
-	Promotion      *apppromotion.Service
-	ServerAPIToken string
-	Moderation     *appmoderation.Service
-	Taxonomy       *apptaxonomy.Service
-	SellersCounts  ports.SellersCounts
-	Catalog        *appcatalog.Queries
-	Participants   *appparticipant.Service
-	Auth           *appbuyer.Auth
-	Carts          *appcart.Service
-	Directory      *appdelivery.Service
-	Checkouts      *appcheckout.Service
-	Reference      *appreference.Service
-	OperatorToken  string
+	DatabaseBudgets ports.DatabaseBudgets
+	RequestTimeout  time.Duration
+	Statuses        *moderationstatus.Service
+	Features        *appbuyer.Features
+	Promotion       *apppromotion.Service
+	ServerAPIToken  string
+	Moderation      *appmoderation.Service
+	Taxonomy        *apptaxonomy.Service
+	SellersCounts   ports.SellersCounts
+	Catalog         *appcatalog.Queries
+	Participants    *appparticipant.Service
+	Auth            *appbuyer.Auth
+	Carts           *appcart.Service
+	Directory       *appdelivery.Service
+	Checkouts       *appcheckout.Service
+	Reference       *appreference.Service
+	OperatorToken   string
 	// ReferenceReadToken — токен читателя реестра: снимок, resolve и чтение записей без прав оператора.
 	ReferenceReadToken string
 	OperatorAuth       *appoperator.Auth
@@ -354,7 +357,7 @@ func NewHandler(deps Deps) http.Handler {
 	mux := http.NewServeMux()
 
 	for _, r := range routes(deps) {
-		mux.HandleFunc(r.method+" "+r.path, moneyContract(r.path, r.handler))
+		mux.HandleFunc(r.method+" "+r.path, requestBudget(r.path, deps, moneyContract(r.path, r.handler)))
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeError(w, r, ErrRouteNotFound) })

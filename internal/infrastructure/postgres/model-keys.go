@@ -87,7 +87,7 @@ func (s *ModelKeyStats) Report(ctx context.Context, samples bool) (ports.ModelKe
 		Samples: []ports.ModelKeySample{},
 	}
 
-	err := s.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := s.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		return loadModelKeyReport(ctx, db, samples, &report)
 	})
 

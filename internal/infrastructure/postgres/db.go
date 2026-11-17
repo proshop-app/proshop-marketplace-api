@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"gorm.io/gorm"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
@@ -27,13 +29,24 @@ var migrations embed.FS
 var ErrUnavailable = errs.New(errs.Unavailable, "storage.unavailable", "хранилище недоступно")
 
 // Open — пул соединений с проверкой связи.
-func Open(ctx context.Context, url string, maxConns int32) (*pgxpool.Pool, error) {
+func Open(ctx context.Context, url string, maxConns int32, budgets ...ports.DatabaseBudget) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, fmt.Errorf("адрес базы: %w", err)
 	}
 
 	cfg.MaxConns = maxConns
+	budget := defaultDatabaseBudget(ports.DatabaseBudget{})
+	if len(budgets) > 0 {
+		budget = budgets[0]
+	}
+	if err := validateDatabaseBudget(budget); err != nil {
+		return nil, err
+	}
+	prepareBudgets(cfg, budget)
+	if cfg.ConnConfig.ConnectTimeout <= 0 {
+		cfg.ConnConfig.ConnectTimeout = 5 * time.Second
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -125,9 +138,7 @@ func runGoose(ctx context.Context, pool *pgxpool.Pool, run func(*goose.Provider)
 
 // logDeliveryMigrationReport читает сохранённый отчёт после фиксации миграции.
 func logDeliveryMigrationReport(ctx context.Context, pool *pgxpool.Pool) error {
-	return newConnectionSource(pool).withConnection(ctx, func(db *gorm.DB) error {
-		return readDeliveryMigrationReport(ctx, db)
-	})
+	return newConnectionSource(pool).withConnection(ctx, readDeliveryMigrationReport)
 }
 
 func readDeliveryMigrationReport(ctx context.Context, db *gorm.DB) error {

@@ -117,7 +117,7 @@ func NewCatalogFeatures(pool *pgxpool.Pool) *CatalogFeatures {
 // Interests использует избранное, корзину и заказы, включая оформление.
 func (r *CatalogFeatures) Interests(ctx context.Context, buyer ids.UUID) (ports.BuyerInterestSet, error) {
 	result := ports.BuyerInterestSet{Categories: []string{}, Purchased: []ids.OfferID{}}
-	err := r.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := r.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		rows, err := rawSQL(ctx, db, selectBuyerInterests, string(buyer)).Rows()
 		if err != nil {
 			return err
@@ -178,7 +178,7 @@ func (r *CatalogFeatures) Recommend(
 		filter.Limit,
 	}
 	var result []ports.OfferState
-	err := r.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := r.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		reader := Offers{db: db}
 		var err error
 		result, err = reader.query(ctx, selectRecommendations, args...)
@@ -195,7 +195,7 @@ func (r *CatalogFeatures) ViewedCategories(ctx context.Context, viewed []ids.Off
 		products = append(products, string(id.Product))
 	}
 	var categories []string
-	err := r.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := r.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		return rawSQL(ctx, db, selectViewedCategories, tenants, products).Scan(&categories).Error
 	})
 	return categories, err

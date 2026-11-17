@@ -14,7 +14,7 @@ const selectFailedTasks = `SELECT id, kind, tenant_id, attempts, failure_reason,
 // Failures читает только безопасные поля; исходные payload и last_error доступны в служебном хранилище.
 func (q *TaskQueue) Failures(ctx context.Context, after int64, limit int) ([]ports.TaskFailure, error) {
 	items := []ports.TaskFailure{}
-	err := q.source.withConnection(ctx, func(db *gorm.DB) error {
+	err := q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		rows, err := rawSQL(ctx, db, selectFailedTasks, after, limit).Rows()
 		if err != nil {
 			return err

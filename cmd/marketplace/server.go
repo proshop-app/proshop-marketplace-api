@@ -482,7 +482,7 @@ func (s *server) run(ctx context.Context) error {
 		return httpServer.Shutdown(shutdownCtx)
 	})
 	group.Go(func() error {
-		err := consumer.Run(groupCtx)
+		err := consumer.Run(ports.WithDatabaseBudget(groupCtx, ports.DatabaseBudget(cfg.Database.Ingestion)))
 
 		if closeErr := reader.Close(); closeErr != nil {
 			s.logger.Warn("kafka: читатель закрылся с ошибкой", slog.Any("error", closeErr))
@@ -564,8 +564,15 @@ func (s *server) httpServer() *http.Server {
 		},
 	}
 	handler := transport.NewHandler(transport.Deps{
-		Statuses: s.app.statuses,
-		Features: s.app.buyerFeatures,
+		DatabaseBudgets: ports.DatabaseBudgets{
+			Read:       ports.DatabaseBudget(cfg.Database.Read),
+			Checkout:   ports.DatabaseBudget(cfg.Database.Checkout),
+			Ingestion:  ports.DatabaseBudget(cfg.Database.Ingestion),
+			Background: ports.DatabaseBudget(cfg.Database.Background),
+		},
+		RequestTimeout: cfg.HTTP.RequestTimeout,
+		Statuses:       s.app.statuses,
+		Features:       s.app.buyerFeatures,
 
 		Promotion:      s.app.promotion,
 		ServerAPIToken: cfg.Promotion.ServerAPIToken,
@@ -598,7 +605,7 @@ func (s *server) httpServer() *http.Server {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      cfg.HTTP.RequestTimeout + 5*time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
 }

@@ -198,6 +198,9 @@ func TestProjectionRecoveryDoesNotExposeConnectionOrServiceSecrets(t *testing.T)
 
 func TestProjectionRecoveryConfigNeedsOnlyDatabaseAndModeration(t *testing.T) {
 	env := func(key string) (string, bool) {
+		if strings.HasPrefix(key, "DATABASE_") && key != "DATABASE_URL" {
+			return "", false
+		}
 		switch key {
 		case "DATABASE_URL":
 			return "postgres://user:password@database/db", true
