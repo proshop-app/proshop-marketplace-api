@@ -173,6 +173,7 @@ type Kafka struct {
 	TopicPrefix string
 	GroupID     string
 	MaxAttempts int
+	Workers     int
 	// ReferenceTopic — имя топика catalog.reference.changed без префикса; топик заводит сервер установки.
 	ReferenceTopic         string
 	OfferStatusTopic       string
@@ -245,6 +246,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			TopicPrefix:            r.str("KAFKA_TOPIC_PREFIX", ""),
 			GroupID:                r.str("KAFKA_GROUP_ID", "marketplace"),
 			MaxAttempts:            r.positive("KAFKA_MAX_ATTEMPTS", 5),
+			Workers:                r.positive("KAFKA_WORKERS", 8),
 			ReferenceTopic:         r.str("KAFKA_TOPIC_REFERENCE_CHANGED", "catalog.reference.changed"),
 			OfferStatusTopic:       r.topic("KAFKA_TOPIC_OFFER_STATUS", "marketplace.offer.status"),
 			ParticipantStatusTopic: r.topic("KAFKA_TOPIC_PARTICIPANT_STATUS", "marketplace.participant.status"),
@@ -319,6 +321,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		ModelKeys: r.boolean("MARKETPLACE_MODEL_KEYS", false),
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
 	}
+
+	r.kafkaCapacity(&cfg)
 
 	if secret := cfg.DaData.CacheSecret; secret != "" && len(secret) < minGeoIPCacheSecretLength {
 		r.fail("GEOIP_CACHE_SECRET", fmt.Sprintf("не короче %d байт", minGeoIPCacheSecretLength))

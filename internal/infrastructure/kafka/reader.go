@@ -42,10 +42,13 @@ type Config struct {
 // топики проверяются по полному списку метаданных, который ничего не
 // создаёт; появились — читатель пересоздаётся с расширенной подпиской.
 type Reader struct {
-	config Config
+	config    Config
+	client    *kafkago.Client
+	transport *kafkago.Transport
 
 	mu         sync.Mutex
-	reader     *kafkago.Reader
+	group      *kafkago.ConsumerGroup
+	runCancel  context.CancelFunc
 	subscribed []string
 	missing    []string
 	checked    time.Time
@@ -54,60 +57,69 @@ type Reader struct {
 
 // NewReader — читатель группы.
 func NewReader(cfg Config) *Reader {
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
+	}
 	if cfg.RefreshInterval <= 0 {
 		cfg.RefreshInterval = DefaultRefreshInterval
 	}
 
-	return &Reader{config: cfg}
-}
-
-// Fetch — следующее сообщение без коммита. Пока ни одного топика нет, ждёт их появления.
-func (r *Reader) Fetch(ctx context.Context) (kafkago.Message, error) {
-	for {
-		reader, err := r.current(ctx)
-		if err != nil {
-			return kafkago.Message{}, err
-		}
-
-		fetchCtx, cancel := context.WithCancelCause(ctx)
-		stopWatch := r.watch(fetchCtx, func() { cancel(errResubscribe) })
-		message, err := reader.FetchMessage(fetchCtx)
-		stopWatch()
-		cancel(nil)
-
-		if err != nil && errors.Is(context.Cause(fetchCtx), errResubscribe) && ctx.Err() == nil {
-			continue
-		}
-
-		return message, err
+	transport := &kafkago.Transport{DialTimeout: 5 * time.Second}
+	return &Reader{
+		config:    cfg,
+		transport: transport,
+		client: &kafkago.Client{
+			Addr:      kafkago.TCP(cfg.Brokers...),
+			Timeout:   5 * time.Second,
+			Transport: transport,
+		},
 	}
 }
 
-// Commit фиксирует позицию после сообщения. Сообщение, прочитанное до
-// переподписки, не фиксируется: оно придёт снова и отсеется дедупом.
-func (r *Reader) Commit(ctx context.Context, message kafkago.Message) error {
+// Run привязывает обработку к поколению группы. Возврат consume означает,
+// что все его воркеры остановлены; только затем допускается новое назначение.
+func (r *Reader) Run(ctx context.Context, consume func(context.Context) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	r.mu.Lock()
-	reader := r.reader
-	r.mu.Unlock()
-
-	if reader == nil {
-		return errors.New("читатель не запущен")
+	if r.closed || r.runCancel != nil {
+		r.mu.Unlock()
+		return errors.New("читатель закрыт или уже запущен")
 	}
+	r.runCancel = cancel
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		r.runCancel = nil
+		r.mu.Unlock()
+	}()
 
-	return reader.CommitMessages(ctx, message)
+	for ctx.Err() == nil {
+		err := r.nextGeneration(ctx, consume)
+		if err != nil && ctx.Err() == nil && !errors.Is(err, errResubscribe) {
+			r.config.Logger.Warn("kafka: поколение завершилось с ошибкой", slog.Any("error", err))
+			if !sleep(ctx, time.Second) {
+				break
+			}
+		}
+	}
+	return nil
 }
 
-// Close закрывает читатель и выходит из группы.
+// Close отменяет обработку до выхода из группы, не фиксируя незавершённые сообщения.
 func (r *Reader) Close() error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	r.closed = true
-	if r.reader == nil {
+	if r.runCancel != nil {
+		r.runCancel()
+	}
+	group := r.group
+	r.mu.Unlock()
+	defer r.transport.CloseIdleConnections()
+	if group == nil {
 		return nil
 	}
-
-	return r.reader.Close()
+	return group.Close()
 }
 
 // Subscribed — топики текущей подписки.
@@ -118,8 +130,8 @@ func (r *Reader) Subscribed() []string {
 	return slices.Clone(r.subscribed)
 }
 
-// current — читатель с актуальной подпиской; пересоздаётся, если появились новые топики.
-func (r *Reader) current(ctx context.Context) (*kafkago.Reader, error) {
+// current — группа с актуальной подпиской; пересоздаётся, если появились новые топики.
+func (r *Reader) current(ctx context.Context) (*kafkago.ConsumerGroup, error) {
 	for {
 		r.mu.Lock()
 		if r.closed {
@@ -128,30 +140,17 @@ func (r *Reader) current(ctx context.Context) (*kafkago.Reader, error) {
 			return nil, errors.New("читатель закрыт")
 		}
 
-		due := r.reader == nil || (len(r.missing) > 0 && time.Since(r.checked) >= r.config.RefreshInterval)
-		reader := r.reader
+		due := r.group == nil || (len(r.missing) > 0 && time.Since(r.checked) >= r.config.RefreshInterval)
+		group := r.group
 		r.mu.Unlock()
 
 		if !due {
-			return reader, nil
+			return group, nil
 		}
 
-		existing, err := r.existing(ctx)
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			if reader != nil {
-				r.config.Logger.Warn("kafka: список топиков недоступен", slog.Any("error", err))
-
-				return reader, nil
-			}
-
-			return nil, err
-		}
-
-		if reader, ok := r.resubscribe(existing); ok {
-			return reader, nil
+		group, err := r.refresh(ctx, group)
+		if err != nil || group != nil {
+			return group, err
 		}
 
 		if !sleep(ctx, r.config.RefreshInterval) {
@@ -160,13 +159,51 @@ func (r *Reader) current(ctx context.Context) (*kafkago.Reader, error) {
 	}
 }
 
-// resubscribe пересоздаёт читатель, если набор существующих топиков вырос.
-func (r *Reader) resubscribe(existing []string) (*kafkago.Reader, bool) {
+func (r *Reader) refresh(ctx context.Context, previous *kafkago.ConsumerGroup) (*kafkago.ConsumerGroup, error) {
+	existing, err := r.existing(ctx)
+	if err == nil {
+		return r.resubscribe(existing)
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if previous == nil {
+		return nil, err
+	}
+	r.config.Logger.Warn("kafka: список топиков недоступен", slog.Any("error", err))
+	return previous, nil
+}
+
+// resubscribe пересоздаёт группу, если набор существующих топиков вырос.
+func (r *Reader) resubscribe(existing []string) (*kafkago.ConsumerGroup, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	if r.closed {
+		return nil, errors.New("читатель закрыт")
+	}
 	r.checked = time.Now()
 
+	subscribe := r.subscription(existing)
+
+	if len(subscribe) == 0 {
+		return nil, nil
+	}
+	if r.group != nil && slices.Equal(subscribe, r.subscribed) {
+		return r.group, nil
+	}
+
+	if r.group != nil {
+		if err := r.group.Close(); err != nil {
+			r.config.Logger.Warn("kafka: прежний читатель закрылся с ошибкой", slog.Any("error", err))
+		}
+	}
+
+	return r.openGroup(subscribe)
+}
+
+// Вызывается под mu; снимок недостающих топиков нужен наблюдателю расширения подписки.
+func (r *Reader) subscription(existing []string) []string {
 	var subscribe, missing []string
 	for _, topic := range r.config.Topics {
 		if slices.Contains(existing, topic) {
@@ -185,37 +222,28 @@ func (r *Reader) resubscribe(existing []string) (*kafkago.Reader, bool) {
 	}
 	r.missing = missing
 
-	if len(subscribe) == 0 {
-		return nil, false
-	}
-	if r.reader != nil && slices.Equal(subscribe, r.subscribed) {
-		return r.reader, true
-	}
+	return subscribe
+}
 
-	if r.reader != nil {
-		if err := r.reader.Close(); err != nil {
-			r.config.Logger.Warn("kafka: прежний читатель закрылся с ошибкой", slog.Any("error", err))
-		}
-	}
-
+func (r *Reader) openGroup(subscribe []string) (*kafkago.ConsumerGroup, error) {
 	r.subscribed = subscribe
-	r.reader = kafkago.NewReader(kafkago.ReaderConfig{
+	var err error
+	r.group, err = kafkago.NewConsumerGroup(kafkago.ConsumerGroupConfig{
 		Brokers:               r.config.Brokers,
-		GroupID:               r.config.GroupID,
-		GroupTopics:           subscribe,
-		MinBytes:              1,
-		MaxBytes:              10 << 20,
-		MaxWait:               500 * time.Millisecond,
+		ID:                    r.config.GroupID,
+		Topics:                subscribe,
 		StartOffset:           kafkago.FirstOffset,
-		CommitInterval:        0,
 		WatchPartitionChanges: true,
 		ErrorLogger: kafkago.LoggerFunc(func(format string, args ...any) {
 			r.config.Logger.Warn("kafka: "+fmt.Sprintf(format, args...), slog.String("group", r.config.GroupID))
 		}),
 	})
+	if err != nil {
+		return nil, err
+	}
 	r.config.Logger.Info("kafka: подписка", slog.Any("topics", subscribe), slog.String("group", r.config.GroupID))
 
-	return r.reader, true
+	return r.group, nil
 }
 
 // watch, пока ждётся сообщение, раз в интервал проверяет недостающие топики
@@ -230,35 +258,46 @@ func (r *Reader) watch(ctx context.Context, interrupt func()) func() {
 	}
 
 	done := make(chan struct{})
-
+	finished := make(chan struct{})
 	go func() {
-		ticker := time.NewTicker(r.config.RefreshInterval)
-		defer ticker.Stop()
+		defer close(finished)
+		r.watchTopics(ctx, done, missing, interrupt)
+	}()
+	return func() {
+		close(done)
+		<-finished
+	}
+}
 
-		for {
-			select {
-			case <-done:
+func (r *Reader) watchTopics(ctx context.Context, done <-chan struct{}, missing []string, interrupt func()) {
+	ticker := time.NewTicker(r.config.RefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if r.topicsAppeared(ctx, missing) {
+				interrupt()
 				return
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				existing, err := r.existing(ctx)
-				if err != nil {
-					continue
-				}
-
-				for _, topic := range missing {
-					if slices.Contains(existing, topic) {
-						interrupt()
-
-						return
-					}
-				}
 			}
 		}
-	}()
+	}
+}
 
-	return func() { close(done) }
+func (r *Reader) topicsAppeared(ctx context.Context, missing []string) bool {
+	existing, err := r.existing(ctx)
+	if err != nil {
+		return false
+	}
+	for _, topic := range missing {
+		if slices.Contains(existing, topic) {
+			return true
+		}
+	}
+	return false
 }
 
 // existing — все топики брокера. Запрос метаданных без списка топиков ничего не создаёт.
@@ -266,18 +305,7 @@ func (r *Reader) existing(ctx context.Context) ([]string, error) {
 	var lastErr error
 
 	for _, broker := range r.config.Brokers {
-		dialer := kafkago.Dialer{Timeout: 5 * time.Second}
-
-		conn, err := dialer.DialContext(ctx, "tcp", strings.TrimSpace(broker))
-		if err != nil {
-			lastErr = err
-
-			continue
-		}
-
-		partitions, err := conn.ReadPartitions()
-		_ = conn.Close()
-
+		partitions, err := readPartitions(ctx, strings.TrimSpace(broker))
 		if err != nil {
 			lastErr = err
 
@@ -295,6 +323,22 @@ func (r *Reader) existing(ctx context.Context) ([]string, error) {
 	}
 
 	return nil, fmt.Errorf("список топиков: %w", lastErr)
+}
+
+// Сетевое ожидание метаданных тоже заканчивается при остановке или переподписке.
+func readPartitions(ctx context.Context, broker string) ([]kafkago.Partition, error) {
+	dialer := kafkago.Dialer{Timeout: 5 * time.Second}
+	conn, err := dialer.DialContext(ctx, "tcp", broker)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return nil, err
+	}
+	return conn.ReadPartitions()
 }
 
 // Ping проверяет, что хотя бы один брокер принимает соединение.

@@ -21,8 +21,16 @@ const (
 
 // Source — чтение группой с ручным коммитом.
 type Source interface {
+	// Run вызывает consume заново для каждого назначения; контекст отменяется при отзыве.
+	// Следующее назначение начинается только после возврата consume.
+	Run(ctx context.Context, consume func(context.Context) error) error
+	// Fetch ограничивает число выданных сообщений отдельно для каждой партиции.
 	Fetch(ctx context.Context) (kafkago.Message, error)
-	Commit(ctx context.Context, message kafkago.Message) error
+	// GenerationActive отличает остановку процесса от отзыва назначения.
+	GenerationActive(ctx context.Context) bool
+	// Release освобождает место в окне чтения после записи итога, независимо от коммита Kafka.
+	Release(ctx context.Context, message kafkago.Message)
+	Commit(ctx context.Context, messages ...kafkago.Message) error
 }
 
 // Parker откладывает сообщение в отравленные.
@@ -32,6 +40,8 @@ type Parker interface {
 
 // ConsumerConfig — политика повторов.
 type ConsumerConfig struct {
+	// Workers — предел одновременно обрабатываемых ключей; ноль — восемь.
+	Workers int
 	// TopicPrefix — префикс установки в именах топиков.
 	TopicPrefix string
 	// MaxAttempts — после стольких неудач сообщение паркуется, если хранилище живо.
@@ -71,6 +81,9 @@ func NewConsumer(
 	logger *slog.Logger,
 	registerer prometheus.Registerer,
 ) *Consumer {
+	if config.Workers <= 0 {
+		config.Workers = 8
+	}
 	m := &metrics{
 		messages: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -114,17 +127,7 @@ func FullTopics(prefix string, router *Router) []string {
 
 // Run читает до отмены контекста.
 func (c *Consumer) Run(ctx context.Context) error {
-	for {
-		message, ok := c.next(ctx)
-		if !ok {
-			return nil
-		}
-
-		// Process возвращает ошибку только при отмене контекста; её увидит следующее чтение
-		if err := c.Process(ctx, message); err != nil && ctx.Err() == nil {
-			return err
-		}
-	}
+	return c.source.Run(ctx, c.runGeneration)
 }
 
 // next читает следующее сообщение, повторяя сбои чтения с паузой; false — контекст отменён.
@@ -146,7 +149,7 @@ func (c *Consumer) next(ctx context.Context) (kafkago.Message, bool) {
 	}
 }
 
-// Process доводит одно сообщение до записанного итога и коммитит позицию.
+// Process доводит одно сообщение до записанного итога. Позиции фиксирует Run пачкой.
 // Возвращает ошибку только при отмене контекста.
 func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
 	envelope := Envelope{
@@ -163,22 +166,25 @@ func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
 	)
 
 	for attempt := 1; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		err := c.router.Handle(ctx, envelope)
 
 		switch {
 		case err == nil:
 			c.metrics.messages.WithLabelValues(envelope.Topic, tenant, "processed").Inc()
 
-			return c.commit(ctx, log, message)
+			return ctx.Err()
 		case ctx.Err() != nil:
 			return ctx.Err()
 		case permanent(err):
 			if c.park(ctx, log, envelope, tenant, reasonOf(err), err, attempt) {
-				return c.commit(ctx, log, message)
+				return ctx.Err()
 			}
 		case attempt >= c.config.MaxAttempts && c.config.Ready(ctx) == nil:
 			if c.park(ctx, log, envelope, tenant, ReasonExhausted, err, attempt) {
-				return c.commit(ctx, log, message)
+				return ctx.Err()
 			}
 		default:
 			c.metrics.failures.WithLabelValues(envelope.Topic, tenant).Inc()
@@ -231,20 +237,6 @@ func (c *Consumer) park(
 	log.Error("kafka: сообщение в отравленных", slog.String("reason", reason), slog.Any("error", cause))
 
 	return true
-}
-
-// commit фиксирует позицию. Сбой коммита не теряет данных: сообщение придёт
-// снова и отсеется дедупом.
-func (c *Consumer) commit(ctx context.Context, log *slog.Logger, message kafkago.Message) error {
-	if err := c.source.Commit(ctx, message); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		log.Warn("kafka: коммит не удался, сообщение придёт повторно", slog.Any("error", err))
-	}
-
-	return nil
 }
 
 // permanent — повтор с тем же сообщением не поможет.
