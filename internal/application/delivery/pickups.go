@@ -8,12 +8,12 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -29,6 +29,13 @@ const (
 	pickupQueueLimit        = 32
 	pickupNegativeTTL       = 30 * time.Second
 	pickupFailureTTL        = 5 * time.Second
+)
+
+type pickupPurpose uint8
+
+const (
+	pickupMap pickupPurpose = iota
+	pickupSelection
 )
 
 // ErrSellerUnreachable — все опрошенные магазины недоступны.
@@ -56,7 +63,9 @@ type Service struct {
 	checkoutLoads chan struct{}
 	cacheBytes    int
 	loads         chan struct{}
-	source        atomic.Uint32
+	sourceMu      sync.Mutex
+	sources       map[delivery.Carrier]ids.TenantID
+	cacheReads    singleflight.Group
 }
 
 type pickupCatalog struct {
@@ -90,6 +99,7 @@ func NewService(uow ports.UnitOfWork, platform ports.PlatformAPI, cache ports.Pi
 		catalogs:      make(map[string]*list.Element),
 		loads:         make(chan struct{}, pickupLoadLimit),
 		checkoutLoads: make(chan struct{}, pickupCheckoutLoadLimit),
+		sources:       make(map[delivery.Carrier]ids.TenantID),
 	}
 }
 
@@ -106,7 +116,7 @@ func (s *Service) Carriers() []delivery.CarrierInfo {
 
 // Search возвращает первый успешный список; отказ службы позволяет перейти к следующему магазину.
 func (s *Service) Search(ctx context.Context, carrier delivery.Carrier, city string) ([]delivery.PickupPoint, error) {
-	catalog, err := s.catalogue(ctx, carrier, city)
+	catalog, err := s.catalogue(ctx, carrier, city, pickupMap)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +127,7 @@ func (s *Service) catalogue(
 	ctx context.Context,
 	carrier delivery.Carrier,
 	city string,
+	purpose pickupPurpose,
 ) (*pickupCatalog, error) {
 	if !slices.ContainsFunc(s.Carriers(), func(item delivery.CarrierInfo) bool { return item.Code == carrier }) {
 		return nil, delivery.ErrInvalidCarrier
@@ -125,6 +136,11 @@ func (s *Service) catalogue(
 	if err != nil {
 		return nil, err
 	}
+	class := ports.PlatformCatalog
+	if purpose == pickupSelection {
+		class = ports.PlatformCheckout
+	}
+	ctx = ports.WithPlatformCallClass(ctx, class)
 	key := "v3:" + string(carrier) + ":" + strings.ToLower(city)
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -133,10 +149,7 @@ func (s *Service) catalogue(
 		return cached, catalogueError(cached)
 	}
 	// Redis читается до допуска фоновой загрузки: холодный шторм не закрывает тёплый каталог другой реплики.
-	if cached := s.readCatalog(ctx, key); cached != nil {
-		s.mu.Lock()
-		s.remember(key, cached)
-		s.mu.Unlock()
+	if cached := s.sharedCacheRead(ctx, key); cached != nil {
 		return cached, catalogueError(cached)
 	}
 	if err := ctx.Err(); err != nil {
@@ -144,11 +157,16 @@ func (s *Service) catalogue(
 	}
 	pool := s.loads
 	flightKey := key
-	if ports.PlatformClassFromContext(ctx) == ports.PlatformCheckout {
+	if purpose == pickupSelection {
 		pool = s.checkoutLoads
 		flightKey = "checkout:" + key
 	}
 	s.mu.Lock()
+	// Пока читался Redis, прежняя загрузка могла завершиться и убрать свой flight.
+	if cached := s.catalogAt(key, time.Now()); cached != nil {
+		s.mu.Unlock()
+		return cached, catalogueError(cached)
+	}
 	f, ok := s.flights[flightKey]
 	if !ok {
 		queued := 0
@@ -252,7 +270,7 @@ func (s *Service) QueryFor(
 	box *delivery.Bounds,
 	offset, limit int,
 ) (delivery.PickupArea, error) {
-	catalog, err := s.catalogue(ctx, carrier, city)
+	catalog, err := s.catalogue(ctx, carrier, city, pickupMap)
 	if err != nil {
 		return delivery.PickupArea{}, err
 	}
@@ -265,47 +283,29 @@ func (s *Service) QueryFor(
 	return catalog.index.List(regions, offset, limit), nil
 }
 
-func (s *Service) candidates(
-	ctx context.Context,
-	carrier delivery.Carrier,
-) ([]ids.TenantID, error) {
+func (s *Service) candidates(ctx context.Context, carrier delivery.Carrier) ([]ids.TenantID, error) {
+	// Курсор меняется вместе с ограниченным чтением; параллельные города не выбирают одну первую тройку.
+	s.sourceMu.Lock()
+	defer s.sourceMu.Unlock()
+	after := s.sources[carrier]
 	var tenants []ids.TenantID
-	err := s.uow.Do(
-		ctx,
-		func(ctx context.Context, tx ports.Tx) error {
-			keys := []ids.TenantID{}
-			after := ids.TenantID("")
-			for {
-				page, err := tx.Participants().PublicTenants(ctx, nil, after, 200)
-				if err != nil {
-					return err
-				}
-				keys = append(keys, page...)
-				if len(page) < 200 {
-					break
-				}
-				after = page[len(page)-1]
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		tenants, err = tx.Participants().PickupSources(ctx, string(carrier), after, s.config.Attempts)
+		if err != nil || len(tenants) >= s.config.Attempts || after == "" {
+			return err
+		}
+		remaining, err := tx.Participants().PickupSources(ctx, string(carrier), "", s.config.Attempts-len(tenants))
+		for _, tenant := range remaining {
+			if !slices.Contains(tenants, tenant) {
+				tenants = append(tenants, tenant)
 			}
-
-			participants, err := tx.Participants().Batch(ctx, keys)
-			if err != nil {
-				return err
-			}
-			registry, err := tx.Registry().Batch(ctx, keys)
-			if err != nil {
-				return err
-			}
-			for _, key := range keys {
-				p, tenant := participants[key], registry[key]
-				if p != nil && tenant != nil && slices.Contains(p.State().Delivery.Carriers, string(carrier)) &&
-					participant.VisibilityOf(p, tenant).CheckoutAvailable {
-					tenants = append(tenants, key)
-				}
-			}
-			return nil
-		},
-	)
-	slices.Sort(tenants)
+		}
+		return err
+	})
+	if err == nil && len(tenants) > 0 {
+		s.sources[carrier] = tenants[0]
+	}
 	return tenants, err
 }
 
@@ -317,9 +317,7 @@ func (s *Service) fetch(
 ) ([]delivery.PickupPoint, error) {
 	failed := 0
 	attempted := 0
-	start := int(s.source.Add(1)-1) % max(1, len(tenants))
-	for offset := range len(tenants) {
-		tenant := tenants[(start+offset)%len(tenants)]
+	for _, tenant := range tenants {
 		if attempted >= s.config.Attempts {
 			break
 		}
@@ -353,7 +351,25 @@ func (s *Service) Point(
 	carrier delivery.Carrier,
 	code, city string,
 ) (delivery.PickupPoint, error) {
-	catalog, err := s.catalogue(ports.WithPlatformCallClass(ctx, ports.PlatformCheckout), carrier, city)
+	return s.lookupPoint(ctx, carrier, code, city, pickupSelection)
+}
+
+// ProfilePoint использует общий пул карты: профиль не занимает резерв выбора ПВЗ покупки.
+func (s *Service) ProfilePoint(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	code, city string,
+) (delivery.PickupPoint, error) {
+	return s.lookupPoint(ctx, carrier, code, city, pickupMap)
+}
+
+func (s *Service) lookupPoint(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	code, city string,
+	purpose pickupPurpose,
+) (delivery.PickupPoint, error) {
+	catalog, err := s.catalogue(ctx, carrier, city, purpose)
 	if err != nil {
 		return delivery.PickupPoint{}, err
 	}

@@ -17,6 +17,11 @@ func (s *Service) memoryCatalog(key string) *pickupCatalog {
 		s.nextCleanup = now.Add(pickupCleanupInterval)
 		go s.cleanupCatalogs(now)
 	}
+	return s.catalogAt(key, now)
+}
+
+// catalogAt вызывается под mu, в том числе перед постановкой холодной загрузки.
+func (s *Service) catalogAt(key string, now time.Time) *pickupCatalog {
 	element := s.catalogs[key]
 	if element == nil {
 		return nil
@@ -81,5 +86,30 @@ func (s *Service) cleanupCatalogs(now time.Time) {
 		if !current.Value.(pickupCacheEntry).catalog.ExpiresAt.After(now) {
 			s.removeCatalog(current)
 		}
+	}
+}
+
+// Redis и разбор большого снимка объединяются отдельно от очередей вызовов магазинов.
+func (s *Service) sharedCacheRead(ctx context.Context, key string) *pickupCatalog {
+	result := s.cacheReads.DoChan(key, func() (any, error) {
+		if cached := s.memoryCatalog(key); cached != nil {
+			return cached, nil
+		}
+		readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.config.QuoteTimeout)
+		defer cancel()
+		catalog := s.readCatalog(readCtx, key)
+		if catalog != nil {
+			s.mu.Lock()
+			s.remember(key, catalog)
+			s.mu.Unlock()
+		}
+		return catalog, nil
+	})
+	select {
+	case <-ctx.Done():
+		return nil
+	case answer := <-result:
+		catalog, _ := answer.Val.(*pickupCatalog)
+		return catalog
 	}
 }

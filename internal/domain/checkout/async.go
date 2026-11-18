@@ -137,6 +137,9 @@ func (c *Checkout) Cancel(now time.Time) (bool, error) {
 
 // ClaimPayment ограждает отмену и фиксирует конкретные заказы до внешнего вызова.
 func (c *Checkout) ClaimPayment(token string, orders map[ids.TenantID]string, now time.Time) error {
+	if c.NeedsConfirmation() {
+		return ErrDeliveryChanged
+	}
 	if c.Status() != StatusAwaitingPayment && c.Status() != StatusPartiallyPaid {
 		return ErrTransition
 	}

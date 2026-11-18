@@ -212,7 +212,14 @@ GET кассы при ошибке показывает HTML со ссылкой
 У каждой группы свой ПВЗ. Отказавшая при расчёте группа не мешает оформлению остальных.
 Несовместимый договор выкатывается одним шагом с короткой остановкой
 (решение владельца 17.11.2026: живых магазинов ещё нет). Переходных версий нет.
-На стенде `kind-proshop-platform`:
+На стенде `kind-proshop-platform` (инструкция оператору; из рабочей сессии кластер не менять):
+
+**Scale 0 выполняется до `helm upgrade`.** В proshop-platform чарт запускает `/migrate up`
+хуком pre-upgrade (`charts/marketplace/templates/migration.yaml`), пока старые pod ещё живы.
+В `proshop-platform/scripts/apps-up.sh`, до первого `helm upgrade` цикла релизов,
+нужно добавить остановку marketplace-web/marketplace-api и ожидание удаления старых pod,
+с сохранением реплик/образов для восстановления. Одного порядка обновления Deployment в Helm
+недостаточно: миграционный hook должен запускаться только после этой остановки.
 
 1. Сохранить текущие числа реплик и образы. Исключить API из публичного Service
    (его текущий selector — `app.kubernetes.io/name=marketplace-api`):
@@ -222,16 +229,18 @@ GET кассы при ошибке показывает HTML со ссылкой
    и дождаться завершения старых pod. Это останавливает HTTP и outbox площадки;
    другие изменения на стенде не выполнять до конца окна.
 2. Проверить оставшиеся покупки чтением PostgreSQL:
-   `SELECT count(*) FROM checkouts c WHERE status IN ('creating_orders','awaiting_payment','partially_paid') AND EXISTS
+   `SELECT c.id FROM checkouts c WHERE status IN ('creating_orders','awaiting_payment','partially_paid') AND EXISTS
    (SELECT 1 FROM checkout_groups g WHERE g.checkout_id=c.id AND g.buyer_delivery>0
    AND COALESCE(NULLIF(g.order_progress->>'LastOrderStatus',''),g.order_progress->>'Status','')
    NOT IN ('paid','shipped','delivered','returned','cancelled'));`.
-   Число на стенде не ограничено бизнес-правилом; его проверяют перед каждым выкатом.
+   Сохранить именно список id для отмены после удаления столбцов, не только число покупок.
 3. При закрытом публичном доступе обновить server (и API, и worker магазина),
    затем marketplace-api, затем marketplace-web. Выполнить dry-run и apply сервера
    `yarn migrate --all` / `yarn migrate --all --apply`; до запуска новой площадки —
-   `migrate up` из её нового образа. Миграции 00058–00059 не ждут занятую таблицу и
-   не переписывают строки; при отказе NOWAIT повторить миграции после завершения транзакций.
+   `migrate up` из её нового образа. Миграция 00058 удаляет старые поля обеих таблиц одной транзакцией,
+   заранее захватив обе таблицы NOWAIT; отказ сохраняет обе прежние схемы.
+   Миграция 00059 создаёт индексы источников ПВЗ CONCURRENTLY.
+   При отказе NOWAIT повторить миграции после завершения транзакций.
    Краткая ACCESS EXCLUSIVE на изменение метаданных неизбежна.
 4. Старые неоплаченные группы `creating_orders`, `awaiting_payment` и `partially_paid`
    с ненулевой доставкой отменить

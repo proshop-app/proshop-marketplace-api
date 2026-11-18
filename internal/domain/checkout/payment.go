@@ -148,7 +148,7 @@ func (c *Checkout) PaymentOrders() map[ids.TenantID]string {
 // reviewComposition требует подтверждения только ещё не оплаченного состава.
 func (c *Checkout) reviewComposition() {
 	c.state.ConfirmedAt = time.Time{}
-	if c.HasPaidGroups() {
+	if c.HasPaidGroups() || c.state.PaymentStarted {
 		c.rollup()
 	} else {
 		c.state.Status = StatusDraft
@@ -177,5 +177,5 @@ func paidStatus(status GroupStatus) bool {
 // Общий статус отражает уже принятые деньги, поэтому не переводится в draft.
 func (c *Checkout) NeedsConfirmation() bool {
 	return c.Status() == StatusDraft ||
-		(c.HasPaidGroups() && c.state.ConfirmedAt.IsZero() && !c.PaymentComplete())
+		((c.HasPaidGroups() || c.state.CartConsumed) && c.state.ConfirmedAt.IsZero() && !c.PaymentComplete())
 }

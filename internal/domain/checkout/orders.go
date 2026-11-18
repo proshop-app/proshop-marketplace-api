@@ -202,9 +202,8 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	}
 	c.rollup()
 
-	if order.Status == GroupCancelled && order.Reason != "payment_expired" && !g.Abandoned &&
-		!c.state.PaymentStarted && !c.HasPaidGroups() {
-		c.state.Status, c.state.ConfirmedAt = StatusDraft, time.Time{}
+	if order.Status == GroupCancelled && from != GroupCancelled && order.Reason != "payment_expired" && !g.Abandoned {
+		c.reviewComposition()
 	}
 
 	return true, c.touch(now)

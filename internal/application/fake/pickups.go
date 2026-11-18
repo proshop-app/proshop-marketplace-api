@@ -115,3 +115,12 @@ func (c *PickupCache) Set(_ context.Context, key string, value []byte, ttl time.
 	c.entries[key] = pickupEntry{value: slices.Clone(value), until: time.Now().Add(ttl)}
 	return nil
 }
+
+// ProfilePoint использует те же фикстуры, но не резерв оформления.
+func (p *PickupLookup) ProfilePoint(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	code, city string,
+) (delivery.PickupPoint, error) {
+	return p.Point(ctx, carrier, code, city)
+}

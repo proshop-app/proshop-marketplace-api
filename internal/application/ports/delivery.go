@@ -26,3 +26,8 @@ type PickupCache interface {
 type PickupLookup interface {
 	Point(context.Context, delivery.Carrier, string, string) (delivery.PickupPoint, error)
 }
+
+// ProfilePickupLookup проверяет пункт профиля без резерва оформления покупки.
+type ProfilePickupLookup interface {
+	ProfilePoint(context.Context, delivery.Carrier, string, string) (delivery.PickupPoint, error)
+}

@@ -1,15 +1,20 @@
 -- +goose Up
--- DROP COLUMN меняет только метаданные, не переписывает строки. Не ждём
--- ACCESS EXCLUSIVE за работающими транзакциями и не создаём очередь писателей:
--- при занятой таблице миграция сразу откатывается, оператор повторяет её позже.
-LOCK TABLE participants IN ACCESS EXCLUSIVE MODE NOWAIT;
+-- Обе таблицы блокируются до первого DROP; отказ NOWAIT откатывает всю миграцию.
+-- Только метаданные, без переписывания строк и ожидания текущих писателей.
+LOCK TABLE participants, checkout_groups IN ACCESS EXCLUSIVE MODE NOWAIT;
 ALTER TABLE participants
     DROP COLUMN IF EXISTS subsidy,
     DROP COLUMN IF EXISTS free_delivery_from;
+ALTER TABLE checkout_groups
+    DROP COLUMN IF EXISTS subsidy,
+    DROP COLUMN IF EXISTS buyer_delivery;
 
 -- +goose Down
--- Удалённые значения невосстановимы; DEFAULT 0 NOT NULL совместим с прежним чтением в int64.
-LOCK TABLE participants IN ACCESS EXCLUSIVE MODE NOWAIT;
+-- Прежний код читает суммы в int64: DEFAULT 0 NOT NULL, без NULL после отката.
+LOCK TABLE participants, checkout_groups IN ACCESS EXCLUSIVE MODE NOWAIT;
 ALTER TABLE participants
     ADD COLUMN IF NOT EXISTS subsidy jsonb,
     ADD COLUMN IF NOT EXISTS free_delivery_from bigint NOT NULL DEFAULT 0 CHECK (free_delivery_from >= 0);
+ALTER TABLE checkout_groups
+    ADD COLUMN IF NOT EXISTS subsidy bigint NOT NULL DEFAULT 0 CHECK (subsidy >= 0),
+    ADD COLUMN IF NOT EXISTS buyer_delivery bigint NOT NULL DEFAULT 0 CHECK (buyer_delivery >= 0);

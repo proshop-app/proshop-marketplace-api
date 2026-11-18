@@ -23,6 +23,8 @@ type Seller struct {
 
 // Repository — хранилище участников.
 type Repository interface {
+	// PickupSources возвращает не больше limit готовых источников службы после курсора.
+	PickupSources(context.Context, string, ids.TenantID, int) ([]ids.TenantID, error)
 	ScanIDs(context.Context, ids.TenantID, int) ([]ids.TenantID, error)
 	SettingsChecked(context.Context, *Participant) error
 	Batch(context.Context, []ids.TenantID) (map[ids.TenantID]*Participant, error)
