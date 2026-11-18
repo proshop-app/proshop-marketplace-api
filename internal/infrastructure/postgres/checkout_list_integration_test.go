@@ -479,28 +479,20 @@ func seedCheckoutList(t *testing.T, uow *postgres.UnitOfWork) []*checkout.Checko
 	return purchases
 }
 
-func TestGroupPickupSnapshotsSurvivePostgres(t *testing.T) {
+func TestPurchasePickupAndIndependentQuotesSurvivePostgres(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	purchase := seedCheckoutList(t, uow)[0]
-	selections := map[ids.TenantID]checkout.Selection{
-		"t1": {Carrier: "cdek", PickupPointCode: "P1", City: "Город", Address: "Адрес 1"},
-		"t2": {Carrier: "yandex", PickupPointCode: "P2", City: "Город", Address: "Адрес 2"},
-	}
-	for tenant, selected := range selections {
-		if err := purchase.SelectDeliveries(
-			selected,
-			map[ids.TenantID]delivery.Quote{
-				tenant: {
-					Status: delivery.QuoteAvailable,
-					Cost:   money.FromKopecks(30000),
-
-					ExpiresAt: at(60),
-				},
-			},
-			at(0),
-		); err != nil {
-			t.Fatal(err)
+	selected := checkout.Selection{Carrier: "cdek", PickupPointCode: "P1", City: "Город", Address: "Адрес"}
+	quotes := map[ids.TenantID]delivery.Quote{}
+	for _, group := range purchase.Groups() {
+		quotes[group.TenantID] = delivery.Quote{
+			Status:    delivery.QuoteAvailable,
+			Cost:      money.FromKopecks(30000),
+			ExpiresAt: at(60),
 		}
+	}
+	if err := purchase.SelectDelivery(selected, quotes, at(0)); err != nil {
+		t.Fatal(err)
 	}
 	if err := uow.Do(
 		context.Background(),

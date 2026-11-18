@@ -25,38 +25,26 @@ func (c *Checkout) SetDeliveryOptions(options, regions map[ids.TenantID][]string
 	return c.touch(now)
 }
 
-// SelectDeliveries атомарно применяет общий ПВЗ выбранным группам покупки.
-func (c *Checkout) SelectDeliveries(
-	selection Selection,
-	quotes map[ids.TenantID]delivery.Quote,
-	now time.Time,
-) error {
-	if c.state.Status != StatusDraft {
-		return ErrNotDraft
-	}
-	for tenant := range quotes {
-		if group := c.group(tenant); group == nil {
-			return ErrNotFound
-		} else if group.Status != "" || group.Abandoned {
-			return ErrSnapshotChanged
+// CommonCarriers — предварительное правило: одна служба должна обслуживать все оставшиеся магазины.
+// Политика собрана здесь; клиент использует результат, не вычисляя своё пересечение.
+func (c *Checkout) CommonCarriers() []string {
+	common := []string{}
+	first := true
+	for _, group := range c.state.Groups {
+		if group.Abandoned {
+			continue
+		}
+		if first {
+			first = false
+			common = append([]string{}, group.Carriers...)
+		} else {
+			common = slices.DeleteFunc(common, func(carrier string) bool {
+				return !slices.Contains(group.Carriers, carrier)
+			})
+		}
+		if len(common) == 0 {
+			return []string{}
 		}
 	}
-	for tenant, quote := range quotes {
-		group := c.group(tenant)
-		selected := selection
-		group.Delivery, group.Quote = &selected, &quote
-	}
-	c.state.Delivery = &selection
-	return c.touch(now)
-}
-
-// Selection возвращает снимок группы; общий выбор нужен для сохранённых ранее покупок.
-func (g Group) Selection(fallback *Selection) *Selection {
-	if g.Delivery != nil {
-		return g.Delivery
-	}
-	if g.Carriers != nil {
-		return nil
-	}
-	return fallback
+	return common
 }

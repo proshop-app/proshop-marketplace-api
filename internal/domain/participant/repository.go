@@ -17,8 +17,9 @@ type Page struct {
 
 // Seller — публичное имя продавца для корзины и заказов.
 type Seller struct {
-	Slug string `json:"slug"`
-	Name string `json:"name"`
+	UnavailableReason string `json:"unavailableReason,omitempty"`
+	Slug              string `json:"slug"`
+	Name              string `json:"name"`
 }
 
 // Repository — хранилище участников.

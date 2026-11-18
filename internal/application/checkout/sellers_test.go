@@ -20,7 +20,8 @@ func TestSellersForResponse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sellers["t1"] == nil || *sellers["t1"] != (participant.Seller{Slug: "shop-one", Name: "Магазин"}) {
+	want := participant.Seller{Slug: "shop-one", Name: "Магазин", UnavailableReason: "delivery_unavailable"}
+	if sellers["t1"] == nil || *sellers["t1"] != want {
 		t.Fatal(sellers)
 	}
 	if sellers["missing"] != nil {

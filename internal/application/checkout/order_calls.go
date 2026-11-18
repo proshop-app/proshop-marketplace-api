@@ -231,8 +231,8 @@ func creationRequest(
 		PromoCode:          group.PromoCode,
 		ExternalCheckoutID: group.ExternalCheckoutID,
 		GroupID:            tenant,
-		Carrier:            string(group.Selection(fallback).Carrier),
-		PickupPointCode:    group.Selection(fallback).PickupPointCode,
+		Carrier:            string(fallback.Carrier),
+		PickupPointCode:    fallback.PickupPointCode,
 		Contact:            contact,
 		DeliveryPrice:      group.DeliveryPrice,
 	}

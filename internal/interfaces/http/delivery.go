@@ -97,7 +97,6 @@ func (h *deliveryHandlers) checkoutPickupPoints(w http.ResponseWriter, r *http.R
 		r.Context(),
 		BuyerID(r.Context()),
 		id,
-		ids.TenantID(r.URL.Query().Get("tenantId")),
 		query,
 	)
 	writePickupArea(w, r, query, result, err)
@@ -105,6 +104,9 @@ func (h *deliveryHandlers) checkoutPickupPoints(w http.ResponseWriter, r *http.R
 
 func pickupQuery(r *http.Request) (appdelivery.PickupQuery, error) {
 	values := r.URL.Query()
+	if values.Has("tenantId") || values.Has("tenantIds") {
+		return appdelivery.PickupQuery{}, ErrInvalidQuery
+	}
 	if len(values["carrier"]) != 1 {
 		return appdelivery.PickupQuery{}, delivery.ErrInvalidCarrier
 	}

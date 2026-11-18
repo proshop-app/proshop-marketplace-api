@@ -61,7 +61,7 @@ func TestCheckoutPickupRegionRefusalIsExplicitHTTPError(t *testing.T) {
 		QuoteTimeout: time.Second,
 	})
 	handler := deliveryHandlers{directory: directory}
-	request := httptest.NewRequest(http.MethodGet, "/?carrier=cdek&city=Москва&tenantId=t1", nil)
+	request := httptest.NewRequest(http.MethodGet, "/?carrier=cdek&city=Москва", nil)
 	request.SetPathValue("checkoutId", string(checkoutID))
 	response := httptest.NewRecorder()
 	handler.checkoutPickupPoints(response, withBuyer(request, buyerID))

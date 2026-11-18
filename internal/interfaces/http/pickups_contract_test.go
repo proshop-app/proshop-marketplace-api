@@ -219,7 +219,7 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 	})
 	for _, offset := range []int{0, 200} {
 		response := httptest.NewRecorder()
-		query := "/?carrier=cdek&city=Город&tenantId=t1&limit=200&offset=" + strconv.Itoa(offset)
+		query := "/?carrier=cdek&city=Город&limit=200&offset=" + strconv.Itoa(offset)
 		request := httptest.NewRequest(http.MethodGet, query, nil)
 		request.SetPathValue("checkoutId", string(id))
 		request = request.WithContext(context.WithValue(request.Context(), keyBuyer, owner))
@@ -229,14 +229,14 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 			Total int
 		}
 		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != http.StatusOK ||
-			len(body.Items) != 200 || body.Total != len(points) || body.Items[0].Code != strconv.Itoa(offset) {
+			len(body.Items) != 200 || body.Total != len(points)+1 || body.Items[0].Code != strconv.Itoa(offset) {
 			t.Fatal(response.Code, body, err)
 		}
 	}
 	for _, query := range []string{
-		"/?carrier=cdek&city=Город&tenantId=t1&bbox=54,36,56,38",
-		"/?carrier=cdek&city=Город&tenantId=t1&bbox=0,0,1,1",
-		"/?carrier=cdek&city=Город&tenantId=t2&bbox=54,36,56,38",
+		"/?carrier=cdek&city=Город&bbox=54,36,56,38",
+		"/?carrier=cdek&city=Город&bbox=0,0,1,1",
+		"/?carrier=cdek&city=Город&bbox=54,36,56,38",
 	} {
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, query, nil)
@@ -252,12 +252,8 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 			t.Fatal(response.Code, response.Body, err)
 		}
 		switch {
-		case strings.Contains(query, "tenantId=t2"):
-			if body.Total != 1 || len(body.Items) != 1 || body.Items[0].RegionCode != "RU-MOS" || body.RefineArea {
-				t.Fatal("пункты другого региона группы", body)
-			}
 		case strings.Contains(query, "bbox=54"):
-			if body.Total != len(points) || len(body.Items) != delivery.PickupMapLimit || !body.RefineArea {
+			if body.Total != len(points)+1 || len(body.Items) != delivery.PickupMapLimit || !body.RefineArea {
 				t.Fatal(body.Total, len(body.Items), body.RefineArea)
 			}
 		case body.Total != 0 || len(body.Items) != 0:

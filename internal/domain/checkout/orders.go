@@ -299,10 +299,6 @@ func cloneState(state State) State {
 			g.Carriers = append([]string{}, g.Carriers...)
 		}
 		g.Regions = append([]string(nil), g.Regions...)
-		if g.Delivery != nil {
-			selection := *g.Delivery
-			g.Delivery = &selection
-		}
 		g.Tracking = cloneTracking(g.Tracking)
 		g.CurrentPrices = append([]PriceChange(nil), g.CurrentPrices...)
 		g.ReturnRemaining = append([]Line(nil), g.ReturnRemaining...)

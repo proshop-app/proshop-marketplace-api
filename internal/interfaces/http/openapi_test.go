@@ -185,7 +185,8 @@ func TestOpenAPIOrderSeller(t *testing.T) {
 		t.Fatal(types)
 	}
 	properties := seller["properties"].(map[string]any)
-	if len(properties) != 2 || properties["slug"] == nil || properties["name"] == nil {
+	complete := properties["slug"] != nil && properties["name"] != nil && properties["unavailableReason"] != nil
+	if len(properties) != 3 || !complete {
 		t.Fatal(properties)
 	}
 }

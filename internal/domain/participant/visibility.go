@@ -18,3 +18,17 @@ func VisibilityOf(p *Participant, tenant *Tenant) Visibility {
 
 	return Visibility{Visible: visible, CheckoutAvailable: visible}
 }
+
+// SellerOf сохраняет имя скрытого продавца в корзине и объясняет недоступность без нового запроса.
+func SellerOf(p *Participant, tenant *Tenant) *Seller {
+	if p == nil {
+		return nil
+	}
+	result := &Seller{Slug: p.Slug(), Name: p.Name()}
+	if !p.DeliveryValid() {
+		result.UnavailableReason = "delivery_unavailable"
+	} else if !VisibilityOf(p, tenant).CheckoutAvailable {
+		result.UnavailableReason = "seller_unavailable"
+	}
+	return result
+}

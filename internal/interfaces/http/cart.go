@@ -165,7 +165,12 @@ func (h *cartHandlers) respond(w http.ResponseWriter, r *http.Request, state car
 		return
 	}
 	for i := range body.Lines {
-		body.Lines[i].Seller = sellers[ids.TenantID(body.Lines[i].TenantID)]
+		seller := sellers[ids.TenantID(body.Lines[i].TenantID)]
+		body.Lines[i].Seller = seller
+		if seller != nil && seller.UnavailableReason != "" {
+			issue := string(cart.IssueUnavailable)
+			body.Lines[i].Issue = &issue
+		}
 	}
 	writeJSON(w, http.StatusOK, body)
 }

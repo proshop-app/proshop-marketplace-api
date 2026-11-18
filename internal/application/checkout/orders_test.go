@@ -8,6 +8,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -197,7 +198,7 @@ func TestDeliveryThresholdsAndRegions(t *testing.T) {
 	ctx := context.Background()
 	c, _ := e.service.Create(ctx, buyerID, key)
 	quoted, err := e.service.Quote(ctx, buyerID, c.ID, "cdek", "MSK1", "Город")
-	if err != nil || quoted.Groups[0].Quote.Reason != "pickup_point_unavailable" {
+	if err != nil || quoted.Groups[0].Quote.Reason != delivery.ReasonRegionNotAllowed {
 		t.Fatalf("регион: %+v %v", quoted, err)
 	}
 }

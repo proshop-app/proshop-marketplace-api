@@ -36,6 +36,7 @@ type Check struct {
 
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
+	Cities                 *appbuyer.Cities
 	DatabaseBudgets        ports.DatabaseBudgets
 	RequestTimeout         time.Duration
 	ReferenceImportTimeout time.Duration
@@ -84,6 +85,7 @@ type healthJSON struct {
 // routes — все маршруты маркетплейса. Та же таблица сверяется с
 // api/openapi.yaml в тестах: маршрут без описания — красный тест.
 func routes(deps Deps) []route {
+	cities := &cityHandlers{service: deps.Cities, trustedProxies: deps.TrustedProxies}
 	promotion := &promotionHandlers{service: deps.Promotion, trustedProxies: deps.TrustedProxies}
 	machine := func(next http.HandlerFunc) http.HandlerFunc { return serverAPI(deps.ServerAPIToken, next) }
 	moderation := &moderationHandlers{service: deps.Moderation}
@@ -115,6 +117,8 @@ func routes(deps Deps) []route {
 	metrics := func(w http.ResponseWriter, r *http.Request) { deps.Metrics.ServeHTTP(w, r) }
 
 	return []route{
+		{readRequest, "GET", "/api/v1/city", cities.detect},
+		{readRequest, "GET", "/api/v1/delivery/cities", cities.suggest},
 		{readRequest, http.MethodGet, "/api/v1/buyer/profile", privateBuyer(signedIn(features.profile))},
 		{
 			ingestionRequest,

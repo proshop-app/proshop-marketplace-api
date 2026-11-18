@@ -88,6 +88,9 @@ func TestSellerResponsesBatchAndNull(t *testing.T) {
 		t.Fatal(response.Body.String())
 	}
 	assertSellerJSON(t, body.Lines[0]["seller"], "shop-one", "Магазин")
+	if string(body.Lines[0]["issue"]) != `"unavailable"` {
+		t.Fatal("скрытый магазин должен быть недоступен без добавочного чтения", response.Body)
+	}
 	if string(body.Lines[2]["seller"]) != "null" || uow.calls != 1 || uow.tenants != 2 {
 		t.Fatal(response.Body.String(), uow.calls, uow.tenants)
 	}
@@ -159,7 +162,8 @@ func assertSellerJSON(t *testing.T, raw json.RawMessage, slug, name string) {
 	if err := json.Unmarshal(raw, &seller); err != nil {
 		t.Fatal(err)
 	}
-	if len(seller) != 2 || seller["slug"] != slug || seller["name"] != name {
+	if len(seller) != 3 || seller["unavailableReason"] != "delivery_unavailable" ||
+		seller["slug"] != slug || seller["name"] != name {
 		t.Fatal(string(raw))
 	}
 }

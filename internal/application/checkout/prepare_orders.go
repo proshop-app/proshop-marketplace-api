@@ -86,7 +86,7 @@ func (s *Service) groupQuotes(
 	fallback *checkout.Selection,
 ) map[ids.TenantID]delivery.Quote {
 	return s.quoteSelections(ctx, buyerID, groups, func(g checkout.Group) *checkout.Selection {
-		return g.Selection(fallback)
+		return fallback
 	},
 	)
 }
