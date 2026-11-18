@@ -1,0 +1,42 @@
+{
+  "cdek": {
+    "available": true,
+    "total": 1,
+    "nextCursor": null,
+    "items": [
+      {
+        "carrier": "cdek",
+        "code": "MOS4",
+        "name": "СДЭК",
+        "address": "ул. Островитянова, 11",
+        "city": "Москва",
+        "regionCode": "RU-MOW",
+        "location": {
+          "lat": 55.641193,
+          "lon": 37.501681
+        },
+        "schedule": "Пн-Пт 10:00-20:00, Сб-Вс 10:00-18:00"
+      }
+    ]
+  },
+  "yandex": {
+    "available": true,
+    "total": 1,
+    "nextCursor": null,
+    "items": [
+      {
+        "carrier": "yandex",
+        "code": "0198602de4a6749aba12e151bdf4caaa",
+        "name": "Яндекс Доставка",
+        "address": "Москва, Пролетарский проспект, 19",
+        "city": "Москва",
+        "regionCode": "RU-MOW",
+        "location": {
+          "lat": 55.666624,
+          "lon": 37.51573
+        },
+        "schedule": ""
+      }
+    ]
+  }
+}

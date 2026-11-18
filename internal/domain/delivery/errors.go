@@ -3,6 +3,12 @@ package delivery
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrRegionNotAllowed отличает область доставки магазина от пустого справочника перевозчика.
+	ErrRegionNotAllowed = errs.New(
+		errs.Invalid,
+		"delivery.region_not_allowed",
+		"магазин не доставляет в регион выбранного города",
+	)
 	// ErrInvalidCarrier — код перевозчика не по формату.
 	ErrInvalidCarrier = errs.New(errs.Invalid, "delivery.invalid_carrier", "некорректный перевозчик")
 	// ErrUnknownCarrier — перевозчик не подключён.

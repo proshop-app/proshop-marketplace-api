@@ -139,7 +139,7 @@ func (s *Service) catalogue(
 		class = ports.PlatformCheckout
 	}
 	ctx = ports.WithPlatformCallClass(ctx, class)
-	key := "v3:" + string(carrier) + ":" + strings.ToLower(city)
+	key := "v4:" + string(carrier) + ":" + strings.ToLower(city)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -291,6 +291,9 @@ func (s *Service) QueryFor(
 	}
 	if regions == nil {
 		regions = catalog.index.Regions()
+	}
+	if len(catalog.Points) > 0 && !catalog.index.SupportsRegions(regions) {
+		return delivery.PickupArea{}, delivery.ErrRegionNotAllowed
 	}
 	if box != nil {
 		return catalog.index.Area(*box, regions), nil

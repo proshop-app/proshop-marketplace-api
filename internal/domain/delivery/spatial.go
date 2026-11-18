@@ -194,3 +194,13 @@ func (i *PickupIndex) Regions() []string {
 	slices.Sort(regions)
 	return regions
 }
+
+// SupportsRegions проверяет пересечение по готовым региональным спискам, не обходя пункты города.
+func (i *PickupIndex) SupportsRegions(regions []string) bool {
+	for _, region := range regions {
+		if len(i.regions[region]) > 0 {
+			return true
+		}
+	}
+	return false
+}
