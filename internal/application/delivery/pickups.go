@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"sync"
@@ -32,7 +33,7 @@ const (
 	pickupFailureTTL        = 5 * time.Second
 )
 
-// ErrSellerUnreachable — все опрошенные магазины недоступны.
+// ErrSellerUnreachable — источник не ответил, успешного справочника нет.
 var ErrSellerUnreachable = errs.New(errs.Unavailable, "seller_unreachable", "магазины не ответили")
 
 // Config ограничивает нагрузку и время ожидания магазинов.
@@ -222,6 +223,9 @@ func (s *Service) load(
 	if f.err == nil {
 		f.catalog, f.err = s.fetchCatalog(ctx, key, carrier, city)
 	}
+	if errors.Is(f.err, context.DeadlineExceeded) {
+		f.err = ErrSellerUnreachable.Wrap(f.err)
+	}
 	if f.err != nil && f.catalog == nil {
 		f.catalog = &pickupCatalog{Failed: true, ExpiresAt: time.Now().Add(pickupFailureTTL)}
 		if encoded, err := json.Marshal(f.catalog); err == nil {
@@ -338,7 +342,7 @@ func (s *Service) fetch(
 			break
 		}
 		attempted++
-		callCtx, cancel := context.WithTimeout(ctx, s.config.QuoteTimeout)
+		callCtx, cancel := context.WithTimeout(ctx, ports.PickupCatalogBudget(s.config.QuoteTimeout))
 		if ports.PlatformClassFromContext(ctx) != ports.PlatformCheckout {
 			callCtx = ports.WithPlatformCallClass(callCtx, ports.PlatformCatalog)
 		}
@@ -355,7 +359,7 @@ func (s *Service) fetch(
 			return answer.Items, nil
 		}
 	}
-	if attempted > 0 && failed == attempted {
+	if failed > 0 {
 		return nil, ErrSellerUnreachable
 	}
 	return []delivery.PickupPoint{}, nil

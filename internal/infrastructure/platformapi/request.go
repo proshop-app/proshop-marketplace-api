@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -37,6 +38,9 @@ func (c *Client) newRequest(
 	}
 	request.Header.Set(HeaderToken, c.token)
 	request.Header.Set("Accept", "application/json")
+	if deadline, ok := ctx.Deadline(); ok {
+		request.Header.Set(HeaderDeadline, strconv.FormatInt(deadline.UnixMilli(), 10))
+	}
 	if payload != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}

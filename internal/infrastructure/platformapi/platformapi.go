@@ -27,6 +27,8 @@ import (
 const (
 	// HeaderToken — заголовок служебного токена, как у сервера.
 	HeaderToken = "x-internal-token"
+	// HeaderDeadline — абсолютный срок вызова, Unix миллисекунды; сервер расходует оставшееся время.
+	HeaderDeadline = "x-marketplace-deadline-ms"
 
 	// codeMarketplaceDisabled — код отказа сервера для магазина, который не участвует в маркетплейсе.
 	codeMarketplaceDisabled = "MARKETPLACE_DISABLED"

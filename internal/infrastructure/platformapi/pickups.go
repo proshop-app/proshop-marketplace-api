@@ -21,6 +21,13 @@ func (c *Client) PickupPoints(
 	carrier delivery.Carrier,
 	city string,
 ) (ports.PickupPoints, error) {
+	// Только справочник имеет длинный срок. Остальные HTTP-вызовы сохраняют общий потолок клиента.
+	ctx, cancel := context.WithTimeout(ctx, ports.PickupCatalogBudget(c.http.Timeout))
+	defer cancel()
+	client := *c
+	transport := *c.http
+	transport.Timeout = 0 // Срок всего листания задан контекстом, а не отдельной страницы.
+	client.http = &transport
 	query := url.Values{"carrier": {string(carrier)}, "city": {city}}
 	var collected ports.PickupPoints
 	seen := make(map[string]bool)
@@ -28,7 +35,7 @@ func (c *Client) PickupPoints(
 	for {
 		var answer ports.PickupPoints
 		path := "/delivery/pickup-points?" + query.Encode()
-		if err := c.call(ctx, http.MethodGet, tenant, path, nil, &answer); err != nil {
+		if err := client.call(ctx, http.MethodGet, tenant, path, nil, &answer); err != nil {
 			var refusal *ports.OrderRefusal
 			if errors.As(err, &refusal) && refusal.Code == "MARKETPLACE_PICKUP_CATALOG_CHANGED" &&
 				restarts < pickupCatalogRestartLimit {

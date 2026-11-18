@@ -1,6 +1,9 @@
 package ports
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // PlatformCallClass выбирается сценарием, независимо от имени операции сервера.
 type PlatformCallClass uint8
@@ -23,4 +26,9 @@ func WithPlatformCallClass(ctx context.Context, class PlatformCallClass) context
 func PlatformClassFromContext(ctx context.Context) PlatformCallClass {
 	class, _ := ctx.Value(platformClassKey{}).(PlatformCallClass)
 	return class
+}
+
+// PickupCatalogBudget оставляет по бюджету на определение города и список перевозчика.
+func PickupCatalogBudget(stage time.Duration) time.Duration {
+	return 2 * stage
 }

@@ -121,16 +121,16 @@ func (c *Client) PickupPoints(
 	city string,
 ) (ports.PickupPoints, error) {
 	ctx = context.WithValue(ctx, tenantContextKey{}, ids.TenantID(""))
-	class := catalogClass
+	class := pickupCatalogClass
 	if ports.PlatformClassFromContext(ctx) == ports.PlatformCheckout {
-		class = checkoutCatalogClass
+		class = pickupSelectionClass
 	}
 	return call(
 		ctx,
 		c,
 		class,
 		"pickup_points",
-		c.cfg.StrictTimeout,
+		ports.PickupCatalogBudget(c.cfg.StrictTimeout),
 		func(ctx context.Context) (ports.PickupPoints, error) {
 			answer, err := c.upstream.PickupPoints(ctx, tenant, carrier, city)
 			if err == nil {
