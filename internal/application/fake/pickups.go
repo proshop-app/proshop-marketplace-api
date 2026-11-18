@@ -38,6 +38,7 @@ type PickupLookup struct {
 // Point проверяет код по заданному списку.
 func (p *PickupLookup) Point(
 	_ context.Context,
+	_ ids.UUID,
 	carrier delivery.Carrier,
 	code, city string,
 ) (delivery.PickupPoint, error) {
@@ -122,5 +123,5 @@ func (p *PickupLookup) ProfilePoint(
 	carrier delivery.Carrier,
 	code, city string,
 ) (delivery.PickupPoint, error) {
-	return p.Point(ctx, carrier, code, city)
+	return p.Point(ctx, "", carrier, code, city)
 }

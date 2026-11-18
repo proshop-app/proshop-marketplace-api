@@ -176,6 +176,11 @@ func paidStatus(status GroupStatus) bool {
 // NeedsConfirmation сохраняет требование согласия на новый состав после частичной оплаты.
 // Общий статус отражает уже принятые деньги, поэтому не переводится в draft.
 func (c *Checkout) NeedsConfirmation() bool {
-	return c.Status() == StatusDraft ||
-		((c.HasPaidGroups() || c.state.CartConsumed) && c.state.ConfirmedAt.IsZero() && !c.PaymentComplete())
+	return c.Status() == StatusDraft || c.NeedsOrderConfirmation()
+}
+
+// NeedsOrderConfirmation требует согласия на изменившийся состав уже начатой покупки.
+// Неизвестный исход оплаты сохраняет заказы, даже если оплаченных групп пока нет.
+func (c *Checkout) NeedsOrderConfirmation() bool {
+	return (c.HasPaidGroups() || c.state.CartConsumed) && c.state.ConfirmedAt.IsZero() && !c.PaymentComplete()
 }

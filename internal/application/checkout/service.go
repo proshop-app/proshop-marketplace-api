@@ -256,7 +256,7 @@ func (s *Service) selectDelivery(
 		return c.State(), err
 	}
 
-	point, err := s.points.Point(ctx, carrier, pointCode, city)
+	point, err := s.points.Point(ctx, buyerID, carrier, pointCode, city)
 	if err != nil {
 		return checkout.State{}, err
 	}
@@ -317,7 +317,7 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 	if reviewChanged {
 		return reviewed, checkout.ErrDeliveryChanged
 	}
-	if c.HasPaidGroups() {
+	if c.NeedsOrderConfirmation() {
 		return s.retrySelection(ctx, buyerID, checkoutID, nil, func(current *checkout.Checkout, now time.Time) error {
 			return current.Confirm(now)
 		})

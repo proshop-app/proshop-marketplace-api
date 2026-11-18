@@ -14,6 +14,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/identity"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -31,13 +32,6 @@ const (
 	pickupFailureTTL        = 5 * time.Second
 )
 
-type pickupPurpose uint8
-
-const (
-	pickupMap pickupPurpose = iota
-	pickupSelection
-)
-
 // ErrSellerUnreachable — все опрошенные магазины недоступны.
 var ErrSellerUnreachable = errs.New(errs.Unavailable, "seller_unreachable", "магазины не ответили")
 
@@ -50,22 +44,23 @@ type Config struct {
 
 // Service объединяет одновременные промахи одного ключа в пределах процесса.
 type Service struct {
-	uow           ports.UnitOfWork
-	platform      ports.PlatformAPI
-	cache         ports.PickupCache
-	config        Config
-	mu            sync.Mutex
-	flights       map[string]*flight
-	catalogs      map[string]*list.Element
-	lru           list.List
-	cleanupCursor *list.Element
-	nextCleanup   time.Time
-	checkoutLoads chan struct{}
-	cacheBytes    int
-	loads         chan struct{}
-	sourceMu      sync.Mutex
-	sources       map[delivery.Carrier]ids.TenantID
-	cacheReads    singleflight.Group
+	uow             ports.UnitOfWork
+	platform        ports.PlatformAPI
+	cache           ports.PickupCache
+	config          Config
+	mu              sync.Mutex
+	flights         map[string]*flight
+	selectionOwners map[ids.UUID]*flight
+	catalogs        map[string]*list.Element
+	lru             list.List
+	cleanupCursor   *list.Element
+	nextCleanup     time.Time
+	checkoutLoads   chan struct{}
+	cacheBytes      int
+	loads           chan struct{}
+	sourceMu        sync.Mutex
+	sources         map[delivery.Carrier]ids.TenantID
+	cacheReads      singleflight.Group
 }
 
 type pickupCatalog struct {
@@ -82,6 +77,7 @@ type pickupCacheEntry struct {
 }
 
 type flight struct {
+	owners  []ids.UUID
 	cancel  context.CancelFunc
 	done    chan struct{}
 	catalog *pickupCatalog
@@ -91,15 +87,16 @@ type flight struct {
 // NewService собирает поиск пунктов и общий кэш.
 func NewService(uow ports.UnitOfWork, platform ports.PlatformAPI, cache ports.PickupCache, cfg Config) *Service {
 	return &Service{
-		uow:           uow,
-		platform:      platform,
-		cache:         cache,
-		config:        cfg,
-		flights:       make(map[string]*flight),
-		catalogs:      make(map[string]*list.Element),
-		loads:         make(chan struct{}, pickupLoadLimit),
-		checkoutLoads: make(chan struct{}, pickupCheckoutLoadLimit),
-		sources:       make(map[delivery.Carrier]ids.TenantID),
+		uow:             uow,
+		platform:        platform,
+		cache:           cache,
+		config:          cfg,
+		flights:         make(map[string]*flight),
+		selectionOwners: make(map[ids.UUID]*flight),
+		catalogs:        make(map[string]*list.Element),
+		loads:           make(chan struct{}, pickupLoadLimit),
+		checkoutLoads:   make(chan struct{}, pickupCheckoutLoadLimit),
+		sources:         make(map[delivery.Carrier]ids.TenantID),
 	}
 }
 
@@ -116,7 +113,7 @@ func (s *Service) Carriers() []delivery.CarrierInfo {
 
 // Search возвращает первый успешный список; отказ службы позволяет перейти к следующему магазину.
 func (s *Service) Search(ctx context.Context, carrier delivery.Carrier, city string) ([]delivery.PickupPoint, error) {
-	catalog, err := s.catalogue(ctx, carrier, city, pickupMap)
+	catalog, err := s.catalogue(ctx, carrier, city, "")
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +124,7 @@ func (s *Service) catalogue(
 	ctx context.Context,
 	carrier delivery.Carrier,
 	city string,
-	purpose pickupPurpose,
+	buyerID ids.UUID,
 ) (*pickupCatalog, error) {
 	if !slices.ContainsFunc(s.Carriers(), func(item delivery.CarrierInfo) bool { return item.Code == carrier }) {
 		return nil, delivery.ErrInvalidCarrier
@@ -137,7 +134,7 @@ func (s *Service) catalogue(
 		return nil, err
 	}
 	class := ports.PlatformCatalog
-	if purpose == pickupSelection {
+	if buyerID != "" {
 		class = ports.PlatformCheckout
 	}
 	ctx = ports.WithPlatformCallClass(ctx, class)
@@ -157,7 +154,7 @@ func (s *Service) catalogue(
 	}
 	pool := s.loads
 	flightKey := key
-	if purpose == pickupSelection {
+	if buyerID != "" {
 		pool = s.checkoutLoads
 		flightKey = "checkout:" + key
 	}
@@ -168,6 +165,13 @@ func (s *Service) catalogue(
 		return cached, catalogueError(cached)
 	}
 	f, ok := s.flights[flightKey]
+	// Лимит закреплён за загрузкой: уход HTTP-запроса не открывает покупателю следующий холодный город.
+	if buyerID != "" {
+		if active := s.selectionOwners[buyerID]; active != nil && active != f {
+			s.mu.Unlock()
+			return nil, delivery.ErrSelectionBusy
+		}
+	}
 	if !ok {
 		queued := 0
 		for running := range s.flights {
@@ -185,6 +189,10 @@ func (s *Service) catalogue(
 		f = &flight{done: make(chan struct{}), cancel: cancel}
 		s.flights[flightKey] = f
 		go s.load(loadCtx, key, flightKey, carrier, city, f, pool)
+	}
+	if buyerID != "" && s.selectionOwners[buyerID] == nil {
+		s.selectionOwners[buyerID] = f
+		f.owners = append(f.owners, buyerID)
 	}
 	s.mu.Unlock()
 
@@ -231,6 +239,9 @@ func (s *Service) load(
 	if s.flights[flightKey] == f {
 		delete(s.flights, flightKey)
 	}
+	for _, owner := range f.owners {
+		delete(s.selectionOwners, owner)
+	}
 	close(f.done)
 	s.mu.Unlock()
 }
@@ -270,7 +281,7 @@ func (s *Service) QueryFor(
 	box *delivery.Bounds,
 	offset, limit int,
 ) (delivery.PickupArea, error) {
-	catalog, err := s.catalogue(ctx, carrier, city, pickupMap)
+	catalog, err := s.catalogue(ctx, carrier, city, "")
 	if err != nil {
 		return delivery.PickupArea{}, err
 	}
@@ -284,10 +295,10 @@ func (s *Service) QueryFor(
 }
 
 func (s *Service) candidates(ctx context.Context, carrier delivery.Carrier) ([]ids.TenantID, error) {
-	// Курсор меняется вместе с ограниченным чтением; параллельные города не выбирают одну первую тройку.
+	// База не вызывается под замком: медленная карта не задерживает проверку выбранного ПВЗ.
 	s.sourceMu.Lock()
-	defer s.sourceMu.Unlock()
 	after := s.sources[carrier]
+	s.sourceMu.Unlock()
 	var tenants []ids.TenantID
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
@@ -304,7 +315,12 @@ func (s *Service) candidates(ctx context.Context, carrier delivery.Carrier) ([]i
 		return err
 	})
 	if err == nil && len(tenants) > 0 {
-		s.sources[carrier] = tenants[0]
+		s.sourceMu.Lock()
+		// Запоздавший ответ не откатывает уже продвинутый курсор.
+		if s.sources[carrier] == after {
+			s.sources[carrier] = tenants[0]
+		}
+		s.sourceMu.Unlock()
 	}
 	return tenants, err
 }
@@ -348,10 +364,14 @@ func (s *Service) fetch(
 // Point проверяет код по списку выбранной службы в городе.
 func (s *Service) Point(
 	ctx context.Context,
+	buyerID ids.UUID,
 	carrier delivery.Carrier,
 	code, city string,
 ) (delivery.PickupPoint, error) {
-	return s.lookupPoint(ctx, carrier, code, city, pickupSelection)
+	if buyerID == "" {
+		return delivery.PickupPoint{}, identity.ErrUnauthorized
+	}
+	return s.lookupPoint(ctx, carrier, code, city, buyerID)
 }
 
 // ProfilePoint использует общий пул карты: профиль не занимает резерв выбора ПВЗ покупки.
@@ -360,16 +380,16 @@ func (s *Service) ProfilePoint(
 	carrier delivery.Carrier,
 	code, city string,
 ) (delivery.PickupPoint, error) {
-	return s.lookupPoint(ctx, carrier, code, city, pickupMap)
+	return s.lookupPoint(ctx, carrier, code, city, "")
 }
 
 func (s *Service) lookupPoint(
 	ctx context.Context,
 	carrier delivery.Carrier,
 	code, city string,
-	purpose pickupPurpose,
+	buyerID ids.UUID,
 ) (delivery.PickupPoint, error) {
-	catalog, err := s.catalogue(ctx, carrier, city, purpose)
+	catalog, err := s.catalogue(ctx, carrier, city, buyerID)
 	if err != nil {
 		return delivery.PickupPoint{}, err
 	}

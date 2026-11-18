@@ -65,7 +65,7 @@ func TestRedisWarmCatalogAndPickupSurviveColdCityStorm(t *testing.T) {
 			Limit:   100,
 		},
 	)
-	_, pointErr := replica2.Point(context.Background(), "cdek", "P1", "Город")
+	_, pointErr := replica2.Point(context.Background(), "buyer", "cdek", "P1", "Город")
 	t.Logf(
 		"город в общем кэше, реплика 2 под штормом: карта=%v; Point=%v",
 		warmErr,
@@ -180,7 +180,7 @@ func TestColdPickupSelectionHasReservedCapacityDuringAnonymousStorm(t *testing.T
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	point, err := service.Point(ctx, "cdek", "P1", "Город")
+	point, err := service.Point(ctx, "buyer", "cdek", "P1", "Город")
 	if err != nil || point.Code != "P1" || started.Load() > 4 {
 		t.Fatal(point, err, started.Load())
 	}

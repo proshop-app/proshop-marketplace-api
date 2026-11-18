@@ -15,4 +15,6 @@ var (
 	ErrInvalidCity = errs.New(errs.Invalid, "delivery.invalid_city", "city — от 1 до 120 символов")
 	// ErrInvalidQuote — ответ магазина о доставке не проходит проверку.
 	ErrInvalidQuote = errs.New(errs.Invalid, "delivery.invalid_quote", "некорректный расчёт доставки")
+	// ErrSelectionBusy — покупатель уже проверяет ПВЗ в другом холодном справочнике.
+	ErrSelectionBusy = errs.New(errs.TooManyRequests, "delivery.selection_busy", "дождитесь проверки выбранного ПВЗ")
 )

@@ -60,7 +60,7 @@ func testMapLeavesPointReserve(t *testing.T, kind string) {
 	victim, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	start := time.Now()
-	_, pointErr := e.pickups.Point(victim, "cdek", "MSK1", "Холодный город покупателя Б")
+	_, pointErr := e.pickups.Point(victim, "buyer-b", "cdek", "MSK1", "Холодный город покупателя Б")
 	t.Logf(
 		"после 40 запросов карты оформления одного покупателя: Point покупателя Б=%v за "+
 			"%s; вызовов магазинов=%d",

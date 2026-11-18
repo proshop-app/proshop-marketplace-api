@@ -417,7 +417,7 @@ func (c *Checkout) Confirm(now time.Time) error {
 	}
 
 	c.state.ConfirmedAt = now
-	if c.HasPaidGroups() {
+	if c.HasPaidGroups() || c.Status() != StatusDraft {
 		c.rollup()
 	} else {
 		c.state.Status = StatusConfirmed
