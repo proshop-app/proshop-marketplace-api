@@ -108,8 +108,10 @@ func TestUnavailableLimitAndEmpty(t *testing.T) {
 	if len(platform.PickupCalls()) != 2 {
 		t.Fatal("отказ должен кэшироваться кратко")
 	}
+	service, platform, _ = setup(t, 3)
+	platform.SetPickupPoints("t1", ports.PickupPoints{Available: true})
 	points, err := service.Search(context.Background(), "yandex", "Город")
-	if err != nil || len(points) != 0 || len(platform.PickupCalls()) != 2 {
+	if err != nil || len(points) != 0 || len(platform.PickupCalls()) != 1 {
 		t.Fatal(points, err)
 	}
 }

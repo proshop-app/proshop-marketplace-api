@@ -39,6 +39,24 @@ WHERE c.id IN (
 );
 UPDATE checkout_groups SET order_progress = order_progress - 'Delivery'
 WHERE order_progress ? 'Delivery';
+-- Неисполненные группы старых черновиков больше не содержат редактируемый выбор служб.
+-- Реальное подключение каждой службы повторно проверяет магазин при расчёте.
+UPDATE checkout_groups g
+SET order_progress = jsonb_set(order_progress, '{Carriers}', '["cdek","yandex"]'::jsonb)
+FROM checkouts c
+WHERE c.id = g.checkout_id AND c.status = 'draft' AND c.carrier IS NULL;
+
+-- Новый обязательный состав интеграций проверяется штатной сверкой до открытия трафика.
+INSERT INTO outbox (kind, tenant_id, dedup_key, payload, next_at, created_at)
+ SELECT 'participant.settings.sync', tenant_id, 'participant.settings.sync:' || tenant_id,
+ jsonb_build_object('tenantId', tenant_id), now(), now() FROM participants
+ ON CONFLICT (dedup_key) WHERE done_at IS NULL AND attempts = 0 DO NOTHING;
+
+-- Службы обязательны всем: источник зависит от видимости, а не сохранённого выбора службы.
+DROP INDEX IF EXISTS participants_pickup_cdek;
+DROP INDEX IF EXISTS participants_pickup_yandex;
+CREATE INDEX participants_pickup_visible ON participants (tenant_id)
+    WHERE stage = 'connected' AND enabled AND delivery_valid;
 
 -- +goose Down
 -- Миграция данных необратима по решению владельца: повторный выбор возможен на новом приложении.

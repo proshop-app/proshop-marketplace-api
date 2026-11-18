@@ -138,7 +138,7 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 
 	purchase := checkout.Restore(state)
 	out := checkoutJSON{
-		Carriers:             purchase.CommonCarriers(),
+		Carriers:             supportedCarrierCodes(),
 		PaymentStarted:       state.PaymentStarted,
 		ConfirmationRequired: purchase.NeedsConfirmation(),
 		ID:                   string(state.ID),
@@ -468,4 +468,12 @@ func checkoutLinesResponse(source []checkout.Line) ([]checkoutLineJSON, money.Mo
 	}
 
 	return lines, total, nil
+}
+
+func supportedCarrierCodes() []string {
+	result := []string{}
+	for _, carrier := range delivery.Carriers() {
+		result = append(result, string(carrier.Code))
+	}
+	return result
 }

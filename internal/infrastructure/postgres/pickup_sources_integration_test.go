@@ -28,13 +28,12 @@ const seedPickupParticipants = `INSERT INTO participants
 const explainPickupSourcePage = `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
     SELECT p.tenant_id FROM participants p JOIN tenants t ON t.tenant_id = p.tenant_id
     WHERE p.stage = 'connected' AND p.enabled AND p.delivery_valid AND t.status = 'active'
-    AND (p.delivery_settings->'carriers') ? 'cdek' AND p.tenant_id > 't00004'
+    AND p.tenant_id > 't00004'
     ORDER BY p.tenant_id LIMIT 1`
 
 const disablePickupSource = `UPDATE participants SET enabled = false, stage = 'disconnected' WHERE tenant_id = 't00005'`
 const suspendPickupSource = `UPDATE tenants SET status = 'suspended' WHERE tenant_id = 't00006'`
-const disconnectPickupSource = `UPDATE participants SET delivery_settings =
-    '{"regions":["RU-MOW"],"carriers":["yandex"]}'::jsonb WHERE tenant_id = 't00007'`
+const disconnectPickupSource = `UPDATE participants SET delivery_valid = false WHERE tenant_id = 't00007'`
 
 const invalidDeliveryPickupSource = `UPDATE participants SET delivery_valid = false WHERE tenant_id = 't00008'`
 
@@ -86,8 +85,8 @@ func testPickupSourcePage(t *testing.T, shops int) {
 	if err := pool.QueryRow(ctx, explainPickupSourcePage).Scan(&plan); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(plan), "participants_pickup_cdek") {
-		t.Fatal("план не использует частичный индекс службы", string(plan))
+	if !strings.Contains(string(plan), "participants_pickup_visible") {
+		t.Fatal("план не использует частичный индекс видимых магазинов", string(plan))
 	}
 	var pretty bytes.Buffer
 	if err := json.Compact(&pretty, plan); err != nil {

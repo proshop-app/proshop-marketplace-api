@@ -24,27 +24,3 @@ func (c *Checkout) SetDeliveryOptions(options, regions map[ids.TenantID][]string
 	}
 	return c.touch(now)
 }
-
-// CommonCarriers — предварительное правило: одна служба должна обслуживать все оставшиеся магазины.
-// Политика собрана здесь; клиент использует результат, не вычисляя своё пересечение.
-func (c *Checkout) CommonCarriers() []string {
-	common := []string{}
-	first := true
-	for _, group := range c.state.Groups {
-		if group.Abandoned {
-			continue
-		}
-		if first {
-			first = false
-			common = append([]string{}, group.Carriers...)
-		} else {
-			common = slices.DeleteFunc(common, func(carrier string) bool {
-				return !slices.Contains(group.Carriers, carrier)
-			})
-		}
-		if len(common) == 0 {
-			return []string{}
-		}
-	}
-	return common
-}

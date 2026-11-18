@@ -97,6 +97,8 @@ func TestPickupPublicContract(t *testing.T) {
 		!strings.Contains(response.Body.String(), "seller_unreachable") {
 		t.Fatal(response.Code, response.Body)
 	}
+	platform.Fail("t1", nil)
+	platform.SetPickupPoints("t1", ports.PickupPoints{Available: true})
 	response = httptest.NewRecorder()
 	handler.pickupPoints(response, httptest.NewRequest(http.MethodGet, "/?carrier=yandex&city=Город", nil))
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"total":0`) {

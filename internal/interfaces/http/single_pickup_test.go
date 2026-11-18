@@ -79,7 +79,8 @@ func TestQuoteResponseHasOnePurchasePickupAndIndependentShopDurations(t *testing
 			Carriers []string                     `json:"carriers"`
 		}
 		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != 200 ||
-			body.Delivery.PickupPointCode != "p1" || len(body.Groups) != 2 || len(body.Carriers) != 1 {
+			body.Delivery.PickupPointCode != "p1" || len(body.Groups) != 2 ||
+			len(body.Carriers) != len(delivery.Carriers()) {
 			t.Fatal(response.Code, response.Body, err)
 		}
 		for _, group := range body.Groups {

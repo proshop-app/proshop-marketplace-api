@@ -103,13 +103,7 @@ func NewService(uow ports.UnitOfWork, platform ports.PlatformAPI, cache ports.Pi
 
 // Carriers — службы, поддерживаемые контрактом настроек магазинов.
 func (s *Service) Carriers() []delivery.CarrierInfo {
-	return []delivery.CarrierInfo{
-		{Code: "cdek", Name: "СДЭК"},
-		{
-			Code: "yandex",
-			Name: "Яндекс Доставка",
-		},
-	}
+	return delivery.Carriers()
 }
 
 // Search возвращает первый успешный список; отказ службы позволяет перейти к следующему магазину.

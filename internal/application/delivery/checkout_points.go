@@ -2,7 +2,6 @@ package delivery
 
 import (
 	"context"
-	"slices"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -50,12 +49,7 @@ func (s *Service) CheckoutPoints(
 		if group.Abandoned {
 			continue
 		}
-		if slices.Contains(group.Carriers, string(query.Carrier)) {
-			regions = append(regions, group.Regions...)
-		}
-	}
-	if !slices.Contains(purchase.CommonCarriers(), string(query.Carrier)) {
-		return delivery.PickupArea{}, checkout.ErrDeliveryUnavailable
+		regions = append(regions, group.Regions...)
 	}
 	return s.QueryFor(ctx, query.Carrier, query.City, regions, query.Bounds, query.Offset, query.Limit)
 }
