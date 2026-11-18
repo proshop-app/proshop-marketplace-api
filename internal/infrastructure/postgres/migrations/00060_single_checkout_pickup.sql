@@ -59,5 +59,5 @@ CREATE INDEX participants_pickup_visible ON participants (tenant_id)
     WHERE stage = 'connected' AND enabled AND delivery_valid;
 
 -- +goose Down
--- Миграция данных необратима по решению владельца: повторный выбор возможен на новом приложении.
-SELECT 1;
+-- Данные не восстанавливаем; снимаем DDL, чтобы повторный Up после технического Down был безопасен.
+DROP INDEX IF EXISTS participants_pickup_visible;

@@ -134,7 +134,12 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 	if err := postgres.Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	assertValidIndex(t, pool, test.name)
+	index := test.name
+	if test.version == 59 {
+		// Единый перечень служб заменяет оба прежних индекса одним индексом видимости.
+		index = "participants_pickup_visible"
+	}
+	assertValidIndex(t, pool, index)
 	for _, index := range []string{
 		"outbox_pending_due_idx",
 		"outbox_pending_tenant_due_idx",
@@ -152,13 +157,13 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 	}
 	if test.version == 59 {
 		var original, repeated uint32
-		if err := pool.QueryRow(ctx, preservedPickupIndexOID, test.name).Scan(&original); err != nil {
+		if err := pool.QueryRow(ctx, preservedPickupIndexOID, index).Scan(&original); err != nil {
 			t.Fatal(err)
 		}
 		if err := postgres.Migrate(ctx, pool); err != nil {
 			t.Fatal(err)
 		}
-		err := pool.QueryRow(ctx, preservedPickupIndexOID, test.name).Scan(&repeated)
+		err := pool.QueryRow(ctx, preservedPickupIndexOID, index).Scan(&repeated)
 		if err != nil || original != repeated {
 			t.Fatal("повтор перестроил valid-индекс", test.name, original, repeated, err)
 		}

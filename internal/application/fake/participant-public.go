@@ -73,15 +73,18 @@ func (r participants) PickupSources(
 	after ids.TenantID,
 	limit int,
 ) ([]ids.TenantID, error) {
+	if !slices.ContainsFunc(delivery.Carriers(), func(item delivery.CarrierInfo) bool {
+		return string(item.Code) == carrier
+	}) {
+		return nil, delivery.ErrInvalidCarrier
+	}
 	keys, err := r.PublicTenants(ctx, nil, after, len(r.d.participants))
 	if err != nil {
 		return nil, err
 	}
 	result := []ids.TenantID{}
 	for _, key := range keys {
-		if r.d.participants[key].Enabled && slices.ContainsFunc(delivery.Carriers(), func(item delivery.CarrierInfo) bool {
-			return string(item.Code) == carrier
-		}) {
+		if r.d.participants[key].Enabled {
 			result = append(result, key)
 			if len(result) == limit {
 				break
