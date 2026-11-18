@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -27,11 +28,13 @@ import (
 )
 
 type pickupCheckoutServer struct {
-	mu       sync.Mutex
-	tariffs  map[string]money.Money
-	platform *fake.Platform
-	quote    delivery.Offered
-	points   ports.PickupPoints
+	mu             sync.Mutex
+	tariffs        map[string]money.Money
+	platform       *fake.Platform
+	quote          delivery.Offered
+	points         ports.PickupPoints
+	redispatch     bool
+	dispatchReview *ports.DispatchReview
 }
 
 func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +73,16 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 		result = answer
 	case strings.HasSuffix(r.URL.Path, "/delivery/quote"):
-		result = s.quote
+		var body struct{ DispatchReview *ports.DispatchReview }
+		err = json.NewDecoder(r.Body).Decode(&body)
+		s.mu.Lock()
+		answer := s.quote
+		if s.redispatch && tenant == "t1" && body.DispatchReview != nil {
+			s.dispatchReview = body.DispatchReview
+			answer.MinDays, answer.MaxDays = 7, 9
+		}
+		s.mu.Unlock()
+		result = answer
 	case strings.HasSuffix(r.URL.Path, "/orders/cancel-by-checkout"):
 		var body ports.CancelOrderRequest
 		err = json.NewDecoder(r.Body).Decode(&body)
@@ -90,6 +102,18 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			result = map[string]string{"status": "paid"}
 		}
 	case strings.HasSuffix(r.URL.Path, "/orders"):
+		s.mu.Lock()
+		blocked := s.redispatch && tenant == "t1" && s.dispatchReview == nil
+		s.mu.Unlock()
+		if blocked {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code": checkout.DispatchOriginChanged,
+				"data": map[string]any{"dispatchReviewRevision": 3},
+			})
+			return
+		}
 		var body ports.CreateOrderRequest
 		err = json.NewDecoder(r.Body).Decode(&body)
 		if err == nil {
@@ -123,14 +147,14 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
 func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
-	for _, action := range []string{"pay", "cancel"} {
+	for _, action := range []string{"pay", "cancel", "redispatch"} {
 		t.Run(action, func(t *testing.T) {
 			ctx := context.Background()
 			now := time.Date(2026, 10, 24, 10, 0, 0, 0, time.UTC)
 			buyer := ids.UUID("00000000-0000-4000-8000-000000000002")
 			store, backend := fake.NewStore(), fake.NewPlatform()
 			backend.OrderNow = now
-			upstream := &pickupCheckoutServer{platform: backend}
+			upstream := &pickupCheckoutServer{platform: backend, redispatch: action == "redispatch"}
 			readPickupFixture(t, "delivery_quote_available.json", &upstream.quote)
 			readPickupFixture(t, "pickups.json", &upstream.points)
 			server := httptest.NewServer(upstream)
@@ -256,6 +280,32 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			runPickupTasks(t, store, service, now)
+			if action == "redispatch" {
+				review, err := service.Get(ctx, buyer, state.ID)
+				if err != nil || review.Status != checkout.StatusDraft || backend.OrderCount() != 1 {
+					t.Fatal("нужно новое подтверждение без потери здорового заказа", review, err)
+				}
+				for _, group := range review.Groups {
+					if group.TenantID == "t1" && (group.Status != checkout.GroupDeliveryRequoted ||
+						group.Reason != checkout.DispatchOriginChanged || group.Quote.MinDays != 7 ||
+						group.Quote.MaxDays != 9 || !group.DeliveryPrice.IsZero() || group.Excluded()) {
+						t.Fatal(group)
+					}
+				}
+				upstream.mu.Lock()
+				recalculation := upstream.dispatchReview
+				upstream.mu.Unlock()
+				if recalculation == nil || recalculation.Revision != 3 || recalculation.GroupID != "t1" {
+					t.Fatal("HTTP-пересчёт не подтвердил сохранённое поколение отказа", recalculation)
+				}
+				if _, err := service.Confirm(ctx, buyer, state.ID); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := service.CreateOrders(ctx, buyer, state.ID, contact); err != nil {
+					t.Fatal(err)
+				}
+				runPickupTasks(t, store, service, now)
+			}
 			if _, err := service.CreateOrders(ctx, buyer, state.ID, contact); err != nil || backend.OrderCount() != 2 {
 				t.Fatal("повтор изменил число заказов", err, backend.OrderCount())
 			}
@@ -279,7 +329,7 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 				}
 			}
 			upstream.mu.Unlock()
-			if action == "pay" {
+			if action != "cancel" {
 				if err := service.ConfirmPayment(ctx, buyer, state.ID); err != nil {
 					t.Fatal(err)
 				}
@@ -333,6 +383,8 @@ func runPickupTasks(t *testing.T, store *fake.Store, service *appcheckout.Servic
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Сначала здоровая группа: её заказ должен пережить пересчёт другой группы.
+	sort.Slice(tasks, func(i, j int) bool { return tasks[i].TenantID > tasks[j].TenantID })
 	for _, task := range tasks {
 		if err := service.HandleOrderTask(context.Background(), task); err != nil {
 			t.Fatal(err)
