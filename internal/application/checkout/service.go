@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -187,7 +188,7 @@ func (s *Service) Get(ctx context.Context, buyerID, checkoutID ids.UUID) (checko
 		return checkout.State{}, err
 	}
 
-	return c.State(), nil
+	return s.paymentView(ctx, c)
 }
 
 // Quote выбирает пункт выдачи и спрашивает расчёт у каждого продавца
@@ -269,7 +270,11 @@ func (s *Service) selectDelivery(
 
 	for _, g := range groups {
 		if g.Status != "" {
-			return c.State(), checkout.ErrSnapshotChanged
+			selected := g.Selection(c.Delivery())
+			if g.Status != checkout.GroupDeliveryRequoted || selected == nil || selected.Carrier != carrier ||
+				selected.PickupPointCode != pointCode || !strings.EqualFold(selected.City, strings.TrimSpace(city)) {
+				return c.State(), checkout.ErrSnapshotChanged
+			}
 		}
 	}
 	point, err := s.points.Point(ctx, carrier, pointCode, city)
@@ -287,12 +292,27 @@ func (s *Service) selectDelivery(
 	quotes := s.quote(ctx, buyerID, groups, selection)
 
 	choose := func(c *checkout.Checkout, now time.Time) error {
+		if len(groups) == 1 && groups[0].Status == checkout.GroupDeliveryRequoted {
+			if selected := groups[0].Selection(c.Delivery()); selected == nil || *selected != selection {
+				return checkout.ErrSnapshotChanged
+			}
+			return c.ApplyDispatchQuote(groups[0].TenantID, quotes[groups[0].TenantID], now)
+		}
 		if targets != nil {
 			return c.SelectDeliveries(selection, quotes, now)
 		}
 		return c.SelectDelivery(selection, quotes, now)
 	}
-	return s.retrySelection(ctx, buyerID, checkoutID, saveBuyerPickup, choose)
+	after := func(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
+		if err := saveBuyerPickup(ctx, tx, c); err != nil {
+			return err
+		}
+		if err := s.enqueueCancellations(ctx, tx, c); err != nil {
+			return err
+		}
+		return s.returnItems(ctx, tx, c)
+	}
+	return s.retrySelection(ctx, buyerID, checkoutID, after, choose)
 }
 
 // Confirm перепроверяет цены и наличие у магазинов, пересчитывает
@@ -494,7 +514,16 @@ func (s *Service) quoteGroup(
 		items = append(items, ports.ItemRequest{ProductID: line.Offer.Product, Quantity: line.Quantity})
 	}
 
+	var review *ports.DispatchReview
+	if group.Status == checkout.GroupDeliveryRequoted && group.DispatchReviewRevision > 0 {
+		review = &ports.DispatchReview{
+			ExternalCheckoutID: group.ExternalCheckoutID,
+			GroupID:            group.TenantID,
+			Revision:           group.DispatchReviewRevision,
+		}
+	}
 	offered, err := s.platform.QuoteDelivery(callCtx, group.TenantID, ports.QuoteRequest{
+		DispatchReview:  review,
 		BuyerID:         buyerID,
 		Carrier:         selection.Carrier,
 		PickupPointCode: selection.PickupPointCode,

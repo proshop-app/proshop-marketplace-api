@@ -30,7 +30,7 @@ func (c *Checkout) ReviewGroups(reasons map[ids.TenantID]string, now time.Time) 
 	for i := range c.state.Groups {
 		g := &c.state.Groups[i]
 		reason, found := reasons[g.TenantID]
-		if !found || g.Excluded() || g.Paid() {
+		if !found || g.Excluded() || g.Paid() || PaymentHoldReason(reason) {
 			continue
 		}
 		g.Quote = &delivery.Quote{Status: delivery.QuoteUnavailable, Reason: reason, ExpiresAt: now}

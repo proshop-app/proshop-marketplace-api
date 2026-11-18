@@ -35,8 +35,16 @@ type ItemCheck struct {
 	Available int
 }
 
+// DispatchReview подтверждает конкретный пересчёт после сохранённого отказа магазина.
+type DispatchReview struct {
+	ExternalCheckoutID string       `json:"externalCheckoutId"`
+	GroupID            ids.TenantID `json:"groupId"`
+	Revision           int          `json:"revision"`
+}
+
 // QuoteRequest — расчёт доставки заказа продавца до пункта выдачи.
 type QuoteRequest struct {
+	DispatchReview  *DispatchReview
 	BuyerID         ids.UUID
 	Carrier         delivery.Carrier
 	PickupPointCode string

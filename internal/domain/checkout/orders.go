@@ -22,6 +22,8 @@ const (
 	GroupRejected              GroupStatus = "rejected"
 	// GroupCreating — команда создания ещё не завершена.
 	GroupCreating GroupStatus = "creating_order"
+	// GroupDeliveryRequoted ждёт согласия после смены склада отправки.
+	GroupDeliveryRequoted GroupStatus = "delivery_requoted"
 	// GroupCreationExpired сохраняет состав после конца ожидания до явного решения покупателя.
 	GroupCreationExpired GroupStatus = "creation_expired"
 	// GroupUnconfirmed — срок подтверждения магазина истёк.

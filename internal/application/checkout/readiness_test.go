@@ -108,7 +108,12 @@ func TestReadinessBeforeOrdersAndPayment(t *testing.T) {
 				default:
 					_, err = e.service.CreateOrders(ctx, buyerID, state.ID, orderContact)
 				}
-				if !errors.Is(err, checkout.ErrDeliveryChanged) {
+				expected := checkout.ErrDeliveryChanged
+				if (phase == "payment" || phase == "payment_confirm") &&
+					(condition == "unpublished" || condition == "card_hidden") {
+					expected = checkout.ErrPaymentPaused
+				}
+				if !errors.Is(err, expected) {
 					t.Fatal(err)
 				}
 			},

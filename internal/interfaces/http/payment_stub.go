@@ -43,9 +43,9 @@ func (h *checkoutHandlers) pay(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, checkout.ErrNotFound)
 		return
 	}
-	_, err = h.checkouts.Pay(r.Context(), BuyerID(r.Context()), id)
+	state, err := h.checkouts.Pay(r.Context(), BuyerID(r.Context()), id)
 	if err != nil {
-		writeError(w, r, err)
+		h.respond(w, r, http.StatusOK, state, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"url": "/api/v1/payment-stub/" + string(id)})

@@ -7,6 +7,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -43,20 +44,67 @@ func (s *Service) unready(ctx context.Context, groups []checkout.Group) (map[ids
 		if err != nil {
 			return err
 		}
-		ready := make(map[ids.OfferID]bool, len(states))
+		unavailable := make(map[ids.OfferID]string, len(states))
 		for _, state := range states {
 			visibility := participant.VisibilityOf(state.Participant, state.Tenant)
 			seller := catalog.Seller{Visible: visibility.Visible, CheckoutAvailable: visibility.CheckoutAvailable}
 			offer := catalog.ComposeOffer(state.Product, state.Signals, seller, state.Verdict)
-			ready[offer.ID] = offer.CheckoutAvailable
+			unavailable[offer.ID] = ""
+			if !offer.CheckoutAvailable {
+				unavailable[offer.ID] = unavailableReason(state, visibility.CheckoutAvailable)
+			}
 		}
-		for _, key := range keys {
-			if !ready[key] {
-				reasons[key.Tenant] = delivery.ReasonSellerNotReady
+		for _, group := range groups {
+			if group.Excluded() || group.Paid() {
+				continue
+			}
+			for _, line := range group.Lines {
+				reason, found := unavailable[line.Offer]
+				if found && reason == "" {
+					continue
+				}
+				if !found {
+					reason = delivery.ReasonSellerNotReady
+				}
+				if group.OrderID == "" || group.EffectiveStatus() != checkout.GroupAwaitingPayment ||
+					!checkout.PaymentHoldReason(reason) {
+					reasons[group.TenantID] = delivery.ReasonSellerNotReady
+					break
+				}
+				reasons[group.TenantID] = reason
 			}
 		}
 		return nil
 	},
 	)
 	return reasons, err
+}
+
+// Временное отсутствие карточки не отменяет уже созданный неоплаченный заказ.
+func unavailableReason(state ports.OfferState, sellerReady bool) string {
+	if state.Product == nil || !sellerReady ||
+		(state.Verdict != nil && state.Verdict.State().Status == moderation.Rejected) {
+		return delivery.ReasonSellerNotReady
+	}
+	product := state.Product.State()
+	if product.Deleted {
+		return delivery.ReasonSellerNotReady
+	}
+	if state.Verdict != nil && state.Verdict.State().Status == moderation.Pending {
+		return checkout.HoldModerationPending
+	}
+	if !product.Card.Visible || !product.Card.Publication.Published {
+		return checkout.HoldPublicationPaused
+	}
+	return delivery.ReasonSellerNotReady
+}
+
+func (s *Service) paymentView(ctx context.Context, c *checkout.Checkout) (checkout.State, error) {
+	for _, group := range c.Groups() {
+		if group.OrderID != "" && group.EffectiveStatus() == checkout.GroupAwaitingPayment {
+			reasons, err := s.unready(ctx, c.Groups())
+			return c.PaymentView(reasons, s.clock.Now()), err
+		}
+	}
+	return c.State(), nil
 }

@@ -48,9 +48,13 @@ type Line struct {
 
 // Group — заказ одного продавца в покупке.
 type Group struct {
-	Delivery *Selection
-	Carriers []string
-	Regions  []string
+	// DispatchReviewRevision связывает новый расчёт с сохранённым отказом попытки магазина.
+	DispatchReviewRevision int
+	// PaymentHold — текущая причина приостановки; вычисляется при чтении, не сохраняет решение модерации.
+	PaymentHold string `json:"-"`
+	Delivery    *Selection
+	Carriers    []string
+	Regions     []string
 	// CreationDeadline фиксирует обещанный срок и не продлевается повтором команды.
 	CreationDeadline time.Time
 	// Abandoned запрещает позднему ответу повторно открыть оплату после отказа покупателя или срока.

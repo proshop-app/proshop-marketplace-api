@@ -74,6 +74,18 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		answer, failed = s.platform.CreateOrder(callCtx, tenant, request)
 	}
 	cancel()
+	var refusal *ports.OrderRefusal
+	if errors.As(failed, &refusal) && refusal.Code == checkout.DispatchOriginChanged {
+		return s.reviewDispatch(
+			ctx,
+			buyerID,
+			id,
+			group,
+			token,
+			refusal.DispatchReviewRevision,
+			state.Delivery,
+		)
+	}
 	// Полученный orderId сохраняем даже при остановке процесса, но ограничиваем время завершения.
 	saveCtx := ctx
 	if failed == nil {

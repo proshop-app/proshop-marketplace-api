@@ -182,8 +182,8 @@ func TestReadingCashierDoesNotChangePurchaseOrScheduleCancellation(t *testing.T)
 	if len(e.platform.CancellationRequests("t1")) != 0 {
 		t.Fatal("GET поставил отмену")
 	}
-	if _, err := e.service.Pay(ctx, buyerID, purchase.ID); !errors.Is(err, checkout.ErrDeliveryChanged) {
-		t.Fatal("POST должен проверить готовность", err)
+	if _, err := e.service.Pay(ctx, buyerID, purchase.ID); !errors.Is(err, checkout.ErrPaymentPaused) {
+		t.Fatal("POST должен приостановить оплату", err)
 	}
 }
 

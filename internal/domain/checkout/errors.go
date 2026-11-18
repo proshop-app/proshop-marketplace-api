@@ -3,6 +3,12 @@ package checkout
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrPaymentPaused сохраняет состав и заказ до восстановления товара или срока оплаты.
+	ErrPaymentPaused = errs.New(
+		errs.Conflict,
+		"checkout.payment_paused",
+		"товар временно недоступен; дождитесь восстановления или срока оплаты",
+	)
 	// ErrInvalidGroups — запрос содержит повтор магазина.
 	ErrInvalidGroups = errs.New(errs.Invalid, "checkout.invalid_groups", "магазины покупки не должны повторяться")
 	// ErrPaymentExpired — срок оплаты хотя бы одного ожидающего заказа истёк.

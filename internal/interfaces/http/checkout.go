@@ -42,6 +42,7 @@ type quoteJSON struct {
 }
 
 type checkoutGroupJSON struct {
+	PaymentHold               string               `json:"paymentHold,omitempty"`
 	Delivery                  *selectionJSON       `json:"delivery"`
 	Regions                   []string             `json:"regions"`
 	Carriers                  []string             `json:"carriers"`
@@ -176,6 +177,7 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 			OrderID:                   group.OrderID,
 			DeliveryPrice:             rubles(group.DeliveryPrice.Kopecks()),
 			Reason:                    group.Reason,
+			PaymentHold:               group.PaymentHold,
 			Tracking:                  trackingResponse(group.Tracking),
 			ReturnFailed:              group.ReturnFailed,
 			ReturnReason:              group.ReturnReason,
@@ -299,7 +301,7 @@ func (h *checkoutHandlers) respond(
 	err error,
 ) {
 	if err != nil {
-		if errors.Is(err, checkout.ErrDeliveryChanged) {
+		if errors.Is(err, checkout.ErrDeliveryChanged) || errors.Is(err, checkout.ErrPaymentPaused) {
 			body, encodeErr := h.responseBody(r, state)
 			if encodeErr != nil {
 				writeError(w, r, encodeErr)

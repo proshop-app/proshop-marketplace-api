@@ -3125,6 +3125,8 @@ paths:
       description: >-
         Только владелец; creationComplete=true. Без PAYMENT_STUB — 503 checkout.payment_unavailable.
         Проверяется now < expiresAt всех ожидающих групп; истёкший срок — 409 checkout.payment_expired.
+        Pending или временное снятие публикации сохраняет заказ и срок; оплата приостановлена
+        с 409 checkout.payment_paused и актуальной покупкой до возвращения товара.
         Нечего оплачивать (включая уже оплаченную покупку) — 409 checkout.transition.
         Истёкшее окно создания сохраняет группу в составе до явной команды покупателя;
         группа с заказом при сбое опроса учитывается по последнему известному статусу.
@@ -7959,6 +7961,10 @@ components:
           $ref: '#/components/schemas/OrderTracking'
         tenantId:
           type: string
+        paymentHold:
+          type: string
+          enum: [moderation_pending, publication_paused]
+          description: Текущая проверка товара приостанавливает оплату до восстановления или expiresAt, не меняя состав.
         status:
           type: string
           description: cancellation_requested — отказ покупателя; cancelled — отмена подтверждена магазином.
@@ -7966,6 +7972,7 @@ components:
           - ''
           - creating_order
           - creation_expired
+          - delivery_requoted
           - unconfirmed
           - cancellation_requested
           - rejected
@@ -8767,6 +8774,10 @@ components:
           $ref: '#/components/schemas/OrderTracking'
         tenantId:
           type: string
+        paymentHold:
+          type: string
+          enum: [moderation_pending, publication_paused]
+          description: Текущая проверка товара приостанавливает оплату до восстановления или expiresAt, не меняя состав.
         status:
           type: string
           description: cancellation_requested — отказ покупателя; cancelled — отмена подтверждена магазином.
@@ -8774,6 +8785,7 @@ components:
           - ''
           - creating_order
           - creation_expired
+          - delivery_requoted
           - unconfirmed
           - cancellation_requested
           - rejected

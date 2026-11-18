@@ -23,6 +23,9 @@ func (c *Checkout) PaymentAmount() (money.Money, error) {
 		if g.OrderID == "" {
 			return money.Money{}, ErrTransition
 		}
+		if g.PaymentHold != "" {
+			return money.Money{}, ErrPaymentPaused
+		}
 		amount, err := g.Goods.Add(g.DeliveryPrice)
 		if err != nil {
 			return money.Money{}, err

@@ -15,31 +15,46 @@ import (
 
 // Payment проверяет владельца раньше флага, чтобы не раскрывать чужую покупку.
 func (s *Service) Payment(ctx context.Context, buyerID, id ids.UUID) (checkout.State, error) {
-	state, err := s.Get(ctx, buyerID, id)
+	c, err := s.paymentCheckout(ctx, buyerID, id)
 	if err != nil {
-		return state, err
+		if c != nil {
+			return c.State(), err
+		}
+		return checkout.State{}, err
+	}
+	return s.paymentView(ctx, c)
+}
+
+func (s *Service) paymentCheckout(ctx context.Context, buyerID, id ids.UUID) (*checkout.Checkout, error) {
+	c, err := s.load(ctx, buyerID, id)
+	if err != nil {
+		return nil, err
 	}
 	if !s.config.PaymentStub {
-		return state, checkout.ErrPaymentUnavailable
+		return c, checkout.ErrPaymentUnavailable
 	}
-	return state, checkout.Restore(state).CheckPaymentWindow(s.clock.Now())
+	return c, c.CheckPaymentWindow(s.clock.Now())
 }
 
 func (s *Service) preparePayment(ctx context.Context, buyerID, id ids.UUID) (checkout.State, error) {
-	state, err := s.Payment(ctx, buyerID, id)
+	c, err := s.paymentCheckout(ctx, buyerID, id)
 	if err != nil {
-		return state, err
-	}
-	if !checkout.Restore(state).PaymentComplete() {
-		reviewed, changed, err := s.reviewReadiness(ctx, checkout.Restore(state))
-		if err != nil {
-			return reviewed, err
+		if c != nil {
+			return c.State(), err
 		}
-		if changed {
-			return reviewed, checkout.ErrDeliveryChanged
-		}
+		return checkout.State{}, err
 	}
-	return state, nil
+	if c.PaymentComplete() {
+		return c.State(), nil
+	}
+	reviewed, changed, err := s.reviewReadiness(ctx, c)
+	if err != nil {
+		return reviewed, err
+	}
+	if changed {
+		return reviewed, checkout.ErrDeliveryChanged
+	}
+	return reviewed, nil
 }
 
 // Pay открывает одну кассу для всех ожидающих групп.

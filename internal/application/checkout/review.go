@@ -14,8 +14,12 @@ func (s *Service) reviewReadiness(
 	c *checkout.Checkout,
 ) (checkout.State, bool, error) {
 	reasons, err := s.unready(ctx, c.Groups())
-	if err != nil || len(reasons) == 0 {
-		return c.State(), false, err
+	final := false
+	for _, reason := range reasons {
+		final = final || !checkout.PaymentHoldReason(reason)
+	}
+	if err != nil || !final {
+		return c.PaymentView(reasons, s.clock.Now()), false, err
 	}
 	expected := c.State().Version
 	changed := false
@@ -34,5 +38,5 @@ func (s *Service) reviewReadiness(
 		return err
 	}
 	state, err := s.updateSelection(ctx, c.BuyerID(), c.ID(), after, mutate)
-	return state, changed, err
+	return checkout.Restore(state).PaymentView(reasons, s.clock.Now()), changed, err
 }

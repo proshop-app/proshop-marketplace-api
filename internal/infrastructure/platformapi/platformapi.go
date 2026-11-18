@@ -84,7 +84,8 @@ type quoteJSON struct {
 // errorJSON — тело отказа сервера: {"ok":false,"message","status","code","items","data"}.
 type errorJSON struct {
 	Data *struct {
-		PromoCode *promoCodeJSON `json:"promoCode"`
+		PromoCode              *promoCodeJSON `json:"promoCode"`
+		DispatchReviewRevision int            `json:"dispatchReviewRevision"`
 	} `json:"data"`
 	Code   string `json:"code"`
 	Reason string `json:"reason"`
@@ -147,6 +148,10 @@ func (c *Client) QuoteDelivery(
 
 	if request.BuyerID != "" {
 		body["buyerId"] = request.BuyerID
+	}
+
+	if request.DispatchReview != nil {
+		body["dispatchReview"] = request.DispatchReview
 	}
 
 	var answer quoteJSON
@@ -344,8 +349,17 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
 		case reply.StatusCode == http.StatusConflict && body.Code == "MARKETPLACE_PICKUP_CATALOG_CHANGED":
 			return &ports.PickupCatalogFailure{Cause: &ports.OrderRefusal{Code: body.Code}}
+		case reply.StatusCode == http.StatusConflict && body.Code == checkout.DispatchOriginChanged:
+			if body.Data == nil || body.Data.DispatchReviewRevision <= 0 {
+				return ErrInvalidResponse
+			}
+			return &ports.OrderRefusal{
+				Code:                   body.Code,
+				DispatchReviewRevision: body.Data.DispatchReviewRevision,
+			}
 		case reply.StatusCode == http.StatusConflict && (body.Code == "DELIVERY_UNAVAILABLE" ||
-			body.Code == "DELIVERY_CHANGED" || body.Code == "OUT_OF_STOCK" ||
+			body.Code == "DELIVERY_CHANGED" ||
+			body.Code == "OUT_OF_STOCK" ||
 			body.Code == "IDEMPOTENCY_CONFLICT" || body.Code == "ORDER_CHECKOUT_CANCELLED"):
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
 		case reply.StatusCode == http.StatusNotFound && body.Code == "ORDER_NOT_FOUND":
