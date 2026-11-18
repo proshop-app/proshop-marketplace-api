@@ -12,11 +12,11 @@ func (c *Checkout) RemoveGroup(tenant ids.TenantID, now time.Time) (bool, error)
 	if g == nil {
 		return false, ErrNotFound
 	}
-	if c.state.PaymentStarted || g.Paid() || c.PaymentComplete() {
-		return false, ErrTransition
-	}
 	if g.Abandoned {
 		return false, nil
+	}
+	if c.state.PaymentStarted || g.Paid() || c.PaymentComplete() {
+		return false, ErrTransition
 	}
 	g.ReconciliationRequired = !g.CancellationConfirmed &&
 		(g.OrderID != "" || g.CreateToken != "" || g.CreateFailures > 0)
@@ -28,7 +28,7 @@ func (c *Checkout) RemoveGroup(tenant ids.TenantID, now time.Time) (bool, error)
 	if !c.state.CartConsumed {
 		g.CartReturned = true
 	}
-	c.state.Status, c.state.ConfirmedAt = StatusDraft, time.Time{}
+	c.reviewComposition()
 	remaining := false
 	for _, group := range c.state.Groups {
 		remaining = remaining || !group.Excluded()

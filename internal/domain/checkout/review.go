@@ -9,9 +9,9 @@ import (
 
 // Excluded отличает окончательно снятую группу от временно недоступного продавца.
 func (g Group) Excluded() bool {
-	return g.Abandoned || g.CreateExhausted || g.Returnable() ||
+	return !g.Paid() && (g.Abandoned || g.CreateExhausted || g.Returnable() ||
 		(g.Quote != nil && g.Quote.Status == delivery.QuoteUnavailable &&
-			g.Quote.Reason != delivery.ReasonSellerUnreachable)
+			g.Quote.Reason != delivery.ReasonSellerUnreachable))
 }
 
 // QuotePending требует повтора, сохраняя группу в подтверждаемом составе.
@@ -23,7 +23,7 @@ func (g Group) QuotePending() bool {
 // ReviewGroups снимает окончательно недоступные группы и требует нового согласия.
 // Уже созданные заказы остальных продавцов сохраняются с прежними ключами.
 func (c *Checkout) ReviewGroups(reasons map[ids.TenantID]string, now time.Time) (bool, error) {
-	if c.state.PaymentStarted || c.Status() == StatusPaid {
+	if c.state.PaymentStarted {
 		return false, ErrTransition
 	}
 	changed := false
@@ -45,16 +45,16 @@ func (c *Checkout) ReviewGroups(reasons map[ids.TenantID]string, now time.Time) 
 	if !changed {
 		return false, nil
 	}
-	c.state.Status, c.state.ConfirmedAt = StatusDraft, time.Time{}
+	c.reviewComposition()
 	return true, c.touch(now)
 }
 
 // DeliveryChanged сравнивает обещание покупателю; продление TTL само по себе не меняет его.
 func (g Group) DeliveryChanged(q delivery.Quote) bool {
 	if g.Quote == nil {
-		return q.Status != delivery.QuoteAvailable || q.BuyerCost != g.DeliveryPrice
+		return q.Status != delivery.QuoteAvailable
 	}
 	old := g.Quote
-	return old.Status != q.Status || old.BuyerCost != q.BuyerCost ||
+	return old.Status != q.Status ||
 		old.MinDays != q.MinDays || old.MaxDays != q.MaxDays
 }

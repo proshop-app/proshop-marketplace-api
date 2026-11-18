@@ -182,8 +182,8 @@ func TestReadingCashierDoesNotChangePurchaseOrScheduleCancellation(t *testing.T)
 	if len(e.platform.CancellationRequests("t1")) != 0 {
 		t.Fatal("GET поставил отмену")
 	}
-	if _, err := e.service.Pay(ctx, buyerID, purchase.ID); !errors.Is(err, checkout.ErrPaymentPaused) {
-		t.Fatal("POST должен приостановить оплату", err)
+	if state, err := e.service.Pay(ctx, buyerID, purchase.ID); err != nil || state.Groups[0].PaymentHold == "" {
+		t.Fatal("POST должен оставить здоровую группу доступной", state, err)
 	}
 }
 
@@ -252,7 +252,7 @@ func TestReviewAfterPartialPaymentPreservesPaidOrder(t *testing.T) {
 	seller.Stage = participant.StageDisconnected
 	e.store.SeedParticipant(seller)
 	state, err = e.service.Pay(ctx, buyerID, purchase.ID)
-	if !errors.Is(err, checkout.ErrDeliveryChanged) || state.Status != checkout.StatusDraft {
+	if !errors.Is(err, checkout.ErrDeliveryChanged) || state.Status != checkout.StatusPaid {
 		t.Fatal(state, err)
 	}
 	if !state.Groups[0].Paid() || state.Groups[0].Excluded() || state.Groups[0].OrderID != paidOrder {
@@ -264,8 +264,8 @@ func TestReviewAfterPartialPaymentPreservesPaidOrder(t *testing.T) {
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
-	state = reconfirmPurchase(t, e, purchase.ID)
-	if state.Status != checkout.StatusPartiallyPaid || state.Groups[0].OrderID != paidOrder {
+	state, err = e.service.Get(ctx, buyerID, purchase.ID)
+	if err != nil || state.Status != checkout.StatusPaid || state.Groups[0].OrderID != paidOrder {
 		t.Fatal(state)
 	}
 	if err := e.service.ConfirmPayment(ctx, buyerID, purchase.ID); err != nil {

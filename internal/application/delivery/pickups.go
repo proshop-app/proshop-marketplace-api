@@ -2,6 +2,7 @@
 package delivery
 
 import (
+	"container/list"
 	"context"
 	"encoding/json"
 	"slices"
@@ -21,10 +22,13 @@ import (
 const (
 	pickupCacheMemoryBytes = 64 * 1024 * 1024
 	// Четыре загрузки по 20 с не занимают места оформления; очередь ограничивает фон при переборе городов.
-	pickupLoadLimit   = 4
-	pickupQueueLimit  = 32
-	pickupNegativeTTL = 30 * time.Second
-	pickupFailureTTL  = 5 * time.Second
+	pickupLoadLimit         = 4
+	pickupCheckoutLoadLimit = 4
+	pickupCleanupBatch      = 256
+	pickupCleanupInterval   = time.Second
+	pickupQueueLimit        = 32
+	pickupNegativeTTL       = 30 * time.Second
+	pickupFailureTTL        = 5 * time.Second
 )
 
 // ErrSellerUnreachable — все опрошенные магазины недоступны.
@@ -39,16 +43,20 @@ type Config struct {
 
 // Service объединяет одновременные промахи одного ключа в пределах процесса.
 type Service struct {
-	uow        ports.UnitOfWork
-	platform   ports.PlatformAPI
-	cache      ports.PickupCache
-	config     Config
-	mu         sync.Mutex
-	flights    map[string]*flight
-	catalogs   map[string]*pickupCatalog
-	cacheBytes int
-	loads      chan struct{}
-	source     atomic.Uint32
+	uow           ports.UnitOfWork
+	platform      ports.PlatformAPI
+	cache         ports.PickupCache
+	config        Config
+	mu            sync.Mutex
+	flights       map[string]*flight
+	catalogs      map[string]*list.Element
+	lru           list.List
+	cleanupCursor *list.Element
+	nextCleanup   time.Time
+	checkoutLoads chan struct{}
+	cacheBytes    int
+	loads         chan struct{}
+	source        atomic.Uint32
 }
 
 type pickupCatalog struct {
@@ -57,7 +65,11 @@ type pickupCatalog struct {
 	ExpiresAt time.Time              `json:"expiresAt"`
 	index     *delivery.PickupIndex
 	bytes     int
-	lastUsed  time.Time
+}
+
+type pickupCacheEntry struct {
+	key     string
+	catalog *pickupCatalog
 }
 
 type flight struct {
@@ -70,19 +82,26 @@ type flight struct {
 // NewService собирает поиск пунктов и общий кэш.
 func NewService(uow ports.UnitOfWork, platform ports.PlatformAPI, cache ports.PickupCache, cfg Config) *Service {
 	return &Service{
-		uow:      uow,
-		platform: platform,
-		cache:    cache,
-		config:   cfg,
-		flights:  make(map[string]*flight),
-		catalogs: make(map[string]*pickupCatalog),
-		loads:    make(chan struct{}, pickupLoadLimit),
+		uow:           uow,
+		platform:      platform,
+		cache:         cache,
+		config:        cfg,
+		flights:       make(map[string]*flight),
+		catalogs:      make(map[string]*list.Element),
+		loads:         make(chan struct{}, pickupLoadLimit),
+		checkoutLoads: make(chan struct{}, pickupCheckoutLoadLimit),
 	}
 }
 
 // Carriers — службы, поддерживаемые контрактом настроек магазинов.
 func (s *Service) Carriers() []delivery.CarrierInfo {
-	return []delivery.CarrierInfo{{Code: "cdek", Name: "СДЭК"}, {Code: "yandex", Name: "Яндекс Доставка"}}
+	return []delivery.CarrierInfo{
+		{Code: "cdek", Name: "СДЭК"},
+		{
+			Code: "yandex",
+			Name: "Яндекс Доставка",
+		},
+	}
 }
 
 // Search возвращает первый успешный список; отказ службы позволяет перейти к следующему магазину.
@@ -110,22 +129,35 @@ func (s *Service) catalogue(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
-	now := time.Now()
-	for cacheKey, entry := range s.catalogs {
-		if !entry.ExpiresAt.After(now) {
-			s.cacheBytes -= entry.bytes
-			delete(s.catalogs, cacheKey)
-		}
+	if cached := s.memoryCatalog(key); cached != nil {
+		return cached, catalogueError(cached)
 	}
-	if cached := s.catalogs[key]; cached != nil {
-		cached.lastUsed = now
+	// Redis читается до допуска фоновой загрузки: холодный шторм не закрывает тёплый каталог другой реплики.
+	if cached := s.readCatalog(ctx, key); cached != nil {
+		s.mu.Lock()
+		s.remember(key, cached)
 		s.mu.Unlock()
 		return cached, catalogueError(cached)
 	}
-	f, ok := s.flights[key]
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	pool := s.loads
+	flightKey := key
+	if ports.PlatformClassFromContext(ctx) == ports.PlatformCheckout {
+		pool = s.checkoutLoads
+		flightKey = "checkout:" + key
+	}
+	s.mu.Lock()
+	f, ok := s.flights[flightKey]
 	if !ok {
-		if len(s.flights) >= pickupLoadLimit+pickupQueueLimit {
+		queued := 0
+		for running := range s.flights {
+			if strings.HasPrefix(running, "checkout:") == (pool == s.checkoutLoads) {
+				queued++
+			}
+		}
+		if queued >= cap(pool)+pickupQueueLimit {
 			s.mu.Unlock()
 			return nil, ErrSellerUnreachable
 		}
@@ -133,8 +165,8 @@ func (s *Service) catalogue(
 		budget := time.Duration(s.config.Attempts)*s.config.QuoteTimeout + 5*time.Second
 		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
 		f = &flight{done: make(chan struct{}), cancel: cancel}
-		s.flights[key] = f
-		go s.load(loadCtx, key, carrier, city, f)
+		s.flights[flightKey] = f
+		go s.load(loadCtx, key, flightKey, carrier, city, f, pool)
 	}
 	s.mu.Unlock()
 
@@ -148,20 +180,21 @@ func (s *Service) catalogue(
 
 func (s *Service) load(
 	ctx context.Context,
-	key string,
+	key, flightKey string,
 	carrier delivery.Carrier,
 	city string,
 	f *flight,
+	pool chan struct{},
 ) {
 	defer f.cancel()
 	select {
-	case s.loads <- struct{}{}:
-		defer func() { <-s.loads }()
+	case pool <- struct{}{}:
+		defer func() { <-pool }()
 	case <-ctx.Done():
 		f.err = ctx.Err()
 	}
 	if f.err == nil {
-		f.catalog, f.err = s.cached(ctx, key, carrier, city)
+		f.catalog, f.err = s.fetchCatalog(ctx, key, carrier, city)
 	}
 	if f.err != nil && f.catalog == nil {
 		f.catalog = &pickupCatalog{Failed: true, ExpiresAt: time.Now().Add(pickupFailureTTL)}
@@ -177,44 +210,19 @@ func (s *Service) load(
 	if f.catalog != nil {
 		s.remember(key, f.catalog)
 	}
-	if s.flights[key] == f {
-		delete(s.flights, key)
+	if s.flights[flightKey] == f {
+		delete(s.flights, flightKey)
 	}
 	close(f.done)
 	s.mu.Unlock()
 }
 
-// remember вызывается под mu; индекс и список остаются неизменяемыми для читателей.
-func (s *Service) remember(key string, catalog *pickupCatalog) {
-	for len(s.catalogs) > 0 && s.cacheBytes+catalog.bytes > pickupCacheMemoryBytes {
-		oldestKey := ""
-		var oldest time.Time
-		for storedKey, value := range s.catalogs {
-			if oldest.IsZero() || value.lastUsed.Before(oldest) {
-				oldestKey, oldest = storedKey, value.lastUsed
-			}
-		}
-		s.cacheBytes -= s.catalogs[oldestKey].bytes
-		delete(s.catalogs, oldestKey)
-	}
-	catalog.lastUsed = time.Now()
-	s.catalogs[key] = catalog
-	s.cacheBytes += catalog.bytes
-}
-
-func (s *Service) cached(
+func (s *Service) fetchCatalog(
 	ctx context.Context,
 	key string,
 	carrier delivery.Carrier,
 	city string,
 ) (*pickupCatalog, error) {
-	if value, hit, err := s.cache.Get(ctx, key); err == nil && hit {
-		var catalog pickupCatalog
-		if json.Unmarshal(value, &catalog) == nil && catalog.ExpiresAt.After(time.Now()) {
-			catalog.bytes = len(value)
-			return &catalog, catalogueError(&catalog)
-		}
-	}
 	candidates, err := s.candidates(ctx, carrier)
 	if err != nil {
 		return nil, err
@@ -262,38 +270,41 @@ func (s *Service) candidates(
 	carrier delivery.Carrier,
 ) ([]ids.TenantID, error) {
 	var tenants []ids.TenantID
-	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		keys := []ids.TenantID{}
-		after := ids.TenantID("")
-		for {
-			page, err := tx.Participants().PublicTenants(ctx, nil, after, 200)
+	err := s.uow.Do(
+		ctx,
+		func(ctx context.Context, tx ports.Tx) error {
+			keys := []ids.TenantID{}
+			after := ids.TenantID("")
+			for {
+				page, err := tx.Participants().PublicTenants(ctx, nil, after, 200)
+				if err != nil {
+					return err
+				}
+				keys = append(keys, page...)
+				if len(page) < 200 {
+					break
+				}
+				after = page[len(page)-1]
+			}
+
+			participants, err := tx.Participants().Batch(ctx, keys)
 			if err != nil {
 				return err
 			}
-			keys = append(keys, page...)
-			if len(page) < 200 {
-				break
+			registry, err := tx.Registry().Batch(ctx, keys)
+			if err != nil {
+				return err
 			}
-			after = page[len(page)-1]
-		}
-
-		participants, err := tx.Participants().Batch(ctx, keys)
-		if err != nil {
-			return err
-		}
-		registry, err := tx.Registry().Batch(ctx, keys)
-		if err != nil {
-			return err
-		}
-		for _, key := range keys {
-			p, tenant := participants[key], registry[key]
-			if p != nil && tenant != nil && slices.Contains(p.State().Delivery.Carriers, string(carrier)) &&
-				participant.VisibilityOf(p, tenant).CheckoutAvailable {
-				tenants = append(tenants, key)
+			for _, key := range keys {
+				p, tenant := participants[key], registry[key]
+				if p != nil && tenant != nil && slices.Contains(p.State().Delivery.Carriers, string(carrier)) &&
+					participant.VisibilityOf(p, tenant).CheckoutAvailable {
+					tenants = append(tenants, key)
+				}
 			}
-		}
-		return nil
-	})
+			return nil
+		},
+	)
 	slices.Sort(tenants)
 	return tenants, err
 }
@@ -314,7 +325,9 @@ func (s *Service) fetch(
 		}
 		attempted++
 		callCtx, cancel := context.WithTimeout(ctx, s.config.QuoteTimeout)
-		callCtx = ports.WithPlatformCallClass(callCtx, ports.PlatformCatalog)
+		if ports.PlatformClassFromContext(ctx) != ports.PlatformCheckout {
+			callCtx = ports.WithPlatformCallClass(callCtx, ports.PlatformCatalog)
+		}
 		answer, err := s.platform.PickupPoints(callCtx, tenant, carrier, city)
 		cancel()
 		if ctx.Err() != nil {
@@ -340,11 +353,11 @@ func (s *Service) Point(
 	carrier delivery.Carrier,
 	code, city string,
 ) (delivery.PickupPoint, error) {
-	points, err := s.Search(ctx, carrier, city)
+	catalog, err := s.catalogue(ports.WithPlatformCallClass(ctx, ports.PlatformCheckout), carrier, city)
 	if err != nil {
 		return delivery.PickupPoint{}, err
 	}
-	for _, point := range points {
+	for _, point := range catalog.Points {
 		if point.Code == code && point.Carrier == carrier {
 			return point, nil
 		}

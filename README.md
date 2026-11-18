@@ -222,16 +222,19 @@ GET кассы при ошибке показывает HTML со ссылкой
    и дождаться завершения старых pod. Это останавливает HTTP и outbox площадки;
    другие изменения на стенде не выполнять до конца окна.
 2. Проверить оставшиеся покупки чтением PostgreSQL:
-   `SELECT count(*) FROM checkouts c WHERE status IN ('creating_orders','awaiting_payment') AND EXISTS
-   (SELECT 1 FROM checkout_groups g WHERE g.checkout_id=c.id AND g.buyer_delivery>0);`.
+   `SELECT count(*) FROM checkouts c WHERE status IN ('creating_orders','awaiting_payment','partially_paid') AND EXISTS
+   (SELECT 1 FROM checkout_groups g WHERE g.checkout_id=c.id AND g.buyer_delivery>0
+   AND COALESCE(NULLIF(g.order_progress->>'LastOrderStatus',''),g.order_progress->>'Status','')
+   NOT IN ('paid','shipped','delivered','returned','cancelled'));`.
    Число на стенде не ограничено бизнес-правилом; его проверяют перед каждым выкатом.
 3. При закрытом публичном доступе обновить server (и API, и worker магазина),
    затем marketplace-api, затем marketplace-web. Выполнить dry-run и apply сервера
    `yarn migrate --all` / `yarn migrate --all --apply`; до запуска новой площадки —
-   `migrate up` из её нового образа. Миграция 00058 не ждёт занятую таблицу и
-   не переписывает строки; при отказе NOWAIT повторить её после завершения транзакций.
+   `migrate up` из её нового образа. Миграции 00058–00059 не ждут занятую таблицу и
+   не переписывают строки; при отказе NOWAIT повторить миграции после завершения транзакций.
    Краткая ACCESS EXCLUSIVE на изменение метаданных неизбежна.
-4. Старые `creating_orders` и `awaiting_payment` с ненулевой доставкой отменить
+4. Старые неоплаченные группы `creating_orders`, `awaiting_payment` и `partially_paid`
+   с ненулевой доставкой отменить
    штатной ручкой новой площадки до открытия публичного доступа. Для просмотра
    использовать pod вне публичного Service и port-forward:
    `kubectl -n marketplace port-forward deployment/marketplace-api 18080:8080`,

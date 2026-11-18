@@ -7963,7 +7963,7 @@ components:
           type: string
         paymentHold:
           type: string
-          enum: [moderation_pending, publication_paused]
+          enum: [moderation_pending, publication_paused, payment_expired]
           description: Текущая проверка товара приостанавливает оплату до восстановления или expiresAt, не меняя состав.
         status:
           type: string
@@ -8121,6 +8121,8 @@ components:
     Checkout:
       type: object
       required:
+      - paymentStarted
+      - confirmationRequired
       - creationComplete
       - id
       - status
@@ -8138,6 +8140,12 @@ components:
       - discount
       - paidTotal
       properties:
+        confirmationRequired:
+          type: boolean
+          description: Новый состав требует подтверждения, включая покупку с уже оплаченными группами.
+        paymentStarted:
+          type: boolean
+          description: Исход отправленного платежа ещё не подтверждён; отмена недоступна до сверки.
         creationComplete:
           type: boolean
           description: Все группы получили итог создания; витрина прекращает опрос ожидания.
@@ -8678,6 +8686,8 @@ components:
     InternalCheckout:
       type: object
       required:
+      - paymentStarted
+      - confirmationRequired
       - creationComplete
       - id
       - status
@@ -8691,6 +8701,12 @@ components:
       - updatedAt
       - confirmedAt
       properties:
+        confirmationRequired:
+          type: boolean
+          description: Новый состав требует подтверждения, включая покупку с уже оплаченными группами.
+        paymentStarted:
+          type: boolean
+          description: Исход отправленного платежа ещё не подтверждён; отмена недоступна до сверки.
         creationComplete:
           type: boolean
           description: Все группы получили итог создания; витрина прекращает опрос ожидания.
@@ -8776,7 +8792,7 @@ components:
           type: string
         paymentHold:
           type: string
-          enum: [moderation_pending, publication_paused]
+          enum: [moderation_pending, publication_paused, payment_expired]
           description: Текущая проверка товара приостанавливает оплату до восстановления или expiresAt, не меняя состав.
         status:
           type: string
@@ -9114,8 +9130,6 @@ components:
       required:
       - status
       - cost
-      - subsidy
-      - buyerCost
       - minDays
       - maxDays
       - expiresAt
@@ -9148,14 +9162,6 @@ components:
           type: integer
           format: int64
           description: Стоимость по договору продавца
-        subsidy:
-          type: integer
-          format: int64
-          description: Сколько оплачивает продавец
-        buyerCost:
-          type: integer
-          format: int64
-          description: Доля покупателя
         minDays:
           type: integer
         maxDays:

@@ -78,6 +78,9 @@ func (g Group) PollDue(now time.Time) bool {
 
 // Returnable — группа без исполненного заказа, которую нужно вернуть в корзину.
 func (g Group) Returnable() bool {
+	if g.Paid() {
+		return false
+	}
 	status := g.EffectiveStatus()
 	return status == GroupCancellationRequested || status == GroupRejected ||
 		status == GroupUnconfirmed || status == GroupCancelled ||

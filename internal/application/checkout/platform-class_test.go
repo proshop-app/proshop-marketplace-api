@@ -30,7 +30,7 @@ func TestPurchaseClassesAndCallBudget(t *testing.T) {
 		return nil
 	}
 	e.platform.BeforePickup = func(ctx context.Context, _ ids.TenantID) error {
-		if ports.PlatformClassFromContext(ctx) != ports.PlatformCatalog {
+		if ports.PlatformClassFromContext(ctx) != ports.PlatformCheckout {
 			t.Error("выбор ПВЗ попал в чтения")
 		}
 		mu.Lock()

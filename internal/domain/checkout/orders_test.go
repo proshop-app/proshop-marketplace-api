@@ -16,8 +16,8 @@ func ordersReady(t *testing.T) *checkout.Checkout {
 	t.Helper()
 	c := draft(t)
 	quotes := map[ids.TenantID]delivery.Quote{
-		"t1": available(100, 50, t0.Add(time.Hour)),
-		"t2": available(200, 100, t0.Add(time.Hour)),
+		"t1": available(100, t0.Add(time.Hour)),
+		"t2": available(200, t0.Add(time.Hour)),
 	}
 	if err := c.SelectDelivery(selection, quotes, t0); err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestExpiryNeedsSellerCancellation(t *testing.T) {
 	if _, err := c.Observe("t2", second, expired, expired); err != nil {
 		t.Fatal(err)
 	}
-	if c.Status() != checkout.StatusPartiallyPaid {
+	if c.Status() != checkout.StatusPaid {
 		t.Fatal(c.Status())
 	}
 }
@@ -127,8 +127,8 @@ func TestAllCancelledAndSnapshotIsolation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if c.Status() != checkout.StatusDraft {
-		t.Fatal("отмена магазина меняет состав", c.Status())
+	if c.Status() != checkout.StatusCancelled {
+		t.Fatal("истекли все заказы", c.Status())
 	}
 	if _, err := c.Cancel(t0); err != nil {
 		t.Fatal(err)

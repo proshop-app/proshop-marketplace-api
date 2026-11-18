@@ -271,11 +271,14 @@ func TestQuote(t *testing.T) {
 	}
 
 	t1, t2 := state.Groups[0].Quote, state.Groups[1].Quote
-	if t1.Status != delivery.QuoteAvailable || t1.Subsidy.Kopecks() != 30000 || t1.BuyerCost.Kopecks() != 0 {
+	if t1.Status != delivery.QuoteAvailable || t1.Cost.Kopecks() != 30000 {
 		t.Fatalf("продавец оплачивает всю доставку: %+v", t1)
 	}
-	if t2.Subsidy.Kopecks() != 25000 || !t2.ExpiresAt.Equal(t0.Add(10*time.Minute)) {
-		t.Fatalf("весь тариф продавцу, срок расчёта магазина короче своего: %+v", t2)
+	if t2.Cost.Kopecks() != 25000 || !t2.ExpiresAt.Equal(t0.Add(10*time.Minute)) {
+		t.Fatalf(
+			"весь тариф продавцу, срок расчёта магазина короче своего: %+v",
+			t2,
+		)
 	}
 	if state.DeliveryTotal.Kopecks() != 0 || state.Delivery.City != "Город" {
 		t.Fatalf("итог доставки и выбранный пункт: %+v", state)

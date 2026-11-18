@@ -122,7 +122,7 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 	e.platform.SetOrderStatus(first.OrderID, checkout.GroupPaid, "")
 	e.platform.SetOrderStatus(second.OrderID, checkout.GroupCancelled, "payment_expired")
 	state, err = refreshOrders(ctx, e, buyerID, c.ID)
-	if err != nil || state.Status != checkout.StatusPartiallyPaid {
+	if err != nil || state.Status != checkout.StatusPaid {
 		t.Fatalf("сверка: %+v %v", state, err)
 	}
 	if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {

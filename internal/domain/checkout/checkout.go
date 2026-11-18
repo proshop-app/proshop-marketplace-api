@@ -48,6 +48,9 @@ type Line struct {
 
 // Group — заказ одного продавца в покупке.
 type Group struct {
+	// PaymentPending сохраняет неопределённость отправленной оплаты до подтверждения магазина.
+	PaymentPending bool
+
 	// DispatchReviewRevision связывает новый расчёт с сохранённым отказом попытки магазина.
 	DispatchReviewRevision int
 	// PaymentHold — текущая причина приостановки; вычисляется при чтении, не сохраняет решение модерации.
@@ -377,7 +380,7 @@ func (c *Checkout) Reprice(checks map[ids.OfferID]PriceCheck, now time.Time) (bo
 // Confirm подтверждает покупку: доставка выбрана, все продавцы везут в пункт,
 // цены доставки действуют.
 func (c *Checkout) Confirm(now time.Time) error {
-	if c.state.Status != StatusDraft {
+	if !c.NeedsConfirmation() {
 		return ErrNotDraft
 	}
 	if c.state.Delivery == nil {
@@ -413,8 +416,12 @@ func (c *Checkout) Confirm(now time.Time) error {
 		return ErrDeliveryUnavailable
 	}
 
-	c.state.Status = StatusConfirmed
 	c.state.ConfirmedAt = now
+	if c.HasPaidGroups() {
+		c.rollup()
+	} else {
+		c.state.Status = StatusConfirmed
+	}
 
 	return c.touch(now)
 }
@@ -461,7 +468,7 @@ func (c *Checkout) recount() error {
 		}
 
 		if group.Quote != nil && group.Quote.Status == delivery.QuoteAvailable {
-			group.DeliveryPrice = group.Quote.BuyerCost
+			group.DeliveryPrice = money.Money{}
 			if deliveryTotal, err = deliveryTotal.Add(group.DeliveryPrice); err != nil {
 				return err
 			}

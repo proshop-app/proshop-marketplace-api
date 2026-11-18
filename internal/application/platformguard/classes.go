@@ -12,6 +12,7 @@ const (
 	checkoutClass operationClass = iota
 	readClass
 	catalogClass
+	checkoutCatalogClass
 	classCount
 )
 
@@ -23,7 +24,7 @@ func callerClass(ctx context.Context) operationClass {
 }
 
 func (c *Client) classLimit(class operationClass) int {
-	if class == catalogClass {
+	if class == catalogClass || class == checkoutCatalogClass {
 		return min(4, max(1, c.cfg.MaxConcurrent/4))
 	}
 	if class == checkoutClass {
@@ -33,7 +34,7 @@ func (c *Client) classLimit(class operationClass) int {
 }
 
 func (c *Client) tenantLimit(class operationClass) int {
-	if class == catalogClass {
+	if class == catalogClass || class == checkoutCatalogClass {
 		return c.classLimit(class)
 	}
 	// Доли магазинов тоже разделены: фоновые чтения не занимают резерв оформления.
@@ -46,6 +47,9 @@ func (c *Client) tenantLimit(class operationClass) int {
 }
 
 func (class operationClass) String() string {
+	if class == checkoutCatalogClass {
+		return "checkout_catalog"
+	}
 	if class == catalogClass {
 		return "catalog"
 	}

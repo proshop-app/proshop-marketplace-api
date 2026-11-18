@@ -60,5 +60,6 @@ func (s *Service) CheckoutPoints(
 	if len(tenants) == 0 {
 		return delivery.PickupArea{}, checkout.ErrNotFound
 	}
+	ctx = ports.WithPlatformCallClass(ctx, ports.PlatformCheckout)
 	return s.QueryFor(ctx, query.Carrier, query.City, regions, query.Bounds, query.Offset, query.Limit)
 }

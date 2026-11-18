@@ -352,7 +352,7 @@ func TestCheckoutPaidTotalKeepsLastConfirmedStatus(t *testing.T) {
 	state.DeliveryTotal = money.FromKopecks(60)
 	state.Total = money.FromKopecks(660)
 	body, err := toCheckoutJSON(state)
-	if err != nil || body.PaidTotal != 440 || body.BaseTotal != 600 || body.Discount != 0 || body.Total != 660 {
+	if err != nil || body.PaidTotal != 550 || body.BaseTotal != 600 || body.Discount != 0 || body.Total != 660 {
 		t.Fatalf("смешанные статусы: %+v, %v", body, err)
 	}
 }

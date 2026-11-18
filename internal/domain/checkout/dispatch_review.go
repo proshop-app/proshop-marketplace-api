@@ -3,6 +3,8 @@ package checkout
 import (
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
+
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -44,7 +46,7 @@ func (c *Checkout) ApplyDispatchQuote(tenant ids.TenantID, quote delivery.Quote,
 		return ErrTransition
 	}
 	g.Quote = &quote
-	g.DeliveryPrice = quote.BuyerCost
+	g.DeliveryPrice = money.Money{}
 	if quote.Status == delivery.QuoteUnavailable && quote.Reason != delivery.ReasonSellerUnreachable {
 		g.Status = GroupDeliveryUnavailable
 		g.ReconciliationRequired = !g.CancellationConfirmed

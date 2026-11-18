@@ -21,11 +21,17 @@ const (
 func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant ids.TenantID) error {
 	token := string(s.ids.NewUUID())
 	claimed := false
-	state, err := s.retrySelection(ctx, buyerID, id, nil, func(c *checkout.Checkout, now time.Time) error {
-		var err error
-		claimed, err = c.ClaimCreation(tenant, token, s.creationLease(c, tenant, now), now)
-		return err
-	})
+	state, err := s.retrySelection(
+		ctx,
+		buyerID,
+		id,
+		nil,
+		func(c *checkout.Checkout, now time.Time) error {
+			var err error
+			claimed, err = c.ClaimCreation(tenant, token, s.creationLease(c, tenant, now), now)
+			return err
+		},
+	)
 	if err != nil {
 		return err
 	}
@@ -47,24 +53,8 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 			group = g
 		}
 	}
-	request := ports.CreateOrderRequest{
-		BuyerID:            buyerID,
-		PromoCode:          group.PromoCode,
-		ExternalCheckoutID: group.ExternalCheckoutID,
-		GroupID:            tenant,
-		Carrier:            string(group.Selection(state.Delivery).Carrier),
-		PickupPointCode:    group.Selection(state.Delivery).PickupPointCode,
-		Contact:            state.Contact,
-		DeliveryPrice:      group.DeliveryPrice,
-	}
-	for _, line := range group.Lines {
-		request.Items = append(request.Items, ports.OrderItem{
-			ProductID: line.Offer.Product,
-			Quantity:  line.Quantity,
-			Price:     line.Price,
-			Discounts: line.Discounts,
-		})
-	}
+	request := creationRequest(buyerID, tenant, group, state.Delivery, state.Contact)
+
 	// Повтор команды должен вернуть сохранённый заказ, даже если код уже истёк.
 	// Сервер сравнивает снимок discounts внутри транзакции создания.
 	callCtx, cancel := context.WithTimeout(ctx, min(s.orderCallBudget(), group.CreationDeadline.Sub(s.clock.Now())))
@@ -93,33 +83,7 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 		saveCtx, finish = context.WithTimeout(context.WithoutCancel(ctx), completionTimeout)
 		defer finish()
 	}
-	state, err = s.saveOrderResult(saveCtx, buyerID, id, tenant, func(c *checkout.Checkout, now time.Time) error {
-		if failed == nil {
-			_, attachErr := c.CompleteCreation(tenant, token, answer, now)
-			if !errors.Is(attachErr, checkout.ErrInvalidOrder) {
-				return attachErr
-			}
-			failed = attachErr
-		}
-		code, terminal, prices := creationFailure(failed)
-		reason := code
-		if errors.Is(failed, checkout.ErrPromoInvalid) {
-			reason = checkout.ErrPromoInvalid.Message()
-			if typed, ok := errs.As(failed); ok {
-				reason = typed.Message()
-			}
-		}
-		var refusal *ports.OrderRefusal
-		if errors.As(failed, &refusal) && refusal.Reason != "" {
-			reason = refusal.Reason
-		}
-		// Прежняя попытка могла создать заказ и потерять ответ до отзыва готовности.
-		reconcile := code == "IDEMPOTENCY_CONFLICT" || errors.Is(failed, checkout.ErrOfferUnavailable) ||
-			(terminal != "" && group.CreateFailures > 0)
-		_, err := c.FailCreation(tenant, token, code, reason, terminal, reconcile, prices, now)
-		return err
-	},
-	)
+	state, err = s.completeGroupCreation(saveCtx, buyerID, id, group, token, answer, failed)
 	if err != nil {
 		return err
 	}
@@ -256,4 +220,71 @@ func (s *Service) orderCallBudget() time.Duration {
 		return min(CreationCallTimeout, s.config.OrderCallTimeout)
 	}
 	return CreationCallTimeout
+}
+
+func creationRequest(
+	buyerID ids.UUID, tenant ids.TenantID, group checkout.Group,
+	fallback *checkout.Selection, contact checkout.Contact,
+) ports.CreateOrderRequest {
+	request := ports.CreateOrderRequest{
+		BuyerID:            buyerID,
+		PromoCode:          group.PromoCode,
+		ExternalCheckoutID: group.ExternalCheckoutID,
+		GroupID:            tenant,
+		Carrier:            string(group.Selection(fallback).Carrier),
+		PickupPointCode:    group.Selection(fallback).PickupPointCode,
+		Contact:            contact,
+		DeliveryPrice:      group.DeliveryPrice,
+	}
+	for _, line := range group.Lines {
+		request.Items = append(
+			request.Items,
+			ports.OrderItem{
+				ProductID: line.Offer.Product,
+				Quantity:  line.Quantity,
+				Price:     line.Price,
+				Discounts: line.Discounts,
+			},
+		)
+	}
+	return request
+}
+
+func (s *Service) completeGroupCreation(
+	ctx context.Context, buyerID, id ids.UUID, group checkout.Group, token string,
+	answer checkout.SellerOrder, failed error,
+) (checkout.State, error) {
+	tenant := group.TenantID
+	return s.saveOrderResult(
+		ctx,
+		buyerID,
+		id,
+		group.TenantID,
+		func(c *checkout.Checkout, now time.Time) error {
+			if failed == nil {
+				_, attachErr := c.CompleteCreation(tenant, token, answer, now)
+				if !errors.Is(attachErr, checkout.ErrInvalidOrder) {
+					return attachErr
+				}
+				failed = attachErr
+			}
+			code, terminal, prices := creationFailure(failed)
+			reason := code
+			if errors.Is(failed, checkout.ErrPromoInvalid) {
+				reason = checkout.ErrPromoInvalid.Message()
+				if typed, ok := errs.As(failed); ok {
+					reason = typed.Message()
+				}
+			}
+			var refusal *ports.OrderRefusal
+			if errors.As(failed, &refusal) && refusal.Reason != "" {
+				reason = refusal.Reason
+			}
+			// Прежняя попытка могла создать заказ и потерять ответ до отзыва готовности.
+			reconcile := code == "IDEMPOTENCY_CONFLICT" || errors.Is(failed, checkout.ErrOfferUnavailable) ||
+				(terminal != "" && group.CreateFailures > 0)
+			_, err := c.FailCreation(tenant, token, code, reason, terminal, reconcile, prices, now)
+			return err
+		},
+	)
 }

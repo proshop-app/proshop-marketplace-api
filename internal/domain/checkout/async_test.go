@@ -3,7 +3,10 @@ package checkout_test
 import (
 	"errors"
 	"testing"
+
 	"time"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 )
@@ -65,7 +68,7 @@ func TestBuyerCancellationAndCreationResult(t *testing.T) {
 	if changed, err := c.Cancel(t0); err != nil || changed {
 		t.Fatal(changed, err)
 	}
-	if err := c.BeginPayment(t0); !errors.Is(err, checkout.ErrTransition) {
+	if err := c.ClaimPayment("test-payment", c.PaymentOrders(), t0); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
 	if _, err := c.CompleteCancellation("t1", order.OrderID, t0); err != nil {
@@ -106,22 +109,40 @@ func TestAbandonedFailureAndPaymentFence(t *testing.T) {
 	c = creatingWithDeadline(t)
 	attach(t, c, 0)
 	attach(t, c, 1)
-	if err := c.ClaimPayment("one", t0); err != nil {
+	if err := c.ClaimPayment("one", c.PaymentOrders(), t0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.Cancel(t0); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
-	if err := c.ClaimPayment("two", t0); err != nil {
+	if err := c.ClaimPayment("two", c.PaymentOrders(), t0); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.FinishPayment("one", true, t0); err != nil {
+	if err := c.FinishPayment(
+		"one",
+		checkout.PaymentResult{
+			Unpaid: map[ids.TenantID]bool{
+				"t1": true,
+				"t2": true,
+			},
+		},
+		t0,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if !c.State().PaymentStarted {
 		t.Fatal("старый отказ снял блокировку новой оплаты")
 	}
-	if err := c.FinishPayment("two", true, t0); err != nil {
+	if err := c.FinishPayment(
+		"two",
+		checkout.PaymentResult{
+			Unpaid: map[ids.TenantID]bool{
+				"t1": true,
+				"t2": true,
+			},
+		},
+		t0,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.Cancel(t0); err != nil {

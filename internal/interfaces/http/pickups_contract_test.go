@@ -299,15 +299,19 @@ func TestPublicQuoteNeverDisclosesSellerCost(t *testing.T) {
 		}
 	}
 
-	state := checkout.State{Groups: []checkout.Group{{
-		Quote: &delivery.Quote{
-			Status:  delivery.QuoteAvailable,
-			Cost:    money.FromKopecks(30000),
-			Subsidy: money.FromKopecks(30000),
-			MinDays: 2,
-			MaxDays: 4,
+	state := checkout.State{
+		Groups: []checkout.Group{
+			{
+				Quote: &delivery.Quote{
+					Status: delivery.QuoteAvailable,
+					Cost:   money.FromKopecks(30000),
+
+					MinDays: 2,
+					MaxDays: 4,
+				},
+			},
 		},
-	}}}
+	}
 	body, err := toCheckoutJSON(state)
 	if err != nil {
 		t.Fatal(err)

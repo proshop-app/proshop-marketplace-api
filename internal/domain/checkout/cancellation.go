@@ -8,7 +8,7 @@ import (
 
 // CancellationRequired выбирает команду вместо опроса в ожидании отмены.
 func (g Group) CancellationRequired() bool {
-	return g.ReconciliationRequired && !g.CancellationConfirmed && !g.CancellationBlocked
+	return !g.Paid() && g.ReconciliationRequired && !g.CancellationConfirmed && !g.CancellationBlocked
 }
 
 // CompleteCancellation принимает только подтверждённый сервером запрет создания по ключу.

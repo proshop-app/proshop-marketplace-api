@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -104,6 +105,11 @@ func (h *checkoutHandlers) finishPayment(w http.ResponseWriter, r *http.Request,
 		_, err = h.checkouts.Payment(r.Context(), BuyerID(r.Context()), id)
 	}
 	if err != nil {
+		var failure *appcheckout.PaymentFailure
+		if errors.As(err, &failure) && failure.State.ID != "" {
+			h.respond(w, r, http.StatusConflict, failure.State, err)
+			return
+		}
 		writeError(w, r, err)
 		return
 	}
@@ -129,7 +135,9 @@ func (h *checkoutHandlers) paymentBrowser(next http.HandlerFunc) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		response := &paymentResponse{header: make(http.Header)}
 		next(response, r)
-		if response.status < http.StatusBadRequest {
+		var failure errorBody
+		hasSnapshot := json.Unmarshal(response.body.Bytes(), &failure) == nil && failure.Checkout != nil
+		if response.status < http.StatusBadRequest || hasSnapshot {
 			for key, values := range response.header {
 				w.Header()[key] = values
 			}

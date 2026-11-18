@@ -413,8 +413,8 @@ func seedCheckoutList(t *testing.T, uow *postgres.UnitOfWork) []*checkout.Checko
 			if err := purchase.SelectDelivery(
 				checkout.Selection{Carrier: "cdek", PickupPointCode: "P1"},
 				map[ids.TenantID]delivery.Quote{
-					"t1": {Status: delivery.QuoteAvailable, ExpiresAt: at(60), BuyerCost: money.FromKopecks(10)},
-					"t2": {Status: delivery.QuoteAvailable, ExpiresAt: at(60), BuyerCost: money.FromKopecks(20)},
+					"t1": {Status: delivery.QuoteAvailable, ExpiresAt: at(60)},
+					"t2": {Status: delivery.QuoteAvailable, ExpiresAt: at(60)},
 				},
 				at(0),
 			); err != nil {
@@ -466,9 +466,13 @@ func seedCheckoutList(t *testing.T, uow *postgres.UnitOfWork) []*checkout.Checko
 		purchases = append(purchases, purchase)
 	}
 	for _, purchase := range slices.Backward(purchases) {
-		if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
-			return tx.Checkouts().Add(ctx, purchase)
-		}); err != nil {
+		if err := do(
+			t,
+			uow,
+			func(ctx context.Context, tx ports.Tx) error {
+				return tx.Checkouts().Add(ctx, purchase)
+			},
+		); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -485,30 +489,38 @@ func TestGroupPickupSnapshotsSurvivePostgres(t *testing.T) {
 	for tenant, selected := range selections {
 		if err := purchase.SelectDeliveries(
 			selected,
-			map[ids.TenantID]delivery.Quote{tenant: {
-				Status:    delivery.QuoteAvailable,
-				Cost:      money.FromKopecks(30000),
-				Subsidy:   money.FromKopecks(30000),
-				ExpiresAt: at(60),
-			}},
+			map[ids.TenantID]delivery.Quote{
+				tenant: {
+					Status: delivery.QuoteAvailable,
+					Cost:   money.FromKopecks(30000),
+
+					ExpiresAt: at(60),
+				},
+			},
 			at(0),
 		); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := uow.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
-		return tx.Checkouts().Update(ctx, purchase)
-	}); err != nil {
+	if err := uow.Do(
+		context.Background(),
+		func(ctx context.Context, tx ports.Tx) error {
+			return tx.Checkouts().Update(ctx, purchase)
+		},
+	); err != nil {
 		t.Fatal(err)
 	}
-	if err := uow.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
-		restored, err := tx.Checkouts().Get(ctx, purchase.ID())
-		if err != nil {
-			return err
-		}
-		assertCheckoutListState(t, restored.State(), purchase.State())
-		return nil
-	}); err != nil {
+	if err := uow.Do(
+		context.Background(),
+		func(ctx context.Context, tx ports.Tx) error {
+			restored, err := tx.Checkouts().Get(ctx, purchase.ID())
+			if err != nil {
+				return err
+			}
+			assertCheckoutListState(t, restored.State(), purchase.State())
+			return nil
+		},
+	); err != nil {
 		t.Fatal(err)
 	}
 }

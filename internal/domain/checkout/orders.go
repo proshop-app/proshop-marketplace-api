@@ -190,15 +190,23 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	g.PollFailures = 0
 	g.LastErrorCode = ""
 	g.LastOrderStatus = order.Status
+	if g.Paid() || order.Status == GroupCancelled {
+		g.PaymentPending = false
+		if c.state.PaymentAttempt == "" {
+			c.state.PaymentStarted = c.paymentPending()
+		}
+	}
 	if g.CancellationBlocked && (order.Status == GroupDelivered ||
 		order.Status == GroupReturned || order.Status == GroupCancelled) {
 		g.ReconciliationRequired = false
 	}
 	c.rollup()
-	if order.Status == GroupCancelled && !g.Abandoned && !c.state.PaymentStarted &&
-		c.Status() != StatusPaid && c.Status() != StatusPartiallyPaid {
+
+	if order.Status == GroupCancelled && order.Reason != "payment_expired" && !g.Abandoned &&
+		!c.state.PaymentStarted && !c.HasPaidGroups() {
 		c.state.Status, c.state.ConfirmedAt = StatusDraft, time.Time{}
 	}
+
 	return true, c.touch(now)
 }
 
@@ -224,14 +232,16 @@ func (c *Checkout) group(tenant ids.TenantID) *Group {
 }
 
 func (c *Checkout) rollup() {
-	if c.Status() == StatusDraft || c.Status() == StatusConfirmed {
+	if (c.Status() == StatusDraft || c.Status() == StatusConfirmed) && !c.HasPaidGroups() {
 		return
 	}
 	paid, cancelled, pending := 0, 0, 0
 	for _, g := range c.state.Groups {
-		switch g.EffectiveStatus() {
-		case GroupPaid, GroupShipped, GroupDelivered, GroupReturned:
+		if g.Paid() {
 			paid++
+			continue
+		}
+		switch g.EffectiveStatus() {
 		case GroupCancellationRequested, GroupRejected, GroupCancelled,
 			GroupPriceChanged, GroupDeliveryUnavailable, GroupUnconfirmed:
 			cancelled++
@@ -240,7 +250,7 @@ func (c *Checkout) rollup() {
 		}
 	}
 	switch {
-	case paid == len(c.state.Groups):
+	case paid > 0 && paid+cancelled == len(c.state.Groups):
 		c.state.Status = StatusPaid
 	case paid > 0:
 		c.state.Status = StatusPartiallyPaid

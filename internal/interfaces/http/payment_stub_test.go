@@ -44,12 +44,16 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 	for _, tenant := range []ids.TenantID{"t1", "t2"} {
 		seedReadyPaymentSeller(store, tenant)
 	}
-	order, err := platform.CreateOrder(ctx, "t1", ports.CreateOrderRequest{
-		ExternalCheckoutID: string(paymentTestID),
-		GroupID:            "t1",
-		Items:              []ports.OrderItem{{ProductID: "p1", Quantity: 1, Price: money.FromKopecks(12345)}},
-		DeliveryPrice:      money.FromKopecks(100),
-	})
+	order, err := platform.CreateOrder(
+		ctx,
+		"t1",
+		ports.CreateOrderRequest{
+			ExternalCheckoutID: string(paymentTestID),
+			GroupID:            "t1",
+			Items:              []ports.OrderItem{{ProductID: "p1", Quantity: 1, Price: money.FromKopecks(12345)}},
+			DeliveryPrice:      money.Money{},
+		},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,35 +61,47 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 		ID:             paymentTestID,
 		BuyerID:        paymentTestBuyer,
 		IdempotencyKey: "payment-test-key",
+		ConfirmedAt:    clock.Now(),
 		Status:         checkout.StatusAwaitingPayment,
 		Version:        1,
-		Total:          money.FromKopecks(12445),
-		Groups: []checkout.Group{{
-			TenantID: "t1",
-			Lines: []checkout.Line{{
-				Offer:    ids.OfferID{Tenant: "t1", Product: "p1"},
-				Quantity: 1,
-				Price:    money.FromKopecks(12345),
-			}},
-			Quote:         &delivery.Quote{Status: delivery.QuoteAvailable, BuyerCost: money.FromKopecks(100)},
-			ExpiresAt:     clock.Now().Add(time.Hour),
-			OrderID:       order.OrderID,
-			Status:        checkout.GroupAwaitingPayment,
-			Goods:         money.FromKopecks(12345),
-			DeliveryPrice: money.FromKopecks(100),
-		}},
+		Total:          money.FromKopecks(12345),
+		GoodsTotal:     money.FromKopecks(12345),
+		Groups: []checkout.Group{
+			{
+				TenantID: "t1",
+				Lines: []checkout.Line{
+					{
+						Offer:    ids.OfferID{Tenant: "t1", Product: "p1"},
+						Quantity: 1,
+						Price:    money.FromKopecks(12345),
+					},
+				},
+				Quote:         &delivery.Quote{Status: delivery.QuoteAvailable},
+				ExpiresAt:     clock.Now().Add(time.Hour),
+				OrderID:       order.OrderID,
+				Status:        checkout.GroupAwaitingPayment,
+				Goods:         money.FromKopecks(12345),
+				DeliveryPrice: money.Money{},
+			},
+		},
 	}
-	if err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		return tx.Checkouts().Add(ctx, checkout.Restore(state))
-	}); err != nil {
+	if err := store.Do(
+		ctx,
+		func(ctx context.Context, tx ports.Tx) error {
+			return tx.Checkouts().Add(ctx, checkout.Restore(state))
+		},
+	); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		if err := tx.Buyers().Add(ctx, buyer.New(paymentTestBuyer, "79000000001", clock.Now())); err != nil {
-			return err
-		}
-		return tx.Buyers().Add(ctx, buyer.New("f0000000-0000-4000-8000-000000000003", "79000000002", clock.Now()))
-	}); err != nil {
+	if err := store.Do(
+		ctx,
+		func(ctx context.Context, tx ports.Tx) error {
+			if err := tx.Buyers().Add(ctx, buyer.New(paymentTestBuyer, "79000000001", clock.Now())); err != nil {
+				return err
+			}
+			return tx.Buyers().Add(ctx, buyer.New("f0000000-0000-4000-8000-000000000003", "79000000002", clock.Now()))
+		},
+	); err != nil {
 		t.Fatal(err)
 	}
 	tokens := fake.NewIdentityTokens(clock)
@@ -107,7 +123,7 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 	mux := http.NewServeMux()
 	for _, route := range routes(Deps{Auth: auth, Checkouts: service}) {
 		if strings.Contains(route.path, "payment-stub") || strings.HasSuffix(route.path, "/pay") ||
-			strings.HasSuffix(route.path, "/cancel") {
+			strings.HasSuffix(route.path, "/cancel") || route.path == "/api/v1/checkout/{checkoutId}" {
 			mux.HandleFunc(route.method+" "+route.path, route.handler)
 		}
 	}
@@ -151,7 +167,7 @@ func TestPaymentStubHTTP(t *testing.T) {
 	}
 	html := e.call(http.MethodGet, page, e.cookie, "")
 	for _, expected := range []string{
-		"124,45",
+		"123,45",
 		`method="post"`,
 		page + "/confirm",
 		page + "/cancel",
@@ -210,7 +226,7 @@ func TestPaymentStubAuthorizationFlagAndCSRF(t *testing.T) {
 			if !enabled {
 				reply := e.call(route.method, route.path, e.cookie, "")
 				expected := 503
-				if route.method == http.MethodPost && strings.Contains(route.path, "payment-stub") {
+				if route.method == http.MethodPost && strings.HasSuffix(route.path, "/cancel") {
 					expected = 303
 				}
 				if reply.Code != expected {
@@ -312,41 +328,49 @@ func TestPaymentStubPaidWithFailedPoll(t *testing.T) {
 
 func TestPaymentStubErrorsStayInBrowser(t *testing.T) {
 	for _, mode := range []string{"server", "expired", "access"} {
-		t.Run(mode, func(t *testing.T) {
-			e := newPaymentTest(t, true)
-			page := "/api/v1/payment-stub/" + string(paymentTestID)
-			switch mode {
-			case "server":
-				e.platform.Fail("t1", errors.New("нет связи"))
-			case "expired":
-				e.clock.Advance(time.Hour)
-				access, err := e.tokens.Open(context.Background(), string(paymentTestBuyer))
-				if err != nil {
-					t.Fatal(err)
+		t.Run(
+			mode,
+			func(t *testing.T) {
+				e := newPaymentTest(t, true)
+				page := "/api/v1/payment-stub/" + string(paymentTestID)
+				switch mode {
+				case "server":
+					e.platform.Fail("t1", errors.New("нет связи"))
+				case "expired":
+					e.clock.Advance(time.Hour)
+					access, err := e.tokens.Open(context.Background(), string(paymentTestBuyer))
+					if err != nil {
+						t.Fatal(err)
+					}
+					e.cookie = access.Token
+				case "access":
+					e.clock.Advance(24 * time.Hour)
 				}
-				e.cookie = access.Token
-			case "access":
-				e.clock.Advance(24 * time.Hour)
-			}
-			if mode != "server" {
-				r := e.call(http.MethodGet, page, e.cookie, "")
-				if r.Code < 400 || !strings.HasPrefix(r.Header().Get("Content-Type"), "text/html") ||
-					!strings.Contains(r.Body.String(), "Вернуться к покупке") {
-					t.Fatal(r.Code, r.Body.String())
+				if mode != "server" {
+					r := e.call(http.MethodGet, page, e.cookie, "")
+					if r.Code < 400 || !strings.HasPrefix(r.Header().Get("Content-Type"), "text/html") ||
+						!strings.Contains(r.Body.String(), "Вернуться к покупке") {
+						t.Fatal(r.Code, r.Body.String())
+					}
 				}
-			}
-			for _, suffix := range []string{"/confirm", "/cancel"} {
-				r := e.call(http.MethodPost, page+suffix, e.cookie, "")
-				want := "https://market.example/checkout/" + string(paymentTestID) + "/return"
-				if r.Code != 303 || r.Header().Get("Location") != want {
-					t.Fatal(r.Code, r.Body.String())
+				for _, suffix := range []string{"/confirm", "/cancel"} {
+					r := e.call(http.MethodPost, page+suffix, e.cookie, "")
+					want := "https://market.example/checkout/" + string(paymentTestID) + "/return"
+					if suffix == "/confirm" && mode != "access" {
+						var failure errorBody
+						if json.Unmarshal(r.Body.Bytes(), &failure) != nil || failure.Checkout == nil {
+							t.Fatal(r.Code, r.Body.String())
+						}
+					} else if r.Code != 303 || r.Header().Get("Location") != want {
+						t.Fatal(r.Code, r.Body.String())
+					}
 				}
-			}
-			state, _ := e.store.Checkout(paymentTestID)
-			if state.Status != checkout.StatusAwaitingPayment {
-				t.Fatal(state)
-			}
-		})
+				state, _ := e.store.Checkout(paymentTestID)
+				if state.Status != checkout.StatusAwaitingPayment {
+					t.Fatal(state)
+				}
+			},
+		)
 	}
 }
 

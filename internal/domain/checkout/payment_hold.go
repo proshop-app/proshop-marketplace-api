@@ -10,6 +10,7 @@ import (
 const (
 	HoldModerationPending = "moderation_pending"
 	HoldPublicationPaused = "publication_paused"
+	HoldPaymentExpired    = "payment_expired"
 )
 
 // PaymentHoldReason отличает временную проверку товара от окончательного отказа.
@@ -24,8 +25,12 @@ func (c *Checkout) PaymentView(reasons map[ids.TenantID]string, now time.Time) S
 		g := &state.Groups[i]
 		g.PaymentHold = ""
 		reason := reasons[g.TenantID]
-		if g.OrderID != "" && g.EffectiveStatus() == GroupAwaitingPayment &&
-			g.ExpiresAt.After(now) && PaymentHoldReason(reason) {
+		if g.OrderID == "" || g.EffectiveStatus() != GroupAwaitingPayment {
+			continue
+		}
+		if !g.ExpiresAt.IsZero() && !g.ExpiresAt.After(now) {
+			g.PaymentHold = HoldPaymentExpired
+		} else if PaymentHoldReason(reason) {
 			g.PaymentHold = reason
 		}
 	}

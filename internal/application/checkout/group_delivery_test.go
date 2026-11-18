@@ -102,7 +102,7 @@ func TestSamePickupQuotesShopsInParallel(t *testing.T) {
 	}
 	for _, group := range state.Groups {
 		if group.Delivery == nil || group.Delivery.PickupPointCode != "MSK1" ||
-			group.Quote.Status != delivery.QuoteAvailable || group.Quote.BuyerCost.Kopecks() != 0 {
+			group.Quote.Status != delivery.QuoteAvailable || !group.DeliveryPrice.IsZero() {
 			t.Fatal(group)
 		}
 	}

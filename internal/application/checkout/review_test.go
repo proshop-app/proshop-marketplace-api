@@ -108,21 +108,19 @@ func TestPartialCartReturnDoesNotBlockShippedOrPayment(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Покупатель успел добавить 998 из 999 допустимых единиц. Вернётся одна из двух.
-	e.store.SeedCart(cart.State{
-		ID:        buyerID,
-		BuyerID:   buyerID,
-		Version:   1,
-		ExpiresAt: t0.Add(24 * time.Hour),
-		Lines:     []cart.Line{{Offer: p1, Name: "Товар", Price: money.FromKopecks(199000), Quantity: 998}},
-	})
+	e.store.SeedCart(
+		cart.State{
+			ID:        buyerID,
+			BuyerID:   buyerID,
+			Version:   1,
+			ExpiresAt: t0.Add(24 * time.Hour),
+			Lines:     []cart.Line{{Offer: p1, Name: "Товар", Price: money.FromKopecks(199000), Quantity: 998}},
+		},
+	)
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupCancelled, "payment_expired")
 	if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
-		t.Fatal("отмена магазина требует нового подтверждения", err)
-	}
-	reconfirmPurchase(t, e, c.ID)
 	if _, err := e.service.Pay(ctx, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}

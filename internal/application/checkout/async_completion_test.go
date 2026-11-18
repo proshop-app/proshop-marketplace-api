@@ -253,16 +253,19 @@ func TestPaymentCompletionSurvivesClientAndClearsOnlyProvenUnpaid(t *testing.T) 
 		if previousPaid {
 			e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupPaid, "")
 		}
-		if err := e.store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-			current, err := tx.Checkouts().Get(ctx, c.ID)
-			if err != nil {
-				return err
-			}
-			if err := current.ClaimPayment("uncertain", e.clock.Now()); err != nil {
-				return err
-			}
-			return tx.Checkouts().Update(ctx, current)
-		}); err != nil {
+		if err := e.store.Do(
+			ctx,
+			func(ctx context.Context, tx ports.Tx) error {
+				current, err := tx.Checkouts().Get(ctx, c.ID)
+				if err != nil {
+					return err
+				}
+				if err := current.ClaimPayment("uncertain", current.PaymentOrders(), e.clock.Now()); err != nil {
+					return err
+				}
+				return tx.Checkouts().Update(ctx, current)
+			},
+		); err != nil {
 			t.Fatal(err)
 		}
 		requestCtx, cancel := context.WithCancel(ctx)
@@ -291,14 +294,11 @@ func TestPaymentCompletionSurvivesClientAndClearsOnlyProvenUnpaid(t *testing.T) 
 			t.Fatal(err)
 		}
 		state, err = service.Get(ctx, buyerID, c.ID)
-		if err != nil || state.PaymentStarted != previousPaid || state.PaymentAttempt != "" {
+		if err != nil || !state.PaymentStarted || state.PaymentAttempt != "" {
 			t.Fatal("завершение попытки должно пережить обрыв клиента", state, err)
 		}
 		_, err = service.Cancel(ctx, buyerID, c.ID)
-		if previousPaid && !errors.Is(err, checkout.ErrTransition) {
-			t.Fatal(err)
-		}
-		if !previousPaid && err != nil {
+		if !errors.Is(err, checkout.ErrTransition) {
 			t.Fatal(err)
 		}
 	}

@@ -99,6 +99,9 @@ func TestCallerSelectsPoolForSharedOperations(t *testing.T) {
 						operation,
 						func() string {
 							if operation == "pickup_points" {
+								if class == checkoutClass {
+									return checkoutCatalogClass.String()
+								}
 								return catalogClass.String()
 							}
 							return class.String()

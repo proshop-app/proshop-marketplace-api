@@ -44,12 +44,11 @@ func draft(t *testing.T) *checkout.Checkout {
 	return checkout.Restore(c.State())
 }
 
-func available(cost, buyer int64, at time.Time) delivery.Quote {
+func available(cost int64, at time.Time) delivery.Quote {
 	return delivery.Quote{
-		Status:    delivery.QuoteAvailable,
-		Cost:      money.FromKopecks(cost),
-		BuyerCost: money.FromKopecks(buyer),
-		Subsidy:   money.FromKopecks(cost - buyer),
+		Status: delivery.QuoteAvailable,
+		Cost:   money.FromKopecks(cost),
+
 		MinDays:   2,
 		MaxDays:   3,
 		ExpiresAt: at,
@@ -88,7 +87,7 @@ func TestSelectDeliveryAndConfirm(t *testing.T) {
 		t.Fatalf("без доставки: %v", err)
 	}
 
-	partial := map[ids.TenantID]delivery.Quote{"t1": available(30000, 20000, t0.Add(time.Hour))}
+	partial := map[ids.TenantID]delivery.Quote{"t1": available(30000, t0.Add(time.Hour))}
 
 	err := c.SelectDelivery(selection, partial, t0)
 	if !errors.Is(err, checkout.ErrInvalidQuotes) {
@@ -96,14 +95,14 @@ func TestSelectDeliveryAndConfirm(t *testing.T) {
 	}
 
 	quotes := map[ids.TenantID]delivery.Quote{
-		"t1": available(30000, 20000, t0.Add(time.Hour)),
+		"t1": available(30000, t0.Add(time.Hour)),
 		"t2": {Status: delivery.QuoteUnavailable, Reason: "carrier_not_connected", ExpiresAt: t0.Add(time.Hour)},
 	}
 	if err := c.SelectDelivery(selection, quotes, t0); err != nil {
 		t.Fatal(err)
 	}
-	if state := c.State(); state.DeliveryTotal.Kopecks() != 20000 || state.Total.Kopecks() != 45000 {
-		t.Fatalf("итоги с долей покупателя: %+v", state)
+	if state := c.State(); state.DeliveryTotal.Kopecks() != 0 || state.Total.Kopecks() != 25000 {
+		t.Fatalf("итоги бесплатной доставки: %+v", state)
 	}
 	if err := checkout.Restore(c.State()).Confirm(t0); err != nil {
 		t.Fatalf("доступная группа подтверждается независимо: %v", err)
@@ -115,7 +114,7 @@ func TestSelectDeliveryAndConfirm(t *testing.T) {
 		t.Fatalf("не ответивший магазин пересчитывается: %v", need)
 	}
 
-	quotes["t2"] = available(10000, 10000, t0.Add(10*time.Minute))
+	quotes["t2"] = available(10000, t0.Add(10*time.Minute))
 	if err := c.SelectDelivery(selection, quotes, t0); err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +125,7 @@ func TestSelectDeliveryAndConfirm(t *testing.T) {
 		t.Fatalf("пересчитать нужно одного продавца: %v", need)
 	}
 
-	requoted := map[ids.TenantID]delivery.Quote{"t2": available(10000, 9000, t0.Add(time.Hour))}
+	requoted := map[ids.TenantID]delivery.Quote{"t2": available(10000, t0.Add(time.Hour))}
 	if err := c.Requote(requoted, t0.Add(11*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
@@ -135,13 +134,18 @@ func TestSelectDeliveryAndConfirm(t *testing.T) {
 	}
 
 	state := c.State()
-	if state.Status != checkout.StatusConfirmed || state.DeliveryTotal.Kopecks() != 29000 ||
-		state.Total.Kopecks() != 54700 ||
+	if state.Status != checkout.StatusConfirmed || state.DeliveryTotal.Kopecks() != 0 ||
+		state.Total.Kopecks() != 25700 ||
 		!state.ConfirmedAt.Equal(t0.Add(12*time.Minute)) {
 		t.Fatalf("подтверждённая покупка: %+v", state)
 	}
 	if status, version := c.Origin(); status != checkout.StatusDraft || version != 1 || state.Version != 2 {
-		t.Fatalf("исходное состояние для условного перехода: %s %d → %d", status, version, state.Version)
+		t.Fatalf(
+			"исходное состояние для условного перехода: %s %d → %d",
+			status,
+			version,
+			state.Version,
+		)
 	}
 
 	if err := c.SelectDelivery(selection, quotes, t0); !errors.Is(err, checkout.ErrNotDraft) {
@@ -155,8 +159,8 @@ func TestSelectDeliveryAndConfirm(t *testing.T) {
 func TestReprice(t *testing.T) {
 	c := draft(t)
 	quotes := map[ids.TenantID]delivery.Quote{
-		"t1": available(30000, 30000, t0.Add(time.Hour)),
-		"t2": available(10000, 10000, t0.Add(time.Hour)),
+		"t1": available(30000, t0.Add(time.Hour)),
+		"t2": available(10000, t0.Add(time.Hour)),
 	}
 	_ = c.SelectDelivery(selection, quotes, t0)
 

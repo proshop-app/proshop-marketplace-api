@@ -97,15 +97,21 @@ func testPayableCashier(t *testing.T, partial bool) {
 	}
 	if partial {
 		state.Total = money.FromKopecks(12645)
-		state.Groups = append(state.Groups, checkout.Group{
-			TenantID: "t2",
-			Status:   checkout.GroupRejected,
-			Goods:    money.FromKopecks(200),
-			Lines:    []checkout.Line{{Quantity: 1, Price: money.FromKopecks(200)}},
-		})
-		if err := e.store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
-			return tx.Checkouts().Update(ctx, checkout.Restore(state))
-		}); err != nil {
+		state.Groups = append(
+			state.Groups,
+			checkout.Group{
+				TenantID: "t2",
+				Status:   checkout.GroupRejected,
+				Goods:    money.FromKopecks(200),
+				Lines:    []checkout.Line{{Quantity: 1, Price: money.FromKopecks(200)}},
+			},
+		)
+		if err := e.store.Do(
+			context.Background(),
+			func(ctx context.Context, tx ports.Tx) error {
+				return tx.Checkouts().Update(ctx, checkout.Restore(state))
+			},
+		); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -114,11 +120,11 @@ func testPayableCashier(t *testing.T, partial bool) {
 		t.Fatal(err)
 	}
 	raw, err := json.Marshal(view)
-	if err != nil || !strings.Contains(string(raw), `"payableTotal":124.45`) {
+	if err != nil || !strings.Contains(string(raw), `"payableTotal":123.45`) {
 		t.Fatal(string(raw), err)
 	}
 	page := e.call(http.MethodGet, "/api/v1/payment-stub/"+string(paymentTestID), e.cookie, "")
-	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "124,45") {
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "123,45") {
 		t.Fatal(page.Code, page.Body.String())
 	}
 	if err := e.service.ConfirmPayment(context.Background(), paymentTestBuyer, paymentTestID); err != nil {

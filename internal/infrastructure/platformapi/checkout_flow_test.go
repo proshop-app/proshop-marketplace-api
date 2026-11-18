@@ -54,16 +54,22 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 		err = json.NewDecoder(r.Body).Decode(&body)
 		if err == nil && len(body.TenantIDs) == 1 {
-			result = map[string]any{"items": []any{map[string]any{
-				"tenantId": body.TenantIDs[0],
-				"items": []any{map[string]any{
-					"productId":         "p1",
-					"available":         true,
-					"availableQuantity": 3,
-					"price":             199000,
-					"discounts":         []any{},
-				}},
-			}}}
+			result = map[string]any{
+				"items": []any{
+					map[string]any{
+						"tenantId": body.TenantIDs[0],
+						"items": []any{
+							map[string]any{
+								"productId":         "p1",
+								"available":         true,
+								"availableQuantity": 3,
+								"price":             199000,
+								"discounts":         []any{},
+							},
+						},
+					},
+				},
+			}
 		}
 	case strings.HasSuffix(r.URL.Path, "/delivery/pickup-points"):
 		answer := s.points
@@ -108,10 +114,12 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		if blocked {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"code": checkout.DispatchOriginChanged,
-				"data": map[string]any{"dispatchReviewRevision": 3},
-			})
+			_ = json.NewEncoder(w).Encode(
+				map[string]any{
+					"code": checkout.DispatchOriginChanged,
+					"data": map[string]any{"dispatchReviewRevision": 3},
+				},
+			)
 			return
 		}
 		var body ports.CreateOrderRequest
@@ -148,214 +156,259 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 	for _, action := range []string{"pay", "cancel", "redispatch"} {
-		t.Run(action, func(t *testing.T) {
-			ctx := context.Background()
-			now := time.Date(2026, 10, 24, 10, 0, 0, 0, time.UTC)
-			buyer := ids.UUID("00000000-0000-4000-8000-000000000002")
-			store, backend := fake.NewStore(), fake.NewPlatform()
-			backend.OrderNow = now
-			upstream := &pickupCheckoutServer{platform: backend, redispatch: action == "redispatch"}
-			readPickupFixture(t, "delivery_quote_available.json", &upstream.quote)
-			readPickupFixture(t, "pickups.json", &upstream.points)
-			server := httptest.NewServer(upstream)
-			defer server.Close()
-			clock := fake.NewClock(now)
-			client := New(Config{
-				BaseURL: server.URL,
-				Token:   "service-token",
-				Timeout: time.Second,
-			})
-			guarded := platformguard.New(client, pickupGuardConfig(), clock, &fake.PlatformMetrics{}, slog.Default())
-			directory := appdelivery.NewService(store, guarded, fake.NewPickupCache(), appdelivery.Config{
-				Attempts:     1,
-				TTL:          time.Hour,
-				QuoteTimeout: time.Second,
-			})
-			index := fake.NewIndex()
-			basket := cart.New("00000000-0000-4000-8000-000000000003", buyer, now, time.Hour)
-			carriers := map[ids.TenantID]string{"t1": "cdek", "t2": "yandex"}
-			for tenant, carrier := range carriers {
-				store.SeedReadyOffer(ids.OfferID{Tenant: tenant, Product: "p1"}, money.FromKopecks(199000))
-				store.SeedTenant(participant.TenantState{
-					TenantID: tenant,
-					Status:   participant.TenantActive,
-				})
-				store.SeedParticipant(participant.State{
-					TenantID: tenant,
-					Enabled:  true,
-					Stage:    participant.StageConnected,
-					Delivery: participant.DeliverySettings{
-						Carriers: []string{carrier},
-						Regions:  []string{"RU-AD"},
+		t.Run(
+			action,
+			func(t *testing.T) {
+				ctx := context.Background()
+				now := time.Date(2026, 10, 24, 10, 0, 0, 0, time.UTC)
+				buyer := ids.UUID("00000000-0000-4000-8000-000000000002")
+				store, backend := fake.NewStore(), fake.NewPlatform()
+				backend.OrderNow = now
+				upstream := &pickupCheckoutServer{platform: backend, redispatch: action == "redispatch"}
+				readPickupFixture(t, "delivery_quote_available.json", &upstream.quote)
+				readPickupFixture(t, "pickups.json", &upstream.points)
+				server := httptest.NewServer(upstream)
+				defer server.Close()
+				clock := fake.NewClock(now)
+				client := New(
+					Config{
+						BaseURL: server.URL,
+						Token:   "service-token",
+						Timeout: time.Second,
 					},
-				})
-				offer := cart.Offer{
-					ID: ids.OfferID{
-						Tenant:  tenant,
-						Product: "p1",
+				)
+				guarded := platformguard.New(
+					client,
+					pickupGuardConfig(),
+					clock,
+					&fake.PlatformMetrics{},
+					slog.Default(),
+				)
+				directory := appdelivery.NewService(
+					store,
+					guarded,
+					fake.NewPickupCache(),
+					appdelivery.Config{
+						Attempts:     1,
+						TTL:          time.Hour,
+						QuoteTimeout: time.Second,
 					},
-					Name:      "Товар",
-					Price:     money.FromKopecks(199000),
-					Available: 3,
-					Visible:   true,
+				)
+				index := fake.NewIndex()
+				basket := cart.New("00000000-0000-4000-8000-000000000003", buyer, now, time.Hour)
+				carriers := map[ids.TenantID]string{"t1": "cdek", "t2": "yandex"}
+				for tenant, carrier := range carriers {
+					store.SeedReadyOffer(ids.OfferID{Tenant: tenant, Product: "p1"}, money.FromKopecks(199000))
+					store.SeedTenant(
+						participant.TenantState{
+							TenantID: tenant,
+							Status:   participant.TenantActive,
+						},
+					)
+					store.SeedParticipant(
+						participant.State{
+							TenantID: tenant,
+							Enabled:  true,
+							Stage:    participant.StageConnected,
+							Delivery: participant.DeliverySettings{
+								Carriers: []string{carrier},
+								Regions:  []string{"RU-AD"},
+							},
+						},
+					)
+					offer := cart.Offer{
+						ID: ids.OfferID{
+							Tenant:  tenant,
+							Product: "p1",
+						},
+						Name:      "Товар",
+						Price:     money.FromKopecks(199000),
+						Available: 3,
+						Visible:   true,
+					}
+					if err := basket.Add(offer, 1, now, time.Hour); err != nil {
+						t.Fatal(err)
+					}
+					if err := index.Put(
+						ctx,
+						[]ports.OfferDocument{
+							{
+								ID:                offer.ID.String(),
+								TenantID:          string(tenant),
+								ProductID:         "p1",
+								Visible:           true,
+								CheckoutAvailable: true,
+								Version:           1,
+							},
+						},
+					); err != nil {
+						t.Fatal(err)
+					}
 				}
-				if err := basket.Add(offer, 1, now, time.Hour); err != nil {
+				if err := store.Do(
+					ctx,
+					func(ctx context.Context, tx ports.Tx) error {
+						return tx.Carts().Save(ctx, basket)
+					},
+				); err != nil {
 					t.Fatal(err)
 				}
-				if err := index.Put(ctx, []ports.OfferDocument{{
-					ID:                offer.ID.String(),
-					TenantID:          string(tenant),
-					ProductID:         "p1",
-					Visible:           true,
-					CheckoutAvailable: true,
-					Version:           1,
-				}}); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-				return tx.Carts().Save(ctx, basket)
-			}); err != nil {
-				t.Fatal(err)
-			}
-			service := appcheckout.NewService(
-				store,
-				guarded,
-				directory,
-				&fake.CartVerifier{},
-				&fake.IDs{},
-				clock,
-				appcheckout.Config{
-					QuoteTTL:     time.Minute,
-					QuoteTimeout: time.Second,
-					PaymentStub:  true,
-				},
-			)
-			state, err := service.Create(ctx, buyer, "pickup-flow-0001")
-			if err != nil {
-				t.Fatal(err)
-			}
-			for tenant, carrier := range carriers {
-				page, err := directory.QueryFor(
-					ctx,
-					delivery.Carrier(carrier),
-					"Город & район",
-					[]string{"RU-AD"},
-					nil,
-					0,
-					200,
+				service := appcheckout.NewService(
+					store,
+					guarded,
+					directory,
+					&fake.CartVerifier{},
+					&fake.IDs{},
+					clock,
+					appcheckout.Config{
+						QuoteTTL:     time.Minute,
+						QuoteTimeout: time.Second,
+						PaymentStub:  true,
+					},
 				)
-				points := page.Items
-				if err != nil || len(points) != 1 {
-					t.Fatal(points, err)
-				}
-				state, err = service.QuoteGroup(
-					ctx,
-					buyer,
-					state.ID,
-					tenant,
-					delivery.Carrier(carrier),
-					"p1",
-					"Город & район",
-				)
+				state, err := service.Create(ctx, buyer, "pickup-flow-0001")
 				if err != nil {
 					t.Fatal(err)
 				}
-			}
-			state, err = service.Confirm(ctx, buyer, state.ID)
-			if err != nil || state.Total != state.GoodsTotal || state.DeliveryTotal.Kopecks() != 0 {
-				t.Fatal(state, err)
-			}
-			for _, group := range state.Groups {
-				if group.Quote.Cost != upstream.quote.Cost || group.Quote.Subsidy != upstream.quote.Cost ||
-					group.Delivery.Carrier != delivery.Carrier(carriers[group.TenantID]) {
-					t.Fatal(group)
+				for tenant, carrier := range carriers {
+					page, err := directory.QueryFor(
+						ctx,
+						delivery.Carrier(carrier),
+						"Город & район",
+						[]string{"RU-AD"},
+						nil,
+						0,
+						200,
+					)
+					points := page.Items
+					if err != nil || len(points) != 1 {
+						t.Fatal(points, err)
+					}
+					state, err = service.QuoteGroup(
+						ctx,
+						buyer,
+						state.ID,
+						tenant,
+						delivery.Carrier(carrier),
+						"p1",
+						"Город & район",
+					)
+					if err != nil {
+						t.Fatal(err)
+					}
 				}
-			}
-			contact := checkout.Contact{
-				Phone: "79251234567",
-				Name:  "Покупатель",
-			}
-			if _, err := service.CreateOrders(ctx, buyer, state.ID, contact); err != nil {
-				t.Fatal(err)
-			}
-			runPickupTasks(t, store, service, now)
-			if action == "redispatch" {
-				review, err := service.Get(ctx, buyer, state.ID)
-				if err != nil || review.Status != checkout.StatusDraft || backend.OrderCount() != 1 {
-					t.Fatal("нужно новое подтверждение без потери здорового заказа", review, err)
+				state, err = service.Confirm(ctx, buyer, state.ID)
+				if err != nil || state.Total != state.GoodsTotal || state.DeliveryTotal.Kopecks() != 0 {
+					t.Fatal(state, err)
 				}
-				for _, group := range review.Groups {
-					if group.TenantID == "t1" && (group.Status != checkout.GroupDeliveryRequoted ||
-						group.Reason != checkout.DispatchOriginChanged || group.Quote.MinDays != 7 ||
-						group.Quote.MaxDays != 9 || !group.DeliveryPrice.IsZero() || group.Excluded()) {
+				for _, group := range state.Groups {
+					if group.Quote.Cost != upstream.quote.Cost ||
+						group.Delivery.Carrier != delivery.Carrier(carriers[group.TenantID]) {
 						t.Fatal(group)
 					}
 				}
-				upstream.mu.Lock()
-				recalculation := upstream.dispatchReview
-				upstream.mu.Unlock()
-				if recalculation == nil || recalculation.Revision != 3 || recalculation.GroupID != "t1" {
-					t.Fatal("HTTP-пересчёт не подтвердил сохранённое поколение отказа", recalculation)
-				}
-				if _, err := service.Confirm(ctx, buyer, state.ID); err != nil {
-					t.Fatal(err)
+				contact := checkout.Contact{
+					Phone: "79251234567",
+					Name:  "Покупатель",
 				}
 				if _, err := service.CreateOrders(ctx, buyer, state.ID, contact); err != nil {
 					t.Fatal(err)
 				}
 				runPickupTasks(t, store, service, now)
-			}
-			if _, err := service.CreateOrders(ctx, buyer, state.ID, contact); err != nil || backend.OrderCount() != 2 {
-				t.Fatal("повтор изменил число заказов", err, backend.OrderCount())
-			}
-			for tenant, carrier := range carriers {
-				requests := backend.OrderRequests(tenant)
-				if len(requests) != 1 || requests[0].Carrier != carrier || requests[0].DeliveryPrice.Kopecks() != 0 {
-					t.Fatal(requests)
+				if action == "redispatch" {
+					review, err := service.Get(ctx, buyer, state.ID)
+					if err != nil || review.Status != checkout.StatusDraft || backend.OrderCount() != 1 {
+						t.Fatal(
+							"нужно новое подтверждение без потери здорового заказа",
+							review,
+							err,
+						)
+					}
+					for _, group := range review.Groups {
+						if group.TenantID == "t1" && (group.Status != checkout.GroupDeliveryRequoted ||
+							group.Reason != checkout.DispatchOriginChanged || group.Quote.MinDays != 7 ||
+							group.Quote.MaxDays != 9 || !group.DeliveryPrice.IsZero() || group.Excluded()) {
+							t.Fatal(group)
+						}
+					}
+					upstream.mu.Lock()
+					recalculation := upstream.dispatchReview
+					upstream.mu.Unlock()
+					if recalculation == nil || recalculation.Revision != 3 || recalculation.GroupID != "t1" {
+						t.Fatal(
+							"HTTP-пересчёт не подтвердил сохранённое поколение отказа",
+							recalculation,
+						)
+					}
+					if _, err := service.Confirm(ctx, buyer, state.ID); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := service.CreateOrders(ctx, buyer, state.ID, contact); err != nil {
+						t.Fatal(err)
+					}
+					runPickupTasks(t, store, service, now)
 				}
-				if _, err := guarded.CreateOrder(ctx, tenant, requests[0]); err != nil || backend.OrderCount() != 2 {
-					t.Fatal("повтор HTTP изменил заказ", err)
+				if _, err := service.CreateOrders(
+					ctx,
+					buyer,
+					state.ID,
+					contact,
+				); err != nil ||
+					backend.OrderCount() != 2 {
+					t.Fatal("повтор изменил число заказов", err, backend.OrderCount())
 				}
-			}
-			state, err = service.Get(ctx, buyer, state.ID)
-			if err != nil {
-				t.Fatal(err)
-			}
-			upstream.mu.Lock()
-			for _, group := range state.Groups {
-				if upstream.tariffs[group.OrderID] != upstream.quote.Cost || group.DeliveryPrice.Kopecks() != 0 {
-					t.Error("расход продавца потерян или попал в сумму покупателя", group)
-				}
-			}
-			upstream.mu.Unlock()
-			if action != "cancel" {
-				if err := service.ConfirmPayment(ctx, buyer, state.ID); err != nil {
-					t.Fatal(err)
-				}
-				if err := service.ConfirmPayment(ctx, buyer, state.ID); err != nil {
-					t.Fatal(err)
-				}
-				state, err = service.Get(ctx, buyer, state.ID)
-				if err != nil || state.Status != checkout.StatusPaid {
-					t.Fatal(state, err)
-				}
-			} else {
-				if _, err := service.Cancel(ctx, buyer, state.ID); err != nil {
-					t.Fatal(err)
-				}
-				runPickupTasks(t, store, service, now)
-				state, err = service.Get(ctx, buyer, state.ID)
-				if err != nil || state.Status != checkout.StatusCancelled {
-					t.Fatal(state, err)
-				}
-				for _, group := range state.Groups {
-					if group.Status != checkout.GroupCancelled {
-						t.Fatal(group)
+				for tenant, carrier := range carriers {
+					requests := backend.OrderRequests(tenant)
+					if len(requests) != 1 || requests[0].Carrier != carrier ||
+						requests[0].DeliveryPrice.Kopecks() != 0 {
+						t.Fatal(requests)
+					}
+					if _, err := guarded.CreateOrder(ctx, tenant, requests[0]); err != nil ||
+						backend.OrderCount() != 2 {
+						t.Fatal("повтор HTTP изменил заказ", err)
 					}
 				}
-			}
-		},
+				state, err = service.Get(ctx, buyer, state.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				upstream.mu.Lock()
+				for _, group := range state.Groups {
+					if upstream.tariffs[group.OrderID] != upstream.quote.Cost || group.DeliveryPrice.Kopecks() != 0 {
+						t.Error(
+							"расход продавца потерян или попал в сумму покупателя",
+							group,
+						)
+					}
+				}
+				upstream.mu.Unlock()
+				if action != "cancel" {
+					if err := service.ConfirmPayment(ctx, buyer, state.ID); err != nil {
+						t.Fatal(err)
+					}
+					if err := service.ConfirmPayment(ctx, buyer, state.ID); err != nil {
+						t.Fatal(err)
+					}
+					state, err = service.Get(ctx, buyer, state.ID)
+					if err != nil || state.Status != checkout.StatusPaid {
+						t.Fatal(state, err)
+					}
+				} else {
+					if _, err := service.Cancel(ctx, buyer, state.ID); err != nil {
+						t.Fatal(err)
+					}
+					runPickupTasks(t, store, service, now)
+					state, err = service.Get(ctx, buyer, state.ID)
+					if err != nil || state.Status != checkout.StatusCancelled {
+						t.Fatal(state, err)
+					}
+					for _, group := range state.Groups {
+						if group.Status != checkout.GroupCancelled {
+							t.Fatal(group)
+						}
+					}
+				}
+			},
 		)
 	}
 }
@@ -373,13 +426,16 @@ func readPickupFixture(t *testing.T, name string, target any) {
 
 func runPickupTasks(t *testing.T, store *fake.Store, service *appcheckout.Service, now time.Time) {
 	t.Helper()
-	tasks, err := store.Claim(context.Background(), ports.ClaimRequest{
-		Now:        now,
-		Limit:      200,
-		PerTenant:  200,
-		LeaseUntil: now.Add(time.Second),
-		Kinds:      []string{appcheckout.TaskCreateOrder, appcheckout.TaskCancelOrder},
-	})
+	tasks, err := store.Claim(
+		context.Background(),
+		ports.ClaimRequest{
+			Now:        now,
+			Limit:      200,
+			PerTenant:  200,
+			LeaseUntil: now.Add(time.Second),
+			Kinds:      []string{appcheckout.TaskCreateOrder, appcheckout.TaskCancelOrder},
+		},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

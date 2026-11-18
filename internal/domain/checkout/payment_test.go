@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestWholePaymentAndRepeat(t *testing.T) {
@@ -76,5 +79,61 @@ func TestPaymentInvalidatesInFlightPoll(t *testing.T) {
 	}
 	if changed, err := c.Pay(t0); err != nil || changed {
 		t.Fatal("повтор с отменённой группой", err)
+	}
+}
+
+func TestPartialPaymentCompositionNeedsConfirmationAndPreservesPaidOrder(t *testing.T) {
+	lines := []checkout.Line{}
+	quotes := map[ids.TenantID]delivery.Quote{}
+	for _, tenant := range []ids.TenantID{"t1", "t2", "t3"} {
+		lines = append(lines, checkout.Line{
+			Offer:    ids.OfferID{Tenant: tenant, Product: "p1"},
+			Name:     "Товар",
+			Quantity: 1,
+			Price:    money.FromKopecks(100),
+		})
+		quotes[tenant] = available(200, t0.Add(time.Hour))
+	}
+	c, err := checkout.New(id, "7a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b", "partial-three-shops", lines, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SelectDelivery(selection, quotes, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Confirm(t0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.BeginOrders(contact, t0); err != nil {
+		t.Fatal(err)
+	}
+	first := attach(t, c, 0)
+	attach(t, c, 1)
+	attach(t, c, 2)
+	first.Status = checkout.GroupPaid
+	if _, err := c.Observe("t1", first, t0, t0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.RemoveGroup("t2", t0); err != nil {
+		t.Fatal(err)
+	}
+	if c.Status() != checkout.StatusPartiallyPaid || !c.NeedsConfirmation() || !c.Groups()[0].Paid() {
+		t.Fatal(c.State())
+	}
+	if _, err := c.PaymentAmount(); !errors.Is(err, checkout.ErrDeliveryChanged) {
+		t.Fatal(err)
+	}
+	if err := c.Confirm(t0); err != nil {
+		t.Fatal(err)
+	}
+	amount, err := c.PaymentAmount()
+	if err != nil || amount.Kopecks() != 100 || c.NeedsConfirmation() {
+		t.Fatal(c.State(), err)
+	}
+	if _, err := c.Cancel(t0); err != nil {
+		t.Fatal(err)
+	}
+	if c.Status() != checkout.StatusPaid || c.State().Total.Kopecks() != 100 || c.Groups()[0].CancellationRequired() {
+		t.Fatal(c.State())
 	}
 }
