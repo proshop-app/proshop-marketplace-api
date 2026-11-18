@@ -118,8 +118,8 @@ func (s *Service) catalogue(
 	carrier delivery.Carrier,
 	city string,
 ) (*pickupCatalog, error) {
-	if _, err := delivery.ParseCarrier(string(carrier)); err != nil {
-		return nil, err
+	if !slices.ContainsFunc(s.Carriers(), func(item delivery.CarrierInfo) bool { return item.Code == carrier }) {
+		return nil, delivery.ErrInvalidCarrier
 	}
 	city, err := delivery.NormalizeCity(city)
 	if err != nil {

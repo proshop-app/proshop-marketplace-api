@@ -62,6 +62,10 @@ func TestPickupPublicContract(t *testing.T) {
 	handler := &deliveryHandlers{directory: service}
 	for _, query := range []string{
 		"city=Город",
+		"carrier=&city=Город",
+		"carrier=all&city=Город",
+		"carrier=cdek,yandex&city=Город",
+		"carrier=cdek&carrier=yandex&city=Город",
 		"carrier=CDEK&city=Город",
 		"carrier=cdek",
 		"carrier=cdek&city=" + strings.Repeat("а", 121),

@@ -292,8 +292,8 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	}
 
 	r = e.session(t, http.MethodGet, "/api/v1/delivery/pickup-points?carrier=ozon&city=Город", "", "")
-	if r.status != http.StatusOK || len(r.body["items"].([]any)) != 0 {
-		t.Fatalf("неподключённый перевозчик: %+v", r)
+	if r.status != http.StatusBadRequest || errorCode(r) != "delivery.invalid_carrier" {
+		t.Fatalf("неподдерживаемый перевозчик: %+v", r)
 	}
 
 	r = e.session(t, http.MethodPost, "/api/v1/checkout", "", token)
