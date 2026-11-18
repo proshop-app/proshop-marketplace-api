@@ -36,7 +36,7 @@ func TestCatalogueFailureAndDisconnectedSourceNeverBecomeEmptySuccess(t *testing
 	if len(platform.PickupCalls()) != 2 {
 		t.Fatal("короткий кэш отказа не сработал", platform.PickupCalls())
 	}
-	raw, ok, err := cache.Get(context.Background(), "v4:cdek:город")
+	raw, ok, err := cache.Get(context.Background(), "v5:cdek:город")
 	if !ok || err != nil {
 		t.Fatal(ok, err)
 	}

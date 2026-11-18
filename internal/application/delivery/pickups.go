@@ -139,7 +139,7 @@ func (s *Service) catalogue(
 		class = ports.PlatformCheckout
 	}
 	ctx = ports.WithPlatformCallClass(ctx, class)
-	key := "v4:" + string(carrier) + ":" + strings.ToLower(city)
+	key := "v5:" + string(carrier) + ":" + strings.ToLower(city)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -306,21 +306,7 @@ func (s *Service) candidates(ctx context.Context, carrier delivery.Carrier) ([]i
 	s.sourceMu.Lock()
 	after := s.sources[carrier]
 	s.sourceMu.Unlock()
-	var tenants []ids.TenantID
-	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		var err error
-		tenants, err = tx.Participants().PickupSources(ctx, string(carrier), after, s.config.Attempts)
-		if err != nil || len(tenants) >= s.config.Attempts || after == "" {
-			return err
-		}
-		remaining, err := tx.Participants().PickupSources(ctx, string(carrier), "", s.config.Attempts-len(tenants))
-		for _, tenant := range remaining {
-			if !slices.Contains(tenants, tenant) {
-				tenants = append(tenants, tenant)
-			}
-		}
-		return err
-	})
+	tenants, err := s.readSources(ctx, carrier, after)
 	if err == nil && len(tenants) > 0 {
 		s.sourceMu.Lock()
 		// Запоздавший ответ не откатывает уже продвинутый курсор.
@@ -332,6 +318,25 @@ func (s *Service) candidates(ctx context.Context, carrier delivery.Carrier) ([]i
 	return tenants, err
 }
 
+// readSources выбирает источник перед вызовом, не удерживая устаревшую пачку после ожидания другого магазина.
+func (s *Service) readSources(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	after ids.TenantID,
+) ([]ids.TenantID, error) {
+	var tenants []ids.TenantID
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		tenants, err = tx.Participants().PickupSources(ctx, string(carrier), after, 1)
+		if err != nil || len(tenants) > 0 || after == "" {
+			return err
+		}
+		tenants, err = tx.Participants().PickupSources(ctx, string(carrier), "", 1)
+		return err
+	})
+	return tenants, err
+}
+
 func (s *Service) fetch(
 	ctx context.Context,
 	carrier delivery.Carrier,
@@ -339,12 +344,13 @@ func (s *Service) fetch(
 	tenants []ids.TenantID,
 ) ([]delivery.PickupPoint, error) {
 	failed := 0
-	attempted := 0
-	for _, tenant := range tenants {
-		if attempted >= s.config.Attempts {
+	seen := make(map[ids.TenantID]bool)
+	for attempted := 0; attempted < s.config.Attempts && len(tenants) > 0; attempted++ {
+		tenant := tenants[0]
+		if seen[tenant] {
 			break
 		}
-		attempted++
+		seen[tenant] = true
 		callCtx, cancel := context.WithTimeout(ctx, ports.PickupCatalogBudget(s.config.QuoteTimeout))
 		if ports.PlatformClassFromContext(ctx) != ports.PlatformCheckout {
 			callCtx = ports.WithPlatformCallClass(callCtx, ports.PlatformCatalog)
@@ -354,12 +360,17 @@ func (s *Service) fetch(
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
+		if err == nil && answer.Available {
+			return answer.Items, nil
+		}
 		if err != nil {
 			failed++
-			continue
 		}
-		if answer.Available {
-			return answer.Items, nil
+		if attempted+1 < s.config.Attempts {
+			tenants, err = s.readSources(ctx, carrier, tenant)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if failed > 0 {

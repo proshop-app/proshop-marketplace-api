@@ -50,6 +50,20 @@ func (p *ResyncingPlatform) QuoteDelivery(
 	return offered, p.resync(ctx, tenantID, err)
 }
 
+// PickupPoints обновляет устаревшую проекцию подключения службы по определённому отказу источника.
+func (p *ResyncingPlatform) PickupPoints(
+	ctx context.Context,
+	tenantID ids.TenantID,
+	carrier delivery.Carrier,
+	city string,
+) (ports.PickupPoints, error) {
+	answer, err := p.PlatformAPI.PickupPoints(ctx, tenantID, carrier, city)
+	if err == nil && !answer.Available && answer.Reason == delivery.ReasonCarrierNotConnected {
+		return answer, p.syncSettings(ctx, tenantID)
+	}
+	return answer, p.resync(ctx, tenantID, err)
+}
+
 // resync ставит сверку настроек, если сервер ответил, что магазин не
 // участвует. Повторный отказ до её разбора склеивается с ней по ключу.
 // Отменённый запрос не должен удерживать соединение для необязательной сверки.
@@ -57,16 +71,18 @@ func (p *ResyncingPlatform) resync(ctx context.Context, tenantID ids.TenantID, e
 	if !errors.Is(err, ports.ErrMarketplaceDisabled) {
 		return err
 	}
-	task := SyncSettingsTask(tenantID, p.clock.Now())
-	enqueue := func(ctx context.Context, tx ports.Tx) error {
-		return tx.Outbox().Enqueue(ctx, task)
-	}
-
-	if failed := p.uow.Do(ctx, enqueue); failed != nil {
+	if failed := p.syncSettings(ctx, tenantID); failed != nil {
 		return errors.Join(err, fmt.Errorf("сверка настроек %s не поставлена: %w", tenantID, failed))
 	}
 
 	return err
+}
+
+func (p *ResyncingPlatform) syncSettings(ctx context.Context, tenantID ids.TenantID) error {
+	task := SyncSettingsTask(tenantID, p.clock.Now())
+	return p.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		return tx.Outbox().Enqueue(ctx, task)
+	})
 }
 
 // SyncSettingsTask — задача внеочередной сверки настроек магазина.

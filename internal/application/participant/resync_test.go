@@ -8,6 +8,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 )
 
@@ -118,5 +119,30 @@ func TestPricingResyncOnMarketplaceDisabled(t *testing.T) {
 	tasks := settingsTasks(store)
 	if !errors.Is(err, ports.ErrMarketplaceDisabled) || len(tasks) != 1 || tasks[0].TenantID != "t1" {
 		t.Fatal(tasks, err)
+	}
+}
+
+func TestDisconnectedPickupSourceRequestsSettingsRefreshWithoutTechnicalRefusal(t *testing.T) {
+	store, clock, _ := setup(t)
+	ctx := context.Background()
+	platform := fake.NewPlatform()
+	platform.SetPickupPoints("t1", ports.PickupPoints{
+		Available: false,
+		Reason:    delivery.ReasonCarrierNotConnected,
+	})
+	resyncing := appparticipant.NewResyncingPlatform(platform, store, clock)
+	for range 2 {
+		answer, err := resyncing.PickupPoints(ctx, "t1", "yandex", "Москва")
+		if err != nil || answer.Available || answer.Reason != delivery.ReasonCarrierNotConnected {
+			t.Fatal(answer, err)
+		}
+	}
+	tasks := settingsTasks(store)
+	if len(tasks) != 1 || tasks[0].TenantID != "t1" {
+		t.Fatal("определённый отказ источника ставит одну сверку устаревшей проекции", tasks)
+	}
+	platform.SetPickupPoints("t2", ports.PickupPoints{Available: true})
+	if _, err := resyncing.PickupPoints(ctx, "t2", "yandex", "Москва"); err != nil || len(settingsTasks(store)) != 1 {
+		t.Fatal("настоящий пустой город не меняет настройки источника", err)
 	}
 }
