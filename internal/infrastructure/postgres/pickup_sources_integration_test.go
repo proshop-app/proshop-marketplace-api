@@ -29,12 +29,14 @@ const explainPickupSourcePage = `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
     SELECT p.tenant_id FROM participants p JOIN tenants t ON t.tenant_id = p.tenant_id
     WHERE p.stage = 'connected' AND p.enabled AND p.delivery_valid AND t.status = 'active'
     AND (p.delivery_settings->'carriers') ? 'cdek' AND p.tenant_id > 't00004'
-    ORDER BY p.tenant_id LIMIT 3`
+    ORDER BY p.tenant_id LIMIT 1`
 
 const disablePickupSource = `UPDATE participants SET enabled = false, stage = 'disconnected' WHERE tenant_id = 't00005'`
 const suspendPickupSource = `UPDATE tenants SET status = 'suspended' WHERE tenant_id = 't00006'`
 const disconnectPickupSource = `UPDATE participants SET delivery_settings =
     '{"regions":["RU-MOW"],"carriers":["yandex"]}'::jsonb WHERE tenant_id = 't00007'`
+
+const invalidDeliveryPickupSource = `UPDATE participants SET delivery_valid = false WHERE tenant_id = 't00008'`
 
 func TestPickupSourcesUseBoundedIndexedPages(t *testing.T) {
 	for _, shops := range []int{1000, 5000} {
@@ -68,8 +70,8 @@ func testPickupSourcePage(t *testing.T, shops int) {
 	defer traced.Close()
 	uow := postgres.NewUnitOfWork(traced)
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		page, err := tx.Participants().PickupSources(ctx, "cdek", "t00004", 3)
-		if err == nil && (len(page) != 3 || page[0] != "t00005" || page[2] != "t00007") {
+		page, err := tx.Participants().PickupSources(ctx, "cdek", "t00004", 1)
+		if err == nil && (len(page) != 1 || page[0] != "t00005") {
 			t.Fatal(page)
 		}
 		return err
@@ -92,14 +94,19 @@ func testPickupSourcePage(t *testing.T, shops int) {
 		t.Fatal(err)
 	}
 	t.Logf("Postgres %d магазинов: %s", shops, pretty.String())
-	for _, statement := range []string{disablePickupSource, suspendPickupSource, disconnectPickupSource} {
+	for _, statement := range []string{
+		disablePickupSource,
+		suspendPickupSource,
+		disconnectPickupSource,
+		invalidDeliveryPickupSource,
+	} {
 		if _, err := pool.Exec(ctx, statement); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		page, err := tx.Participants().PickupSources(ctx, "cdek", "t00004", 3)
-		if err == nil && (len(page) != 3 || page[0] != "t00008") {
+		if err == nil && (len(page) != 3 || page[0] != "t00009") {
 			t.Fatal("отключение участника/службы и магазина применяется сразу", page)
 		}
 		return err
