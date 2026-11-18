@@ -93,7 +93,7 @@ func TestUnknownCreationErrorRetriesOnlyBeforeDeadline(t *testing.T) {
 	}
 	state, err := e.service.Get(ctx, buyerID, c.ID)
 	if err != nil || state.Status != checkout.StatusDraft || state.Groups[0].Excluded() ||
-		state.Groups[0].Reason != "seller_unreachable" ||
+		state.Groups[0].Reason != "creation_timeout" ||
 		len(e.platform.OrderRequests("t1")) != beforeDeadline {
 		t.Fatalf("ограничение повторов: %+v %v", state, err)
 	}

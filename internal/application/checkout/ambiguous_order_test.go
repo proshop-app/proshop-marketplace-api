@@ -13,7 +13,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-// Новый сервер проверяет deliveryPrice до возврата сохранённого ответа (marketplace-orders.service.ts:157).
+// Потерянный успешный ответ и последующий окончательный отказ требуют отмены возможного заказа.
 type rejectAfterLostReply struct {
 	ports.PlatformAPI
 	calls atomic.Int32
@@ -69,7 +69,7 @@ func runTasks(ctx context.Context, e *env, svc *appcheckout.Service) error {
 	return nil
 }
 
-func TestHostileLostReplyThenDeliveryChangedLeavesOrphanOrder(t *testing.T) {
+func TestRefusalAfterLostReplyCancelsPossibleOrder(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	upstream := &rejectAfterLostReply{PlatformAPI: e.platform}

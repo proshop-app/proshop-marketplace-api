@@ -40,7 +40,6 @@ func (p *PickupLookup) Point(
 	_ context.Context,
 	carrier delivery.Carrier,
 	code, city string,
-	_ ...ids.TenantID,
 ) (delivery.PickupPoint, error) {
 	if strings.TrimSpace(city) == "" {
 		return delivery.PickupPoint{}, delivery.ErrInvalidCity

@@ -152,7 +152,7 @@ func TestAsyncIntentAndDeadline(t *testing.T) {
 		t.Fatal(state, err)
 	}
 	for _, g := range state.Groups {
-		if g.Status != checkout.GroupSellerUnreachable || g.CartReturned || g.ReconciliationRequired || g.Excluded() {
+		if g.Status != checkout.GroupCreationExpired || g.CartReturned || g.ReconciliationRequired || g.Excluded() {
 			t.Fatal(g)
 		}
 	}

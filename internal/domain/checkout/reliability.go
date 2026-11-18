@@ -67,6 +67,9 @@ func (g Group) CreationDue(now time.Time) bool {
 
 // PollDue учитывает срок следующего обращения и окончательные статусы.
 func (g Group) PollDue(now time.Time) bool {
+	if g.Status == GroupCreationExpired {
+		return false
+	}
 	if g.Abandoned {
 		return g.CancellationBlocked && g.ReconciliationRequired && g.OrderID != "" && !now.Before(g.NextPollAt)
 	}

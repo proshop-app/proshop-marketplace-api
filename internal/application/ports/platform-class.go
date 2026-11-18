@@ -9,6 +9,7 @@ type PlatformCallClass uint8
 const (
 	PlatformRead PlatformCallClass = iota
 	PlatformCheckout
+	PlatformCatalog
 )
 
 type platformClassKey struct{}

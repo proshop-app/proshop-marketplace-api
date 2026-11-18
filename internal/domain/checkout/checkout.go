@@ -386,7 +386,7 @@ func (c *Checkout) Confirm(now time.Time) error {
 		if group.Excluded() {
 			continue
 		}
-		if group.QuotePending() {
+		if group.QuotePending() || group.Status == GroupCreationExpired {
 			return ErrSellerUnavailable
 		}
 		if group.OrderID != "" {

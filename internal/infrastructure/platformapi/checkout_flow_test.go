@@ -216,7 +216,6 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 					ctx,
 					delivery.Carrier(carrier),
 					"Город & район",
-					[]ids.TenantID{tenant},
 					[]string{"RU-AD"},
 					nil,
 					0,

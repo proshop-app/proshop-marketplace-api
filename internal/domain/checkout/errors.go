@@ -3,6 +3,8 @@ package checkout
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrInvalidGroups — запрос содержит повтор магазина.
+	ErrInvalidGroups = errs.New(errs.Invalid, "checkout.invalid_groups", "магазины покупки не должны повторяться")
 	// ErrPaymentExpired — срок оплаты хотя бы одного ожидающего заказа истёк.
 	ErrPaymentExpired = errs.New(errs.Conflict, "checkout.payment_expired", "срок оплаты заказа истёк")
 	// ErrPaymentUnavailable — болванка выключена или сервер временно недоступен.

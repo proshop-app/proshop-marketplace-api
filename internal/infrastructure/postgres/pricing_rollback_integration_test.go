@@ -10,7 +10,7 @@ import (
 )
 
 // Откат 00058 и запуск прежнего образа: старый scanParticipant читает free_delivery_from в int64.
-func TestHostileDownMigrationIsNotReadableByOldCode(t *testing.T) {
+func TestDownMigrationPreservesNonNullableDeliveryDefault(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
 	if _, err := pool.Exec(

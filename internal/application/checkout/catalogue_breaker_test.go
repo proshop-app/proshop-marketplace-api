@@ -14,7 +14,7 @@ import (
 
 // 409 MARKETPLACE_PICKUP_CATALOG_CHANGED приходит в площадку как неожиданный отказ (platformapi.refusal).
 // Пять сбоев загрузки справочника открывают размыкатель магазина, общий для quote и CreateOrder.
-func TestHostileDirectoryFailuresOpenShopBreakerForQuotes(t *testing.T) {
+func TestCatalogueFailuresLeaveCheckoutBreakerAvailable(t *testing.T) {
 	e := setup(t)
 	e.platform.BeforePickup = func(context.Context, ids.TenantID) error {
 		return &ports.OrderRefusal{Code: "MARKETPLACE_PICKUP_CATALOG_CHANGED", Unexpected: true}

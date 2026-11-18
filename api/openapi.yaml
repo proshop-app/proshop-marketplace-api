@@ -3092,6 +3092,32 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/groups/{tenantId}/remove:
+    post:
+      tags: [checkout]
+      summary: Убрать магазин из покупки
+      description: >-
+        Явное решение владельца покупки. Товары возвращаются в корзину, возможный заказ
+        отменяется через cancel-by-checkout. Другие заказы сохраняются. Покупка становится
+        draft с новым составом и суммой; оплата требует повторного подтверждения.
+        Удаление последнего магазина отменяет покупку.
+        Оплаченную группу и покупку с начатым неопределённым платежом изменять нельзя.
+        Повтор удаления безопасен.
+      operationId: removeCheckoutGroup
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
+        - $ref: "#/components/parameters/CheckoutId"
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Checkout" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/checkout/{checkoutId}/pay:
     post:
       tags: [checkout]
@@ -3100,7 +3126,7 @@ paths:
         Только владелец; creationComplete=true. Без PAYMENT_STUB — 503 checkout.payment_unavailable.
         Проверяется now < expiresAt всех ожидающих групп; истёкший срок — 409 checkout.payment_expired.
         Нечего оплачивать (включая уже оплаченную покупку) — 409 checkout.transition.
-        Исчерпанное создание без orderId возвращается в корзину и исключается из суммы;
+        Истёкшее окно создания сохраняет группу в составе до явной команды покупателя;
         группа с заказом при сбое опроса учитывается по последнему известному статусу.
         Недоступный магазин с ожидающим заказом блокирует единый платёж до успешной сверки;
         после expiresAt оплата всей покупки отклоняется, даже если у остальных групп срок ещё не истёк.
@@ -7939,6 +7965,7 @@ components:
           enum:
           - ''
           - creating_order
+          - creation_expired
           - unconfirmed
           - cancellation_requested
           - rejected
@@ -8746,6 +8773,7 @@ components:
           enum:
           - ''
           - creating_order
+          - creation_expired
           - unconfirmed
           - cancellation_requested
           - rejected

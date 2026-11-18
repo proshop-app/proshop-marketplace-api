@@ -2,8 +2,6 @@ package checkout
 
 import (
 	"time"
-
-	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 )
 
 // CreationResult — результат создания, независимо от дальнейшего исполнения.
@@ -20,7 +18,7 @@ const (
 
 // SetCreationDeadline сохраняет единый срок вместе с намерением, до публикации задач.
 func (c *Checkout) SetCreationDeadline(deadline, now time.Time) error {
-	if c.Status() == StatusAwaitingPayment {
+	if c.CreationComplete() {
 		return nil
 	}
 	if c.Status() != StatusCreatingOrders || !deadline.After(now) {
@@ -37,7 +35,7 @@ func (c *Checkout) SetCreationDeadline(deadline, now time.Time) error {
 // CreationExpired отмечает достижение срока; закрытие отдельно учитывает активную аренду попытки.
 func (g Group) CreationExpired(now time.Time) bool {
 	return !g.CreationDeadline.IsZero() && !now.Before(g.CreationDeadline) &&
-		!g.Abandoned && !g.CreateExhausted && g.OrderID == ""
+		!g.Abandoned && !g.CreateExhausted && g.OrderID == "" && g.Status != GroupCreationExpired
 }
 
 // ExpireCreation отделяет итог для покупателя от незавершённой сверки магазина.
@@ -49,8 +47,8 @@ func (c *Checkout) ExpireCreation(now time.Time) (bool, error) {
 			continue
 		}
 		// Истечение бюджета не доказывает отказ магазина: состав и корзина сохраняются.
-		g.Status, g.Reason = GroupSellerUnreachable, delivery.ReasonSellerUnreachable
-		g.CreationDeadline = time.Time{}
+		g.Status, g.Reason = GroupCreationExpired, "creation_timeout"
+		g.ReconciliationRequired = g.CreateToken != "" || g.CreateFailures > 0
 		changed = true
 	}
 	if !changed {

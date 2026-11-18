@@ -27,7 +27,7 @@ func (s *Service) ready(ctx context.Context, groups []checkout.Group) error {
 func (s *Service) unready(ctx context.Context, groups []checkout.Group) (map[ids.TenantID]string, error) {
 	keys := []ids.OfferID{}
 	for _, group := range groups {
-		if group.Excluded() {
+		if group.Excluded() || group.Paid() {
 			continue
 		}
 		for _, line := range group.Lines {

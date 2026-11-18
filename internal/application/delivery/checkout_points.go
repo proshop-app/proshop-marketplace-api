@@ -21,7 +21,7 @@ type PickupQuery struct {
 
 // Query возвращает ограниченный публичный справочник.
 func (s *Service) Query(ctx context.Context, query PickupQuery) (delivery.PickupArea, error) {
-	return s.QueryFor(ctx, query.Carrier, query.City, nil, nil, query.Bounds, query.Offset, query.Limit)
+	return s.QueryFor(ctx, query.Carrier, query.City, nil, query.Bounds, query.Offset, query.Limit)
 }
 
 // CheckoutPoints проверяет владельца и применяет разрешения групп одним сценарием.
@@ -60,5 +60,5 @@ func (s *Service) CheckoutPoints(
 	if len(tenants) == 0 {
 		return delivery.PickupArea{}, checkout.ErrNotFound
 	}
-	return s.QueryFor(ctx, query.Carrier, query.City, tenants, regions, query.Bounds, query.Offset, query.Limit)
+	return s.QueryFor(ctx, query.Carrier, query.City, regions, query.Bounds, query.Offset, query.Limit)
 }

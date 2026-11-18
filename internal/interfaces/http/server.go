@@ -638,6 +638,12 @@ func routes(deps Deps) []route {
 			"/api/v1/checkout/{checkoutId}/cancel",
 			signedIn(checkouts.cancel),
 		},
+		{
+			checkoutRequest,
+			http.MethodPost,
+			"/api/v1/checkout/{checkoutId}/groups/{tenantId}/remove",
+			signedIn(checkouts.removeGroup),
+		},
 		{checkoutRequest, http.MethodPost, "/api/v1/checkout/{checkoutId}/pay", signedIn(checkouts.pay)},
 		{
 			checkoutRequest,

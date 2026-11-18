@@ -80,7 +80,7 @@ func TestFallbackAndCache(t *testing.T) {
 			if _, err := service.Search(context.Background(), "cdek", "Другой город"); err != nil {
 				t.Fatal(err)
 			}
-			if len(platform.PickupCalls()) != 4 {
+			if len(platform.PickupCalls()) != 3 {
 				t.Fatal(platform.PickupCalls())
 			}
 		})
@@ -105,16 +105,16 @@ func TestUnavailableLimitAndEmpty(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(platform.PickupCalls()) != 4 {
-		t.Fatal("ошибка закэширована")
+	if len(platform.PickupCalls()) != 2 {
+		t.Fatal("отказ должен кэшироваться кратко")
 	}
 	points, err := service.Search(context.Background(), "yandex", "Город")
-	if err != nil || len(points) != 0 || len(platform.PickupCalls()) != 4 {
+	if err != nil || len(points) != 0 || len(platform.PickupCalls()) != 2 {
 		t.Fatal(points, err)
 	}
 }
 
-func TestEmptySuccessAndRefusalsAreNotCached(t *testing.T) {
+func TestEmptyCatalogueIsCachedBriefly(t *testing.T) {
 	for _, available := range []bool{false, true} {
 		service, platform, _ := setup(t, 3)
 		if available {
@@ -126,9 +126,9 @@ func TestEmptySuccessAndRefusalsAreNotCached(t *testing.T) {
 				t.Fatal(points, err)
 			}
 		}
-		expected := 4
+		expected := 2
 		if available {
-			expected = 2
+			expected = 1
 		}
 		if len(platform.PickupCalls()) != expected {
 			t.Fatal(platform.PickupCalls())

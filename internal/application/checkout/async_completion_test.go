@@ -173,7 +173,7 @@ func TestDeadlineCommitsDespiteCartFailure(t *testing.T) {
 		t.Fatal(state, err)
 	}
 	for _, g := range state.Groups {
-		if g.Status != checkout.GroupSellerUnreachable || g.ReturnFailed || g.CartReturned || g.Excluded() {
+		if g.Status != checkout.GroupCreationExpired || g.ReturnFailed || g.CartReturned || g.Excluded() {
 			t.Fatal(g)
 		}
 	}
@@ -236,7 +236,7 @@ func TestDeadlineTaskWaitsForAttemptLease(t *testing.T) {
 		t.Fatal(result)
 	}
 	state, err = e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || state.Groups[0].Status != checkout.GroupSellerUnreachable {
+	if err != nil || state.Groups[0].Status != checkout.GroupCreationExpired {
 		t.Fatal(state, err)
 	}
 }

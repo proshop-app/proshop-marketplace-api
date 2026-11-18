@@ -22,6 +22,14 @@ func (s *Service) Payment(ctx context.Context, buyerID, id ids.UUID) (checkout.S
 	if !s.config.PaymentStub {
 		return state, checkout.ErrPaymentUnavailable
 	}
+	return state, checkout.Restore(state).CheckPaymentWindow(s.clock.Now())
+}
+
+func (s *Service) preparePayment(ctx context.Context, buyerID, id ids.UUID) (checkout.State, error) {
+	state, err := s.Payment(ctx, buyerID, id)
+	if err != nil {
+		return state, err
+	}
 	if !checkout.Restore(state).PaymentComplete() {
 		reviewed, changed, err := s.reviewReadiness(ctx, checkout.Restore(state))
 		if err != nil {
@@ -31,12 +39,12 @@ func (s *Service) Payment(ctx context.Context, buyerID, id ids.UUID) (checkout.S
 			return reviewed, checkout.ErrDeliveryChanged
 		}
 	}
-	return state, checkout.Restore(state).CheckPaymentWindow(s.clock.Now())
+	return state, nil
 }
 
 // Pay открывает одну кассу для всех ожидающих групп.
 func (s *Service) Pay(ctx context.Context, buyerID, id ids.UUID) (checkout.State, error) {
-	state, err := s.Payment(ctx, buyerID, id)
+	state, err := s.preparePayment(ctx, buyerID, id)
 	if err != nil {
 		return state, err
 	}
@@ -49,7 +57,7 @@ func (s *Service) Pay(ctx context.Context, buyerID, id ids.UUID) (checkout.State
 // ConfirmPayment вызывает сервер вне транзакции. После сбоя повтор безопасен:
 // сервер помнит успешные платежи; локально сверяется набор подтверждённых заказов.
 func (s *Service) ConfirmPayment(ctx context.Context, buyerID, id ids.UUID) error {
-	state, err := s.Payment(ctx, buyerID, id)
+	state, err := s.preparePayment(ctx, buyerID, id)
 	if err != nil {
 		return err
 	}

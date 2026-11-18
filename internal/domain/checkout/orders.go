@@ -22,6 +22,8 @@ const (
 	GroupRejected              GroupStatus = "rejected"
 	// GroupCreating — команда создания ещё не завершена.
 	GroupCreating GroupStatus = "creating_order"
+	// GroupCreationExpired сохраняет состав после конца ожидания до явного решения покупателя.
+	GroupCreationExpired GroupStatus = "creation_expired"
 	// GroupUnconfirmed — срок подтверждения магазина истёк.
 	GroupUnconfirmed GroupStatus = "unconfirmed"
 	// GroupAwaitingPayment — магазин ждёт оплаты.
@@ -132,7 +134,8 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 		}
 		return false, ErrTransition
 	}
-	if !g.Abandoned && g.Status != GroupCreating && g.Status != GroupSellerUnreachable {
+	if !g.Abandoned && g.Status != GroupCreating &&
+		g.Status != GroupSellerUnreachable && g.Status != GroupCreationExpired {
 		return false, ErrTransition
 	}
 	total, err := g.Goods.Add(g.DeliveryPrice)
@@ -147,7 +150,7 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	if !g.CancellationConfirmed {
 		g.LastOrderStatus = GroupAwaitingPayment
 	}
-	if g.Abandoned {
+	if g.Abandoned || g.Status == GroupCreationExpired {
 		g.ReconciliationRequired = !g.CancellationConfirmed
 	} else {
 		g.Status, g.Reason = GroupAwaitingPayment, ""
@@ -230,7 +233,7 @@ func (c *Checkout) rollup() {
 		case GroupCancellationRequested, GroupRejected, GroupCancelled,
 			GroupPriceChanged, GroupDeliveryUnavailable, GroupUnconfirmed:
 			cancelled++
-		case GroupCreating, GroupSellerUnreachable:
+		case GroupCreating, GroupSellerUnreachable, GroupCreationExpired:
 			pending++
 		}
 	}

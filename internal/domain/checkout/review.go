@@ -23,14 +23,14 @@ func (g Group) QuotePending() bool {
 // ReviewGroups снимает окончательно недоступные группы и требует нового согласия.
 // Уже созданные заказы остальных продавцов сохраняются с прежними ключами.
 func (c *Checkout) ReviewGroups(reasons map[ids.TenantID]string, now time.Time) (bool, error) {
-	if c.state.PaymentStarted || c.Status() == StatusPaid || c.Status() == StatusPartiallyPaid {
+	if c.state.PaymentStarted || c.Status() == StatusPaid {
 		return false, ErrTransition
 	}
 	changed := false
 	for i := range c.state.Groups {
 		g := &c.state.Groups[i]
 		reason, found := reasons[g.TenantID]
-		if !found || g.Excluded() {
+		if !found || g.Excluded() || g.Paid() {
 			continue
 		}
 		g.Quote = &delivery.Quote{Status: delivery.QuoteUnavailable, Reason: reason, ExpiresAt: now}

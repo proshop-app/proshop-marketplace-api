@@ -36,7 +36,7 @@ func TestCreationDeadlineAndLateResult(t *testing.T) {
 		t.Fatal(c.State())
 	}
 	for _, group := range c.Groups() {
-		if group.Excluded() || group.CartReturned || group.ReconciliationRequired {
+		if group.Excluded() || group.CartReturned {
 			t.Fatal(group)
 		}
 	}
@@ -155,13 +155,13 @@ func TestDeadlineWaitsForActiveAttempt(t *testing.T) {
 	if _, err := c.ExpireCreation(deadline); err != nil {
 		t.Fatal(err)
 	}
-	if c.Groups()[0].Abandoned || c.Groups()[1].Status != checkout.GroupSellerUnreachable {
+	if c.Groups()[0].Abandoned || c.Groups()[1].Status != checkout.GroupCreationExpired {
 		t.Fatal(c.State())
 	}
 	if _, err := c.ExpireCreation(lease); err != nil {
 		t.Fatal(err)
 	}
-	if c.Groups()[0].Status != checkout.GroupSellerUnreachable {
+	if c.Groups()[0].Status != checkout.GroupCreationExpired {
 		t.Fatal(c.State())
 	}
 }

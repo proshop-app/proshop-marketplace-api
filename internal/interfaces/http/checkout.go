@@ -367,14 +367,6 @@ func (h *checkoutHandlers) quote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var state checkout.State
-	unique := make(map[ids.TenantID]bool, len(body.TenantIDs))
-	for _, tenant := range body.TenantIDs {
-		if unique[tenant] {
-			writeError(w, r, ErrInvalidQuery)
-			return
-		}
-		unique[tenant] = true
-	}
 	if len(body.TenantIDs) > 0 && body.TenantID != "" {
 		writeError(w, r, ErrInvalidQuery)
 		return

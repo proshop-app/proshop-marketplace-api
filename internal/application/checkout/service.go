@@ -239,6 +239,13 @@ func (s *Service) selectDelivery(
 	if _, err := delivery.NormalizeCity(city); err != nil {
 		return checkout.State{}, err
 	}
+	unique := make(map[ids.TenantID]bool, len(targets))
+	for _, tenant := range targets {
+		if unique[tenant] {
+			return checkout.State{}, checkout.ErrInvalidGroups
+		}
+		unique[tenant] = true
+	}
 	c, err := s.load(ctx, buyerID, checkoutID)
 	if err != nil {
 		return checkout.State{}, err
@@ -248,16 +255,8 @@ func (s *Service) selectDelivery(
 	}
 
 	groups := c.Groups()
-	tenants := make([]ids.TenantID, 0, len(groups))
 	if targets != nil {
 		groups = nil
-		unique := make(map[ids.TenantID]bool, len(targets))
-		for _, tenant := range targets {
-			if unique[tenant] {
-				return checkout.State{}, checkout.ErrInvalidQuotes
-			}
-			unique[tenant] = true
-		}
 		for _, group := range c.Groups() {
 			if unique[group.TenantID] {
 				groups = append(groups, group)
@@ -272,9 +271,8 @@ func (s *Service) selectDelivery(
 		if g.Status != "" {
 			return c.State(), checkout.ErrSnapshotChanged
 		}
-		tenants = append(tenants, g.TenantID)
 	}
-	point, err := s.points.Point(ctx, carrier, pointCode, city, tenants...)
+	point, err := s.points.Point(ctx, carrier, pointCode, city)
 	if err != nil {
 		return checkout.State{}, err
 	}

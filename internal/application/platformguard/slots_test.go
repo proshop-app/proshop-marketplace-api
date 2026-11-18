@@ -77,26 +77,38 @@ func TestCheckoutPassesWhenReadPoolIsFull(t *testing.T) {
 func TestCallerSelectsPoolForSharedOperations(t *testing.T) {
 	for _, operation := range []string{"settings", "price_group", "pickup_points"} {
 		for _, class := range []operationClass{checkoutClass, readClass} {
-			t.Run(operation+"/"+class.String(), func(t *testing.T) {
-				metrics := &fake.PlatformMetrics{}
-				c := New(fake.NewPlatform(), testConfig(), fake.NewClock(time.Now()), metrics, nil)
-				opposite := readClass
-				label := ports.PlatformCheckout
-				if class == readClass {
-					opposite, label = checkoutClass, ports.PlatformRead
-				}
-				first := admit(t, c, "t1", opposite)
-				second := admit(t, c, "t2", opposite)
-				defer c.release(first, nil)
-				defer c.release(second, nil)
-				ctx := ports.WithPlatformCallClass(context.Background(), label)
-				if err := strictCallContext(ctx, c, operation); err != nil {
-					t.Fatal("занятый чужой класс задержал вызов", err)
-				}
-				if metrics.CountClass(operation, class.String(), "ok") != 1 {
-					t.Fatal("метрика потеряла класс вызывающего")
-				}
-			})
+			t.Run(
+				operation+"/"+class.String(),
+				func(t *testing.T) {
+					metrics := &fake.PlatformMetrics{}
+					c := New(fake.NewPlatform(), testConfig(), fake.NewClock(time.Now()), metrics, nil)
+					opposite := readClass
+					label := ports.PlatformCheckout
+					if class == readClass {
+						opposite, label = checkoutClass, ports.PlatformRead
+					}
+					first := admit(t, c, "t1", opposite)
+					second := admit(t, c, "t2", opposite)
+					defer c.release(first, nil)
+					defer c.release(second, nil)
+					ctx := ports.WithPlatformCallClass(context.Background(), label)
+					if err := strictCallContext(ctx, c, operation); err != nil {
+						t.Fatal("занятый чужой класс задержал вызов", err)
+					}
+					if metrics.CountClass(
+						operation,
+						func() string {
+							if operation == "pickup_points" {
+								return catalogClass.String()
+							}
+							return class.String()
+						}(),
+						"ok",
+					) != 1 {
+						t.Fatal("метрика потеряла класс вызывающего")
+					}
+				},
+			)
 		}
 	}
 }

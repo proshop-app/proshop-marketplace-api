@@ -14,7 +14,7 @@ import (
 )
 
 // Витрина отменяет запрос карты при каждом движении; общая холодная загрузка умирает вместе с последним ожидающим.
-func TestHostileAbortedMapRequestRestartsColdLoad(t *testing.T) {
+func TestCancelledWaitersShareCompletedCatalogueLoad(t *testing.T) {
 	store := fake.NewStore()
 	platform := fake.NewPlatform()
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Status: participant.TenantActive})
@@ -64,7 +64,7 @@ func TestHostileAbortedMapRequestRestartsColdLoad(t *testing.T) {
 	box := delivery.Bounds{54, 36, 56, 38}
 	for move := range 5 {
 		ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
-		_, err := service.QueryFor(ctx, "cdek", "Город", []ids.TenantID{"t1"}, []string{"RU-MOW"}, &box, 0, 500)
+		_, err := service.QueryFor(ctx, "cdek", "Город", []string{"RU-MOW"}, &box, 0, 500)
 		cancel()
 		time.Sleep(20 * time.Millisecond)
 		t.Logf("движение %d: err=%v, загрузок у сервера=%d", move, err, len(platform.PickupCalls()))

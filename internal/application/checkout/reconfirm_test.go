@@ -62,44 +62,46 @@ func TestReviewBeforePaymentPreservesHealthyOrderAndNeverChargesRemovedGroup(t *
 	}
 }
 
-func TestTemporaryCreationRetriesOriginalIntentAfterReview(t *testing.T) {
+func TestRemovingUnreachableShopPreservesHealthyOrderAndRequiresConsent(t *testing.T) {
 	e := setup(t)
 	purchase := confirmedPurchase(t, e)
 	ctx := context.Background()
 	e.platform.FailCreate("t1", errors.New("timeout"))
-	if _, err := beginAndExecute(ctx, e, buyerID, purchase.ID, orderContact); err != nil {
+	started, err := beginAndExecute(ctx, e, buyerID, purchase.ID, orderContact)
+	if err != nil {
 		t.Fatal(err)
 	}
+	healthy := started.Groups[1].OrderID
 	e.clock.Advance(appcheckout.CreationTimeout)
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
-	review, err := e.service.Get(ctx, buyerID, purchase.ID)
-	if err != nil || review.Status != checkout.StatusDraft || review.Total != purchase.Total ||
-		review.Groups[0].Excluded() {
-		t.Fatal(review, err)
+	state, _ := e.service.Get(ctx, buyerID, purchase.ID)
+	if state.Status != checkout.StatusDraft || state.Total != purchase.Total || state.Groups[0].Excluded() {
+		t.Fatal(state)
 	}
-	if _, err := e.service.QuoteGroup(ctx, buyerID, purchase.ID, "t1", "cdek", "other", "Город"); !errors.Is(
-		err,
-		checkout.ErrSnapshotChanged,
-	) {
-		t.Fatal("нельзя менять ПВЗ отправленного намерения", err)
+	if _, err := e.service.Confirm(ctx, buyerID, purchase.ID); !errors.Is(err, checkout.ErrSellerUnavailable) {
+		t.Fatal("срок нельзя продлить новым confirm", err)
 	}
-	e.platform.FailCreate("t1", nil)
-	if _, err := e.service.Confirm(ctx, buyerID, purchase.ID); err != nil {
+	removed, err := e.service.RemoveGroup(ctx, buyerID, purchase.ID, "t1")
+	if err != nil || removed.Status != checkout.StatusDraft || removed.Total.Kopecks() != 35000 {
+		t.Fatal(removed, err)
+	}
+	if _, err := e.service.Pay(ctx, buyerID, purchase.ID); !errors.Is(err, checkout.ErrTransition) {
+		t.Fatal("нужно новое согласие", err)
+	}
+	repeated, err := e.service.RemoveGroup(ctx, buyerID, purchase.ID, "t1")
+	if err != nil || repeated.Total != removed.Total {
+		t.Fatal(repeated, err)
+	}
+	final := reconfirmPurchase(t, e, purchase.ID)
+	if final.Groups[1].OrderID != healthy || len(e.platform.OrderRequests("t2")) != 1 {
+		t.Fatal(final)
+	}
+	if err := e.service.ConfirmPayment(ctx, buyerID, purchase.ID); err != nil {
 		t.Fatal(err)
 	}
-	otherContact := orderContact
-	otherContact.Name = "Другой получатель"
-	if _, err := e.service.CreateOrders(ctx, buyerID, purchase.ID, otherContact); !errors.Is(
-		err,
-		checkout.ErrSnapshotChanged,
-	) {
-		t.Fatal(err)
-	}
-	result, err := beginAndExecute(ctx, e, buyerID, purchase.ID, orderContact)
-	if err != nil || result.Status != checkout.StatusAwaitingPayment || result.Total != purchase.Total ||
-		result.Groups[1].OrderID != review.Groups[1].OrderID || len(e.platform.OrderRequests("t2")) != 1 {
-		t.Fatal(result, err)
+	if calls := e.platform.StubPaymentCalls(); len(calls) != 1 || calls[0] != "t2" {
+		t.Fatal(calls)
 	}
 }

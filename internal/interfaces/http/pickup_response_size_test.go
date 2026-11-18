@@ -16,7 +16,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-func hostilePoints(n int) []delivery.PickupPoint {
+func fixturePoints(n int) []delivery.PickupPoint {
 	points := make([]delivery.PickupPoint, n)
 	for i := range points {
 		points[i] = delivery.PickupPoint{
@@ -34,9 +34,9 @@ func hostilePoints(n int) []delivery.PickupPoint {
 }
 
 // Г: размер и время ответа публичной ручки и карты при 20 000 пунктах города.
-func TestHostilePickupResponseSize(t *testing.T) {
+func TestPickupResponsesRespectAreaAndPageLimits(t *testing.T) {
 	service, platform, store := pickupHTTP(t)
-	points := hostilePoints(20000)
+	points := fixturePoints(20000)
 	platform.SetPickupPoints("t1", ports.PickupPoints{Available: true, Items: points})
 	handler := &deliveryHandlers{directory: service}
 

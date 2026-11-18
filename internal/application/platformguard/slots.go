@@ -74,8 +74,9 @@ func (c *Client) release(p permit, err error) {
 	if p.tenant.inactive() {
 		c.unpin(p.tenant)
 	}
-	c.dispatch(checkoutClass)
-	c.dispatch(readClass)
+	for class := checkoutClass; class < classCount; class++ {
+		c.dispatch(class)
+	}
 }
 
 func (c *Client) finishBreakers(p permit, err error) {

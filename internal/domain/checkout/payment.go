@@ -86,3 +86,13 @@ func (c *Checkout) CheckPaymentWindow(now time.Time) error {
 	}
 	return nil
 }
+
+// Paid означает состоявшийся платёж, независимо от последующего исполнения.
+func (g Group) Paid() bool {
+	switch g.EffectiveStatus() {
+	case GroupPaid, GroupShipped, GroupDelivered, GroupReturned:
+		return true
+	default:
+		return false
+	}
+}

@@ -36,7 +36,7 @@ func logGroups(t *testing.T, state checkout.State) {
 // H1: покупатель подтвердил обе группы доступными; на повторном расчёте в CreateOrders
 // магазин t2 временно не ответил (или вернул no_rate). Контракт: «изменившийся расчёт
 // возвращает draft и DELIVERY_CHANGED», «покупатель подтверждает частичное оформление».
-func TestHostileAvailabilityLossAtCreateOrdersIsSilent(t *testing.T) {
+func TestAvailabilityLossRequiresNewConfirmation(t *testing.T) {
 	for _, mode := range []string{"seller_unreachable", "no_rate"} {
 		t.Run(
 			mode,
@@ -71,7 +71,7 @@ func TestHostileAvailabilityLossAtCreateOrdersIsSilent(t *testing.T) {
 
 // H2: истёкший расчёт пересчитывается внутри Confirm; группа стала недоступной,
 // Confirm всё равно успешен, а витрина сразу вызывает CreateOrders (useCheckoutPayment.createOrders).
-func TestHostileConfirmSilentlyDropsGroupAfterRequote(t *testing.T) {
+func TestRequoteAvailabilityLossReturnsDraft(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	state, err := e.service.Create(ctx, buyerID, key)
@@ -102,7 +102,7 @@ func TestHostileConfirmSilentlyDropsGroupAfterRequote(t *testing.T) {
 
 // H3: отзыв готовности одного продавца после создания заказов блокирует оплату всех групп;
 // исключения группы или отмены по cancel-by-checkout не происходит.
-func TestHostileOneSellerBlocksWholePayment(t *testing.T) {
+func TestSellerWithdrawalRequiresConsentBeforePayment(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	state := confirmedPurchase(t, e)
@@ -144,7 +144,7 @@ func TestHostileOneSellerBlocksWholePayment(t *testing.T) {
 
 // H5: State.Total (поле total, его показывает MockCashier) включает товары исключённой группы,
 // а реальная сумма оплаты (payableTotal/PaymentAmount) — нет.
-func TestHostileTotalIncludesExcludedGroup(t *testing.T) {
+func TestTotalExcludesUnavailableGroups(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	p, _ := e.store.Participant("t1")
@@ -181,9 +181,8 @@ func TestHostileTotalIncludesExcludedGroup(t *testing.T) {
 	}
 }
 
-// Товары группы, исключённой ещё до подтверждения (нет службы ПВЗ), изымаются из корзины
-// вместе с остальными и возвращаются только асинхронной задачей.
-func TestHostileExcludedGroupConsumedFromCart(t *testing.T) {
+// Неоформляемая группа остаётся в корзине сразу после создания остальных заказов.
+func TestExcludedGroupRemainsInCart(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	p, _ := e.store.Participant("t1")

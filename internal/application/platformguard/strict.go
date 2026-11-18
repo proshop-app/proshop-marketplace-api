@@ -120,11 +120,11 @@ func (c *Client) PickupPoints(
 	carrier delivery.Carrier,
 	city string,
 ) (ports.PickupPoints, error) {
-	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
+	ctx = context.WithValue(ctx, tenantContextKey{}, ids.TenantID(""))
 	return call(
 		ctx,
 		c,
-		callerClass(ctx),
+		catalogClass,
 		"pickup_points",
 		c.cfg.StrictTimeout,
 		func(ctx context.Context) (ports.PickupPoints, error) {

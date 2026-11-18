@@ -86,7 +86,7 @@ func (r countingRegistry) Batch(
 
 // Тёплый кэш справочника: сколько работы с БД делает каждый запрос публичного списка ПВЗ
 // (GET /api/v1/delivery/pickup-points, профиль покупателя) при 1000 магазинах.
-func TestHostileWarmPickupSearchScansAllShops(t *testing.T) {
+func TestWarmPickupSearchDoesNotReadRegistry(t *testing.T) {
 	store := fake.NewStore()
 	platform := fake.NewPlatform()
 	const shops = 1000

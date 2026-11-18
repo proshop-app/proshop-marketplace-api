@@ -109,7 +109,7 @@ func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 		}
 		late, err := service.Get(ctx, buyerID, c.ID)
 		if err != nil || late.Groups[0].OrderID == "" || late.Status != checkout.StatusDraft ||
-			late.Groups[0].Excluded() || late.Groups[0].CancellationConfirmed {
+			late.Groups[0].Excluded() || !late.Groups[0].CancellationConfirmed {
 			t.Error("поздний заказ сохраняется до повторного согласия покупателя", late, err)
 		}
 		if err := <-otherDone; err != nil {
