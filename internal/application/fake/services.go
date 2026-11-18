@@ -78,7 +78,6 @@ type Platform struct {
 	createErrors      map[ids.TenantID]error
 	pollErrors        map[ids.TenantID]error
 	pollCalls         map[ids.TenantID]int
-	MinSubsidyPercent int
 	BeforeSettings    func(ids.TenantID)
 	OrderNow          time.Time
 	AfterCreate       func()
@@ -240,23 +239,22 @@ func (l *Limiter) Allow(_ context.Context, key string, limit int, window time.Du
 // NewPlatform — пустой сервер.
 func NewPlatform() *Platform {
 	return &Platform{
-		items:             map[ids.TenantID]map[ids.ProductID]ports.ItemCheck{},
-		cancelledOrders:   map[string]ports.CancelOrderResult{},
-		cancelRequests:    map[ids.TenantID][]ports.CancelOrderRequest{},
-		cancelErrors:      map[ids.TenantID]error{},
-		orders:            map[string]checkout.SellerOrder{},
-		stubPaid:          map[string]bool{},
-		orderRefusals:     map[string]error{},
-		orderTenants:      map[string]ids.TenantID{},
-		orderBodies:       map[string]string{},
-		orderRequests:     map[ids.TenantID][]ports.CreateOrderRequest{},
-		createErrors:      map[ids.TenantID]error{},
-		pollErrors:        map[ids.TenantID]error{},
-		pollCalls:         map[ids.TenantID]int{},
-		MinSubsidyPercent: 30,
-		quotes:            map[ids.TenantID]delivery.Offered{},
-		settings:          map[ids.TenantID]ports.ShopSettings{},
-		failing:           map[ids.TenantID]error{},
+		items:           map[ids.TenantID]map[ids.ProductID]ports.ItemCheck{},
+		cancelledOrders: map[string]ports.CancelOrderResult{},
+		cancelRequests:  map[ids.TenantID][]ports.CancelOrderRequest{},
+		cancelErrors:    map[ids.TenantID]error{},
+		orders:          map[string]checkout.SellerOrder{},
+		stubPaid:        map[string]bool{},
+		orderRefusals:   map[string]error{},
+		orderTenants:    map[string]ids.TenantID{},
+		orderBodies:     map[string]string{},
+		orderRequests:   map[ids.TenantID][]ports.CreateOrderRequest{},
+		createErrors:    map[ids.TenantID]error{},
+		pollErrors:      map[ids.TenantID]error{},
+		pollCalls:       map[ids.TenantID]int{},
+		quotes:          map[ids.TenantID]delivery.Offered{},
+		settings:        map[ids.TenantID]ports.ShopSettings{},
+		failing:         map[ids.TenantID]error{},
 	}
 }
 

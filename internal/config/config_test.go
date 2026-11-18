@@ -189,38 +189,6 @@ func TestLoadDatabase(t *testing.T) {
 	}
 }
 
-func TestDeliverySubsidyMinPercent(t *testing.T) {
-	cfg, err := config.Load(envOf(validEnv()))
-	if err != nil || cfg.Checkout.DeliverySubsidyMinPercent != 30 {
-		t.Fatalf("умолчание: %+v %v", cfg.Checkout, err)
-	}
-	for _, tc := range []struct {
-		raw   string
-		want  int
-		valid bool
-	}{
-		{"0", 0, true},
-		{"45", 45, true},
-		{"100", 100, true},
-		{"-1", 0, false},
-		{"101", 0, false},
-		{"30.5", 0, false},
-	} {
-		t.Run(tc.raw, func(t *testing.T) {
-			env := validEnv()
-			env["DELIVERY_SUBSIDY_MIN_PERCENT"] = tc.raw
-			cfg, err := config.Load(envOf(env))
-			if tc.valid {
-				if err != nil || cfg.Checkout.DeliverySubsidyMinPercent != tc.want {
-					t.Fatalf("порог: %+v %v", cfg.Checkout, err)
-				}
-			} else if err == nil || !strings.Contains(err.Error(), "DELIVERY_SUBSIDY_MIN_PERCENT") {
-				t.Fatalf("ожидалась ошибка порога: %v", err)
-			}
-		})
-	}
-}
-
 // HTTP_TRUST_PROXY — число прокси: прежнее true доверяло бы любому X-Forwarded-For клиента.
 func TestTrustedProxies(t *testing.T) {
 	cfg, err := config.Load(envOf(validEnv()))

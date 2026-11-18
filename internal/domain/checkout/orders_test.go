@@ -7,9 +7,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 var contact = checkout.Contact{Phone: "79251234567", Name: "Покупатель"}
@@ -18,8 +16,8 @@ func ordersReady(t *testing.T) *checkout.Checkout {
 	t.Helper()
 	c := draft(t)
 	quotes := map[ids.TenantID]delivery.Quote{
-		"t1": available(100, 50, t0.Add(time.Hour)),
-		"t2": available(200, 100, t0.Add(time.Hour)),
+		"t1": available(100, t0.Add(time.Hour)),
+		"t2": available(200, t0.Add(time.Hour)),
 	}
 	if err := c.SelectDelivery(selection, quotes, t0); err != nil {
 		t.Fatal(err)
@@ -109,7 +107,7 @@ func TestExpiryNeedsSellerCancellation(t *testing.T) {
 	if _, err := c.Observe("t2", second, expired, expired); err != nil {
 		t.Fatal(err)
 	}
-	if c.Status() != checkout.StatusPartiallyPaid {
+	if c.Status() != checkout.StatusPaid {
 		t.Fatal(c.Status())
 	}
 }
@@ -119,12 +117,21 @@ func TestAllCancelledAndSnapshotIsolation(t *testing.T) {
 	if _, err := c.BeginOrders(contact, t0); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := c.MarkCartConsumed(t0); err != nil {
+		t.Fatal(err)
+	}
 	for i := range c.Groups() {
 		order := attach(t, c, i)
 		order.Status, order.Reason = checkout.GroupCancelled, "payment_expired"
 		if _, err := c.Observe(c.Groups()[i].TenantID, order, t0, t0); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if c.Status() != checkout.StatusCancelled {
+		t.Fatal("истекли все заказы", c.Status())
+	}
+	if _, err := c.Cancel(t0); err != nil {
+		t.Fatal(err)
 	}
 	if c.Status() != checkout.StatusCancelled {
 		t.Fatal(c.Status())
@@ -152,26 +159,5 @@ func TestOrdersRequireConfirmedContactAndValidResponse(t *testing.T) {
 	}
 	if _, err := c.AttachOrder("t1", checkout.SellerOrder{}, t0); !errors.Is(err, checkout.ErrInvalidOrder) {
 		t.Fatal(err)
-	}
-}
-
-func TestGroupDeliveryThresholdAndSellerSubsidy(t *testing.T) {
-	c := draft(t)
-	g := c.Groups()[0]
-	subsidy := participant.Subsidy{
-		Enabled:   true,
-		Type:      participant.SubsidyPercent,
-		Value:     50,
-		MaxAmount: money.FromKopecks(120),
-	}
-	for _, threshold := range []int64{0, 25000, 25001} {
-		amount, err := g.DeliverySubsidy(money.FromKopecks(threshold), subsidy, money.FromKopecks(300), 0)
-		want := int64(300)
-		if threshold == 25001 {
-			want = 120
-		}
-		if err != nil || amount.Kopecks() != want {
-			t.Fatalf("порог %d: %v %v", threshold, amount, err)
-		}
 	}
 }

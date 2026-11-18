@@ -3,7 +3,10 @@ package checkout_test
 import (
 	"errors"
 	"testing"
+
 	"time"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 )
@@ -22,10 +25,8 @@ func creatingWithDeadline(t *testing.T) *checkout.Checkout {
 
 func TestCreationDeadlineAndLateResult(t *testing.T) {
 	c := creatingWithDeadline(t)
+	original := c.State().Total
 	if _, err := c.ClaimCreation("t1", "attempt", t0.Add(5*time.Second), t0); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.BeginPayment(t0); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
 	if changed, err := c.ExpireCreation(t0.Add(14900 * time.Millisecond)); err != nil || changed {
@@ -34,21 +35,23 @@ func TestCreationDeadlineAndLateResult(t *testing.T) {
 	if changed, err := c.ExpireCreation(t0.Add(15 * time.Second)); err != nil || !changed {
 		t.Fatal(changed, err)
 	}
-	if !c.CreationComplete() || !c.Groups()[0].ReconciliationRequired || c.Groups()[1].ReconciliationRequired {
+	if c.Status() != checkout.StatusDraft || c.State().Total != original || c.CreationComplete() {
 		t.Fatal(c.State())
+	}
+	for _, group := range c.Groups() {
+		if group.Excluded() || group.CartReturned {
+			t.Fatal(group)
+		}
 	}
 	if changed, err := c.ExpireCreation(t0.Add(time.Minute)); err != nil || changed {
 		t.Fatal(changed, err)
 	}
 	order := attach(t, c, 0)
-	if c.Groups()[0].Status != checkout.GroupUnconfirmed || !c.Groups()[0].ReconciliationRequired {
-		t.Fatal("поздний заказ не открывает оплату", c.State())
-	}
-	if _, err := c.CompleteCancellation("t1", order.OrderID, t0); err != nil {
-		t.Fatal(err)
-	}
-	if c.Groups()[0].ReconciliationRequired {
+	if c.Status() != checkout.StatusDraft || c.Groups()[0].OrderID != order.OrderID {
 		t.Fatal(c.State())
+	}
+	if _, err := c.PaymentAmount(); !errors.Is(err, checkout.ErrTransition) {
+		t.Fatal(err)
 	}
 }
 
@@ -65,7 +68,7 @@ func TestBuyerCancellationAndCreationResult(t *testing.T) {
 	if changed, err := c.Cancel(t0); err != nil || changed {
 		t.Fatal(changed, err)
 	}
-	if err := c.BeginPayment(t0); !errors.Is(err, checkout.ErrTransition) {
+	if err := c.ClaimPayment("test-payment", c.PaymentOrders(), t0); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
 	if _, err := c.CompleteCancellation("t1", order.OrderID, t0); err != nil {
@@ -106,22 +109,40 @@ func TestAbandonedFailureAndPaymentFence(t *testing.T) {
 	c = creatingWithDeadline(t)
 	attach(t, c, 0)
 	attach(t, c, 1)
-	if err := c.ClaimPayment("one", t0); err != nil {
+	if err := c.ClaimPayment("one", c.PaymentOrders(), t0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.Cancel(t0); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
-	if err := c.ClaimPayment("two", t0); err != nil {
+	if err := c.ClaimPayment("two", c.PaymentOrders(), t0); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.FinishPayment("one", true, t0); err != nil {
+	if err := c.FinishPayment(
+		"one",
+		checkout.PaymentResult{
+			Unpaid: map[ids.TenantID]bool{
+				"t1": true,
+				"t2": true,
+			},
+		},
+		t0,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if !c.State().PaymentStarted {
 		t.Fatal("старый отказ снял блокировку новой оплаты")
 	}
-	if err := c.FinishPayment("two", true, t0); err != nil {
+	if err := c.FinishPayment(
+		"two",
+		checkout.PaymentResult{
+			Unpaid: map[ids.TenantID]bool{
+				"t1": true,
+				"t2": true,
+			},
+		},
+		t0,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.Cancel(t0); err != nil {
@@ -155,13 +176,13 @@ func TestDeadlineWaitsForActiveAttempt(t *testing.T) {
 	if _, err := c.ExpireCreation(deadline); err != nil {
 		t.Fatal(err)
 	}
-	if c.Groups()[0].Abandoned || c.Groups()[1].Status != checkout.GroupUnconfirmed {
+	if c.Groups()[0].Abandoned || c.Groups()[1].Status != checkout.GroupCreationExpired {
 		t.Fatal(c.State())
 	}
 	if _, err := c.ExpireCreation(lease); err != nil {
 		t.Fatal(err)
 	}
-	if c.Groups()[0].Status != checkout.GroupUnconfirmed {
+	if c.Groups()[0].Status != checkout.GroupCreationExpired {
 		t.Fatal(c.State())
 	}
 }

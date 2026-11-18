@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 const maxNameLength = 200
@@ -25,20 +24,17 @@ type Origin struct {
 
 // State — плоский снимок агрегата для хранения.
 type State struct {
-	StoreCard        StoreCard
-	Trust            string
-	ApprovedOffers   int
-	TenantID         ids.TenantID
-	Slug             string
-	Name             string
-	Stage            Stage
-	Enabled          bool
-	FreeDeliveryFrom money.Money
-	Delivery         DeliverySettings
-	AwaitingReview   bool
-	LastDecision     *LastDecision
-	// Subsidy — субсидия доставки из настроек магазина.
-	Subsidy Subsidy
+	StoreCard      StoreCard
+	Trust          string
+	ApprovedOffers int
+	TenantID       ids.TenantID
+	Slug           string
+	Name           string
+	Stage          Stage
+	Enabled        bool
+	Delivery       DeliverySettings
+	AwaitingReview bool
+	LastDecision   *LastDecision
 	// SettingsSyncedAt — когда настройки магазина последний раз прочитаны с сервера; ноль — ещё не читались.
 	SettingsSyncedAt time.Time
 	Version          int64
@@ -133,36 +129,21 @@ func (p *Participant) Enabled() bool { return p.state.Enabled }
 // Version — версия состояния.
 func (p *Participant) Version() int64 { return p.state.Version }
 
-// Subsidy — субсидия доставки продавца.
-func (p *Participant) Subsidy() Subsidy { return p.state.Subsidy }
-
 // ApplyShopSettings переносит настройки магазина с сервера. Версия растёт,
 // только если поменялись настройки доставки; время сверки
 // обновляется всегда.
 func (p *Participant) ApplyShopSettings(
-	subsidy Subsidy,
-	freeDeliveryFrom money.Money,
 	delivery DeliverySettings,
 	now time.Time,
 ) (bool, error) {
-	if err := subsidy.Validate(); err != nil {
-		return false, err
-	}
-
-	if freeDeliveryFrom.IsNegative() {
-		return false, ErrInvalidDeliverySettings
-	}
 	delivery = delivery.Clone()
-	changed := p.state.Subsidy != subsidy ||
-		p.state.FreeDeliveryFrom != freeDeliveryFrom || !reflect.DeepEqual(p.state.Delivery, delivery)
+	changed := !reflect.DeepEqual(p.state.Delivery, delivery)
 	p.state.SettingsSyncedAt = now
 
 	if !changed {
 		return false, nil
 	}
 
-	p.state.Subsidy = subsidy
-	p.state.FreeDeliveryFrom = freeDeliveryFrom
 	p.state.Delivery = delivery.Clone()
 	p.touch(now)
 
@@ -268,8 +249,7 @@ func (p *Participant) SetDelivery(settings DeliverySettings, version int64, now 
 // DeliveryValid — обязательные настройки доставки получены и корректны.
 func (p *Participant) DeliveryValid() bool {
 	s := p.state
-	return s.Delivery.Validate() == nil && s.Subsidy.Validate() == nil && s.Subsidy.Enabled &&
-		!s.FreeDeliveryFrom.IsNegative()
+	return s.Delivery.Validate() == nil
 }
 
 // InQueue не отправляет оператору кандидата с незаполненной карточкой или доставкой.

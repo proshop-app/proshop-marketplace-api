@@ -48,13 +48,6 @@ func TestParticipantShopSettings(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	seedTenant(t, uow, "t1", "shop-one", participant.TenantActive)
 
-	subsidy := participant.Subsidy{
-		Enabled:   true,
-		Type:      participant.SubsidyPercent,
-		Value:     30,
-		MaxAmount: money.FromKopecks(50000),
-	}
-
 	err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		tenant, _ := tx.Registry().Get(ctx, "t1")
 		p, _ := participant.New(tenant, "Магазин", at(0))
@@ -62,7 +55,7 @@ func TestParticipantShopSettings(t *testing.T) {
 			return err
 		}
 
-		if _, err := p.ApplyShopSettings(subsidy, money.Money{}, w3Week2IntegrationDelivery, at(1)); err != nil {
+		if _, err := p.ApplyShopSettings(w3Week2IntegrationDelivery, at(1)); err != nil {
 			return err
 		}
 
@@ -74,7 +67,7 @@ func TestParticipantShopSettings(t *testing.T) {
 
 	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		p, err := tx.Participants().Get(ctx, "t1")
-		if err != nil || !p.DeliveryValid() || p.Subsidy() != subsidy || !p.State().SettingsSyncedAt.Equal(at(1)) {
+		if err != nil || !p.DeliveryValid() || !p.State().SettingsSyncedAt.Equal(at(1)) {
 			return fmt.Errorf("настройки магазина после хранения: %+v %w", p.State(), err)
 		}
 
@@ -261,25 +254,41 @@ func TestCheckouts(t *testing.T) {
 			Quantity: 2,
 			Price:    money.FromKopecks(199000),
 		},
-		{Offer: ids.OfferID{Tenant: "t2", Product: "p1"}, Name: "Кружка", Quantity: 1, Price: money.FromKopecks(35000)},
+		{
+			Offer: ids.OfferID{
+				Tenant:  "t2",
+				Product: "p1",
+			},
+			Name:     "Кружка",
+			Quantity: 1,
+			Price:    money.FromKopecks(35000),
+		},
 	}
 	created, err := checkout.New(buyerB, buyerA, "checkout-key-0001", lines, at(0))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
-		return tx.Checkouts().Add(ctx, created)
-	})
+	err = do(
+		t,
+		uow,
+		func(ctx context.Context, tx ports.Tx) error {
+			return tx.Checkouts().Add(ctx, created)
+		},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	duplicate, _ := checkout.New("8b1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b", buyerA, "checkout-key-0001", lines, at(0))
 
-	err = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
-		return tx.Checkouts().Add(ctx, duplicate)
-	})
+	err = do(
+		t,
+		uow,
+		func(ctx context.Context, tx ports.Tx) error {
+			return tx.Checkouts().Add(ctx, duplicate)
+		},
+	)
 	if !errors.Is(err, checkout.ErrDuplicateKey) {
 		t.Fatalf("ключ занят: %v", err)
 	}
@@ -292,10 +301,9 @@ func TestCheckouts(t *testing.T) {
 	}
 	quotes := map[ids.TenantID]delivery.Quote{
 		"t1": {
-			Status:    delivery.QuoteAvailable,
-			Cost:      money.FromKopecks(30000),
-			Subsidy:   money.FromKopecks(10000),
-			BuyerCost: money.FromKopecks(20000),
+			Status: delivery.QuoteAvailable,
+			Cost:   money.FromKopecks(30000),
+
 			MinDays:   2,
 			MaxDays:   4,
 			ExpiresAt: at(30),
@@ -303,57 +311,65 @@ func TestCheckouts(t *testing.T) {
 		"t2": {Status: delivery.QuoteUnavailable, Reason: "carrier_not_connected", ExpiresAt: at(30)},
 	}
 
-	err = do(t, uow, func(ctx context.Context, tx ports.Tx) error {
-		c, err := tx.Checkouts().ByKey(ctx, buyerA, "checkout-key-0001")
-		if err != nil {
-			return err
-		}
-		stale := checkout.Restore(c.State())
+	err = do(
+		t,
+		uow,
+		func(ctx context.Context, tx ports.Tx) error {
+			c, err := tx.Checkouts().ByKey(ctx, buyerA, "checkout-key-0001")
+			if err != nil {
+				return err
+			}
+			stale := checkout.Restore(c.State())
 
-		if err := c.SelectDelivery(selection, quotes, at(1)); err != nil {
-			return err
-		}
-		if err := tx.Checkouts().Update(ctx, c); err != nil {
-			return err
-		}
+			if err := c.SelectDelivery(selection, quotes, at(1)); err != nil {
+				return err
+			}
+			if err := tx.Checkouts().Update(ctx, c); err != nil {
+				return err
+			}
 
-		_ = stale.SelectDelivery(selection, quotes, at(2))
-		if err := tx.Checkouts().Update(ctx, stale); !errors.Is(err, checkout.ErrConflict) {
-			return fmt.Errorf("устаревшая покупка: %w", err)
-		}
+			_ = stale.SelectDelivery(selection, quotes, at(2))
+			if err := tx.Checkouts().Update(ctx, stale); !errors.Is(err, checkout.ErrConflict) {
+				return fmt.Errorf("устаревшая покупка: %w", err)
+			}
 
-		return nil
-	})
+			return nil
+		},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
-		c, err := tx.Checkouts().Get(ctx, buyerB)
-		if err != nil {
-			return fmt.Errorf("%w", err)
-		}
+	if err := do(
+		t,
+		uow,
+		func(ctx context.Context, tx ports.Tx) error {
+			c, err := tx.Checkouts().Get(ctx, buyerB)
+			if err != nil {
+				return fmt.Errorf("%w", err)
+			}
 
-		state := c.State()
-		if *state.Delivery != selection || state.DeliveryTotal.Kopecks() != 20000 ||
-			state.Total.Kopecks() != 2*199000+35000+20000 {
-			return fmt.Errorf("покупка после хранения: %+v", state)
-		}
-		if q := state.Groups[0].Quote; q == nil || q.Subsidy.Kopecks() != 10000 || q.MaxDays != 4 ||
-			!q.ExpiresAt.Equal(at(30)) {
-			return fmt.Errorf("расчёт продавца: %+v", q)
-		}
-		if q := state.Groups[1].Quote; q == nil || q.Status != delivery.QuoteUnavailable ||
-			q.Reason != "carrier_not_connected" {
-			return fmt.Errorf("недоступный расчёт: %+v", q)
-		}
-		if state.Groups[1].ExternalCheckoutID != string(buyerB)+":t2" ||
-			state.Groups[0].Lines[0].Price.Kopecks() != 199000 {
-			return fmt.Errorf("группа: %+v", state.Groups[1])
-		}
+			state := c.State()
+			if *state.Delivery != selection || state.DeliveryTotal.Kopecks() != 0 ||
+				state.Total.Kopecks() != 2*199000 {
+				return fmt.Errorf("покупка после хранения: %+v", state)
+			}
+			if q := state.Groups[0].Quote; q == nil || q.Cost.Kopecks() != 30000 || q.MaxDays != 4 ||
+				!q.ExpiresAt.Equal(at(30)) {
+				return fmt.Errorf("расчёт продавца: %+v", q)
+			}
+			if q := state.Groups[1].Quote; q == nil || q.Status != delivery.QuoteUnavailable ||
+				q.Reason != "carrier_not_connected" {
+				return fmt.Errorf("недоступный расчёт: %+v", q)
+			}
+			if state.Groups[1].ExternalCheckoutID != string(buyerB)+":t2" ||
+				state.Groups[0].Lines[0].Price.Kopecks() != 199000 {
+				return fmt.Errorf("группа: %+v", state.Groups[1])
+			}
 
-		return nil
-	}); err != nil {
+			return nil
+		},
+	); err != nil {
 		t.Fatal(err)
 	}
 }

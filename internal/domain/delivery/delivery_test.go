@@ -93,27 +93,24 @@ func TestNewPickupPoint(t *testing.T) {
 	}
 }
 
-func halfSubsidy(cost money.Money) (money.Money, error) { return cost.MulRatio(1, 2) }
-
 func TestNewQuote(t *testing.T) {
 	quote, err := delivery.NewQuote(
 		delivery.Offered{Available: true, Cost: money.FromKopecks(30001), MinDays: 2, MaxDays: 4},
-		halfSubsidy,
+
 		t0,
 		30*time.Minute,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if quote.Status != delivery.QuoteAvailable || quote.Subsidy.Kopecks() != 15000 ||
-		quote.BuyerCost.Kopecks() != 15001 ||
+	if quote.Status != delivery.QuoteAvailable || quote.Cost.Kopecks() != 30001 ||
 		!quote.ExpiresAt.Equal(t0.Add(30*time.Minute)) {
 		t.Fatalf("расчёт: %+v", quote)
 	}
 
 	short, _ := delivery.NewQuote(
 		delivery.Offered{Available: true, Cost: money.FromKopecks(100), ExpiresAt: t0.Add(5 * time.Minute)},
-		halfSubsidy,
+
 		t0,
 		time.Hour,
 	)
@@ -129,7 +126,7 @@ func TestNewQuote(t *testing.T) {
 	}
 
 	for _, reason := range reasons {
-		unavailable, err := delivery.NewQuote(delivery.Offered{Reason: reason}, halfSubsidy, t0, time.Hour)
+		unavailable, err := delivery.NewQuote(delivery.Offered{Reason: reason}, t0, time.Hour)
 		if err != nil || unavailable.Status != delivery.QuoteUnavailable || unavailable.Reason != reason {
 			t.Fatalf("недоступно, %s: %+v %v", reason, unavailable, err)
 		}
@@ -143,7 +140,7 @@ func TestNewQuote(t *testing.T) {
 		"без причины":           {},
 		"причина маркетплейса":  {Reason: delivery.ReasonSellerUnreachable},
 	} {
-		if _, err := delivery.NewQuote(offered, halfSubsidy, t0, time.Hour); !errors.Is(err, delivery.ErrInvalidQuote) {
+		if _, err := delivery.NewQuote(offered, t0, time.Hour); !errors.Is(err, delivery.ErrInvalidQuote) {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}

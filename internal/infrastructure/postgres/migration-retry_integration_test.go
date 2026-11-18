@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	interruptedIndexValid = `SELECT indisvalid FROM pg_index WHERE indexrelid = to_regclass($1)`
-	preservedIndexOID     = `SELECT 'outbox_quarantine_id_idx'::regclass::oid`
-	indexBuildStarted     = `SELECT EXISTS (
+	interruptedIndexValid   = `SELECT indisvalid FROM pg_index WHERE indexrelid = to_regclass($1)`
+	preservedPickupIndexOID = `SELECT to_regclass($1)::oid`
+	preservedIndexOID       = `SELECT 'outbox_quarantine_id_idx'::regclass::oid`
+	indexBuildStarted       = `SELECT EXISTS (
         SELECT 1 FROM pg_index WHERE indexrelid = to_regclass($1) AND NOT indisvalid
     )`
 	interruptedOutboxInsert = `INSERT INTO outbox (kind, tenant_id, payload, next_at, created_at)
@@ -61,6 +62,18 @@ func TestInterruptedConcurrentIndexMigrationRecovers(t *testing.T) {
 			name:    "outbox_retry_kind_created_idx",
 			file:    "migrations/00057_outbox_retry_stats.sql",
 			insert:  interruptedOutboxInsert,
+		},
+		{
+			version: 59,
+			name:    "participants_pickup_cdek",
+			file:    "migrations/00059_pickup_source_indexes.sql",
+			insert:  "UPDATE participants SET version = version",
+		},
+		{
+			version: 59,
+			name:    "participants_pickup_yandex",
+			file:    "migrations/00059_pickup_source_indexes.sql",
+			insert:  "UPDATE participants SET version = version",
 		},
 	}
 	for _, test := range tests {
@@ -137,8 +150,21 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 			t.Fatal("valid-индекс был перестроен", err)
 		}
 	}
+	if test.version == 59 {
+		var original, repeated uint32
+		if err := pool.QueryRow(ctx, preservedPickupIndexOID, test.name).Scan(&original); err != nil {
+			t.Fatal(err)
+		}
+		if err := postgres.Migrate(ctx, pool); err != nil {
+			t.Fatal(err)
+		}
+		err := pool.QueryRow(ctx, preservedPickupIndexOID, test.name).Scan(&repeated)
+		if err != nil || original != repeated {
+			t.Fatal("повтор перестроил valid-индекс", test.name, original, repeated, err)
+		}
+	}
 	if test.version >= 56 {
-		if _, err := pool.Exec(ctx, test.insert); err != nil {
+		if _, err := pool.Exec(ctx, interruptedOutboxInsert); err != nil {
 			t.Fatal(err)
 		}
 		tasks, err := postgres.NewTaskQueue(pool).Claim(ctx, ports.ClaimRequest{

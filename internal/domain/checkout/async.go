@@ -1,6 +1,10 @@
 package checkout
 
-import "time"
+import (
+	"time"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+)
 
 // CreationResult — результат создания, независимо от дальнейшего исполнения.
 type CreationResult uint8
@@ -16,11 +20,16 @@ const (
 
 // SetCreationDeadline сохраняет единый срок вместе с намерением, до публикации задач.
 func (c *Checkout) SetCreationDeadline(deadline, now time.Time) error {
+	if c.CreationComplete() {
+		return nil
+	}
 	if c.Status() != StatusCreatingOrders || !deadline.After(now) {
 		return ErrTransition
 	}
 	for i := range c.state.Groups {
-		c.state.Groups[i].CreationDeadline = deadline
+		if c.state.Groups[i].OrderID == "" && !c.state.Groups[i].Excluded() {
+			c.state.Groups[i].CreationDeadline = deadline
+		}
 	}
 	return c.touch(now)
 }
@@ -28,7 +37,7 @@ func (c *Checkout) SetCreationDeadline(deadline, now time.Time) error {
 // CreationExpired отмечает достижение срока; закрытие отдельно учитывает активную аренду попытки.
 func (g Group) CreationExpired(now time.Time) bool {
 	return !g.CreationDeadline.IsZero() && !now.Before(g.CreationDeadline) &&
-		!g.Abandoned && !g.CreateExhausted && g.OrderID == ""
+		!g.Abandoned && !g.CreateExhausted && g.OrderID == "" && g.Status != GroupCreationExpired
 }
 
 // ExpireCreation отделяет итог для покупателя от незавершённой сверки магазина.
@@ -39,15 +48,15 @@ func (c *Checkout) ExpireCreation(now time.Time) (bool, error) {
 		if !g.CreationExpired(now) || (g.CreateToken != "" && now.Before(g.NextCreateAt)) {
 			continue
 		}
+		// Истечение бюджета не доказывает отказ магазина: состав и корзина сохраняются.
+		g.Status, g.Reason = GroupCreationExpired, "creation_timeout"
 		g.ReconciliationRequired = g.CreateToken != "" || g.CreateFailures > 0
-		g.Abandoned, g.CreateExhausted = true, true
-		g.Status, g.Reason = GroupUnconfirmed, "creation_deadline_exceeded"
 		changed = true
 	}
 	if !changed {
 		return false, nil
 	}
-	c.rollup()
+	c.reviewComposition()
 	return true, c.touch(now)
 }
 
@@ -78,7 +87,7 @@ func (g Group) CreationResult() CreationResult {
 	if g.Status == GroupCancellationRequested && g.ReconciliationRequired {
 		return CreationUnconfirmed
 	}
-	if g.Returnable() {
+	if g.Returnable() || g.Paid() {
 		return CreationRejected
 	}
 	return CreationPending
@@ -96,16 +105,16 @@ func (c *Checkout) HasOrders() bool {
 
 // Cancel запрещает оплату немедленно. Подтверждение отмены магазина хранится отдельно.
 func (c *Checkout) Cancel(now time.Time) (bool, error) {
-	if c.state.PaymentStarted || c.Status() == StatusPaid || c.Status() == StatusPartiallyPaid {
+	if c.state.PaymentStarted {
 		return false, ErrTransition
 	}
-	if c.Status() == StatusDraft || c.Status() == StatusConfirmed {
+	if (c.Status() == StatusDraft || c.Status() == StatusConfirmed) && !c.state.CartConsumed {
 		return false, ErrTransition
 	}
 	changed := false
 	for i := range c.state.Groups {
 		g := &c.state.Groups[i]
-		if g.Returnable() {
+		if g.Returnable() || g.Paid() {
 			continue
 		}
 		g.ReconciliationRequired = g.OrderID != "" || g.CreateToken != "" || g.CreateFailures > 0
@@ -116,51 +125,62 @@ func (c *Checkout) Cancel(now time.Time) (bool, error) {
 		}
 		changed = true
 	}
-	if !changed {
+	if !changed && c.Status() != StatusDraft && c.Status() != StatusConfirmed {
 		return false, nil
+	}
+	if !c.HasPaidGroups() {
+		c.state.Status = StatusCreatingOrders
 	}
 	c.rollup()
 	return true, c.touch(now)
 }
 
-// BeginPayment исключает гонку отмены с уже отправленным внешним платежом.
-func (c *Checkout) BeginPayment(now time.Time) error {
-	if _, err := c.PaymentAmount(); err != nil {
-		return err
+// ClaimPayment ограждает отмену и фиксирует конкретные заказы до внешнего вызова.
+func (c *Checkout) ClaimPayment(token string, orders map[ids.TenantID]string, now time.Time) error {
+	if c.NeedsConfirmation() {
+		return ErrDeliveryChanged
 	}
-	if err := c.CheckPaymentWindow(now); err != nil {
-		return err
+	if c.Status() != StatusAwaitingPayment && c.Status() != StatusPartiallyPaid {
+		return ErrTransition
 	}
-	if c.state.PaymentStarted {
-		return nil
+	if len(orders) == 0 {
+		return ErrTransition
 	}
-	c.state.PaymentStarted = true
+	for tenant, orderID := range orders {
+		g := c.group(tenant)
+		if g == nil || g.Paid() || g.Excluded() || g.OrderID != orderID || g.EffectiveStatus() != GroupAwaitingPayment {
+			return ErrTransition
+		}
+		if !now.Before(g.ExpiresAt) {
+			return ErrPaymentExpired
+		}
+	}
+	for tenant := range orders {
+		c.group(tenant).PaymentPending = true
+	}
+	c.state.PaymentAttempt, c.state.PaymentStarted = token, true
 	return c.touch(now)
 }
 
-// ClaimPayment ограждает снятие блокировки: отказ старой попытки не отменяет защиту новой.
-func (c *Checkout) ClaimPayment(token string, now time.Time) error {
-	if err := c.BeginPayment(now); err != nil {
-		return err
-	}
-	c.state.PaymentAttempt = token
-	return c.touch(now)
-}
-
-// FinishPayment снимает блокировку отмены только при доказанном отсутствии оплаты.
-func (c *Checkout) FinishPayment(token string, unpaid bool, now time.Time) error {
+// FinishPayment снимает неопределённость лишь у подтверждённых результатов этой попытки.
+// AwaitingPayment после таймаута не доказывает, что отправленный платёж не завершится позже.
+func (c *Checkout) FinishPayment(token string, result PaymentResult, now time.Time) error {
 	if c.state.PaymentAttempt != token {
 		return nil
 	}
-	c.state.PaymentAttempt = ""
-	if unpaid {
-		for _, g := range c.state.Groups {
-			switch g.EffectiveStatus() {
-			case GroupPaid, GroupShipped, GroupDelivered, GroupReturned:
-				return ErrTransition
-			}
+	for i := range c.state.Groups {
+		g := &c.state.Groups[i]
+		if result.Paid[g.TenantID] == g.OrderID && g.OrderID != "" && !g.Paid() {
+			g.Status, g.LastOrderStatus = GroupPaid, GroupPaid
+			g.Reason, g.LastErrorCode, g.PollToken = "", "", ""
+			g.NextPollAt, g.PollFailures = now, 0
 		}
-		c.state.PaymentStarted = false
+		if g.Paid() || result.Unpaid[g.TenantID] {
+			g.PaymentPending = false
+		}
 	}
+	c.state.PaymentAttempt = ""
+	c.state.PaymentStarted = c.paymentPending()
+	c.rollup()
 	return c.touch(now)
 }

@@ -28,7 +28,6 @@ const (
         WHERE NOT p.deleted AND pa.stage = 'connected' AND pa.delivery_valid AND t.status = 'active'
             AND p.card->>'visible' = 'true'
             AND p.card->'publication'->>'published' = 'true'
-            AND pa.subsidy->>'enabled' = 'true'
             AND jsonb_array_length(pa.delivery_settings->'regions') > 0
             AND jsonb_array_length(pa.delivery_settings->'carriers') > 0
             AND EXISTS (

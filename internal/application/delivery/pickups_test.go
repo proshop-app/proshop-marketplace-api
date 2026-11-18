@@ -38,7 +38,7 @@ func setup(t *testing.T, attempts int) (*app.Service, *fake.Platform, *fake.Stor
 			TenantID: tenant,
 			Stage:    participant.StageConnected,
 			Enabled:  true,
-			Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 			Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
 		})
 	}
@@ -80,7 +80,7 @@ func TestFallbackAndCache(t *testing.T) {
 			if _, err := service.Search(context.Background(), "cdek", "Другой город"); err != nil {
 				t.Fatal(err)
 			}
-			if len(platform.PickupCalls()) != 4 {
+			if len(platform.PickupCalls()) != 3 {
 				t.Fatal(platform.PickupCalls())
 			}
 		})
@@ -105,16 +105,16 @@ func TestUnavailableLimitAndEmpty(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(platform.PickupCalls()) != 4 {
-		t.Fatal("ошибка закэширована")
+	if len(platform.PickupCalls()) != 2 {
+		t.Fatal("отказ должен кэшироваться кратко")
 	}
 	points, err := service.Search(context.Background(), "yandex", "Город")
-	if err != nil || len(points) != 0 || len(platform.PickupCalls()) != 4 {
+	if err != nil || len(points) != 0 || len(platform.PickupCalls()) != 2 {
 		t.Fatal(points, err)
 	}
 }
 
-func TestEmptySuccessAndRefusalsAreNotCached(t *testing.T) {
+func TestEmptyCatalogueIsCachedBriefly(t *testing.T) {
 	for _, available := range []bool{false, true} {
 		service, platform, _ := setup(t, 3)
 		if available {
@@ -126,9 +126,9 @@ func TestEmptySuccessAndRefusalsAreNotCached(t *testing.T) {
 				t.Fatal(points, err)
 			}
 		}
-		expected := 4
+		expected := 2
 		if available {
-			expected = 2
+			expected = 1
 		}
 		if len(platform.PickupCalls()) != expected {
 			t.Fatal(platform.PickupCalls())
@@ -223,19 +223,19 @@ func TestLeaderCancellationDoesNotCancelSharedLoad(t *testing.T) {
 	}
 }
 
-func TestSharedPickupLoadStopsAfterLastClientLeaves(t *testing.T) {
+func TestSharedPickupLoadCompletesAfterLastClientLeaves(t *testing.T) {
 	_, platform, store := setup(t, 3)
 	service := app.NewService(store, platform, fake.NewPickupCache(), app.Config{
 		Attempts:     3,
 		TTL:          time.Hour,
 		QuoteTimeout: time.Second,
 	})
+	platform.SetPickupPoints("t1", answer())
 	started, stopped := make(chan struct{}), make(chan struct{})
 	platform.BeforePickup = func(ctx context.Context, _ ids.TenantID) error {
 		close(started)
-		<-ctx.Done()
-		close(stopped)
-		return ctx.Err()
+		<-stopped
+		return nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -249,9 +249,9 @@ func TestSharedPickupLoadStopsAfterLastClientLeaves(t *testing.T) {
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	select {
-	case <-stopped:
-	case <-time.After(time.Second):
-		t.Fatal("общая загрузка пережила последнего клиента")
+	close(stopped)
+	points, err := service.Search(context.Background(), "cdek", "Город")
+	if err != nil || len(points) != 1 || len(platform.PickupCalls()) != 1 {
+		t.Fatal("общая загрузка не сохранилась", points, platform.PickupCalls(), err)
 	}
 }

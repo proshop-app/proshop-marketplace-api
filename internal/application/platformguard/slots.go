@@ -74,19 +74,22 @@ func (c *Client) release(p permit, err error) {
 	if p.tenant.inactive() {
 		c.unpin(p.tenant)
 	}
-	c.dispatch(checkoutClass)
-	c.dispatch(readClass)
+	for class := checkoutClass; class < classCount; class++ {
+		c.dispatch(class)
+	}
 }
 
 func (c *Client) finishBreakers(p permit, err error) {
 	var serverFailure *ports.PlatformServerFailure
 	shared := errors.As(err, &serverFailure)
+	var catalogFailure *ports.PickupCatalogFailure
+	catalog := errors.As(err, &catalogFailure)
 	canceled := errors.Is(err, context.Canceled)
 	now := c.clock.Now()
 	serverNeutral := canceled || (!shared && errors.Is(err, context.DeadlineExceeded))
 	c.server.finish(p.server, shared, serverNeutral, c.cfg, now)
 	if p.tenant.id != "" {
-		p.tenant.breaker.finish(p.shop, tenantFailure(err), shared || canceled, c.cfg, now)
+		p.tenant.breaker.finish(p.shop, tenantFailure(err), shared || canceled || catalog, c.cfg, now)
 	}
 }
 

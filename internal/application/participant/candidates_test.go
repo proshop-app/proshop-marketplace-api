@@ -142,8 +142,8 @@ func TestCandidateReviewLifecycle(t *testing.T) {
 	assertQueue(0)
 	platform := fake.NewPlatform()
 	platform.SetSettings("t1", ports.ShopSettings{
-		Card:     participant.CardReadiness{Ready: true},
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+		Card: participant.CardReadiness{Ready: true},
+
 		Delivery: w3SettingsDelivery,
 	})
 	syncer := appparticipant.NewSettings(store, platform, clock, &fake.IDs{})
@@ -246,7 +246,6 @@ func TestCandidateBackfillIsolatesFailureAndAlreadyExists(t *testing.T) {
 		platform.SetSettings(id, ports.ShopSettings{
 			Card:     participant.CardReadiness{Ready: true},
 			Delivery: w3SettingsDelivery,
-			Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
 		})
 	}
 	syncer := appparticipant.NewSettings(candidateUOW{UnitOfWork: store, fail: "t2"}, platform, clock, &fake.IDs{})

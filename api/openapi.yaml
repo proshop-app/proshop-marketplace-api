@@ -2723,26 +2723,86 @@ paths:
     get:
       tags: [delivery]
       summary: Пункты выдачи перевозчика
-      description: Список через активный магазин; кэш по службе и городу на час.
+      description: Справочник перевозчика в городе; кэш на час. Без bbox — страницы списка, с bbox — до 500 точек и точное
+        число совпадений.
       operationId: listPickupPoints
       parameters:
-        - { name: carrier, in: query, required: true, schema: { type: string, examples: [cdek, yandex] } }
+        - name: carrier
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - cdek
+              - yandex
         - name: city
           in: query
           required: true
-          schema: { type: string, minLength: 1, maxLength: 120 }
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+        - name: bbox
+          in: query
+          description: Юг,запад,север,восток WGS84 через запятую. При наличии limit=500, offset=0.
+          schema:
+            type: string
+            examples:
+              - 55.6,37.4,55.9,37.8
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
       responses:
         "200":
-          description: Пункты
+          description: Страница ПВЗ
           content:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required:
+                  - items
+                  - total
+                  - offset
+                  - limit
+                  - refineArea
+                  - bounds
                 properties:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/PickupPoint" }
+                  total:
+                    type: integer
+                    minimum: 0
+                    description: Точное число разрешённых точек в области или списке
+                  refineArea:
+                    type: boolean
+                    description: В области больше 500 точек; увеличьте карту
+                  bounds:
+                    type:
+                      - array
+                      - 'null'
+                    minItems: 4
+                    maxItems: 4
+                    items:
+                      type: number
+                    description: Охват разрешённых регионов города, юг/запад/север/восток
+                  offset:
+                    type: integer
+                    minimum: 0
+                  limit:
+                    type: integer
+                    minimum: 1
+                    maximum: 500
         "400": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
   /api/v1/checkout:
@@ -2812,6 +2872,14 @@ paths:
                 carrier: { type: string }
                 pickupPointCode: { type: string }
                 city: { type: string, minLength: 1, maxLength: 120 }
+                tenantId:
+                  type: string
+                tenantIds:
+                  type: array
+                  minItems: 1
+                  uniqueItems: true
+                  items:
+                    type: string
       responses:
         "200": { $ref: "#/components/responses/Checkout" }
         "400": { $ref: "#/components/responses/Error" }
@@ -3024,6 +3092,32 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/groups/{tenantId}/remove:
+    post:
+      tags: [checkout]
+      summary: Убрать магазин из покупки
+      description: >-
+        Явное решение владельца покупки. Товары возвращаются в корзину, возможный заказ
+        отменяется через cancel-by-checkout. Другие заказы сохраняются. Покупка становится
+        draft с новым составом и суммой; оплата требует повторного подтверждения.
+        Удаление последнего магазина отменяет покупку.
+        Оплаченную группу и покупку с начатым неопределённым платежом изменять нельзя.
+        Повтор удаления безопасен.
+      operationId: removeCheckoutGroup
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
+        - $ref: "#/components/parameters/CheckoutId"
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Checkout" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/checkout/{checkoutId}/pay:
     post:
       tags: [checkout]
@@ -3031,8 +3125,10 @@ paths:
       description: >-
         Только владелец; creationComplete=true. Без PAYMENT_STUB — 503 checkout.payment_unavailable.
         Проверяется now < expiresAt всех ожидающих групп; истёкший срок — 409 checkout.payment_expired.
+        Pending или временное снятие публикации сохраняет заказ и срок; оплата приостановлена
+        с 409 checkout.payment_paused и актуальной покупкой до возвращения товара.
         Нечего оплачивать (включая уже оплаченную покупку) — 409 checkout.transition.
-        Исчерпанное создание без orderId возвращается в корзину и исключается из суммы;
+        Истёкшее окно создания сохраняет группу в составе до явной команды покупателя;
         группа с заказом при сбое опроса учитывается по последнему известному статусу.
         Недоступный магазин с ожидающим заказом блокирует единый платёж до успешной сверки;
         после expiresAt оплата всей покупки отклоняется, даже если у остальных групп срок ещё не истёк.
@@ -3214,29 +3310,6 @@ paths:
               schema: { $ref: "#/components/schemas/PurchaseList" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
-
-  /api/v1/delivery/settings:
-    get:
-      tags: [delivery]
-      summary: Действующий минимальный процент субсидии продавца для PR-A1
-      operationId: getDeliverySettings
-      security: []
-      description: Настройка продавца ниже порога принимается; нижняя граница применяется после maxAmount.
-      responses:
-        "200":
-          description: Публичные правила доставки площадки
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [deliverySubsidyMinPercent]
-                properties:
-                  deliverySubsidyMinPercent:
-                    type: integer
-                    minimum: 0
-                    maximum: 100
-                    default: 30
-                    description: DELIVERY_SUBSIDY_MIN_PERCENT; действующая субсидия — max настройки с потолком и процента cost.
 
   /api/v1/operator/reference:
     get:
@@ -4896,6 +4969,110 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SponsoredPage"
+  /api/v1/checkout/{checkoutId}/delivery/pickup-points:
+    get:
+      tags:
+        - checkout
+      summary: Пункты магазинов покупки в области карты или странице списка
+      operationId: checkoutPickupPoints
+      security:
+        - sessionCookie: []
+        - sessionBearer: []
+      parameters:
+        - $ref: '#/components/parameters/MoneyUnit'
+        - $ref: '#/components/parameters/CheckoutId'
+        - name: carrier
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - cdek
+              - yandex
+        - name: city
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+        - name: tenantId
+          in: query
+          schema:
+            type: string
+          description: Ограничить службами и регионами одной группы покупки
+        - name: bbox
+          in: query
+          description: Юг,запад,север,восток WGS84 через запятую. При наличии limit=500, offset=0.
+          schema:
+            type: string
+            examples:
+              - 55.6,37.4,55.9,37.8
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+      responses:
+        '200':
+          description: Страница ПВЗ
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - total
+                  - offset
+                  - limit
+                  - refineArea
+                  - bounds
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PickupPoint'
+                  total:
+                    type: integer
+                    minimum: 0
+                    description: Точное число разрешённых точек в области или списке
+                  refineArea:
+                    type: boolean
+                    description: В области больше 500 точек; увеличьте карту
+                  bounds:
+                    type:
+                      - array
+                      - 'null'
+                    minItems: 4
+                    maxItems: 4
+                    items:
+                      type: number
+                    description: Охват разрешённых регионов города, юг/запад/север/восток
+                  offset:
+                    type: integer
+                    minimum: 0
+                  limit:
+                    type: integer
+                    minimum: 1
+                    maximum: 500
+        '409':
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     serverApiToken:
@@ -7177,19 +7354,12 @@ components:
     Seller:
       type: object
       required:
-      - slug
-      - name
-      - delivery
-      - freeDeliveryFrom
+        - slug
+        - name
+        - delivery
       properties:
         delivery:
           $ref: '#/components/schemas/ParticipantDelivery'
-        freeDeliveryFrom:
-          type: number
-          minimum: 0
-          multipleOf: 0.01
-          maximum: 9999999999999.99
-          description: Сумма в рублях
         slug:
           type: string
         name:
@@ -7657,13 +7827,11 @@ components:
     Quote:
       type: object
       required:
-      - status
-      - cost
-      - subsidy
-      - buyerCost
-      - minDays
-      - maxDays
-      - expiresAt
+        - status
+        - buyerCost
+        - minDays
+        - maxDays
+        - expiresAt
       properties:
         status:
           type: string
@@ -7673,10 +7841,11 @@ components:
         reason:
           type: string
           enum:
-          - carrier_not_connected
-          - pickup_point_unavailable
-          - no_rate
-          - seller_unreachable
+            - carrier_not_connected
+            - pickup_point_unavailable
+            - no_rate
+            - seller_unreachable
+            - seller_not_ready
           description: 'Только при status unavailable. Закрытый словарь docs/server-contract.md:
 
             carrier_not_connected — у продавца нет этого перевозчика;
@@ -7688,18 +7857,6 @@ components:
             seller_unreachable — продавец не ответил, повтор при подтверждении.
 
             '
-        cost:
-          type: number
-          description: Стоимость по договору продавца
-          multipleOf: 0.01
-          minimum: 0
-          maximum: 9999999999999.99
-        subsidy:
-          type: number
-          description: Сколько оплачивает продавец
-          multipleOf: 0.01
-          minimum: 0
-          maximum: 9999999999999.99
         buyerCost:
           type: number
           description: Доля покупателя
@@ -7766,24 +7923,26 @@ components:
     CheckoutGroup:
       type: object
       required:
-      - reconciliationRequired
-      - tenantId
-      - externalCheckoutId
-      - lines
-      - goods
-      - quote
-      - status
-      - deliveryPrice
-      - returnFailed
-      - pollFailures
-      - nextPollAt
-      - createFailures
-      - createExhausted
-      - seller
-      - tracking
-      - baseTotal
-      - discount
-      - total
+        - carriers
+        - regions
+        - reconciliationRequired
+        - tenantId
+        - externalCheckoutId
+        - lines
+        - goods
+        - quote
+        - status
+        - deliveryPrice
+        - returnFailed
+        - pollFailures
+        - nextPollAt
+        - createFailures
+        - createExhausted
+        - seller
+        - tracking
+        - baseTotal
+        - discount
+        - total
       properties:
         creationStatus:
           type: string
@@ -7795,19 +7954,25 @@ components:
         creationDeadline:
           type: string
           format: date-time
-          description: Срок 15 секунд от намерения; закрытие ждёт завершения активной аренды попытки (запас до 100 ms).
+          description: Бюджет создания 15 секунд. Временный сбой сохраняет состав и сумму; повтор требует подтверждения покупателя.
         seller:
           $ref: '#/components/schemas/OrderSeller'
         tracking:
           $ref: '#/components/schemas/OrderTracking'
         tenantId:
           type: string
+        paymentHold:
+          type: string
+          enum: [moderation_pending, publication_paused, payment_expired]
+          description: Текущая проверка товара приостанавливает оплату до восстановления или expiresAt, не меняя состав.
         status:
           type: string
           description: cancellation_requested — отказ покупателя; cancelled — отмена подтверждена магазином.
           enum:
           - ''
           - creating_order
+          - creation_expired
+          - delivery_requoted
           - unconfirmed
           - cancellation_requested
           - rejected
@@ -7828,7 +7993,7 @@ components:
         deliveryPrice:
           type: number
           minimum: 0
-          description: Доставка группы в составе единого платежа; 0 — строка доставки скрыта
+          description: 'Плата покупателя площадки за доставку до ПВЗ: 0, Бесплатно.'
           multipleOf: 0.01
           maximum: 9999999999999.99
         reason:
@@ -7923,17 +8088,41 @@ components:
           multipleOf: 0.01
           minimum: 0
           maximum: 9999999999999.99
+        regions:
+          type: array
+          items:
+            type: string
+        carriers:
+          type: array
+          items:
+            type: string
+            enum:
+              - cdek
+              - yandex
+        delivery:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Selection'
     Selection:
       type: object
-      required: [carrier, pickupPointCode, city, address]
+      required:
+        - carrier
+        - pickupPointCode
+        - city
+        - address
+        - regionCode
       properties:
         carrier: { type: string }
         pickupPointCode: { type: string }
         city: { type: string }
         address: { type: string }
+        regionCode:
+          type: string
     Checkout:
       type: object
       required:
+      - paymentStarted
+      - confirmationRequired
       - creationComplete
       - id
       - status
@@ -7951,6 +8140,12 @@ components:
       - discount
       - paidTotal
       properties:
+        confirmationRequired:
+          type: boolean
+          description: Новый состав требует подтверждения, включая покупку с уже оплаченными группами.
+        paymentStarted:
+          type: boolean
+          description: Исход отправленного платежа ещё не подтверждён; отмена недоступна до сверки.
         creationComplete:
           type: boolean
           description: Все группы получили итог создания; витрина прекращает опрос ожидания.
@@ -8034,59 +8229,31 @@ components:
           multipleOf: 0.01
           minimum: 0
           maximum: 9999999999999.99
-    Subsidy:
-      type: object
-      required:
-      - enabled
-      - value
-      - maxAmount
-      properties:
-        enabled:
-          type: boolean
-        type:
-          type: string
-          enum:
-          - fixed
-          - percent
-        value:
-          description: Рубли для fixed; целый процент от 0 до 100 для percent
-          type: number
-          multipleOf: 0.01
-          minimum: 0
-          maximum: 9999999999999.99
-        maxAmount:
-          type: number
-          description: Потолок в рублях; 0 — без потолка
-          multipleOf: 0.01
-          minimum: 0
-          maximum: 9999999999999.99
     Participant:
       type: object
       required:
-      - card
-      - cardReady
-      - cardMissing
-      - trust
-      - probationOffers
-      - approvedOffers
-      - tenantId
-      - slug
-      - name
-      - stage
-      - awaitingReview
-      - lastDecision
-      - deliveryValid
-      - enabled
-      - freeDeliveryFrom
-      - delivery
-      - subsidy
-      - settingsSyncedAt
-      - tenantStatus
-      - visible
-      - checkoutAvailable
-      - version
-      - createdAt
-      - updatedAt
+        - card
+        - cardReady
+        - cardMissing
+        - trust
+        - probationOffers
+        - approvedOffers
+        - tenantId
+        - slug
+        - name
+        - stage
+        - awaitingReview
+        - lastDecision
+        - deliveryValid
+        - enabled
+        - delivery
+        - settingsSyncedAt
+        - tenantStatus
+        - visible
+        - checkoutAvailable
+        - version
+        - createdAt
+        - updatedAt
       properties:
         card:
           type: object
@@ -8136,16 +8303,8 @@ components:
         enabled:
           type: boolean
           description: Включён оператором
-        freeDeliveryFrom:
-          type: number
-          minimum: 0
-          multipleOf: 0.01
-          maximum: 9999999999999.99
-          description: Сумма в рублях
         delivery:
           $ref: '#/components/schemas/ParticipantDelivery'
-        subsidy:
-          $ref: '#/components/schemas/Subsidy'
         settingsSyncedAt:
           type:
           - string
@@ -8527,6 +8686,8 @@ components:
     InternalCheckout:
       type: object
       required:
+      - paymentStarted
+      - confirmationRequired
       - creationComplete
       - id
       - status
@@ -8540,6 +8701,12 @@ components:
       - updatedAt
       - confirmedAt
       properties:
+        confirmationRequired:
+          type: boolean
+          description: Новый состав требует подтверждения, включая покупку с уже оплаченными группами.
+        paymentStarted:
+          type: boolean
+          description: Исход отправленного платежа ещё не подтверждён; отмена недоступна до сверки.
         creationComplete:
           type: boolean
           description: Все группы получили итог создания; витрина прекращает опрос ожидания.
@@ -8623,12 +8790,18 @@ components:
           $ref: '#/components/schemas/OrderTracking'
         tenantId:
           type: string
+        paymentHold:
+          type: string
+          enum: [moderation_pending, publication_paused, payment_expired]
+          description: Текущая проверка товара приостанавливает оплату до восстановления или expiresAt, не меняя состав.
         status:
           type: string
           description: cancellation_requested — отказ покупателя; cancelled — отмена подтверждена магазином.
           enum:
           - ''
           - creating_order
+          - creation_expired
+          - delivery_requoted
           - unconfirmed
           - cancellation_requested
           - rejected
@@ -8957,8 +9130,6 @@ components:
       required:
       - status
       - cost
-      - subsidy
-      - buyerCost
       - minDays
       - maxDays
       - expiresAt
@@ -8975,6 +9146,7 @@ components:
           - pickup_point_unavailable
           - no_rate
           - seller_unreachable
+          - seller_not_ready
           description: 'Только при status unavailable. Закрытый словарь docs/server-contract.md:
 
             carrier_not_connected — у продавца нет этого перевозчика;
@@ -8990,14 +9162,6 @@ components:
           type: integer
           format: int64
           description: Стоимость по договору продавца
-        subsidy:
-          type: integer
-          format: int64
-          description: Сколько оплачивает продавец
-        buyerCost:
-          type: integer
-          format: int64
-          description: Доля покупателя
         minDays:
           type: integer
         maxDays:

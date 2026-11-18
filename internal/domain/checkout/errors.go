@@ -3,6 +3,14 @@ package checkout
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrPaymentPaused сохраняет состав и заказ до восстановления товара или срока оплаты.
+	ErrPaymentPaused = errs.New(
+		errs.Conflict,
+		"checkout.payment_paused",
+		"товар временно недоступен; дождитесь восстановления или срока оплаты",
+	)
+	// ErrInvalidGroups — запрос содержит повтор магазина.
+	ErrInvalidGroups = errs.New(errs.Invalid, "checkout.invalid_groups", "магазины покупки не должны повторяться")
 	// ErrPaymentExpired — срок оплаты хотя бы одного ожидающего заказа истёк.
 	ErrPaymentExpired = errs.New(errs.Conflict, "checkout.payment_expired", "срок оплаты заказа истёк")
 	// ErrPaymentUnavailable — болванка выключена или сервер временно недоступен.
@@ -17,8 +25,6 @@ var (
 		"checkout.delivery_changed",
 		"условия доставки изменились, подтвердите заново",
 	)
-	// ErrInvalidSubsidyPercent — порог площадки вне допустимого диапазона.
-	ErrInvalidSubsidyPercent = errs.New(errs.Invalid, "checkout.invalid_subsidy_percent", "порог субсидии: от 0 до 100")
 
 	// ErrTransition — команда не подходит текущему состоянию покупки или группы.
 	ErrTransition = errs.New(errs.Conflict, "checkout.transition", "недопустимый переход покупки или группы")
@@ -71,6 +77,18 @@ var (
 	)
 	// ErrConflict — покупку изменили параллельно.
 	ErrConflict = errs.New(errs.Conflict, "checkout.version_conflict", "покупка изменена параллельно, повторите")
+	// ErrSnapshotChanged — повтор сохраняет получателя и ПВЗ ранее отправленного намерения.
+	ErrSnapshotChanged = errs.New(
+		errs.Conflict,
+		"checkout.order_snapshot_changed",
+		"получатель и ПВЗ начатой покупки сохранены: для их изменения отмените её и оформите заново",
+	)
+	// ErrSellerUnavailable — временный сбой не меняет подтверждённый состав.
+	ErrSellerUnavailable = errs.New(
+		errs.Unavailable,
+		"checkout.seller_unreachable",
+		"магазин не ответил; повторите расчёт",
+	)
 	// ErrPromoInvalid — сервер отклонил промокод при оформлении покупки.
 	ErrPromoInvalid = errs.New(errs.Invalid, "checkout.promo_invalid", "промокод больше не действует: измените корзину")
 )

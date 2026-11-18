@@ -12,7 +12,6 @@ import (
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 var w3SettingsDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
@@ -54,15 +53,10 @@ func TestSettingsSync(t *testing.T) {
 	}
 
 	platform := fake.NewPlatform()
-	subsidy := participant.Subsidy{
-		Enabled:   true,
-		Type:      participant.SubsidyFixed,
-		Value:     15000,
-		MaxAmount: money.FromKopecks(20000),
-	}
+
 	platform.SetSettings("t1", ports.ShopSettings{
-		Profile:  participant.Profile{Name: "Магазин t1"},
-		Subsidy:  subsidy,
+		Profile: participant.Profile{Name: "Магазин t1"},
+
 		Delivery: w3SettingsDelivery,
 	})
 	platform.Fail("t2", errors.New("сервер недоступен"))
@@ -95,7 +89,7 @@ func TestSettingsSync(t *testing.T) {
 	if !ok {
 		t.Fatal("участник не найден")
 	}
-	if !participant.Restore(p).DeliveryValid() || p.Subsidy != subsidy || p.SettingsSyncedAt.IsZero() {
+	if !participant.Restore(p).DeliveryValid() || p.SettingsSyncedAt.IsZero() {
 		t.Fatalf("настройки магазина: %+v", p)
 	}
 
@@ -143,7 +137,7 @@ func TestInvalidParticipationSettingsHideSeller(t *testing.T) {
 	}
 	platform := fake.NewPlatform()
 	platform.SetSettings("t1", ports.ShopSettings{
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
 	})
 	syncer := appparticipant.NewSettings(store, platform, clock, &fake.IDs{})

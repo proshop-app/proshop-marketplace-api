@@ -9,7 +9,7 @@ import (
 var ErrInvalidDeliverySettings = errs.New(
 	errs.Invalid,
 	"participant.invalid_delivery_settings",
-	"обязательны минимум заказа, субсидия продавца и регионы доставки",
+	"обязательны подключённые перевозчики и регионы доставки",
 )
 
 // DeliverySettings — регионы ISO 3166-2 RU и подключённые перевозчики.

@@ -47,7 +47,7 @@ const (
 
 	groupColumns = `
 		tenant_id, external_checkout_id, lines, goods, quote_status, quote_reason, delivery_cost,
-		subsidy, buyer_delivery, min_days, max_days, quote_expires_at, order_progress, tracking`
+		min_days, max_days, quote_expires_at, order_progress, tracking`
 
 	selectCheckoutGroups = `
 		SELECT ` + groupColumns + `
@@ -58,7 +58,7 @@ const (
 
 	insertCheckoutGroup = `
 		INSERT INTO checkout_groups (checkout_id, ` + groupColumns + `, next_work_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 
 	updateCheckoutGroup = `
 		UPDATE checkout_groups
@@ -68,14 +68,12 @@ const (
 			quote_status = $6,
 			quote_reason = $7,
 			delivery_cost = $8,
-			subsidy = $9,
-			buyer_delivery = $10,
-			min_days = $11,
-			max_days = $12,
-			quote_expires_at = $13,
-			order_progress = $14,
-			tracking = $15,
-			next_work_at = $16
+			min_days = $9,
+			max_days = $10,
+			quote_expires_at = $11,
+			order_progress = $12,
+			tracking = $13,
+			next_work_at = $14
 		WHERE checkout_id = $1 AND tenant_id = $2`
 )
 
@@ -113,16 +111,16 @@ type checkoutRow struct {
 
 // groupRow — строка группы; поля расчёта пусты, пока доставку не считали.
 type groupRow struct {
-	tracking                     []byte
-	group                        checkout.Group
-	tenantID                     string
-	lines                        []byte
-	goods                        int64
-	quoteStatus, reason          *string
-	cost, subsidy, buyerDelivery *int64
-	minDays, maxDays             *int
-	expiresAt                    *time.Time
-	orderProgress                []byte
+	tracking            []byte
+	group               checkout.Group
+	tenantID            string
+	lines               []byte
+	goods               int64
+	quoteStatus, reason *string
+	cost                *int64
+	minDays, maxDays    *int
+	expiresAt           *time.Time
+	orderProgress       []byte
 }
 
 // Get — покупка.
@@ -370,8 +368,6 @@ func (r *groupRow) targets() []any {
 		&r.quoteStatus,
 		&r.reason,
 		&r.cost,
-		&r.subsidy,
-		&r.buyerDelivery,
 		&r.minDays,
 		&r.maxDays,
 		&r.expiresAt,
@@ -434,8 +430,6 @@ func (r *groupRow) quote() *delivery.Quote {
 
 	if r.cost != nil {
 		quote.Cost = money.FromKopecks(*r.cost)
-		quote.Subsidy = money.FromKopecks(*r.subsidy)
-		quote.BuyerCost = money.FromKopecks(*r.buyerDelivery)
 		quote.MinDays = *r.minDays
 		quote.MaxDays = *r.maxDays
 	}
@@ -501,7 +495,7 @@ func groupArgs(group checkout.Group) ([]any, error) {
 // quoteArgs — поля расчёта доставки; суммы и сроки есть только у доступного расчёта.
 func quoteArgs(q *delivery.Quote) []any {
 	if q == nil {
-		return []any{nil, nil, nil, nil, nil, nil, nil, nil}
+		return []any{nil, nil, nil, nil, nil, nil}
 	}
 
 	var reason any
@@ -510,15 +504,13 @@ func quoteArgs(q *delivery.Quote) []any {
 	}
 
 	if q.Status != delivery.QuoteAvailable {
-		return []any{string(q.Status), reason, nil, nil, nil, nil, nil, q.ExpiresAt}
+		return []any{string(q.Status), reason, nil, nil, nil, q.ExpiresAt}
 	}
 
 	return []any{
 		string(q.Status),
 		reason,
 		q.Cost.Kopecks(),
-		q.Subsidy.Kopecks(),
-		q.BuyerCost.Kopecks(),
 		q.MinDays,
 		q.MaxDays,
 		q.ExpiresAt,

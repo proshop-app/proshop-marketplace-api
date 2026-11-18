@@ -14,7 +14,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 const (
@@ -26,8 +25,8 @@ const (
 	offerSelect = `
 		SELECT ` + productColumns + `, ` + signalsColumns + `,
 			pa.tenant_id, pa.slug, pa.name, pa.stage, pa.enabled,
-			pa.awaiting_review, pa.subsidy, pa.settings_synced_at, pa.version, pa.created_at, pa.updated_at,
-			pa.free_delivery_from, pa.delivery_settings, pa.trust, pa.approved_offers,
+			pa.awaiting_review, pa.settings_synced_at, pa.version, pa.created_at, pa.updated_at,
+			pa.delivery_settings, pa.trust, pa.approved_offers,
 			t.tenant_id, t.slug, t.status, t.cell, t.plan, t.hosts, t.event_at, t.version, t.updated_at,
 			CASE WHEN mv.tenant_id IS NULL THEN NULL ELSE
 				to_jsonb(mv) || jsonb_build_object('operator', jsonb_build_object(
@@ -81,10 +80,8 @@ type participantRow struct {
 	approvedOffers               *int
 	tenantID, slug, name, status *string
 	enabled                      *bool
-	freeDeliveryFrom             *int64
 	deliverySettings             []byte
 	awaitingReview               *bool
-	subsidy                      []byte
 	syncedAt                     *time.Time
 	version                      *int64
 	createdAt, updatedAt         *time.Time
@@ -220,12 +217,10 @@ func (r *participantRow) targets() []any {
 		&r.status,
 		&r.enabled,
 		&r.awaitingReview,
-		&r.subsidy,
 		&r.syncedAt,
 		&r.version,
 		&r.createdAt,
 		&r.updatedAt,
-		&r.freeDeliveryFrom,
 		&r.deliverySettings,
 		&r.trust,
 		&r.approvedOffers,
@@ -238,11 +233,6 @@ func (r *participantRow) participant() (*participant.Participant, error) {
 		return nil, nil
 	}
 
-	subsidy, err := decodeSubsidy(r.subsidy)
-	if err != nil {
-		return nil, fmt.Errorf("субсидия участника %s: %w", *r.tenantID, err)
-	}
-
 	state := participant.State{
 		Trust:          *r.trust,
 		ApprovedOffers: *r.approvedOffers,
@@ -252,13 +242,12 @@ func (r *participantRow) participant() (*participant.Participant, error) {
 		Stage:          participant.Stage(*r.status),
 		Enabled:        *r.enabled,
 		AwaitingReview: *r.awaitingReview,
-		Subsidy:        subsidy,
-		Version:        *r.version,
-		CreatedAt:      *r.createdAt,
-		UpdatedAt:      *r.updatedAt,
+
+		Version:   *r.version,
+		CreatedAt: *r.createdAt,
+		UpdatedAt: *r.updatedAt,
 	}
 
-	state.FreeDeliveryFrom = money.FromKopecks(*r.freeDeliveryFrom)
 	if err := json.Unmarshal(r.deliverySettings, &state.Delivery); err != nil {
 		return nil, fmt.Errorf("доставка участника %s: %w", *r.tenantID, err)
 	}

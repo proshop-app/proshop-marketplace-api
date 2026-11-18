@@ -85,7 +85,6 @@ func TestCreationSaveRetriesOnlyTransientFailures(t *testing.T) {
 			uow := &resultUOW{UnitOfWork: e.store, failure: failure}
 			service := appcheckout.NewService(
 				uow,
-				e.index,
 				e.platform,
 				nil,
 				nil,
@@ -115,7 +114,8 @@ func TestCreationSaveRetriesOnlyTransientFailures(t *testing.T) {
 			if err != nil || state.Groups[0].OrderID == "" || len(e.platform.OrderRequests("t1")) != 1 {
 				t.Fatal(state, err)
 			}
-		})
+		},
+		)
 	}
 }
 
@@ -131,7 +131,6 @@ func TestSuccessfulCreationPersistsAfterShutdown(t *testing.T) {
 	uow := &resultUOW{UnitOfWork: e.store}
 	service := appcheckout.NewService(
 		uow,
-		e.index,
 		e.platform,
 		nil,
 		nil,
@@ -158,7 +157,6 @@ func TestDeadlineCommitsDespiteCartFailure(t *testing.T) {
 	}
 	e.service = appcheckout.NewService(
 		brokenCartUOW{UnitOfWork: e.store},
-		e.index,
 		e.platform,
 		nil,
 		nil,
@@ -171,11 +169,11 @@ func TestDeadlineCommitsDespiteCartFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err := e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || !checkout.Restore(state).CreationComplete() {
+	if err != nil || state.Status != checkout.StatusDraft || checkout.Restore(state).CreationComplete() {
 		t.Fatal(state, err)
 	}
 	for _, g := range state.Groups {
-		if g.Status != checkout.GroupUnconfirmed || !g.ReturnFailed || g.CartReturned {
+		if g.Status != checkout.GroupCreationExpired || g.ReturnFailed || g.CartReturned || g.Excluded() {
 			t.Fatal(g)
 		}
 	}
@@ -238,7 +236,7 @@ func TestDeadlineTaskWaitsForAttemptLease(t *testing.T) {
 		t.Fatal(result)
 	}
 	state, err = e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || state.Groups[0].Status != checkout.GroupUnconfirmed {
+	if err != nil || state.Groups[0].Status != checkout.GroupCreationExpired {
 		t.Fatal(state, err)
 	}
 }
@@ -255,16 +253,19 @@ func TestPaymentCompletionSurvivesClientAndClearsOnlyProvenUnpaid(t *testing.T) 
 		if previousPaid {
 			e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupPaid, "")
 		}
-		if err := e.store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-			current, err := tx.Checkouts().Get(ctx, c.ID)
-			if err != nil {
-				return err
-			}
-			if err := current.ClaimPayment("uncertain", e.clock.Now()); err != nil {
-				return err
-			}
-			return tx.Checkouts().Update(ctx, current)
-		}); err != nil {
+		if err := e.store.Do(
+			ctx,
+			func(ctx context.Context, tx ports.Tx) error {
+				current, err := tx.Checkouts().Get(ctx, c.ID)
+				if err != nil {
+					return err
+				}
+				if err := current.ClaimPayment("uncertain", current.PaymentOrders(), e.clock.Now()); err != nil {
+					return err
+				}
+				return tx.Checkouts().Update(ctx, current)
+			},
+		); err != nil {
 			t.Fatal(err)
 		}
 		requestCtx, cancel := context.WithCancel(ctx)
@@ -276,23 +277,28 @@ func TestPaymentCompletionSurvivesClientAndClearsOnlyProvenUnpaid(t *testing.T) 
 			return ctx.Err()
 		}
 		uow := &resultUOW{UnitOfWork: e.store}
-		service := appcheckout.NewService(uow, e.index, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{
-			PaymentStub: true,
-		})
+		service := appcheckout.NewService(
+			uow,
+			e.platform,
+			nil,
+			nil,
+			&fake.IDs{},
+			e.clock,
+			appcheckout.Config{
+				PaymentStub: true,
+			},
+		)
 		err = service.ConfirmPayment(requestCtx, buyerID, c.ID)
 		cancel()
 		if !errors.Is(err, checkout.ErrTransition) {
 			t.Fatal(err)
 		}
 		state, err = service.Get(ctx, buyerID, c.ID)
-		if err != nil || state.PaymentStarted != previousPaid || state.PaymentAttempt != "" {
+		if err != nil || !state.PaymentStarted || state.PaymentAttempt != "" {
 			t.Fatal("завершение попытки должно пережить обрыв клиента", state, err)
 		}
 		_, err = service.Cancel(ctx, buyerID, c.ID)
-		if previousPaid && !errors.Is(err, checkout.ErrTransition) {
-			t.Fatal(err)
-		}
-		if !previousPaid && err != nil {
+		if !errors.Is(err, checkout.ErrTransition) {
 			t.Fatal(err)
 		}
 	}
@@ -313,7 +319,7 @@ func TestExecutorBacksOffNonPendingFailures(t *testing.T) {
 	}
 	unavailable := errs.New(errs.Unavailable, "test.storage", "база недоступна")
 	uow := &resultUOW{UnitOfWork: e.store, failure: unavailable, remaining: 100}
-	service := appcheckout.NewService(uow, e.index, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
+	service := appcheckout.NewService(uow, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
 	executor := appcheckout.NewExecutor(e.store, e.clock, service)
 	for _, delay := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second} {
 		now := e.clock.Now()

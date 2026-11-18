@@ -27,8 +27,6 @@ type participantJSON struct {
 	Name              string                       `json:"name"`
 	Stage             string                       `json:"stage"`
 	Enabled           bool                         `json:"enabled"`
-	Subsidy           subsidyJSON                  `json:"subsidy"`
-	FreeDeliveryFrom  rubles                       `json:"freeDeliveryFrom"`
 	Delivery          participant.DeliverySettings `json:"delivery"`
 	SettingsSyncedAt  *time.Time                   `json:"settingsSyncedAt"`
 	TenantStatus      string                       `json:"tenantStatus"`
@@ -37,14 +35,6 @@ type participantJSON struct {
 	Version           int64                        `json:"version"`
 	CreatedAt         time.Time                    `json:"createdAt"`
 	UpdatedAt         time.Time                    `json:"updatedAt"`
-}
-
-// subsidyJSON — субсидия доставки продавца: value — рубли для fixed, процент для percent.
-type subsidyJSON struct {
-	Enabled   bool   `json:"enabled"`
-	Type      string `json:"type,omitempty"`
-	Value     any    `json:"value"`
-	MaxAmount rubles `json:"maxAmount"`
 }
 
 type participantListJSON struct {
@@ -90,7 +80,6 @@ func toParticipantJSON(view appparticipant.View) participantJSON {
 		Trust:             p.Trust,
 		ApprovedOffers:    p.ApprovedOffers,
 		TenantID:          string(p.TenantID),
-		FreeDeliveryFrom:  rubles(p.FreeDeliveryFrom.Kopecks()),
 		Delivery:          p.Delivery,
 		Slug:              p.Slug,
 		Name:              p.Name,
@@ -102,12 +91,6 @@ func toParticipantJSON(view appparticipant.View) participantJSON {
 		Version:           p.Version,
 		CreatedAt:         p.CreatedAt.UTC(),
 		UpdatedAt:         p.UpdatedAt.UTC(),
-		Subsidy: subsidyJSON{
-			Enabled:   p.Subsidy.Enabled,
-			Type:      string(p.Subsidy.Type),
-			Value:     subsidyValueResponse(p.Subsidy),
-			MaxAmount: rubles(p.Subsidy.MaxAmount.Kopecks()),
-		},
 	}
 	if !p.SettingsSyncedAt.IsZero() {
 		synced := p.SettingsSyncedAt.UTC()
@@ -233,11 +216,4 @@ func (h *participantHandlers) delivery(w http.ResponseWriter, r *http.Request) {
 	h.withTenant(w, r, func(tenantID ids.TenantID) (appparticipant.View, error) {
 		return h.service.SetDelivery(r.Context(), tenantID, body.Delivery, body.Version)
 	})
-}
-
-func subsidyValueResponse(subsidy participant.Subsidy) any {
-	if subsidy.Type == participant.SubsidyFixed {
-		return rubles(subsidy.Value)
-	}
-	return subsidy.Value
 }

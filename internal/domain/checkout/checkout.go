@@ -48,6 +48,16 @@ type Line struct {
 
 // Group — заказ одного продавца в покупке.
 type Group struct {
+	// PaymentPending сохраняет неопределённость отправленной оплаты до подтверждения магазина.
+	PaymentPending bool
+
+	// DispatchReviewRevision связывает новый расчёт с сохранённым отказом попытки магазина.
+	DispatchReviewRevision int
+	// PaymentHold — текущая причина приостановки; вычисляется при чтении, не сохраняет решение модерации.
+	PaymentHold string `json:"-"`
+	Delivery    *Selection
+	Carriers    []string
+	Regions     []string
 	// CreationDeadline фиксирует обещанный срок и не продлевается повтором команды.
 	CreationDeadline time.Time
 	// Abandoned запрещает позднему ответу повторно открыть оплату после отказа покупателя или срока.
@@ -245,6 +255,11 @@ func (c *Checkout) SelectDelivery(selection Selection, quotes map[ids.TenantID]d
 		return ErrInvalidQuotes
 	}
 
+	for _, group := range c.state.Groups {
+		if group.Status != "" || group.Abandoned {
+			return ErrTransition
+		}
+	}
 	for i := range c.state.Groups {
 		quote, ok := quotes[c.state.Groups[i].TenantID]
 		if !ok {
@@ -252,6 +267,7 @@ func (c *Checkout) SelectDelivery(selection Selection, quotes map[ids.TenantID]d
 		}
 
 		c.state.Groups[i].Quote = &quote
+		c.state.Groups[i].Delivery = &selection
 	}
 
 	c.state.Delivery = &selection
@@ -262,34 +278,19 @@ func (c *Checkout) SelectDelivery(selection Selection, quotes map[ids.TenantID]d
 // NeedsQuote — продавцы, чей расчёт нужно получить заново: его нет, цена
 // доставки устарела или магазин не ответил. Без выбранной доставки — никто.
 func (c *Checkout) NeedsQuote(now time.Time) []ids.TenantID {
-	if c.state.Delivery == nil {
-		return nil
-	}
 
 	var tenants []ids.TenantID
 
 	for _, group := range c.state.Groups {
+		if group.Excluded() || group.OrderID != "" {
+			continue
+		}
 		quote := group.Quote
 
 		switch {
 		case quote == nil,
 			quote.Status == delivery.QuoteAvailable && quote.Expired(now),
 			quote.Status == delivery.QuoteUnavailable && quote.Reason == delivery.ReasonSellerUnreachable:
-			tenants = append(tenants, group.TenantID)
-		}
-	}
-
-	return tenants
-}
-
-// Undeliverable — продавцы, которые ответили, что в выбранный пункт не везут.
-// Их не исправит ни перепроверка цен, ни пересчёт: нужен другой пункт.
-func (c *Checkout) Undeliverable() []ids.TenantID {
-	var tenants []ids.TenantID
-
-	for _, group := range c.state.Groups {
-		if q := group.Quote; q != nil && q.Status == delivery.QuoteUnavailable &&
-			q.Reason != delivery.ReasonSellerUnreachable {
 			tenants = append(tenants, group.TenantID)
 		}
 	}
@@ -324,6 +325,9 @@ func (c *Checkout) Reprice(checks map[ids.OfferID]PriceCheck, now time.Time) (bo
 	var missing []string
 
 	for _, group := range c.state.Groups {
+		if group.Excluded() || group.Status != "" {
+			continue
+		}
 		for _, line := range group.Lines {
 			check, ok := checks[line.Offer]
 			if ok {
@@ -345,6 +349,9 @@ func (c *Checkout) Reprice(checks map[ids.OfferID]PriceCheck, now time.Time) (bo
 
 	for gi := range c.state.Groups {
 		group := &c.state.Groups[gi]
+		if group.Excluded() || group.Status != "" {
+			continue
+		}
 		groupChanged := false
 
 		for li := range group.Lines {
@@ -373,32 +380,48 @@ func (c *Checkout) Reprice(checks map[ids.OfferID]PriceCheck, now time.Time) (bo
 // Confirm подтверждает покупку: доставка выбрана, все продавцы везут в пункт,
 // цены доставки действуют.
 func (c *Checkout) Confirm(now time.Time) error {
-	if c.state.Status != StatusDraft {
+	if !c.NeedsConfirmation() {
 		return ErrNotDraft
 	}
 	if c.state.Delivery == nil {
 		return ErrDeliveryNotSelected
 	}
 
-	var unavailable []string
+	available := 0
 
 	for _, group := range c.state.Groups {
+		if group.Excluded() {
+			continue
+		}
+		if group.QuotePending() || group.Status == GroupCreationExpired {
+			return ErrSellerUnavailable
+		}
+		if group.OrderID != "" {
+			available++
+			continue
+		}
 		switch {
 		case group.Quote == nil:
 			return ErrQuoteExpired
 		case group.Quote.Status != delivery.QuoteAvailable:
-			unavailable = append(unavailable, string(group.TenantID))
+			continue
 		case group.Quote.Expired(now):
 			return ErrQuoteExpired
+		default:
+			available++
 		}
 	}
 
-	if len(unavailable) > 0 {
-		return ErrDeliveryUnavailable.WithMessage("не доставляют в выбранный пункт: " + strings.Join(unavailable, ", "))
+	if available == 0 {
+		return ErrDeliveryUnavailable
 	}
 
-	c.state.Status = StatusConfirmed
 	c.state.ConfirmedAt = now
+	if c.HasPaidGroups() || c.Status() != StatusDraft {
+		c.rollup()
+	} else {
+		c.state.Status = StatusConfirmed
+	}
 
 	return c.touch(now)
 }
@@ -437,12 +460,15 @@ func (c *Checkout) recount() error {
 		group.DeliveryPrice = money.Money{}
 
 		var err error
+		if group.Excluded() {
+			continue
+		}
 		if goodsTotal, err = goodsTotal.Add(goods); err != nil {
 			return err
 		}
 
 		if group.Quote != nil && group.Quote.Status == delivery.QuoteAvailable {
-			group.DeliveryPrice = group.Quote.BuyerCost
+			group.DeliveryPrice = money.Money{}
 			if deliveryTotal, err = deliveryTotal.Add(group.DeliveryPrice); err != nil {
 				return err
 			}

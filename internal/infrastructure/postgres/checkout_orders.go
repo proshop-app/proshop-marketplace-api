@@ -15,7 +15,7 @@ const (
  WHERE `
 
 	listCheckoutFilters = `
-  AND (NOT $3 OR status NOT IN ('draft', 'confirmed'))
+  AND (NOT $3 OR status NOT IN ('draft', 'confirmed') OR order_context->>'CartConsumed' = 'true')
  AND (NOT $7 OR EXISTS (SELECT 1 FROM checkout_groups g
   WHERE g.checkout_id = c.id AND coalesce(g.order_progress->>'OrderID', '') <> ''))
   AND ($4::timestamptz IS NULL OR EXISTS (

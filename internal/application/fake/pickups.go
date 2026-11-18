@@ -38,6 +38,7 @@ type PickupLookup struct {
 // Point проверяет код по заданному списку.
 func (p *PickupLookup) Point(
 	_ context.Context,
+	_ ids.UUID,
 	carrier delivery.Carrier,
 	code, city string,
 ) (delivery.PickupPoint, error) {
@@ -114,4 +115,13 @@ func (c *PickupCache) Set(_ context.Context, key string, value []byte, ttl time.
 	defer c.mu.Unlock()
 	c.entries[key] = pickupEntry{value: slices.Clone(value), until: time.Now().Add(ttl)}
 	return nil
+}
+
+// ProfilePoint использует те же фикстуры, но не резерв оформления.
+func (p *PickupLookup) ProfilePoint(
+	ctx context.Context,
+	carrier delivery.Carrier,
+	code, city string,
+) (delivery.PickupPoint, error) {
+	return p.Point(ctx, "", carrier, code, city)
 }

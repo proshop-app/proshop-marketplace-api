@@ -29,10 +29,10 @@ func promotionHTTPFixture() (*promotionHandlers, *fake.Store, *fake.Clock) {
 		TenantID:  "t1",
 		Name:      "Магазин",
 		Delivery:  participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
-		Subsidy:   participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
-		Enabled:   true,
-		Stage:     participant.StageConnected,
-		Version:   1,
+
+		Enabled: true,
+		Stage:   participant.StageConnected,
+		Version: 1,
 	})
 	store.SeedProduct(catalog.ProductState{
 		TenantID:  "t1",

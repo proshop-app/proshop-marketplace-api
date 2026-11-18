@@ -38,7 +38,7 @@ type RegionLimitError struct {
 
 // Features — покупательские сценарии в одной транзакции на изменение.
 type Features struct {
-	points  ports.PickupLookup
+	points  ports.ProfilePickupLookup
 	uow     ports.UnitOfWork
 	geo     ports.GeoIP
 	pricing ports.CatalogPricing
@@ -79,7 +79,7 @@ func NewFeatures(
 	geo ports.GeoIP,
 	pricing ports.CatalogPricing,
 	limiter ports.RateLimiter,
-	points ports.PickupLookup,
+	points ports.ProfilePickupLookup,
 ) *Features {
 	return &Features{uow: uow, geo: geo, pricing: pricing, limiter: limiter, points: points}
 }
@@ -135,7 +135,7 @@ func (s *Features) Patch(
 		if _, err := delivery.NormalizeCity(selected.City); err != nil {
 			return ProfileView{}, err
 		}
-		point, err := s.points.Point(ctx, delivery.Carrier(selected.Provider), selected.Code, selected.City)
+		point, err := s.points.ProfilePoint(ctx, delivery.Carrier(selected.Provider), selected.Code, selected.City)
 		if err != nil {
 			return ProfileView{}, err
 		}

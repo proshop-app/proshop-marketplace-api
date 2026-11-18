@@ -56,7 +56,7 @@ func TestExecutorShutdownLeavesInFlightTaskForNextProcess(t *testing.T) {
 	}
 	started := make(chan struct{}, 2)
 	platform := delayedOrderPlatform{PlatformAPI: e.platform, release: make(chan struct{}), started: started}
-	service := appcheckout.NewService(e.store, e.index, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
+	service := appcheckout.NewService(e.store, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
 	executor := appcheckout.NewExecutor(e.store, e.clock, service, 1)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)

@@ -35,8 +35,16 @@ type ItemCheck struct {
 	Available int
 }
 
+// DispatchReview подтверждает конкретный пересчёт после сохранённого отказа магазина.
+type DispatchReview struct {
+	ExternalCheckoutID string       `json:"externalCheckoutId"`
+	GroupID            ids.TenantID `json:"groupId"`
+	Revision           int          `json:"revision"`
+}
+
 // QuoteRequest — расчёт доставки заказа продавца до пункта выдачи.
 type QuoteRequest struct {
+	DispatchReview  *DispatchReview
 	BuyerID         ids.UUID
 	Carrier         delivery.Carrier
 	PickupPointCode string
@@ -46,13 +54,11 @@ type QuoteRequest struct {
 
 // ShopSettings — настройки магазина для маркетплейса.
 type ShopSettings struct {
-	Products         participant.CardProducts
-	Profile          participant.Profile
-	Card             participant.CardReadiness
-	Returns          *participant.Returns
-	Subsidy          participant.Subsidy
-	FreeDeliveryFrom money.Money
-	Delivery         participant.DeliverySettings
+	Products participant.CardProducts
+	Profile  participant.Profile
+	Card     participant.CardReadiness
+	Returns  *participant.Returns
+	Delivery participant.DeliverySettings
 }
 
 // CatalogPricing — выбор профилей до фильтрации и пагинации каталога.

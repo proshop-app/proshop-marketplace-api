@@ -27,6 +27,8 @@ import (
 const (
 	// HeaderToken — заголовок служебного токена, как у сервера.
 	HeaderToken = "x-internal-token"
+	// HeaderDeadline — абсолютный срок вызова, Unix миллисекунды; сервер расходует оставшееся время.
+	HeaderDeadline = "x-marketplace-deadline-ms"
 
 	// codeMarketplaceDisabled — код отказа сервера для магазина, который не участвует в маркетплейсе.
 	codeMarketplaceDisabled = "MARKETPLACE_DISABLED"
@@ -84,7 +86,8 @@ type quoteJSON struct {
 // errorJSON — тело отказа сервера: {"ok":false,"message","status","code","items","data"}.
 type errorJSON struct {
 	Data *struct {
-		PromoCode *promoCodeJSON `json:"promoCode"`
+		PromoCode              *promoCodeJSON `json:"promoCode"`
+		DispatchReviewRevision int            `json:"dispatchReviewRevision"`
 	} `json:"data"`
 	Code   string `json:"code"`
 	Reason string `json:"reason"`
@@ -111,18 +114,11 @@ type settingsProductsJSON struct {
 }
 
 type settingsJSON struct {
-	Products         *settingsProductsJSON         `json:"products"`
-	Profile          *settingsProfileJSON          `json:"profile"`
-	Card             *participant.CardReadiness    `json:"card"`
-	Returns          *participant.Returns          `json:"returns"`
-	FreeDeliveryFrom *int64                        `json:"freeDeliveryFrom"`
-	Delivery         *participant.DeliverySettings `json:"delivery"`
-	Subsidy          *struct {
-		Enabled   bool   `json:"enabled"`
-		Type      string `json:"type"`
-		Value     int64  `json:"value"`
-		MaxAmount int64  `json:"maxAmount"`
-	} `json:"subsidy"`
+	Products *settingsProductsJSON         `json:"products"`
+	Profile  *settingsProfileJSON          `json:"profile"`
+	Card     *participant.CardReadiness    `json:"card"`
+	Returns  *participant.Returns          `json:"returns"`
+	Delivery *participant.DeliverySettings `json:"delivery"`
 }
 
 // New — клиент API сервера.
@@ -154,6 +150,10 @@ func (c *Client) QuoteDelivery(
 
 	if request.BuyerID != "" {
 		body["buyerId"] = request.BuyerID
+	}
+
+	if request.DispatchReview != nil {
+		body["dispatchReview"] = request.DispatchReview
 	}
 
 	var answer quoteJSON
@@ -225,37 +225,11 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 		settings.Card.Ready = len(settings.Card.Missing) == 0
 	}
 
-	if answer.FreeDeliveryFrom != nil {
-		if *answer.FreeDeliveryFrom < 0 {
-			return ports.ShopSettings{}, ports.ErrInvalidSettings
-		}
-		settings.FreeDeliveryFrom = money.FromKopecks(*answer.FreeDeliveryFrom)
-	}
 	if answer.Delivery != nil {
 		if err := answer.Delivery.Validate(); err != nil {
 			return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
 		}
 		settings.Delivery = answer.Delivery.Clone()
-	}
-
-	if s := answer.Subsidy; s != nil {
-		if !s.Enabled {
-			return ports.ShopSettings{}, ports.ErrInvalidSettings
-		}
-		settings.Subsidy = participant.Subsidy{
-			Enabled:   s.Enabled,
-			Type:      participant.SubsidyType(s.Type),
-			Value:     s.Value,
-			MaxAmount: money.FromKopecks(s.MaxAmount),
-		}
-	}
-
-	if err := settings.Subsidy.Validate(); err != nil {
-		return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
-	}
-	// Неполный набор настроек не разрешает торговлю, но профиль кандидата сохраняется.
-	if answer.FreeDeliveryFrom == nil || answer.Subsidy == nil || answer.Delivery == nil {
-		settings.Delivery = participant.DeliverySettings{}
 	}
 
 	return settings, nil
@@ -375,8 +349,19 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 		case reply.StatusCode == http.StatusConflict && strings.HasSuffix(path, "/stub-payment") &&
 			(body.Code == "MARKETPLACE_STUB_PAYMENT_AMOUNT" || body.Code == "MARKETPLACE_STUB_PAYMENT_STATE"):
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
+		case reply.StatusCode == http.StatusConflict && body.Code == "MARKETPLACE_PICKUP_CATALOG_CHANGED":
+			return &ports.PickupCatalogFailure{Cause: &ports.OrderRefusal{Code: body.Code}}
+		case reply.StatusCode == http.StatusConflict && body.Code == checkout.DispatchOriginChanged:
+			if body.Data == nil || body.Data.DispatchReviewRevision <= 0 {
+				return ErrInvalidResponse
+			}
+			return &ports.OrderRefusal{
+				Code:                   body.Code,
+				DispatchReviewRevision: body.Data.DispatchReviewRevision,
+			}
 		case reply.StatusCode == http.StatusConflict && (body.Code == "DELIVERY_UNAVAILABLE" ||
-			body.Code == "DELIVERY_CHANGED" || body.Code == "OUT_OF_STOCK" ||
+			body.Code == "DELIVERY_CHANGED" ||
+			body.Code == "OUT_OF_STOCK" ||
 			body.Code == "IDEMPOTENCY_CONFLICT" || body.Code == "ORDER_CHECKOUT_CANCELLED"):
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
 		case reply.StatusCode == http.StatusNotFound && body.Code == "ORDER_NOT_FOUND":

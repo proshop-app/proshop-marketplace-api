@@ -31,15 +31,23 @@ func (c *Checkout) RecheckDelivery(quotes map[ids.TenantID]delivery.Quote, now t
 		return false, ErrInvalidQuotes
 	}
 	changed := false
+	available := 0
 	for _, g := range c.state.Groups {
 		q, ok := quotes[g.TenantID]
 		if !ok {
 			return false, ErrInvalidQuotes
 		}
-		if q.Status != delivery.QuoteAvailable || q.Expired(now) || q.BuyerCost != g.DeliveryPrice {
+		if g.QuotePending() || q.Reason == delivery.ReasonSellerUnreachable {
+			return false, ErrSellerUnavailable
+		}
+		if q.Status == delivery.QuoteAvailable {
+			available++
+		}
+		if !g.Excluded() && g.DeliveryChanged(q) {
 			changed = true
 		}
 	}
+	changed = changed || available == 0
 	for i := range c.state.Groups {
 		q := quotes[c.state.Groups[i].TenantID]
 		c.state.Groups[i].Quote = &q
@@ -59,6 +67,9 @@ func (g Group) CreationDue(now time.Time) bool {
 
 // PollDue учитывает срок следующего обращения и окончательные статусы.
 func (g Group) PollDue(now time.Time) bool {
+	if g.Status == GroupCreationExpired {
+		return false
+	}
 	if g.Abandoned {
 		return g.CancellationBlocked && g.ReconciliationRequired && g.OrderID != "" && !now.Before(g.NextPollAt)
 	}
@@ -67,6 +78,9 @@ func (g Group) PollDue(now time.Time) bool {
 
 // Returnable — группа без исполненного заказа, которую нужно вернуть в корзину.
 func (g Group) Returnable() bool {
+	if g.Paid() {
+		return false
+	}
 	status := g.EffectiveStatus()
 	return status == GroupCancellationRequested || status == GroupRejected ||
 		status == GroupUnconfirmed || status == GroupCancelled ||
@@ -84,7 +98,7 @@ func (c *Checkout) ClaimCreation(tenant ids.TenantID, token string, leaseUntil, 
 	if g == nil {
 		return false, ErrNotFound
 	}
-	if !g.CreationDue(now) {
+	if c.Status() == StatusDraft || c.Status() == StatusConfirmed || !g.CreationDue(now) {
 		return false, nil
 	}
 	g.CreateToken, g.NextCreateAt = token, leaseUntil
@@ -154,6 +168,9 @@ func (c *Checkout) FailCreation(
 		g.CreateExhausted = true
 	}
 	c.rollup()
+	if terminal != "" {
+		c.state.Status, c.state.ConfirmedAt = StatusDraft, time.Time{}
+	}
 	return true, c.touch(now)
 }
 

@@ -8,7 +8,7 @@ import (
 
 // CancellationRequired выбирает команду вместо опроса в ожидании отмены.
 func (g Group) CancellationRequired() bool {
-	return g.ReconciliationRequired && !g.CancellationConfirmed && !g.CancellationBlocked
+	return !g.Paid() && g.ReconciliationRequired && !g.CancellationConfirmed && !g.CancellationBlocked
 }
 
 // CompleteCancellation принимает только подтверждённый сервером запрет создания по ключу.
@@ -26,7 +26,7 @@ func (c *Checkout) CompleteCancellation(tenant ids.TenantID, orderID string, now
 	if g.OrderID != "" && orderID != g.OrderID {
 		return false, ErrInvalidOrder
 	}
-	if !g.Abandoned {
+	if !g.Abandoned && g.Status != GroupCreationExpired {
 		g.Status = g.EffectiveStatus()
 		g.Abandoned = true
 	}
@@ -65,11 +65,22 @@ func (c *Checkout) BlockCancellation(
 	if g.CancellationBlocked && g.LastOrderStatus == status && g.Reason == reason {
 		return false, nil
 	}
-	if !g.Abandoned {
+	if !g.Abandoned && g.Status != GroupCreationExpired {
 		g.Status = g.EffectiveStatus()
 		g.Abandoned = true
 	}
 	g.OrderID, g.LastOrderStatus = orderID, status
+	if g.Status == GroupCreationExpired {
+		observed := Group{Status: status}
+		if observed.Paid() {
+			g.Status, g.Reason = status, reason
+			g.CancellationBlocked, g.ReconciliationRequired = false, false
+			g.NextPollAt = now
+			c.state.Status = StatusCreatingOrders
+			c.rollup()
+			return true, c.touch(now)
+		}
+	}
 	g.CancellationBlocked = true
 	g.Reason = reason
 	g.NextPollAt = now
@@ -116,7 +127,7 @@ func (c *Checkout) FailCancellation(tenant ids.TenantID, code string, blocked bo
 	}
 	g.CancellationLastErrorCode = code
 	if blocked {
-		if !g.Abandoned {
+		if !g.Abandoned && g.Status != GroupCreationExpired {
 			g.Status = g.EffectiveStatus()
 			g.Abandoned = true
 		}

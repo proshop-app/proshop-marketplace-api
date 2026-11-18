@@ -12,6 +12,7 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 type paymentConflictUOW struct {
@@ -36,76 +37,82 @@ func (u *paymentConflictUOW) Do(ctx context.Context, fn func(context.Context, po
 
 func TestSinglePaymentRecovery(t *testing.T) {
 	for _, mode := range []string{"all", "partial", "failure", "commit"} {
-		t.Run(mode, func(t *testing.T) {
-			e := setup(t)
-			c := confirmedPurchase(t, e)
-			ctx := context.Background()
-			state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
-			if err != nil {
-				t.Fatal(err)
-			}
-			first := state.Groups[0]
-			if mode == "partial" {
-				e.platform.SetOrderStatus(first.OrderID, checkout.GroupPaid, "")
-				if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
+		t.Run(
+			mode,
+			func(t *testing.T) {
+				e := setup(t)
+				c := confirmedPurchase(t, e)
+				ctx := context.Background()
+				state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
+				if err != nil {
 					t.Fatal(err)
 				}
-				// Уже оплаченный локально магазин больше не вызывается.
-				e.platform.Fail(first.TenantID, errors.New("недоступен"))
-			}
-			if mode == "failure" {
-				e.platform.Fail(state.Groups[1].TenantID, errors.New("недоступен"))
-				err := e.service.ConfirmPayment(ctx, buyerID, c.ID)
-				if !errors.Is(err, checkout.ErrPaymentUnavailable) {
+				first := state.Groups[0]
+				if mode == "partial" {
+					e.platform.SetOrderStatus(first.OrderID, checkout.GroupPaid, "")
+					if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
+						t.Fatal(err)
+					}
+					// Уже оплаченный локально магазин больше не вызывается.
+					e.platform.Fail(first.TenantID, errors.New("недоступен"))
+				}
+				if mode == "failure" {
+					e.platform.Fail(state.Groups[1].TenantID, errors.New("недоступен"))
+					err := e.service.ConfirmPayment(ctx, buyerID, c.ID)
+					if !errors.Is(err, checkout.ErrPaymentUnavailable) {
+						t.Fatal(err)
+					}
+					remote, err := e.platform.GetOrder(ctx, first.TenantID, first.OrderID)
+					if err != nil || remote.Status != checkout.GroupPaid {
+						t.Fatal(remote, err)
+					}
+					local, err := e.service.Get(ctx, buyerID, c.ID)
+					if err != nil || local.Status != checkout.StatusPartiallyPaid {
+						t.Fatal(local, err)
+					}
+					e.platform.Fail(state.Groups[1].TenantID, nil)
+				}
+				if mode == "commit" {
+					e.platform.AfterStubPayment = func() { e.store.FailCommit = errors.New("нет базы") }
+					if err := e.service.ConfirmPayment(ctx, buyerID, c.ID); err == nil {
+						t.Fatal("ожидался отказ")
+					}
+					e.store.FailCommit = nil
+					e.platform.AfterStubPayment = nil
+				}
+				if err := e.service.ConfirmPayment(ctx, buyerID, c.ID); err != nil {
 					t.Fatal(err)
 				}
-				remote, err := e.platform.GetOrder(ctx, first.TenantID, first.OrderID)
-				if err != nil || remote.Status != checkout.GroupPaid {
-					t.Fatal(remote, err)
+				calls := e.platform.StubPaymentCalls()
+				expectedCalls := 2
+				if mode == "partial" {
+					expectedCalls = 1
 				}
-				local, err := e.service.Get(ctx, buyerID, c.ID)
-				if err != nil || local.Status != checkout.StatusAwaitingPayment {
-					t.Fatal(local, err)
+				if mode == "failure" {
+					expectedCalls = 3
 				}
-				e.platform.Fail(state.Groups[1].TenantID, nil)
-			}
-			if mode == "commit" {
-				e.platform.AfterStubPayment = func() { e.store.FailCommit = errors.New("нет базы") }
-				if err := e.service.ConfirmPayment(ctx, buyerID, c.ID); err == nil {
-					t.Fatal("ожидался отказ")
+				if mode == "commit" {
+					expectedCalls = 4
 				}
-				e.store.FailCommit = nil
-				e.platform.AfterStubPayment = nil
-			}
-			if err := e.service.ConfirmPayment(ctx, buyerID, c.ID); err != nil {
-				t.Fatal(err)
-			}
-			calls := e.platform.StubPaymentCalls()
-			expectedCalls := 2
-			if mode == "partial" {
-				expectedCalls = 1
-			}
-			if mode == "failure" || mode == "commit" {
-				expectedCalls = 4
-			}
-			if len(calls) != expectedCalls {
-				t.Fatalf("попытки: %v", calls)
-			}
-			paid, err := e.service.Get(ctx, buyerID, c.ID)
-			if err != nil || paid.Status != checkout.StatusPaid {
-				t.Fatal(paid, err)
-			}
-			if err := e.service.ConfirmPayment(ctx, buyerID, c.ID); err != nil {
-				t.Fatal(err)
-			}
-			repeated, _ := e.service.Get(ctx, buyerID, c.ID)
-			if paid.Version != repeated.Version {
-				t.Fatal("повтор изменил версию")
-			}
-			if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
-				t.Fatal(err)
-			}
-		})
+				if len(calls) != expectedCalls {
+					t.Fatalf("попытки: %v", calls)
+				}
+				paid, err := e.service.Get(ctx, buyerID, c.ID)
+				if err != nil || paid.Status != checkout.StatusPaid {
+					t.Fatal(paid, err)
+				}
+				if err := e.service.ConfirmPayment(ctx, buyerID, c.ID); err != nil {
+					t.Fatal(err)
+				}
+				repeated, _ := e.service.Get(ctx, buyerID, c.ID)
+				if paid.Version != repeated.Version {
+					t.Fatal("повтор изменил версию")
+				}
+				if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
+					t.Fatal(err)
+				}
+			},
+		)
 	}
 }
 
@@ -165,7 +172,6 @@ func TestPaymentWithoutStubPreservesCart(t *testing.T) {
 	before, _ := e.store.Cart(buyerID)
 	service := appcheckout.NewService(
 		e.store,
-		e.index,
 		e.platform,
 		nil,
 		nil,
@@ -240,41 +246,29 @@ func TestExpiredPaymentMakesNoServerCalls(t *testing.T) {
 	}
 }
 
-func TestPaymentAfterExhaustedCreation(t *testing.T) {
-	for _, refusal := range []error{
-		&ports.OrderRefusal{Code: "IDEMPOTENCY_CONFLICT"},
-		ports.ErrMarketplaceDisabled,
-		errors.New("нет связи"),
-	} {
+func TestTemporaryCreationFailureNeverShrinksPayment(t *testing.T) {
+	for _, refusal := range []error{ports.ErrMarketplaceDisabled, errors.New("нет связи")} {
 		e := setup(t)
 		c := confirmedPurchase(t, e)
 		ctx := context.Background()
 		e.platform.FailCreate("t1", refusal)
-		state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
-		if err != nil {
+		if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
 			t.Fatal(err)
 		}
-		for !state.Groups[0].CreateExhausted {
-			e.clock.Advance(state.Groups[0].NextCreateAt.Sub(e.clock.Now()))
-			if err := resumeAndExecute(ctx, e); err != nil {
-				t.Fatal(err)
-			}
-			state, err = e.service.Get(ctx, buyerID, c.ID)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-		if !state.Groups[0].CartReturned {
-			t.Fatal("группа не вернулась в корзину")
-		}
-		if _, err := e.service.Pay(ctx, buyerID, c.ID); err != nil {
+		e.clock.Advance(appcheckout.CreationTimeout)
+		if err := resumeAndExecute(ctx, e); err != nil {
 			t.Fatal(err)
 		}
-		if err := e.service.ConfirmPayment(ctx, buyerID, c.ID); err != nil {
+		state, err := e.service.Get(ctx, buyerID, c.ID)
+		if err != nil || state.Status != checkout.StatusDraft || state.Groups[0].Excluded() ||
+			state.Groups[0].CartReturned || state.Total != c.Total {
+			t.Fatal(state, err)
+		}
+		if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
 			t.Fatal(err)
 		}
-		if calls := e.platform.StubPaymentCalls(); len(calls) != 1 || calls[0] != "t2" {
-			t.Fatal(calls)
+		if len(e.platform.StubPaymentCalls()) != 0 {
+			t.Fatal("снятие денег без нового согласия")
 		}
 	}
 }
@@ -356,7 +350,6 @@ func TestPaymentRetriesLocalConflict(t *testing.T) {
 		uow := &paymentConflictUOW{UnitOfWork: e.store}
 		service := appcheckout.NewService(
 			uow,
-			e.index,
 			e.platform,
 			nil,
 			nil,
@@ -419,7 +412,7 @@ func TestFakePaymentContract(t *testing.T) {
 		}
 	}
 	for _, id := range []string{g.OrderID, "missing"} {
-		err := e.platform.StubPayment(ctx, g.TenantID, id, g.Goods)
+		err := e.platform.StubPayment(ctx, g.TenantID, id, money.FromKopecks(1))
 		want := "MARKETPLACE_STUB_PAYMENT_AMOUNT"
 		if id == "missing" {
 			want = "ORDER_NOT_FOUND"

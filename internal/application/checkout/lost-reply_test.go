@@ -59,7 +59,6 @@ func checkoutWithLostReply(e *env) *appcheckout.Service {
 	)
 	return appcheckout.NewService(
 		e.store,
-		e.index,
 		guard,
 		nil,
 		nil,

@@ -92,6 +92,10 @@ func TestPriceChangedKeepsSnapshotAndReturnsGroup(t *testing.T) {
 	})
 	ctx := context.Background()
 	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
+	if state.Status != checkout.StatusDraft || e.platform.OrderCount() != 0 {
+		t.Fatal("окончательный отказ должен остановить оформление до нового согласия", state.Status, err)
+	}
+	state = reconfirmPurchase(t, e, c.ID)
 	if err != nil || state.Groups[0].Status != checkout.GroupPriceChanged ||
 		state.Groups[0].Lines[0].Price.Kopecks() != 199000 ||
 		state.Groups[0].CurrentPrices[0].Price.Kopecks() != 209000 || e.platform.OrderCount() != 1 {
@@ -118,7 +122,7 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 	e.platform.SetOrderStatus(first.OrderID, checkout.GroupPaid, "")
 	e.platform.SetOrderStatus(second.OrderID, checkout.GroupCancelled, "payment_expired")
 	state, err = refreshOrders(ctx, e, buyerID, c.ID)
-	if err != nil || state.Status != checkout.StatusPartiallyPaid {
+	if err != nil || state.Status != checkout.StatusPaid {
 		t.Fatalf("сверка: %+v %v", state, err)
 	}
 	if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
@@ -179,14 +183,10 @@ func TestDeliveryThresholdsAndRegions(t *testing.T) {
 	for _, threshold := range []int64{0, 398000, 398001} {
 		e := setup(t)
 		p, _ := e.store.Participant("t1")
-		p.FreeDeliveryFrom = money.FromKopecks(threshold)
 		e.store.SeedParticipant(p)
 		c := confirmedPurchase(t, e)
 		want := int64(0)
-		if threshold > 398000 {
-			want = 15000
-		}
-		if c.Groups[0].DeliveryPrice.Kopecks() != want || c.DeliveryTotal.Kopecks() != want+17500 {
+		if c.Groups[0].DeliveryPrice.Kopecks() != want || c.DeliveryTotal.Kopecks() != 0 {
 			t.Fatalf("порог %d: %+v", threshold, c)
 		}
 	}

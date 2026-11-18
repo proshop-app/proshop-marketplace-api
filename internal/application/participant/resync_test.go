@@ -67,7 +67,7 @@ func TestSettingsTaskDisablesShop(t *testing.T) {
 	settings := appparticipant.NewSettings(store, platform, clock, &fake.IDs{})
 
 	platform.SetSettings("t1", ports.ShopSettings{
-		Subsidy:  participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
+
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
 	})
 	if changed, err := settings.SyncOne(ctx, "t1"); err != nil || !changed {

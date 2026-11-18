@@ -22,6 +22,10 @@ const (
 	GroupRejected              GroupStatus = "rejected"
 	// GroupCreating — команда создания ещё не завершена.
 	GroupCreating GroupStatus = "creating_order"
+	// GroupDeliveryRequoted ждёт согласия после смены склада отправки.
+	GroupDeliveryRequoted GroupStatus = "delivery_requoted"
+	// GroupCreationExpired сохраняет состав после конца ожидания до явного решения покупателя.
+	GroupCreationExpired GroupStatus = "creation_expired"
 	// GroupUnconfirmed — срок подтверждения магазина истёк.
 	GroupUnconfirmed GroupStatus = "unconfirmed"
 	// GroupAwaitingPayment — магазин ждёт оплаты.
@@ -88,11 +92,35 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 		return false, ErrInvalidContact
 	}
 	contact.Phone, contact.Name = string(phone), strings.TrimSpace(contact.Name)
+	if c.state.CartConsumed && c.state.Contact != contact {
+		return false, ErrSnapshotChanged
+	}
 	c.state.Contact = contact
 	c.state.Status = StatusCreatingOrders
 	for i := range c.state.Groups {
-		c.state.Groups[i].Status = GroupCreating
+		g := &c.state.Groups[i]
+		if g.OrderID != "" || g.Abandoned {
+			continue
+		}
+		if g.QuotePending() {
+			return false, ErrSellerUnavailable
+		}
+		if g.Excluded() {
+			if !g.Returnable() {
+				g.Status = GroupDeliveryUnavailable
+				if g.Quote != nil {
+					g.Reason = g.Quote.Reason
+				}
+			}
+			g.CreateExhausted = true
+			if !c.state.CartConsumed {
+				g.CartReturned = true
+			}
+		} else {
+			g.Status = GroupCreating
+		}
 	}
+	c.rollup()
 	return true, c.touch(now)
 }
 
@@ -108,7 +136,8 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 		}
 		return false, ErrTransition
 	}
-	if !g.Abandoned && g.Status != GroupCreating && g.Status != GroupSellerUnreachable {
+	if !g.Abandoned && g.Status != GroupCreating &&
+		g.Status != GroupSellerUnreachable && g.Status != GroupCreationExpired {
 		return false, ErrTransition
 	}
 	total, err := g.Goods.Add(g.DeliveryPrice)
@@ -123,7 +152,7 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	if !g.CancellationConfirmed {
 		g.LastOrderStatus = GroupAwaitingPayment
 	}
-	if g.Abandoned {
+	if g.Abandoned || g.Status == GroupCreationExpired {
 		g.ReconciliationRequired = !g.CancellationConfirmed
 	} else {
 		g.Status, g.Reason = GroupAwaitingPayment, ""
@@ -161,11 +190,22 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	g.PollFailures = 0
 	g.LastErrorCode = ""
 	g.LastOrderStatus = order.Status
+	if g.Paid() || order.Status == GroupCancelled {
+		g.PaymentPending = false
+		if c.state.PaymentAttempt == "" {
+			c.state.PaymentStarted = c.paymentPending()
+		}
+	}
 	if g.CancellationBlocked && (order.Status == GroupDelivered ||
 		order.Status == GroupReturned || order.Status == GroupCancelled) {
 		g.ReconciliationRequired = false
 	}
 	c.rollup()
+
+	if order.Status == GroupCancelled && from != GroupCancelled && order.Reason != "payment_expired" && !g.Abandoned {
+		c.reviewComposition()
+	}
+
 	return true, c.touch(now)
 }
 
@@ -191,20 +231,25 @@ func (c *Checkout) group(tenant ids.TenantID) *Group {
 }
 
 func (c *Checkout) rollup() {
+	if (c.Status() == StatusDraft || c.Status() == StatusConfirmed) && !c.HasPaidGroups() {
+		return
+	}
 	paid, cancelled, pending := 0, 0, 0
 	for _, g := range c.state.Groups {
-		switch g.EffectiveStatus() {
-		case GroupPaid, GroupShipped, GroupDelivered, GroupReturned:
+		if g.Paid() {
 			paid++
+			continue
+		}
+		switch g.EffectiveStatus() {
 		case GroupCancellationRequested, GroupRejected, GroupCancelled,
 			GroupPriceChanged, GroupDeliveryUnavailable, GroupUnconfirmed:
 			cancelled++
-		case GroupCreating, GroupSellerUnreachable:
+		case GroupCreating, GroupSellerUnreachable, GroupCreationExpired:
 			pending++
 		}
 	}
 	switch {
-	case paid == len(c.state.Groups):
+	case paid > 0 && paid+cancelled == len(c.state.Groups):
 		c.state.Status = StatusPaid
 	case paid > 0:
 		c.state.Status = StatusPartiallyPaid
@@ -249,6 +294,14 @@ func cloneState(state State) State {
 		g.Lines = append([]Line(nil), g.Lines...)
 		for j := range g.Lines {
 			g.Lines[j].Discounts = append([]cart.Discount(nil), g.Lines[j].Discounts...)
+		}
+		if g.Carriers != nil {
+			g.Carriers = append([]string{}, g.Carriers...)
+		}
+		g.Regions = append([]string(nil), g.Regions...)
+		if g.Delivery != nil {
+			selection := *g.Delivery
+			g.Delivery = &selection
 		}
 		g.Tracking = cloneTracking(g.Tracking)
 		g.CurrentPrices = append([]PriceChange(nil), g.CurrentPrices...)

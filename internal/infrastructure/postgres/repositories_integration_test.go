@@ -21,7 +21,6 @@ var w3RepositoriesIntegrationDelivery = participant.DeliverySettings{
 	Regions:  []string{"RU-MOW"},
 	Carriers: []string{"cdek"},
 }
-var w3RepositoriesIntegrationSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func TestMigrationsDownAndUp(t *testing.T) {
 	pool := testPool(t)
@@ -181,8 +180,6 @@ func TestParticipantsRepository(t *testing.T) {
 		stale := participant.Restore(p.State())
 
 		if _, err := p.ApplyShopSettings(
-			w3RepositoriesIntegrationSubsidy,
-			money.Money{},
 			w3RepositoriesIntegrationDelivery,
 			at(2),
 		); err != nil {

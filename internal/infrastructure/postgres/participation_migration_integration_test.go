@@ -60,7 +60,7 @@ func TestOrderSettingsMigrationDisablesLegacyParticipation(t *testing.T) {
 			p.DeliveryValid() || visibility.Visible || visibility.CheckoutAvailable {
 			return fmt.Errorf("старое согласие без обязательных настроек выключено: %+v %+v", state, visibility)
 		}
-		if state.Subsidy.Value != 50 || !state.FreeDeliveryFrom.IsZero() || state.Delivery.Validate() == nil {
+		if state.Delivery.Validate() == nil {
 			return fmt.Errorf("субсидия сохранена, новые настройки продавец ещё не задал: %+v", state)
 		}
 		return nil

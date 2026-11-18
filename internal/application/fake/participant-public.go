@@ -64,3 +64,26 @@ func (r registry) MissingParticipants(_ context.Context, after ids.TenantID, lim
 	}
 	return result, nil
 }
+
+// PickupSources повторяет отбор хранилища без выдачи агрегатов вызывающему.
+func (r participants) PickupSources(
+	ctx context.Context,
+	carrier string,
+	after ids.TenantID,
+	limit int,
+) ([]ids.TenantID, error) {
+	keys, err := r.PublicTenants(ctx, nil, after, len(r.d.participants))
+	if err != nil {
+		return nil, err
+	}
+	result := []ids.TenantID{}
+	for _, key := range keys {
+		if slices.Contains(r.d.participants[key].Delivery.Carriers, carrier) {
+			result = append(result, key)
+			if len(result) == limit {
+				break
+			}
+		}
+	}
+	return result, nil
+}

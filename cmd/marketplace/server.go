@@ -271,20 +271,18 @@ func (s *server) services(ctx context.Context) (services, error) {
 	carts := appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL)
 	checkouts := appcheckout.NewService(
 		uow,
-		s.store.index,
 		resyncing,
 		pickups,
 		carts,
 		identities,
 		now,
 		appcheckout.Config{
-			OrderCallTimeout:          cfg.Platform.Timeout,
-			DeliverySubsidyMinPercent: cfg.Checkout.DeliverySubsidyMinPercent,
-			QuoteTTL:                  cfg.Checkout.QuoteTTL,
-			ReturnBaseURL:             cfg.Checkout.ReturnBaseURL,
-			PaymentStub:               cfg.Checkout.PaymentStub,
-			CartTTL:                   cfg.Cart.TTL,
-			QuoteTimeout:              cfg.Checkout.QuoteTimeout,
+			OrderCallTimeout: cfg.Platform.Timeout,
+			QuoteTTL:         cfg.Checkout.QuoteTTL,
+			ReturnBaseURL:    cfg.Checkout.ReturnBaseURL,
+			PaymentStub:      cfg.Checkout.PaymentStub,
+			CartTTL:          cfg.Cart.TTL,
+			QuoteTimeout:     cfg.Checkout.QuoteTimeout,
 		},
 	)
 	moderationMetrics := jobs.NewModerationMetrics(s.metrics)

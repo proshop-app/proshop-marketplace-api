@@ -604,11 +604,16 @@ func routes(deps Deps) []route {
 		},
 
 		{readRequest, http.MethodGet, "/api/v1/delivery/carriers", shipping.carriers},
-		{readRequest, http.MethodGet, "/api/v1/delivery/settings", checkouts.deliverySettings},
 		{readRequest, http.MethodGet, "/api/v1/delivery/pickup-points", shipping.pickupPoints},
 
 		{checkoutRequest, http.MethodPost, "/api/v1/checkout", signedIn(checkouts.create)},
 		{checkoutRequest, http.MethodGet, "/api/v1/checkout/{checkoutId}", signedIn(checkouts.get)},
+		{
+			checkoutRequest,
+			http.MethodGet,
+			"/api/v1/checkout/{checkoutId}/delivery/pickup-points",
+			signedIn(shipping.checkoutPickupPoints),
+		},
 		{
 			checkoutRequest,
 			http.MethodPost,
@@ -632,6 +637,12 @@ func routes(deps Deps) []route {
 			http.MethodPost,
 			"/api/v1/checkout/{checkoutId}/cancel",
 			signedIn(checkouts.cancel),
+		},
+		{
+			checkoutRequest,
+			http.MethodPost,
+			"/api/v1/checkout/{checkoutId}/groups/{tenantId}/remove",
+			signedIn(checkouts.removeGroup),
 		},
 		{checkoutRequest, http.MethodPost, "/api/v1/checkout/{checkoutId}/pay", signedIn(checkouts.pay)},
 		{

@@ -42,7 +42,6 @@ type env struct {
 }
 
 var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
-var w3ServiceSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func setup(t *testing.T) *env {
 	t.Helper()
@@ -58,21 +57,21 @@ func setup(t *testing.T) *env {
 	e.verifier = &fake.CartVerifier{CartVerifier: e.carts}
 	e.service = appcheckout.NewService(
 		e.store,
-		e.index,
 		e.platform,
 		e.pickups,
 		e.verifier,
 		identities,
 		e.clock,
 		appcheckout.Config{
-			DeliverySubsidyMinPercent: 30,
-			QuoteTTL:                  30 * time.Minute,
-			QuoteTimeout:              time.Second,
-			ReturnBaseURL:             "https://market.example",
-			PaymentStub:               true,
+			QuoteTTL:      30 * time.Minute,
+			QuoteTimeout:  time.Second,
+			ReturnBaseURL: "https://market.example",
+			PaymentStub:   true,
 		},
 	)
 	ctx := context.Background()
+	e.store.SeedReadyOffer(p1, money.FromKopecks(199000))
+	e.store.SeedReadyOffer(p2, money.FromKopecks(35000))
 	err := e.index.Put(ctx, []ports.OfferDocument{
 		{
 			ID:                p1.String(),
@@ -136,18 +135,14 @@ func setup(t *testing.T) *env {
 	}
 
 	e.store.SeedParticipant(participant.State{
-		TenantID:         "t1",
-		Delivery:         w3ServiceDelivery,
-		FreeDeliveryFrom: money.FromKopecks(1000000),
-		Slug:             "s1",
-		Name:             "Первый",
-		Stage:            participant.StageConnected,
-		Enabled:          true,
-		Subsidy: participant.Subsidy{
-			Enabled: true,
-			Type:    participant.SubsidyPercent,
-			Value:   50,
-		},
+		TenantID: "t1",
+		Delivery: w3ServiceDelivery,
+
+		Slug:    "s1",
+		Name:    "Первый",
+		Stage:   participant.StageConnected,
+		Enabled: true,
+
 		Version:   1,
 		CreatedAt: t0,
 		UpdatedAt: t0,
@@ -155,19 +150,16 @@ func setup(t *testing.T) *env {
 
 	e.platform.OrderNow = t0
 	e.store.SeedParticipant(participant.State{
-		Stage:            participant.StageConnected,
-		TenantID:         "t2",
-		Enabled:          true,
-		Delivery:         w3ServiceDelivery,
-		Subsidy:          w3ServiceSubsidy,
-		FreeDeliveryFrom: money.FromKopecks(1000000),
+		Stage:    participant.StageConnected,
+		TenantID: "t2",
+		Enabled:  true,
+		Delivery: w3ServiceDelivery,
 	})
 	for _, tenant := range []ids.TenantID{"t1", "t2"} {
 		p, _ := e.store.Participant(tenant)
 		e.platform.SetSettings(tenant, ports.ShopSettings{
-			FreeDeliveryFrom: p.FreeDeliveryFrom,
-			Subsidy:          p.Subsidy,
-			Delivery:         p.Delivery,
+
+			Delivery: p.Delivery,
 		})
 	}
 	e.platform.SetItem(
@@ -260,8 +252,11 @@ func TestCreateRefusesUnpayableSeller(t *testing.T) {
 		},
 	})
 
+	p, _ := e.store.Participant("t2")
+	p.Stage = participant.StageDisconnected
+	e.store.SeedParticipant(p)
 	if _, err := e.service.Create(context.Background(), buyerID, key); !errors.Is(err, checkout.ErrOfferUnavailable) {
-		t.Fatalf("продавец без оплаты через маркетплейс в покупку не попадает: %v", err)
+		t.Fatalf("готовность продавца обязательна: %v", err)
 	}
 }
 
@@ -276,13 +271,16 @@ func TestQuote(t *testing.T) {
 	}
 
 	t1, t2 := state.Groups[0].Quote, state.Groups[1].Quote
-	if t1.Status != delivery.QuoteAvailable || t1.Subsidy.Kopecks() != 15000 || t1.BuyerCost.Kopecks() != 15000 {
-		t.Fatalf("субсидия продавца — половина доставки: %+v", t1)
+	if t1.Status != delivery.QuoteAvailable || t1.Cost.Kopecks() != 30000 {
+		t.Fatalf("продавец оплачивает всю доставку: %+v", t1)
 	}
-	if t2.Subsidy.Kopecks() != 7500 || !t2.ExpiresAt.Equal(t0.Add(10*time.Minute)) {
-		t.Fatalf("действует порог 30%%, срок магазина короче своего: %+v", t2)
+	if t2.Cost.Kopecks() != 25000 || !t2.ExpiresAt.Equal(t0.Add(10*time.Minute)) {
+		t.Fatalf(
+			"весь тариф продавцу, срок расчёта магазина короче своего: %+v",
+			t2,
+		)
 	}
-	if state.DeliveryTotal.Kopecks() != 15000+17500 || state.Delivery.City != "Город" {
+	if state.DeliveryTotal.Kopecks() != 0 || state.Delivery.City != "Город" {
 		t.Fatalf("итог доставки и выбранный пункт: %+v", state)
 	}
 	request := e.platform.QuoteRequests()[0]
@@ -343,7 +341,7 @@ func TestConfirm(t *testing.T) {
 		t.Fatal(err)
 	}
 	if state.Status != checkout.StatusConfirmed || state.Groups[1].Quote.Cost.Kopecks() != 26000 ||
-		state.Total.Kopecks() != 2*199000+35000+15000+18200 {
+		state.Total.Kopecks() != 2*199000+35000 {
 		t.Fatalf("устаревший расчёт пересчитан, покупка подтверждена: %+v", state)
 	}
 

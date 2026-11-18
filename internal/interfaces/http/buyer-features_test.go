@@ -60,7 +60,6 @@ func TestBuyerFeatureCollectionsAndShopHeader(t *testing.T) {
 		Slug:     "shop",
 		Stage:    participant.StageConnected,
 		Delivery: w3ServerDelivery,
-		Subsidy:  w3ServerSubsidy,
 	})
 	e.seedOffer(t, "t1", "p1", 100)
 	for _, collection := range []string{"favorites", "price-watches"} {
@@ -306,7 +305,6 @@ func TestBuyerFavoritesPaginationHTTP(t *testing.T) {
 		Enabled:  true,
 		Stage:    participant.StageConnected,
 		Delivery: w3ServerDelivery,
-		Subsidy:  w3ServerSubsidy,
 	})
 	for _, id := range []string{"p1", "p2", "p3"} {
 		e.seedOffer(t, "t1", ids.ProductID(id), 100)

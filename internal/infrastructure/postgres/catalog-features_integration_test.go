@@ -61,14 +61,14 @@ func seedRecommendationProducts(t *testing.T, uow *postgres.UnitOfWork, tenant i
 	seedTenant(t, uow, tenant, string(tenant), participant.TenantActive)
 	if err := uow.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 		member := participant.Restore(participant.State{
-			TenantID:  tenant,
-			Slug:      string(tenant),
-			Name:      "Магазин",
-			Stage:     participant.StageConnected,
-			Enabled:   true,
-			Trust:     participant.Probation,
-			Delivery:  w3RepositoriesIntegrationDelivery,
-			Subsidy:   w3RepositoriesIntegrationSubsidy,
+			TenantID: tenant,
+			Slug:     string(tenant),
+			Name:     "Магазин",
+			Stage:    participant.StageConnected,
+			Enabled:  true,
+			Trust:    participant.Probation,
+			Delivery: w3RepositoriesIntegrationDelivery,
+
 			Version:   1,
 			CreatedAt: at(0),
 			UpdatedAt: at(0),

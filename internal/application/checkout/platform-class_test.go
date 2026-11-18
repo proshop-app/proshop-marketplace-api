@@ -51,7 +51,6 @@ func TestPurchaseClassesAndCallBudget(t *testing.T) {
 	}
 	want := map[string]int{
 		"price_group":   3,
-		"settings":      1,
 		"pickup_points": 1,
 		"quote":         2,
 		"create_order":  1,

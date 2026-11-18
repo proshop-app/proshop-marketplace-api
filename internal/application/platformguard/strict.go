@@ -120,15 +120,26 @@ func (c *Client) PickupPoints(
 	carrier delivery.Carrier,
 	city string,
 ) (ports.PickupPoints, error) {
-	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
+	ctx = context.WithValue(ctx, tenantContextKey{}, ids.TenantID(""))
+	class := pickupCatalogClass
+	if ports.PlatformClassFromContext(ctx) == ports.PlatformCheckout {
+		class = pickupSelectionClass
+	}
 	return call(
 		ctx,
 		c,
-		callerClass(ctx),
+		class,
 		"pickup_points",
-		c.cfg.StrictTimeout,
+		ports.PickupCatalogBudget(c.cfg.StrictTimeout),
 		func(ctx context.Context) (ports.PickupPoints, error) {
-			return c.upstream.PickupPoints(ctx, tenant, carrier, city)
+			answer, err := c.upstream.PickupPoints(ctx, tenant, carrier, city)
+			if err == nil {
+				err = ctx.Err()
+			}
+			if err != nil {
+				return answer, &ports.PickupCatalogFailure{Cause: err}
+			}
+			return answer, nil
 		},
 	)
 }

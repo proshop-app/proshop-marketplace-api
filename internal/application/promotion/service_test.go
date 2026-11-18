@@ -43,8 +43,8 @@ func setup() environment {
 		Enabled:   true,
 		Stage:     participant.StageConnected,
 		Delivery:  participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
-		Subsidy:   participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed},
-		Version:   1,
+
+		Version: 1,
 	})
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Slug: "t1", Status: participant.TenantActive, Version: 1})
 	for _, product := range []ids.ProductID{"p1", "p2"} {

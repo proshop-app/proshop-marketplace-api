@@ -10,7 +10,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func seedReadParticipant(t *testing.T, uow *postgres.UnitOfWork, tenant ids.TenantID, enabled bool) {
@@ -26,8 +25,6 @@ func seedReadParticipant(t *testing.T, uow *postgres.UnitOfWork, tenant ids.Tena
 			return err
 		}
 		if _, err := p.ApplyShopSettings(
-			w3RepositoriesIntegrationSubsidy,
-			money.Money{},
 			w3RepositoriesIntegrationDelivery,
 			at(1),
 		); err != nil {

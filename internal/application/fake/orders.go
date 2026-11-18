@@ -201,7 +201,7 @@ func (p *Platform) OrderRequests(tenant ids.TenantID) []ports.CreateOrderRequest
 }
 
 func (p *Platform) validateOrderDelivery(tenant ids.TenantID, request ports.CreateOrderRequest) error {
-	settings, hasSettings := p.settings[tenant]
+	_, hasSettings := p.settings[tenant]
 	offered, hasQuote := p.quotes[tenant]
 	if !hasSettings || !hasQuote {
 		return nil
@@ -209,36 +209,7 @@ func (p *Platform) validateOrderDelivery(tenant ids.TenantID, request ports.Crea
 	if !offered.Available {
 		return &ports.OrderRefusal{Code: "DELIVERY_UNAVAILABLE"}
 	}
-	goods := money.Money{}
-	for _, item := range request.Items {
-		current := p.promos[tenant]
-		if request.PromoCode == "" && current.PromoCode != nil {
-			current = ports.GroupPricing{}
-		}
-		discounts := current.Discounts[item.ProductID]
-		amount, err := cart.DiscountedAmount(item.Price, item.Quantity, discounts)
-		if err != nil {
-			return err
-		}
-		goods, err = goods.Add(amount)
-		if err != nil {
-			return err
-		}
-	}
-	contribution, err := (checkout.Group{Goods: goods}).DeliverySubsidy(
-		settings.FreeDeliveryFrom,
-		settings.Subsidy,
-		offered.Cost,
-		p.MinSubsidyPercent,
-	)
-	if err != nil {
-		return err
-	}
-	fee, err := offered.Cost.Sub(contribution)
-	if err != nil {
-		return err
-	}
-	if fee != request.DeliveryPrice {
+	if request.DeliveryPrice != (money.Money{}) {
 		return &ports.OrderRefusal{Code: "DELIVERY_CHANGED"}
 	}
 	return nil

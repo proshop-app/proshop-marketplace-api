@@ -15,12 +15,12 @@ func TestDeliveryRecheckReturnsToDraftWithNewTotals(t *testing.T) {
 	c := ordersReady(t)
 	changed, err := c.RecheckDelivery(
 		map[ids.TenantID]delivery.Quote{
-			"t1": available(100, 0, t0.Add(time.Hour)),
-			"t2": available(200, 100, t0.Add(time.Hour)),
+			"t1": {Status: delivery.QuoteAvailable, MinDays: 7, MaxDays: 9, ExpiresAt: t0.Add(time.Hour)},
+			"t2": available(200, t0.Add(time.Hour)),
 		},
 		t0,
 	)
-	if err != nil || !changed || c.Status() != checkout.StatusDraft || c.State().DeliveryTotal.Kopecks() != 100 {
+	if err != nil || !changed || c.Status() != checkout.StatusDraft || c.State().DeliveryTotal.Kopecks() != 0 {
 		t.Fatalf("новые условия: %+v %v", c.State(), err)
 	}
 	if _, err := c.BeginOrders(contact, t0); !errors.Is(err, checkout.ErrTransition) {

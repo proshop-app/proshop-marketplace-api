@@ -61,7 +61,6 @@ type response struct {
 }
 
 var w3ServerDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
-var w3ServerSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 	t.Helper()
@@ -124,18 +123,16 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 		Directory: directory,
 		Checkouts: appcheckout.NewService(
 			e.store,
-			e.index,
 			e.platform,
 			e.pickups,
 			appcart.NewService(e.store, e.index, e.platform, identities, e.clock, time.Hour),
 			identities,
 			e.clock,
 			appcheckout.Config{
-				DeliverySubsidyMinPercent: 30,
-				QuoteTTL:                  30 * time.Minute,
-				QuoteTimeout:              time.Second,
-				ReturnBaseURL:             "https://market.example",
-				PaymentStub:               true,
+				QuoteTTL:      30 * time.Minute,
+				QuoteTimeout:  time.Second,
+				ReturnBaseURL: "https://market.example",
+				PaymentStub:   true,
 			},
 		),
 		OperatorToken:  token,
@@ -382,13 +379,13 @@ func TestCatalog(t *testing.T) {
 	e := newEnv(t)
 	e.seedTenant("t1", "shop-one")
 	e.store.SeedParticipant(participant.State{
-		TenantID:  "t1",
-		Slug:      "shop-one",
-		Name:      "Магазин",
-		Stage:     participant.StageConnected,
-		Enabled:   true,
-		Delivery:  w3ServerDelivery,
-		Subsidy:   w3ServerSubsidy,
+		TenantID: "t1",
+		Slug:     "shop-one",
+		Name:     "Магазин",
+		Stage:    participant.StageConnected,
+		Enabled:  true,
+		Delivery: w3ServerDelivery,
+
 		Version:   1,
 		CreatedAt: t0,
 		UpdatedAt: t0,

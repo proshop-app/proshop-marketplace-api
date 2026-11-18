@@ -42,8 +42,10 @@ func execute[T any](
 ) (T, error) {
 	value, err := load(ctx)
 	var serverFailure *ports.PlatformServerFailure
+	var catalogFailure *ports.PickupCatalogFailure
+	catalog := errors.As(err, &catalogFailure)
 	shared := errors.As(err, &serverFailure)
-	if ctx.Err() != nil && (!shared || errors.Is(ctx.Err(), context.Canceled)) {
+	if ctx.Err() != nil && (!shared || errors.Is(ctx.Err(), context.Canceled)) && !catalog {
 		err = ctx.Err()
 	}
 	if parent.Err() != nil {

@@ -123,3 +123,13 @@ func (h *checkoutHandlers) cancel(w http.ResponseWriter, r *http.Request) {
 	state, err := h.checkouts.Cancel(r.Context(), BuyerID(r.Context()), id)
 	h.respond(w, r, http.StatusOK, state, err)
 }
+
+func (h *checkoutHandlers) removeGroup(w http.ResponseWriter, r *http.Request) {
+	id, err := ids.ParseUUID(r.PathValue("checkoutId"))
+	if err != nil {
+		writeError(w, r, checkout.ErrNotFound)
+		return
+	}
+	state, err := h.checkouts.RemoveGroup(r.Context(), BuyerID(r.Context()), id, ids.TenantID(r.PathValue("tenantId")))
+	h.respond(w, r, http.StatusOK, state, err)
+}

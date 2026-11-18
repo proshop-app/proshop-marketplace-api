@@ -35,8 +35,6 @@ type checkoutLineJSON struct {
 type quoteJSON struct {
 	Status    string    `json:"status"`
 	Reason    string    `json:"reason,omitempty"`
-	Cost      rubles    `json:"cost"`
-	Subsidy   rubles    `json:"subsidy"`
 	BuyerCost rubles    `json:"buyerCost"`
 	MinDays   int       `json:"minDays"`
 	MaxDays   int       `json:"maxDays"`
@@ -44,6 +42,10 @@ type quoteJSON struct {
 }
 
 type checkoutGroupJSON struct {
+	PaymentHold               string               `json:"paymentHold,omitempty"`
+	Delivery                  *selectionJSON       `json:"delivery"`
+	Regions                   []string             `json:"regions"`
+	Carriers                  []string             `json:"carriers"`
 	CreationStatus            string               `json:"creationStatus,omitempty"`
 	ReconciliationRequired    bool                 `json:"reconciliationRequired"`
 	CreationDeadline          *time.Time           `json:"creationDeadline,omitempty"`
@@ -81,6 +83,7 @@ type priceChangeJSON struct {
 }
 
 type selectionJSON struct {
+	RegionCode      string `json:"regionCode"`
 	Carrier         string `json:"carrier"`
 	PickupPointCode string `json:"pickupPointCode"`
 	City            string `json:"city"`
@@ -89,22 +92,24 @@ type selectionJSON struct {
 
 // checkoutJSON — покупка; суммы — рубли из согласованного снимка.
 type checkoutJSON struct {
-	CreationComplete bool                `json:"creationComplete"`
-	ID               string              `json:"id"`
-	Status           string              `json:"status"`
-	Groups           []checkoutGroupJSON `json:"groups"`
-	Delivery         *selectionJSON      `json:"delivery"`
-	BaseTotal        rubles              `json:"baseTotal"`
-	Discount         rubles              `json:"discount"`
-	PaidTotal        rubles              `json:"paidTotal"`
-	GoodsTotal       rubles              `json:"goodsTotal"`
-	DeliveryTotal    rubles              `json:"deliveryTotal"`
-	Total            rubles              `json:"total"`
-	PayableTotal     rubles              `json:"payableTotal"`
-	Version          int64               `json:"version"`
-	CreatedAt        time.Time           `json:"createdAt"`
-	UpdatedAt        time.Time           `json:"updatedAt"`
-	ConfirmedAt      *time.Time          `json:"confirmedAt"`
+	ConfirmationRequired bool                `json:"confirmationRequired"`
+	PaymentStarted       bool                `json:"paymentStarted"`
+	CreationComplete     bool                `json:"creationComplete"`
+	ID                   string              `json:"id"`
+	Status               string              `json:"status"`
+	Groups               []checkoutGroupJSON `json:"groups"`
+	Delivery             *selectionJSON      `json:"delivery"`
+	BaseTotal            rubles              `json:"baseTotal"`
+	Discount             rubles              `json:"discount"`
+	PaidTotal            rubles              `json:"paidTotal"`
+	GoodsTotal           rubles              `json:"goodsTotal"`
+	DeliveryTotal        rubles              `json:"deliveryTotal"`
+	Total                rubles              `json:"total"`
+	PayableTotal         rubles              `json:"payableTotal"`
+	Version              int64               `json:"version"`
+	CreatedAt            time.Time           `json:"createdAt"`
+	UpdatedAt            time.Time           `json:"updatedAt"`
+	ConfirmedAt          *time.Time          `json:"confirmedAt"`
 }
 
 type checkoutHandlers struct {
@@ -112,9 +117,11 @@ type checkoutHandlers struct {
 }
 
 type quoteRequestJSON struct {
-	City            string `json:"city"`
-	Carrier         string `json:"carrier"`
-	PickupPointCode string `json:"pickupPointCode"`
+	TenantIDs       []ids.TenantID `json:"tenantIds"`
+	TenantID        string         `json:"tenantId"`
+	City            string         `json:"city"`
+	Carrier         string         `json:"carrier"`
+	PickupPointCode string         `json:"pickupPointCode"`
 }
 
 type returnLineJSON struct {
@@ -124,22 +131,27 @@ type returnLineJSON struct {
 
 func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 	payable, err := appcheckout.PaymentAmount(state)
-	if err != nil && !errors.Is(err, checkout.ErrTransition) {
+	if err != nil &&
+		!errors.Is(err, checkout.ErrTransition) &&
+		!errors.Is(err, checkout.ErrPaymentPaused) &&
+		!errors.Is(err, checkout.ErrPaymentExpired) && !errors.Is(err, checkout.ErrDeliveryChanged) {
 		return checkoutJSON{}, err
 	}
 
 	out := checkoutJSON{
-		ID:               string(state.ID),
-		CreationComplete: checkout.Restore(state).CreationComplete(),
-		Status:           string(state.Status),
-		Groups:           make([]checkoutGroupJSON, 0, len(state.Groups)),
-		GoodsTotal:       rubles(state.GoodsTotal.Kopecks()),
-		DeliveryTotal:    rubles(state.DeliveryTotal.Kopecks()),
-		Total:            rubles(state.Total.Kopecks()),
-		PayableTotal:     rubles(payable.Kopecks()),
-		Version:          state.Version,
-		CreatedAt:        state.CreatedAt.UTC(),
-		UpdatedAt:        state.UpdatedAt.UTC(),
+		PaymentStarted:       state.PaymentStarted,
+		ConfirmationRequired: checkout.Restore(state).NeedsConfirmation(),
+		ID:                   string(state.ID),
+		CreationComplete:     checkout.Restore(state).CreationComplete(),
+		Status:               string(state.Status),
+		Groups:               make([]checkoutGroupJSON, 0, len(state.Groups)),
+		GoodsTotal:           rubles(state.GoodsTotal.Kopecks()),
+		DeliveryTotal:        rubles(state.DeliveryTotal.Kopecks()),
+		Total:                rubles(state.Total.Kopecks()),
+		PayableTotal:         rubles(payable.Kopecks()),
+		Version:              state.Version,
+		CreatedAt:            state.CreatedAt.UTC(),
+		UpdatedAt:            state.UpdatedAt.UTC(),
 	}
 
 	if !state.ConfirmedAt.IsZero() {
@@ -151,124 +163,31 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 		out.Delivery = &selectionJSON{
 			Carrier:         string(d.Carrier),
 			PickupPointCode: d.PickupPointCode,
+			RegionCode:      d.RegionCode,
 			City:            d.City,
 			Address:         d.Address,
 		}
 	}
 
 	for _, group := range state.Groups {
-		g := checkoutGroupJSON{
-			TenantID:                  string(group.TenantID),
-			ReconciliationRequired:    group.ReconciliationRequired,
-			CreationStatus:            creationStatus(group.CreationResult()),
-			ExternalCheckoutID:        group.ExternalCheckoutID,
-			Lines:                     make([]checkoutLineJSON, 0, len(group.Lines)),
-			Goods:                     rubles(group.Goods.Kopecks()),
-			Status:                    group.Status,
-			OrderID:                   group.OrderID,
-			DeliveryPrice:             rubles(group.DeliveryPrice.Kopecks()),
-			Reason:                    group.Reason,
-			Tracking:                  trackingResponse(group.Tracking),
-			ReturnFailed:              group.ReturnFailed,
-			ReturnReason:              group.ReturnReason,
-			PollFailures:              group.PollFailures,
-			NextPollAt:                group.NextPollAt,
-			CreateFailures:            group.CreateFailures,
-			LastErrorCode:             group.LastErrorCode,
-			CancellationAttempts:      group.CancellationAttempts,
-			CancellationLastErrorCode: group.CancellationLastErrorCode,
-			CreateExhausted:           group.CreateExhausted,
-		}
-
-		for _, change := range group.CurrentPrices {
-			g.CurrentPrices = append(g.CurrentPrices, priceChangeJSON{
-				ProductID: change.ProductID,
-				Price:     rubles(change.Price.Kopecks()),
-			})
-		}
-
-		for _, remaining := range group.ReturnRemaining {
-			g.ReturnRemaining = append(g.ReturnRemaining, returnLineJSON{
-				OfferID:  remaining.Offer.String(),
-				Quantity: remaining.Quantity,
-			})
-		}
-		if !group.CreationDeadline.IsZero() {
-			deadline := group.CreationDeadline
-			g.CreationDeadline = &deadline
-		}
-		if !group.ExpiresAt.IsZero() {
-			expires := group.ExpiresAt
-			g.ExpiresAt = &expires
-		}
-		for _, line := range group.Lines {
-			amount, err := cart.DiscountedAmount(line.Price, line.Quantity, line.Discounts)
-			if err != nil {
-				return checkoutJSON{}, err
-			}
-
-			base, discount, percent, err := lineBreakdown(line.Price, line.Quantity, amount)
-			if err != nil {
-				return checkoutJSON{}, err
-			}
-			baseTotal, err := money.FromKopecks(int64(g.BaseTotal)).Add(base)
-			if err != nil {
-				return checkoutJSON{}, err
-			}
-			g.BaseTotal = rubles(baseTotal.Kopecks())
-
-			g.Lines = append(g.Lines, checkoutLineJSON{
-				OfferID:         line.Offer.String(),
-				ProductID:       string(line.Offer.Product),
-				Name:            line.Name,
-				Quantity:        line.Quantity,
-				Price:           rubles(line.Price.Kopecks()),
-				Amount:          rubles(amount.Kopecks()),
-				BaseAmount:      rubles(base.Kopecks()),
-				Discount:        rubles(discount.Kopecks()),
-				DiscountPercent: percent,
-			})
-		}
-
-		if q := group.Quote; q != nil {
-			g.Quote = &quoteJSON{
-				Status:    string(q.Status),
-				Reason:    q.Reason,
-				Cost:      rubles(q.Cost.Kopecks()),
-				Subsidy:   rubles(q.Subsidy.Kopecks()),
-				BuyerCost: rubles(q.BuyerCost.Kopecks()),
-				MinDays:   q.MinDays,
-				MaxDays:   q.MaxDays,
-				ExpiresAt: q.ExpiresAt.UTC(),
-			}
-		}
-
-		discount, err := money.FromKopecks(int64(g.BaseTotal)).Sub(group.Goods)
+		g, err := checkoutGroupResponse(group, state.Delivery)
 		if err != nil {
 			return checkoutJSON{}, err
 		}
-		if discount.IsNegative() {
-			return checkoutJSON{}, money.ErrInvalid
-		}
-		g.Discount = rubles(discount.Kopecks())
-		groupTotal, err := group.Goods.Add(group.DeliveryPrice)
-		if err != nil {
-			return checkoutJSON{}, err
-		}
-		g.Total = rubles(groupTotal.Kopecks())
-		status := group.EffectiveStatus()
-		if status == checkout.GroupPaid || status == checkout.GroupShipped || status == checkout.GroupDelivered {
-			paidTotal, err := money.FromKopecks(int64(out.PaidTotal)).Add(groupTotal)
+		if group.Paid() {
+			paid, err := money.FromKopecks(int64(out.PaidTotal)).Add(money.FromKopecks(int64(g.Total)))
 			if err != nil {
 				return checkoutJSON{}, err
 			}
-			out.PaidTotal = rubles(paidTotal.Kopecks())
+			out.PaidTotal = rubles(paid.Kopecks())
 		}
-		baseTotal, err := money.FromKopecks(int64(out.BaseTotal)).Add(money.FromKopecks(int64(g.BaseTotal)))
-		if err != nil {
-			return checkoutJSON{}, err
+		if !group.Excluded() {
+			base, err := money.FromKopecks(int64(out.BaseTotal)).Add(money.FromKopecks(int64(g.BaseTotal)))
+			if err != nil {
+				return checkoutJSON{}, err
+			}
+			out.BaseTotal = rubles(base.Kopecks())
 		}
-		out.BaseTotal = rubles(baseTotal.Kopecks())
 		out.Groups = append(out.Groups, g)
 	}
 
@@ -291,7 +210,7 @@ func (h *checkoutHandlers) respond(
 	err error,
 ) {
 	if err != nil {
-		if errors.Is(err, checkout.ErrDeliveryChanged) {
+		if state.ID != "" || errors.Is(err, checkout.ErrDeliveryChanged) || errors.Is(err, checkout.ErrPaymentPaused) {
 			body, encodeErr := h.responseBody(r, state)
 			if encodeErr != nil {
 				writeError(w, r, encodeErr)
@@ -358,14 +277,33 @@ func (h *checkoutHandlers) quote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	state, err := h.checkouts.Quote(
-		r.Context(),
-		BuyerID(r.Context()),
-		checkoutID,
-		carrier,
-		body.PickupPointCode,
-		body.City,
-	)
+	var state checkout.State
+	if len(body.TenantIDs) > 0 && body.TenantID != "" {
+		writeError(w, r, ErrInvalidQuery)
+		return
+	}
+	if len(body.TenantIDs) > 0 {
+		state, err = h.checkouts.QuoteGroups(
+			r.Context(),
+			BuyerID(r.Context()),
+			checkoutID,
+			body.TenantIDs,
+			carrier,
+			body.PickupPointCode,
+			body.City,
+		)
+	} else {
+		state, err = h.checkouts.QuoteGroup(
+			r.Context(),
+			BuyerID(r.Context()),
+			checkoutID,
+			ids.TenantID(body.TenantID),
+			carrier,
+			body.PickupPointCode,
+			body.City,
+		)
+	}
+
 	h.respond(w, r, http.StatusOK, state, err)
 }
 
@@ -424,4 +362,143 @@ func creationStatus(result checkout.CreationResult) string {
 	default:
 		return ""
 	}
+}
+
+func selectionResponse(d *checkout.Selection) *selectionJSON {
+	if d == nil {
+		return nil
+	}
+	return &selectionJSON{
+		Carrier:         string(d.Carrier),
+		PickupPointCode: d.PickupPointCode,
+		RegionCode:      d.RegionCode,
+		City:            d.City,
+		Address:         d.Address,
+	}
+}
+
+func checkoutGroupResponse(group checkout.Group, fallback *checkout.Selection) (checkoutGroupJSON, error) {
+	g := checkoutGroupJSON{
+		TenantID:                  string(group.TenantID),
+		Carriers:                  append([]string{}, group.Carriers...),
+		Regions:                   append([]string{}, group.Regions...),
+		Delivery:                  selectionResponse(group.Selection(fallback)),
+		ReconciliationRequired:    group.ReconciliationRequired,
+		CreationStatus:            creationStatus(group.CreationResult()),
+		ExternalCheckoutID:        group.ExternalCheckoutID,
+		Lines:                     make([]checkoutLineJSON, 0, len(group.Lines)),
+		Goods:                     rubles(group.Goods.Kopecks()),
+		Status:                    group.Status,
+		OrderID:                   group.OrderID,
+		DeliveryPrice:             rubles(group.DeliveryPrice.Kopecks()),
+		Reason:                    group.Reason,
+		PaymentHold:               group.PaymentHold,
+		Tracking:                  trackingResponse(group.Tracking),
+		ReturnFailed:              group.ReturnFailed,
+		ReturnReason:              group.ReturnReason,
+		PollFailures:              group.PollFailures,
+		NextPollAt:                group.NextPollAt,
+		CreateFailures:            group.CreateFailures,
+		LastErrorCode:             group.LastErrorCode,
+		CancellationAttempts:      group.CancellationAttempts,
+		CancellationLastErrorCode: group.CancellationLastErrorCode,
+		CreateExhausted:           group.CreateExhausted,
+	}
+
+	for _, change := range group.CurrentPrices {
+		g.CurrentPrices = append(
+			g.CurrentPrices,
+			priceChangeJSON{
+				ProductID: change.ProductID,
+				Price:     rubles(change.Price.Kopecks()),
+			},
+		)
+	}
+
+	for _, remaining := range group.ReturnRemaining {
+		g.ReturnRemaining = append(
+			g.ReturnRemaining,
+			returnLineJSON{
+				OfferID:  remaining.Offer.String(),
+				Quantity: remaining.Quantity,
+			},
+		)
+	}
+	if !group.CreationDeadline.IsZero() {
+		deadline := group.CreationDeadline
+		g.CreationDeadline = &deadline
+	}
+	if !group.ExpiresAt.IsZero() {
+		expires := group.ExpiresAt
+		g.ExpiresAt = &expires
+	}
+	lines, base, err := checkoutLinesResponse(group.Lines)
+	if err != nil {
+		return checkoutGroupJSON{}, err
+	}
+	g.Lines = lines
+	g.BaseTotal = rubles(base.Kopecks())
+
+	if q := group.Quote; q != nil {
+		g.Quote = &quoteJSON{
+			Status: string(q.Status),
+			Reason: q.Reason,
+
+			MinDays:   q.MinDays,
+			MaxDays:   q.MaxDays,
+			ExpiresAt: q.ExpiresAt.UTC(),
+		}
+	}
+	discount, err := money.FromKopecks(int64(g.BaseTotal)).Sub(group.Goods)
+	if err != nil {
+		return checkoutGroupJSON{}, err
+	}
+	if discount.IsNegative() {
+		return checkoutGroupJSON{}, money.ErrInvalid
+	}
+	g.Discount = rubles(discount.Kopecks())
+	groupTotal, err := group.Goods.Add(group.DeliveryPrice)
+	if err != nil {
+		return checkoutGroupJSON{}, err
+	}
+	g.Total = rubles(groupTotal.Kopecks())
+	return g, nil
+}
+
+func checkoutLinesResponse(source []checkout.Line) ([]checkoutLineJSON, money.Money, error) {
+	var lines []checkoutLineJSON
+	var total money.Money
+	for _, line := range source {
+		amount, err := cart.DiscountedAmount(line.Price, line.Quantity, line.Discounts)
+		if err != nil {
+			return nil, money.Money{}, err
+		}
+
+		base, discount, percent, err := lineBreakdown(line.Price, line.Quantity, amount)
+		if err != nil {
+			return nil, money.Money{}, err
+		}
+		baseTotal, err := total.Add(base)
+		if err != nil {
+			return nil, money.Money{}, err
+		}
+		total = baseTotal
+
+		lines = append(
+			lines,
+			checkoutLineJSON{
+				OfferID:         line.Offer.String(),
+				ProductID:       string(line.Offer.Product),
+				Name:            line.Name,
+				Quantity:        line.Quantity,
+				Price:           rubles(line.Price.Kopecks()),
+				Amount:          rubles(amount.Kopecks()),
+				BaseAmount:      rubles(base.Kopecks()),
+				Discount:        rubles(discount.Kopecks()),
+				DiscountPercent: percent,
+			},
+		)
+	}
+
+	return lines, total, nil
 }

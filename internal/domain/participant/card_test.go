@@ -5,12 +5,11 @@ import (
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestCardReadinessAndModeration(t *testing.T) {
 	p := newParticipant(t)
-	_, err := p.ApplyShopSettings(w3ParticipantSubsidy, money.Money{}, w3ParticipantDelivery, t0)
+	_, err := p.ApplyShopSettings(w3ParticipantDelivery, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,8 +50,6 @@ func TestCardReadinessAndModeration(t *testing.T) {
 		t.Fatal("потеря готовности скрыла подключённый магазин")
 	}
 	if _, err := p.ApplyShopSettings(
-		participant.Subsidy{},
-		money.Money{},
 		participant.DeliverySettings{},
 		t1,
 	); err != nil {

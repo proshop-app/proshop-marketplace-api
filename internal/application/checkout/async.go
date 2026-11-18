@@ -82,6 +82,10 @@ func (s *Service) HandleOrderTask(ctx context.Context, task ports.Task) error {
 			return err
 		}
 		for _, g := range state.Groups {
+			if g.TenantID == task.TenantID && !g.Excluded() && g.OrderID == "" &&
+				g.CreationDeadline.After(s.clock.Now()) {
+				return &creationPendingUntil{at: g.CreationDeadline}
+			}
 			if g.TenantID == task.TenantID && g.CreationExpired(s.clock.Now()) {
 				return &creationPendingUntil{at: g.NextCreateAt}
 			}

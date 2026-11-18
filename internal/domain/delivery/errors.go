@@ -3,6 +3,12 @@ package delivery
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrRegionNotAllowed отличает область доставки магазина от пустого справочника перевозчика.
+	ErrRegionNotAllowed = errs.New(
+		errs.Invalid,
+		"delivery.region_not_allowed",
+		"магазин не доставляет в регион выбранного города",
+	)
 	// ErrInvalidCarrier — код перевозчика не по формату.
 	ErrInvalidCarrier = errs.New(errs.Invalid, "delivery.invalid_carrier", "некорректный перевозчик")
 	// ErrUnknownCarrier — перевозчик не подключён.
@@ -15,4 +21,6 @@ var (
 	ErrInvalidCity = errs.New(errs.Invalid, "delivery.invalid_city", "city — от 1 до 120 символов")
 	// ErrInvalidQuote — ответ магазина о доставке не проходит проверку.
 	ErrInvalidQuote = errs.New(errs.Invalid, "delivery.invalid_quote", "некорректный расчёт доставки")
+	// ErrSelectionBusy — покупатель уже проверяет ПВЗ в другом холодном справочнике.
+	ErrSelectionBusy = errs.New(errs.TooManyRequests, "delivery.selection_busy", "дождитесь проверки выбранного ПВЗ")
 )

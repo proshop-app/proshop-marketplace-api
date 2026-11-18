@@ -15,12 +15,12 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 // session — запрос с кукой сессии покупателя.
 var w3BuyerDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
-var w3BuyerSubsidy = participant.Subsidy{Enabled: true, Type: participant.SubsidyFixed}
 
 func (e *env) session(t *testing.T, method, path, body, cookie string, headers ...string) response {
 	t.Helper()
@@ -190,17 +190,18 @@ func TestLoginIPLimitIgnoresForgedForwardedFor(t *testing.T) {
 }
 
 func (e *env) seedCartDelivery() {
+	e.store.SeedReadyOffer(ids.OfferID{Tenant: "t1", Product: "p1"}, money.FromKopecks(199000))
 	ctx := context.Background()
 
 	e.store.SeedTenant(participant.TenantState{TenantID: "t1", Status: participant.TenantActive})
 	e.store.SeedParticipant(participant.State{
-		TenantID:  "t1",
-		Slug:      "s1",
-		Name:      "Магазин",
-		Stage:     participant.StageConnected,
-		Enabled:   true,
-		Delivery:  w3BuyerDelivery,
-		Subsidy:   w3BuyerSubsidy,
+		TenantID: "t1",
+		Slug:     "s1",
+		Name:     "Магазин",
+		Stage:    participant.StageConnected,
+		Enabled:  true,
+		Delivery: w3BuyerDelivery,
+
 		Version:   1,
 		CreatedAt: t0,
 		UpdatedAt: t0,
@@ -291,8 +292,8 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	}
 
 	r = e.session(t, http.MethodGet, "/api/v1/delivery/pickup-points?carrier=ozon&city=Город", "", "")
-	if r.status != http.StatusOK || len(r.body["items"].([]any)) != 0 {
-		t.Fatalf("неподключённый перевозчик: %+v", r)
+	if r.status != http.StatusBadRequest || errorCode(r) != "delivery.invalid_carrier" {
+		t.Fatalf("неподдерживаемый перевозчик: %+v", r)
 	}
 
 	r = e.session(t, http.MethodPost, "/api/v1/checkout", "", token)

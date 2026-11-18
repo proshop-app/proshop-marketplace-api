@@ -19,6 +19,9 @@ var ErrOrderRefusal = errs.New(errs.Invalid, "platform.order_refusal", "мага
 // ErrUnknownOrderRefusal — неизвестный ответ требует ограниченного разбора и диагностики.
 var ErrUnknownOrderRefusal = errs.New(errs.Internal, "platform.unknown_order_refusal", "неизвестный отказ магазина")
 
+// ErrDispatchOriginChanged допускает повтор того же ключа после нового согласия покупателя.
+var ErrDispatchOriginChanged = errs.New(errs.Conflict, "platform.dispatch_origin_changed", "склад отправки изменён")
+
 // ErrOrderNotFound — исходного заказа больше нет на сервере.
 var ErrOrderNotFound = errs.New(errs.NotFound, "platform.order_not_found", "заказ магазина не найден")
 
@@ -97,9 +100,10 @@ type SellerOrders interface {
 
 // OrderRefusal — код отказа магазина из словаря §4; неизвестный код сохраняется для оператора.
 type OrderRefusal struct {
-	Code       string
-	Reason     string
-	Unexpected bool
+	DispatchReviewRevision int
+	Code                   string
+	Reason                 string
+	Unexpected             bool
 }
 
 func (e *PriceChanged) Error() string { return ErrPriceChanged.Error() }
@@ -112,6 +116,8 @@ func (e *OrderRefusal) Unwrap() error {
 		return ErrUnknownOrderRefusal
 	}
 	switch e.Code {
+	case checkout.DispatchOriginChanged:
+		return ErrDispatchOriginChanged
 	case "ORDER_NOT_FOUND":
 		return ErrOrderNotFound
 	case "MARKETPLACE_TEMPORARY_FAILURE":

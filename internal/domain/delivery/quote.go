@@ -28,6 +28,7 @@ const (
 	ReasonNoRate = "no_rate"
 	// ReasonSellerUnreachable — магазин не ответил на расчёт.
 	ReasonSellerUnreachable = "seller_unreachable"
+	ReasonSellerNotReady    = "seller_not_ready"
 )
 
 // sellerReasons — причины, которые вправе прислать магазин.
@@ -38,14 +39,11 @@ var sellerReasons = map[string]bool{
 }
 
 // Quote — расчёт доставки заказа одного продавца до пункта выдачи. Cost —
-// стоимость по договору продавца, Subsidy — сколько из неё оплачивает
-// продавец, BuyerCost — доля покупателя.
+// стоимость перевозчика — расход продавца. Для покупателя доставка бесплатна.
 type Quote struct {
 	Status    QuoteStatus
 	Reason    string
 	Cost      money.Money
-	Subsidy   money.Money
-	BuyerCost money.Money
 	MinDays   int
 	MaxDays   int
 	ExpiresAt time.Time
@@ -62,12 +60,10 @@ type Offered struct {
 	ExpiresAt time.Time
 }
 
-// NewQuote собирает расчёт: субсидию продавца вычитает из стоимости, срок
-// цены — не позже maxAge от расчёта, даже если магазин обещал дольше. Причина
+// NewQuote сохраняет тариф продавца; срок цены — не позже maxAge от расчёта, даже если магазин обещал дольше. Причина
 // недоступности не из словаря — ответ не по контракту.
 func NewQuote(
 	offered Offered,
-	subsidy func(money.Money) (money.Money, error),
 	now time.Time,
 	maxAge time.Duration,
 ) (Quote, error) {
@@ -91,21 +87,10 @@ func NewQuote(
 		return Quote{}, ErrInvalidQuote.WithMessage("магазин вернул уже истёкший расчёт")
 	}
 
-	paid, err := subsidy(offered.Cost)
-	if err != nil {
-		return Quote{}, err
-	}
-
-	buyerCost, err := offered.Cost.Sub(paid)
-	if err != nil {
-		return Quote{}, err
-	}
-
 	return Quote{
-		Status:    QuoteAvailable,
-		Cost:      offered.Cost,
-		Subsidy:   paid,
-		BuyerCost: buyerCost,
+		Status: QuoteAvailable,
+		Cost:   offered.Cost,
+
 		MinDays:   offered.MinDays,
 		MaxDays:   offered.MaxDays,
 		ExpiresAt: expires,

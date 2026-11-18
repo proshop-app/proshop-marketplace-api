@@ -51,8 +51,6 @@ func seedBuyerFeatureOffers(t *testing.T, uow *postgres.UnitOfWork) {
 			return err
 		}
 		if _, err := shop.ApplyShopSettings(
-			w3RepositoriesIntegrationSubsidy,
-			money.Money{},
 			w3RepositoriesIntegrationDelivery,
 			at(1),
 		); err != nil {

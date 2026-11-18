@@ -19,7 +19,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 type concurrentModelResolver struct {
@@ -48,8 +47,6 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 				return err
 			}
 			if _, err := seller.ApplyShopSettings(
-				w3RepositoriesIntegrationSubsidy,
-				money.Money{},
 				w3RepositoriesIntegrationDelivery,
 				at(2),
 			); err != nil {
@@ -181,8 +178,6 @@ func TestModelKeyConflictDoesNotAbortRebuild(t *testing.T) {
 			return err
 		}
 		if _, err := seller.ApplyShopSettings(
-			w3RepositoriesIntegrationSubsidy,
-			money.Money{},
 			w3RepositoriesIntegrationDelivery,
 			at(2),
 		); err != nil {
