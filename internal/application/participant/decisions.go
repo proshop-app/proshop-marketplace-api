@@ -106,7 +106,11 @@ func (s *Service) decide(
 				return err
 			}
 			if action == "trust" {
-				if err := tx.Outbox().Enqueue(ctx, appmoderation.ReevaluateTask(tenant, now)); err != nil {
+				task := appmoderation.ReevaluateTask(tenant, now)
+				if value == participant.Trusted {
+					task = appmoderation.AllowTrustedTask(tenant, "", now)
+				}
+				if err := tx.Outbox().Enqueue(ctx, task); err != nil {
 					return err
 				}
 			}

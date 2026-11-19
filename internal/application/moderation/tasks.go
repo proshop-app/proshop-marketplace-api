@@ -13,10 +13,14 @@ import (
 
 // TaskReevaluate отделяет переоценку политики от синхронизации индекса.
 const TaskReevaluate = "moderation.tenant.reevaluate"
+
+// TaskAllowTrusted продолжает фоновое одобрение по одной странице на аренду outbox.
+const TaskAllowTrusted = "moderation.tenant.allow_trusted"
 const batchSize = 200
 
 type taskPayload struct {
 	TenantID ids.TenantID `json:"tenantId"`
+	After    ids.UUID     `json:"after,omitempty"`
 }
 
 // ReevaluateTask склеивает ожидающие задачи одного участника.
@@ -26,6 +30,18 @@ func ReevaluateTask(tenant ids.TenantID, now time.Time) ports.NewTask {
 		Kind:     TaskReevaluate,
 		TenantID: tenant,
 		DedupKey: TaskReevaluate + ":" + string(tenant),
+		Payload:  payload,
+		At:       now,
+	}
+}
+
+// AllowTrustedTask не запускает переоценку дел с другими причинами.
+func AllowTrustedTask(tenant ids.TenantID, after ids.UUID, now time.Time) ports.NewTask {
+	payload, _ := json.Marshal(taskPayload{TenantID: tenant, After: after})
+	return ports.NewTask{
+		Kind:     TaskAllowTrusted,
+		TenantID: tenant,
+		DedupKey: TaskAllowTrusted + ":" + string(tenant) + ":" + string(after),
 		Payload:  payload,
 		At:       now,
 	}
@@ -60,11 +76,14 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 	if err := json.Unmarshal(task.Payload, &payload); err != nil {
 		return moderation.ErrInvalid.Wrap(err)
 	}
-	if task.Kind != TaskReevaluate || payload.TenantID != task.TenantID {
+	if (task.Kind != TaskReevaluate && task.Kind != TaskAllowTrusted) || payload.TenantID != task.TenantID {
 		return moderation.ErrInvalid
 	}
 	if _, err := ids.ParseTenantID(string(payload.TenantID)); err != nil {
 		return moderation.ErrInvalid.Wrap(err)
+	}
+	if task.Kind == TaskAllowTrusted {
+		return s.allowTrustedProbation(ctx, payload.TenantID, payload.After, task.ID)
 	}
 	return s.Reevaluate(ctx, payload.TenantID)
 }

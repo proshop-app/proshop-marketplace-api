@@ -174,7 +174,7 @@ func TestFiftiethApprovalAndReevaluation(t *testing.T) {
 	}
 	queued := false
 	for _, task := range e.store.OutboxRows() {
-		if task.Kind == appmoderation.TaskReevaluate && task.TenantID == "t1" {
+		if task.Kind == appmoderation.TaskAllowTrusted && task.TenantID == "t1" {
 			queued = true
 		}
 	}

@@ -346,6 +346,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 		map[string]messaging.Handler{
 			appmoderation.TaskReevaluate:     moderation.HandleTask,
+			appmoderation.TaskAllowTrusted:   moderation.HandleTask,
 			messaging.TaskReplay:             events.HandleTask,
 			appcatalog.TaskSyncOffer:         indexer.HandleTask,
 			appcatalog.TaskSyncTenant:        indexer.HandleTask,

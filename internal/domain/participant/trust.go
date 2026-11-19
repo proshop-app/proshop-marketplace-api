@@ -68,7 +68,15 @@ func (p *Participant) SetTrust(trust string, now time.Time) (bool, error) {
 
 // ApproveOffer учитывает одобрение и завершает испытание при достижении порога.
 func (p *Participant) ApproveOffer(threshold int, now time.Time) bool {
-	p.state.ApprovedOffers++
+	return p.ApproveOffers(1, threshold, now)
+}
+
+// ApproveOffers учитывает пачку одним изменением версии участника.
+func (p *Participant) ApproveOffers(count, threshold int, now time.Time) bool {
+	if count <= 0 {
+		return false
+	}
+	p.state.ApprovedOffers += count
 	if p.state.Trust == Probation && p.state.ApprovedOffers >= threshold {
 		p.state.Trust = Trusted
 	}

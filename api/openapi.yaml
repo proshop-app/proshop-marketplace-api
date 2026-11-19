@@ -742,6 +742,92 @@ paths:
                   minLength: 1
                   maxLength: 2000
                   description: 1–2000 символов после TrimSpace
+  /api/v1/operator/moderation/cases/bulk-count:
+    get:
+      tags: [moderation]
+      summary: Число открытых дел магазина с причинами только из набора
+      operationId: moderationBulkCount
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
+      - name: tenantId
+        in: query
+        required: true
+        schema: { type: string }
+      - name: reason
+        in: query
+        required: true
+        schema:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { type: string }
+        style: form
+        explode: true
+      responses:
+        '200':
+          description: Число дел для подтверждения; очередь может измениться до выполнения
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total]
+                properties:
+                  total: { type: integer }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/operator/moderation/cases/bulk-allow:
+    post:
+      tags: [moderation]
+      summary: Одобрить до 200 дел одной атомарной пачкой
+      description: >-
+        Ровно один способ выбора. Selector читает страницу до 200 дел, только с причинами из набора.
+        При hasMore передайте nextAfter в selector.after следующего запроса с новым ключом.
+        Повтор страницы с прежним ключом возвращает исходный итог без повторного исполнения.
+        Конфликты отдельных дел возвращаются как пропуски. Заметка обязательна и общая для пачки.
+      operationId: moderationBulkAllow
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationBulkInput'
+      responses:
+        '200':
+          description: Итог только этой страницы, включая пропущенные дела
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationBulkResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /api/v1/operator/moderation/cases/{caseId}:
     get:
       tags:
@@ -5243,6 +5329,53 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Participant" }
   schemas:
+    ModerationBulkInput:
+      type: object
+      required: [note]
+      properties:
+        note: { type: string, minLength: 1, maxLength: 2000 }
+        cases:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required: [id, expectedVersion]
+            properties:
+              id: { type: string, format: uuid }
+              expectedVersion: { type: integer, format: int64, minimum: 1 }
+        selector:
+          $ref: '#/components/schemas/ModerationBulkSelector'
+    ModerationBulkSelector:
+      type: object
+      required: [tenantId, reasons]
+      properties:
+        tenantId: { type: string }
+        reasons:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items: { type: string }
+        after: { type: string, format: uuid }
+    ModerationBulkResult:
+      type: object
+      required: [approved, skipped, details, hasMore]
+      properties:
+        approved: { type: integer }
+        skipped: { type: integer }
+        hasMore: { type: boolean }
+        nextAfter: { type: string, format: uuid }
+        details:
+          type: array
+          items:
+            type: object
+            required: [id, reason]
+            properties:
+              id: { type: string, format: uuid }
+              reason:
+                type: string
+                enum: [changed, already_decided, other_reasons, not_found, participant_changed]
     BuyerRegionChoice:
       type: [object, "null"]
       required: [code]
