@@ -3,6 +3,7 @@ package messaging_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,13 +29,13 @@ func enqueue(t *testing.T, store *fake.Store, kind string, tenant ids.TenantID, 
 }
 
 func config() messaging.DispatcherConfig {
-	return messaging.DispatcherConfig{Batch: 10, PerTenant: 2, Lease: time.Minute}
+	return messaging.DispatcherConfig{Batch: 10, Lease: time.Minute}
 }
 
 func TestDispatcherCompletesAndRetries(t *testing.T) {
 	store, clock := fake.NewStore(), fake.NewClock(t0)
 	enqueue(t, store, "ok", "t1", "a", t0)
-	enqueue(t, store, "fail", "t1", "b", t0)
+	enqueue(t, store, "fail", "t3", "b", t0)
 	enqueue(t, store, "unknown", "t2", "c", t0)
 
 	calls := 0
@@ -52,8 +53,8 @@ func TestDispatcherCompletesAndRetries(t *testing.T) {
 	if outcomes[0].Lag != 3*time.Second {
 		t.Fatalf("задержка задачи: %s", outcomes[0].Lag)
 	}
-	if !errors.Is(outcomes[1].Err, messaging.ErrUnknownTask) {
-		t.Fatalf("неизвестная задача: %v", outcomes[1].Err)
+	if !errors.Is(outcomes[2].Err, messaging.ErrUnknownTask) {
+		t.Fatalf("неизвестная задача: %v", outcomes[2].Err)
 	}
 
 	rows := store.OutboxRows()
@@ -79,14 +80,20 @@ func TestDispatcherLimitsPerTenant(t *testing.T) {
 	clock.Advance(time.Minute)
 
 	seen := map[ids.TenantID]int{}
+	var seenMu sync.Mutex
 	dispatcher := messaging.NewDispatcher(store, clock, config(), map[string]messaging.Handler{
-		"ok": func(_ context.Context, task ports.Task) error { seen[task.TenantID]++; return nil },
+		"ok": func(_ context.Context, task ports.Task) error {
+			seenMu.Lock()
+			defer seenMu.Unlock()
+			seen[task.TenantID]++
+			return nil
+		},
 	})
 
 	if _, err := dispatcher.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if seen["noisy"] != 2 || seen["quiet"] != 1 {
+	if seen["noisy"] != 1 || seen["quiet"] != 1 {
 		t.Fatalf("шумный магазин не занимает всю пачку: %+v", seen)
 	}
 }

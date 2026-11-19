@@ -28,12 +28,14 @@ func (h *moderationHandlers) bulkAllow(w http.ResponseWriter, r *http.Request) {
 func (h *moderationHandlers) bulkCount(w http.ResponseWriter, r *http.Request) {
 	selector := moderation.BulkSelector{
 		TenantID: ids.TenantID(r.URL.Query().Get("tenantId")),
-		Reasons:  r.URL.Query()["reason"],
+		Reasons:  r.URL.Query()["reasons"],
+		Reason:   r.URL.Query().Get("reason"),
+		Source:   r.URL.Query().Get("source"),
 	}
 	count, err := h.service.BulkCount(r.Context(), selector)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"total": count})
+	writeJSON(w, http.StatusOK, count)
 }

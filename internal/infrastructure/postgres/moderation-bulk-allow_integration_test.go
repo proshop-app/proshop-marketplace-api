@@ -91,7 +91,7 @@ func bulkApprovalCommand(cases []moderation.BulkCase, key string) appmoderation.
 		Cases:          cases,
 		Note:           "Проверено пачкой",
 		Operator:       moderation.Actor{ID: "o1", Name: "Оператор"},
-		IdempotencyKey: key,
+		IdempotencyKey: fmt.Sprintf("%d:%s", time.Now().UnixMilli(), key),
 	}
 }
 
@@ -165,7 +165,7 @@ func TestBulkApprovalSelectorAndPlan(t *testing.T) {
 	ctx := context.Background()
 	selector := moderation.BulkSelector{TenantID: "t1", Reasons: []string{"moderation.probation"}}
 	count, err := service.BulkCount(ctx, selector)
-	if err != nil || count != 401 {
+	if err != nil || count.Total != 401 {
 		t.Fatal(count, err)
 	}
 	if _, err := pool.Exec(ctx, "ANALYZE moderation_cases"); err != nil {
@@ -209,7 +209,7 @@ func TestBulkApprovalSelectorAndPlan(t *testing.T) {
 		t.Fatal(approved)
 	}
 	count, err = service.BulkCount(ctx, selector)
-	if err != nil || count != 0 {
+	if err != nil || count.Total != 0 {
 		t.Fatal(count, err)
 	}
 	remaining, err := service.ListCases(ctx, moderation.Filter{TenantID: "t1", Status: moderation.Open, Limit: 10})
@@ -244,7 +244,7 @@ func TestBulkApprovalAutomaticTrust(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			var pending int
+			var pending moderation.BulkCounts
 			if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 				var err error
 				pending, err = tx.BulkModeration().Count(ctx, moderation.BulkSelector{
@@ -252,7 +252,7 @@ func TestBulkApprovalAutomaticTrust(t *testing.T) {
 					Reasons:  []string{"moderation.probation"},
 				})
 				return err
-			}); err != nil || pending < 200 {
+			}); err != nil || pending.Total < 200 {
 				t.Fatal("одобрение выполнено в запросе", pending, err)
 			}
 			task := appmoderation.AllowTrustedTask("t1", "", time.Now())

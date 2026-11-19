@@ -4,6 +4,11 @@ import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 // Ошибки сохраняют ключи для единого перевода транспортом.
 var (
+	ErrKeyExpired = errs.New(
+		errs.Conflict,
+		"moderation.idempotency_key_expired",
+		"срок ключа массового одобрения истёк",
+	)
 	ErrKeyReused = errs.New(
 		errs.Conflict,
 		"moderation.idempotency_key_reused",

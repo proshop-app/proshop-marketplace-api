@@ -10,8 +10,10 @@ type BulkCase struct {
 
 // BulkSelector читает только очередную страницу подходящих открытых дел.
 type BulkSelector struct {
-	TenantID ids.TenantID `json:"tenantId"`
-	Reasons  []string     `json:"reasons"`
+	TenantID ids.TenantID `json:"tenantId,omitempty"`
+	Reasons  []string     `json:"reasons,omitempty"`
+	Source   string       `json:"source,omitempty"`
+	Reason   string       `json:"reason,omitempty"`
 	After    ids.UUID     `json:"after,omitempty"`
 }
 
@@ -28,4 +30,11 @@ type BulkResult struct {
 	Details   []BulkSkip `json:"details"`
 	NextAfter ids.UUID   `json:"nextAfter,omitempty"`
 	HasMore   bool       `json:"hasMore"`
+}
+
+// BulkCounts раскрывает объём и риск отбора до подтверждения оператором.
+type BulkCounts struct {
+	Total        int `json:"total"`
+	Tenants      int `json:"tenants"`
+	OtherReasons int `json:"otherReasons"`
 }

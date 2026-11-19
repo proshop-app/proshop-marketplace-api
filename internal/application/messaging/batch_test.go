@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 func TestClaimInterleavesTenantsBeforeGlobalLimit(t *testing.T) {
@@ -38,7 +41,7 @@ func TestClaimInterleavesTenantsBeforeGlobalLimit(t *testing.T) {
 func TestBatchResolutionRollsBackOnStaleOwner(t *testing.T) {
 	store, clock := fake.NewStore(), fake.NewClock(t0)
 	for n := range 2 {
-		enqueue(t, store, "ok", "t1", fmt.Sprintf("k%d", n), t0)
+		enqueue(t, store, "ok", ids.TenantID(fmt.Sprintf("t%d", n)), fmt.Sprintf("k%d", n), t0)
 	}
 	d := messaging.NewDispatcher(store, clock, config(), nil)
 	d.RegisterBatch("ok", func(ctx context.Context, tasks []ports.Task) []error {
@@ -94,5 +97,98 @@ func TestReadyCountsExcludesLeaseDelayAndCompleted(t *testing.T) {
 	counts, err = store.ReadyCounts(ctx, t0)
 	if err != nil || len(counts) != 0 {
 		t.Fatalf("аренда не считается готовой задачей: %+v, %v", counts, err)
+	}
+}
+
+func TestDispatcherIsolatesSlowTenantAndBoundsHandlerDuration(t *testing.T) {
+	store := fake.NewStore()
+	clock := fake.NewClock(t0)
+	enqueue(t, store, "slow", "A", "a", t0)
+	enqueue(t, store, "fast", "B", "b", t0)
+	fast := make(chan struct{})
+	slow := make(chan struct{})
+	var slowExpired, fastBeforeDeadline atomic.Bool
+	d := messaging.NewDispatcher(
+		store,
+		clock,
+		messaging.DispatcherConfig{
+			Batch:          200,
+			Concurrency:    1,
+			HandlerTimeout: 100 * time.Millisecond,
+			Lease:          time.Minute,
+		},
+		map[string]messaging.Handler{
+			"fast": func(context.Context, ports.Task) error {
+				<-slow
+				fastBeforeDeadline.Store(!slowExpired.Load())
+				close(fast)
+				return nil
+			},
+		},
+	)
+	d.RegisterBatch("slow", func(ctx context.Context, _ []ports.Task) []error {
+		close(slow)
+		<-ctx.Done()
+		slowExpired.Store(true)
+		return []error{ctx.Err()}
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := d.RunOnce(context.Background())
+		done <- err
+	}()
+	select {
+	case <-fast:
+	case <-time.After(time.Second):
+		t.Fatal("чужая задача заблокирована медленным магазином")
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if !fastBeforeDeadline.Load() {
+		t.Fatal("быстрая задача ждала истечения срока чужого обработчика")
+	}
+	rows := store.OutboxRows()
+	if rows[0].DoneAt != nil || rows[0].LastError != context.DeadlineExceeded.Error() || rows[1].DoneAt == nil {
+		t.Fatal("просроченный обработчик должен повторяться, быстрый — завершиться", rows)
+	}
+}
+
+func TestDispatcherRotatesTenantsWhenReadyStoresExceedSlots(t *testing.T) {
+	store := fake.NewStore()
+	clock := fake.NewClock(t0)
+	for tenant := range 8 {
+		for task := range 3 {
+			enqueue(t, store, "work", ids.TenantID(fmt.Sprintf("t%d", tenant)), fmt.Sprintf("%d:%d", tenant, task), t0)
+		}
+	}
+	var once sync.Once
+	var quiet atomic.Bool
+	d := messaging.NewDispatcher(
+		store,
+		clock,
+		messaging.DispatcherConfig{
+			Batch:       200,
+			Concurrency: 8,
+			Lease:       time.Minute,
+		},
+		map[string]messaging.Handler{
+			"work": func(_ context.Context, task ports.Task) error {
+				once.Do(func() { enqueue(t, store, "work", "quiet", "quiet", t0) })
+				if task.TenantID == "quiet" {
+					quiet.Store(true)
+				}
+				return nil
+			},
+		},
+	)
+	for range 2 {
+		if _, err := d.RunOnce(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !quiet.Load() {
+		t.Fatal("магазины с остатком очереди повторно заняли все слоты перед новым магазином")
 	}
 }

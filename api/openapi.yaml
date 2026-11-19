@@ -703,7 +703,7 @@ paths:
   /api/v1/operator/moderation/cases/bulk-count:
     get:
       tags: [moderation]
-      summary: Число открытых дел магазина с причинами только из набора
+      summary: Объём открытой очереди по фильтрам для подтверждения
       operationId: moderationBulkCount
       security:
       - operatorToken: []
@@ -712,11 +712,15 @@ paths:
       - { $ref: "#/components/parameters/MoneyUnit" }
       - name: tenantId
         in: query
-        required: true
         schema: { type: string }
+      - name: source
+        in: query
+        schema: { type: string, enum: [rule, operator] }
       - name: reason
         in: query
-        required: true
+        schema: { type: string }
+      - name: reasons
+        in: query
         schema:
           type: array
           minItems: 1
@@ -730,10 +734,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [total]
-                properties:
-                  total: { type: integer }
+                $ref: '#/components/schemas/ModerationBulkCounts'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -749,9 +750,12 @@ paths:
       tags: [moderation]
       summary: Одобрить до 200 дел одной атомарной пачкой
       description: >-
-        Ровно один способ выбора. Selector читает страницу до 200 дел, только с причинами из набора.
+        Ровно один способ выбора. Пустой selector выбирает всю открытую очередь, любые причины и магазины.
+        Фильтры tenantId/source/reason совпадают с очередью; reasons ограничивает все причины набором.
         При hasMore передайте nextAfter в selector.after следующего запроса с новым ключом.
-        Повтор страницы с прежним ключом возвращает исходный итог без повторного исполнения.
+        Idempotency-Key имеет формат unixMilliseconds:nonce. Повтор в течение 30 суток возвращает исходный итог.
+        Просроченный ключ получает 409 moderation.idempotency_key_expired даже после удаления результата;
+        повтор не выбирает новые дела. Результаты очищаются фоновым retention пачками.
         Конфликты отдельных дел возвращаются как пропуски. Заметка обязательна и общая для пачки.
       operationId: moderationBulkAllow
       security:
@@ -5306,16 +5310,24 @@ components:
           $ref: '#/components/schemas/ModerationBulkSelector'
     ModerationBulkSelector:
       type: object
-      required: [tenantId, reasons]
       properties:
         tenantId: { type: string }
+        source: { type: string, enum: [rule, operator] }
+        reason: { type: string, description: Дело содержит указанную причину }
         reasons:
+          description: Непустой набор ограничивает все причины дела; пустой не ограничивает отбор
           type: array
-          minItems: 1
           maxItems: 20
           uniqueItems: true
           items: { type: string }
         after: { type: string, format: uuid }
+    ModerationBulkCounts:
+      type: object
+      required: [total, tenants, otherReasons]
+      properties:
+        total: { type: integer }
+        tenants: { type: integer }
+        otherReasons: { type: integer, description: Дела с набором причин отличным от единственной moderation.probation }
     ModerationBulkResult:
       type: object
       required: [approved, skipped, details, hasMore]

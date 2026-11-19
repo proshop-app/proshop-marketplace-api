@@ -3,6 +3,7 @@ package moderation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -19,8 +20,10 @@ const TaskAllowTrusted = "moderation.tenant.allow_trusted"
 const batchSize = 200
 
 type taskPayload struct {
-	TenantID ids.TenantID `json:"tenantId"`
-	After    ids.UUID     `json:"after,omitempty"`
+	TenantID     ids.TenantID  `json:"tenantId"`
+	After        ids.UUID      `json:"after,omitempty"`
+	ProductAfter ids.ProductID `json:"productAfter,omitempty"`
+	Traversal    int64         `json:"traversal,omitempty"`
 }
 
 // ReevaluateTask склеивает ожидающие задачи одного участника.
@@ -85,7 +88,45 @@ func (s *Service) HandleTask(ctx context.Context, task ports.Task) error {
 	if task.Kind == TaskAllowTrusted {
 		return s.allowTrustedProbation(ctx, payload.TenantID, payload.After, task.ID)
 	}
-	return s.Reevaluate(ctx, payload.TenantID)
+	return s.reevaluateTaskPage(ctx, task, payload)
+}
+
+// Длинная переоценка продолжает курсор отдельной задачей, освобождая слот
+// общего диспетчера. Оценка страницы и её продолжение фиксируются вместе.
+func (s *Service) reevaluateTaskPage(ctx context.Context, task ports.Task, payload taskPayload) error {
+	if payload.ProductAfter != "" {
+		if _, err := ids.ParseProductID(string(payload.ProductAfter)); err != nil {
+			return moderation.ErrInvalid.Wrap(err)
+		}
+	}
+	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		states, err := tx.Offers().TenantOffers(ctx, payload.TenantID, payload.ProductAfter, batchSize)
+		if err != nil {
+			return err
+		}
+		now := s.clock.Now()
+		for _, state := range states {
+			if err := s.Evaluate(ctx, tx, state.Product, state.Participant, nil, now); err != nil {
+				return err
+			}
+		}
+		if len(states) < batchSize {
+			return nil
+		}
+		payload.ProductAfter = states[len(states)-1].Product.State().ProductID
+		if payload.Traversal == 0 {
+			payload.Traversal = task.ID
+		}
+		raw, _ := json.Marshal(payload)
+		key := fmt.Sprintf("%s:%s:%d:%s", TaskReevaluate, payload.TenantID, payload.Traversal, payload.ProductAfter)
+		return tx.Outbox().Enqueue(ctx, ports.NewTask{
+			Kind:     TaskReevaluate,
+			TenantID: payload.TenantID,
+			DedupKey: key,
+			Payload:  raw,
+			At:       now,
+		})
+	})
 }
 
 // Reevaluate пересчитывает предложения страницами с условным сохранением.

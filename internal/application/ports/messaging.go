@@ -49,6 +49,8 @@ type Outbox interface {
 
 // ClaimRequest — сколько задач взять и до какого времени их держать.
 type ClaimRequest struct {
+	// AfterTenant продолжает круг магазинов; пустое значение сохраняет выбор по возрасту.
+	AfterTenant  ids.TenantID
 	Kinds        []string
 	ExcludeKinds []string
 	// TenantSlots уменьшает квоту с учётом уже выполняющихся задач.
@@ -171,6 +173,7 @@ type EventFilter struct {
 
 // PurgeRequest — границы чистки служебных записей.
 type PurgeRequest struct {
+	BulkBefore       time.Time
 	ProcessedBefore  time.Time
 	OutboxDoneBefore time.Time
 	ParkedBefore     time.Time
@@ -184,6 +187,7 @@ type PurgeRequest struct {
 
 // PurgeResult — сколько записей удалено.
 type PurgeResult struct {
+	BulkApprovals        int64
 	RevalidationFailures int64
 	Processed            int64
 	OutboxDone           int64

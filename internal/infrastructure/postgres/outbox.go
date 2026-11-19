@@ -30,7 +30,9 @@ const (
 				AND (cardinality($5::text[]) = 0 OR kind = ANY($5::text[]))
 				AND NOT (kind = ANY($6::text[]))
 		), candidates AS (
-			SELECT c.id, c.next_at, c.position
+			SELECT c.id, c.next_at, c.position,
+                CASE WHEN $8::text = '' THEN false ELSE t.tenant_id <= $8 END AS wrapped,
+                CASE WHEN $8::text = '' THEN '' ELSE t.tenant_id END AS tenant_order
 			FROM due_tenants t
 			CROSS JOIN LATERAL (
 				SELECT id, next_at, row_number() OVER (ORDER BY next_at, id) AS position
@@ -41,7 +43,7 @@ const (
 				ORDER BY next_at, id
 				LIMIT COALESCE(($7::jsonb ->> t.tenant_id)::integer, $3)
 			) c
-			ORDER BY c.position, c.next_at, c.id
+			ORDER BY c.position, wrapped, tenant_order, c.next_at, c.id
 			LIMIT $2
 		), locked AS (
 			SELECT o.id
@@ -59,7 +61,7 @@ const (
 				COALESCE(outbox.unknown_failures, 0) AS unknown_failures
 		)
 		SELECT u.* FROM updated u JOIN candidates c ON c.id = u.id
-		ORDER BY c.position, c.next_at, c.id`
+		ORDER BY c.position, c.wrapped, c.tenant_order, c.next_at, c.id`
 
 	completeTask = `
 		UPDATE outbox
@@ -149,6 +151,7 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 		append([]string{}, request.Kinds...),
 		append([]string{}, request.ExcludeKinds...),
 		string(slots),
+		string(request.AfterTenant),
 	).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("взятие задач: %w", err)

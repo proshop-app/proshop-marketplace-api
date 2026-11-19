@@ -15,15 +15,18 @@ type bulkModeration struct{ d *data }
 func (t *tx) BulkModeration() ports.BulkModeration { return bulkModeration{d: t.data} }
 
 func bulkMatches(c moderation.CaseState, selector moderation.BulkSelector) bool {
-	if c.Status != moderation.Open || c.TenantID != selector.TenantID || len(c.Reasons) == 0 {
+	if c.Status != moderation.Open || (selector.TenantID != "" && c.TenantID != selector.TenantID) ||
+		(selector.Source != "" && c.Source != selector.Source) {
 		return false
 	}
+	found := selector.Reason == ""
 	for _, reason := range c.Reasons {
-		if !slices.Contains(selector.Reasons, reason.Key) {
+		found = found || reason.Key == selector.Reason
+		if len(selector.Reasons) > 0 && !slices.Contains(selector.Reasons, reason.Key) {
 			return false
 		}
 	}
-	return true
+	return found && (len(selector.Reasons) == 0 || len(c.Reasons) > 0)
 }
 
 func (r bulkModeration) Page(
@@ -49,13 +52,19 @@ func (r bulkModeration) Page(
 	return result[:min(limit, len(result))], nil
 }
 
-func (r bulkModeration) Count(_ context.Context, selector moderation.BulkSelector) (int, error) {
-	count := 0
+func (r bulkModeration) Count(_ context.Context, selector moderation.BulkSelector) (moderation.BulkCounts, error) {
+	count := moderation.BulkCounts{}
+	tenants := map[ids.TenantID]bool{}
 	for _, c := range r.d.moderation.cases {
 		if bulkMatches(c, selector) {
-			count++
+			count.Total++
+			tenants[c.TenantID] = true
+			if len(c.Reasons) != 1 || c.Reasons[0].Key != "moderation.probation" {
+				count.OtherReasons++
+			}
 		}
 	}
+	count.Tenants = len(tenants)
 	return count, nil
 }
 

@@ -41,15 +41,33 @@ type interruptedIndexCase struct {
 func TestInterruptedConcurrentIndexMigrationRecovers(t *testing.T) {
 	tests := []interruptedIndexCase{
 		{
-			version: 61,
+			version: 62,
 			name:    "moderation_case_probation",
-			file:    "migrations/00061_moderation_bulk.sql",
+			file:    "migrations/00062_moderation_bulk.sql",
 			insert:  bulkInterruptedCaseInsert,
 		},
 		{
-			version: 61,
+			version: 62,
 			name:    "moderation_case_tenant_open",
-			file:    "migrations/00061_moderation_bulk.sql",
+			file:    "migrations/00062_moderation_bulk.sql",
+			insert:  bulkInterruptedCaseInsert,
+		},
+		{
+			version: 62,
+			name:    "moderation_case_open_id",
+			file:    "migrations/00062_moderation_bulk.sql",
+			insert:  bulkInterruptedCaseInsert,
+		},
+		{
+			version: 62,
+			name:    "moderation_case_source_open_id",
+			file:    "migrations/00062_moderation_bulk.sql",
+			insert:  bulkInterruptedCaseInsert,
+		},
+		{
+			version: 62,
+			name:    "moderation_case_open_reasons",
+			file:    "migrations/00062_moderation_bulk.sql",
 			insert:  bulkInterruptedCaseInsert,
 		},
 		{
@@ -116,7 +134,7 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 		t.Fatal(err)
 	}
 	up := strings.Split(string(raw), "-- +goose Down")[0]
-	if test.version == 61 {
+	if test.version == 62 {
 		function := regexp.MustCompile(`(?s)CREATE OR REPLACE FUNCTION moderation_reason_keys\b.*?\$\$;`)
 		if _, err := pool.Exec(ctx, function.FindString(up)); err != nil {
 			t.Fatal(err)

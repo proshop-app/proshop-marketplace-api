@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
-	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
-	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -30,9 +30,9 @@ type BulkCommand struct {
 	Automatic      bool                     `json:"-"`
 }
 
-// ValidateSelector не допускает неограниченного отбора без магазина и причин.
+// ValidateSelector проверяет фильтры очереди; пустой отбор означает всю очередь.
 func ValidateSelector(selector moderation.BulkSelector) error {
-	if _, err := ids.ParseTenantID(string(selector.TenantID)); err != nil {
+	if _, err := ids.ParseTenantID(string(selector.TenantID)); selector.TenantID != "" && err != nil {
 		return moderation.ErrInvalid
 	}
 	if selector.After != "" {
@@ -40,17 +40,23 @@ func ValidateSelector(selector moderation.BulkSelector) error {
 			return moderation.ErrInvalid
 		}
 	}
-	if len(selector.Reasons) == 0 || len(selector.Reasons) > 20 {
+	if len(selector.Reasons) > 20 ||
+		(selector.Source != "" && selector.Source != moderation.Rule && selector.Source != moderation.Operator) ||
+		(selector.Reason != "" && !validBulkReason(selector.Reason)) {
 		return moderation.ErrInvalid
 	}
 	seen := map[string]bool{}
 	for _, reason := range selector.Reasons {
-		if !strings.HasPrefix(reason, "moderation.") || len(reason) > 120 || seen[reason] {
+		if !validBulkReason(reason) || seen[reason] {
 			return moderation.ErrInvalid
 		}
 		seen[reason] = true
 	}
 	return nil
+}
+
+func validBulkReason(reason string) bool {
+	return strings.HasPrefix(reason, "moderation.") && len(reason) <= 120
 }
 
 func validateBulk(cmd BulkCommand) error {
@@ -73,11 +79,11 @@ func validateBulk(cmd BulkCommand) error {
 }
 
 // BulkCount читает число дел с причинами только из набора для подтверждения оператора.
-func (s *Service) BulkCount(ctx context.Context, selector moderation.BulkSelector) (int, error) {
+func (s *Service) BulkCount(ctx context.Context, selector moderation.BulkSelector) (moderation.BulkCounts, error) {
 	if err := ValidateSelector(selector); err != nil {
-		return 0, err
+		return moderation.BulkCounts{}, err
 	}
-	var count int
+	var count moderation.BulkCounts
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
 		count, err = tx.BulkModeration().Count(ctx, selector)
@@ -92,150 +98,112 @@ func (s *Service) BulkAllow(ctx context.Context, cmd BulkCommand) (moderation.Bu
 	if err := validateBulk(cmd); err != nil {
 		return result, err
 	}
-	identity, _ := json.Marshal([]string{"bulk.allow", cmd.Operator.ID, cmd.IdempotencyKey})
-	key := fmt.Sprintf("%x", sha256.Sum256(identity))
-	raw, _ := json.Marshal(cmd)
-	fingerprint := fmt.Sprintf("%x", sha256.Sum256(raw))
-	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		cached, found, err := tx.BulkModeration().Cached(ctx, key)
-		if err != nil {
-			return err
-		}
-		if found {
-			if cached.Fingerprint != fingerprint {
-				return moderation.ErrKeyReused
-			}
-			result = cached.Result
-			return nil
-		}
-		selected := cmd.Cases
-		if cmd.Selector != nil {
-			selected, err = tx.BulkModeration().Page(ctx, *cmd.Selector, BulkLimit)
-			if err != nil {
-				return err
-			}
-			result.HasMore = len(selected) == BulkLimit
-			if len(selected) > 0 {
-				result.NextAfter = selected[len(selected)-1].ID
-			}
-		}
-		if err := s.allowPage(ctx, tx, cmd, selected, &result); err != nil {
-			return err
-		}
-		if cmd.Automatic && result.HasMore {
-			task := AllowTrustedTask(cmd.Selector.TenantID, result.NextAfter, s.clock.Now())
-			if err := tx.Outbox().Enqueue(ctx, task); err != nil {
-				return err
-			}
-		}
-		return tx.BulkModeration().Cache(ctx, key, ports.CachedBulkApproval{
-			Fingerprint: fingerprint,
-			Result:      result,
-		})
+	expires, err := bulkKeyExpiry(cmd, s.clock.Now())
+	if err != nil {
+		return result, err
+	}
+	key, fingerprint := bulkIdentity(cmd)
+	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		result, err = s.replayOrApprovePage(ctx, tx, cmd, key, fingerprint, expires)
+		return err
 	})
 	return result, err
 }
 
-func (s *Service) allowPage(
+// Ключ несёт собственный срок. После удаления результата старый отбор никогда
+// не исполняется снова: проверка срока не зависит от существования строки в БД.
+func bulkKeyExpiry(cmd BulkCommand, now time.Time) (time.Time, error) {
+	if cmd.Automatic {
+		return now.Add(30 * 24 * time.Hour), nil
+	}
+	timestamp, nonce, ok := strings.Cut(cmd.IdempotencyKey, ":")
+	milliseconds, err := strconv.ParseInt(timestamp, 10, 64)
+	if !ok || nonce == "" || err != nil {
+		return time.Time{}, moderation.ErrInvalid.WithMessage("ключ должен иметь формат unixMilliseconds:nonce")
+	}
+	created := time.UnixMilli(milliseconds)
+	expires := created.Add(30 * 24 * time.Hour)
+	if !now.Before(expires) || created.After(now.Add(5*time.Minute)) {
+		return time.Time{}, moderation.ErrKeyExpired
+	}
+	return expires, nil
+}
+
+func bulkIdentity(cmd BulkCommand) (string, string) {
+	identity, _ := json.Marshal([]string{"bulk.allow", cmd.Operator.ID, cmd.IdempotencyKey})
+	raw, _ := json.Marshal(cmd)
+	return fmt.Sprintf("%x", sha256.Sum256(identity)), fmt.Sprintf("%x", sha256.Sum256(raw))
+}
+
+func (s *Service) replayOrApprovePage(
 	ctx context.Context,
 	tx ports.Tx,
 	cmd BulkCommand,
-	selected []moderation.BulkCase,
+	key, fingerprint string,
+	expires time.Time,
+) (moderation.BulkResult, error) {
+	result := moderation.BulkResult{Details: []moderation.BulkSkip{}}
+	cached, found, err := tx.BulkModeration().Cached(ctx, key)
+	if err != nil {
+		return result, err
+	}
+	// Ключ мог истечь, пока запрос ждал сериализации; retention уже мог удалить результат.
+	if !cmd.Automatic && !s.clock.Now().Before(expires) {
+		return result, moderation.ErrKeyExpired
+	}
+
+	if found {
+		if cached.Fingerprint != fingerprint {
+			return result, moderation.ErrKeyReused
+		}
+		return cached.Result, nil
+	}
+	selected, err := selectPage(ctx, tx, cmd, &result)
+	if err != nil {
+		return result, err
+	}
+	if err := s.allowPage(ctx, tx, cmd, selected, &result); err != nil {
+		return result, err
+	}
+	if err := s.enqueueTrustedContinuation(ctx, tx, cmd, result); err != nil {
+		return result, err
+	}
+	err = tx.BulkModeration().Cache(ctx, key, ports.CachedBulkApproval{
+		Fingerprint: fingerprint,
+		Result:      result,
+		ExpiresAt:   expires,
+	})
+	return result, err
+}
+
+func selectPage(
+	ctx context.Context,
+	tx ports.Tx,
+	cmd BulkCommand,
 	result *moderation.BulkResult,
+) ([]moderation.BulkCase, error) {
+	if cmd.Selector == nil {
+		return cmd.Cases, nil
+	}
+	selected, err := tx.BulkModeration().Page(ctx, *cmd.Selector, BulkLimit)
+	result.HasMore = len(selected) == BulkLimit
+	if len(selected) > 0 {
+		result.NextAfter = selected[len(selected)-1].ID
+	}
+	return selected, err
+}
+
+func (s *Service) enqueueTrustedContinuation(
+	ctx context.Context,
+	tx ports.Tx,
+	cmd BulkCommand,
+	result moderation.BulkResult,
 ) error {
-	if len(selected) == 0 {
+	if !cmd.Automatic || !result.HasMore {
 		return nil
 	}
-	keys := make([]ids.UUID, 0, len(selected))
-	for _, c := range selected {
-		keys = append(keys, c.ID)
-	}
-	inputs, err := tx.BulkModeration().Read(ctx, keys)
-	if err != nil {
-		return err
-	}
-	tenants := []ids.TenantID{}
-	for _, input := range inputs {
-		tenant := input.Case.State().TenantID
-		if !slices.Contains(tenants, tenant) {
-			tenants = append(tenants, tenant)
-		}
-	}
-	slices.Sort(tenants)
-	members, err := tx.BulkModeration().Members(ctx, tenants)
-	if err != nil {
-		return err
-	}
-	changes, tasks := []ports.BulkModerationChange{}, []ports.NewTask{}
-	counts := map[ids.TenantID]int{}
-	now := s.clock.Now()
-	for _, item := range selected {
-		input, found := inputs[item.ID]
-		reason := bulkSkipReason(input, found, item, cmd, members)
-		if reason != "" {
-			result.Details = append(result.Details, moderation.BulkSkip{ID: item.ID, Reason: reason})
-			result.Skipped++
-			continue
-		}
-		state := input.Case.State()
-		_, err := input.Case.Decide(item.ExpectedVersion, input.Revision, moderation.Allow, cmd.Note, now)
-		if err != nil {
-			return err
-		}
-		input.Verdict.Decide(moderation.Allow, "", now)
-		input.Verdict.RecordDecision(cmd.Operator, moderation.VerdictDecision{
-			Action: moderation.Allow,
-			Note:   strings.TrimSpace(cmd.Note),
-			At:     now,
-		})
-		changes = append(changes, ports.BulkModerationChange{
-			Case:    input.Case,
-			Verdict: input.Verdict,
-			Decision: moderation.Decision{
-				ID:       s.ids.NewUUID(),
-				CaseID:   state.ID,
-				Operator: cmd.Operator,
-				Action:   moderation.Allow,
-				Note:     strings.TrimSpace(cmd.Note),
-				Revision: state.Revision,
-				At:       now,
-			},
-		})
-		counts[state.TenantID]++
-		tasks = append(
-			tasks,
-			appcatalog.SyncOfferTask(state.TenantID, state.ProductID, now),
-			moderationstatus.OfferTask(state.TenantID, state.ProductID, now),
-		)
-		s.recordVerdict(tx, input.Verdict.State())
-		if s.config.Metrics != nil {
-			tx.AfterCommit(func() { s.config.Metrics.Decision(moderation.Allow) })
-		}
-		result.Approved++
-	}
-	for _, tenant := range tenants {
-		count := counts[tenant]
-		if count == 0 {
-			continue
-		}
-		p := members[tenant]
-		trust := p.State().Trust
-		p.ApproveOffers(count, s.config.ProbationOffers, now)
-		if err := tx.Participants().Update(ctx, p); err != nil {
-			return err
-		}
-		tasks = append(tasks, ports.StoreCardTask(tenant, now))
-		if trust != p.State().Trust {
-			if err := tx.ParticipantDecisions().Add(ctx, p.PromotionDecision(s.ids.NewUUID(), now)); err != nil {
-				return err
-			}
-			tasks = append(tasks, moderationstatus.ParticipantTask(tenant, now), AllowTrustedTask(tenant, "", now))
-		}
-	}
-	if len(changes) == 0 {
-		return nil
-	}
-	return tx.BulkModeration().Save(ctx, changes, tasks)
+	return tx.Outbox().Enqueue(ctx, AllowTrustedTask(cmd.Selector.TenantID, result.NextAfter, s.clock.Now()))
 }
 
 func bulkSkipReason(
@@ -256,7 +224,7 @@ func bulkSkipReason(
 		c.Revision != input.Revision || input.Verdict.State().Revision != c.Revision {
 		return "changed"
 	}
-	if cmd.Selector != nil && (c.TenantID != cmd.Selector.TenantID || !onlyReasons(c, cmd.Selector.Reasons)) {
+	if cmd.Selector != nil && !matchesBulkSelector(c, *cmd.Selector) {
 		return "other_reasons"
 	}
 	p := members[c.TenantID]
@@ -264,6 +232,23 @@ func bulkSkipReason(
 		return "participant_changed"
 	}
 	return ""
+}
+
+func matchesBulkSelector(c moderation.CaseState, selector moderation.BulkSelector) bool {
+	if (selector.TenantID != "" && c.TenantID != selector.TenantID) ||
+		(selector.Source != "" && c.Source != selector.Source) ||
+		(len(selector.Reasons) > 0 && !onlyReasons(c, selector.Reasons)) {
+		return false
+	}
+	if selector.Reason == "" {
+		return true
+	}
+	for _, reason := range c.Reasons {
+		if reason.Key == selector.Reason {
+			return true
+		}
+	}
+	return false
 }
 
 func onlyReasons(c moderation.CaseState, allowed []string) bool {

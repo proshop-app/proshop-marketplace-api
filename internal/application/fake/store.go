@@ -308,7 +308,17 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Ta
 		positions[i] = perTenant[tenant]
 	}
 	sort.SliceStable(due, func(a, b int) bool {
-		return positions[due[a]] < positions[due[b]]
+		if positions[due[a]] != positions[due[b]] {
+			return positions[due[a]] < positions[due[b]]
+		}
+		if request.AfterTenant != "" {
+			left, right := s.data.outbox[due[a]].TenantID, s.data.outbox[due[b]].TenantID
+			if (left > request.AfterTenant) != (right > request.AfterTenant) {
+				return left > request.AfterTenant
+			}
+			return left < right
+		}
+		return false
 	})
 	perTenant = map[ids.TenantID]int{}
 	tasks := make([]ports.Task, 0, request.Limit)
@@ -420,6 +430,13 @@ func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.Purg
 		if challenge.ExpiresAt.Before(request.ChallengesBefore) {
 			delete(s.data.challenges, id)
 			result.Challenges++
+		}
+	}
+
+	for key, cached := range s.data.moderation.cachedBulk {
+		if cached.ExpiresAt.Before(request.BulkBefore) {
+			delete(s.data.moderation.cachedBulk, key)
+			result.BulkApprovals++
 		}
 	}
 

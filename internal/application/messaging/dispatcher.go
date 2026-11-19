@@ -4,10 +4,13 @@ package messaging
 
 import (
 	"context"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // ErrInvalidTask — сохранённое намерение нельзя исполнить с теми же данными.
@@ -39,21 +42,27 @@ type Outcome struct {
 
 // DispatcherConfig — размеры пачки и аренда.
 type DispatcherConfig struct {
-	MaxAttempts  int
-	ExcludeKinds []string
-	Batch        int
-	PerTenant    int
-	Lease        time.Duration
+	MaxAttempts    int
+	ExcludeKinds   []string
+	Batch          int
+	PerTenant      int
+	Lease          time.Duration
+	Concurrency    int
+	HandlerTimeout time.Duration
 }
 
 // Dispatcher разбирает outbox: берёт созревшие задачи с арендой, выполняет и
 // отмечает итог. Задача не теряется: упавший процесс оставляет её до конца аренды.
 type Dispatcher struct {
-	queue    ports.TaskQueue
-	clock    ports.Clock
-	handlers map[string]Handler
-	batches  map[string]BatchHandler
-	config   DispatcherConfig
+	claimMu        sync.Mutex
+	singleAfter    ids.TenantID
+	batchAfter     ids.TenantID
+	batchKindAfter int
+	queue          ports.TaskQueue
+	clock          ports.Clock
+	handlers       map[string]Handler
+	batches        map[string]BatchHandler
+	config         DispatcherConfig
 }
 
 // NewDispatcher — разбор outbox с обработчиками по видам задач.
@@ -65,6 +74,26 @@ func NewDispatcher(
 ) *Dispatcher {
 	if config.MaxAttempts <= 0 {
 		config.MaxAttempts = DefaultMaxAttempts
+	}
+	if config.Batch <= 0 {
+		config.Batch = 200
+	}
+	if config.PerTenant <= 0 {
+		config.PerTenant = config.Batch
+	}
+	if config.Lease <= 0 {
+		config.Lease = time.Minute
+	}
+	if config.Concurrency <= 0 {
+		config.Concurrency = 8
+	}
+	// Один слот всегда остаётся для точечных задач рядом с пакетным обработчиком.
+	config.Concurrency = max(2, config.Concurrency)
+	if config.HandlerTimeout <= 0 {
+		config.HandlerTimeout = 30 * time.Second
+	}
+	if config.Lease > 0 && config.HandlerTimeout > config.Lease/2 {
+		config.HandlerTimeout = config.Lease / 2
 	}
 	return &Dispatcher{queue: queue, clock: clock, handlers: handlers, config: config}
 }
@@ -98,60 +127,142 @@ func (d *Dispatcher) ReadyCounts(ctx context.Context) (map[string]int64, error) 
 
 // RunOnce разбирает одну справедливо выбранную пачку.
 func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
-	now := d.clock.Now()
-
-	tasks, err := d.queue.Claim(ctx, ports.ClaimRequest{
-		Now:          now,
-		ExcludeKinds: d.config.ExcludeKinds,
-		Limit:        d.config.Batch,
-		PerTenant:    d.config.PerTenant,
-		LeaseUntil:   now.Add(d.config.Lease),
-	})
+	tasks, err := d.claimPass(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return d.executePass(ctx, tasks)
+}
 
-	outcomes := make([]Outcome, 0, len(tasks))
-	for len(tasks) > 0 {
-		if ctx.Err() != nil {
-			return outcomes, ctx.Err()
+// Пакетный обработчик получает одну порцию, а не N последовательных вызовов.
+// Остальные задачи берём по одной на магазин, без локального хвоста ожидания.
+func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
+	d.claimMu.Lock()
+	defer d.claimMu.Unlock()
+	now := d.clock.Now()
+	request := ports.ClaimRequest{
+		Now:          now,
+		ExcludeKinds: slices.Clone(d.config.ExcludeKinds),
+		Limit:        d.config.Batch,
+		PerTenant:    d.config.PerTenant,
+		LeaseUntil:   now.Add(d.config.Lease),
+	}
+	kinds := []string{}
+	for kind := range d.batches {
+		kinds = append(kinds, kind)
+	}
+	slices.Sort(kinds)
+	allBatchKinds := slices.Clone(kinds)
+	if len(kinds) > 0 {
+		start := d.batchKindAfter % len(kinds)
+		kinds = append(slices.Clone(kinds[start:]), kinds[:start]...)
+		kinds = kinds[:min(len(kinds), d.config.Concurrency-1)]
+		d.batchKindAfter = (start + len(kinds)) % len(allBatchKinds)
+	}
+	tasks := []ports.Task{}
+	if len(kinds) > 0 {
+		request.Kinds = kinds
+		request.AfterTenant = d.batchAfter
+		var err error
+		tasks, err = d.queue.Claim(ctx, request)
+		if err != nil {
+			return nil, err
 		}
+		if len(tasks) > 0 {
+			d.batchAfter = tasks[len(tasks)-1].TenantID
+		}
+	}
+	occupied := map[ids.TenantID]int{}
+	batchKinds := map[string]bool{}
+	for _, task := range tasks {
+		occupied[task.TenantID] = 0
+		batchKinds[task.Kind] = true
+	}
+	request.Kinds = nil
+	request.AfterTenant = d.singleAfter
+	request.ExcludeKinds = append(request.ExcludeKinds, allBatchKinds...)
+	request.TenantSlots = occupied
+	request.PerTenant = 1
+	request.Limit = min(d.config.Batch, d.config.Concurrency-len(batchKinds))
+	if request.Limit == 0 {
+		return tasks, nil
+	}
+	singles, err := d.queue.Claim(ctx, request)
+	if len(singles) > 0 && err == nil {
+		d.singleAfter = singles[len(singles)-1].TenantID
+	}
+	return append(tasks, singles...), err
+}
+
+// executePass не держит локальный хвост одного магазина. Все взятые порции
+// сразу получают слот; новая задача другого магазина попадёт в следующий проход.
+func (d *Dispatcher) executePass(ctx context.Context, tasks []ports.Task) ([]Outcome, error) {
+	groups := [][]ports.Task{}
+	for len(tasks) > 0 {
 		group := tasks[:1]
-		var failures []error
-		if handler, ok := d.batches[tasks[0].Kind]; ok {
+		if _, ok := d.batches[tasks[0].Kind]; ok {
 			group, tasks = takeKind(tasks, tasks[0].Kind)
-			failures = handler(ctx, group)
 		} else {
-			failures = []error{d.run(ctx, tasks[0])}
 			tasks = tasks[1:]
 		}
-		if err := ctx.Err(); err != nil {
-			// При остановке аренда истечёт: отмена процесса не является отказом задачи.
-			return outcomes, err
-		}
-		results := make([]Outcome, 0, len(group))
-		resolutions := make([]ports.TaskResolution, 0, len(group))
-		for n, task := range group {
-			finished := d.clock.Now()
-			outcome := Outcome{Task: task, Lag: finished.Sub(task.CreatedAt)}
-			if len(failures) > 0 {
-				if len(failures) != len(group) {
-					outcome.Err = errs.New(errs.Internal, "messaging.batch_result", "неполный результат пачки")
-				} else {
-					outcome.Err = failures[n]
-				}
-			}
-			resolution := Resolution(task, outcome.Err, finished, d.config.MaxAttempts)
-			outcome.FailureReason = resolution.FailureReason
-			results = append(results, outcome)
-			resolutions = append(resolutions, resolution)
-		}
-		if err := d.resolve(ctx, resolutions); err != nil {
-			return outcomes, err
-		}
-		outcomes = append(outcomes, results...)
+		groups = append(groups, group)
 	}
-	return outcomes, nil
+	results := make([][]Outcome, len(groups))
+	failures := make([]error, len(groups))
+	var workers sync.WaitGroup
+	for n, group := range groups {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			results[n], failures[n] = d.executeGroup(ctx, group)
+		}()
+	}
+	workers.Wait()
+	outcomes := []Outcome{}
+	for n, result := range results {
+		if failures[n] != nil {
+			return outcomes, failures[n]
+		}
+		outcomes = append(outcomes, result...)
+	}
+	return outcomes, ctx.Err()
+}
+
+func (d *Dispatcher) executeGroup(ctx context.Context, group []ports.Task) ([]Outcome, error) {
+	handling, cancel := context.WithTimeout(ctx, d.config.HandlerTimeout)
+	defer cancel()
+	var failures []error
+	if handler, ok := d.batches[group[0].Kind]; ok {
+		failures = handler(handling, group)
+	} else {
+		failures = []error{d.run(handling, group[0])}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	results := make([]Outcome, 0, len(group))
+	resolutions := make([]ports.TaskResolution, 0, len(group))
+	for n, task := range group {
+		finished := d.clock.Now()
+		outcome := Outcome{Task: task, Lag: finished.Sub(task.CreatedAt)}
+		if handling.Err() != nil {
+			outcome.Err = handling.Err()
+		} else if len(failures) > 0 {
+			if len(failures) != len(group) {
+				outcome.Err = errs.New(errs.Internal, "messaging.batch_result", "неполный результат пачки")
+			} else {
+				outcome.Err = failures[n]
+			}
+		}
+		resolution := Resolution(task, outcome.Err, finished, d.config.MaxAttempts)
+		outcome.FailureReason = resolution.FailureReason
+		results = append(results, outcome)
+		resolutions = append(resolutions, resolution)
+	}
+	if err := d.resolve(ctx, resolutions); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 func (d *Dispatcher) resolve(ctx context.Context, results []ports.TaskResolution) error {

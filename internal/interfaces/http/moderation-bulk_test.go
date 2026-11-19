@@ -13,8 +13,8 @@ func TestModerationBulkHTTP(t *testing.T) {
 	path := moderationURL + "/cases/bulk-allow"
 	body := fmt.Sprintf(`{"cases":[{"id":%q,"expectedVersion":1}],"note":"Проверено"}`, e.caseID)
 	e.request(t, "POST", path, body, "", 400)
-	first := e.request(t, "POST", path, body, "bulk", 200)
-	replay := e.request(t, "POST", path, body, "bulk", 200)
+	first := e.request(t, "POST", path, body, fmt.Sprintf("%d:bulk", e.clock.Now().UnixMilli()), 200)
+	replay := e.request(t, "POST", path, body, fmt.Sprintf("%d:bulk", e.clock.Now().UnixMilli()), 200)
 	if first.Body.String() != replay.Body.String() || !strings.Contains(first.Body.String(), `"approved":1`) {
 		t.Fatal(first.Body.String(), replay.Body.String())
 	}
@@ -35,8 +35,8 @@ func TestModerationBulkValidation(t *testing.T) {
 	tooMany := `{"cases":[` + cases + fmt.Sprintf(`{"id":%q,"expectedVersion":1}],"note":"Проверено"}`, e.caseID)
 	for _, body := range []string{
 		`{"note":"Проверено"}`,
-		`{"selector":{"tenantId":"t1","reasons":[]},"note":"Проверено"}`,
-		`{"selector":{"tenantId":"","reasons":["moderation.probation"]},"note":"Проверено"}`,
+		`{"selector":{"source":"bad"},"note":"Проверено"}`,
+		`{"selector":{"reason":"bad"},"note":"Проверено"}`,
 		`{"selector":{"tenantId":"t1","reasons":["moderation.probation"]},"note":" "}`,
 		tooMany,
 	} {

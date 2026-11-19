@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"slices"
+	"fmt"
 
 	"gorm.io/gorm"
 
@@ -16,15 +16,21 @@ import (
 )
 
 const (
-	bulkCached         = `SELECT response FROM moderation_bulk_idempotency WHERE key_hash = $1`
-	bulkCache          = `INSERT INTO moderation_bulk_idempotency (key_hash, response) VALUES ($1, $2)`
-	bulkProbationWhere = ` FROM moderation_cases WHERE tenant_id = $1 AND status = 'open'
-        AND moderation_reason_keys(reasons) = ARRAY['moderation.probation']::text[]`
-	bulkReasonsWhere = ` FROM moderation_cases WHERE tenant_id = $1 AND status = 'open'
-        AND cardinality(moderation_reason_keys(reasons)) > 0 AND moderation_reason_keys(reasons) <@ $2::text[]`
-	bulkPage             = `SELECT id, version`
-	bulkPageAfter        = ` AND id > $2::uuid ORDER BY id LIMIT $3`
-	bulkReasonsPageAfter = ` AND id > $3::uuid ORDER BY id LIMIT $4`
+	bulkCached = `SELECT response FROM moderation_bulk_idempotency WHERE key_hash = $1`
+	bulkCache  = `INSERT INTO moderation_bulk_idempotency (key_hash, response, expires_at)
+        VALUES ($1, $2, $3)`
+	bulkSelectPage         = `SELECT id, version`
+	bulkTenantFilter       = ` AND tenant_id = $%d`
+	bulkSourceFilter       = ` AND source = $%d`
+	bulkReasonFilter       = ` AND moderation_reason_keys(reasons) @> ARRAY[$%d]::text[]`
+	bulkAllowedReasons     = ` AND cardinality(moderation_reason_keys(reasons)) > 0`
+	bulkReasonsFilter      = ` AND moderation_reason_keys(reasons) <@ $%d::text[]`
+	bulkCursorPage         = ` AND id > $%d::uuid ORDER BY id LIMIT $%d`
+	bulkOpenWhere          = ` FROM moderation_cases WHERE status = 'open'`
+	bulkProbationPredicate = ` AND moderation_reason_keys(reasons) = ARRAY['moderation.probation']::text[]`
+	bulkCount              = `SELECT count(*), count(DISTINCT tenant_id),
+        count(*) - (SELECT count(*) %s)`
+
 	// Товар → вердикт → дело: тот же порядок записи, что у проектора и одиночного решения.
 	bulkLockProducts = `SELECT p.tenant_id FROM catalog_products p JOIN moderation_cases c
         USING (tenant_id, product_id) WHERE c.id = ANY($1::uuid[])
@@ -58,10 +64,27 @@ type BulkModeration struct {
 func (s *scope) BulkModeration() ports.BulkModeration { return &BulkModeration{db: s.db} }
 
 func bulkSelection(selector moderation.BulkSelector) (string, []any) {
-	if slices.Equal(selector.Reasons, []string{"moderation.probation"}) {
-		return bulkProbationWhere, []any{selector.TenantID}
+	where, args := bulkOpenWhere, []any{}
+	add := func(predicate string, value any) {
+		args = append(args, value)
+		where += fmt.Sprintf(predicate, len(args))
 	}
-	return bulkReasonsWhere, []any{selector.TenantID, selector.Reasons}
+	if selector.TenantID != "" {
+		add(bulkTenantFilter, selector.TenantID)
+	}
+	if selector.Source != "" {
+		add(bulkSourceFilter, selector.Source)
+	}
+	if selector.Reason != "" {
+		add(bulkReasonFilter, selector.Reason)
+	}
+	if len(selector.Reasons) == 1 && selector.Reasons[0] == "moderation.probation" {
+		where += bulkProbationPredicate
+	} else if len(selector.Reasons) > 0 {
+		where += bulkAllowedReasons
+		add(bulkReasonsFilter, selector.Reasons)
+	}
+	return where, args
 }
 
 // Page использует keyset; закрытие предыдущей страницы не сдвигает следующую.
@@ -75,12 +98,10 @@ func (r *BulkModeration) Page(
 	if after == "" {
 		after = "00000000-0000-0000-0000-000000000000"
 	}
-	suffix := bulkPageAfter
-	if len(args) == 2 {
-		suffix = bulkReasonsPageAfter
-	}
+	suffix := fmt.Sprintf(bulkCursorPage, len(args)+1, len(args)+2)
+	query := bulkSelectPage + where + suffix
 	args = append(args, after, limit)
-	rows, err := rawSQL(ctx, r.db, bulkPage+where+suffix, args...).Rows()
+	rows, err := rawSQL(ctx, r.db, query, args...).Rows()
 	if err != nil {
 		return nil, err
 	}
@@ -97,10 +118,11 @@ func (r *BulkModeration) Page(
 }
 
 // Count нужен подтверждению; сама обработка не считает очередь на каждой странице.
-func (r *BulkModeration) Count(ctx context.Context, selector moderation.BulkSelector) (int, error) {
+func (r *BulkModeration) Count(ctx context.Context, selector moderation.BulkSelector) (moderation.BulkCounts, error) {
 	where, args := bulkSelection(selector)
-	var count int
-	err := rawSQL(ctx, r.db, `SELECT count(*)`+where, args...).Row().Scan(&count)
+	var count moderation.BulkCounts
+	query := fmt.Sprintf(bulkCount, where+bulkProbationPredicate) + where
+	err := rawSQL(ctx, r.db, query, args...).Row().Scan(&count.Total, &count.Tenants, &count.OtherReasons)
 	return count, err
 }
 
@@ -251,12 +273,12 @@ func (r *BulkModeration) Cached(ctx context.Context, key string) (ports.CachedBu
 	return value, err == nil, err
 }
 
-// Cache хранит исходный результат без TTL: повтор отбора никогда не выбирает новые дела.
+// Cache хранит результат до срока ключа; просроченный ключ отвергается до чтения отбора.
 func (r *BulkModeration) Cache(ctx context.Context, key string, value ports.CachedBulkApproval) error {
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	_, err = execSQL(ctx, r.db, bulkCache, key, raw)
+	_, err = execSQL(ctx, r.db, bulkCache, key, raw, value.ExpiresAt)
 	return err
 }
