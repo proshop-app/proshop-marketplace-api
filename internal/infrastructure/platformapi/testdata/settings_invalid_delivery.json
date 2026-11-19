@@ -7,10 +7,7 @@
   },
   "profile": {
     "name": "Магазин",
-    "logo": null,
-    "appearance": {
-      "color": "#125F67"
-    }
+    "logo": null
   },
   "card": {
     "ready": true,

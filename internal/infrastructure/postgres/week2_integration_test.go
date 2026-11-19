@@ -435,8 +435,9 @@ func TestParticipantSettingsMigrationSchedulesReindex(t *testing.T) {
 
 	err := pool.QueryRow(ctx, participant).Scan(&version, &shop)
 	// Версия 1 увеличивается до 2 при добавлении согласия магазина (4),
-	// затем до 3 при введении доставки (21), до 5 при изменениях оформления карточки (45, 46).
-	if err != nil || version != 5 || shop {
+	// затем до 3 при введении доставки (21), до 5 при изменениях карточки (45, 46),
+	// до 6 при удалении её настроек (61).
+	if err != nil || version != 6 || shop {
 		t.Fatalf("две инвалидации видимости, доставка ещё не настроена: %d %v %v", version, shop, err)
 	}
 

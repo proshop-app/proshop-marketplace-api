@@ -281,13 +281,6 @@ func TestStoreCardCandidateProjectionAndSalesRevision(t *testing.T) {
 				return err
 			}
 		}
-		states, err := tx.Offers().StoreCardOffers(ctx, "t1", "", 10)
-		if err != nil {
-			return err
-		}
-		if len(states) != 2 || states[0].Product.State().Card.Publication.Published {
-			t.Fatal(states)
-		}
 		items, total, err := tx.Participants().List(ctx, participant.Page{Queue: true, Limit: 10})
 		if err != nil {
 			return err

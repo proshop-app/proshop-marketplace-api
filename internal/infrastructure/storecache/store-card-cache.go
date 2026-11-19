@@ -101,7 +101,7 @@ func (r cards) read(
 	if err != nil {
 		return nil, err
 	}
-	key := fmt.Sprintf("v2:%d:%s:%x", version, kind, sha256.Sum256(encoded))
+	key := fmt.Sprintf("v3:%d:%s:%x", version, kind, sha256.Sum256(encoded))
 	if raw, hit, err := r.cached(ctx, key, valid); err != nil {
 		return r.load(source)
 	} else if hit {
@@ -153,7 +153,7 @@ func (r cards) load(source func() (any, error)) ([]byte, error) {
 func validCards(items []ports.ShopCard) bool {
 	for _, card := range items {
 		if card.TenantID == "" || card.Slug == "" || card.Name == "" || card.Products == nil ||
-			card.Appearance.Color == "" || len(card.Products) > 3 {
+			len(card.Products) > 3 {
 			return false
 		}
 	}

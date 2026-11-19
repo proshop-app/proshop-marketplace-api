@@ -18,14 +18,14 @@ import (
 const (
 	cacheGenerationSeed = `INSERT INTO store_cards (tenant_id,slug,name,offers,public,page_public,summary,header,card)
  VALUES ('t1','shop','Магазин',3,true,true,'{}','{"categories":[]}',
- '{"tenantId":"t1","slug":"shop","name":"Магазин","appearance":{"color":"#125F67"},"products":[]}')`
+ '{"tenantId":"t1","slug":"shop","name":"Магазин","products":[]}')`
 	cacheGenerationMetrics = `UPDATE store_cards SET offers = offers + 1,
  card = card || '{"offers":7,"fromPrice":500,"rating":{"value":5,"count":7},
  "products":[{"productId":"p1","offerId":"t1~p1","name":"Товар","image":null}]}'::jsonb
  WHERE tenant_id = 't1'`
-	cacheGenerationSignature  = `UPDATE store_cards SET cache_signature = $1 WHERE tenant_id = 't1'`
-	cacheGenerationAppearance = `UPDATE store_cards SET card =
- jsonb_set(card,'{appearance,color}','"#F3F3F3"') WHERE tenant_id = 't1'`
+	cacheGenerationSignature = `UPDATE store_cards SET cache_signature = $1 WHERE tenant_id = 't1'`
+	cacheGenerationLogo      = `UPDATE store_cards SET card =
+ jsonb_set(card,'{logo}','"new-logo"') WHERE tenant_id = 't1'`
 	cacheGenerationHide   = `UPDATE store_cards SET public = false, page_public = false WHERE tenant_id = 't1'`
 	cacheGenerationDelete = `DELETE FROM store_cards WHERE tenant_id = 't1'`
 )
@@ -93,13 +93,13 @@ func TestStoreCardCacheGenerationCommittedPublicChanges(t *testing.T) {
 	}
 	for i, query := range []string{
 		cacheGenerationSignature,
-		cacheGenerationAppearance,
+		cacheGenerationLogo,
 		cacheGenerationHide,
 		cacheGenerationDelete,
 	} {
 		var args []any
 		if i == 0 {
-			args = []any{"eligible-product-image-or-pins-changed"}
+			args = []any{"eligible-product-image-changed"}
 		}
 		if _, err := pool.Exec(ctx, query, args...); err != nil {
 			t.Fatal(err)

@@ -51,11 +51,11 @@ const (
 		THEN jsonb_set(EXCLUDED.summary, '{hidden}', store_cards.summary->'hidden') ELSE EXCLUDED.summary END,
 		header = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
 		THEN EXCLUDED.header || jsonb_build_object(
-		 'logo', store_cards.header->'logo', 'appearance', store_cards.header->'appearance')
+		 'logo', store_cards.header->'logo')
 		ELSE EXCLUDED.header END,
 		card = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
 		THEN EXCLUDED.card || jsonb_build_object(
-		 'logo', store_cards.card->'logo', 'appearance', store_cards.card->'appearance')
+		 'logo', store_cards.card->'logo')
 		ELSE EXCLUDED.card END,
 		profile_version = GREATEST(store_cards.profile_version, EXCLUDED.profile_version)`
 	deleteStoreCategories = `DELETE FROM store_card_categories WHERE tenant_id = $1`
@@ -248,10 +248,9 @@ func (r *StoreCards) UpdateProfile(ctx context.Context, p *participant.Participa
 		return err
 	}
 	empty, err := json.Marshal(ports.StoreSummary{
-		Categories:       []ports.StoreCategory{},
-		Products:         []ports.StoreCardProduct{},
-		SelectedProducts: []ports.StoreCardProduct{},
-		Hidden:           append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
+		Categories: []ports.StoreCategory{},
+		Products:   []ports.ShopCardProduct{},
+		Hidden:     append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
 	})
 	if err != nil {
 		return err

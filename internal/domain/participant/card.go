@@ -31,9 +31,8 @@ type Returns struct {
 
 // Profile — профиль принадлежит серверу, маркетплейс хранит его снимок.
 type Profile struct {
-	Name       string         `json:"name"`
-	Logo       *string        `json:"logo"`
-	Appearance CardAppearance `json:"appearance"`
+	Name string  `json:"name"`
+	Logo *string `json:"logo"`
 }
 
 // CardReadiness — серверный чеклист без повторного вычисления на площадке.
@@ -52,7 +51,6 @@ type CardHidden struct {
 // StoreCard — хранит исходные значения отдельно от операторского скрытия.
 type StoreCard struct {
 	Profile   Profile       `json:"profile"`
-	Products  *CardProducts `json:"products"`
 	Readiness CardReadiness `json:"card"`
 	Returns   *Returns      `json:"returns"`
 	Hidden    []CardHidden  `json:"hidden"`
@@ -60,10 +58,6 @@ type StoreCard struct {
 
 // Clone отделяет изменяемые списки от снимка агрегата.
 func (c StoreCard) Clone() StoreCard {
-	if c.Products != nil {
-		products := c.ProductSettings()
-		c.Products = &products
-	}
 	if c.Profile.Logo != nil {
 		logo := *c.Profile.Logo
 		c.Profile.Logo = &logo
@@ -84,19 +78,14 @@ func (p *Participant) ApplyStoreCard(
 	returns *Returns,
 	now time.Time,
 ) (bool, error) {
-	appearance, err := profile.Appearance.Normalize()
-	if err != nil {
-		return false, err
-	}
-	profile.Appearance = appearance
 	if name, err := normalizeName(profile.Name); err == nil {
 		profile.Name = name
 	} else {
 		profile.Name = p.Name()
 	}
 	next := StoreCard{
-		Profile:   profile,
-		Products:  p.state.StoreCard.Products,
+		Profile: profile,
+
 		Readiness: card,
 		Returns:   returns,
 		Hidden:    p.state.StoreCard.Hidden,
