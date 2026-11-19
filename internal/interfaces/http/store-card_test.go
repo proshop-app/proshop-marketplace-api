@@ -123,7 +123,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	summaryKeys := "badge categories fromPrice hidden offers products rank rating selectedProducts uncategorized"
+	summaryKeys := "badge categories fromPrice hidden offers products rank rating uncategorized"
 	wantKeys := strings.Fields(summaryKeys)
 	if !reflect.DeepEqual(keys, wantKeys) {
 		t.Fatal(keys)
@@ -150,13 +150,12 @@ func TestStoreCardHTTP(t *testing.T) {
 		t.Fatal(member)
 	}
 	refresh()
-	expectedAppearance := `"appearance":{"color":"#125F67"}`
 	for _, path := range []string{"/api/v1/shops", "/api/v1/shops/shop"} {
 		response := call("GET", path, "", "", http.StatusOK)
 		body := response.Body.String()
 		if !strings.Contains(body, `"logo":null`) || strings.Contains(body, `"showcase":`) ||
 			strings.Contains(body, `"initial":`) ||
-			!strings.Contains(body, expectedAppearance) {
+			strings.Contains(body, `"appearance":`) {
 			t.Fatal(body)
 		}
 		if response.Header().Get("X-Marketplace-Money-Unit") != "RUB" {
@@ -165,9 +164,9 @@ func TestStoreCardHTTP(t *testing.T) {
 		if path == "/api/v1/shops" {
 			var page struct {
 				Items []struct {
-					FromPrice json.Number              `json:"fromPrice"`
-					Color     json.RawMessage          `json:"color"`
-					Products  []ports.StoreCardProduct `json:"products"`
+					FromPrice json.Number             `json:"fromPrice"`
+					Color     json.RawMessage         `json:"color"`
+					Products  []ports.ShopCardProduct `json:"products"`
 				} `json:"items"`
 			}
 			if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
@@ -208,7 +207,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	headerKeys := "appearance categories isNew logo name offers rating slug subscribers tenantId"
+	headerKeys := "categories isNew logo name offers rating slug subscribers tenantId"
 	wantKeys = strings.Fields(headerKeys)
 	if !reflect.DeepEqual(keys, wantKeys) {
 		t.Fatal(keys)

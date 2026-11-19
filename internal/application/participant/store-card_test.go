@@ -259,18 +259,6 @@ func TestStoreSummaryCandidateSkipsMissingDefaultPrice(t *testing.T) {
 	if err != nil || summary.Offers != 4 || *summary.FromPrice != 100 {
 		t.Fatal(summary, err)
 	}
-	if err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
-		record, err := tx.StoreCards().Get(ctx, "t1")
-		if err != nil {
-			return err
-		}
-		if record.Header.Appearance != participant.DefaultCardAppearance() {
-			t.Fatal(record.Header)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestStoreSummaryBeforeFirstRefresh(t *testing.T) {
