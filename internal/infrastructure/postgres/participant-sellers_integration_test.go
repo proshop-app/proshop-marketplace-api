@@ -15,6 +15,9 @@ import (
 
 const deleteSellerParticipant = `DELETE FROM participants WHERE tenant_id = $1`
 
+const connectSellerParticipant = `UPDATE participants SET stage = 'connected', enabled = true, delivery_valid = true,
+    delivery_settings = '{"regions": ["RU-MOW"], "carriers": ["cdek", "yandex"]}' WHERE tenant_id = $1`
+
 func TestParticipantSellersBatch(t *testing.T) {
 	pool := pgtest.Pool(t)
 	uow := postgres.NewUnitOfWork(pool)
@@ -34,6 +37,9 @@ func TestParticipantSellersBatch(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if _, err := pool.Exec(ctx, connectSellerParticipant, "t2"); err != nil {
+		t.Fatal(err)
 	}
 	for _, deleted := range []bool{false, true} {
 		if deleted {
@@ -56,6 +62,10 @@ func TestParticipantSellersBatch(t *testing.T) {
 			want := participant.Seller{Slug: "shop-t1", Name: "Магазин t1", UnavailableReason: "delivery_unavailable"}
 			if *sellers["t1"] != want {
 				t.Fatal(sellers["t1"])
+			}
+			// Подключённый магазин с настроенной доставкой в корзине доступен: стадия читается запросом.
+			if !deleted && sellers["t2"].UnavailableReason != "" {
+				t.Fatal(sellers["t2"])
 			}
 			empty, err := tx.Participants().Sellers(ctx, nil)
 			if err == nil && len(empty) != 0 {
