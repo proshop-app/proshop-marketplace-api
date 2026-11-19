@@ -67,7 +67,7 @@ func detector(t testing.TB, path string, dev netip.Addr) *Detector {
 	return d
 }
 
-func TestLocalDetectionReturnsCanonicalCityAndNoResultForUnknownOrForeign(t *testing.T) {
+func TestLocalDetectionReturnsCanonicalCityAndNoResultForUnknown(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "city.mmdb")
 	if err := os.WriteFile(path, database(t, 55.7540471, 37.620405), 0600); err != nil {
 		t.Fatal(err)
@@ -78,11 +78,30 @@ func TestLocalDetectionReturnsCanonicalCityAndNoResultForUnknownOrForeign(t *tes
 		result.KladrID != "7700000000000" {
 		t.Fatal(result, err)
 	}
-	for _, ip := range []string{"8.8.8.8", "2001:4860:4860::8888", "1.1.1.1", "invalid"} {
+	for _, ip := range []string{"1.1.1.1", "invalid"} {
 		result, err := d.DetectCity(context.Background(), ip)
 		if err != nil || result.City != "" {
 			t.Fatal(ip, result, err)
 		}
+	}
+}
+
+func TestForeignAddressReturnsOnlyCountry(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "city.mmdb")
+	if err := os.WriteFile(path, database(t, 55.7540471, 37.620405), 0600); err != nil {
+		t.Fatal(err)
+	}
+	d := detector(t, path, netip.Addr{})
+	for ip, country := range map[string]string{
+		"8.8.8.8":              "US",
+		"2001:4860:4860::8888": "CA",
+	} {
+		t.Run(ip, func(t *testing.T) {
+			result, err := d.DetectCity(context.Background(), ip)
+			if err != nil || result != (ports.DetectedCity{Country: country}) {
+				t.Fatal(result, err)
+			}
+		})
 	}
 }
 

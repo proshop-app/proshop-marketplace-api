@@ -99,7 +99,10 @@ func (d *Detector) DetectCity(ctx context.Context, input string) (ports.Detected
 	if err := d.reader.Lookup(net.IP(addr.AsSlice()), &value); err != nil {
 		return ports.DetectedCity{}, ports.ErrCityUnavailable
 	}
-	if value.Country.Code != "RU" || value.Location == nil {
+	if value.Country.Code != "RU" {
+		return ports.DetectedCity{Country: value.Country.Code}, nil
+	}
+	if value.Location == nil {
 		return ports.DetectedCity{}, nil
 	}
 	return d.catalog.Nearest(value.Location.Latitude, value.Location.Longitude), nil
