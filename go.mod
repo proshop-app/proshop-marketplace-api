@@ -4,6 +4,8 @@ go 1.23.0
 
 require (
 	github.com/jackc/pgx/v5 v5.7.6
+	github.com/maxmind/mmdbwriter v1.0.0
+	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/pressly/goose/v3 v3.24.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.14.0
@@ -13,6 +15,8 @@ require (
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.2
 )
+
+require go4.org/netipx v0.0.0-20220812043211-3cc044ffd68d // indirect
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

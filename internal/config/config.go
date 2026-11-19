@@ -29,6 +29,7 @@ type DaData struct {
 
 // Config — настройки процесса маркетплейса.
 type Config struct {
+	City          City
 	PriceContexts PriceContexts
 	DaData        DaData
 	Promotion     Promotion
@@ -239,6 +240,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	r := reader{env: env}
 
 	cfg := Config{
+		City:          r.city(),
 		PriceContexts: r.priceContexts(),
 		Promotion:     r.promotion(),
 		Identity:      r.identity(),
