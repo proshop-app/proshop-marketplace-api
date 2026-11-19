@@ -70,7 +70,7 @@ func TestBulkBacklogDoesNotOccupyDispatcherPass(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("A backlog=50000, first pass A=%d, pass=%s, B wait=%s", firstCalls, pass, quietDelay)
-	if firstCalls > 1 || quietDelay == 0 {
+	if firstCalls != 8 || quietDelay == 0 {
 		t.Fatalf("магазин A занял проход: %d задач, B ждал %s", firstCalls, quietDelay)
 	}
 }

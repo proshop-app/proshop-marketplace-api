@@ -53,6 +53,8 @@ type ClaimRequest struct {
 	AfterTenant  ids.TenantID
 	Kinds        []string
 	ExcludeKinds []string
+	// OrderedKinds берёт только старейшую незавершённую задачу вида на магазин, включая аренды и повторы.
+	OrderedKinds []string
 	// TenantSlots уменьшает квоту с учётом уже выполняющихся задач.
 	TenantSlots map[ids.TenantID]int
 	Now         time.Time

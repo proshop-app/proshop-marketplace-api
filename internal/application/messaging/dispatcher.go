@@ -44,6 +44,7 @@ type Outcome struct {
 type DispatcherConfig struct {
 	MaxAttempts    int
 	ExcludeKinds   []string
+	OrderedKinds   []string
 	Batch          int
 	PerTenant      int
 	Lease          time.Duration
@@ -135,7 +136,7 @@ func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
 }
 
 // Пакетный обработчик получает одну порцию, а не N последовательных вызовов.
-// Остальные задачи берём по одной на магазин, без локального хвоста ожидания.
+// Точечный выбор сначала даёт слот каждому магазину, затем заполняет свободные слоты.
 func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
 	d.claimMu.Lock()
 	defer d.claimMu.Unlock()
@@ -172,17 +173,15 @@ func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
 			d.batchAfter = tasks[len(tasks)-1].TenantID
 		}
 	}
-	occupied := map[ids.TenantID]int{}
 	batchKinds := map[string]bool{}
 	for _, task := range tasks {
-		occupied[task.TenantID] = 0
 		batchKinds[task.Kind] = true
 	}
 	request.Kinds = nil
 	request.AfterTenant = d.singleAfter
 	request.ExcludeKinds = append(request.ExcludeKinds, allBatchKinds...)
-	request.TenantSlots = occupied
-	request.PerTenant = 1
+	request.OrderedKinds = d.config.OrderedKinds
+	request.PerTenant = min(d.config.PerTenant, d.config.Concurrency)
 	request.Limit = min(d.config.Batch, d.config.Concurrency-len(batchKinds))
 	if request.Limit == 0 {
 		return tasks, nil
@@ -208,27 +207,37 @@ func (d *Dispatcher) executePass(ctx context.Context, tasks []ports.Task) ([]Out
 		groups = append(groups, group)
 	}
 	results := make([][]Outcome, len(groups))
+	resolutions := make([][]ports.TaskResolution, len(groups))
 	failures := make([]error, len(groups))
 	var workers sync.WaitGroup
 	for n, group := range groups {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
-			results[n], failures[n] = d.executeGroup(ctx, group)
+			results[n], resolutions[n], failures[n] = d.executeGroup(ctx, group)
 		}()
 	}
 	workers.Wait()
 	outcomes := []Outcome{}
+	allResolutions := []ports.TaskResolution{}
 	for n, result := range results {
 		if failures[n] != nil {
 			return outcomes, failures[n]
 		}
 		outcomes = append(outcomes, result...)
+		allResolutions = append(allResolutions, resolutions[n]...)
+	}
+	// Ограниченный проход подтверждается одним запросом, без N отдельных COMMIT.
+	if err := d.resolve(ctx, allResolutions); err != nil {
+		return nil, err
 	}
 	return outcomes, ctx.Err()
 }
 
-func (d *Dispatcher) executeGroup(ctx context.Context, group []ports.Task) ([]Outcome, error) {
+func (d *Dispatcher) executeGroup(
+	ctx context.Context,
+	group []ports.Task,
+) ([]Outcome, []ports.TaskResolution, error) {
 	handling, cancel := context.WithTimeout(ctx, d.config.HandlerTimeout)
 	defer cancel()
 	var failures []error
@@ -238,7 +247,7 @@ func (d *Dispatcher) executeGroup(ctx context.Context, group []ports.Task) ([]Ou
 		failures = []error{d.run(handling, group[0])}
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	results := make([]Outcome, 0, len(group))
 	resolutions := make([]ports.TaskResolution, 0, len(group))
@@ -259,13 +268,13 @@ func (d *Dispatcher) executeGroup(ctx context.Context, group []ports.Task) ([]Ou
 		results = append(results, outcome)
 		resolutions = append(resolutions, resolution)
 	}
-	if err := d.resolve(ctx, resolutions); err != nil {
-		return nil, err
-	}
-	return results, nil
+	return results, resolutions, nil
 }
 
 func (d *Dispatcher) resolve(ctx context.Context, results []ports.TaskResolution) error {
+	if len(results) == 0 {
+		return nil
+	}
 	if len(results) != 1 || results[0].FailureReason != "" || results[0].UnknownFailures > 0 {
 		return d.queue.Resolve(ctx, results)
 	}

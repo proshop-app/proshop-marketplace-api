@@ -93,8 +93,8 @@ func TestDispatcherLimitsPerTenant(t *testing.T) {
 	if _, err := dispatcher.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if seen["noisy"] != 1 || seen["quiet"] != 1 {
-		t.Fatalf("шумный магазин не занимает всю пачку: %+v", seen)
+	if seen["noisy"] != 4 || seen["quiet"] != 1 {
+		t.Fatalf("свободные слоты заполняются после первой задачи каждого магазина: %+v", seen)
 	}
 }
 

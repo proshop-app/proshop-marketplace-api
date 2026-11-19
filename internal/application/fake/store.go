@@ -287,7 +287,19 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Ta
 		if row.DoneAt == nil && row.FailedAt == nil && !row.NextAt.After(request.Now) &&
 			(len(request.Kinds) == 0 || slices.Contains(request.Kinds, row.Kind)) &&
 			!slices.Contains(request.ExcludeKinds, row.Kind) {
-			due = append(due, i)
+			blocked := false
+			if slices.Contains(request.OrderedKinds, row.Kind) {
+				for _, earlier := range s.data.outbox {
+					if earlier.ID < row.ID && earlier.Kind == row.Kind && earlier.TenantID == row.TenantID &&
+						earlier.DoneAt == nil && earlier.FailedAt == nil {
+						blocked = true
+						break
+					}
+				}
+			}
+			if !blocked {
+				due = append(due, i)
+			}
 		}
 	}
 

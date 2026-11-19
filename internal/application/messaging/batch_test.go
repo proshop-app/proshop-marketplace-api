@@ -15,6 +15,22 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+type resolutionCountingQueue struct {
+	ports.TaskQueue
+	singles atomic.Int64
+	batches atomic.Int64
+}
+
+func (q *resolutionCountingQueue) Complete(ctx context.Context, id int64, attempts int, at time.Time) error {
+	q.singles.Add(1)
+	return q.TaskQueue.Complete(ctx, id, attempts, at)
+}
+
+func (q *resolutionCountingQueue) Resolve(ctx context.Context, results []ports.TaskResolution) error {
+	q.batches.Add(1)
+	return q.TaskQueue.Resolve(ctx, results)
+}
+
 func TestClaimInterleavesTenantsBeforeGlobalLimit(t *testing.T) {
 	store := fake.NewStore()
 	for n := range 10 {
@@ -190,5 +206,69 @@ func TestDispatcherRotatesTenantsWhenReadyStoresExceedSlots(t *testing.T) {
 	}
 	if !quiet.Load() {
 		t.Fatal("магазины с остатком очереди повторно заняли все слоты перед новым магазином")
+	}
+}
+
+func TestDispatcherFillsFreeSlotsFromOneTenant(t *testing.T) {
+	store := fake.NewStore()
+	for n := range 16 {
+		enqueue(t, store, "point", "A", fmt.Sprint(n), t0)
+	}
+	var active, peak atomic.Int64
+	d := messaging.NewDispatcher(
+		store,
+		fake.NewClock(t0),
+		messaging.DispatcherConfig{Concurrency: 8},
+		map[string]messaging.Handler{
+			"point": func(context.Context, ports.Task) error {
+				n := active.Add(1)
+				for old := peak.Load(); n > old && !peak.CompareAndSwap(old, n); old = peak.Load() {
+				}
+				time.Sleep(20 * time.Millisecond)
+				active.Add(-1)
+				return nil
+			},
+		},
+	)
+	d.RegisterBatch("unused", func(context.Context, []ports.Task) []error { return nil })
+	outcomes, err := d.RunOnce(context.Background())
+	if err != nil || len(outcomes) != 8 || peak.Load() != 8 {
+		t.Fatalf("свободные слоты простаивают: tasks=%d peak=%d err=%v", len(outcomes), peak.Load(), err)
+	}
+}
+
+func TestDispatcherFillsSlotsBesideBatchOfSameTenant(t *testing.T) {
+	store := fake.NewStore()
+	enqueue(t, store, "batch", "A", "batch", t0)
+	for n := range 8 {
+		enqueue(t, store, "point", "A", fmt.Sprint(n), t0)
+	}
+	d := messaging.NewDispatcher(
+		store,
+		fake.NewClock(t0),
+		messaging.DispatcherConfig{Concurrency: 8},
+		map[string]messaging.Handler{
+			"point": func(context.Context, ports.Task) error { return nil },
+		},
+	)
+	d.RegisterBatch("batch", func(context.Context, []ports.Task) []error { return nil })
+	outcomes, err := d.RunOnce(context.Background())
+	if err != nil || len(outcomes) != 8 {
+		t.Fatal("пакет магазина не должен оставлять его точечные слоты пустыми", len(outcomes), err)
+	}
+}
+
+func TestDispatcherResolvesPointPassInOneBatch(t *testing.T) {
+	store := fake.NewStore()
+	for n := range 8 {
+		enqueue(t, store, "work", "A", fmt.Sprint(n), t0)
+	}
+	queue := &resolutionCountingQueue{TaskQueue: store}
+	d := messaging.NewDispatcher(queue, fake.NewClock(t0), config(), map[string]messaging.Handler{
+		"work": func(context.Context, ports.Task) error { return nil },
+	})
+	outcomes, err := d.RunOnce(context.Background())
+	if err != nil || len(outcomes) != 8 || queue.batches.Load() != 1 || queue.singles.Load() != 0 {
+		t.Fatalf("tasks=%d batch=%d single=%d err=%v", len(outcomes), queue.batches.Load(), queue.singles.Load(), err)
 	}
 }

@@ -116,8 +116,12 @@ func decisionRequired(state ports.OfferState) bool {
 }
 
 func decisionMatches(state ports.OfferState, d moderation.Decision) bool {
-	v := state.Verdict.State()
-	return d.Revision <= state.Product.State().Revision && d.Action == v.Decision.Action &&
+	return verdictDecisionMatches(state.Verdict, state.Product.State().Revision, d)
+}
+
+func verdictDecisionMatches(verdict *moderation.Verdict, revision int64, d moderation.Decision) bool {
+	v := verdict.State()
+	return d.Revision <= revision && d.Action == v.Decision.Action &&
 		d.Operator == v.Operator && d.At.Equal(v.Decision.At) && d.Note == v.Decision.Note &&
 		reflect.DeepEqual(moderation.DecisionReason(d.Reason, d.ReasonMessage), v.Decision.Reason)
 }

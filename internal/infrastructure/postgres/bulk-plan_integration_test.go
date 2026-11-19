@@ -34,6 +34,14 @@ const bulkTenantPlan = `EXPLAIN (ANALYZE, BUFFERS) SELECT id, version FROM moder
         AND id > '00000000-0000-0000-0000-000000000000'
     ORDER BY id LIMIT 200`
 
+const bulkTenantAnyPlan = `EXPLAIN (ANALYZE, BUFFERS) SELECT id, version FROM moderation_cases
+    WHERE status = 'open' AND tenant_id = 't0'
+        AND id > '00000000-0000-0000-0000-000000000000'
+    ORDER BY id LIMIT 200`
+const bulkReasonCountPlan = `EXPLAIN (ANALYZE, BUFFERS) SELECT count(*), count(DISTINCT tenant_id)
+    FROM moderation_cases WHERE status = 'open'
+        AND moderation_reason_keys(reasons) @> ARRAY['moderation.probation']::text[]`
+
 func TestBulkMillionCasePlansUseKeysetIndexes(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
@@ -80,7 +88,19 @@ func TestBulkMillionCasePlansUseKeysetIndexes(t *testing.T) {
 		t.Log("confirmation", check.selector, counts, time.Since(started))
 	}
 
-	for _, query := range []string{bulkWholePlan, bulkSourcePlan, bulkTenantPlan} {
+	checks := []struct {
+		query string
+		index string
+		count bool
+	}{
+		{query: bulkWholePlan, index: "moderation_case_open_id"},
+		{query: bulkSourcePlan, index: "moderation_case_source_open_id"},
+		{query: bulkTenantPlan, index: "moderation_case_probation"},
+		{query: bulkTenantAnyPlan, index: "moderation_case_tenant_open"},
+		{query: bulkReasonCountPlan, index: "moderation_case_open_reasons", count: true},
+	}
+	for _, check := range checks {
+		query := check.query
 		rows, err := conn.Query(ctx, query)
 		if err != nil {
 			t.Fatal(err)
@@ -97,7 +117,13 @@ func TestBulkMillionCasePlansUseKeysetIndexes(t *testing.T) {
 		if err := rows.Err(); err != nil {
 			t.Fatal(err)
 		}
-		t.Log(plan)
+		t.Log(query, "\n", plan)
+		if !strings.Contains(plan, check.index) {
+			t.Fatal("индекс без подтверждённого запроса", check.index, plan)
+		}
+		if check.count {
+			continue
+		}
 		indexed := strings.Contains(plan, "Index Scan") && strings.Contains(plan, "rows=200")
 		if strings.Contains(plan, "Sort") || !indexed {
 			t.Fatal("нужна индексная страница без сортировки", plan)
