@@ -39,7 +39,7 @@ func setup(t *testing.T, attempts int) (*app.Service, *fake.Platform, *fake.Stor
 			Stage:    participant.StageConnected,
 			Enabled:  true,
 
-			Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+			Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 		})
 	}
 	service := app.NewService(store, platform, fake.NewPickupCache(), app.Config{

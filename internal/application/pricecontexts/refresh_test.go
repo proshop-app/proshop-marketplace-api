@@ -25,7 +25,7 @@ func TestFreshPreloadOnlyFetchesMissingShopsAndKeepsOriginalAge(t *testing.T) {
 		Enabled:  true,
 		Stage:    participant.StageConnected,
 
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	f.service.Preload(buyerID)
 	wait(t, f, "ok")

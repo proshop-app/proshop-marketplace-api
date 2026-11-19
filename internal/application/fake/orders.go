@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -74,9 +75,11 @@ func (p *Platform) CreateOrder(
 		}
 		actual := current.Discounts[item.ProductID]
 		if !sameDiscounts(discounts, actual) {
-			refused := &ports.PriceChanged{Items: []checkout.PriceChange{
-				{ProductID: item.ProductID, Price: item.Price},
-			}}
+			refused := &ports.PriceChanged{
+				Items: []checkout.PriceChange{
+					{ProductID: item.ProductID, Price: item.Price},
+				},
+			}
 			p.orderRefusals[key] = refused
 			return checkout.SellerOrder{}, refused
 		}
@@ -89,9 +92,11 @@ func (p *Platform) CreateOrder(
 			return checkout.SellerOrder{}, err
 		}
 		if current, ok := p.items[tenant][item.ProductID]; ok && current.Price != item.Price {
-			refused := &ports.PriceChanged{Items: []checkout.PriceChange{
-				{ProductID: item.ProductID, Price: current.Price},
-			}}
+			refused := &ports.PriceChanged{
+				Items: []checkout.PriceChange{
+					{ProductID: item.ProductID, Price: current.Price},
+				},
+			}
 			p.orderRefusals[key] = refused
 			return checkout.SellerOrder{}, refused
 		}
@@ -101,10 +106,12 @@ func (p *Platform) CreateOrder(
 		return checkout.SellerOrder{}, err
 	}
 	order := checkout.SellerOrder{
-		OrderID:   fmt.Sprintf("order-%d", len(p.orders)+1),
-		ExpiresAt: p.OrderNow.Add(time.Hour),
-		Total:     total,
-		Status:    checkout.GroupAwaitingPayment,
+		Carrier:         delivery.Carrier(request.Carrier),
+		PickupPointCode: request.PickupPointCode,
+		OrderID:         fmt.Sprintf("order-%d", len(p.orders)+1),
+		ExpiresAt:       p.OrderNow.Add(time.Hour),
+		Total:           total,
+		Status:          checkout.GroupAwaitingPayment,
 	}
 	p.orders[key] = order
 	p.orderTenants[order.OrderID] = tenant

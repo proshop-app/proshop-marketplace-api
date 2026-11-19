@@ -19,7 +19,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-var w3IndexingDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
+var w3IndexingDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}}
 
 type unavailableBrandResolver struct {
 	started chan struct{}

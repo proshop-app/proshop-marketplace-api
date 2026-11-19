@@ -97,7 +97,7 @@ func TestWarmPickupSearchDoesNotReadRegistry(t *testing.T) {
 			TenantID: tenant,
 			Stage:    participant.StageConnected,
 			Enabled:  true,
-			Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
+			Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}},
 		})
 		platform.SetPickupPoints(
 			tenant,

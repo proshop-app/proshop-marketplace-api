@@ -33,7 +33,7 @@ import (
 // OpenSearch и выдача: весь путь синхронизации на настоящих хранилищах.
 var w3PipelineIntegrationDelivery = participant.DeliverySettings{
 	Regions:  []string{"RU-MOW"},
-	Carriers: []string{"cdek"},
+	Carriers: []string{"cdek", "yandex"},
 }
 
 func TestProjectionToIndex(t *testing.T) {

@@ -41,7 +41,7 @@ type env struct {
 	service  *appcheckout.Service
 }
 
-var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
+var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}}
 
 func setup(t *testing.T) *env {
 	t.Helper()

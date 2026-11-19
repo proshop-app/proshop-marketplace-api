@@ -19,7 +19,7 @@ import (
 
 var w3RepositoriesIntegrationDelivery = participant.DeliverySettings{
 	Regions:  []string{"RU-MOW"},
-	Carriers: []string{"cdek"},
+	Carriers: []string{"cdek", "yandex"},
 }
 
 func TestMigrationsDownAndUp(t *testing.T) {

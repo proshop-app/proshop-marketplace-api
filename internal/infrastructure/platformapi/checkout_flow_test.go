@@ -138,9 +138,11 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 				s.mu.Unlock()
 			}
 			result = map[string]any{
-				"orderId":   order.OrderID,
-				"expiresAt": order.ExpiresAt,
-				"total":     order.Total,
+				"orderId":         order.OrderID,
+				"carrier":         order.Carrier,
+				"pickupPointCode": order.PickupPointCode,
+				"expiresAt":       order.ExpiresAt,
+				"total":           order.Total,
 			}
 		}
 	default:
@@ -197,7 +199,7 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 				index := fake.NewIndex()
 				basket := cart.New("00000000-0000-4000-8000-000000000003", buyer, now, time.Hour)
 				carriers := map[ids.TenantID]string{"t1": "cdek", "t2": "cdek"}
-				for tenant, carrier := range carriers {
+				for tenant := range carriers {
 					store.SeedReadyOffer(ids.OfferID{Tenant: tenant, Product: "p1"}, money.FromKopecks(199000))
 					store.SeedTenant(
 						participant.TenantState{
@@ -211,7 +213,7 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 							Enabled:  true,
 							Stage:    participant.StageConnected,
 							Delivery: participant.DeliverySettings{
-								Carriers: []string{carrier},
+								Carriers: []string{"cdek", "yandex"},
 								Regions:  []string{"RU-AD"},
 							},
 						},

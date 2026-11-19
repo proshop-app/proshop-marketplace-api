@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
 // Endpoint и Timeout — тот же источник и бюджет, что у витрины магазина.
@@ -21,7 +20,7 @@ const Endpoint = "http://ip-api.com/json"
 const Timeout = 1500 * time.Millisecond
 
 // ErrUnavailable оставляет покупателю ручной выбор города.
-var ErrUnavailable = errs.New(errs.Unavailable, "city.unavailable", "не удалось определить город, выберите его вручную")
+var ErrUnavailable = ports.ErrCityUnavailable
 
 // Detector использует тот же IP-источник, что витрина магазина.
 type Detector struct {
@@ -60,6 +59,9 @@ func (d *Detector) DetectCity(ctx context.Context, ip string) (ports.DetectedCit
 		return ports.DetectedCity{}, ErrUnavailable
 	}
 	defer func() { _ = reply.Body.Close() }()
+	if reply.StatusCode == http.StatusTooManyRequests {
+		return ports.DetectedCity{}, ports.ErrCityRateLimited
+	}
 	if reply.StatusCode != http.StatusOK {
 		return ports.DetectedCity{}, ErrUnavailable
 	}

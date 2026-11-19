@@ -44,7 +44,7 @@ func TestFavoritesOnlyRequestContextsOfDisplayedShops(t *testing.T) {
 		Enabled:  true,
 		Stage:    participant.StageConnected,
 
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	platform := fake.NewPlatform()
 	service := app.NewFeatures(store, nil, platform, fake.NewLimiter(), &fake.PickupLookup{})
@@ -87,7 +87,7 @@ func seedFeatureOffer(store *fake.Store, price int64, visible bool) {
 		Enabled:  true,
 		Stage:    participant.StageConnected,
 
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	store.SeedProduct(catalog.ProductState{
 		TenantID:  "t1",
@@ -544,7 +544,7 @@ func TestProfilePricingOnlyWatchedTenants(t *testing.T) {
 		Enabled:  true,
 		Stage:    participant.StageConnected,
 
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	platform := fake.NewPlatform()
 	platform.Fail("t2", errors.New("посторонний магазин недоступен"))

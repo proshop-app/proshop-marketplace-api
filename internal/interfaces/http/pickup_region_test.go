@@ -28,7 +28,7 @@ func TestCheckoutPickupRegionRefusalIsExplicitHTTPError(t *testing.T) {
 		Enabled:  true,
 		Delivery: participant.DeliverySettings{
 			Regions:  []string{"RU-TA"},
-			Carriers: []string{"cdek"},
+			Carriers: []string{"cdek", "yandex"},
 		},
 	})
 	purchase := checkout.Restore(checkout.State{
@@ -37,7 +37,7 @@ func TestCheckoutPickupRegionRefusalIsExplicitHTTPError(t *testing.T) {
 		Groups: []checkout.Group{{
 			TenantID: "t1",
 			Regions:  []string{"RU-TA"},
-			Carriers: []string{"cdek"},
+			Carriers: []string{"cdek", "yandex"},
 		}},
 	})
 	if err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {

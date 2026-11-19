@@ -22,7 +22,7 @@ func TestCancelledWaitersShareCompletedCatalogueLoad(t *testing.T) {
 		TenantID: "t1",
 		Stage:    participant.StageConnected,
 		Enabled:  true,
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	platform.SetPickupPoints(
 		"t1",

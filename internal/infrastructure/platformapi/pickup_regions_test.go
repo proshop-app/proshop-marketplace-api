@@ -51,7 +51,7 @@ func TestOfficialPickupRegionsSurviveHTTPAndRespectShopArea(t *testing.T) {
 				Enabled:  true,
 				Delivery: participant.DeliverySettings{
 					Regions:  []string{"RU-MOW"},
-					Carriers: []string{string(carrier)},
+					Carriers: []string{"cdek", "yandex"},
 				},
 			})
 			client := New(Config{BaseURL: server.URL})

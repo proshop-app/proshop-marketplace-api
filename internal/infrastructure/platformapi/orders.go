@@ -11,17 +11,20 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 type sellerOrderJSON struct {
-	Tracking  *trackingJSON        `json:"tracking"`
-	OrderID   string               `json:"orderId"`
-	ExpiresAt time.Time            `json:"expiresAt"`
-	Total     *int64               `json:"total"`
-	Status    checkout.GroupStatus `json:"status"`
-	Reason    string               `json:"reason"`
+	Carrier         string               `json:"carrier"`
+	PickupPointCode string               `json:"pickupPointCode"`
+	Tracking        *trackingJSON        `json:"tracking"`
+	OrderID         string               `json:"orderId"`
+	ExpiresAt       time.Time            `json:"expiresAt"`
+	Total           *int64               `json:"total"`
+	Status          checkout.GroupStatus `json:"status"`
+	Reason          string               `json:"reason"`
 }
 
 // CreateOrder создаёт заказ магазина без открытия кассы по ключу покупки и группы.
@@ -80,11 +83,13 @@ func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
 		a.Tracking.Number = nil
 	}
 	order := checkout.SellerOrder{
-		OrderID:   a.OrderID,
-		ExpiresAt: a.ExpiresAt,
-		Status:    a.Status,
-		Reason:    a.Reason,
-		Tracking:  a.Tracking.domain(),
+		Carrier:         delivery.Carrier(a.Carrier),
+		PickupPointCode: a.PickupPointCode,
+		OrderID:         a.OrderID,
+		ExpiresAt:       a.ExpiresAt,
+		Status:          a.Status,
+		Reason:          a.Reason,
+		Tracking:        a.Tracking.domain(),
 	}
 	if a.Total != nil {
 		order.Total = money.FromKopecks(*a.Total)

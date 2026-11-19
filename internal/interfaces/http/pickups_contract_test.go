@@ -33,7 +33,7 @@ func pickupHTTP(t *testing.T) (*appdelivery.Service, *fake.Platform, *fake.Store
 		Stage:    participant.StageConnected,
 		Enabled:  true,
 
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	platform.SetPickupPoints("t1", ports.PickupPoints{
 		Available: true,
@@ -217,7 +217,7 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 	store.SeedParticipant(participant.State{
 		TenantID: "t2",
 		Stage:    participant.StageConnected,
-		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOS"}},
+		Delivery: participant.DeliverySettings{Carriers: []string{"cdek", "yandex"}, Regions: []string{"RU-MOS"}},
 	})
 	for _, offset := range []int{0, 200} {
 		response := httptest.NewRecorder()

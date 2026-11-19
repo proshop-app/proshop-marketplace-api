@@ -9,6 +9,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -63,12 +64,14 @@ type PriceChange struct {
 
 // SellerOrder — подтверждённый сервером снимок; возврат с кассы его не заменяет.
 type SellerOrder struct {
-	Tracking  *Tracking
-	OrderID   string
-	ExpiresAt time.Time
-	Total     money.Money
-	Status    GroupStatus
-	Reason    string
+	Carrier         delivery.Carrier
+	PickupPointCode string
+	Tracking        *Tracking
+	OrderID         string
+	ExpiresAt       time.Time
+	Total           money.Money
+	Status          GroupStatus
+	Reason          string
 }
 
 // Tracking — номер и ссылка перевозчика из заказа сервера.
@@ -102,9 +105,6 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 		if g.OrderID != "" || g.Abandoned {
 			continue
 		}
-		if g.QuotePending() {
-			return false, ErrSellerUnavailable
-		}
 		if g.Excluded() {
 			if !g.Returnable() {
 				g.Status = GroupDeliveryUnavailable
@@ -113,10 +113,14 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 				}
 			}
 			g.CreateExhausted = true
+			g.Quote = nil
 			if !c.state.CartConsumed {
 				g.CartReturned = true
 			}
 		} else {
+			if g.QuotePending() {
+				return false, ErrSellerUnavailable
+			}
 			g.Status = GroupCreating
 		}
 	}
@@ -146,6 +150,10 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	}
 	if order.OrderID == "" || order.ExpiresAt.IsZero() || total.Cmp(order.Total) != 0 {
 		return false, ErrInvalidOrder
+	}
+	if c.state.Delivery == nil || order.Carrier != c.state.Delivery.Carrier ||
+		order.PickupPointCode != c.state.Delivery.PickupPointCode {
+		return c.rejectOrderPickup(g, order, now)
 	}
 	g.OrderID, g.ExpiresAt = order.OrderID, order.ExpiresAt
 	g.NextPollAt = now
@@ -202,6 +210,9 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	}
 	c.rollup()
 
+	if order.Status == GroupCancelled {
+		g.Quote = nil
+	}
 	if order.Status == GroupCancelled && from != GroupCancelled && order.Reason != "payment_expired" && !g.Abandoned {
 		c.reviewComposition()
 	}

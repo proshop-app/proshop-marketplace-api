@@ -27,12 +27,16 @@ func (c *Checkout) RecheckDelivery(quotes map[ids.TenantID]delivery.Quote, now t
 	if c.Status() != StatusConfirmed {
 		return false, ErrTransition
 	}
-	if len(quotes) != len(c.state.Groups) {
-		return false, ErrInvalidQuotes
-	}
 	changed := false
 	available := 0
 	for _, g := range c.state.Groups {
+		if g.Excluded() {
+			continue
+		}
+		if g.OrderID != "" {
+			available++
+			continue
+		}
 		q, ok := quotes[g.TenantID]
 		if !ok {
 			return false, ErrInvalidQuotes
@@ -43,14 +47,18 @@ func (c *Checkout) RecheckDelivery(quotes map[ids.TenantID]delivery.Quote, now t
 		if q.Status == delivery.QuoteAvailable {
 			available++
 		}
-		if !g.Excluded() && g.DeliveryChanged(q) {
+		if g.DeliveryChanged(q) {
 			changed = true
 		}
 	}
 	changed = changed || available == 0
 	for i := range c.state.Groups {
-		q := quotes[c.state.Groups[i].TenantID]
-		c.state.Groups[i].Quote = &q
+		g := &c.state.Groups[i]
+		if g.Excluded() || g.OrderID != "" {
+			continue
+		}
+		q := quotes[g.TenantID]
+		g.Quote = &q
 	}
 	if changed {
 		c.state.Status = StatusDraft
@@ -166,6 +174,7 @@ func (c *Checkout) FailCreation(
 		g.Status = terminal
 		g.ReconciliationRequired = reconciliation
 		g.CreateExhausted = true
+		g.Quote = nil
 	}
 	c.rollup()
 	if terminal != "" {

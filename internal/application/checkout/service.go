@@ -472,13 +472,6 @@ func (s *Service) quoteGroup(
 	group checkout.Group,
 	selection checkout.Selection,
 ) delivery.Quote {
-	if group.Carriers != nil && !slices.Contains(group.Carriers, string(selection.Carrier)) {
-		return delivery.Quote{
-			Status:    delivery.QuoteUnavailable,
-			Reason:    delivery.ReasonCarrierNotConnected,
-			ExpiresAt: s.clock.Now().Add(s.config.QuoteTTL),
-		}
-	}
 	if group.Carriers != nil && !slices.Contains(group.Regions, selection.RegionCode) {
 		return delivery.Quote{
 			Status:    delivery.QuoteUnavailable,

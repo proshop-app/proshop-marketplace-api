@@ -29,7 +29,7 @@ func TestStoreCardCandidatesHTTP(t *testing.T) {
 		Name:     "Магазин",
 		Stage:    participant.StageConnected,
 		Version:  1,
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Status: participant.TenantActive, Version: 1})
 	store.SeedProduct(catalog.ProductState{

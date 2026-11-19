@@ -61,9 +61,11 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 	}
 	stale := checkout.Restore(c.State())
 	order := checkout.SellerOrder{
-		OrderID:   "o1",
-		ExpiresAt: at(60),
-		Total:     money.FromKopecks(10000),
+		Carrier:         "cdek",
+		PickupPointCode: "P1",
+		OrderID:         "o1",
+		ExpiresAt:       at(60),
+		Total:           money.FromKopecks(10000),
 	}
 	if _, err := c.AttachOrder("t1", order, at(1)); err != nil {
 		t.Fatal(err)

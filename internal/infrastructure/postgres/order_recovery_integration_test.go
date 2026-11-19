@@ -75,9 +75,11 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 			"t1",
 			"create",
 			checkout.SellerOrder{
-				OrderID:   "o1",
-				Total:     money.FromKopecks(10000),
-				ExpiresAt: at(60),
+				Carrier:         "cdek",
+				PickupPointCode: "P1",
+				OrderID:         "o1",
+				Total:           money.FromKopecks(10000),
+				ExpiresAt:       at(60),
 			},
 			now,
 		)
@@ -111,9 +113,11 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 		if _, err := loaded.Observe(
 			"t1",
 			checkout.SellerOrder{
-				OrderID: "o1",
-				Status:  checkout.GroupCancelled,
-				Reason:  "payment_expired",
+				Carrier:         "cdek",
+				PickupPointCode: "P1",
+				OrderID:         "o1",
+				Status:          checkout.GroupCancelled,
+				Reason:          "payment_expired",
 			},
 			now,
 			now,

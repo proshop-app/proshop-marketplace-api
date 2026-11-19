@@ -62,7 +62,7 @@ func TestOfferIDsResponse(t *testing.T) {
 		Enabled:  true,
 		Stage:    participant.StageConnected,
 		Delivery: participant.DeliverySettings{
-			Carriers: []string{"cdek"},
+			Carriers: []string{"cdek", "yandex"},
 			Regions:  []string{"RU-MOW"},
 		},
 	})
@@ -77,7 +77,7 @@ func TestOfferIDsResponse(t *testing.T) {
 			Description: "Описание",
 			Assets:      []string{"image"},
 			Delivery: participant.DeliverySettings{
-				Carriers: []string{"cdek"},
+				Carriers: []string{"cdek", "yandex"},
 				Regions:  []string{"RU-MOW"},
 			},
 			PriceProfiles: []catalog.PriceProfile{

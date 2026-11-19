@@ -104,7 +104,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	}
 	platform.SetSettings("t1", ports.ShopSettings{
 
-		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}},
+		Delivery: participant.DeliverySettings{Carriers: []string{"cdek", "yandex"}, Regions: []string{"RU-MOW"}},
 	})
 	platform.SetQuote("t1", delivery.Offered{Available: true})
 	cfg := appcheckout.Config{PaymentStub: true, QuoteTimeout: time.Second, QuoteTTL: time.Hour}

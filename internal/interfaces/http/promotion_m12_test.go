@@ -28,7 +28,7 @@ func promotionHTTPFixture() (*promotionHandlers, *fake.Store, *fake.Clock) {
 		StoreCard: participant.StoreCard{Readiness: participant.CardReadiness{Ready: true}},
 		TenantID:  "t1",
 		Name:      "Магазин",
-		Delivery:  participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Delivery:  participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 
 		Enabled: true,
 		Stage:   participant.StageConnected,

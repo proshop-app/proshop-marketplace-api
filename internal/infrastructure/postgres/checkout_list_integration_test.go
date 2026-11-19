@@ -454,9 +454,11 @@ func seedCheckoutList(t *testing.T, uow *postgres.UnitOfWork) []*checkout.Checko
 					t.Fatal(err)
 				}
 				order := checkout.SellerOrder{
-					OrderID:   "o-" + string(group.TenantID),
-					ExpiresAt: at(60),
-					Total:     total,
+					Carrier:         "cdek",
+					PickupPointCode: "P1",
+					OrderID:         "o-" + string(group.TenantID),
+					ExpiresAt:       at(60),
+					Total:           total,
 				}
 				if _, err := purchase.AttachOrder(group.TenantID, order, value.at); err != nil {
 					t.Fatal(err)

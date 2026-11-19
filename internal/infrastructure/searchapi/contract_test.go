@@ -101,7 +101,7 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 		Price:                price,
 		Delivery: participant.DeliverySettings{
 			Regions:  []string{},
-			Carriers: []string{"cdek"},
+			Carriers: []string{"cdek", "yandex"},
 		},
 		CheckoutAvailable: true,
 		Attributes: map[string]json.RawMessage{

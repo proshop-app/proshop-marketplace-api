@@ -69,7 +69,7 @@ func TestSettingsTaskDisablesShop(t *testing.T) {
 
 	platform.SetSettings("t1", ports.ShopSettings{
 
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	if changed, err := settings.SyncOne(ctx, "t1"); err != nil || !changed {
 		t.Fatalf("участие включено: %v %v", changed, err)

@@ -23,7 +23,7 @@ const seedPickupTenants = `INSERT INTO tenants (tenant_id, slug, status, event_a
 const seedPickupParticipants = `INSERT INTO participants
     (tenant_id, slug, name, stage, enabled, version, created_at, updated_at, delivery_settings, delivery_valid)
     SELECT tenant_id, slug, 'Магазин', 'connected', true, 1, now(), now(),
-    '{"regions":["RU-MOW"],"carriers":["cdek"]}'::jsonb, true FROM tenants`
+    '{"regions":["RU-MOW"],"carriers":["cdek","yandex"]}'::jsonb, true FROM tenants`
 
 const explainPickupSourcePage = `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
     SELECT p.tenant_id FROM participants p JOIN tenants t ON t.tenant_id = p.tenant_id

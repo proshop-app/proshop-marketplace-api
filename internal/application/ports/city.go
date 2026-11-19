@@ -1,6 +1,24 @@
 package ports
 
-import "context"
+import (
+	"context"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+)
+
+// Отказ определения города оставляет доступным ручной выбор.
+var (
+	ErrCityUnavailable = errs.New(
+		errs.Unavailable,
+		"city.unavailable",
+		"не удалось определить город, выберите его вручную",
+	)
+	ErrCityRateLimited = errs.New(
+		errs.Unavailable,
+		"city.rate_limited",
+		"источник определения города временно ограничил запросы",
+	)
+)
 
 // DetectedCity — подсказка по IP; пустой город требует ручного выбора.
 type DetectedCity struct {

@@ -251,7 +251,8 @@ func (c *Checkout) SelectDelivery(selection Selection, quotes map[ids.TenantID]d
 		return ErrNotDraft
 	}
 	for _, group := range c.state.Groups {
-		if group.OrderID != "" && (c.state.Delivery == nil || *c.state.Delivery != selection) {
+		if !group.Excluded() && (group.Status != "" || group.CreateToken != "" || group.OrderID != "") &&
+			(c.state.Delivery == nil || *c.state.Delivery != selection) {
 			return ErrSnapshotChanged
 		}
 		if _, ok := quotes[group.TenantID]; !ok && !group.Excluded() {

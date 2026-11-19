@@ -197,7 +197,7 @@ func TestDeliveryVersionAndTransactionalRollback(t *testing.T) {
 	if _, err := service.Create(ctx, appparticipant.CreateCommand{TenantID: "t1", Name: "Магазин"}); err != nil {
 		t.Fatal(err)
 	}
-	settings := participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
+	settings := participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}}
 	store.FailCommit = errors.New("commit")
 	if _, err := service.SetDelivery(ctx, "t1", settings, 1); err == nil {
 		t.Fatal("ожидался откат")
