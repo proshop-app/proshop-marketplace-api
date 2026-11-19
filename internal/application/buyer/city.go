@@ -27,9 +27,6 @@ func NewCities(detector ports.CityDetector, suggestions ports.CitySuggestions, l
 
 // Detect определяет город по адресу доверенного клиента.
 func (s *Cities) Detect(ctx context.Context, ip string) (ports.DetectedCity, error) {
-	if err := s.allow(ctx, ip); err != nil {
-		return ports.DetectedCity{}, err
-	}
 	return s.detector.DetectCity(ctx, ip)
 }
 

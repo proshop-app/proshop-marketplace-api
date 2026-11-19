@@ -80,6 +80,7 @@ build:
 	CGO_ENABLED=0 go build -trimpath -o bin/marketplace ./cmd/marketplace
 	CGO_ENABLED=0 go build -trimpath -o bin/migrate ./cmd/migrate
 	CGO_ENABLED=0 go build -trimpath -o bin/taxonomy ./cmd/taxonomy
+	CGO_ENABLED=0 go build -trimpath -o bin/geoip-update ./cmd/geoip
 
 ## image: образ сервиса
 image:
