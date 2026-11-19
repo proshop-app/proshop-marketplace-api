@@ -702,3 +702,10 @@ SQL через `CROSS JOIN LATERAL` берёт не больше `limit` луч�
 её завершения: старые признаки `delivery_valid` должны быть перепроверены новым сервером.
 Удаление сохранённого `marketplace.delivery.carriers` на сервере: шаг мигратора
 `remove-marketplace-carriers` (dry-run, затем `--apply`); регионы сохраняются.
+
+## Локальная подсказка города
+
+`GET /api/v1/city` использует опубликованную DB-IP City Lite и встроенный
+HFLabs/city, без передачи/сохранения IP. Поставка базы — отдельный `/geoip` и
+месячный CronJob на PVC; отсутствие файла сохраняет ручной выбор.
+[Договор, лицензии, приватность и обновление](internal/infrastructure/localgeoip/README.md).

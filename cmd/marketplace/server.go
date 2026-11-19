@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/ipapi"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	goredis "github.com/redis/go-redis/v9"
@@ -37,6 +35,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/contextcache"
 	infrakafka "github.com/proshop-app/proshop-marketplace/internal/infrastructure/kafka"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/localgeoip"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/password"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/platformapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
@@ -90,12 +89,13 @@ type services struct {
 
 // server — процесс маркетплейса: хранилища, сценарии и метрики.
 type server struct {
-	cfg     config.Config
-	logger  *slog.Logger
-	store   *storage
-	cache   *goredis.Client
-	metrics *prometheus.Registry
-	app     services
+	cityDetector *localgeoip.Detector
+	cfg          config.Config
+	logger       *slog.Logger
+	store        *storage
+	cache        *goredis.Client
+	metrics      *prometheus.Registry
+	app          services
 }
 
 // promotionRandom использует math/rand/v2: ротации не нужна криптографическая случайность.
@@ -122,6 +122,11 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	defer func() { _ = cache.Close() }()
 	s := &server{cfg: cfg, logger: logger, store: store, cache: cache, metrics: telemetry.NewRegistry()}
+	s.cityDetector, err = localgeoip.New(cfg.City.Path, cfg.City.DevClientIP, logger, s.metrics)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = s.cityDetector.Close() }()
 	s.app, err = s.services(ctx)
 	if err != nil {
 		return err
@@ -384,7 +389,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 	return services{
 		cities: appbuyer.NewCities(
-			redis.NewCityDetector(s.cache, ipapi.New(ipapi.Endpoint), keyPrefix),
+			s.cityDetector,
 			upstream,
 			redis.NewLimiter(s.cache, keyPrefix),
 		),
@@ -511,6 +516,7 @@ func (s *server) jobs() []func(context.Context) error {
 	cfg := s.cfg
 
 	runners := []func(context.Context) error{
+		s.cityDetector.Run,
 		func(ctx context.Context) error {
 			return s.app.moderationMetrics.Run(ctx, s.app.moderation, cfg.Moderation.MetricsInterval, s.logger)
 		},

@@ -6,24 +6,22 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
-// Отказ определения города оставляет доступным ручной выбор.
-var (
-	ErrCityUnavailable = errs.New(
-		errs.Unavailable,
-		"city.unavailable",
-		"не удалось определить город, выберите его вручную",
-	)
-	ErrCityRateLimited = errs.New(
-		errs.Unavailable,
-		"city.rate_limited",
-		"источник определения города временно ограничил запросы",
-	)
+// ErrCityUnavailable оставляет доступным ручной выбор при отказе локальной базы.
+var ErrCityUnavailable = errs.New(
+	errs.Unavailable,
+	"city.unavailable",
+	"не удалось определить город, выберите его вручную",
 )
 
 // DetectedCity — подсказка по IP; пустой город требует ручного выбора.
 type DetectedCity struct {
-	City    string `json:"city"`
-	Country string `json:"country"`
+	City       string `json:"city"`
+	Country    string `json:"country"`
+	Label      string `json:"label,omitempty"`
+	Region     string `json:"region,omitempty"`
+	RegionCode string `json:"regionCode,omitempty"`
+	FiasID     string `json:"fiasId,omitempty"`
+	KladrID    string `json:"kladrId,omitempty"`
 }
 
 // CitySuggestion — тот же справочник назначения, что у витрины магазина.

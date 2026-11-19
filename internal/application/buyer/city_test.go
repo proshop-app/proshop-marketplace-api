@@ -28,3 +28,11 @@ func TestCitySuggestionsUseSharedSourceAndValidateBeforeCalling(t *testing.T) {
 		t.Fatal(detected, err)
 	}
 }
+
+func TestCityDetectionDoesNotUseLimiterOrPersistAddress(t *testing.T) {
+	source := &fake.Cities{Detection: ports.DetectedCity{City: "Город", Country: "RU"}}
+	service := app.NewCities(source, source, nil)
+	if _, err := service.Detect(context.Background(), "192.0.2.1"); err != nil {
+		t.Fatal(err)
+	}
+}

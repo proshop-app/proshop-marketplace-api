@@ -81,7 +81,7 @@ paths:
     get:
       tags: [buyer]
       operationId: detectCity
-      summary: Город по IP после гидрации, источник витрины магазина
+      summary: Канонический город по локальной DB-IP после гидрации
       responses:
         "200":
           description: Подсказка; Cache-Control private, no-store
@@ -93,7 +93,11 @@ paths:
                 properties:
                   city: { type: string }
                   country: { type: string }
-        "429": { $ref: "#/components/responses/Error" }
+                  label: { type: string }
+                  region: { type: string }
+                  regionCode: { type: string, description: ISO 3166-2 }
+                  fiasId: { type: string }
+                  kladrId: { type: string }
         "503": { $ref: "#/components/responses/Error" }
   /api/v1/delivery/cities:
     get:
