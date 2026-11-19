@@ -187,6 +187,7 @@ func (r *RetentionRunner) Run(ctx context.Context) error {
 		case err == nil:
 			r.logger.Info(
 				"чистка: готово",
+				slog.Int64("bulkApprovals", result.BulkApprovals),
 				slog.Int64("processedEvents", result.Processed),
 				slog.Int64("outboxDone", result.OutboxDone),
 				slog.Int64("parkedEvents", result.Parked),

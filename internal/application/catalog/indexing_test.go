@@ -416,3 +416,28 @@ func TestStoreCardRefreshCoalescing(t *testing.T) {
 	}
 	assertTask(clock.Now())
 }
+
+func TestTenantSyncTaskYieldsAndResumesAfterOnePage(t *testing.T) {
+	store, index, clock := fake.NewStore(), fake.NewIndex(), fake.NewClock(t1)
+	seedSeller(store, "t1", participant.TenantActive, true)
+	for _, id := range []ids.ProductID{"p1", "p2", "p3", "p4", "p5"} {
+		seedProduct(store, "t1", id)
+	}
+	idx := indexer(store, index, clock)
+	task := taskOf(appcatalog.SyncTenantTask("t1", t1))
+	task.ID = 10
+	for pass := 1; pass <= 3; pass++ {
+		if err := idx.HandleTask(context.Background(), task); err != nil {
+			t.Fatal(err)
+		}
+		page, _ := index.Search(context.Background(), ports.OfferQuery{Limit: 10})
+		if page.Total != min(2*pass, 5) {
+			t.Fatal("обработчик должен индексировать одну порцию", pass, page.Total)
+		}
+		for _, row := range store.OutboxRows() {
+			if row.Kind == appcatalog.TaskSyncTenant {
+				task = ports.Task{ID: row.ID, Kind: row.Kind, TenantID: row.TenantID, Payload: row.Payload}
+			}
+		}
+	}
+}

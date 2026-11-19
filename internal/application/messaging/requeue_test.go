@@ -47,7 +47,7 @@ func TestRequeuePreservesIntentAndFencesOldOwner(t *testing.T) {
 		enqueue(t, store, kind, "t1", "", t0)
 	}
 	d := messaging.NewDispatcher(store, clock, config(), nil)
-	for range 2 {
+	for range 3 {
 		if _, err := d.RunOnce(context.Background()); err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +78,7 @@ func TestRequeuePreservesIntentAndFencesOldOwner(t *testing.T) {
 		"bad":   func(context.Context, ports.Task) error { return nil },
 		"other": func(context.Context, ports.Task) error { return nil },
 	})
-	for range 2 {
+	for range 3 {
 		if _, err := d.RunOnce(context.Background()); err != nil {
 			t.Fatal(err)
 		}

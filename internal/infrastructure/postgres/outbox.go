@@ -23,14 +23,21 @@ const (
 
 	// claimTasks берёт созревшие задачи с квотой на магазин и пропуском занятых строк.
 	claimTasks = `
-		WITH due_tenants AS (
+		WITH ordered_heads AS MATERIALIZED (
+            SELECT DISTINCT ON (tenant_id, kind) id
+            FROM outbox
+            WHERE done_at IS NULL AND failed_at IS NULL AND kind = ANY($9::text[])
+            ORDER BY tenant_id, kind, id
+        ), due_tenants AS (
 			SELECT DISTINCT tenant_id
 			FROM outbox
 			WHERE done_at IS NULL AND failed_at IS NULL AND next_at <= $1
 				AND (cardinality($5::text[]) = 0 OR kind = ANY($5::text[]))
 				AND NOT (kind = ANY($6::text[]))
 		), candidates AS (
-			SELECT c.id, c.next_at, c.position
+			SELECT c.id, c.next_at, c.position,
+                CASE WHEN $8::text = '' THEN false ELSE t.tenant_id <= $8 END AS wrapped,
+                CASE WHEN $8::text = '' THEN '' ELSE t.tenant_id END AS tenant_order
 			FROM due_tenants t
 			CROSS JOIN LATERAL (
 				SELECT id, next_at, row_number() OVER (ORDER BY next_at, id) AS position
@@ -38,17 +45,24 @@ const (
 				WHERE tenant_id = t.tenant_id AND done_at IS NULL AND failed_at IS NULL AND next_at <= $1
 				AND (cardinality($5::text[]) = 0 OR kind = ANY($5::text[]))
 				AND NOT (kind = ANY($6::text[]))
+                AND (NOT (kind = ANY($9::text[])) OR id IN (SELECT id FROM ordered_heads))
 				ORDER BY next_at, id
 				LIMIT COALESCE(($7::jsonb ->> t.tenant_id)::integer, $3)
 			) c
-			ORDER BY c.position, c.next_at, c.id
+			ORDER BY c.position, wrapped, tenant_order, c.next_at, c.id
 			LIMIT $2
 		), locked AS (
-			SELECT o.id
-			FROM outbox o
-			JOIN candidates c ON c.id = o.id
-			WHERE o.done_at IS NULL AND o.failed_at IS NULL AND o.next_at <= $1
-			FOR UPDATE OF o SKIP LOCKED
+            SELECT selected.id
+            FROM candidates c
+            CROSS JOIN LATERAL (
+                SELECT o.id, o.done_at, o.failed_at, o.next_at
+                FROM outbox o
+                WHERE o.id = c.id
+                -- Не переносить проверку готовности внутрь поиска: иначе неверная оценка выбирает due-индекс.
+                OFFSET 0
+                FOR UPDATE SKIP LOCKED
+            ) selected
+            WHERE selected.done_at IS NULL AND selected.failed_at IS NULL AND selected.next_at <= $1
 		), updated AS (
 			UPDATE outbox
 			SET attempts = outbox.attempts + 1,
@@ -59,7 +73,7 @@ const (
 				COALESCE(outbox.unknown_failures, 0) AS unknown_failures
 		)
 		SELECT u.* FROM updated u JOIN candidates c ON c.id = u.id
-		ORDER BY c.position, c.next_at, c.id`
+		ORDER BY c.position, c.wrapped, c.tenant_order, c.next_at, c.id`
 
 	completeTask = `
 		UPDATE outbox
@@ -149,6 +163,8 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 		append([]string{}, request.Kinds...),
 		append([]string{}, request.ExcludeKinds...),
 		string(slots),
+		string(request.AfterTenant),
+		append([]string{}, request.OrderedKinds...),
 	).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("взятие задач: %w", err)

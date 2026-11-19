@@ -458,3 +458,17 @@ func (r references) CandidateCounts(ctx context.Context, codes []string) (map[st
 	}
 	return result, nil
 }
+
+// PublishBatch имитирует одну отправку пачки.
+func (p *Publisher) PublishBatch(_ context.Context, messages []ports.Message) []error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	failures := make([]error, len(messages))
+	for n, message := range messages {
+		failures[n] = p.Err
+		if p.Err == nil {
+			p.messages = append(p.messages, message)
+		}
+	}
+	return failures
+}

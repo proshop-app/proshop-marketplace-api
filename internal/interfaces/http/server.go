@@ -388,6 +388,18 @@ func routes(deps Deps) []route {
 		{backgroundRequest, http.MethodPost, "/api/v1/operator/moderation/cases", operator(moderation.open)},
 		{
 			backgroundRequest,
+			http.MethodPost,
+			"/api/v1/operator/moderation/cases/bulk-allow",
+			operator(moderation.bulkAllow),
+		},
+		{
+			backgroundRequest,
+			http.MethodGet,
+			"/api/v1/operator/moderation/cases/bulk-count",
+			operator(moderation.bulkCount),
+		},
+		{
+			backgroundRequest,
 			http.MethodGet,
 			"/api/v1/operator/moderation/cases/{caseId}",
 			operator(moderation.getCase),

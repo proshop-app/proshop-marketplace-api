@@ -36,6 +36,7 @@ func (j *Janitor) Purge(ctx context.Context) (ports.PurgeResult, error) {
 	now := j.clock.Now()
 
 	return j.retention.Purge(ctx, ports.PurgeRequest{
+		BulkBefore:       now,
 		ProcessedBefore:  now.Add(-j.policy.ProcessedEvents),
 		OutboxDoneBefore: now.Add(-j.policy.OutboxDone),
 		ParkedBefore:     now.Add(-j.policy.ParkedEvents),

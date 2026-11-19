@@ -69,8 +69,8 @@ func TestTaxonomyFailureQueryAndRetentionSQL(t *testing.T) {
 	}
 	trace.reset()
 	result, err := postgres.NewRetention(traced).Purge(ctx, ports.PurgeRequest{Batch: 2})
-	if err != nil || result.RevalidationFailures != 3 || len(trace.snapshot()) != 10 {
-		t.Fatal("6 штатных SQL и 4 страницы отказов", result, err, trace.snapshot())
+	if err != nil || result.RevalidationFailures != 3 || len(trace.snapshot()) != 11 {
+		t.Fatal("7 штатных SQL (включая bulk retention) и 4 страницы отказов", result, err, trace.snapshot())
 	}
 	var remaining int
 	if err := pool.QueryRow(ctx, countRevalidationFailures).Scan(&remaining); err != nil || remaining != 3 {

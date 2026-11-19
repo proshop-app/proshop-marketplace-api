@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	purgeBulkApprovals = `DELETE FROM moderation_bulk_idempotency WHERE key_hash IN
+        (SELECT key_hash FROM moderation_bulk_idempotency WHERE expires_at < $1 ORDER BY expires_at LIMIT $2)`
 	purgePromotionViews = `DELETE FROM promotion_views WHERE ctid IN
  (SELECT v.ctid FROM promotion_views v JOIN promotion_campaigns c ON c.id=v.campaign_id
  WHERE c.date_to < $1::date LIMIT $2)`
@@ -59,6 +61,7 @@ func (r *Retention) Purge(ctx context.Context, request ports.PurgeRequest) (port
 		before time.Time
 		count  *int64
 	}{
+		{sql: purgeBulkApprovals, before: request.BulkBefore, count: &result.BulkApprovals},
 		{sql: purgeProcessedEvents, before: request.ProcessedBefore, count: &result.Processed},
 		{sql: purgeDoneTasks, before: request.OutboxDoneBefore, count: &result.OutboxDone},
 		{sql: purgeParkedEvents, before: request.ParkedBefore, count: &result.Parked},

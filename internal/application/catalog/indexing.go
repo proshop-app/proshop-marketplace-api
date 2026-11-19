@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -70,11 +71,68 @@ func (i *Indexer) HandleTask(ctx context.Context, task ports.Task) error {
 
 	case TaskSyncTenant:
 
-		return i.SyncTenant(ctx, tenantID)
+		return i.syncTenantTaskPage(ctx, task, tenantID)
 	default:
 
 		return ErrInvalidTask.WithMessage("неизвестная задача: " + task.Kind)
 	}
+}
+
+// Фоновая синхронизация отдаёт слот после страницы, сохраняя продолжение
+// только после успешной записи индекса. Повтор страницы идемпотентен по версии.
+func (i *Indexer) syncTenantTaskPage(ctx context.Context, task ports.Task, tenant ids.TenantID) error {
+	var payload taskPayload
+	if err := json.Unmarshal(task.Payload, &payload); err != nil {
+		return ErrInvalidTask.Wrap(err)
+	}
+	after := ids.ProductID(payload.After)
+	if payload.After != "" {
+		if _, err := ids.ParseProductID(payload.After); err != nil {
+			return ErrInvalidTask.Wrap(err)
+		}
+	}
+	var states []ports.OfferState
+	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		states, err = tx.Offers().TenantOffers(ctx, tenant, after, i.batch)
+		return err
+	})
+	if err != nil || len(states) == 0 {
+		return err
+	}
+	ready, err := i.refreshModelKeys(ctx, states)
+	if err != nil {
+		return err
+	}
+	if docs := documents(ready); len(docs) > 0 {
+		if err := i.index.Put(ctx, docs); err != nil {
+			return err
+		}
+	}
+	return i.enqueueTenantPage(ctx, task, payload, states)
+}
+
+func (i *Indexer) enqueueTenantPage(
+	ctx context.Context,
+	task ports.Task,
+	payload taskPayload,
+	states []ports.OfferState,
+) error {
+	return i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		now := i.clock.Now()
+		if err := tx.Outbox().Enqueue(ctx, ports.StoreCardTask(task.TenantID, now.Add(i.refreshDelay))); err != nil {
+			return err
+		}
+		if len(states) < i.batch {
+			return nil
+		}
+		traversal := payload.Traversal
+		if traversal == 0 {
+			traversal = task.ID
+		}
+		after := states[len(states)-1].Product.State().ProductID
+		return tx.Outbox().Enqueue(ctx, syncTenantPageTask(task.TenantID, after, traversal, now))
+	})
 }
 
 // SyncOffer переписывает одно предложение. Товар магазина, который не

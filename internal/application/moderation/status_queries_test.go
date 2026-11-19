@@ -55,6 +55,22 @@ func TestStatusQueryMatchesEvents(t *testing.T) {
 			}
 			before := e.store.OutboxRows()
 			messages := publisher.Messages()
+			batchPublisher := &fake.Publisher{}
+			batchService := moderationstatus.NewService(e.store, e.clock, batchPublisher, "offer", "participant")
+			missing := moderationstatus.OfferTask("t1", "missing", e.clock.Now())
+			failures := batchService.HandleOfferBatch(ctx, []ports.Task{
+				{Kind: task.Kind, TenantID: task.TenantID, Payload: task.Payload},
+				{Kind: missing.Kind, TenantID: missing.TenantID, Payload: missing.Payload},
+			})
+			for _, failure := range failures {
+				if failure != nil {
+					t.Fatal(failure)
+				}
+			}
+			if !reflect.DeepEqual(messages, batchPublisher.Messages()) {
+				t.Fatal("пакетная доставка изменила обратную связь", mode, batchPublisher.Messages(), messages)
+			}
+
 			snapshot, err := service.Get(ctx, "t1", []ids.ProductID{"p1", "missing"})
 			if err != nil {
 				t.Fatal(err)

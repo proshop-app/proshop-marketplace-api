@@ -704,6 +704,96 @@ paths:
                   minLength: 1
                   maxLength: 2000
                   description: 1–2000 символов после TrimSpace
+  /api/v1/operator/moderation/cases/bulk-count:
+    get:
+      tags: [moderation]
+      summary: Объём открытой очереди по фильтрам для подтверждения
+      operationId: moderationBulkCount
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
+      - name: tenantId
+        in: query
+        schema: { type: string }
+      - name: source
+        in: query
+        schema: { type: string, enum: [rule, operator] }
+      - name: reason
+        in: query
+        schema: { type: string }
+      - name: reasons
+        in: query
+        schema:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { type: string }
+        style: form
+        explode: true
+      responses:
+        '200':
+          description: Число дел для подтверждения; очередь может измениться до выполнения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationBulkCounts'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/operator/moderation/cases/bulk-allow:
+    post:
+      tags: [moderation]
+      summary: Одобрить до 200 дел одной атомарной пачкой
+      description: >-
+        Ровно один способ выбора. Пустой selector выбирает всю открытую очередь, любые причины и магазины.
+        Фильтры tenantId/source/reason совпадают с очередью; reasons ограничивает все причины набором.
+        При hasMore передайте nextAfter в selector.after следующего запроса с новым ключом.
+        Idempotency-Key имеет формат unixMilliseconds:nonce. Повтор в течение 30 суток возвращает исходный итог.
+        Просроченный ключ получает 409 moderation.idempotency_key_expired даже после удаления результата;
+        повтор не выбирает новые дела. Результаты очищаются фоновым retention пачками.
+        Конфликты отдельных дел возвращаются как пропуски. Заметка обязательна и общая для пачки.
+      operationId: moderationBulkAllow
+      security:
+      - operatorToken: []
+      - operatorSession: []
+      parameters:
+      - { $ref: "#/components/parameters/MoneyUnit" }
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationBulkInput'
+      responses:
+        '200':
+          description: Итог только этой страницы, включая пропущенные дела
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationBulkResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /api/v1/operator/moderation/cases/{caseId}:
     get:
       tags:
@@ -5205,6 +5295,61 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Participant" }
   schemas:
+    ModerationBulkInput:
+      type: object
+      required: [note]
+      properties:
+        note: { type: string, minLength: 1, maxLength: 2000 }
+        cases:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required: [id, expectedVersion]
+            properties:
+              id: { type: string, format: uuid }
+              expectedVersion: { type: integer, format: int64, minimum: 1 }
+        selector:
+          $ref: '#/components/schemas/ModerationBulkSelector'
+    ModerationBulkSelector:
+      type: object
+      properties:
+        tenantId: { type: string }
+        source: { type: string, enum: [rule, operator] }
+        reason: { type: string, description: Дело содержит указанную причину }
+        reasons:
+          description: Непустой набор ограничивает все причины дела; пустой не ограничивает отбор
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items: { type: string }
+        after: { type: string, format: uuid }
+    ModerationBulkCounts:
+      type: object
+      required: [total, tenants, otherReasons]
+      properties:
+        total: { type: integer }
+        tenants: { type: integer }
+        otherReasons: { type: integer, description: Дела с набором причин отличным от единственной moderation.probation }
+    ModerationBulkResult:
+      type: object
+      required: [approved, skipped, details, hasMore]
+      properties:
+        approved: { type: integer }
+        skipped: { type: integer }
+        hasMore: { type: boolean }
+        nextAfter: { type: string, format: uuid }
+        details:
+          type: array
+          items:
+            type: object
+            required: [id, reason]
+            properties:
+              id: { type: string, format: uuid }
+              reason:
+                type: string
+                enum: [changed, already_decided, other_reasons, not_found, participant_changed]
     BuyerRegionChoice:
       type: [object, "null"]
       required: [code]

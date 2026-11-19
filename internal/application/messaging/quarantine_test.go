@@ -80,7 +80,6 @@ func TestDependencyOutageRecoversAllTasksAfterThirtyMinutes(t *testing.T) {
 			}
 		}
 		cfg := config()
-		cfg.PerTenant = 1
 		d := messaging.NewDispatcher(store, clock, cfg, handlers)
 		if batch {
 			d.RegisterBatch("index", func(ctx context.Context, tasks []ports.Task) []error {

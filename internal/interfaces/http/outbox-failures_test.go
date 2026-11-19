@@ -42,9 +42,8 @@ func TestOperatorCanReturnQuarantineByKindAndID(t *testing.T) {
 		store,
 		clock,
 		messaging.DispatcherConfig{
-			Batch:     10,
-			PerTenant: 10,
-			Lease:     time.Second,
+			Batch: 10,
+			Lease: time.Second,
 		}, nil)
 	for _, kind := range []string{"bad", "other", "bad"} {
 		err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
@@ -59,8 +58,10 @@ func TestOperatorCanReturnQuarantineByKindAndID(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := dispatcher.RunOnce(context.Background()); err != nil {
-		t.Fatal(err)
+	for range 3 {
+		if _, err := dispatcher.RunOnce(context.Background()); err != nil {
+			t.Fatal(err)
+		}
 	}
 	e := newEnv(t, func(deps *transport.Deps) { deps.Dispatcher = dispatcher })
 	path := "/api/v1/operator/outbox/failures/retry"

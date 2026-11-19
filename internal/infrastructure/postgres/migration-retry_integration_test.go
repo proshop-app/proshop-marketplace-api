@@ -17,6 +17,10 @@ import (
 )
 
 const (
+	bulkInterruptedCaseInsert = `INSERT INTO moderation_cases
+        (id, tenant_id, product_id, revision, source, status, reasons, note, opened_at, version)
+        VALUES ('00000000-0000-4000-8000-000000000001', 't1', 'p1', 1, 'rule', 'open',
+            '[{"key":"moderation.probation"}]', '', now(), 1)`
 	interruptedIndexValid   = `SELECT indisvalid FROM pg_index WHERE indexrelid = to_regclass($1)`
 	preservedPickupIndexOID = `SELECT to_regclass($1)::oid`
 	preservedIndexOID       = `SELECT 'outbox_quarantine_id_idx'::regclass::oid`
@@ -36,6 +40,36 @@ type interruptedIndexCase struct {
 
 func TestInterruptedConcurrentIndexMigrationRecovers(t *testing.T) {
 	tests := []interruptedIndexCase{
+		{
+			version: 62,
+			name:    "moderation_case_probation",
+			file:    "migrations/00062_moderation_bulk.sql",
+			insert:  bulkInterruptedCaseInsert,
+		},
+		{
+			version: 62,
+			name:    "moderation_case_tenant_open",
+			file:    "migrations/00062_moderation_bulk.sql",
+			insert:  bulkInterruptedCaseInsert,
+		},
+		{
+			version: 62,
+			name:    "moderation_case_open_id",
+			file:    "migrations/00062_moderation_bulk.sql",
+			insert:  bulkInterruptedCaseInsert,
+		},
+		{
+			version: 62,
+			name:    "moderation_case_source_open_id",
+			file:    "migrations/00062_moderation_bulk.sql",
+			insert:  bulkInterruptedCaseInsert,
+		},
+		{
+			version: 62,
+			name:    "moderation_case_open_reasons",
+			file:    "migrations/00062_moderation_bulk.sql",
+			insert:  bulkInterruptedCaseInsert,
+		},
 		{
 			version: 54,
 			name:    "catalog_products_store_summary",
@@ -100,6 +134,12 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 		t.Fatal(err)
 	}
 	up := strings.Split(string(raw), "-- +goose Down")[0]
+	if test.version == 62 {
+		function := regexp.MustCompile(`(?s)CREATE OR REPLACE FUNCTION moderation_reason_keys\b.*?\$\$;`)
+		if _, err := pool.Exec(ctx, function.FindString(up)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	pattern := regexp.MustCompile(`(?s)CREATE INDEX CONCURRENTLY IF NOT EXISTS ` + test.name + `\b[^;]+;`)
 	statement := pattern.FindString(up)
 	if statement == "" {

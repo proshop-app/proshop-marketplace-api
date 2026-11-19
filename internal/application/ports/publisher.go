@@ -15,4 +15,6 @@ type Message struct {
 // не из транзакции изменения, поэтому повтор после сбоя безопасен.
 type Publisher interface {
 	Publish(ctx context.Context, message Message) error
+	// PublishBatch возвращает ошибки в порядке сообщений; nil означает успех всей пачки.
+	PublishBatch(context.Context, []Message) []error
 }

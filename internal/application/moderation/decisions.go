@@ -257,7 +257,7 @@ func (s *Service) approve(
 		if err := tx.Outbox().Enqueue(ctx, moderationstatus.ParticipantTask(tenant, now)); err != nil {
 			return err
 		}
-		return tx.Outbox().Enqueue(ctx, ReevaluateTask(tenant, now))
+		return tx.Outbox().Enqueue(ctx, AllowTrustedTask(tenant, "", now))
 	}
 	return nil
 }

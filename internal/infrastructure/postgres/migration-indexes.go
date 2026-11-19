@@ -31,6 +31,13 @@ const (
 
 // Восстанавливаем только DDL нужного направления: valid-индексы не перестраиваем.
 var retryableMigrationIndexes = map[int64][]string{
+	62: {
+		"moderation_case_probation",
+		"moderation_case_tenant_open",
+		"moderation_case_open_id",
+		"moderation_case_source_open_id",
+		"moderation_case_open_reasons",
+	},
 	59: {"participants_pickup_cdek", "participants_pickup_yandex"},
 	54: {
 		"moderation_cases_offer_history",

@@ -30,6 +30,7 @@ type UnitOfWork interface {
 
 // Tx — хранилища, привязанные к одной транзакции.
 type Tx interface {
+	BulkModeration() BulkModeration
 	Revalidation() RevalidationStore
 	BuyerFeatures() BuyerFeatures
 	Promotion() promotion.Repository

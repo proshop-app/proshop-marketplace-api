@@ -7,12 +7,14 @@ import (
 	"sort"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 type moderationData struct {
+	cachedBulk           map[string]ports.CachedBulkApproval
 	verdictLog           []moderation.VerdictState
 	cached               map[string]moderation.CachedDecision
 	verdicts             map[productKey]moderation.VerdictState
@@ -32,18 +34,20 @@ type participantDecisions struct{ d *moderationData }
 
 func newModerationData() *moderationData {
 	return &moderationData{
-		cached:   map[string]moderation.CachedDecision{},
-		verdicts: map[productKey]moderation.VerdictState{},
-		cases:    map[ids.UUID]moderation.CaseState{},
-		phrases:  map[string]moderation.StopPhrase{},
-		reasons:  map[string]moderation.ReasonCode{},
-		revision: 1,
+		cached:     map[string]moderation.CachedDecision{},
+		cachedBulk: map[string]ports.CachedBulkApproval{},
+		verdicts:   map[productKey]moderation.VerdictState{},
+		cases:      map[ids.UUID]moderation.CaseState{},
+		phrases:    map[string]moderation.StopPhrase{},
+		reasons:    map[string]moderation.ReasonCode{},
+		revision:   1,
 	}
 }
 
 func (d *moderationData) clone() *moderationData {
 	return &moderationData{
 		cached:               maps.Clone(d.cached),
+		cachedBulk:           maps.Clone(d.cachedBulk),
 		verdictLog:           slices.Clone(d.verdictLog),
 		verdicts:             maps.Clone(d.verdicts),
 		cases:                maps.Clone(d.cases),

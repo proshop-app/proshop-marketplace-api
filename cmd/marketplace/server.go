@@ -339,6 +339,12 @@ func (s *server) services(ctx context.Context) (services, error) {
 		now,
 		messaging.DispatcherConfig{
 			MaxAttempts: cfg.Outbox.MaxAttempts,
+			// Эти обработчики публикуют или применяют снимок без внешней версии.
+			OrderedKinds: []string{
+				appparticipant.TaskSyncSettings,
+				moderationstatus.TaskParticipant,
+				appreference.TaskChanged,
+			},
 			ExcludeKinds: []string{
 				appcheckout.TaskCreateOrder,
 				appcheckout.TaskExpireCreation,
@@ -351,6 +357,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 		map[string]messaging.Handler{
 			appmoderation.TaskReevaluate:     moderation.HandleTask,
+			appmoderation.TaskAllowTrusted:   moderation.HandleTask,
 			messaging.TaskReplay:             events.HandleTask,
 			appcatalog.TaskSyncOffer:         indexer.HandleTask,
 			appcatalog.TaskSyncTenant:        indexer.HandleTask,
@@ -363,6 +370,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	)
 	indexer.SetBatchObserver(telemetry.NewOfferBatches(s.metrics))
 	dispatcher.RegisterBatch(appcatalog.TaskSyncOffer, indexer.HandleOfferBatch)
+	dispatcher.RegisterBatch(moderationstatus.TaskOffer, statuses.HandleOfferBatch)
 	janitor := messaging.NewJanitor(postgres.NewRetention(s.store.pool), now, messaging.RetentionPolicy{
 		ProcessedEvents: cfg.Retention.ProcessedEvents,
 		OutboxDone:      cfg.Retention.OutboxDone,

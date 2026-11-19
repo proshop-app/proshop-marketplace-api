@@ -22,6 +22,18 @@ type OfferState struct {
 	Tenant      *participant.Tenant
 }
 
+// OfferStatus содержит только данные обратной связи; Err относится к одному повреждённому товару.
+type OfferStatus struct {
+	Key         ids.OfferID
+	Revision    int64
+	Deleted     bool
+	Publication taxonomy.Publication
+	Verdict     *moderation.Verdict
+	Decision    *moderation.Decision
+	CaseReasons []moderation.Reason
+	Err         error
+}
+
 // OfferKey — позиция для постраничного чтения.
 type OfferKey struct {
 	TenantID  ids.TenantID
@@ -32,6 +44,8 @@ type OfferKey struct {
 type OfferStates interface {
 	// WalkStoreSummaryOffers читает единый снимок пачками, с соседними вариантами для подсчёта рейтинга.
 	WalkStoreSummaryOffers(context.Context, ids.TenantID, func([]OfferState) error) error
+	// StatusBatch читает статусы, последние решения и причины дел одним снимком.
+	StatusBatch(context.Context, []ids.OfferID) ([]OfferStatus, error)
 	// Batch читает проекции выбранных предложений одной пачкой.
 	Batch(context.Context, []ids.OfferID) ([]OfferState, error)
 	// Offer — снимок одного предложения; товара нет — catalog.ErrProductNotFound.
