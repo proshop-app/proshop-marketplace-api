@@ -11,7 +11,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -97,24 +96,12 @@ type errorJSON struct {
 	} `json:"items"`
 }
 
-type settingsAppearanceJSON struct {
-	Color      string `json:"color"`
-	Background string `json:"background"`
-}
-
 type settingsProfileJSON struct {
-	Name       string                  `json:"name"`
-	Logo       *string                 `json:"logo"`
-	Appearance *settingsAppearanceJSON `json:"appearance"`
-}
-
-type settingsProductsJSON struct {
-	Enabled    *bool     `json:"enabled"`
-	ProductIDs *[]string `json:"productIds"`
+	Name string  `json:"name"`
+	Logo *string `json:"logo"`
 }
 
 type settingsJSON struct {
-	Products *settingsProductsJSON         `json:"products"`
 	Profile  *settingsProfileJSON          `json:"profile"`
 	Card     *participant.CardReadiness    `json:"card"`
 	Returns  *participant.Returns          `json:"returns"`
@@ -197,34 +184,6 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 		Card:    *answer.Card,
 		Returns: answer.Returns,
 	}
-	appearance, err := normalizeSettingsAppearance(answer.Profile.Appearance)
-	if err != nil {
-		return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
-	}
-	settings.Profile.Appearance = appearance
-	settings.Products = participant.DefaultCardProducts()
-	if answer.Products != nil {
-		if answer.Products.Enabled == nil || answer.Products.ProductIDs == nil {
-			return ports.ShopSettings{}, ports.ErrInvalidSettings
-		}
-		products := participant.CardProducts{
-			Enabled:    *answer.Products.Enabled,
-			ProductIDs: *answer.Products.ProductIDs,
-		}
-		settings.Products, err = products.Normalize()
-		if err != nil {
-			return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
-		}
-	}
-
-	// Старый сервер ещё может прислать удалённое требование; другие признаки готовности не пересчитываем.
-	if slices.Contains(settings.Card.Missing, "brandColor") {
-		settings.Card.Missing = slices.DeleteFunc(settings.Card.Missing, func(key string) bool {
-			return key == "brandColor"
-		})
-		settings.Card.Ready = len(settings.Card.Missing) == 0
-	}
-
 	if answer.Delivery != nil {
 		if err := answer.Delivery.Validate(); err != nil {
 			return ports.ShopSettings{}, ports.ErrInvalidSettings.Wrap(err)
@@ -233,23 +192,6 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 	}
 
 	return settings, nil
-}
-
-// Старый producer ещё может отправлять background; в домен попадает только выбранный цвет.
-func normalizeSettingsAppearance(value *settingsAppearanceJSON) (participant.CardAppearance, error) {
-	if value == nil {
-		return participant.DefaultCardAppearance(), nil
-	}
-	for _, color := range []string{value.Color, value.Background} {
-		if color == "" {
-			continue
-		}
-		appearance, err := (participant.CardAppearance{Color: color}).Normalize()
-		if err == nil {
-			return appearance, nil
-		}
-	}
-	return participant.CardAppearance{}, participant.ErrInvalidCardAppearance
 }
 
 func (c *Client) call(

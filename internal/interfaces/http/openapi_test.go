@@ -292,34 +292,7 @@ func TestOpenAPIStoreCardsWithoutShowcase(t *testing.T) {
 	}
 }
 
-func TestOpenAPIStoreCardAppearance(t *testing.T) {
-	doc, _ := loadSpec(t)
-	schemas := doc.Components["schemas"]
-	for _, name := range []string{"ShopHeader", "ShopCard"} {
-		schema := schemas[name].(map[string]any)
-		properties := schema["properties"].(map[string]any)
-		if properties["initial"] != nil || properties["color"] != nil ||
-			!slices.Contains(schema["required"].([]any), any("appearance")) {
-			t.Fatal(name, schema)
-		}
-		appearance := properties["appearance"].(map[string]any)
-		if appearance["$ref"] != "#/components/schemas/StoreCardAppearance" {
-			t.Fatal(name, appearance)
-		}
-	}
-	appearance := schemas["StoreCardAppearance"].(map[string]any)
-	properties := appearance["properties"].(map[string]any)
-	if len(properties) != 1 || properties["color"] == nil {
-		t.Fatal("оформление должно содержать только выбранный цвет", appearance)
-	}
-	for _, key := range []string{"color"} {
-		if !slices.Contains(appearance["required"].([]any), any(key)) {
-			t.Fatal(key, appearance)
-		}
-	}
-}
-
-func TestOpenAPIStoreCardProducts(t *testing.T) {
+func TestOpenAPIShopCardProducts(t *testing.T) {
 	doc, _ := loadSpec(t)
 	schemas := doc.Components["schemas"]
 	for _, name := range []string{"ShopCard", "StoreSummary"} {
@@ -330,7 +303,7 @@ func TestOpenAPIStoreCardProducts(t *testing.T) {
 		}
 		products := properties["products"].(map[string]any)
 		if products["maxItems"] != 3 ||
-			products["items"].(map[string]any)["$ref"] != "#/components/schemas/StoreCardProduct" {
+			products["items"].(map[string]any)["$ref"] != "#/components/schemas/ShopCardProduct" {
 			t.Fatal(name, products)
 		}
 	}
@@ -338,7 +311,7 @@ func TestOpenAPIStoreCardProducts(t *testing.T) {
 	if header["properties"].(map[string]any)["products"] != nil {
 		t.Fatal("шапка магазина не содержит товары", header)
 	}
-	product := schemas["StoreCardProduct"].(map[string]any)
+	product := schemas["ShopCardProduct"].(map[string]any)
 	fields := product["properties"].(map[string]any)
 	if len(fields) != 4 || fields["price"] != nil {
 		t.Fatal("публичные элементы карточки не содержат цены", fields)

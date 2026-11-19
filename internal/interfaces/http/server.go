@@ -186,12 +186,6 @@ func routes(deps Deps) []route {
 			machine(participants.storeCard),
 		},
 		{
-			readRequest,
-			http.MethodGet,
-			"/api/v1/internal/tenants/{tenantId}/store-card/products",
-			machine(participants.cardCandidates),
-		},
-		{
 			ingestionRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/settings/sync",

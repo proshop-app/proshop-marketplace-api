@@ -1,10 +1,7 @@
 {
   "profile": {
     "name": "Кандидат",
-    "logo": null,
-    "appearance": {
-      "color": "#125F67"
-    }
+    "logo": null
   },
   "card": {
     "ready": false,

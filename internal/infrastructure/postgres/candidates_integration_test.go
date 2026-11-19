@@ -207,7 +207,7 @@ func TestCandidateMigrationStartsReviewWithoutBackfill(t *testing.T) {
 		}
 		state := p.State()
 		if state.Stage != participant.StageCandidate || !state.AwaitingReview || state.Enabled ||
-			state.LastDecision != nil || state.Version != 9 {
+			state.LastDecision != nil || state.Version != 10 {
 			return fmt.Errorf("%+v", state)
 		}
 		return nil

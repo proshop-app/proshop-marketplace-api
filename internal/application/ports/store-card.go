@@ -16,8 +16,8 @@ type StoreCategory struct {
 	Count int    `json:"count"`
 }
 
-// StoreCardProduct — публичные сведения о выбранном товаре без цены.
-type StoreCardProduct struct {
+// ShopCardProduct — публичные сведения о выбранном товаре без цены.
+type ShopCardProduct struct {
 	ProductID string  `json:"productId"`
 	OfferID   string  `json:"offerId"`
 	Name      string  `json:"name"`
@@ -26,32 +26,30 @@ type StoreCardProduct struct {
 
 // StoreSummary — статистика из проекции, независимая от поискового индекса.
 type StoreSummary struct {
-	CacheSignature   string                   `json:"-"`
-	Products         []StoreCardProduct       `json:"products"`
-	SelectedProducts []StoreCardProduct       `json:"selectedProducts"`
-	VisibleOffers    int                      `json:"-"`
-	CategoryCounts   map[string]StoreCategory `json:"-"`
-	Offers           int                      `json:"offers"`
-	FromPrice        *int64                   `json:"fromPrice"`
-	Categories       []StoreCategory          `json:"categories"`
-	Uncategorized    int                      `json:"uncategorized"`
-	Hidden           []participant.CardHidden `json:"hidden"`
-	Rating           *catalog.Rating          `json:"rating"`
-	Badge            *string                  `json:"badge"`
-	Rank             *int                     `json:"rank"`
+	CacheSignature string                   `json:"-"`
+	Products       []ShopCardProduct        `json:"products"`
+	VisibleOffers  int                      `json:"-"`
+	CategoryCounts map[string]StoreCategory `json:"-"`
+	Offers         int                      `json:"offers"`
+	FromPrice      *int64                   `json:"fromPrice"`
+	Categories     []StoreCategory          `json:"categories"`
+	Uncategorized  int                      `json:"uncategorized"`
+	Hidden         []participant.CardHidden `json:"hidden"`
+	Rating         *catalog.Rating          `json:"rating"`
+	Badge          *string                  `json:"badge"`
+	Rank           *int                     `json:"rank"`
 }
 
 // ShopHeader — публичный профиль после применения постмодерации.
 type ShopHeader struct {
-	Rating     *catalog.Rating            `json:"rating"`
-	TenantID   ids.TenantID               `json:"tenantId"`
-	Slug       string                     `json:"slug"`
-	Name       string                     `json:"name"`
-	Logo       *string                    `json:"logo"`
-	Appearance participant.CardAppearance `json:"appearance"`
-	Offers     int                        `json:"offers"`
-	Categories []StoreCategory            `json:"categories"`
-	IsNew      bool                       `json:"isNew"`
+	Rating     *catalog.Rating `json:"rating"`
+	TenantID   ids.TenantID    `json:"tenantId"`
+	Slug       string          `json:"slug"`
+	Name       string          `json:"name"`
+	Logo       *string         `json:"logo"`
+	Offers     int             `json:"offers"`
+	Categories []StoreCategory `json:"categories"`
+	IsNew      bool            `json:"isNew"`
 }
 
 // ShopCategory — категория отбора или крупнейший корневой узел магазина.
@@ -62,18 +60,17 @@ type ShopCategory struct {
 
 // ShopCard — публичная карточка готового магазина с предложениями.
 type ShopCard struct {
-	Products       []StoreCardProduct         `json:"products"`
-	TenantID       ids.TenantID               `json:"tenantId"`
-	Slug           string                     `json:"slug"`
-	Name           string                     `json:"name"`
-	Logo           *string                    `json:"logo"`
-	Appearance     participant.CardAppearance `json:"appearance"`
-	Category       *ShopCategory              `json:"category"`
-	MoreCategories int                        `json:"moreCategories"`
-	Offers         int                        `json:"offers"`
-	FromPrice      *int64                     `json:"fromPrice"`
-	Rating         *catalog.Rating            `json:"rating"`
-	IsNew          bool                       `json:"isNew"`
+	Products       []ShopCardProduct `json:"products"`
+	TenantID       ids.TenantID      `json:"tenantId"`
+	Slug           string            `json:"slug"`
+	Name           string            `json:"name"`
+	Logo           *string           `json:"logo"`
+	Category       *ShopCategory     `json:"category"`
+	MoreCategories int               `json:"moreCategories"`
+	Offers         int               `json:"offers"`
+	FromPrice      *int64            `json:"fromPrice"`
+	Rating         *catalog.Rating   `json:"rating"`
+	IsNew          bool              `json:"isNew"`
 }
 
 // ShopPage — сохраняет общее число результатов до пагинации.

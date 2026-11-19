@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash"
-	"slices"
 	"sort"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -24,10 +23,8 @@ type storeSummaryBuilder struct {
 	visible         storeTotals
 	candidates      storeTotals
 	best            []storeOffer
-	pinned          map[string]storeOffer
 	paths           map[string][]StoreCategory
 	roots           map[string]StoreCategory
-	settings        participant.CardProducts
 	signature       hash.Hash
 	lastRatingGroup string
 	weighted        float64
@@ -36,7 +33,7 @@ type storeSummaryBuilder struct {
 }
 
 type storeProductSignature struct {
-	Product    ports.StoreCardProduct
+	Product    ports.ShopCardProduct
 	CategoryID string
 }
 
@@ -48,10 +45,8 @@ func summarizeStore(ctx context.Context, tx ports.Tx, p *participant.Participant
 	builder := storeSummaryBuilder{
 		visible:    storeTotals{categories: map[string]StoreCategory{}},
 		candidates: storeTotals{categories: map[string]StoreCategory{}},
-		pinned:     map[string]storeOffer{},
 		paths:      categoryPaths(definition.Categories),
 		roots:      categoryRoots(definition.Categories),
-		settings:   p.State().StoreCard.ProductSettings(),
 		signature:  sha256.New(),
 	}
 	if err := builder.read(ctx, tx, p); err != nil {
@@ -111,10 +106,6 @@ func (b *storeSummaryBuilder) addVisible(item storeOffer) error {
 	b.best = append(b.best, item)
 	sortStoreOffers(b.best)
 	b.best = b.best[:min(len(b.best), storeProductsSize)]
-	id := string(item.product.ProductID)
-	if slices.Contains(b.settings.ProductIDs, id) {
-		b.pinned[id] = item
-	}
 	// Порядок групп и товаров устойчив; потоковый хеш не хранит каталог и не включает цены/ранги.
 	return json.NewEncoder(b.signature).Encode(storeProductSignature{
 		Product:    storeProduct(item),
@@ -140,16 +131,15 @@ func (b *storeSummaryBuilder) summary(p *participant.Participant) (StoreSummary,
 		totals = b.candidates
 	}
 	result := StoreSummary{
-		Offers:           totals.offers,
-		VisibleOffers:    b.visible.offers,
-		FromPrice:        totals.fromPrice,
-		CategoryCounts:   totals.categories,
-		Categories:       []StoreCategory{},
-		Products:         []ports.StoreCardProduct{},
-		SelectedProducts: []ports.StoreCardProduct{},
-		Hidden:           append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
-		Uncategorized:    b.uncategorized,
-		Rating:           catalog.ProductRating(b.weighted/float64(b.ratings), b.ratings),
+		Offers:         totals.offers,
+		VisibleOffers:  b.visible.offers,
+		FromPrice:      totals.fromPrice,
+		CategoryCounts: totals.categories,
+		Categories:     []StoreCategory{},
+		Products:       []ports.ShopCardProduct{},
+		Hidden:         append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
+		Uncategorized:  b.uncategorized,
+		Rating:         catalog.ProductRating(b.weighted/float64(b.ratings), b.ratings),
 	}
 	for id, category := range totals.categories {
 		if b.roots[id].ID == id {
@@ -159,15 +149,6 @@ func (b *storeSummaryBuilder) summary(p *participant.Participant) (StoreSummary,
 	sortStoreCategories(result.Categories)
 	for _, item := range b.best {
 		result.Products = append(result.Products, storeProduct(item))
-	}
-	for _, id := range b.settings.ProductIDs {
-		if item, ok := b.pinned[id]; ok && len(result.SelectedProducts) < storeProductsSize {
-			result.SelectedProducts = append(result.SelectedProducts, storeProduct(item))
-			delete(b.pinned, id)
-		}
-	}
-	if err := json.NewEncoder(b.signature).Encode(b.settings); err != nil {
-		return StoreSummary{}, err
 	}
 	result.CacheSignature = fmt.Sprintf("%x", b.signature.Sum(nil))
 	return result, nil
