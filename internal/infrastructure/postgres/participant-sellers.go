@@ -9,7 +9,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-const selectParticipantSellers = `SELECT p.tenant_id, p.slug, p.name, p.enabled, p.delivery_settings,
+const selectParticipantSellers = `SELECT p.tenant_id, p.slug, p.name, p.stage, p.delivery_settings,
     coalesce(t.status, '') FROM participants p LEFT JOIN tenants t ON t.tenant_id = p.tenant_id
     WHERE p.tenant_id = ANY($1::text[])`
 
@@ -34,7 +34,7 @@ func (r *Participants) Sellers(
 		var state participant.State
 		var status participant.TenantStatus
 		var settings []byte
-		if err := rows.Scan(&tenant, &state.Slug, &state.Name, &state.Enabled, &settings, &status); err != nil {
+		if err := rows.Scan(&tenant, &state.Slug, &state.Name, &state.Stage, &settings, &status); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(settings, &state.Delivery); err != nil {
