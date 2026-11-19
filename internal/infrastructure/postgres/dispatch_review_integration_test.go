@@ -41,7 +41,7 @@ func TestDispatchReviewPersistsGenerationButNotLiveModerationHold(t *testing.T) 
 	group.DispatchReviewRevision = 7
 	group.PaymentHold = checkout.HoldModerationPending
 	group.Quote = &delivery.Quote{Status: delivery.QuoteAvailable, MinDays: 7, MaxDays: 9, ExpiresAt: at(60)}
-	group.Delivery = &checkout.Selection{Carrier: "cdek", PickupPointCode: "P1", City: "Город"}
+	state.Delivery = &checkout.Selection{Carrier: "cdek", PickupPointCode: "P1", City: "Город"}
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		return tx.Checkouts().Add(ctx, checkout.Restore(state))
 	}); err != nil {

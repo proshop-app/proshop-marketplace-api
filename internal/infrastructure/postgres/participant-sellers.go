@@ -2,13 +2,16 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-const selectParticipantSellers = `SELECT tenant_id, slug, name FROM participants WHERE tenant_id = ANY($1::text[])`
+const selectParticipantSellers = `SELECT p.tenant_id, p.slug, p.name, p.enabled, p.delivery_settings,
+    coalesce(t.status, '') FROM participants p LEFT JOIN tenants t ON t.tenant_id = p.tenant_id
+    WHERE p.tenant_id = ANY($1::text[])`
 
 // Sellers возвращает имена всей пачки без загрузки агрегатов.
 func (r *Participants) Sellers(
@@ -28,11 +31,18 @@ func (r *Participants) Sellers(
 	}()
 	for rows.Next() {
 		var tenant ids.TenantID
-		var seller participant.Seller
-		if err := rows.Scan(&tenant, &seller.Slug, &seller.Name); err != nil {
+		var state participant.State
+		var status participant.TenantStatus
+		var settings []byte
+		if err := rows.Scan(&tenant, &state.Slug, &state.Name, &state.Enabled, &settings, &status); err != nil {
 			return nil, err
 		}
-		result[tenant] = &seller
+		if err := json.Unmarshal(settings, &state.Delivery); err != nil {
+			return nil, err
+		}
+		state.TenantID = tenant
+		record := participant.RestoreTenant(participant.TenantState{TenantID: tenant, Status: status})
+		result[tenant] = participant.SellerOf(participant.Restore(state), record)
 	}
 	return result, rows.Err()
 }

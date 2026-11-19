@@ -32,7 +32,7 @@ func (s *Service) reviewDispatch(
 			group = current
 		}
 	}
-	quote := s.quoteGroup(ctx, buyerID, group, *group.Selection(fallback))
+	quote := s.quoteGroup(ctx, buyerID, group, *fallback)
 	after := func(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
 		if err := s.enqueueCancellations(ctx, tx, c); err != nil {
 			return err

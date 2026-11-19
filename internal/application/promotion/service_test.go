@@ -42,7 +42,7 @@ func setup() environment {
 		Name:      "Магазин",
 		Enabled:   true,
 		Stage:     participant.StageConnected,
-		Delivery:  participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Delivery:  participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 
 		Version: 1,
 	})

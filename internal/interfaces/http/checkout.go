@@ -43,7 +43,6 @@ type quoteJSON struct {
 
 type checkoutGroupJSON struct {
 	PaymentHold               string               `json:"paymentHold,omitempty"`
-	Delivery                  *selectionJSON       `json:"delivery"`
 	Regions                   []string             `json:"regions"`
 	Carriers                  []string             `json:"carriers"`
 	CreationStatus            string               `json:"creationStatus,omitempty"`
@@ -92,6 +91,7 @@ type selectionJSON struct {
 
 // checkoutJSON — покупка; суммы — рубли из согласованного снимка.
 type checkoutJSON struct {
+	Carriers             []string            `json:"carriers"`
 	ConfirmationRequired bool                `json:"confirmationRequired"`
 	PaymentStarted       bool                `json:"paymentStarted"`
 	CreationComplete     bool                `json:"creationComplete"`
@@ -117,11 +117,9 @@ type checkoutHandlers struct {
 }
 
 type quoteRequestJSON struct {
-	TenantIDs       []ids.TenantID `json:"tenantIds"`
-	TenantID        string         `json:"tenantId"`
-	City            string         `json:"city"`
-	Carrier         string         `json:"carrier"`
-	PickupPointCode string         `json:"pickupPointCode"`
+	City            string `json:"city"`
+	Carrier         string `json:"carrier"`
+	PickupPointCode string `json:"pickupPointCode"`
 }
 
 type returnLineJSON struct {
@@ -138,11 +136,13 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 		return checkoutJSON{}, err
 	}
 
+	purchase := checkout.Restore(state)
 	out := checkoutJSON{
+		Carriers:             supportedCarrierCodes(),
 		PaymentStarted:       state.PaymentStarted,
-		ConfirmationRequired: checkout.Restore(state).NeedsConfirmation(),
+		ConfirmationRequired: purchase.NeedsConfirmation(),
 		ID:                   string(state.ID),
-		CreationComplete:     checkout.Restore(state).CreationComplete(),
+		CreationComplete:     purchase.CreationComplete(),
 		Status:               string(state.Status),
 		Groups:               make([]checkoutGroupJSON, 0, len(state.Groups)),
 		GoodsTotal:           rubles(state.GoodsTotal.Kopecks()),
@@ -170,7 +170,7 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 	}
 
 	for _, group := range state.Groups {
-		g, err := checkoutGroupResponse(group, state.Delivery)
+		g, err := checkoutGroupResponse(group)
 		if err != nil {
 			return checkoutJSON{}, err
 		}
@@ -277,33 +277,14 @@ func (h *checkoutHandlers) quote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	var state checkout.State
-	if len(body.TenantIDs) > 0 && body.TenantID != "" {
-		writeError(w, r, ErrInvalidQuery)
-		return
-	}
-	if len(body.TenantIDs) > 0 {
-		state, err = h.checkouts.QuoteGroups(
-			r.Context(),
-			BuyerID(r.Context()),
-			checkoutID,
-			body.TenantIDs,
-			carrier,
-			body.PickupPointCode,
-			body.City,
-		)
-	} else {
-		state, err = h.checkouts.QuoteGroup(
-			r.Context(),
-			BuyerID(r.Context()),
-			checkoutID,
-			ids.TenantID(body.TenantID),
-			carrier,
-			body.PickupPointCode,
-			body.City,
-		)
-	}
-
+	state, err := h.checkouts.Quote(
+		r.Context(),
+		BuyerID(r.Context()),
+		checkoutID,
+		carrier,
+		body.PickupPointCode,
+		body.City,
+	)
 	h.respond(w, r, http.StatusOK, state, err)
 }
 
@@ -364,25 +345,11 @@ func creationStatus(result checkout.CreationResult) string {
 	}
 }
 
-func selectionResponse(d *checkout.Selection) *selectionJSON {
-	if d == nil {
-		return nil
-	}
-	return &selectionJSON{
-		Carrier:         string(d.Carrier),
-		PickupPointCode: d.PickupPointCode,
-		RegionCode:      d.RegionCode,
-		City:            d.City,
-		Address:         d.Address,
-	}
-}
-
-func checkoutGroupResponse(group checkout.Group, fallback *checkout.Selection) (checkoutGroupJSON, error) {
+func checkoutGroupResponse(group checkout.Group) (checkoutGroupJSON, error) {
 	g := checkoutGroupJSON{
 		TenantID:                  string(group.TenantID),
 		Carriers:                  append([]string{}, group.Carriers...),
 		Regions:                   append([]string{}, group.Regions...),
-		Delivery:                  selectionResponse(group.Selection(fallback)),
 		ReconciliationRequired:    group.ReconciliationRequired,
 		CreationStatus:            creationStatus(group.CreationResult()),
 		ExternalCheckoutID:        group.ExternalCheckoutID,
@@ -501,4 +468,12 @@ func checkoutLinesResponse(source []checkout.Line) ([]checkoutLineJSON, money.Mo
 	}
 
 	return lines, total, nil
+}
+
+func supportedCarrierCodes() []string {
+	result := []string{}
+	for _, carrier := range delivery.Carriers() {
+		result = append(result, string(carrier.Code))
+	}
+	return result
 }

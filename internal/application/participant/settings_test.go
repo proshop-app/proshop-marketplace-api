@@ -14,7 +14,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 )
 
-var w3SettingsDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
+var w3SettingsDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}}
 
 func TestSettingsSyncUsesReadClassEvenFromCheckoutContext(t *testing.T) {
 	platform := fake.NewPlatform()
@@ -138,7 +138,7 @@ func TestInvalidParticipationSettingsHideSeller(t *testing.T) {
 	platform := fake.NewPlatform()
 	platform.SetSettings("t1", ports.ShopSettings{
 
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	syncer := appparticipant.NewSettings(store, platform, clock, &fake.IDs{})
 	if _, err := syncer.SyncOne(ctx, "t1"); err != nil {

@@ -52,7 +52,7 @@ func TestColdPickupCatalogueCarriesDeadlineAcrossBothProviderStagesAndWarmsCache
 		TenantID: "t1",
 		Stage:    participant.StageConnected,
 		Enabled:  true,
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	guard := platformguard.New(
 		client,

@@ -60,7 +60,7 @@ type response struct {
 	body   map[string]any
 }
 
-var w3ServerDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
+var w3ServerDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}}
 
 func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 	t.Helper()

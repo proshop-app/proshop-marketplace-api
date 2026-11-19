@@ -36,7 +36,7 @@ func setup() environment {
 	store := fake.NewStore()
 	clock := fake.NewClock(time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC))
 	store.SeedParticipant(participant.State{
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 
 		TenantID: "t1",
 		Slug:     "t1",

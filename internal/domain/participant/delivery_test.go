@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 )
 
@@ -48,5 +49,26 @@ func TestDeliveryCloneNormalizesEmptyArraysAndCopiesContents(t *testing.T) {
 	cloned.Carriers[0] = "yandex"
 	if original.Regions[0] != "RU-MOW" || original.Carriers[0] != "cdek" {
 		t.Fatal("клон изменил исходные массивы", original)
+	}
+}
+
+func TestParticipationRequiresEveryMarketplaceCarrier(t *testing.T) {
+	for _, carriers := range [][]string{{"cdek"}, {"yandex"}, {"cdek", "cdek"}, {"cdek", "other"}} {
+		settings := participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: carriers}
+		if settings.Validate() == nil || settings.Allows("cdek", "RU-MOW") || settings.Allows("yandex", "RU-MOW") {
+			t.Fatal("неполный набор служб не разрешает участие", carriers)
+		}
+	}
+	settings := participant.DeliverySettings{Regions: []string{"RU-MOW"}}
+	for _, carrier := range delivery.Carriers() {
+		settings.Carriers = append(settings.Carriers, string(carrier.Code))
+	}
+	if err := settings.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, carrier := range delivery.Carriers() {
+		if !settings.Allows(string(carrier.Code), "RU-MOW") {
+			t.Fatal("каждая обязательная служба доступна", carrier.Code)
+		}
 	}
 }

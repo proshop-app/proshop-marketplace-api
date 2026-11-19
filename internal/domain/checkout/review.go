@@ -37,6 +37,7 @@ func (c *Checkout) ReviewGroups(reasons map[ids.TenantID]string, now time.Time) 
 		g.Reason, g.LastErrorCode = reason, reason
 		if c.state.CartConsumed {
 			g.ReconciliationRequired = g.OrderID != "" || g.CreateToken != "" || g.CreateFailures > 0
+			g.Quote = nil
 			g.Abandoned, g.CreateExhausted = true, true
 			g.Status = GroupDeliveryUnavailable
 		}

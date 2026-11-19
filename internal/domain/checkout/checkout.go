@@ -55,7 +55,6 @@ type Group struct {
 	DispatchReviewRevision int
 	// PaymentHold — текущая причина приостановки; вычисляется при чтении, не сохраняет решение модерации.
 	PaymentHold string `json:"-"`
-	Delivery    *Selection
 	Carriers    []string
 	Regions     []string
 	// CreationDeadline фиксирует обещанный срок и не продлевается повтором команды.
@@ -251,27 +250,31 @@ func (c *Checkout) SelectDelivery(selection Selection, quotes map[ids.TenantID]d
 	if c.state.Status != StatusDraft {
 		return ErrNotDraft
 	}
-	if len(quotes) != len(c.state.Groups) {
-		return ErrInvalidQuotes
-	}
-
 	for _, group := range c.state.Groups {
-		if group.Status != "" || group.Abandoned {
-			return ErrTransition
+		if !group.Excluded() && (group.Status != "" || group.CreateToken != "" || group.OrderID != "") &&
+			(c.state.Delivery == nil || *c.state.Delivery != selection) {
+			return ErrSnapshotChanged
+		}
+		if _, ok := quotes[group.TenantID]; !ok && !group.Excluded() {
+			return ErrInvalidQuotes
 		}
 	}
 	for i := range c.state.Groups {
-		quote, ok := quotes[c.state.Groups[i].TenantID]
-		if !ok {
-			return ErrInvalidQuotes
+		group := &c.state.Groups[i]
+		if group.Abandoned || group.OrderID != "" {
+			continue
 		}
-
-		c.state.Groups[i].Quote = &quote
-		c.state.Groups[i].Delivery = &selection
+		if quote, ok := quotes[group.TenantID]; ok {
+			if group.Status == GroupDeliveryRequoted {
+				if err := c.ApplyDispatchQuote(group.TenantID, quote, now); err != nil {
+					return err
+				}
+			} else {
+				group.Quote = &quote
+			}
+		}
 	}
-
 	c.state.Delivery = &selection
-
 	return c.touch(now)
 }
 

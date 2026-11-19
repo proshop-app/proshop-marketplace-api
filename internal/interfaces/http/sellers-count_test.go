@@ -26,7 +26,7 @@ func sellersHandler(t *testing.T, key string) (catalogHandlers, *fake.SellersCou
 		TenantID: "t1",
 		Stage:    participant.StageConnected,
 		Enabled:  true,
-		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}},
+		Delivery: participant.DeliverySettings{Carriers: []string{"cdek", "yandex"}, Regions: []string{"RU-MOW"}},
 	}
 	tenant := participant.TenantState{TenantID: "t1", Status: participant.TenantActive}
 	product := catalog.ProductState{

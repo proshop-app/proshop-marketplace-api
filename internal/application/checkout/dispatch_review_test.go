@@ -92,10 +92,10 @@ func TestFailedDispatchRecalculationCanBeRetriedOnlyWithSamePickup(t *testing.T)
 	e.platform.CallHook = nil
 	e.platform.Fail("t1", nil)
 	e.platform.FailCreate("t1", nil)
-	if _, err := e.service.QuoteGroup(ctx, buyerID, purchase.ID, "t1", "cdek", "OTHER", "Город"); err == nil {
+	if _, err := e.service.Quote(ctx, buyerID, purchase.ID, "cdek", "OTHER", "Город"); err == nil {
 		t.Fatal("нельзя изменить подтверждённый ПВЗ")
 	}
-	state, err := e.service.QuoteGroup(ctx, buyerID, purchase.ID, "t1", "cdek", "MSK1", "Город")
+	state, err := e.service.Quote(ctx, buyerID, purchase.ID, "cdek", "MSK1", "Город")
 	if err != nil || state.Status != checkout.StatusDraft || state.Groups[0].Quote.Status != delivery.QuoteAvailable {
 		t.Fatal(state, err)
 	}

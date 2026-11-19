@@ -438,6 +438,6 @@ func seedReadyPaymentSeller(store *fake.Store, tenant ids.TenantID) {
 	store.SeedParticipant(participant.State{
 		TenantID: tenant,
 		Stage:    participant.StageConnected,
-		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}},
+		Delivery: participant.DeliverySettings{Carriers: []string{"cdek", "yandex"}, Regions: []string{"RU-MOW"}},
 	})
 }

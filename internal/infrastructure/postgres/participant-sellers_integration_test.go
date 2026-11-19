@@ -53,7 +53,8 @@ func TestParticipantSellersBatch(t *testing.T) {
 			if len(sellers) != expected || sellers["missing"] != nil || sellers["t1"] == nil {
 				t.Fatalf("продавцы: %+v", sellers)
 			}
-			if *sellers["t1"] != (participant.Seller{Slug: "shop-t1", Name: "Магазин t1"}) {
+			want := participant.Seller{Slug: "shop-t1", Name: "Магазин t1", UnavailableReason: "delivery_unavailable"}
+			if *sellers["t1"] != want {
 				t.Fatal(sellers["t1"])
 			}
 			empty, err := tx.Participants().Sellers(ctx, nil)

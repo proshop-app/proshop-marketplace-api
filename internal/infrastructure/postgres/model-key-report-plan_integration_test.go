@@ -16,7 +16,7 @@ import (
 
 const (
 	reportPlanParticipants = `UPDATE participants SET delivery_valid = true,
- delivery_settings = '{"regions":["RU-MOW"],"carriers":["cdek"]}'`
+ delivery_settings = '{"regions":["RU-MOW"],"carriers":["cdek","yandex"]}'`
 	reportPlanProducts = `INSERT INTO catalog_products
  (tenant_id, product_id, revision, deleted, card, price, available, projected_at,
  version, updated_at, price_profiles)

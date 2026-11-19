@@ -41,7 +41,7 @@ type env struct {
 	service  *appcheckout.Service
 }
 
-var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
+var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}}
 
 func setup(t *testing.T) *env {
 	t.Helper()
@@ -227,7 +227,7 @@ func TestCreateIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestCreateRefusesUnpayableSeller(t *testing.T) {
+func TestCreateSkipsHiddenSeller(t *testing.T) {
 	e := setup(t)
 
 	_ = e.index.Put(context.Background(), []ports.OfferDocument{
@@ -255,8 +255,9 @@ func TestCreateRefusesUnpayableSeller(t *testing.T) {
 	p, _ := e.store.Participant("t2")
 	p.Stage = participant.StageDisconnected
 	e.store.SeedParticipant(p)
-	if _, err := e.service.Create(context.Background(), buyerID, key); !errors.Is(err, checkout.ErrOfferUnavailable) {
-		t.Fatalf("готовность продавца обязательна: %v", err)
+	state, err := e.service.Create(context.Background(), buyerID, key)
+	if err != nil || len(state.Groups) != 1 || state.Groups[0].TenantID != "t1" {
+		t.Fatalf("скрытый продавец не попадает в покупку: %+v %v", state, err)
 	}
 }
 

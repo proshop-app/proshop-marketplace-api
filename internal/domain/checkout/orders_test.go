@@ -37,10 +37,12 @@ func attach(t *testing.T, c *checkout.Checkout, index int) checkout.SellerOrder 
 		t.Fatal(err)
 	}
 	order := checkout.SellerOrder{
-		OrderID:   string(g.TenantID) + "-order",
-		ExpiresAt: t0.Add(time.Hour),
-		Total:     total,
-		Status:    checkout.GroupAwaitingPayment,
+		Carrier:         c.Delivery().Carrier,
+		PickupPointCode: c.Delivery().PickupPointCode,
+		OrderID:         string(g.TenantID) + "-order",
+		ExpiresAt:       t0.Add(time.Hour),
+		Total:           total,
+		Status:          checkout.GroupAwaitingPayment,
 	}
 	if _, err := c.AttachOrder(g.TenantID, order, t0); err != nil {
 		t.Fatal(err)
@@ -138,9 +140,9 @@ func TestAllCancelledAndSnapshotIsolation(t *testing.T) {
 	}
 	copy := c.State()
 	copy.Groups[0].Lines[0].Quantity = 99
-	copy.Groups[0].Quote.Reason = "изменён"
+	copy.Groups[0].Reason = "изменён"
 	copy.Delivery.City = "изменён"
-	if c.Groups()[0].Lines[0].Quantity == 99 || c.Groups()[0].Quote.Reason != "" || c.Delivery().City == "изменён" {
+	if c.Groups()[0].Lines[0].Quantity == 99 || c.Groups()[0].Reason == "изменён" || c.Delivery().City == "изменён" {
 		t.Fatal("снимок не должен менять агрегат")
 	}
 }

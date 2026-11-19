@@ -35,7 +35,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		Name:     "Магазин",
 		Stage:    participant.StageConnected,
 		Version:  1,
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 
 		StoreCard: participant.StoreCard{
 			Readiness: participant.CardReadiness{Ready: true},

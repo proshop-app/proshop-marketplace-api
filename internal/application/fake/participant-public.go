@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -72,13 +73,18 @@ func (r participants) PickupSources(
 	after ids.TenantID,
 	limit int,
 ) ([]ids.TenantID, error) {
+	if !slices.ContainsFunc(delivery.Carriers(), func(item delivery.CarrierInfo) bool {
+		return string(item.Code) == carrier
+	}) {
+		return nil, delivery.ErrInvalidCarrier
+	}
 	keys, err := r.PublicTenants(ctx, nil, after, len(r.d.participants))
 	if err != nil {
 		return nil, err
 	}
 	result := []ids.TenantID{}
 	for _, key := range keys {
-		if slices.Contains(r.d.participants[key].Delivery.Carriers, carrier) {
+		if r.d.participants[key].Enabled {
 			result = append(result, key)
 			if len(result) == limit {
 				break

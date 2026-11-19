@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/ipapi"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	goredis "github.com/redis/go-redis/v9"
@@ -54,6 +56,7 @@ const referenceStatsInterval = time.Minute
 
 // services — сценарии приложения процесса.
 type services struct {
+	cities        *appbuyer.Cities
 	statuses      *moderationstatus.Service
 	contextCache  *redis.PriceContexts
 	priceContexts *pricecontexts.Service
@@ -380,6 +383,11 @@ func (s *server) services(ctx context.Context) (services, error) {
 		Metrics:         telemetry.NewPromotion(s.metrics),
 	})
 	return services{
+		cities: appbuyer.NewCities(
+			redis.NewCityDetector(s.cache, ipapi.New(ipapi.Endpoint), keyPrefix),
+			upstream,
+			redis.NewLimiter(s.cache, keyPrefix),
+		),
 		contextCache:  sharedContexts,
 		priceContexts: contexts,
 		buyerFeatures: appbuyer.NewFeatures(
@@ -579,6 +587,7 @@ func (s *server) httpServer() *http.Server {
 		ReferenceImportTimeout: cfg.HTTP.ReferenceImportTimeout,
 		Statuses:               s.app.statuses,
 		Features:               s.app.buyerFeatures,
+		Cities:                 s.app.cities,
 
 		Promotion:      s.app.promotion,
 		ServerAPIToken: cfg.Promotion.ServerAPIToken,

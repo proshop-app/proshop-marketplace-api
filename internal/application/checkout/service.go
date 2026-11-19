@@ -83,6 +83,7 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 
 	var lines []checkout.Line
 	codes := make(map[ids.TenantID]string)
+	issues := make(map[ids.OfferID]cart.Issue)
 
 	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Carts().ByBuyer(ctx, buyerID)
@@ -102,11 +103,7 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 			}
 		}
 		for _, line := range c.Lines() {
-			if line.Issue == cart.IssueUnavailable || line.Issue == cart.IssueNotEnoughStock {
-				message := "в корзине есть недоступные позиции: " + line.Offer.String()
-
-				return checkout.ErrOfferUnavailable.WithMessage(message)
-			}
+			issues[line.Offer] = line.Issue
 
 			lines = append(
 				lines,
@@ -132,6 +129,24 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 	}
 
 	settings, err := s.deliverySettings(ctx, created.Groups())
+	if err != nil {
+		return checkout.State{}, err
+	}
+	eligible := make([]checkout.Line, 0, len(lines))
+	for _, line := range lines {
+		setting, found := settings[line.Offer.Tenant]
+		if !found || !participant.Restore(setting).DeliveryValid() || !setting.Enabled {
+			continue
+		}
+		if issues[line.Offer] == cart.IssueUnavailable || issues[line.Offer] == cart.IssueNotEnoughStock {
+			return checkout.State{}, checkout.ErrOfferUnavailable
+		}
+		eligible = append(eligible, line)
+	}
+	if len(eligible) == 0 {
+		return checkout.State{}, checkout.ErrOfferUnavailable
+	}
+	created, err = checkout.New(created.ID(), buyerID, key, eligible, s.clock.Now())
 	if err != nil {
 		return checkout.State{}, err
 	}
@@ -198,49 +213,16 @@ func (s *Service) Quote(
 	carrier delivery.Carrier,
 	pointCode, city string,
 ) (checkout.State, error) {
-	return s.selectDelivery(ctx, buyerID, checkoutID, nil, carrier, pointCode, city)
-}
-
-// QuoteGroup выбирает ПВЗ одного магазина, не меняя снимки остальных.
-func (s *Service) QuoteGroup(
-	ctx context.Context,
-	buyerID, checkoutID ids.UUID,
-	tenant ids.TenantID,
-	carrier delivery.Carrier,
-	pointCode, city string,
-) (checkout.State, error) {
-	if tenant == "" {
-		return s.selectDelivery(ctx, buyerID, checkoutID, nil, carrier, pointCode, city)
-	}
-	return s.selectDelivery(ctx, buyerID, checkoutID, []ids.TenantID{tenant}, carrier, pointCode, city)
-}
-
-// QuoteGroups рассчитывает общий ПВЗ выбранных магазинов параллельно.
-func (s *Service) QuoteGroups(
-	ctx context.Context,
-	buyerID, checkoutID ids.UUID,
-	tenants []ids.TenantID,
-	carrier delivery.Carrier,
-	pointCode, city string,
-) (checkout.State, error) {
-	if len(tenants) == 0 {
-		return checkout.State{}, checkout.ErrNotFound
-	}
-	return s.selectDelivery(ctx, buyerID, checkoutID, tenants, carrier, pointCode, city)
+	return s.selectDelivery(ctx, buyerID, checkoutID, carrier, pointCode, city)
 }
 
 func (s *Service) selectDelivery(
 	ctx context.Context,
 	buyerID, checkoutID ids.UUID,
-	targets []ids.TenantID,
 	carrier delivery.Carrier,
 	pointCode, city string,
 ) (checkout.State, error) {
 	if _, err := delivery.NormalizeCity(city); err != nil {
-		return checkout.State{}, err
-	}
-	unique, err := selectedTenants(targets)
-	if err != nil {
 		return checkout.State{}, err
 	}
 	c, err := s.load(ctx, buyerID, checkoutID)
@@ -251,7 +233,7 @@ func (s *Service) selectDelivery(
 		return checkout.State{}, checkout.ErrNotDraft
 	}
 
-	groups, err := selectionGroups(c, unique, carrier, pointCode, city)
+	groups, err := selectionGroups(c, carrier, pointCode, city)
 	if err != nil {
 		return c.State(), err
 	}
@@ -271,15 +253,6 @@ func (s *Service) selectDelivery(
 	quotes := s.quote(ctx, buyerID, groups, selection)
 
 	choose := func(c *checkout.Checkout, now time.Time) error {
-		if len(groups) == 1 && groups[0].Status == checkout.GroupDeliveryRequoted {
-			if selected := groups[0].Selection(c.Delivery()); selected == nil || *selected != selection {
-				return checkout.ErrSnapshotChanged
-			}
-			return c.ApplyDispatchQuote(groups[0].TenantID, quotes[groups[0].TenantID], now)
-		}
-		if targets != nil {
-			return c.SelectDeliveries(selection, quotes, now)
-		}
 		return c.SelectDelivery(selection, quotes, now)
 	}
 	return s.retrySelection(ctx, buyerID, checkoutID, s.saveSelectedDelivery, choose)
@@ -499,11 +472,10 @@ func (s *Service) quoteGroup(
 	group checkout.Group,
 	selection checkout.Selection,
 ) delivery.Quote {
-	if group.Carriers != nil && (!slices.Contains(group.Carriers, string(selection.Carrier)) ||
-		!slices.Contains(group.Regions, selection.RegionCode)) {
+	if group.Carriers != nil && !slices.Contains(group.Regions, selection.RegionCode) {
 		return delivery.Quote{
 			Status:    delivery.QuoteUnavailable,
-			Reason:    delivery.ReasonPickupPointUnavailable,
+			Reason:    delivery.ReasonRegionNotAllowed,
 			ExpiresAt: s.clock.Now().Add(s.config.QuoteTTL),
 		}
 	}
@@ -831,32 +803,20 @@ func (s *Service) observeTransitions(tx ports.Tx, before, after checkout.State) 
 }
 
 func selectionGroups(
-	c *checkout.Checkout, unique map[ids.TenantID]bool, carrier delivery.Carrier, pointCode, city string,
+	c *checkout.Checkout, carrier delivery.Carrier, pointCode, city string,
 ) ([]checkout.Group, error) {
-
-	groups := c.Groups()
-	if unique != nil {
-		groups = nil
-		for _, group := range c.Groups() {
-			if unique[group.TenantID] {
-				groups = append(groups, group)
-			}
+	selected := c.Delivery()
+	for _, group := range c.Groups() {
+		uncreated := group.Status == "" || group.Status == checkout.GroupDeliveryRequoted || group.Excluded()
+		if group.OrderID == "" && uncreated {
+			continue
 		}
-		if len(groups) != len(unique) {
-			return nil, checkout.ErrNotFound
+		if selected == nil || selected.Carrier != carrier || selected.PickupPointCode != pointCode ||
+			!strings.EqualFold(selected.City, strings.TrimSpace(city)) {
+			return nil, checkout.ErrSnapshotChanged
 		}
 	}
-
-	for _, g := range groups {
-		if g.Status != "" {
-			selected := g.Selection(c.Delivery())
-			if g.Status != checkout.GroupDeliveryRequoted || selected == nil || selected.Carrier != carrier ||
-				selected.PickupPointCode != pointCode || !strings.EqualFold(selected.City, strings.TrimSpace(city)) {
-				return nil, checkout.ErrSnapshotChanged
-			}
-		}
-	}
-	return groups, nil
+	return c.Groups(), nil
 }
 
 func (s *Service) saveSelectedDelivery(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
@@ -867,19 +827,4 @@ func (s *Service) saveSelectedDelivery(ctx context.Context, tx ports.Tx, c *chec
 		return err
 	}
 	return s.returnItems(ctx, tx, c)
-}
-
-func selectedTenants(targets []ids.TenantID) (map[ids.TenantID]bool, error) {
-	if targets == nil {
-		return nil, nil
-	}
-	unique := make(map[ids.TenantID]bool, len(targets))
-	for _, tenant := range targets {
-		if unique[tenant] {
-			return nil, checkout.ErrInvalidGroups
-		}
-		unique[tenant] = true
-	}
-
-	return unique, nil
 }

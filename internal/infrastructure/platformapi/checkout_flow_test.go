@@ -138,9 +138,11 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 				s.mu.Unlock()
 			}
 			result = map[string]any{
-				"orderId":   order.OrderID,
-				"expiresAt": order.ExpiresAt,
-				"total":     order.Total,
+				"orderId":         order.OrderID,
+				"carrier":         order.Carrier,
+				"pickupPointCode": order.PickupPointCode,
+				"expiresAt":       order.ExpiresAt,
+				"total":           order.Total,
 			}
 		}
 	default:
@@ -196,8 +198,8 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 				)
 				index := fake.NewIndex()
 				basket := cart.New("00000000-0000-4000-8000-000000000003", buyer, now, time.Hour)
-				carriers := map[ids.TenantID]string{"t1": "cdek", "t2": "yandex"}
-				for tenant, carrier := range carriers {
+				carriers := map[ids.TenantID]string{"t1": "cdek", "t2": "cdek"}
+				for tenant := range carriers {
 					store.SeedReadyOffer(ids.OfferID{Tenant: tenant, Product: "p1"}, money.FromKopecks(199000))
 					store.SeedTenant(
 						participant.TenantState{
@@ -211,7 +213,7 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 							Enabled:  true,
 							Stage:    participant.StageConnected,
 							Delivery: participant.DeliverySettings{
-								Carriers: []string{carrier},
+								Carriers: []string{"cdek", "yandex"},
 								Regions:  []string{"RU-AD"},
 							},
 						},
@@ -270,7 +272,7 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for tenant, carrier := range carriers {
+				for _, carrier := range []string{"cdek"} {
 					page, err := directory.QueryFor(
 						ctx,
 						delivery.Carrier(carrier),
@@ -284,11 +286,10 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 					if err != nil || len(points) != 1 {
 						t.Fatal(points, err)
 					}
-					state, err = service.QuoteGroup(
+					state, err = service.Quote(
 						ctx,
 						buyer,
 						state.ID,
-						tenant,
 						delivery.Carrier(carrier),
 						"p1",
 						"Город & район",
@@ -303,7 +304,7 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 				}
 				for _, group := range state.Groups {
 					if group.Quote.Cost != upstream.quote.Cost ||
-						group.Delivery.Carrier != delivery.Carrier(carriers[group.TenantID]) {
+						state.Delivery.Carrier != delivery.Carrier(carriers[group.TenantID]) {
 						t.Fatal(group)
 					}
 				}

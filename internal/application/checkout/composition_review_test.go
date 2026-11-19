@@ -154,7 +154,7 @@ func TestTotalExcludesUnavailableGroups(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.QuoteGroup(ctx, buyerID, state.ID, "t2", "cdek", "MSK1", "Город"); err != nil {
+	if _, err := e.service.Quote(ctx, buyerID, state.ID, "cdek", "MSK1", "Город"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.service.Confirm(ctx, buyerID, state.ID); err != nil {
@@ -192,7 +192,7 @@ func TestExcludedGroupRemainsInCart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.QuoteGroup(ctx, buyerID, state.ID, "t2", "cdek", "MSK1", "Город"); err != nil {
+	if _, err := e.service.Quote(ctx, buyerID, state.ID, "cdek", "MSK1", "Город"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.service.Confirm(ctx, buyerID, state.ID); err != nil {

@@ -25,7 +25,10 @@ const (
 	buyerB ids.UUID = "7a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b"
 )
 
-var w3Week2IntegrationDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
+var w3Week2IntegrationDelivery = participant.DeliverySettings{
+	Regions:  []string{"RU-MOW"},
+	Carriers: []string{"cdek", "yandex"},
+}
 
 func do(t *testing.T, uow *postgres.UnitOfWork, fn func(ctx context.Context, tx ports.Tx) error) error {
 	t.Helper()

@@ -24,7 +24,7 @@ func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 	e.store.SeedParticipant(participant.State{
 		TenantID: "t1",
 		Stage:    participant.StageConnected,
-		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}}})
+		Delivery: participant.DeliverySettings{Carriers: []string{"cdek", "yandex"}, Regions: []string{"RU-MOW"}}})
 	c, err := checkout.New(
 		id,
 		owner,
@@ -60,7 +60,7 @@ func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 	}
 	e.platform.SetSettings("t1", ports.ShopSettings{
 
-		Delivery: participant.DeliverySettings{Carriers: []string{"cdek"}, Regions: []string{"RU-MOW"}},
+		Delivery: participant.DeliverySettings{Carriers: []string{"cdek", "yandex"}, Regions: []string{"RU-MOW"}},
 	})
 	e.platform.SetQuote("t1", delivery.Offered{Available: true})
 	if err := c.Confirm(t0); err != nil {
@@ -179,7 +179,7 @@ func TestCatalogShowsDeliveryUnavailableOutsideSellerRegions(t *testing.T) {
 		Name:     "Магазин",
 		Enabled:  true,
 		Version:  1,
-		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}},
+		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}},
 	})
 	e.seedOffer(t, "t1", "p1", 10000)
 	for _, selected := range []struct {

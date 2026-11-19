@@ -1,6 +1,9 @@
 package participant
 
 import (
+	"slices"
+
+	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/regions"
 )
@@ -20,11 +23,11 @@ type DeliverySettings struct {
 
 // Validate проверяет форму списка зон и способов доставки.
 func (d DeliverySettings) Validate() error {
-	if len(d.Regions) == 0 || len(d.Carriers) == 0 {
+	if len(d.Regions) == 0 || len(d.Carriers) != len(delivery.Carriers()) {
 		return ErrInvalidDeliverySettings
 	}
-	for _, carrier := range d.Carriers {
-		if carrier != "cdek" && carrier != "yandex" {
+	for _, carrier := range delivery.Carriers() {
+		if !slices.Contains(d.Carriers, string(carrier.Code)) {
 			return ErrInvalidDeliverySettings
 		}
 	}
@@ -38,8 +41,8 @@ func (d DeliverySettings) Validate() error {
 
 // Allows запрещает доставку вне зон или без известного кода региона ПВЗ.
 func (d DeliverySettings) Allows(carrier, region string) bool {
-	return (carrier == "cdek" || carrier == "yandex") &&
-		contains(d.Carriers, carrier) && regions.ValidRU(region) && contains(d.Regions, region)
+	return d.Validate() == nil && contains(d.Carriers, carrier) &&
+		regions.ValidRU(region) && contains(d.Regions, region)
 }
 
 // Clone отделяет списки настроек от изменяемого снимка вызывающего.

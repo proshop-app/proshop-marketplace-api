@@ -77,6 +77,57 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
+  /api/v1/city:
+    get:
+      tags: [buyer]
+      operationId: detectCity
+      summary: Город по IP после гидрации, источник витрины магазина
+      responses:
+        "200":
+          description: Подсказка; Cache-Control private, no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [city, country]
+                properties:
+                  city: { type: string }
+                  country: { type: string }
+        "429": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/delivery/cities:
+    get:
+      tags: [buyer]
+      operationId: suggestCities
+      summary: Справочник городов назначения через сервер платформы
+      parameters:
+        - name: value
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 120 }
+      responses:
+        "200":
+          description: Подсказки городов
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [city, label]
+                      properties:
+                        city: { type: string }
+                        label: { type: string }
+                        region: { type: string }
+                        fiasId: { type: string }
+                        kladrId: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/region:
     get:
       tags: [buyer]
@@ -2872,14 +2923,6 @@ paths:
                 carrier: { type: string }
                 pickupPointCode: { type: string }
                 city: { type: string, minLength: 1, maxLength: 120 }
-                tenantId:
-                  type: string
-                tenantIds:
-                  type: array
-                  minItems: 1
-                  uniqueItems: true
-                  items:
-                    type: string
       responses:
         "200": { $ref: "#/components/responses/Checkout" }
         "400": { $ref: "#/components/responses/Error" }
@@ -4996,11 +5039,6 @@ paths:
             type: string
             minLength: 1
             maxLength: 120
-        - name: tenantId
-          in: query
-          schema:
-            type: string
-          description: Ограничить службами и регионами одной группы покупки
         - name: bbox
           in: query
           description: Юг,запад,север,восток WGS84 через запятую. При наличии limit=500, offset=0.
@@ -7610,6 +7648,9 @@ components:
       type: [object, "null"]
       required: [slug, name]
       properties:
+        unavailableReason:
+          type: string
+          enum: [delivery_unavailable, seller_unavailable]
         slug: { type: string }
         name: { type: string }
     CartLine:
@@ -7843,6 +7884,7 @@ components:
           enum:
             - carrier_not_connected
             - pickup_point_unavailable
+            - region_not_allowed
             - no_rate
             - seller_unreachable
             - seller_not_ready
@@ -7851,6 +7893,8 @@ components:
             carrier_not_connected — у продавца нет этого перевозчика;
 
             pickup_point_unavailable — перевозчик не везёт в этот пункт;
+
+            region_not_allowed — регион пункта вне области магазина;
 
             no_rate — тариф не рассчитан (вес, габариты, зона);
 
@@ -8099,10 +8143,6 @@ components:
             enum:
               - cdek
               - yandex
-        delivery:
-          nullable: true
-          allOf:
-            - $ref: '#/components/schemas/Selection'
     Selection:
       type: object
       required:
@@ -8121,6 +8161,7 @@ components:
     Checkout:
       type: object
       required:
+      - carriers
       - paymentStarted
       - confirmationRequired
       - creationComplete
@@ -8140,6 +8181,10 @@ components:
       - discount
       - paidTotal
       properties:
+        carriers:
+          type: array
+          items: { type: string }
+          description: Общие для всех оставшихся магазинов службы; порядок справочника API.
         confirmationRequired:
           type: boolean
           description: Новый состав требует подтверждения, включая покупку с уже оплаченными группами.
@@ -9144,6 +9189,7 @@ components:
           enum:
           - carrier_not_connected
           - pickup_point_unavailable
+          - region_not_allowed
           - no_rate
           - seller_unreachable
           - seller_not_ready
@@ -9152,6 +9198,8 @@ components:
             carrier_not_connected — у продавца нет этого перевозчика;
 
             pickup_point_unavailable — перевозчик не везёт в этот пункт;
+
+            region_not_allowed — регион пункта вне области магазина;
 
             no_rate — тариф не рассчитан (вес, габариты, зона);
 

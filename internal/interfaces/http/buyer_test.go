@@ -20,7 +20,7 @@ import (
 )
 
 // session — запрос с кукой сессии покупателя.
-var w3BuyerDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek"}}
+var w3BuyerDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}}
 
 func (e *env) session(t *testing.T, method, path, body, cookie string, headers ...string) response {
 	t.Helper()

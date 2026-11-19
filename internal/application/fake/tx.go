@@ -444,7 +444,8 @@ func (r participants) Sellers(_ context.Context, tenants []ids.TenantID) (map[id
 	result := make(map[ids.TenantID]*participant.Seller)
 	for _, tenant := range tenants {
 		if p, ok := r.d.participants[tenant]; ok {
-			result[tenant] = &participant.Seller{Slug: p.Slug, Name: p.Name}
+			record := participant.RestoreTenant(r.d.tenants[tenant])
+			result[tenant] = participant.SellerOf(participant.Restore(p), record)
 		}
 	}
 	return result, nil

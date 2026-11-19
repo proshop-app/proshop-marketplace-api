@@ -29,6 +29,8 @@ const (
 	// ReasonSellerUnreachable — магазин не ответил на расчёт.
 	ReasonSellerUnreachable = "seller_unreachable"
 	ReasonSellerNotReady    = "seller_not_ready"
+	// ReasonRegionNotAllowed — регион общего ПВЗ не входит в область доставки группы.
+	ReasonRegionNotAllowed = "region_not_allowed"
 )
 
 // sellerReasons — причины, которые вправе прислать магазин.

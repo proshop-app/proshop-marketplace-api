@@ -41,8 +41,9 @@ func (s *Service) prepareOrders(
 		return reviewed, checkout.ErrDeliveryChanged
 	}
 	quotes := s.groupQuotes(ctx, buyerID, c.Groups(), c.Delivery())
-	for _, quote := range quotes {
-		if quote.Reason == delivery.ReasonSellerUnreachable {
+	for _, group := range c.Groups() {
+		if !group.Excluded() && group.OrderID == "" &&
+			quotes[group.TenantID].Reason == delivery.ReasonSellerUnreachable {
 			return c.State(), checkout.ErrSellerUnavailable
 		}
 	}
@@ -86,7 +87,7 @@ func (s *Service) groupQuotes(
 	fallback *checkout.Selection,
 ) map[ids.TenantID]delivery.Quote {
 	return s.quoteSelections(ctx, buyerID, groups, func(g checkout.Group) *checkout.Selection {
-		return g.Selection(fallback)
+		return fallback
 	},
 	)
 }

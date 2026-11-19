@@ -45,7 +45,6 @@ func testMapLeavesPointReserve(t *testing.T, kind string) {
 				attack,
 				buyerID,
 				purchase.ID,
-				"",
 				appdelivery.PickupQuery{
 					Carrier: "cdek",
 					City:    fmt.Sprintf("Атака %d", i),

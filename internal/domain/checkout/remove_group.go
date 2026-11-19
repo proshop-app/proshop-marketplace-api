@@ -20,6 +20,7 @@ func (c *Checkout) RemoveGroup(tenant ids.TenantID, now time.Time) (bool, error)
 	}
 	g.ReconciliationRequired = !g.CancellationConfirmed &&
 		(g.OrderID != "" || g.CreateToken != "" || g.CreateFailures > 0)
+	g.Quote = nil
 	g.Abandoned, g.CreateExhausted = true, true
 	g.Status, g.Reason = GroupCancellationRequested, "buyer_removed"
 	if !g.ReconciliationRequired {

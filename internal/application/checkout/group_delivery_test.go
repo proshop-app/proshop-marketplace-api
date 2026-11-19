@@ -5,10 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestUndeliverableGroupDoesNotBlockOtherShop(t *testing.T) {
@@ -27,25 +26,27 @@ func TestUndeliverableGroupDoesNotBlockOtherShop(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if reason != delivery.ReasonCarrierNotConnected {
-				if _, err := e.service.QuoteGroup(ctx, buyerID, state.ID, "t1", "cdek", "MSK1", "Город"); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if _, err := e.service.QuoteGroup(ctx, buyerID, state.ID, "t2", "cdek", "MSK1", "Город"); err != nil {
+			if _, err := e.service.Quote(ctx, buyerID, state.ID, "cdek", "MSK1", "Город"); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := e.service.Confirm(ctx, buyerID, state.ID); err != nil {
 				t.Fatal(err)
 			}
 			state, err = beginAndExecute(ctx, e, buyerID, state.ID, orderContact)
-			if err != nil || e.platform.OrderCount() != 1 || !state.Groups[0].CartReturned ||
-				state.Groups[0].CreationResult() != checkout.CreationRejected ||
-				state.Groups[1].Status != checkout.GroupAwaitingPayment || state.DeliveryTotal.Kopecks() != 0 {
+			if err != nil || e.platform.OrderCount() != 1 || !state.DeliveryTotal.IsZero() {
 				t.Fatal(state, err)
 			}
-			if reason == delivery.ReasonNoRate && len(e.platform.QuoteRequests()) != 3 {
-				t.Fatal("отказавшую группу нельзя незаметно включить повторным расчётом")
+			if reason == delivery.ReasonCarrierNotConnected {
+				if len(state.Groups) != 1 || state.Groups[0].TenantID != "t2" {
+					t.Fatal("магазин без доставки не должен входить в покупку", state)
+				}
+				basket, _ := e.carts.Get(ctx, buyerID)
+				if len(basket.Lines) != 1 || basket.Lines[0].Offer != p1 {
+					t.Fatal("исключённый магазин остаётся в корзине", basket)
+				}
+			} else if len(state.Groups) != 2 || !state.Groups[0].CartReturned ||
+				state.Groups[0].CreationResult() != checkout.CreationRejected {
+				t.Fatal(state)
 			}
 			if len(e.platform.OrderRequests("t1")) != 0 {
 				t.Fatal("магазин без доставки получил заказ")
@@ -56,6 +57,18 @@ func TestUndeliverableGroupDoesNotBlockOtherShop(t *testing.T) {
 
 func TestSamePickupQuotesShopsInParallel(t *testing.T) {
 	e := setup(t)
+	e.platform.SetQuote("t1", delivery.Offered{
+		Available: true,
+		Cost:      money.FromKopecks(19000),
+		MinDays:   2,
+		MaxDays:   3,
+	})
+	e.platform.SetQuote("t2", delivery.Offered{
+		Available: true,
+		Cost:      money.FromKopecks(29000),
+		MinDays:   5,
+		MaxDays:   8,
+	})
 	ctx := context.Background()
 	state, err := e.service.Create(ctx, buyerID, key)
 	if err != nil {
@@ -72,11 +85,10 @@ func TestSamePickupQuotesShopsInParallel(t *testing.T) {
 	}
 	finished := make(chan error, 1)
 	go func() {
-		_, err := e.service.QuoteGroups(
+		_, err := e.service.Quote(
 			ctx,
 			buyerID,
 			state.ID,
-			[]ids.TenantID{"t1", "t2"},
 			"cdek",
 			"MSK1",
 			"Город",
@@ -101,9 +113,20 @@ func TestSamePickupQuotesShopsInParallel(t *testing.T) {
 		t.Fatal(state, err)
 	}
 	for _, group := range state.Groups {
-		if group.Delivery == nil || group.Delivery.PickupPointCode != "MSK1" ||
+		if state.Delivery == nil || state.Delivery.PickupPointCode != "MSK1" ||
 			group.Quote.Status != delivery.QuoteAvailable || !group.DeliveryPrice.IsZero() {
 			t.Fatal(group)
 		}
 	}
+	if state.Groups[0].Quote.MinDays != 2 || state.Groups[1].Quote.MaxDays != 8 ||
+		state.Groups[0].Quote.Cost.Kopecks() != 19000 || state.Groups[1].Quote.Cost.Kopecks() != 29000 {
+		t.Fatal(state.Groups)
+	}
+	e.platform.CallHook = nil
+	confirmed, err := e.service.Confirm(ctx, buyerID, state.ID)
+	if err != nil || confirmed.Status != checkout.StatusConfirmed || !confirmed.DeliveryTotal.IsZero() ||
+		confirmed.Total != confirmed.GoodsTotal {
+		t.Fatal(confirmed, err)
+	}
+
 }
