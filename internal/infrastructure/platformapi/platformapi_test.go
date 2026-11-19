@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/platformapi"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
@@ -118,8 +117,7 @@ func TestMarketplaceSettings(t *testing.T) {
 
 	settings, err := client.MarketplaceSettings(context.Background(), "t1")
 	if err != nil || settings.Delivery.Validate() != nil || settings.Profile.Name != "Магазин" ||
-		!settings.Card.Ready || settings.Returns == nil ||
-		settings.Profile.Appearance != participant.DefaultCardAppearance() {
+		!settings.Card.Ready || settings.Returns == nil {
 		t.Fatalf("настройки: %+v %v", settings, err)
 	}
 }
@@ -195,7 +193,7 @@ func TestCandidateProfileWithoutDelivery(t *testing.T) {
 	)
 	settings, err := client.MarketplaceSettings(context.Background(), "t1")
 	if err != nil || settings.Profile.Name != "Кандидат" || settings.Card.Ready || len(settings.Card.Missing) != 3 ||
-		settings.Profile.Appearance != participant.DefaultCardAppearance() || settings.Returns != nil ||
+		settings.Returns != nil ||
 		settings.Delivery.Validate() == nil {
 		t.Fatal(settings, err)
 	}

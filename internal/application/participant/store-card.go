@@ -15,7 +15,6 @@ import (
 const (
 	storeDefaultLimit = 20
 	storeMaxLimit     = 100
-	storeBatchSize    = 200
 	storeProductsSize = 3
 )
 
@@ -54,10 +53,9 @@ func (s *Service) StoreSummary(ctx context.Context, tenant ids.TenantID) (StoreS
 				return participantErr
 			}
 			summary = StoreSummary{
-				Categories:       []StoreCategory{},
-				Products:         []ports.StoreCardProduct{},
-				SelectedProducts: []ports.StoreCardProduct{},
-				Hidden:           append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
+				Categories: []StoreCategory{},
+				Products:   []ports.ShopCardProduct{},
+				Hidden:     append([]participant.CardHidden{}, p.State().StoreCard.Hidden...),
 			}
 			return nil
 		}
@@ -82,58 +80,6 @@ func categoryRoots(nodes []taxonomy.Category) map[string]StoreCategory {
 	return result
 }
 
-// storeOffers отделяет публичные предложения от кандидатов, используемых только в статистике.
-func storeOffers(
-	ctx context.Context,
-	tx ports.Tx,
-	p *participant.Participant,
-	roots map[string]StoreCategory,
-) ([]storeOffer, []storeOffer, int, error) {
-	var visible, candidates []storeOffer
-	var uncategorized int
-	for after := ids.ProductID(""); ; {
-		states, err := tx.Offers().StoreCardOffers(ctx, p.TenantID(), after, storeBatchSize)
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		for _, state := range states {
-			product := state.Product.State()
-			after = product.ProductID
-			if product.Deleted || product.TenantID != p.TenantID() {
-				continue
-			}
-			card := product.Card
-			if card.Marketplace != nil && card.Marketplace.Published {
-				if _, ok := roots[card.Marketplace.CategoryID]; !ok {
-					uncategorized++
-				}
-			}
-			visibility := participant.VisibilityOf(p, state.Tenant)
-			seller := catalog.Seller{
-				Slug:              p.Slug(),
-				Name:              p.Name(),
-				Visible:           visibility.Visible,
-				CheckoutAvailable: visibility.CheckoutAvailable,
-			}
-			offer := catalog.ComposeOffer(state.Product, state.Signals, seller, state.Verdict)
-			if _, ok := catalog.SelectPrice(product.PriceProfiles, catalog.DefaultPriceProfile); !ok {
-				continue
-			}
-			item := storeOffer{product: product, offer: offer, root: roots[card.Publication.CategoryID]}
-			if offer.Visible {
-				visible = append(visible, item)
-			}
-			if card.Publication.Published {
-				candidates = append(candidates, item)
-			}
-		}
-		if len(states) < storeBatchSize {
-			break
-		}
-	}
-	return visible, candidates, uncategorized, nil
-}
-
 func sortStoreOffers(items []storeOffer) {
 	sort.Slice(items, func(i, j int) bool {
 		a, b := items[i].product, items[j].product
@@ -153,13 +99,13 @@ func sortStoreOffers(items []storeOffer) {
 	})
 }
 
-func storeProduct(item storeOffer) ports.StoreCardProduct {
+func storeProduct(item storeOffer) ports.ShopCardProduct {
 	var image *string
 	if item.product.Card.Image != "" {
 		value := item.product.Card.Image
 		image = &value
 	}
-	return ports.StoreCardProduct{
+	return ports.ShopCardProduct{
 		ProductID: string(item.product.ProductID),
 		OfferID:   item.offer.ID.String(),
 		Name:      item.product.Card.Name,
@@ -167,35 +113,14 @@ func storeProduct(item storeOffer) ports.StoreCardProduct {
 	}
 }
 
-func selectedStoreProducts(summary StoreSummary, enabled bool) []ports.StoreCardProduct {
-	result := []ports.StoreCardProduct{}
-	if !enabled {
-		return result
-	}
-	used := map[string]bool{}
-	for _, product := range append(summary.SelectedProducts, summary.Products...) {
-		if used[product.ProductID] || len(result) == storeProductsSize {
-			continue
-		}
-		result = append(result, product)
-		used[product.ProductID] = true
-	}
-	return result
-}
-
 func shopHeader(p *participant.Participant, summary StoreSummary) ShopHeader {
 	profile := p.PublicProfile()
-	appearance, err := profile.Appearance.Normalize()
-	if err != nil {
-		appearance = participant.DefaultCardAppearance()
-	}
 	return ShopHeader{
 		Rating:     summary.Rating,
 		TenantID:   p.TenantID(),
 		Slug:       p.Slug(),
 		Name:       p.Name(),
 		Logo:       profile.Logo,
-		Appearance: appearance,
 		Offers:     summary.Offers,
 		Categories: summary.Categories,
 		IsNew:      true,
@@ -228,13 +153,12 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 		}
 		h := shopHeader(p, summary)
 		card := ShopCard{
-			Products:       selectedStoreProducts(summary, p.State().StoreCard.ProductSettings().Enabled),
+			Products:       summary.Products,
 			Rating:         h.Rating,
 			TenantID:       h.TenantID,
 			Slug:           h.Slug,
 			Name:           h.Name,
 			Logo:           h.Logo,
-			Appearance:     h.Appearance,
 			Offers:         h.Offers,
 			FromPrice:      summary.FromPrice,
 			MoreCategories: max(len(h.Categories)-1, 0),

@@ -375,6 +375,11 @@ WHERE c.status IN ('creating_orders', 'awaiting_payment', 'partially_paid', 'dra
 Новых миграций сервера в этом круге нет. Команды выше — инструкция оператору;
 рабочая сессия не меняет kind и данные стенда.
 
+Удаление настроек карточки (19.11.2026): следующая миграция — 00061.
+Одним окном с остановкой выкатываются server/admin/deps/marketplace-api/web.
+Команды и порядок — `proshop-server/docs/remove-store-card-settings.md`.
+Down восстанавливает пустую JSONB-структуру без прежних данных.
+
 ## Сделано на неделе 1
 
 - Каркас по слоям §3: `pkg/money`, `pkg/ids`, `pkg/errs`, контексты

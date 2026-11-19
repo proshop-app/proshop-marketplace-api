@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/storecache"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -93,12 +92,11 @@ func (c *sourceCards) List(ctx context.Context, _ string, limit, offset int) (po
 	price := int64(12345)
 	return ports.ShopPage{
 		Items: []ports.ShopCard{{
-			TenantID:   "t1",
-			Slug:       "shop",
-			Name:       name,
-			FromPrice:  &price,
-			Products:   []ports.StoreCardProduct{},
-			Appearance: participant.DefaultCardAppearance(),
+			TenantID:  "t1",
+			Slug:      "shop",
+			Name:      name,
+			FromPrice: &price,
+			Products:  []ports.ShopCardProduct{},
 		}},
 		Total:  1,
 		Limit:  limit,
