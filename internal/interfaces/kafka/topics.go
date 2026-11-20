@@ -6,14 +6,15 @@ package kafka
 // (src/common/enums/broker-topics.ts); события реестра платформы сервер
 // заводит в своём PR-08d.
 const (
-	TopicProductProjected    = "catalog.product.projected"
-	TopicStockItemUpdated    = "stock.item.updated"
-	TopicProductPriceUpdated = "catalog.product.price-updated"
-	TopicTenantCreated       = "platform.tenant.created"
-	TopicTenantUpdated       = "platform.tenant.updated"
-	TopicTenantSuspended     = "platform.tenant.suspended"
-	TopicTenantResumed       = "platform.tenant.resumed"
-	TopicTenantDeleted       = "platform.tenant.deleted"
+	TopicProductProjected     = "catalog.product.projected"
+	TopicProductProjectedBulk = "catalog.product.projected.bulk"
+	TopicStockItemUpdated     = "stock.item.updated"
+	TopicProductPriceUpdated  = "catalog.product.price-updated"
+	TopicTenantCreated        = "platform.tenant.created"
+	TopicTenantUpdated        = "platform.tenant.updated"
+	TopicTenantSuspended      = "platform.tenant.suspended"
+	TopicTenantResumed        = "platform.tenant.resumed"
+	TopicTenantDeleted        = "platform.tenant.deleted"
 )
 
 // HeaderTenant — заголовок с магазином, который ставит продюсер сервера.
@@ -26,4 +27,16 @@ var tenantTopics = []string{
 	TopicTenantSuspended,
 	TopicTenantResumed,
 	TopicTenantDeleted,
+}
+
+// SubscriptionTopics делит топики на основную подписку и массовую полосу,
+// сохраняя один и тот же префикс установки.
+func SubscriptionTopics(prefix string, router *Router) (regular []string, bulk string) {
+	prefix = prefixOf(prefix)
+	for _, topic := range router.Topics() {
+		if topic != TopicProductProjectedBulk {
+			regular = append(regular, prefix+topic)
+		}
+	}
+	return regular, prefix + TopicProductProjectedBulk
 }

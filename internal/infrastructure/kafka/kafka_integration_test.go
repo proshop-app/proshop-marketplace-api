@@ -331,10 +331,11 @@ func newPipeline(t *testing.T, pool *pgxpool.Pool, prefix, group string) *pipeli
 		appcatalog.NewProjector(uow, clock.System{}, nil),
 		appparticipant.NewRegistry(uow, clock.System{}, random.IDs{}),
 	)
+	topics, _ := kafka.SubscriptionTopics(prefix, router)
 	reader := infrakafka.NewReader(infrakafka.Config{
 		Brokers: brokers(),
 		GroupID: group,
-		Topics:  kafka.FullTopics(prefix, router),
+		Topics:  topics,
 		Logger:  quiet,
 	})
 
@@ -345,7 +346,14 @@ func newPipeline(t *testing.T, pool *pgxpool.Pool, prefix, group string) *pipeli
 		Ready:       pool.Ping,
 		Now:         clock.System{}.Now,
 	}
-	consumer := kafka.NewConsumer(reader, router, messaging.NewParker(uow), cfg, quiet, prometheus.NewRegistry())
+	consumer := kafka.NewConsumer(
+		reader,
+		router,
+		messaging.NewParker(uow),
+		cfg,
+		quiet,
+		kafka.NewConsumerMetrics(prometheus.NewRegistry()),
+	)
 
 	return &pipeline{pool: pool, consumer: consumer, reader: reader}
 }
@@ -408,7 +416,7 @@ func TestConsumerEndToEnd(t *testing.T) {
 	prefix := unique("shop")
 	group := unique("marketplace-")
 
-	topics := kafka.FullTopics(prefix, kafka.NewRouter(nil, nil))
+	topics, _ := kafka.SubscriptionTopics(prefix, kafka.NewRouter(nil, nil))
 	createTopics(t, topics...)
 
 	topic := func(name string) string { return prefix + "." + name }

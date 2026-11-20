@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	kafkago "github.com/segmentio/kafka-go"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -63,66 +62,23 @@ type Consumer struct {
 	parker  Parker
 	config  ConsumerConfig
 	logger  *slog.Logger
-	metrics *metrics
+	metrics *ConsumerMetrics
 }
 
-type metrics struct {
-	messages *prometheus.CounterVec
-	parked   *prometheus.CounterVec
-	failures *prometheus.CounterVec
-}
-
-// NewConsumer — консьюмер с метриками в registerer.
+// NewConsumer — консьюмер с общими для групп счётчиками приёма.
 func NewConsumer(
 	source Source,
 	router *Router,
 	parker Parker,
 	config ConsumerConfig,
 	logger *slog.Logger,
-	registerer prometheus.Registerer,
+	metrics *ConsumerMetrics,
 ) *Consumer {
 	if config.Workers <= 0 {
 		config.Workers = 8
 	}
-	m := &metrics{
-		messages: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "marketplace_kafka_messages_total",
-				Help: "Сообщения Kafka по итогу: processed — обработано, parked — в отравленных.",
-			},
-			[]string{"topic", "tenant", "result"},
-		),
-		parked: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "marketplace_kafka_parked_total",
-				Help: "Отравленные сообщения по причине; tenant пуст, если магазин не определён.",
-			},
-			[]string{"topic", "tenant", "reason"},
-		),
-		failures: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "marketplace_kafka_handler_failures_total",
-				Help: "Неудачные попытки обработки, после которых сообщение повторяется.",
-			},
-			[]string{"topic", "tenant"},
-		),
-	}
-	registerer.MustRegister(m.messages, m.parked, m.failures)
 
-	return &Consumer{source: source, router: router, parker: parker, config: config, logger: logger, metrics: m}
-}
-
-// FullTopics — полные имена топиков маршрутизатора с префиксом установки:
-// "<prefix>.<topic>", как их называет сервер.
-func FullTopics(prefix string, router *Router) []string {
-	short := router.Topics()
-	full := make([]string, 0, len(short))
-
-	for _, topic := range short {
-		full = append(full, prefixOf(prefix)+topic)
-	}
-
-	return full
+	return &Consumer{source: source, router: router, parker: parker, config: config, logger: logger, metrics: metrics}
 }
 
 // Run читает до отмены контекста.
@@ -157,42 +113,47 @@ func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
 		EventID: fmt.Sprintf("%s:%d:%d", message.Topic, message.Partition, message.Offset),
 		Message: message,
 	}
-	tenant := TenantHint(message)
-	log := c.logger.With(
-		slog.String("topic", envelope.Topic),
-		slog.String("tenantId", tenant),
-		slog.Int("partition", message.Partition),
-		slog.Int64("offset", message.Offset),
-	)
-
+	var log *slog.Logger
+	var tenantID string
 	unknownFailures := 0
 	for attempt := 1; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		err := c.router.Handle(ctx, envelope)
-		if err != nil && errs.RetryKindOf(err) == errs.RetryUnknown {
+		if err == nil {
+			c.metrics.messages.WithLabelValues(envelope.Topic, "processed").Inc()
+
+			return ctx.Err()
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if log == nil {
+			tenantID = TenantHint(message)
+			log = c.logger.With(
+				slog.String("topic", envelope.Topic),
+				slog.Int("partition", message.Partition),
+				slog.Int64("offset", message.Offset),
+				slog.String("tenantId", tenantID),
+			)
+		}
+		retry := errs.RetryKindOf(err)
+		if retry == errs.RetryUnknown {
 			unknownFailures++
 		}
 
 		switch {
-		case err == nil:
-			c.metrics.messages.WithLabelValues(envelope.Topic, tenant, "processed").Inc()
-
-			return ctx.Err()
-		case ctx.Err() != nil:
-			return ctx.Err()
-		case errs.RetryKindOf(err) == errs.RetryPermanent:
-			if c.park(ctx, log, envelope, tenant, reasonOf(err), err, attempt) {
+		case retry == errs.RetryPermanent:
+			if c.park(ctx, log, envelope, tenantID, reasonOf(err), err, attempt) {
 				return ctx.Err()
 			}
-		case unknownFailures >= c.config.MaxAttempts && errs.RetryKindOf(err) == errs.RetryUnknown &&
-			c.config.Ready(ctx) == nil:
-			if c.park(ctx, log, envelope, tenant, ReasonExhausted, err, attempt) {
+		case retry == errs.RetryUnknown && unknownFailures >= c.config.MaxAttempts && c.config.Ready(ctx) == nil:
+			if c.park(ctx, log, envelope, tenantID, ReasonExhausted, err, attempt) {
 				return ctx.Err()
 			}
 		default:
-			c.metrics.failures.WithLabelValues(envelope.Topic, tenant).Inc()
+			c.metrics.failures.WithLabelValues(envelope.Topic).Inc()
 			log.Warn("kafka: обработка не удалась, повтор", slog.Int("attempt", attempt), slog.Any("error", err))
 		}
 
@@ -206,7 +167,7 @@ func (c *Consumer) park(
 	ctx context.Context,
 	log *slog.Logger,
 	envelope Envelope,
-	tenant, reason string,
+	tenantID, reason string,
 	cause error,
 	attempts int,
 ) bool {
@@ -223,7 +184,7 @@ func (c *Consumer) park(
 		Key:         message.Key,
 		Headers:     headers,
 		Value:       message.Value,
-		TenantID:    tenant,
+		TenantID:    tenantID,
 		Reason:      reason,
 		Error:       cause.Error(),
 		Attempts:    attempts,
@@ -231,14 +192,14 @@ func (c *Consumer) park(
 		ParkedAt:    c.config.Now(),
 	})
 	if err != nil {
-		c.metrics.failures.WithLabelValues(envelope.Topic, tenant).Inc()
+		c.metrics.failures.WithLabelValues(envelope.Topic).Inc()
 		log.Error("kafka: парковка не удалась, повтор", slog.Any("error", err))
 
 		return false
 	}
 
-	c.metrics.parked.WithLabelValues(envelope.Topic, tenant, reason).Inc()
-	c.metrics.messages.WithLabelValues(envelope.Topic, tenant, "parked").Inc()
+	c.metrics.parked.WithLabelValues(envelope.Topic, reason).Inc()
+	c.metrics.messages.WithLabelValues(envelope.Topic, "parked").Inc()
 	log.Error("kafka: сообщение в отравленных", slog.String("reason", reason), slog.Any("error", cause))
 
 	return true

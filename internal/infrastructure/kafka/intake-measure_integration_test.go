@@ -35,6 +35,7 @@ import (
 
 const (
 	measureMessages = 2000
+	measurePool     = 16
 	measureTenants  = 16
 	setMeasureTrust = `UPDATE participants SET trust = 'trusted'`
 )
@@ -152,7 +153,7 @@ func TestIntakeThroughput(t *testing.T) {
 
 func measureIntake(t *testing.T, kind string, workers int) {
 	t.Helper()
-	pool, queries, uow := intakeDatabase(t)
+	pool, queries, uow := intakeDatabase(t, measurePool)
 	moderation := appmoderation.NewService(uow, clock.System{}, random.IDs{}, appmoderation.Config{})
 	projection := &measuredProjection{
 		Projector: appcatalog.NewProjector(uow, clock.System{}, moderation),
@@ -160,7 +161,7 @@ func measureIntake(t *testing.T, kind string, workers int) {
 	}
 	topic := unique("measure-") + "." + intakeTopic(kind)
 	createTopics(t, topic)
-	messages := intakeMessages(kind, topic)
+	messages := intakeMessages(kind, topic, measureMessages)
 	produce(t, messages...)
 	router := kafka.NewRouter(projection, appparticipant.NewRegistry(uow, clock.System{}, random.IDs{}))
 	prefix := strings.TrimSuffix(topic, "."+intakeTopic(kind))
@@ -185,7 +186,7 @@ func measureIntake(t *testing.T, kind string, workers int) {
 			Now:         time.Now,
 		},
 		quiet,
-		prometheus.NewRegistry(),
+		kafka.NewConsumerMetrics(prometheus.NewRegistry()),
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -231,11 +232,11 @@ func measureIntake(t *testing.T, kind string, workers int) {
 	}
 }
 
-func intakeDatabase(t *testing.T) (*pgxpool.Pool, *intakeQueries, ports.UnitOfWork) {
+func intakeDatabase(t *testing.T, size int32) (*pgxpool.Pool, *intakeQueries, ports.UnitOfWork) {
 	t.Helper()
 	base := pgtest.Pool(t)
 	cfg := base.Config().Copy()
-	cfg.MaxConns = 16
+	cfg.MaxConns = size
 	queries := &intakeQueries{}
 	cfg.ConnConfig.Tracer = queries
 	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
@@ -262,8 +263,8 @@ func intakeTopic(kind string) string {
 	}
 }
 
-func intakeMessages(kind, topic string) []kafkago.Message {
-	messages := make([]kafkago.Message, measureMessages)
+func intakeMessages(kind, topic string, count int) []kafkago.Message {
+	messages := make([]kafkago.Message, count)
 	for i := range messages {
 		tenant, product := fmt.Sprintf("t%d", i%measureTenants), fmt.Sprintf("p%d", i)
 		value := fmt.Sprintf(`{"id":%q,"price":100}`, product)

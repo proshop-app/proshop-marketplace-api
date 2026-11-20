@@ -48,7 +48,7 @@ func TestConsumerFinalCommitReachesBrokerAfterProcessCancellation(t *testing.T) 
 	topic := prefix + "." + kafka.TopicProductPriceUpdated
 	group := unique("shutdown-group-")
 	createTopics(t, topic)
-	message := intakeMessages("price", topic)[0]
+	message := intakeMessages("price", topic, 1)[0]
 	produce(t, message)
 	reader := infrakafka.NewReader(infrakafka.Config{
 		Brokers: brokers(),
@@ -72,7 +72,7 @@ func TestConsumerFinalCommitReachesBrokerAfterProcessCancellation(t *testing.T) 
 			Now:         time.Now,
 		},
 		quiet,
-		prometheus.NewRegistry(),
+		kafka.NewConsumerMetrics(prometheus.NewRegistry()),
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

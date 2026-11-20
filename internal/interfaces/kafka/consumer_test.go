@@ -1,10 +1,13 @@
 package kafka_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -116,7 +119,7 @@ func consumer(
 	}
 	router := kafka.NewRouter(projections, &recorder{})
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	c := kafka.NewConsumer(src, router, park, cfg, logger, registry)
+	c := kafka.NewConsumer(src, router, park, cfg, logger, kafka.NewConsumerMetrics(registry))
 
 	return c, registry
 }
@@ -168,6 +171,91 @@ func TestConsumerParksMessageWithoutTenant(t *testing.T) {
 	}
 	if got := sum(t, registry, "marketplace_kafka_parked_total"); got != 1 {
 		t.Fatalf("метрика отравленных: %v", got)
+	}
+}
+
+func TestIntakeTelemetryByTopic(t *testing.T) {
+	cases := []struct {
+		topic      string
+		badMessage func(string) kafkago.Message
+	}{
+		{kafka.TopicProductProjected, badProjection},
+		{kafka.TopicProductProjectedBulk, badProjection},
+		{kafka.TopicProductPriceUpdated, func(tenant string) kafkago.Message {
+			return message("p1", "{", tenantHeader(tenant))
+		}},
+		{kafka.TopicTenantCreated, func(tenant string) kafkago.Message {
+			return message("", fmt.Sprintf(`{"tenantId":%q,"at":"invalid"}`, tenant))
+		}},
+	}
+	registry := prometheus.NewRegistry()
+	park := &parker{}
+	var journal bytes.Buffer
+	c := kafka.NewConsumer(
+		&source{},
+		kafka.NewRouter(&recorder{}, &recorder{}),
+		park,
+		kafka.ConsumerConfig{
+			TopicPrefix: "shop",
+			Backoff:     func(int) time.Duration { return 0 },
+			Now:         time.Now,
+		},
+		slog.New(slog.NewTextHandler(&journal, nil)),
+		kafka.NewConsumerMetrics(registry),
+	)
+	for _, tc := range cases {
+		for _, tenant := range []string{"t1", "t2"} {
+			journal.Reset()
+			park.failures = 1
+			msg := tc.badMessage(tenant)
+			msg.Topic = "shop." + tc.topic
+			if err := c.Process(context.Background(), msg); err != nil {
+				t.Fatal(err)
+			}
+			if got := park.events[len(park.events)-1].TenantID; got != tenant {
+				t.Fatalf("магазин в записи парковки: %q, ожидался %q", got, tenant)
+			}
+			lines := strings.Split(strings.TrimSpace(journal.String()), "\n")
+			if len(lines) != 2 {
+				t.Fatalf("ожидался журнал ошибки парковки и отравленного сообщения: %s", journal.String())
+			}
+			for _, line := range lines {
+				if !strings.Contains(line, "topic="+tc.topic+" ") || !strings.Contains(line, "tenantId="+tenant+" ") {
+					t.Fatalf("нет темы или магазина в журнале: %s", line)
+				}
+			}
+		}
+	}
+	assertIntakeMetrics(t, registry, len(cases))
+}
+
+func badProjection(tenant string) kafkago.Message {
+	return message(fmt.Sprintf(`[%q,"p1"]`, tenant), "{")
+}
+
+func assertIntakeMetrics(t *testing.T, registry *prometheus.Registry, topicCount int) {
+	t.Helper()
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(families) != 3 {
+		t.Fatalf("ожидалось три семейства метрик, получено %d", len(families))
+	}
+	for _, family := range families {
+		if len(family.Metric) != topicCount {
+			t.Fatalf("%s: рядов %d, ожидалось %d", family.GetName(), len(family.Metric), topicCount)
+		}
+		for _, metric := range family.Metric {
+			for _, label := range metric.Label {
+				if label.GetName() == "tenant" {
+					t.Fatalf("%s: лишняя метка tenant", family.GetName())
+				}
+			}
+			if metric.GetCounter().GetValue() != 2 {
+				t.Fatalf("%s: счётчик должен включать оба магазина", family.GetName())
+			}
+		}
 	}
 }
 
@@ -266,17 +354,22 @@ func TestConsumerRunStopsOnCancel(t *testing.T) {
 	}
 }
 
-func TestFullTopicsUsePrefix(t *testing.T) {
+func TestSubscriptionTopicsUsePrefix(t *testing.T) {
 	router := kafka.NewRouter(&recorder{}, &recorder{})
 
-	topics := kafka.FullTopics("shop", router)
+	topics, bulk := kafka.SubscriptionTopics("shop", router)
 	sort.Strings(topics)
 
 	if len(topics) != 8 || topics[0] != "shop.catalog.product.price-updated" || topics[7] != "shop.stock.item.updated" {
 		t.Fatalf("полные имена топиков: %v", topics)
 	}
 
-	if bare := kafka.FullTopics("", router); len(bare) != 8 || strings.HasPrefix(bare[0], ".") {
+	if bulk != "shop."+kafka.TopicProductProjectedBulk || slices.Contains(topics, bulk) {
+		t.Fatalf("массовая тема выделена в свою подписку: %v, %s", topics, bulk)
+	}
+
+	bare, bareBulk := kafka.SubscriptionTopics("", router)
+	if len(bare) != 8 || strings.HasPrefix(bare[0], ".") || bareBulk != kafka.TopicProductProjectedBulk {
 		t.Fatalf("без префикса установки: %v", bare)
 	}
 }

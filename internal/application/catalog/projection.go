@@ -10,7 +10,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-// ProductEvent — снимок товара из события catalog.product.projected.
+// ProductEvent — снимок товара из основной или массовой темы проекции.
 type ProductEvent struct {
 	EventID  string
 	Snapshot catalog.Snapshot
