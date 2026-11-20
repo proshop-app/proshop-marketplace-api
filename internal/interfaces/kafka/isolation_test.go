@@ -62,7 +62,7 @@ func TestConsumerIsolatesRegistryTenantsAndBuyerContexts(t *testing.T) {
 					Now:         time.Now,
 				},
 				slog.New(slog.NewTextHandler(io.Discard, nil)),
-				prometheus.NewRegistry(),
+				kafka.NewConsumerMetrics(prometheus.NewRegistry()),
 			)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

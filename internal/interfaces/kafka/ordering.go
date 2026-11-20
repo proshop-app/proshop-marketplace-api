@@ -31,7 +31,7 @@ func messageKey(message kafkago.Message, prefix string) orderingKey {
 	topic := strings.TrimPrefix(message.Topic, prefixOf(prefix))
 	var key orderingKey
 	switch topic {
-	case TopicProductProjected, TopicPriceContextChanged:
+	case TopicProductProjected, TopicProductProjectedBulk, TopicPriceContextChanged:
 		key = pairedKey(message, topic)
 	case TopicStockItemUpdated, TopicProductPriceUpdated:
 		key = signalKey(message, topic)

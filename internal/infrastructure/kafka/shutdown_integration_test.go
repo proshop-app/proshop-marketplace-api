@@ -72,7 +72,7 @@ func TestConsumerFinalCommitReachesBrokerAfterProcessCancellation(t *testing.T) 
 			Now:         time.Now,
 		},
 		quiet,
-		prometheus.NewRegistry(),
+		kafka.NewConsumerMetrics(prometheus.NewRegistry()),
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -59,6 +59,10 @@ func TestIntakeSQLCounts(t *testing.T) {
 	check("product/price-only", 6, func() error {
 		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: "product2", Snapshot: snapshot})
 	})
+	snapshot.Revision--
+	check("product/stale", 2, func() error {
+		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: "product3", Snapshot: snapshot})
+	})
 	check("price", 4, func() error {
 		return projector.ApplyPrice(ctx, appcatalog.PriceEvent{
 			EventID:   "price1",
@@ -90,7 +94,7 @@ func TestIntakeBeforeRegistryPreservesDataAndReevaluates(t *testing.T) {
 		messaging.NewParker(uow),
 		kafka.ConsumerConfig{MaxAttempts: 1, Ready: pool.Ping, Backoff: messaging.Backoff, Now: time.Now},
 		quiet,
-		prometheus.NewRegistry(),
+		kafka.NewConsumerMetrics(prometheus.NewRegistry()),
 	)
 	messages := []kafkago.Message{
 		intakeMessages("product", kafka.TopicProductProjected)[0],

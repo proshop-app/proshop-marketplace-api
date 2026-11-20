@@ -456,26 +456,9 @@ func (s *server) prepareIndexes(ctx context.Context) error {
 	return nil
 }
 
-// run запускает HTTP, консьюмер и фоновые циклы; первый сбой останавливает остальных.
+// run запускает HTTP, консьюмеры и фоновые циклы; первый сбой останавливает остальных.
 func (s *server) run(ctx context.Context) error {
 	cfg := s.cfg
-	router := kafka.NewRouter(s.app.projector, s.app.registry).WithPriceContexts(s.app.priceContexts)
-	topics := kafka.FullTopics(cfg.Kafka.TopicPrefix, router)
-	reader := infrakafka.NewReader(infrakafka.Config{
-		Brokers: cfg.Kafka.Brokers,
-		GroupID: cfg.Kafka.GroupID,
-		Topics:  topics,
-		Logger:  s.logger,
-	})
-	consumerConfig := kafka.ConsumerConfig{
-		Workers:     cfg.Kafka.Workers,
-		TopicPrefix: cfg.Kafka.TopicPrefix,
-		MaxAttempts: cfg.Kafka.MaxAttempts,
-		Backoff:     messaging.Backoff,
-		Ready:       s.store.pool.Ping,
-		Now:         clock.System{}.Now,
-	}
-	consumer := kafka.NewConsumer(reader, router, s.app.parker, consumerConfig, s.logger, s.metrics)
 	httpServer := s.httpServer()
 	group, groupCtx := errgroup.WithContext(ctx)
 
@@ -500,21 +483,13 @@ func (s *server) run(ctx context.Context) error {
 
 		return httpServer.Shutdown(shutdownCtx)
 	})
-	group.Go(func() error {
-		err := consumer.Run(ports.WithDatabaseBudget(groupCtx, ports.DatabaseBudget(cfg.Database.Ingestion)))
-
-		if closeErr := reader.Close(); closeErr != nil {
-			s.logger.Warn("kafka: читатель закрылся с ошибкой", slog.Any("error", closeErr))
-		}
-
-		return err
-	})
+	s.runConsumers(groupCtx, group)
 
 	for _, job := range s.jobs() {
 		group.Go(func() error { return job(groupCtx) })
 	}
 
-	s.logger.Info("маркетплейс запущен", slog.String("group", cfg.Kafka.GroupID), slog.Any("topics", topics))
+	s.logger.Info("маркетплейс запущен")
 
 	return group.Wait()
 }

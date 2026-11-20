@@ -185,7 +185,7 @@ func measureIntake(t *testing.T, kind string, workers int) {
 			Now:         time.Now,
 		},
 		quiet,
-		prometheus.NewRegistry(),
+		kafka.NewConsumerMetrics(prometheus.NewRegistry()),
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

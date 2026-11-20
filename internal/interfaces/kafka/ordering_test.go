@@ -18,6 +18,7 @@ func TestMessageKeysKeepOnlyRequiredOrdering(t *testing.T) {
 	}{
 		{TopicProductProjected, `["t1", "p1"]`, "", product},
 		{TopicProductProjected, `["t1","p1"]`, "", product},
+		{TopicProductProjectedBulk, `["t1","p1"]`, "", product},
 		{TopicStockItemUpdated, `"stock-1"`, `{"productId":"p1"}`, product},
 		{TopicProductPriceUpdated, `"p1"`, `{"id":"p1"}`, product},
 		{TopicTenantCreated, `"t1"`, `{"tenantId":"t1"}`, tenant},
@@ -33,6 +34,7 @@ func TestMessageKeysKeepOnlyRequiredOrdering(t *testing.T) {
 			orderingKey{kind: orderBuyer, tenant: "t1", entity: buyer},
 		},
 		{TopicProductProjected, `null`, "", orderingKey{}},
+		{TopicProductProjectedBulk, `null`, "", orderingKey{}},
 		{TopicStockItemUpdated, `"stock-1"`, "{", orderingKey{}},
 		{TopicTenantUpdated, "", "{", orderingKey{}},
 		{TopicTenantCreated, "", `{"tenantId":"t2"}`, orderingKey{}},

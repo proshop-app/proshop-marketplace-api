@@ -14,7 +14,7 @@ func TestParkedReplayKeepsOriginalIdentityAndTime(t *testing.T) {
 	rec := &recorder{}
 	replay := kafka.NewReplay(kafka.NewRouter(rec, rec), "cell")
 	value := ports.ParkedEvent{
-		Topic:       "cell." + kafka.TopicProductProjected,
+		Topic:       "cell." + kafka.TopicProductProjectedBulk,
 		Partition:   2,
 		Offset:      17,
 		Key:         []byte(`["t1","p1"]`),

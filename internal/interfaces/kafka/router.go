@@ -44,10 +44,12 @@ type Router struct {
 
 // NewRouter — обработчики всех топиков маркетплейса.
 func NewRouter(projections Projections, registry Registry) *Router {
+	projected := bind(projections, productProjected)
 	r := &Router{handlers: map[string]handler{
-		TopicProductProjected:    bind(projections, productProjected),
-		TopicStockItemUpdated:    bind(projections, stockItemUpdated),
-		TopicProductPriceUpdated: bind(projections, priceUpdated),
+		TopicProductProjected:     projected,
+		TopicProductProjectedBulk: projected,
+		TopicStockItemUpdated:     bind(projections, stockItemUpdated),
+		TopicProductPriceUpdated:  bind(projections, priceUpdated),
 	}}
 
 	for _, topic := range tenantTopics {
