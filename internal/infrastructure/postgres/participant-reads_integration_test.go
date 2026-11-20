@@ -50,22 +50,11 @@ func seedReadParticipant(t *testing.T, uow *postgres.UnitOfWork, tenant ids.Tena
 	}
 }
 
-func TestPublicTenantsSQLScopeAndParticipantBatches(t *testing.T) {
+func TestParticipantBatches(t *testing.T) {
 	uow := postgres.NewUnitOfWork(testPool(t))
 	seedReadParticipant(t, uow, "t1", true)
 	seedReadParticipant(t, uow, "t2", false)
 	err := uow.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
-		filters := [][]ids.TenantID{nil, {"t1"}, {"t2"}, {}}
-		for i, filter := range filters {
-			tenants, err := tx.Participants().PublicTenants(ctx, filter, "", 100)
-			want := 0
-			if i < 2 {
-				want = 1
-			}
-			if err != nil || len(tenants) != want || want == 1 && tenants[0] != "t1" {
-				t.Fatalf("filter=%v tenants=%v err=%v", filter, tenants, err)
-			}
-		}
 		keys := []ids.TenantID{"t1", "t2", "missing"}
 		participants, err := tx.Participants().Batch(ctx, keys)
 		if err != nil || len(participants) != 2 {

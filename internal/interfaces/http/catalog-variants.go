@@ -11,7 +11,6 @@ func (h *catalogHandlers) variants(w http.ResponseWriter, r *http.Request) {
 		r.Context(),
 		r.PathValue("tenantId"),
 		r.PathValue("groupId"),
-		BuyerID(r.Context()),
 	)
 	if err != nil {
 		writeError(w, r, err)

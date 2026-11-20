@@ -10,18 +10,17 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
-	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-func TestPromoContextContract(t *testing.T) {
+func TestItemsCheckPromoContract(t *testing.T) {
 	for _, valid := range []bool{false, true} {
-		name := map[bool]string{true: "promo_context_valid.json", false: "promo_context_invalid.json"}[valid]
+		name := map[bool]string{true: "items_check_valid.json", false: "items_check_invalid.json"}[valid]
 		t.Run(name, func(t *testing.T) {
 			client := server(
 				t,
 				map[string][2]string{
-					"POST /api/v1/internal/marketplace/pricing/contexts": {"promo_context_request.json", name},
+					"POST /api/v1/internal/marketplace/tenants/t1/items/check": {"items_check_request.json", name},
 				},
 				http.StatusOK,
 			)
@@ -29,7 +28,6 @@ func TestPromoContextContract(t *testing.T) {
 				context.Background(),
 				"t1",
 				ports.GroupPricingRequest{
-					BuyerID:   ids.UUID("7a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b"),
 					PromoCode: "SAVE",
 					Items:     []ports.ItemRequest{{ProductID: "p1", Quantity: 3}},
 				},
@@ -86,20 +84,19 @@ func TestOrderTrackingContract(t *testing.T) {
 }
 
 func TestPromoInvalidResponses(t *testing.T) {
-	for _, name := range []string{"null_code", "null_message", "missing_item", "foreign_tenant", "excess_discount"} {
+	for _, name := range []string{"null_code", "null_message", "missing_item", "foreign_item", "excess_discount"} {
 		t.Run(name, func(t *testing.T) {
 			client := server(
 				t,
 				map[string][2]string{
-					"POST /api/v1/internal/marketplace/pricing/contexts": {
-						"promo_context_request.json",
-						"promo_context_" + name + ".json",
+					"POST /api/v1/internal/marketplace/tenants/t1/items/check": {
+						"items_check_request.json",
+						"items_check_" + name + ".json",
 					},
 				},
 				http.StatusOK,
 			)
 			_, err := client.PriceGroup(context.Background(), "t1", ports.GroupPricingRequest{
-				BuyerID:   ids.UUID("7a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b"),
 				PromoCode: "SAVE",
 				Items:     []ports.ItemRequest{{ProductID: "p1", Quantity: 3}},
 			})
@@ -150,16 +147,15 @@ func TestPricingWithoutCode(t *testing.T) {
 	client := server(
 		t,
 		map[string][2]string{
-			"POST /api/v1/internal/marketplace/pricing/contexts": {
-				"promo_context_no_code_request.json",
-				"promo_context_no_code.json",
+			"POST /api/v1/internal/marketplace/tenants/t1/items/check": {
+				"items_check_no_code_request.json",
+				"items_check_no_code.json",
 			},
 		},
 		http.StatusOK,
 	)
 	result, err := client.PriceGroup(context.Background(), "t1", ports.GroupPricingRequest{
-		BuyerID: ids.UUID("7a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b"),
-		Items:   []ports.ItemRequest{{ProductID: "p1", Quantity: 3}},
+		Items: []ports.ItemRequest{{ProductID: "p1", Quantity: 3}},
 	})
 	if err != nil || result.PromoCode != nil || len(result.Discounts["p1"]) != 1 {
 		t.Fatal(result, err)

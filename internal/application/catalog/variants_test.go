@@ -57,7 +57,7 @@ func TestVariantBlockScopeOrderAndDuplicates(t *testing.T) {
 	}
 	for _, item := range block.Items {
 		if item.Price != 90 || item.BasePrice != 100 {
-			t.Fatalf("ценовой контекст: %+v", item)
+			t.Fatalf("публичная цена: %+v", item)
 		}
 	}
 }

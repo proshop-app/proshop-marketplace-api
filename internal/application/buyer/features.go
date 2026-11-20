@@ -41,13 +41,12 @@ type Features struct {
 	points  ports.ProfilePickupLookup
 	uow     ports.UnitOfWork
 	geo     ports.GeoIP
-	pricing ports.CatalogPricing
 	limiter ports.RateLimiter
 }
 
 // Alerts — счётчик достигнутых ценовых условий.
 type Alerts struct {
-	PriceDrops *int
+	PriceDrops int
 }
 
 // ProfileView — профиль с вычисленным счётчиком уведомлений.
@@ -77,16 +76,14 @@ type SavedView struct {
 func NewFeatures(
 	uow ports.UnitOfWork,
 	geo ports.GeoIP,
-	pricing ports.CatalogPricing,
 	limiter ports.RateLimiter,
 	points ports.ProfilePickupLookup,
 ) *Features {
-	return &Features{uow: uow, geo: geo, pricing: pricing, limiter: limiter, points: points}
+	return &Features{uow: uow, geo: geo, limiter: limiter, points: points}
 }
 
 // Profile возвращает сохранённый профиль и актуальное число снижений.
 func (s *Features) Profile(ctx context.Context, id ids.UUID) (ProfileView, error) {
-	contexts := s.profileContexts(ctx, id)
 	var result ProfileView
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		p, err := tx.BuyerFeatures().Profile(ctx, id)
@@ -94,7 +91,7 @@ func (s *Features) Profile(ctx context.Context, id ids.UUID) (ProfileView, error
 			return err
 		}
 		result.ProfileState = p.State()
-		result.Alerts.PriceDrops, err = s.priceDrops(ctx, tx, id, contexts)
+		result.Alerts.PriceDrops, err = tx.BuyerFeatures().PriceDrops(ctx, id)
 		return err
 	})
 	return result, err
@@ -147,7 +144,6 @@ func (s *Features) Patch(
 			RegionCode: point.RegionCode,
 		}
 	}
-	contexts := s.profileContexts(ctx, id)
 	var result ProfileView
 	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		if err := tx.BuyerFeatures().Lock(ctx, id); err != nil {
@@ -170,7 +166,7 @@ func (s *Features) Patch(
 			}
 		}
 		result.ProfileState = p.State()
-		result.Alerts.PriceDrops, err = s.priceDrops(ctx, tx, id, contexts)
+		result.Alerts.PriceDrops, err = tx.BuyerFeatures().PriceDrops(ctx, id)
 		return err
 	})
 	return result, err
@@ -249,43 +245,32 @@ func (s *Features) Saved(ctx context.Context, id ids.UUID) ([]SavedView, error) 
 	if err != nil {
 		return nil, err
 	}
-	return s.savedOfferViews(ctx, id, saved)
+	return s.savedOfferViews(ctx, saved)
 }
 
 func (s *Features) savedOfferViews(
 	ctx context.Context,
-	id ids.UUID,
 	saved []ports.SavedOffer,
 ) ([]SavedView, error) {
 	if len(saved) == 0 {
 		return []SavedView{}, nil
 	}
 	keys := make([]ids.OfferID, 0, len(saved))
-	tenants := make([]ids.TenantID, 0, len(saved))
-	seen := make(map[ids.TenantID]bool, len(saved))
 	for _, item := range saved {
 		key, err := ids.ParseOfferID(item.Offer.ID)
 		if err != nil {
 			return nil, err
 		}
 		keys = append(keys, key)
-		if !seen[key.Tenant] {
-			tenants = append(tenants, key.Tenant)
-			seen[key.Tenant] = true
-		}
-	}
-	contexts, err := appcatalog.PriceContexts(ctx, s.uow, s.pricing, id, tenants)
-	if err != nil {
-		return nil, err
 	}
 	current := map[string]ports.OfferDocument{}
-	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		states, err := tx.Offers().Batch(ctx, keys)
 		if err != nil {
 			return err
 		}
 		for _, state := range states {
-			if doc, ok := pricedDocument(state, contexts); ok {
+			if doc, ok := pricedDocument(state); ok {
 				current[doc.ID] = doc
 			}
 		}
@@ -324,10 +309,6 @@ func (s *Features) PutSaved(
 	if target != nil && target.Kopecks() < 0 {
 		return buyer.ErrInvalidTarget
 	}
-	contexts, err := appcatalog.PriceContexts(ctx, s.uow, s.pricing, id, []ids.TenantID{offer.Tenant})
-	if err != nil {
-		return err
-	}
 	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		repo := tx.BuyerFeatures()
 		if err := repo.Lock(ctx, id); err != nil {
@@ -351,7 +332,7 @@ func (s *Features) PutSaved(
 		if err != nil {
 			return err
 		}
-		doc, ok := pricedDocument(state, contexts)
+		doc, ok := pricedDocument(state)
 		if !ok || !doc.Visible {
 			return catalog.ErrProductNotFound
 		}
@@ -449,61 +430,15 @@ func (s *Features) Favorites(ctx context.Context, id ids.UUID, limit, offset int
 	if err != nil {
 		return nil, 0, err
 	}
-	result, err := s.savedOfferViews(ctx, id, saved)
+	result, err := s.savedOfferViews(ctx, saved)
 	return result, total, err
 }
 
-func (s *Features) profileContexts(ctx context.Context, id ids.UUID) map[ids.TenantID]string {
-	var tenants []ids.TenantID
-	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		var err error
-		tenants, err = tx.BuyerFeatures().WatchTenants(ctx, id)
-		return err
-	})
-	if err != nil {
-		slog.WarnContext(ctx, "Магазины наблюдений недоступны", "buyerId", id, "error", err)
-		return nil
-	}
-	if len(tenants) == 0 {
-		return map[ids.TenantID]string{}
-	}
-	contexts, err := appcatalog.PriceContexts(ctx, s.uow, s.pricing, id, tenants)
-	if err != nil {
-		slog.WarnContext(ctx, "Ценовые контексты профиля недоступны", "buyerId", id, "error", err)
-		return nil
-	}
-	return contexts
-}
-
-func (s *Features) priceDrops(
-	ctx context.Context,
-	tx ports.Tx,
-	id ids.UUID,
-	contexts map[ids.TenantID]string,
-) (*int, error) {
-	if contexts == nil {
-		return nil, nil
-	}
-	if len(contexts) == 0 {
-		count := 0
-		return &count, nil
-	}
-	count, err := tx.BuyerFeatures().PriceDrops(ctx, id, contexts)
-	return &count, err
-}
-
-func pricedDocument(state ports.OfferState, contexts map[ids.TenantID]string) (ports.OfferDocument, bool) {
+func pricedDocument(state ports.OfferState) (ports.OfferDocument, bool) {
 	doc, ok := appcatalog.Document(state)
 	if !ok || !doc.Visible {
 		return doc, false
 	}
-	key := contexts[ids.TenantID(doc.TenantID)]
-	price, ok := catalog.SelectPrice(doc.PriceProfiles, key)
-	if !ok {
-		return doc, false
-	}
-	doc.Price = price.EffectivePrice.Kopecks()
-	doc.BasePrice = price.Price.Kopecks()
 	return doc, true
 }
 

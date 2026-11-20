@@ -24,13 +24,7 @@ var w3FixturesDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"
 
 func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at time.Time) catalog.Snapshot {
 	return catalog.Snapshot{
-		PriceProfiles: []catalog.PriceProfile{
-			{
-				Key:            catalog.DefaultPriceProfile,
-				Price:          money.FromKopecks(10000),
-				EffectivePrice: money.FromKopecks(10000),
-			},
-		},
+
 		TenantID:  tenant,
 		ProductID: product,
 		Revision:  revision,
@@ -49,8 +43,11 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, at tim
 			Visible:    true,
 			Categories: []catalog.Category{{ID: "c1", Name: "Категория"}},
 		},
-		Price:     money.FromKopecks(10000),
+
 		Available: 3,
+		HasPrice:  true,
+		Price:     money.FromKopecks(10000),
+		BasePrice: money.FromKopecks(10000),
 	}
 }
 

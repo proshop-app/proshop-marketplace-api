@@ -12,11 +12,9 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
-	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
@@ -41,11 +39,10 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 		}
 
 		var query struct {
-			PriceContexts map[string]string                `json:"priceContexts"`
-			Attributes    map[string]ports.AttributeFilter `json:"attributes"`
-			InStock       bool                             `json:"inStock"`
-			InStockSet    bool                             `json:"inStockSet"`
-			FacetFields   []struct {
+			Attributes  map[string]ports.AttributeFilter `json:"attributes"`
+			InStock     bool                             `json:"inStock"`
+			InStockSet  bool                             `json:"inStockSet"`
+			FacetFields []struct {
 				Code string `json:"code"`
 				Type string `json:"type"`
 			} `json:"facetFields"`
@@ -55,7 +52,7 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 			t.Error(err)
 		}
 
-		if query.PriceContexts["t1"] != "marketplace:group" || !query.InStockSet || query.InStock ||
+		if !query.InStockSet || query.InStock ||
 			query.Attributes["a2"].Type != "number" || query.Attributes["a2"].Min != "1.5" ||
 			len(query.FacetFields) != 1 || query.FacetFields[0].Code != "a2" {
 			t.Errorf("контекст поиска потерян: %+v", query)
@@ -98,7 +95,7 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 		ProductID:            "p1",
 		CategoryID:           "c2",
 		CategoryPath:         []string{"c1", "c2"},
-		Price:                price,
+
 		Delivery: participant.DeliverySettings{
 			Regions:  []string{},
 			Carriers: []string{"cdek", "yandex"},
@@ -110,27 +107,14 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 			"a3": json.RawMessage(`false`),
 			"a4": json.RawMessage(`"true"`),
 		},
-		PriceProfiles: []catalog.PriceProfile{
-			{
-				Key:            catalog.DefaultPriceProfile,
-				Price:          money.FromKopecks(price),
-				EffectivePrice: money.FromKopecks(price),
-			},
-			{
-				Key:            "marketplace:group",
-				Price:          money.FromKopecks(0),
-				EffectivePrice: money.FromKopecks(0),
-			},
-		},
+		Price:     money.FromKopecks(price).Kopecks(),
+		BasePrice: money.FromKopecks(price).Kopecks(),
 	}
 
 	if err := client.Put(ctx, []ports.OfferDocument{doc}); err != nil {
 		t.Fatal(err)
 	}
 	page, err := client.Search(ctx, ports.OfferQuery{
-		PriceContexts: map[ids.TenantID]string{
-			"t1": "marketplace:group",
-		},
 		InStockSet: true,
 		Attributes: map[string]ports.AttributeFilter{
 			"a2": {
@@ -152,7 +136,7 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 	got := page.Items[0]
 
 	if got.Price != price || !reflect.DeepEqual(got.Attributes, doc.Attributes) ||
-		!reflect.DeepEqual(got.PriceProfiles, doc.PriceProfiles) || !reflect.DeepEqual(got.Delivery, doc.Delivery) ||
+		!reflect.DeepEqual(got.Delivery, doc.Delivery) ||
 		!reflect.DeepEqual(got.CategoryPath, doc.CategoryPath) {
 		t.Fatalf("изменились данные после HTTP-передачи: %+v", got)
 	}

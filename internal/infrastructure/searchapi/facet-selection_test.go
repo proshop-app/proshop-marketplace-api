@@ -13,7 +13,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
-	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 func TestFacetSelectionWireContract51(t *testing.T) {
@@ -79,14 +78,10 @@ func TestFacetSelectionWireContract51(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, contexts := range []map[ids.TenantID]string{
-				nil,
-				{"t1": "marketplace:default"},
-			} {
+			for range 1 {
 				_, err := client.Search(context.Background(), ports.OfferQuery{
-					Facets:        tc.facets,
-					FacetFields:   []taxonomy.Attribute{{Code: "a1", Name: "Поле", Type: "enum"}},
-					PriceContexts: contexts,
+					Facets:      tc.facets,
+					FacetFields: []taxonomy.Attribute{{Code: "a1", Name: "Поле", Type: "enum"}},
 				})
 				if err != nil {
 					t.Fatal(err)
@@ -105,12 +100,8 @@ func TestFacetSelectionWireContract51(t *testing.T) {
 				if string(request["facetFields"]) != wantFields {
 					t.Fatalf("пустые атрибутные фасеты: %s", request["facetFields"])
 				}
-				want := "null"
-				if contexts != nil {
-					want = `{"t1":"marketplace:default"}`
-				}
-				if string(request["priceContexts"]) != want {
-					t.Fatalf("ценовая область изменена: %s, ожидалось %s", request["priceContexts"], want)
+				if _, found := request["priceContexts"]; found {
+					t.Fatal("запрос содержит удалённое поле priceContexts")
 				}
 			}
 		})

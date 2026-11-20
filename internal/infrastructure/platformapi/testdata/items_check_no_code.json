@@ -1,0 +1,17 @@
+{
+  "promoCode": null,
+  "items": [
+    {
+      "productId": "p1",
+      "available": true,
+      "availableQuantity": 10,
+      "price": 100,
+      "discounts": [
+        {
+          "promotionId": "promo1",
+          "amount": 11
+        }
+      ]
+    }
+  ]
+}

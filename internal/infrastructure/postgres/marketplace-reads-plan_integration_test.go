@@ -21,11 +21,11 @@ const (
 	readPlanSeedGenerations = `INSERT INTO store_card_cache_versions (tenant_id, version)
  SELECT 't' || n::text, 1 FROM generate_series(1, 1000) n`
 	readPlanSeedProducts = `INSERT INTO catalog_products
- (tenant_id, product_id, revision, deleted, card, price, available, projected_at, version, updated_at)
+ (tenant_id, product_id, revision, deleted, card, price, base_price, available, projected_at, version, updated_at)
  SELECT tenant_id, 'p' || lpad(n::text, 6, '0'), 1, false,
  jsonb_build_object('name', 'Товар', 'visible', true, 'assets', '[]'::jsonb,
  'variantsId', 'g' || (n / 3)::text, 'publication', jsonb_build_object('published', true)),
- 100, 1, $1, 1, $1 FROM tenants
+ 100, 100, 1, $1, 1, $1 FROM tenants
  CROSS JOIN LATERAL generate_series(1, CASE WHEN tenant_id = 't001000' THEN 2100 ELSE 100 END) n`
 	readPlanSeedCases = `INSERT INTO moderation_cases
  (id, tenant_id, product_id, revision, source, status, reasons, note, opened_at, version)

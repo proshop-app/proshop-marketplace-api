@@ -240,7 +240,6 @@ func TestParticipantsRepository(t *testing.T) {
 }
 
 func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, minute int) catalog.Snapshot {
-	promo := money.FromKopecks(8000)
 
 	return catalog.Snapshot{
 		TenantID:  tenant,
@@ -257,16 +256,11 @@ func snapshot(tenant ids.TenantID, product ids.ProductID, revision int64, minute
 			VariantsID:  "v1",
 			Visible:     true,
 		},
-		Price:      money.FromKopecks(10000),
-		PromoPrice: &promo,
-		Available:  5,
-		PriceProfiles: []catalog.PriceProfile{
-			{
-				Key:            catalog.DefaultPriceProfile,
-				Price:          money.FromKopecks(10000),
-				EffectivePrice: money.FromKopecks(10000),
-			},
-		},
+
+		Available: 5,
+		HasPrice:  true,
+		Price:     money.FromKopecks(10000),
+		BasePrice: money.FromKopecks(10000),
 	}
 }
 
@@ -330,8 +324,8 @@ func TestProductRoundTrip(t *testing.T) {
 		if state.Card.Name != "Товар p1" ||
 			state.Card.Categories[0].Name != "Категория" ||
 			state.Price.Kopecks() != 10000 ||
-			state.PromoPrice == nil ||
-			state.PromoPrice.Kopecks() != 8000 ||
+			!state.HasPrice ||
+			state.BasePrice.Kopecks() != 10000 ||
 			state.Available != 5 ||
 			!state.ProjectedAt.Equal(at(0)) {
 			return fmt.Errorf("товар после хранения: %+v", state)
@@ -360,7 +354,7 @@ func TestProductRoundTrip(t *testing.T) {
 
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		product, err := tx.Products().Get(ctx, "t1", "p1")
-		if err != nil || !product.State().Deleted || product.State().PromoPrice != nil || product.Version() != 2 {
+		if err != nil || !product.State().Deleted || product.State().HasPrice || product.Version() != 2 {
 			return fmt.Errorf("удалённый товар: %+v, %w", product.State(), err)
 		}
 		if _, err := tx.Products().Get(ctx, "t1", "missing"); !errors.Is(err, catalog.ErrProductNotFound) {

@@ -37,7 +37,7 @@ func sellersHandler(t *testing.T, key string) (catalogHandlers, *fake.SellersCou
 			ModelKey:    key,
 			Publication: taxonomy.Publication{Published: true},
 		},
-		PriceProfiles: []catalog.PriceProfile{{Key: catalog.DefaultPriceProfile}},
+		HasPrice: true,
 	}
 	state := ports.OfferState{
 		Product:     catalog.RestoreProduct(product),

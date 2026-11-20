@@ -50,40 +50,37 @@ type Limiter struct {
 
 // Platform — API сервера установки в памяти.
 type Platform struct {
-	priceContextCalls []ids.TenantID
-	pickups           map[ids.TenantID]ports.PickupPoints
-	pickupCalls       []PickupCall
-	BeforePickup      func(context.Context, ids.TenantID) error
-	CallHook          func(context.Context, string) error
-	Reviews           []ports.Review
-	ReviewsErr        error
-	promos            map[ids.TenantID]ports.GroupPricing
-	buyerProfiles     map[ids.UUID]map[ids.TenantID]string
-	buyerItems        map[ids.UUID]map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
-	checks            []ItemCheckCall
-	mu                sync.Mutex
-	items             map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
-	quotes            map[ids.TenantID]delivery.Offered
-	settings          map[ids.TenantID]ports.ShopSettings
-	failing           map[ids.TenantID]error
-	requests          []ports.QuoteRequest
-	cancelledOrders   map[string]ports.CancelOrderResult
-	cancelRequests    map[ids.TenantID][]ports.CancelOrderRequest
-	cancelErrors      map[ids.TenantID]error
-	orders            map[string]checkout.SellerOrder
-	orderRefusals     map[string]error
-	orderTenants      map[string]ids.TenantID
-	orderBodies       map[string]string
-	orderRequests     map[ids.TenantID][]ports.CreateOrderRequest
-	createErrors      map[ids.TenantID]error
-	pollErrors        map[ids.TenantID]error
-	pollCalls         map[ids.TenantID]int
-	BeforeSettings    func(ids.TenantID)
-	OrderNow          time.Time
-	AfterCreate       func()
-	AfterStubPayment  func()
-	stubPaid          map[string]bool
-	stubCalls         []ids.TenantID
+	pickups          map[ids.TenantID]ports.PickupPoints
+	pickupCalls      []PickupCall
+	BeforePickup     func(context.Context, ids.TenantID) error
+	CallHook         func(context.Context, string) error
+	Reviews          []ports.Review
+	ReviewsErr       error
+	promos           map[ids.TenantID]ports.GroupPricing
+	checks           []ItemCheckCall
+	mu               sync.Mutex
+	items            map[ids.TenantID]map[ids.ProductID]ports.ItemCheck
+	quotes           map[ids.TenantID]delivery.Offered
+	settings         map[ids.TenantID]ports.ShopSettings
+	failing          map[ids.TenantID]error
+	requests         []ports.QuoteRequest
+	cancelledOrders  map[string]ports.CancelOrderResult
+	cancelRequests   map[ids.TenantID][]ports.CancelOrderRequest
+	cancelErrors     map[ids.TenantID]error
+	orders           map[string]checkout.SellerOrder
+	orderRefusals    map[string]error
+	orderTenants     map[string]ids.TenantID
+	orderBodies      map[string]string
+	orderRequests    map[ids.TenantID][]ports.CreateOrderRequest
+	createErrors     map[ids.TenantID]error
+	pollErrors       map[ids.TenantID]error
+	pollCalls        map[ids.TenantID]int
+	BeforeSettings   func(ids.TenantID)
+	OrderNow         time.Time
+	AfterCreate      func()
+	AfterStubPayment func()
+	stubPaid         map[string]bool
+	stubCalls        []ids.TenantID
 }
 
 // NewUUID — следующий идентификатор вида 00000000-0000-4000-8000-00000000000N.
@@ -318,10 +315,7 @@ func (p *Platform) checkItems(
 	p.checks = append(p.checks, ItemCheckCall{TenantID: tenant, Request: request})
 	checks := make([]ports.ItemCheck, 0, len(request.Items))
 	for _, item := range request.Items {
-		check, ok := p.buyerItems[request.BuyerID][tenant][item.ProductID]
-		if !ok {
-			check, ok = p.items[tenant][item.ProductID]
-		}
+		check, ok := p.items[tenant][item.ProductID]
 		if !ok {
 			check = ports.ItemCheck{ProductID: item.ProductID}
 		}

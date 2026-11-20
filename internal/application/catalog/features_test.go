@@ -13,7 +13,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestRecommendationRulesAndSingleCandidateQuery(t *testing.T) {
@@ -92,12 +91,11 @@ func TestRatingSortPlacesUnratedLast(t *testing.T) {
 	for i, rating := range []*catalog.Rating{nil, {Value: 4.7, Count: 2}, {Value: 4.7, Count: 10}} {
 		id := []string{"t1~p1", "t1~p2", "t1~p3"}[i]
 		doc := ports.OfferDocument{
-			ID:            id,
-			Listed:        true,
-			Visible:       true,
-			Version:       1,
-			Rating:        rating,
-			PriceProfiles: snapshot("t1", "p1", 1, t0).PriceProfiles,
+			ID:      id,
+			Listed:  true,
+			Visible: true,
+			Version: 1,
+			Rating:  rating,
 		}
 		if err := index.Put(ctx, []ports.OfferDocument{doc}); err != nil {
 			t.Fatal(err)
@@ -130,14 +128,7 @@ func recommendationStates(t *testing.T, store *fake.Store) []ports.OfferState {
 				product.Card.Visible = false
 			}
 			if tenant == "t4" {
-				product.PriceProfiles = nil
-			}
-			if tenant == "t2" {
-				product.PriceProfiles = append(product.PriceProfiles, catalog.PriceProfile{
-					Key:            "marketplace:buyer",
-					Price:          money.FromKopecks(9000),
-					EffectivePrice: money.FromKopecks(8000),
-				})
+				product.HasPrice = false
 			}
 			state.Product = catalog.RestoreProduct(product)
 			states = append(states, state)
@@ -154,7 +145,6 @@ func TestRecommendationAssemblyAndBuyerPrices(t *testing.T) {
 	states := recommendationStates(t, store)
 	seedProduct(store, "t1", "p0")
 	platform := fake.NewPlatform()
-	platform.SetBuyerProfile("buyer", "t2", "marketplace:buyer")
 	features := &fake.CatalogFeatures{States: states}
 	q := app.NewQueries(store, fake.NewIndex(), platform, features, features, fake.NewClock(time.Time{}))
 	request := app.RecommendationRequest{
@@ -178,8 +168,8 @@ func TestRecommendationAssemblyAndBuyerPrices(t *testing.T) {
 	}
 	request.BuyerID = "buyer"
 	result, err = q.Recommend(context.Background(), request)
-	if err != nil || len(result.Items) != 2 || result.Items[0].Offer.Price != 8000 ||
-		result.Items[0].Offer.BasePrice != 9000 {
+	if err != nil || len(result.Items) != 2 || result.Items[0].Offer.Price != 10000 ||
+		result.Items[0].Offer.BasePrice != 10000 {
 		t.Fatal(result, err)
 	}
 	if features.Calls != 2 {
@@ -250,16 +240,18 @@ func TestGuestRecommendationExpiryAndSameTenant(t *testing.T) {
 func TestGuestRecommendationsShareMissAndDoNotCacheErrors(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	var first sync.Once
-	features := &fake.CatalogFeatures{RecommendHook: func(ctx context.Context) error {
-		first.Do(func() {
-			close(started)
-			<-release
-		})
-		if _, ok := ctx.Deadline(); !ok {
-			t.Error("у общей загрузки нет таймаута")
-		}
-		return ctx.Err()
-	}}
+	features := &fake.CatalogFeatures{
+		RecommendHook: func(ctx context.Context) error {
+			first.Do(func() {
+				close(started)
+				<-release
+			})
+			if _, ok := ctx.Deadline(); !ok {
+				t.Error("у общей загрузки нет таймаута")
+			}
+			return ctx.Err()
+		},
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	q := app.NewQueries(fake.NewStore(), fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(t0))
@@ -343,12 +335,14 @@ func TestViewedRecommendationsForGuestAndBuyer(t *testing.T) {
 
 func TestGuestRecommendationsCancelSQLWhenLastWaiterLeaves(t *testing.T) {
 	started, stopped := make(chan struct{}), make(chan struct{})
-	features := &fake.CatalogFeatures{RecommendHook: func(ctx context.Context) error {
-		close(started)
-		<-ctx.Done()
-		close(stopped)
-		return ctx.Err()
-	}}
+	features := &fake.CatalogFeatures{
+		RecommendHook: func(ctx context.Context) error {
+			close(started)
+			<-ctx.Done()
+			close(stopped)
+			return ctx.Err()
+		},
+	}
 	q := app.NewQueries(fake.NewStore(), fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(t0))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

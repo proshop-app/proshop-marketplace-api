@@ -31,11 +31,15 @@ func seedStoreCard(t *testing.T) (*fake.Store, *app.Service) {
 			Readiness: participant.CardReadiness{Ready: true},
 		},
 	})
-	store.SeedTaxonomy(taxonomy.Definition{Categories: []taxonomy.Category{{
-		ID:       "root",
-		Name:     "Раздел",
-		Children: []taxonomy.Category{{ID: "leaf", Name: "Подраздел"}},
-	}}})
+	store.SeedTaxonomy(taxonomy.Definition{
+		Categories: []taxonomy.Category{
+			{
+				ID:       "root",
+				Name:     "Раздел",
+				Children: []taxonomy.Category{{ID: "leaf", Name: "Подраздел"}},
+			},
+		},
+	})
 	for i, id := range []ids.ProductID{"p1", "p2", "p3", "p4"} {
 		price := money.FromKopecks(int64(100 + i))
 		image := ""
@@ -54,11 +58,9 @@ func seedStoreCard(t *testing.T) (*fake.Store, *app.Service) {
 				Marketplace: &taxonomy.Card{Published: true, CategoryID: "leaf"},
 				Publication: taxonomy.Publication{Published: true, CategoryID: "leaf"},
 			},
-			PriceProfiles: []catalog.PriceProfile{{
-				Key:            catalog.DefaultPriceProfile,
-				Price:          money.FromKopecks(1000),
-				EffectivePrice: price,
-			}},
+			HasPrice:  true,
+			Price:     price,
+			BasePrice: money.FromKopecks(1000),
 		})
 		store.SeedVerdict(moderation.VerdictState{
 			TenantID:  "t1",
@@ -202,10 +204,12 @@ func refreshStore(t *testing.T, service *app.Service) {
 
 func TestStoreSummaryMultipleRootsAndNoVisibleOffers(t *testing.T) {
 	store, service := seedStoreCard(t)
-	store.SeedTaxonomy(taxonomy.Definition{Categories: []taxonomy.Category{
-		{ID: "root", Name: "Б", Children: []taxonomy.Category{{ID: "leaf", Name: "Лист"}}},
-		{ID: "second", Name: "А"},
-	}})
+	store.SeedTaxonomy(taxonomy.Definition{
+		Categories: []taxonomy.Category{
+			{ID: "root", Name: "Б", Children: []taxonomy.Category{{ID: "leaf", Name: "Лист"}}},
+			{ID: "second", Name: "А"},
+		},
+	})
 	for _, id := range []ids.ProductID{"p1", "p2"} {
 		if err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 			p, err := tx.Products().Get(ctx, "t1", id)
@@ -356,14 +360,15 @@ func TestStoreWeightedRatingOnlyVisibleOffers(t *testing.T) {
 				value, count = 1, 100
 			}
 			next := catalog.Snapshot{
-				TenantID:      state.TenantID,
-				ProductID:     state.ProductID,
-				Revision:      state.Revision + 1,
-				At:            t0,
-				Card:          state.Card,
-				PriceProfiles: state.PriceProfiles,
+				TenantID:  state.TenantID,
+				ProductID: state.ProductID,
+				Revision:  state.Revision + 1,
+				At:        t0,
+				Card:      state.Card,
+
 				AverageRating: value,
 				RatingsCount:  count,
+				HasPrice:      true,
 			}
 			_, err = p.Apply(next, t0)
 			if err != nil {

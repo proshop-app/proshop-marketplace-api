@@ -21,7 +21,7 @@ func (h *catalogHandlers) listIDs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	cards, err := h.queries.Offers(r.Context(), offerIDs, BuyerID(r.Context()))
+	cards, err := h.queries.Offers(r.Context(), offerIDs)
 	if err != nil {
 		writeError(w, r, err)
 		return

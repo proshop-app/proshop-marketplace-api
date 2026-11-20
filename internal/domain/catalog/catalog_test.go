@@ -22,8 +22,6 @@ var visibleSeller = catalog.Seller{Slug: "shop", Name: "Магазин", Visible
 
 func rub(kopecks int64) money.Money { return money.FromKopecks(kopecks) }
 
-func ptr(m money.Money) *money.Money { return &m }
-
 func snapshot(revision int64, at time.Time) catalog.Snapshot {
 	return catalog.Snapshot{
 		TenantID:  "t1",
@@ -36,15 +34,10 @@ func snapshot(revision int64, at time.Time) catalog.Snapshot {
 			Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
 			Publication: taxonomy.Publication{Published: true, CategoryID: "c1"},
 		},
+		HasPrice:  true,
 		Price:     rub(10000),
+		BasePrice: rub(10000),
 		Available: 5,
-		PriceProfiles: []catalog.PriceProfile{
-			{
-				Key:            catalog.DefaultPriceProfile,
-				Price:          rub(10000),
-				EffectivePrice: rub(10000),
-			},
-		},
 	}
 }
 
@@ -99,7 +92,7 @@ func TestProductRejectsInvalidSnapshot(t *testing.T) {
 		"нет названия":     func(s *catalog.Snapshot) { s.Card.Name = "  " },
 		"цена меньше нуля": func(s *catalog.Snapshot) { s.Price = rub(-1) },
 		"промо меньше нуля": func(s *catalog.Snapshot) {
-			s.PromoPrice = ptr(rub(-1))
+			s.BasePrice = rub(-1)
 		},
 	}
 
@@ -154,7 +147,7 @@ func TestSignalsOrderedByTime(t *testing.T) {
 
 func TestComposeOfferPrices(t *testing.T) {
 	s := snapshot(1, t1)
-	s.PriceProfiles[0].EffectivePrice = rub(8000)
+	s.Price = rub(8000)
 	product, _ := catalog.NewProduct(s, t1)
 	offer := catalog.ComposeOffer(product, nil, visibleSeller, allowedVerdict())
 	if offer.Price.Kopecks() != 8000 || offer.BasePrice.Kopecks() != 10000 {
@@ -167,7 +160,7 @@ func TestComposeOfferPrices(t *testing.T) {
 	}
 
 	s = snapshot(2, t2)
-	s.PriceProfiles[0].EffectivePrice = rub(0)
+	s.Price = rub(0)
 	if _, err := product.Apply(s, t2); err != nil {
 		t.Fatal(err)
 	}

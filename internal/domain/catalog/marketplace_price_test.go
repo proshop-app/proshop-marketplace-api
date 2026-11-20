@@ -8,13 +8,7 @@ import (
 
 func TestMarketplacePriceSurvivesShopPriceSignals(t *testing.T) {
 	s := snapshot(1, t0)
-	s.PriceProfiles = []catalog.PriceProfile{
-		{
-			Key:            catalog.DefaultPriceProfile,
-			Price:          rub(25000),
-			EffectivePrice: rub(25000),
-		},
-	}
+	s.Price, s.BasePrice = rub(25000), rub(25000)
 	product, err := catalog.NewProduct(s, t0)
 	if err != nil {
 		t.Fatal(err)
@@ -32,5 +26,18 @@ func TestMarketplacePriceSurvivesShopPriceSignals(t *testing.T) {
 	offer = catalog.ComposeOffer(product, signals, visibleSeller, allowedVerdict())
 	if offer.Price.Kopecks() != 10000 {
 		t.Fatalf("новая проекция Pricing: %v", offer.Price)
+	}
+}
+
+func TestMissingPublicPriceHidesOffer(t *testing.T) {
+	value := snapshot(1, t0)
+	value.HasPrice = false
+	product, err := catalog.NewProduct(value, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	offer := catalog.ComposeOffer(product, nil, visibleSeller, allowedVerdict())
+	if offer.Visible || offer.Listed || offer.CheckoutAvailable {
+		t.Fatal("товар без публичной цены доступен", offer)
 	}
 }

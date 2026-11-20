@@ -2,7 +2,6 @@ package http_test
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -28,6 +27,9 @@ func TestBuyerFeatureAuthorizationAndProfile(t *testing.T) {
 	result := e.session(t, http.MethodPatch, "/api/v1/buyer/profile", `{"name":"Имя"}`, cookie)
 	if result.status != http.StatusOK || result.body["name"] != "Имя" || result.body["region"] != nil {
 		t.Fatalf("профиль: %+v", result)
+	}
+	if result.body["alerts"].(map[string]any)["priceDrops"] != float64(0) {
+		t.Fatal(result)
 	}
 	result = e.session(t, http.MethodPatch, "/api/v1/buyer/profile", `{"region":{"code":"bad"}}`, cookie)
 	if result.status != http.StatusBadRequest {
@@ -86,20 +88,12 @@ func TestBuyerFeatureCollectionsAndShopHeader(t *testing.T) {
 		t.Fatal(result)
 	}
 	e.seedOffer(t, "t1", "p1", 90)
-	result = e.session(t, http.MethodGet, "/api/v1/buyer/profile", "", cookie)
-	if result.status != http.StatusOK || result.body["alerts"].(map[string]any)["priceDrops"] != float64(1) {
-		t.Fatal(result)
-	}
-	e.platform.Fail("t1", errors.New("контексты недоступны"))
 	for _, method := range []string{http.MethodGet, http.MethodPatch} {
 		result = e.session(t, method, "/api/v1/buyer/profile", `{}`, cookie)
-		alerts, ok := result.body["alerts"].(map[string]any)
-		value, exists := alerts["priceDrops"]
-		if result.status != http.StatusOK || !ok || !exists || value != nil {
+		if result.status != http.StatusOK || result.body["alerts"].(map[string]any)["priceDrops"] != float64(1) {
 			t.Fatal(result)
 		}
 	}
-	e.platform.Fail("t1", nil)
 	e.store.SeedProduct(catalog.ProductState{TenantID: "t1", ProductID: "p1", Deleted: true})
 	result = e.session(t, http.MethodGet, "/api/v1/buyer/favorites", "", cookie)
 	favorite := result.body["items"].([]any)[0].(map[string]any)

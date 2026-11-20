@@ -4,7 +4,6 @@ package postgres_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -27,18 +26,24 @@ const (
 	waitingBuyerLocks = `SELECT count(*) FROM pg_locks
  WHERE locktype = 'advisory' AND NOT granted
  AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`
-	lowerWatchPrices = `UPDATE catalog_products SET price_profiles = $1 WHERE tenant_id = 't1' AND product_id = 'p1'`
+	lowerWatchPrices = `UPDATE catalog_products SET price = $1 WHERE tenant_id = 't1' AND product_id = 'p1'`
 	hideWatchSeller  = `UPDATE participants
  SET enabled = false,
  stage = 'disconnected'
  WHERE tenant_id = 't1'`
 	rejectWatchOffer = `UPDATE moderation_verdicts SET status = 'rejected'
  WHERE tenant_id = 't1' AND product_id = 'p1'`
-	deleteWatchOffer = `UPDATE catalog_products SET deleted = true, card = NULL, price = NULL
+	deleteWatchOffer = `UPDATE catalog_products SET deleted = true,
+ card = NULL,
+ price = NULL,
+ base_price = NULL
  WHERE tenant_id = 't1' AND product_id = 'p1'`
 	unpublishWatchOffer = `UPDATE catalog_products SET card = jsonb_set(card, '{publication,published}', 'false')
  WHERE tenant_id = 't1' AND product_id = 'p1'`
-	clearWatchPrices = `UPDATE catalog_products SET price_profiles = '[]' WHERE tenant_id = 't1' AND product_id = 'p1'`
+	clearWatchPrices = `UPDATE catalog_products
+ SET price = NULL,
+ base_price = NULL
+ WHERE tenant_id = 't1' AND product_id = 'p1'`
 )
 
 func seedBuyerFeatureOffers(t *testing.T, uow *postgres.UnitOfWork) {
@@ -129,7 +134,7 @@ func TestBuyerCollectionConcurrentLimit(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal(ctx.Err())
 			}
-			service := appbuyer.NewFeatures(uow, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
+			service := appbuyer.NewFeatures(uow, nil, fake.NewLimiter(), &fake.PickupLookup{})
 			results, started := make(chan error, 2), make(chan struct{}, 2)
 			for _, id := range []ids.ProductID{"p1", "p2"} {
 				go func() {
@@ -196,7 +201,7 @@ func TestBuyerPriceDropSQLAndFavoritePage(t *testing.T) {
 	uow := postgres.NewUnitOfWork(pgtest.Pool(t))
 	seedBuyerFeatureOffers(t, uow)
 	ctx := context.Background()
-	service := appbuyer.NewFeatures(uow, nil, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
+	service := appbuyer.NewFeatures(uow, nil, fake.NewLimiter(), &fake.PickupLookup{})
 	for _, id := range []ids.ProductID{"p1", "p2"} {
 		offer := ids.OfferID{Tenant: "t1", Product: id}
 		if err := service.PutSaved(ctx, buyerA, ports.Favorites, offer, nil); err != nil {
@@ -219,7 +224,7 @@ func TestBuyerPriceDropSQLAndFavoritePage(t *testing.T) {
 		t.Fatal(err)
 	}
 	profile, err := service.Profile(ctx, buyerA)
-	if err != nil || (profile.Alerts.PriceDrops == nil || *profile.Alerts.PriceDrops != 0) {
+	if err != nil || profile.Alerts.PriceDrops != 0 {
 		t.Fatal(profile, err)
 	}
 	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -229,7 +234,7 @@ func TestBuyerPriceDropSQLAndFavoritePage(t *testing.T) {
 		}
 		snap := snapshot("t1", "p1", 2, 1)
 		snap.Card.Publication = taxonomy.Publication{Published: true}
-		snap.PriceProfiles[0].EffectivePrice = money.FromKopecks(9000)
+		snap.Price = money.FromKopecks(9000)
 		if _, err := product.Apply(snap, at(1)); err != nil {
 			return err
 		}
@@ -238,7 +243,7 @@ func TestBuyerPriceDropSQLAndFavoritePage(t *testing.T) {
 		t.Fatal(err)
 	}
 	profile, err = service.Profile(ctx, buyerA)
-	if err != nil || (profile.Alerts.PriceDrops == nil || *profile.Alerts.PriceDrops != 1) {
+	if err != nil || profile.Alerts.PriceDrops != 1 {
 		t.Fatal(profile, err)
 	}
 	target = money.FromKopecks(8000)
@@ -246,86 +251,41 @@ func TestBuyerPriceDropSQLAndFavoritePage(t *testing.T) {
 		t.Fatal(err)
 	}
 	profile, err = service.Profile(ctx, buyerA)
-	if err != nil || (profile.Alerts.PriceDrops == nil || *profile.Alerts.PriceDrops != 0) {
+	if err != nil || profile.Alerts.PriceDrops != 0 {
 		t.Fatal(profile, err)
 	}
 }
 
 func TestPriceDropCounterMatchesList(t *testing.T) {
 	for _, test := range []struct {
-		name              string
-		query             string
-		profile           string
-		drops             int
-		publicUnchanged   bool
-		personalUnchanged bool
+		name  string
+		query string
+		drops int
 	}{
 		{name: "публичный", drops: 1},
 		{name: "скрытый участник", query: hideWatchSeller},
 		{name: "отклонённый вердикт", query: rejectWatchOffer},
 		{name: "удалённый товар", query: deleteWatchOffer},
 		{name: "неопубликованная карточка", query: unpublishWatchOffer},
-		{name: "нет профиля цены", query: clearWatchPrices},
-		{name: "персональная цена", profile: "marketplace:personal", drops: 1},
-		{name: "падает только общая", profile: "marketplace:personal", personalUnchanged: true},
-		{name: "падает только персональная", profile: "marketplace:personal", publicUnchanged: true, drops: 1},
-		{name: "неизвестный профиль", profile: "marketplace:absent"},
+		{name: "нет публичной цены", query: clearWatchPrices},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			pool := pgtest.Pool(t)
 			uow := postgres.NewUnitOfWork(pool)
 			seedBuyerFeatureOffers(t, uow)
 			ctx := context.Background()
-			platform := fake.NewPlatform()
-			service := appbuyer.NewFeatures(uow, nil, platform, fake.NewLimiter(), &fake.PickupLookup{})
-			profiles := []catalog.PriceProfile{
-				{
-					Key:            catalog.DefaultPriceProfile,
-					Price:          money.FromKopecks(10000),
-					EffectivePrice: money.FromKopecks(10000),
-				},
-				{
-					Key:            "marketplace:personal",
-					Price:          money.FromKopecks(20000),
-					EffectivePrice: money.FromKopecks(18000),
-				},
-			}
-			raw, err := json.Marshal(profiles)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := pool.Exec(ctx, lowerWatchPrices, raw); err != nil {
-				t.Fatal(err)
-			}
-			if test.profile == "marketplace:personal" {
-				platform.SetBuyerProfile(buyerA, "t1", test.profile)
-			}
+			service := appbuyer.NewFeatures(uow, nil, fake.NewLimiter(), &fake.PickupLookup{})
 			offer := ids.OfferID{Tenant: "t1", Product: "p1"}
 			if err := service.PutSaved(ctx, buyerA, ports.PriceWatches, offer, nil); err != nil {
 				t.Fatal(err)
 			}
-			profiles[0].EffectivePrice = money.FromKopecks(9000)
-			profiles[1].EffectivePrice = money.FromKopecks(15000)
-			if test.publicUnchanged {
-				profiles[0].EffectivePrice = money.FromKopecks(10000)
-			}
-			if test.personalUnchanged {
-				profiles[1].EffectivePrice = money.FromKopecks(18000)
-			}
-			raw, err = json.Marshal(profiles)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := pool.Exec(ctx, lowerWatchPrices, raw); err != nil {
+			if _, err := pool.Exec(ctx, lowerWatchPrices, int64(9000)); err != nil {
 				t.Fatal(err)
 			}
 			if test.query != "" {
 				if _, err := pool.Exec(ctx, test.query); err != nil {
 					t.Fatal(err)
 				}
-			}
-			if test.profile != "" {
-				platform.SetBuyerProfile(buyerA, "t1", test.profile)
 			}
 			list, err := service.Saved(ctx, buyerA)
 			if err != nil || len(list) != 1 {
@@ -338,13 +298,8 @@ func TestPriceDropCounterMatchesList(t *testing.T) {
 				}
 			}
 			profile, err := service.Profile(ctx, buyerA)
-			if err != nil || profile.Alerts.PriceDrops == nil ||
-				*profile.Alerts.PriceDrops != count || count != test.drops {
+			if err != nil || profile.Alerts.PriceDrops != count || count != test.drops {
 				t.Fatal(profile, count, err)
-			}
-			if test.profile == "marketplace:personal" &&
-				(list[0].PriceAtWatch != 18000 || *list[0].CurrentPrice != profiles[1].EffectivePrice.Kopecks()) {
-				t.Fatal(list)
 			}
 			if list[0].Offer.UpdatedAt.IsZero() {
 				t.Fatal("нулевая дата снимка")

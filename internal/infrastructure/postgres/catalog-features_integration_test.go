@@ -88,7 +88,7 @@ func seedRecommendationProducts(t *testing.T, uow *postgres.UnitOfWork, tenant i
 			snap.Card.Publication = taxonomy.Publication{Published: true, CategoryID: "c1"}
 			snap.AverageRating, snap.RatingsCount = 4.5, 12
 			snap.SalesCount = int64(1000 - i)
-			snap.PriceProfiles[0].EffectivePrice = money.FromKopecks(10000 + int64(i)*5000)
+			snap.Price = money.FromKopecks(10000 + int64(i)*5000)
 			product, err := catalog.NewProduct(snap, at(0))
 			if err != nil {
 				return err
@@ -156,10 +156,6 @@ func TestCatalogRecommendationsProjection(t *testing.T) {
 		t.Fatal(states, err)
 	}
 	filter.Region = "RU-MOW"
-	filter.PriceContexts = map[ids.TenantID]string{"t2": "marketplace:missing"}
-	if states, err := repository.Recommend(ctx, filter); err != nil || len(states) != 0 {
-		t.Fatal(states, err)
-	}
 	seedBuyer(t, uow, buyerA, "79990000001")
 	for _, sql := range []string{seedInterestCart, seedInterestLine, seedInterestCheckout, seedInterestOrder} {
 		if _, err := pool.Exec(ctx, sql, string(buyerA)); err != nil {

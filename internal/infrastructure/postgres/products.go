@@ -22,12 +22,11 @@ const (
 		p.deleted,
 		p.card,
 		p.price,
-		p.promo_price,
+		p.base_price,
 		p.available,
 		p.projected_at,
 		p.version,
 		p.updated_at,
-		p.price_profiles,
 		p.sales_count,
 		p.average_rating,
 		p.ratings_count`
@@ -46,17 +45,16 @@ const (
 			deleted,
 			card,
 			price,
-			promo_price,
+			base_price,
 			available,
 			projected_at,
 			version,
 			updated_at,
-			price_profiles,
 			sales_count,
 			average_rating,
 			ratings_count
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 
 	updateProduct = `
 		UPDATE catalog_products
@@ -64,16 +62,15 @@ const (
 			deleted = $4,
 			card = $5,
 			price = $6,
-			promo_price = $7,
+			base_price = $7,
 			available = $8,
 			projected_at = $9,
 			version = $10,
 			updated_at = $11,
-			price_profiles = $12,
-			sales_count = $13,
-			average_rating = $14,
-			ratings_count = $15
-		WHERE tenant_id = $1 AND product_id = $2 AND version = $16`
+			sales_count = $12,
+			average_rating = $13,
+			ratings_count = $14
+		WHERE tenant_id = $1 AND product_id = $2 AND version = $15`
 )
 
 // Products — проекция товаров в PostgreSQL.
@@ -117,8 +114,7 @@ type productRow struct {
 	ratingsCount        int64
 	deleted             bool
 	card                []byte
-	priceProfiles       []byte
-	price, promo        *int64
+	price, base         *int64
 	available           int
 	projectedAt         time.Time
 	version             int64
@@ -161,7 +157,7 @@ func (r *Products) get(
 func (r *Products) Save(ctx context.Context, product *catalog.Product) error {
 	s := product.State()
 
-	var card, price, promo any
+	var card, price, base any
 
 	if !s.Deleted {
 		encoded, err := encodeCard(s.Card)
@@ -170,17 +166,12 @@ func (r *Products) Save(ctx context.Context, product *catalog.Product) error {
 		}
 
 		card = string(encoded)
-		price = s.Price.Kopecks()
+		if s.HasPrice {
+			price = s.Price.Kopecks()
+			base = s.BasePrice.Kopecks()
+		}
 	}
 
-	if s.PromoPrice != nil {
-		promo = s.PromoPrice.Kopecks()
-	}
-
-	profiles, err := json.Marshal(s.PriceProfiles)
-	if err != nil {
-		return err
-	}
 	args := []any{
 		string(s.TenantID),
 		string(s.ProductID),
@@ -188,12 +179,11 @@ func (r *Products) Save(ctx context.Context, product *catalog.Product) error {
 		s.Deleted,
 		card,
 		price,
-		promo,
+		base,
 		s.Available,
 		s.ProjectedAt,
 		s.Version,
 		s.UpdatedAt,
-		string(profiles),
 		s.SalesCount,
 		s.AverageRating,
 		s.RatingsCount,
@@ -224,12 +214,11 @@ func (r *productRow) targetsWithTimes(projected, updated any) []any {
 		&r.deleted,
 		&r.card,
 		&r.price,
-		&r.promo,
+		&r.base,
 		&r.available,
 		projected,
 		&r.version,
 		updated,
-		&r.priceProfiles,
 		&r.salesCount,
 		&r.averageRating,
 		&r.ratingsCount,
@@ -256,17 +245,13 @@ func (r *productRow) product() (*catalog.Product, error) {
 		UpdatedAt:     r.updatedAt,
 	}
 
-	if err := json.Unmarshal(r.priceProfiles, &state.PriceProfiles); err != nil {
-		return nil, fmt.Errorf("ценовые профили %s/%s: %w", r.tenantID, r.productID, err)
-	}
-
 	if r.price != nil {
+		state.HasPrice = true
 		state.Price = money.FromKopecks(*r.price)
 	}
 
-	if r.promo != nil {
-		promo := money.FromKopecks(*r.promo)
-		state.PromoPrice = &promo
+	if r.base != nil {
+		state.BasePrice = money.FromKopecks(*r.base)
 	}
 
 	return catalog.RestoreProduct(state), nil

@@ -40,7 +40,7 @@ func (s *Service) prepareOrders(
 	if changed {
 		return reviewed, checkout.ErrDeliveryChanged
 	}
-	quotes := s.groupQuotes(ctx, buyerID, c.Groups(), c.Delivery())
+	quotes := s.groupQuotes(ctx, c.Groups(), c.Delivery())
 	for _, group := range c.Groups() {
 		if !group.Excluded() && group.OrderID == "" &&
 			quotes[group.TenantID].Reason == delivery.ReasonSellerUnreachable {
@@ -82,11 +82,10 @@ func (s *Service) prepareOrders(
 // groupQuotes рассчитывает каждый магазин ровно один раз через предохранитель.
 func (s *Service) groupQuotes(
 	ctx context.Context,
-	buyerID ids.UUID,
 	groups []checkout.Group,
 	fallback *checkout.Selection,
 ) map[ids.TenantID]delivery.Quote {
-	return s.quoteSelections(ctx, buyerID, groups, func(g checkout.Group) *checkout.Selection {
+	return s.quoteSelections(ctx, groups, func(g checkout.Group) *checkout.Selection {
 		return fallback
 	},
 	)

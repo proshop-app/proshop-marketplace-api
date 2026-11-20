@@ -53,7 +53,7 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 			group = g
 		}
 	}
-	request := creationRequest(buyerID, tenant, group, state.Delivery, state.Contact)
+	request := creationRequest(tenant, group, state.Delivery, state.Contact)
 
 	// Повтор команды должен вернуть сохранённый заказ, даже если код уже истёк.
 	// Сервер сравнивает снимок discounts внутри транзакции создания.
@@ -223,11 +223,10 @@ func (s *Service) orderCallBudget() time.Duration {
 }
 
 func creationRequest(
-	buyerID ids.UUID, tenant ids.TenantID, group checkout.Group,
+	tenant ids.TenantID, group checkout.Group,
 	fallback *checkout.Selection, contact checkout.Contact,
 ) ports.CreateOrderRequest {
 	request := ports.CreateOrderRequest{
-		BuyerID:            buyerID,
 		PromoCode:          group.PromoCode,
 		ExternalCheckoutID: group.ExternalCheckoutID,
 		GroupID:            tenant,

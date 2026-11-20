@@ -45,7 +45,8 @@ type Card struct {
 // Snapshot — снимок товара из события проекции: полная карточка или удаление
 // с монотонной ревизией источника.
 type Snapshot struct {
-	PriceProfiles []PriceProfile
+	// HasPrice отличает отсутствие публичного профиля от допустимой нулевой цены.
+	HasPrice      bool
 	TenantID      ids.TenantID
 	ProductID     ids.ProductID
 	Revision      int64
@@ -55,7 +56,7 @@ type Snapshot struct {
 	Deleted       bool
 	Card          Card
 	Price         money.Money
-	PromoPrice    *money.Money
+	BasePrice     money.Money
 	Available     int
 	// At — время публикации события; по нему снимок сравнивается с сигналами.
 	At time.Time
@@ -63,7 +64,8 @@ type Snapshot struct {
 
 // ProductState — плоский снимок записи проекции.
 type ProductState struct {
-	PriceProfiles []PriceProfile
+	// HasPrice отличает отсутствие публичного профиля от допустимой нулевой цены.
+	HasPrice      bool
 	TenantID      ids.TenantID
 	ProductID     ids.ProductID
 	Revision      int64
@@ -73,7 +75,7 @@ type ProductState struct {
 	Deleted       bool
 	Card          Card
 	Price         money.Money
-	PromoPrice    *money.Money
+	BasePrice     money.Money
 	Available     int
 	ProjectedAt   time.Time
 	Version       int64
@@ -144,21 +146,21 @@ func (p *Product) assign(snapshot Snapshot, now time.Time) {
 	p.state.UpdatedAt = now
 
 	if snapshot.Deleted {
-		p.state.PriceProfiles = nil
+		p.state.HasPrice = false
 		p.state.Card = Card{}
 		p.state.Price = money.Money{}
-		p.state.PromoPrice = nil
+		p.state.BasePrice = money.Money{}
 		p.state.Available = 0
 
 		return
 	}
 
-	p.state.PriceProfiles = append([]PriceProfile(nil), snapshot.PriceProfiles...)
+	p.state.HasPrice = snapshot.HasPrice
 	p.state.Card = snapshot.Card
 	p.state.Card.Assets = append([]string(nil), snapshot.Card.Assets...)
 	p.state.Card.Name = strings.TrimSpace(snapshot.Card.Name)
 	p.state.Price = snapshot.Price
-	p.state.PromoPrice = snapshot.PromoPrice
+	p.state.BasePrice = snapshot.BasePrice
 	p.state.Available = available
 }
 
@@ -175,10 +177,6 @@ func (p *Product) MarkSaved() { p.originVersion = p.state.Version }
 func (p *Product) Version() int64 { return p.state.Version }
 
 func (s Snapshot) validate() error {
-	if err := ValidatePrices(s.PriceProfiles); err != nil {
-		return err
-	}
-
 	if _, err := NormalizeRating(s.AverageRating, s.RatingsCount); err != nil {
 		return err
 	}
@@ -193,8 +191,8 @@ func (s Snapshot) validate() error {
 		return ErrInvalidSnapshot.WithMessage("у товара нет названия")
 	case s.Price.IsNegative():
 		return ErrInvalidSnapshot.WithMessage("отрицательная цена товара")
-	case s.PromoPrice != nil && s.PromoPrice.IsNegative():
-		return ErrInvalidSnapshot.WithMessage("отрицательная промо-цена товара")
+	case s.BasePrice.IsNegative():
+		return ErrInvalidSnapshot.WithMessage("отрицательная базовая цена товара")
 	default:
 		return nil
 	}

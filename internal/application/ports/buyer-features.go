@@ -60,13 +60,11 @@ type SavedOffer struct {
 
 // BuyerFeatures привязан к транзакции; Lock сериализует изменения списков и проверку лимитов.
 type BuyerFeatures interface {
-	// WatchTenants возвращает уникальные магазины наблюдений без чтения снимков.
-	WatchTenants(context.Context, ids.UUID) ([]ids.TenantID, error)
 	Lock(context.Context, ids.UUID) error
 	Profile(context.Context, ids.UUID) (*buyer.Profile, error)
 	SaveProfile(context.Context, ids.UUID, *buyer.Profile) error
 	FavoritesPage(context.Context, ids.UUID, int, int) ([]SavedOffer, int, error)
-	PriceDrops(context.Context, ids.UUID, map[ids.TenantID]string) (int, error)
+	PriceDrops(context.Context, ids.UUID) (int, error)
 	SavedStats(context.Context, ids.UUID, SavedKind, ids.OfferID) (int, bool, error)
 	UpdateTarget(context.Context, ids.UUID, SavedKind, ids.OfferID, *money.Money) error
 	Saved(context.Context, ids.UUID) ([]SavedOffer, error)

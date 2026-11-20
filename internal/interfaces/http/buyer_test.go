@@ -11,7 +11,6 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
-	pricecatalog "github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
@@ -207,23 +206,18 @@ func (e *env) seedCartDelivery() {
 		UpdatedAt: t0,
 	})
 	offer := ports.OfferDocument{
-		ID:                "t1~p1",
-		TenantID:          "t1",
-		ProductID:         "p1",
-		Name:              "Чайник",
-		Price:             199000,
+		ID:        "t1~p1",
+		TenantID:  "t1",
+		ProductID: "p1",
+		Name:      "Чайник",
+
 		Available:         3,
 		Visible:           true,
 		Listed:            true,
 		CheckoutAvailable: true,
 		Version:           1,
-		PriceProfiles: []pricecatalog.PriceProfile{
-			{
-				Key:            pricecatalog.DefaultPriceProfile,
-				Price:          money.FromKopecks(199000),
-				EffectivePrice: money.FromKopecks(199000),
-			},
-		},
+		Price:             money.FromKopecks(199000).Kopecks(),
+		BasePrice:         money.FromKopecks(199000).Kopecks(),
 	}
 	_ = e.index.Put(ctx, []ports.OfferDocument{offer})
 

@@ -275,6 +275,7 @@ func intakeMessages(kind, topic string, count int) []kafkago.Message {
 			value = fmt.Sprintf(
 				`{"version":1,"tenantId":%q,"productId":%q,"revision":1,"operation":"upsert",`+
 					`"product":{"id":%q,"name":"Товар","price":100,"conditions":{"isVisible":true},`+
+					`"priceProfiles":[{"key":"marketplace:default","price":100,"effectivePrice":100}],`+
 					`"marketplace":{"categoryId":"c1","published":true,"attributes":{}}}}`,
 				tenant,
 				product,

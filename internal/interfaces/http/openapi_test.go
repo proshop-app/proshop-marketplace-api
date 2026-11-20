@@ -236,7 +236,7 @@ func TestOpenAPIBuyerContractFields(t *testing.T) {
 		t.Fatal(alerts)
 	}
 	drops := alerts["properties"].(map[string]any)["priceDrops"].(map[string]any)
-	if !reflect.DeepEqual(drops["type"], []any{"integer", "null"}) || drops["minimum"] != 0 {
+	if drops["type"] != "integer" || drops["minimum"] != 0 {
 		t.Fatal(drops)
 	}
 	for _, name := range []string{"BuyerNotifications", "BuyerNotificationsPatch"} {

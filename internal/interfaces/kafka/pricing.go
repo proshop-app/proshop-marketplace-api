@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 )
@@ -13,27 +12,29 @@ type priceProfileJSON struct {
 	EffectivePrice json.Number `json:"effectivePrice"`
 }
 
-func snapshotPrices(values []priceProfileJSON) ([]catalog.PriceProfile, error) {
-	profiles := make([]catalog.PriceProfile, 0, len(values))
-
+// snapshotPrices берёт только публичную цену канала; остальные профили не хранятся.
+func snapshotPrices(snapshot *catalog.Snapshot, values []priceProfileJSON) error {
 	for _, value := range values {
-		if !strings.HasPrefix(value.Key, "marketplace:") {
+		if value.Key != "marketplace:default" {
 			continue
 		}
-		price, err := rubles(value.Price)
-		if err != nil {
-			return nil, err
+		if snapshot.HasPrice {
+			return ErrInvalidPayload.WithMessage("повтор публичной цены")
 		}
-		effective, err := rubles(value.EffectivePrice)
+		base, err := rubles(value.Price)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		profiles = append(profiles, catalog.PriceProfile{
-			Key:            value.Key,
-			Price:          price,
-			EffectivePrice: effective,
-		})
+		price, err := rubles(value.EffectivePrice)
+		if err != nil {
+			return err
+		}
+		if base.IsNegative() || price.IsNegative() {
+			return ErrInvalidPayload.WithMessage("отрицательная публичная цена")
+		}
+		snapshot.HasPrice = true
+		snapshot.Price = price
+		snapshot.BasePrice = base
 	}
-
-	return profiles, catalog.ValidatePrices(profiles)
+	return nil
 }

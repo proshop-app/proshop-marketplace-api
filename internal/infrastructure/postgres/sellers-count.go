@@ -9,7 +9,7 @@ import (
 
 const (
 	// Вычисляемые колонки повторяют ComposeOffer; остаток не ограничивает видимость.
-	visibleOfferSQL = `p.on_sale AND p.default_price IS NOT NULL
+	visibleOfferSQL = `p.on_sale AND p.price IS NOT NULL
         AND pa.enabled AND pa.delivery_valid AND t.status = 'active' AND mv.status = 'allowed'`
 	selectSellersCounts = `SELECT p.model_key, COUNT(DISTINCT p.tenant_id)
         FROM catalog_products p

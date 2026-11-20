@@ -57,12 +57,11 @@ func setup() environment {
 				Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
 				Publication: taxonomy.Publication{Published: true, CategoryID: "c1"},
 			},
-			PriceProfiles: []catalog.PriceProfile{{
-				Key:            catalog.DefaultPriceProfile,
-				Price:          money.FromKopecks(100),
-				EffectivePrice: money.FromKopecks(100),
-			}},
-			Version: 1,
+
+			Version:   1,
+			HasPrice:  true,
+			Price:     money.FromKopecks(100),
+			BasePrice: money.FromKopecks(100),
 		})
 		store.SeedVerdict(moderation.VerdictState{
 			TenantID:  "t1",

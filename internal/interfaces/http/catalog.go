@@ -54,7 +54,6 @@ type offerJSON struct {
 }
 
 type offerPageJSON struct {
-	Pricing    string               `json:"pricing,omitempty"`
 	Correction *offerCorrectionJSON `json:"correction,omitempty"`
 	Facets     []facetJSON          `json:"facets"`
 	Items      []offerJSON          `json:"items"`
@@ -132,7 +131,6 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query.BuyerID = BuyerID(r.Context())
 	list, err := h.queries.Search(r.Context(), query)
 	if err != nil {
 		writeError(w, r, err)
@@ -153,12 +151,11 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := offerPageJSON{
-		Pricing: list.Pricing,
-		Facets:  facets,
-		Items:   make([]offerJSON, 0, len(list.Items)),
-		Total:   list.Total,
-		Limit:   limit,
-		Offset:  query.Offset,
+		Facets: facets,
+		Items:  make([]offerJSON, 0, len(list.Items)),
+		Total:  list.Total,
+		Limit:  limit,
+		Offset: query.Offset,
 	}
 	if list.Correction != nil {
 		body.Correction = &offerCorrectionJSON{
@@ -188,7 +185,7 @@ func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	card, err := h.queries.Offer(r.Context(), offerID, BuyerID(r.Context()))
+	card, err := h.queries.Offer(r.Context(), offerID)
 	if err != nil {
 		writeError(w, r, err)
 

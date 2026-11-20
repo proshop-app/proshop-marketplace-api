@@ -51,13 +51,13 @@ func TestM5VerdictStorage(t *testing.T) {
 			return err
 		}
 		snapshot := catalog.Snapshot{
-			TenantID:      "t1",
-			ProductID:     "p1",
-			Revision:      1,
-			At:            now,
-			Card:          catalog.Card{Name: "Товар"},
-			Price:         money.FromKopecks(100),
-			PriceProfiles: []catalog.PriceProfile{{Key: catalog.DefaultPriceProfile, Price: money.FromKopecks(100)}},
+			TenantID:  "t1",
+			ProductID: "p1",
+			Revision:  1,
+			At:        now,
+			Card:      catalog.Card{Name: "Товар"},
+			HasPrice:  true,
+			BasePrice: money.FromKopecks(100),
 		}
 		product, err := catalog.NewProduct(snapshot, now)
 		if err != nil {

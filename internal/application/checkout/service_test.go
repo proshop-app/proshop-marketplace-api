@@ -11,7 +11,6 @@ import (
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	pricecatalog "github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -74,42 +73,32 @@ func setup(t *testing.T) *env {
 	e.store.SeedReadyOffer(p2, money.FromKopecks(35000))
 	err := e.index.Put(ctx, []ports.OfferDocument{
 		{
-			ID:                p1.String(),
-			TenantID:          "t1",
-			ProductID:         "p1",
-			Name:              "Чайник",
-			Price:             199000,
+			ID:        p1.String(),
+			TenantID:  "t1",
+			ProductID: "p1",
+			Name:      "Чайник",
+
 			Available:         3,
 			Visible:           true,
 			Listed:            true,
 			CheckoutAvailable: true,
 			Version:           1,
-			PriceProfiles: []pricecatalog.PriceProfile{
-				{
-					Key:            pricecatalog.DefaultPriceProfile,
-					Price:          money.FromKopecks(199000),
-					EffectivePrice: money.FromKopecks(199000),
-				},
-			},
+			Price:             money.FromKopecks(199000).Kopecks(),
+			BasePrice:         money.FromKopecks(199000).Kopecks(),
 		},
 		{
-			ID:                p2.String(),
-			TenantID:          "t2",
-			ProductID:         "p1",
-			Name:              "Кружка",
-			Price:             35000,
+			ID:        p2.String(),
+			TenantID:  "t2",
+			ProductID: "p1",
+			Name:      "Кружка",
+
 			Available:         10,
 			Visible:           true,
 			Listed:            true,
 			CheckoutAvailable: true,
 			Version:           1,
-			PriceProfiles: []pricecatalog.PriceProfile{
-				{
-					Key:            pricecatalog.DefaultPriceProfile,
-					Price:          money.FromKopecks(35000),
-					EffectivePrice: money.FromKopecks(35000),
-				},
-			},
+			Price:             money.FromKopecks(35000).Kopecks(),
+			BasePrice:         money.FromKopecks(35000).Kopecks(),
 		},
 	})
 	if err != nil {
@@ -232,23 +221,18 @@ func TestCreateSkipsHiddenSeller(t *testing.T) {
 
 	_ = e.index.Put(context.Background(), []ports.OfferDocument{
 		{
-			ID:                p2.String(),
-			TenantID:          "t2",
-			ProductID:         "p1",
-			Name:              "Кружка",
-			Price:             35000,
+			ID:        p2.String(),
+			TenantID:  "t2",
+			ProductID: "p1",
+			Name:      "Кружка",
+
 			Available:         10,
 			Visible:           true,
 			Listed:            true,
 			CheckoutAvailable: false,
 			Version:           2,
-			PriceProfiles: []pricecatalog.PriceProfile{
-				{
-					Key:            pricecatalog.DefaultPriceProfile,
-					Price:          money.FromKopecks(35000),
-					EffectivePrice: money.FromKopecks(35000),
-				},
-			},
+			Price:             money.FromKopecks(35000).Kopecks(),
+			BasePrice:         money.FromKopecks(35000).Kopecks(),
 		},
 	})
 

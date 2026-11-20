@@ -21,7 +21,7 @@ const (
         card = jsonb_set(card, '{publication,published}', 'false') WHERE tenant_id = 't2'`
 	pendingSellersVerdict = `UPDATE moderation_verdicts SET status = 'pending' WHERE tenant_id = 't2'`
 	deletedSellersProduct = `UPDATE catalog_products SET deleted = true WHERE tenant_id = 't2'`
-	missingSellersPrice   = `UPDATE catalog_products SET price_profiles = '[]' WHERE tenant_id = 't2'`
+	missingSellersPrice   = `UPDATE catalog_products SET price = NULL, base_price = NULL WHERE tenant_id = 't2'`
 	hideSellersVerdict    = `DELETE FROM moderation_verdicts WHERE tenant_id = 't2'`
 	hideSellersDelivery   = `UPDATE participants SET delivery_valid = false WHERE tenant_id = 't2'`
 	hideSellersTenant     = `UPDATE tenants SET status = 'suspended' WHERE tenant_id = 't2'`

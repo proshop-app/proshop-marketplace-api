@@ -156,7 +156,7 @@ func (s *Service) change(
 			groups = append(groups, group)
 		}
 	}
-	results, err := PriceGroups(ctx, s.platform, buyerID, groups)
+	results, err := PriceGroups(ctx, s.platform, groups)
 	// Удаление должно работать и при отказе магазина; оставшиеся скидки уже сброшены агрегатом.
 	if err != nil && !removing {
 		return cart.State{}, err

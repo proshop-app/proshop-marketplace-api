@@ -19,7 +19,7 @@ const (
  delivery_settings = '{"regions":["RU-MOW"],"carriers":["cdek","yandex"]}'`
 	reportPlanProducts = `INSERT INTO catalog_products
  (tenant_id, product_id, revision, deleted, card, price, available, projected_at,
- version, updated_at, price_profiles)
+ version, updated_at, base_price)
  SELECT tenant_id, 'p' || lpad(n::text, 6, '0'), 1, false,
  jsonb_build_object('name', 'Товар', 'visible', true, 'assets', '[]'::jsonb,
  'description', repeat(md5(tenant_id || n::text), 16),
@@ -28,7 +28,7 @@ const (
  'modelKeySource', CASE WHEN n % 10 = 0 THEN '' ELSE 'identity' END,
  'publication', jsonb_build_object('published', true, 'categoryPath', jsonb_build_array('d' || (n % 10)::text),
  'schema', 's' || (n % 20)::text, 'issues', '[]'::jsonb)),
- 100, 1, $1, 1, $1, '[{"key":"marketplace:default"}]'::jsonb
+ 100, 1, $1, 1, $1, 100
  FROM tenants CROSS JOIN generate_series(1, 2100) n`
 	reportPlanAnalyze     = `ANALYZE catalog_products; ANALYZE participants; ANALYZE tenants`
 	reportPlanEnvironment = `SELECT current_setting('server_version'), current_setting('work_mem'),

@@ -53,11 +53,9 @@ func TestStoreCardHTTP(t *testing.T) {
 		TenantID:  "t1",
 		ProductID: "p1",
 		Card:      catalog.Card{Name: "Товар", Visible: true, Publication: taxonomy.Publication{Published: true}},
-		PriceProfiles: []catalog.PriceProfile{{
-			Key:            catalog.DefaultPriceProfile,
-			Price:          money.FromKopecks(19999),
-			EffectivePrice: money.FromKopecks(19999),
-		}},
+		HasPrice:  true,
+		Price:     money.FromKopecks(19999),
+		BasePrice: money.FromKopecks(19999),
 	})
 	store.SeedVerdict(moderation.VerdictState{TenantID: "t1", ProductID: "p1", Status: moderation.Allowed})
 	service := app.NewService(store, fake.NewClock(t0), &fake.IDs{})
@@ -75,7 +73,7 @@ func TestStoreCardHTTP(t *testing.T) {
 		Features: appbuyer.NewFeatures(
 			store,
 			nil,
-			fake.NewPlatform(),
+
 			fake.NewLimiter(),
 			&fake.PickupLookup{},
 		),

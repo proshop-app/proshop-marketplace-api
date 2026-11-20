@@ -7,7 +7,6 @@ import (
 )
 
 func TestMessageKeysKeepOnlyRequiredOrdering(t *testing.T) {
-	const buyer = "00000000-0000-4000-8000-000000000001"
 	product := orderingKey{kind: orderProduct, tenant: "t1", entity: "p1"}
 	tenant := orderingKey{kind: orderTenant, tenant: "t1"}
 	cases := []struct {
@@ -27,18 +26,11 @@ func TestMessageKeysKeepOnlyRequiredOrdering(t *testing.T) {
 		{TopicTenantResumed, `"t1"`, `{"tenantId":"t1"}`, tenant},
 		{TopicTenantDeleted, `"t1"`, `{"tenantId":"t1"}`, tenant},
 		{"platform.tenant.future", `"t1"`, `{"tenantId":"t1"}`, tenant},
-		{
-			TopicPriceContextChanged,
-			`["t1","` + buyer + `"]`,
-			"",
-			orderingKey{kind: orderBuyer, tenant: "t1", entity: buyer},
-		},
 		{TopicProductProjected, `null`, "", orderingKey{}},
 		{TopicProductProjectedBulk, `null`, "", orderingKey{}},
 		{TopicStockItemUpdated, `"stock-1"`, "{", orderingKey{}},
 		{TopicTenantUpdated, "", "{", orderingKey{}},
 		{TopicTenantCreated, "", `{"tenantId":"t2"}`, orderingKey{}},
-		{TopicPriceContextChanged, `["t1","bad"]`, "", orderingKey{}},
 		{"future.topic", "", "", orderingKey{}},
 	}
 	for _, tc := range cases {
@@ -65,7 +57,6 @@ func TestOrderingKindsAndFallbackPartitionsDoNotCollide(t *testing.T) {
 	const id = "00000000-0000-4000-8000-000000000001"
 	keys := []orderingKey{
 		{kind: orderProduct, tenant: "t1", entity: id},
-		{kind: orderBuyer, tenant: "t1", entity: id},
 		{kind: orderTenant, tenant: "t1"},
 		{kind: orderPartition, topic: "a", partition: 0},
 		{kind: orderPartition, topic: "a", partition: 1},

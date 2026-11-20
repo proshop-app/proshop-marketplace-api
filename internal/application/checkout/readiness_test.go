@@ -66,7 +66,7 @@ func TestReadinessBeforeOrdersAndPayment(t *testing.T) {
 					case "product_deleted":
 						product.Deleted = true
 					case "price_profile":
-						product.PriceProfiles = nil
+						product.HasPrice = false
 					case "card_hidden":
 						product.Card.Visible = false
 					case "unpublished":

@@ -84,22 +84,3 @@ func TestLateSuccessCannotCloseNewBreakerGeneration(t *testing.T) {
 		t.Fatal("успешная проба не закрыла размыкатель")
 	}
 }
-
-func TestUnattributedBatchFailureDoesNotCloseHealthyTenants(t *testing.T) {
-	cfg := testConfig()
-	cfg.FailureThreshold = 1
-	upstream := fake.NewPlatform()
-	c := New(upstream, cfg, fake.NewClock(time.Now()), nil, nil)
-	upstream.Fail("t1", errors.New("сбой в пачке без tenantId"))
-	for i := 0; i < 3; i++ {
-		if _, err := c.PriceContexts(context.Background(), "b1", []ids.TenantID{"t1", "t2"}); err == nil {
-			t.Fatal("сбой пачки потерян")
-		}
-	}
-	upstream.Fail("t1", nil)
-	for _, tenant := range []ids.TenantID{"t1", "t2"} {
-		if _, err := c.MarketplaceSettings(context.Background(), tenant); err != nil {
-			t.Fatal("сбой пачки начислен магазину или всему серверу", err)
-		}
-	}
-}

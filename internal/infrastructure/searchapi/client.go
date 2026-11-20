@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	contractVersion = 7
+	contractVersion = 9
 	apiPath         = "/api/v1/internal/marketplace"
 	batchLimit      = 200
 	requestLimit    = 4 << 20
@@ -206,23 +206,22 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 		http.MethodPost,
 		"/search",
 		offerQuery{
-			Exact:         query.Exact,
-			TrackQuery:    query.TrackQuery,
-			PriceContexts: wirePriceContexts(query.PriceContexts),
-			Attributes:    query.Attributes,
-			FacetFields:   wireFacetFields(query),
-			Facets:        wireFacetSelection(query.Facets),
-			InStockSet:    query.InStockSet,
-			Text:          query.Text,
-			TenantIDs:     query.TenantIDs,
-			GroupID:       query.GroupID,
-			CategoryID:    query.CategoryID,
-			PriceMin:      query.PriceMin,
-			PriceMax:      query.PriceMax,
-			InStock:       query.InStock,
-			Sort:          string(query.Sort),
-			Offset:        query.Offset,
-			Limit:         query.Limit,
+			Exact:       query.Exact,
+			TrackQuery:  query.TrackQuery,
+			Attributes:  query.Attributes,
+			FacetFields: wireFacetFields(query),
+			Facets:      wireFacetSelection(query.Facets),
+			InStockSet:  query.InStockSet,
+			Text:        query.Text,
+			TenantIDs:   query.TenantIDs,
+			GroupID:     query.GroupID,
+			CategoryID:  query.CategoryID,
+			PriceMin:    query.PriceMin,
+			PriceMax:    query.PriceMax,
+			InStock:     query.InStock,
+			Sort:        string(query.Sort),
+			Offset:      query.Offset,
+			Limit:       query.Limit,
 		},
 		&result,
 	)

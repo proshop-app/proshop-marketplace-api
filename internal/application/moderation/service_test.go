@@ -76,7 +76,8 @@ func (e environment) project(t *testing.T, product ids.ProductID, revision int64
 			Visible:     true,
 			Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
 		},
-		PriceProfiles: []catalog.PriceProfile{{Key: catalog.DefaultPriceProfile, Price: money.FromKopecks(100)}},
+		HasPrice:  true,
+		BasePrice: money.FromKopecks(100),
 	}
 	err := e.projector.ApplyProduct(context.Background(), appcatalog.ProductEvent{
 		EventID:  fmt.Sprintf("%s:%d", product, revision),
@@ -232,12 +233,13 @@ func TestStaleAndRollback(t *testing.T) {
 		}
 		state := product.State()
 		next := catalog.Snapshot{
-			TenantID:      state.TenantID,
-			ProductID:     state.ProductID,
-			Revision:      state.Revision + 1,
-			Card:          state.Card,
-			PriceProfiles: state.PriceProfiles,
-			At:            e.clock.Now(),
+			TenantID:  state.TenantID,
+			ProductID: state.ProductID,
+			Revision:  state.Revision + 1,
+			Card:      state.Card,
+
+			At:       e.clock.Now(),
+			HasPrice: true,
 		}
 		_, err = product.Apply(next, e.clock.Now())
 		if err != nil {

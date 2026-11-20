@@ -2325,7 +2325,7 @@ paths:
         Порядок: salesCount, ratingsCount, averageRating, updatedAt по убыванию, затем хеш offerId.
         deliveryRegion ограничивает все виды рекомендаций; неизвестный регион — 400.
         Для гостя и вошедшего Cache-Control: private, no-store.
-        Отказ сервера магазинов не прерывает страницу: старые ценовые контексты либо пустой items с HTTP 200.
+        Публичная цена читается из локальной проекции; сервер магазинов не вызывается.
       parameters:
         - { $ref: "#/components/parameters/MoneyUnit" }
         - name: context
@@ -2373,9 +2373,8 @@ paths:
       tags: [catalog]
       summary: Выдача предложений
       description: |
-        При отказе персонализации используются последние успешные ценовые контексты.
-        Без сохранённых контекстов вошедший покупатель получает HTTP 200 с пустыми items и total=0.
-        Гостевой каталог читает публичные цены из проекции без сервера магазинов.
+        Публичная цена одинакова для гостя и вошедшего покупателя.
+        Каталог читает публичные цены из проекции без сервера магазинов.
         Только опубликованные предложения. category — узел дерева площадки, включая потомков.
         Канонические фильтры: attr.<код>=значение; повтор параметра означает OR,
         разные коды — AND. Для number: attr.<код>.min и attr.<код>.max (включительно),
@@ -2502,7 +2501,7 @@ paths:
       summary: Все видимые варианты группы продавца
       operationId: getOfferVariants
       description: >-
-        Отдельный запрос перед рендером карточки. Цены в контексте покупателя.
+        Отдельный запрос перед рендером карточки. Публичная цена одинакова для всех покупателей.
         Порядок options — порядок осей; до 200 предложений, truncated указывает на технический потолок.
       parameters:
         - { $ref: "#/components/parameters/MoneyUnit" }
@@ -2528,8 +2527,8 @@ paths:
       tags: [catalog]
       summary: Карточка предложения
       description: >-
-        При отказе персонализации используется последний успешный профиль цен, а без него публичный
-        профиль из проекции. HTTP 200 для существующего видимого предложения; оформление проверяет цены заново.
+        Публичная цена читается из индекса. HTTP 200 для существующего видимого предложения;
+        оформление проверяет цену и наличие заново.
       operationId: getOffer
       parameters:
         - { $ref: "#/components/parameters/MoneyUnit" }
@@ -4974,7 +4973,7 @@ paths:
     get:
       summary: Спонсорские карточки первой страницы
       description: >-
-        При отказе сервера магазинов используются старые ценовые контексты либо пустой items с HTTP 200.
+        Публичные цены читаются из проекции без вызова сервера магазинов.
       security: []
       parameters:
       - { $ref: "#/components/parameters/MoneyUnit" }
@@ -5432,9 +5431,9 @@ components:
           required: [priceDrops]
           properties:
             priceDrops:
-              type: [integer, "null"]
+              type: integer
               minimum: 0
-              description: Число снижений цены; null при недоступности ценовых контекстов платформы.
+              description: Число снижений публичной цены по наблюдениям покупателя.
     BuyerRegionResult:
       type: object
       required: [code, name, source]
@@ -7687,13 +7686,6 @@ components:
       type: object
       required: [items, total, limit, offset, facets]
       properties:
-        pricing:
-          type: string
-          enum: [personal, public]
-          description: >-
-            Только для вошедшего покупателя. personal — применён персональный профиль хотя бы одного продавца;
-            public — использованы публичные профили, в том числе при ещё не загруженном контексте.
-            Поле отсутствует у гостя. Ответ покупателя private, no-store.
         correction:
           $ref: "#/components/schemas/OfferCorrection"
         items:

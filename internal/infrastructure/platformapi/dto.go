@@ -69,9 +69,6 @@ func orderBody(r ports.CreateOrderRequest) map[string]any {
 		"deliveryPrice":      r.DeliveryPrice.Kopecks(),
 	}
 
-	if r.BuyerID != "" {
-		body["buyerId"] = r.BuyerID
-	}
 	if r.PromoCode != "" {
 		body["promoCode"] = r.PromoCode
 	}

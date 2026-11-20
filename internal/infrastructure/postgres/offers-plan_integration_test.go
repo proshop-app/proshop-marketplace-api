@@ -36,6 +36,7 @@ const (
 			deleted,
 			card,
 			price,
+			base_price,
 			available,
 			projected_at,
 			version,
@@ -43,7 +44,7 @@ const (
 		)
 		SELECT tenant_id, 'p' || lpad(n::text, 6, '0'), 1, false,
 			'{"name":"Товар","visible":true,"assets":[],"publication":{}}'::jsonb,
-			100, 1, $2, 1, $2
+			100, 100, 1, $2, 1, $2
 		FROM tenants CROSS JOIN generate_series(1, $1::integer) n`
 	offerPlanSeedSignals = `
 		INSERT INTO offers (tenant_id, product_id, available, stock_at, price, price_at, version, updated_at)

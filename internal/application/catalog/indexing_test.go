@@ -196,16 +196,11 @@ func TestRebuildCreatesGenerationAndCatchesUp(t *testing.T) {
 
 	if err := index.Put(ctx, []ports.OfferDocument{
 		{
-			ID:      "garbage~x",
-			Listed:  true,
-			Visible: true,
-			PriceProfiles: []catalog.PriceProfile{
-				{
-					Key:            catalog.DefaultPriceProfile,
-					Price:          money.FromKopecks(0),
-					EffectivePrice: money.FromKopecks(0),
-				},
-			},
+			ID:        "garbage~x",
+			Listed:    true,
+			Visible:   true,
+			Price:     money.FromKopecks(0).Kopecks(),
+			BasePrice: money.FromKopecks(0).Kopecks(),
 		},
 	}); err != nil {
 		t.Fatal(err)

@@ -83,14 +83,9 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 	if err != nil {
 		return result, err
 	}
-	contexts, err := q.priceContexts(ctx, request.BuyerID, "")
-	if err != nil {
-		return result, err
-	}
 	filter := ports.RecommendationFilter{
-		Limit:         query.Limit,
-		Region:        request.Region,
-		PriceContexts: contexts,
+		Limit:  query.Limit,
+		Region: request.Region,
 	}
 	if request.Context == "offer" {
 		var state ports.OfferState
@@ -106,16 +101,7 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 		if !ok || !doc.Visible {
 			return result, catalog.ErrOfferNotFound
 		}
-		key := priceProfileKey(contexts, request.OfferID.Tenant)
-		if request.BuyerID != "" && key == "" {
-			return result, nil
-		}
-		profile, ok := catalog.SelectPrice(doc.PriceProfiles, key)
-		if !ok {
-			return result, catalog.ErrOfferNotFound
-		}
-		price := profile.EffectivePrice.Kopecks()
-		low, high := recommendationPriceBounds(price)
+		low, high := recommendationPriceBounds(doc.Price)
 		filter.PriceMin, filter.PriceMax = &low, &high
 		filter.Categories = []string{doc.CategoryID}
 		filter.Excluded = []ids.OfferID{request.OfferID}
@@ -133,7 +119,7 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 	if err != nil {
 		return result, err
 	}
-	appendRecommendations(&result, states, contexts, filter.OtherTenant)
+	appendRecommendations(&result, states, filter.OtherTenant)
 	if result.Reason == "personal" && len(result.Items) == 0 {
 		filter.Categories = nil
 		result.Reason = "popular"
@@ -141,7 +127,7 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 		if err != nil {
 			return result, err
 		}
-		appendRecommendations(&result, states, contexts, "")
+		appendRecommendations(&result, states, "")
 	}
 	return result, nil
 }
@@ -149,7 +135,6 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 func appendRecommendations(
 	result *Recommendations,
 	states []ports.OfferState,
-	contexts map[ids.TenantID]string,
 	otherTenant ids.TenantID,
 ) {
 	for _, state := range states {
@@ -157,12 +142,6 @@ func appendRecommendations(
 		if !ok || !doc.Visible {
 			continue
 		}
-		key := priceProfileKey(contexts, state.Product.State().TenantID)
-		profile, ok := catalog.SelectPrice(doc.PriceProfiles, key)
-		if !ok {
-			continue
-		}
-		doc.Price, doc.BasePrice = profile.EffectivePrice.Kopecks(), profile.Price.Kopecks()
 		result.Items = append(result.Items, OfferCard{Offer: doc})
 	}
 	if otherTenant != "" {
@@ -173,7 +152,7 @@ func appendRecommendations(
 	}
 }
 
-// recommendCandidates кэширует только гостевой отбор; персональные цены никогда не разделяются.
+// recommendCandidates кэширует только гостевой отбор; интересы покупателей не разделяются.
 func (q *Queries) recommendCandidates(
 	ctx context.Context,
 	request RecommendationRequest,
@@ -257,13 +236,6 @@ func (q *Queries) loadRecommendationCandidates(
 		delete(q.recommendationLoads, key)
 	}
 	close(pending.done)
-}
-
-func priceProfileKey(contexts map[ids.TenantID]string, tenant ids.TenantID) string {
-	if contexts == nil {
-		return catalog.DefaultPriceProfile
-	}
-	return contexts[tenant]
 }
 
 // recommendationPriceBounds — ceil(0.6*p), floor(1.4*p) без переполнения.

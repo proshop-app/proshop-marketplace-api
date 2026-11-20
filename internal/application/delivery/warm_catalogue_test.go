@@ -56,16 +56,6 @@ func (t countingTx) Registry() participant.Registry {
 	return countingRegistry{Registry: t.Tx.Registry(), u: t.u}
 }
 
-func (r countingParticipants) PublicTenants(
-	ctx context.Context,
-	filter []ids.TenantID,
-	after ids.TenantID,
-	limit int,
-) ([]ids.TenantID, error) {
-	r.u.public.Add(1)
-	return r.Repository.PublicTenants(ctx, filter, after, limit)
-}
-
 func (r countingParticipants) Batch(
 	ctx context.Context,
 	keys []ids.TenantID,
@@ -103,15 +93,17 @@ func TestWarmPickupSearchDoesNotReadRegistry(t *testing.T) {
 			tenant,
 			ports.PickupPoints{
 				Available: true,
-				Items: []delivery.PickupPoint{{
-					Carrier:    "cdek",
-					Code:       "P1",
-					Name:       "Пункт",
-					City:       "Город",
-					Address:    "Адрес",
-					RegionCode: "RU-MOW",
-					Location:   delivery.Location{Lat: 55, Lon: 37},
-				}},
+				Items: []delivery.PickupPoint{
+					{
+						Carrier:    "cdek",
+						Code:       "P1",
+						Name:       "Пункт",
+						City:       "Город",
+						Address:    "Адрес",
+						RegionCode: "RU-MOW",
+						Location:   delivery.Location{Lat: 55, Lon: 37},
+					},
+				},
 			},
 		)
 	}

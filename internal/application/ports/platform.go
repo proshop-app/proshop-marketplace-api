@@ -45,7 +45,6 @@ type DispatchReview struct {
 // QuoteRequest — расчёт доставки заказа продавца до пункта выдачи.
 type QuoteRequest struct {
 	DispatchReview  *DispatchReview
-	BuyerID         ids.UUID
 	Carrier         delivery.Carrier
 	PickupPointCode string
 	City            string
@@ -60,17 +59,11 @@ type ShopSettings struct {
 	Delivery participant.DeliverySettings
 }
 
-// CatalogPricing — выбор профилей до фильтрации и пагинации каталога.
-type CatalogPricing interface {
-	PriceContexts(context.Context, ids.UUID, []ids.TenantID) (map[ids.TenantID]string, error)
-}
-
-// PlatformAPI — доверенный канал продавца; цены выбираются по проверенному аккаунту.
+// PlatformAPI — доверенный канал продавца; публичная цена канала marketplace.
 type PlatformAPI interface {
 	PickupPoints(context.Context, ids.TenantID, delivery.Carrier, string) (PickupPoints, error)
 	SellerOrders
 	PromoPricing
-	CatalogPricing
 	// ProductReviews — страница опубликованных отзывов, включая безымянных авторов.
 	ProductReviews(
 		ctx context.Context,

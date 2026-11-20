@@ -10,7 +10,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
-	pricecatalog "github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -43,36 +42,26 @@ func setup(t *testing.T) *env {
 			TenantID:  "t1",
 			ProductID: "p1",
 			Name:      "Чайник",
-			Price:     199000,
+
 			Available: 3,
 			Visible:   true,
 			Listed:    true,
 			Version:   1,
-			PriceProfiles: []pricecatalog.PriceProfile{
-				{
-					Key:            pricecatalog.DefaultPriceProfile,
-					Price:          money.FromKopecks(199000),
-					EffectivePrice: money.FromKopecks(199000),
-				},
-			},
+			Price:     money.FromKopecks(199000).Kopecks(),
+			BasePrice: money.FromKopecks(199000).Kopecks(),
 		},
 		{
 			ID:        p2.String(),
 			TenantID:  "t2",
 			ProductID: "p1",
 			Name:      "Кружка",
-			Price:     35000,
+
 			Available: 10,
 			Visible:   true,
 			Listed:    true,
 			Version:   1,
-			PriceProfiles: []pricecatalog.PriceProfile{
-				{
-					Key:            pricecatalog.DefaultPriceProfile,
-					Price:          money.FromKopecks(35000),
-					EffectivePrice: money.FromKopecks(35000),
-				},
-			},
+			Price:     money.FromKopecks(35000).Kopecks(),
+			BasePrice: money.FromKopecks(35000).Kopecks(),
 		},
 		{
 			ID:        "t3~p1",
@@ -80,13 +69,8 @@ func setup(t *testing.T) *env {
 			ProductID: "p1",
 			Visible:   false,
 			Version:   1,
-			PriceProfiles: []pricecatalog.PriceProfile{
-				{
-					Key:            pricecatalog.DefaultPriceProfile,
-					Price:          money.FromKopecks(0),
-					EffectivePrice: money.FromKopecks(0),
-				},
-			},
+			Price:     money.FromKopecks(0).Kopecks(),
+			BasePrice: money.FromKopecks(0).Kopecks(),
 		},
 	})
 	if err != nil {

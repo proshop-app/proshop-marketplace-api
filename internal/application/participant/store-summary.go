@@ -74,7 +74,7 @@ func (b *storeSummaryBuilder) add(state ports.OfferState, p *participant.Partici
 	if card := product.Card.Marketplace; card != nil && card.Published && b.roots[card.CategoryID].ID == "" {
 		b.uncategorized++
 	}
-	if _, ok := catalog.SelectPrice(product.PriceProfiles, catalog.DefaultPriceProfile); !ok {
+	if !product.HasPrice {
 		return nil
 	}
 	visibility := participant.VisibilityOf(p, state.Tenant)

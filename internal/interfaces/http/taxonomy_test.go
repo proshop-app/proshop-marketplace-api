@@ -199,13 +199,8 @@ func TestTaxonomyHTTP(t *testing.T) {
 			Listed:       true,
 			Visible:      true,
 			Version:      1,
-			PriceProfiles: []catalog.PriceProfile{
-				{
-					Key:            catalog.DefaultPriceProfile,
-					Price:          pricemoney.FromKopecks(0),
-					EffectivePrice: pricemoney.FromKopecks(0),
-				},
-			},
+			Price:        pricemoney.FromKopecks(0).Kopecks(),
+			BasePrice:    pricemoney.FromKopecks(0).Kopecks(),
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -336,18 +331,20 @@ func TestTaxonomyFacetSnapshotHTTP(t *testing.T) {
 	store := fake.NewStore()
 	store.SeedTaxonomy(taxonomy.Definition{
 		Version: 1,
-		Attributes: []taxonomy.Attribute{{
-			Code:         "color",
-			Name:         "Цвет",
-			Type:         "enum",
-			Values:       []string{"Зелёный", "Хаки"},
-			FacetOptions: []string{"Зелёный"},
-			FacetValuesByValue: map[string][]string{
-				"Зелёный": {"Зелёный"},
-				"Хаки":    {"Зелёный"},
+		Attributes: []taxonomy.Attribute{
+			{
+				Code:         "color",
+				Name:         "Цвет",
+				Type:         "enum",
+				Values:       []string{"Зелёный", "Хаки"},
+				FacetOptions: []string{"Зелёный"},
+				FacetValuesByValue: map[string][]string{
+					"Зелёный": {"Зелёный"},
+					"Хаки":    {"Зелёный"},
+				},
+				ValuesMeta: map[string]taxonomy.ValueMeta{"Зелёный": {Hex: "#008000"}},
 			},
-			ValuesMeta: map[string]taxonomy.ValueMeta{"Зелёный": {Hex: "#008000"}},
-		}},
+		},
 	})
 	handler := NewHandler(Deps{
 		RequestTimeout:         time.Minute,

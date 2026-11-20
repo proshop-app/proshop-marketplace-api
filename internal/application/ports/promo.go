@@ -16,12 +16,11 @@ type GroupPricing struct {
 
 // GroupPricingRequest — снимок строк и кода одного магазина.
 type GroupPricingRequest struct {
-	BuyerID   ids.UUID
 	PromoCode string
 	Items     []ItemRequest
 }
 
-// PromoPricing — проверка промокода и цен в контексте покупателя.
+// PromoPricing — проверка промокода, публичной цены и наличия.
 type PromoPricing interface {
 	PriceGroup(context.Context, ids.TenantID, GroupPricingRequest) (GroupPricing, error)
 }

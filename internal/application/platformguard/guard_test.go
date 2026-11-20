@@ -154,22 +154,6 @@ func strictCallContext(ctx context.Context, c *Client, operation string) error {
 	}
 }
 
-func TestContextLoadNeverRenewsStaleValue(t *testing.T) {
-	ctx := context.Background()
-	upstream := fake.NewPlatform()
-	c := New(upstream, testConfig(), fake.NewClock(time.Now()), nil, nil)
-	upstream.SetBuyerProfile("b1", "t1", "marketplace:buyer")
-	got, err := c.PriceContexts(ctx, "b1", []ids.TenantID{"t1"})
-	if err != nil || got["t1"] != "marketplace:buyer" {
-		t.Fatal(got, err)
-	}
-	upstream.Fail("t1", errors.New("недоступен"))
-	got, err = c.PriceContexts(ctx, "b1", []ids.TenantID{"t1"})
-	if err == nil || len(got) != 0 {
-		t.Fatal("устаревший контекст выдан как подтверждённая новая загрузка", got, err)
-	}
-}
-
 func TestReviewsStaleAndColdTimeout(t *testing.T) {
 	ctx := context.Background()
 	upstream := fake.NewPlatform()
