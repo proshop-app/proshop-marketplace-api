@@ -42,7 +42,7 @@ const (
 			FROM participants m
 			JOIN tenants t ON t.tenant_id = m.tenant_id
 			CROSS JOIN LATERAL (
-				SELECT p.tenant_id, p.product_id, p.variant_group, p.sales_count,
+				SELECT p.tenant_id, p.product_id, p.tile_key, p.sales_count,
 					p.ratings_count, p.average_rating, p.updated_at,
 					md5(p.tenant_id || '~' || p.product_id) AS offer_key
 				FROM catalog_products p
@@ -57,9 +57,10 @@ const (
 				) pricing
 				WHERE p.tenant_id = m.tenant_id AND p.on_sale AND p.default_price IS NOT NULL
 					AND mv.status = 'allowed' AND pricing.price IS NOT NULL
+					AND NOT COALESCE((p.card->>'onlyVariant')::boolean, false)
 					AND NOT EXISTS (
 						SELECT 1 FROM catalog_products excluded
-						WHERE excluded.tenant_id = p.tenant_id AND excluded.variant_group = p.variant_group
+						WHERE excluded.tenant_id = p.tenant_id AND excluded.tile_key = p.tile_key
 							AND excluded.tenant_id || '~' || excluded.product_id = ANY($2::text[])
 					)
 					AND ($4::bigint IS NULL OR pricing.price >= $4)
@@ -71,9 +72,9 @@ const (
 			WHERE m.enabled AND m.delivery_valid AND t.status = 'active'
 				AND ($3 = '' OR m.delivery_settings->'regions' ? $3)
 		), candidates AS (
-			SELECT DISTINCT ON (tenant_id, variant_group) *
+			SELECT DISTINCT ON (tenant_id, tile_key) *
 			FROM eligible
-			ORDER BY tenant_id, variant_group, ` + recommendationRank + `
+			ORDER BY tenant_id, tile_key, ` + recommendationRank + `
 		), ranked AS (
 			SELECT *, row_number() OVER (PARTITION BY tenant_id ORDER BY ` + recommendationRank + `) AS tenant_rank
 			FROM candidates

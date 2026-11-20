@@ -26,7 +26,7 @@ func (q *Queries) Offers(ctx context.Context, offerIDs []ids.OfferID, buyerID id
 			if err != nil {
 				return errOffersUnavailable.Wrap(err)
 			}
-			if found && doc.Visible && doc.Listed {
+			if found && doc.Visible {
 				docs[i] = doc
 			}
 			return nil

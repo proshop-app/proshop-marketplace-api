@@ -23,6 +23,8 @@ type priceProfile struct {
 }
 
 type offerDocument struct {
+	TileKey           string                       `json:"tileKey,omitempty"`
+	OnlyVariant       bool                         `json:"onlyVariant,omitempty"`
 	Rating            *catalog.Rating              `json:"rating"`
 	Variants          *catalog.Variants            `json:"variants,omitempty"`
 	ModelKey          string                       `json:"modelKey,omitempty"`

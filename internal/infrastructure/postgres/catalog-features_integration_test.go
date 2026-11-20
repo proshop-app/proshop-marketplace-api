@@ -79,8 +79,10 @@ func seedRecommendationProducts(t *testing.T, uow *postgres.UnitOfWork, tenant i
 		for i := 0; i < count; i++ {
 			id := ids.ProductID(fmt.Sprintf("p%d", i+1))
 			snap := snapshot(tenant, id, 1, 0)
-			if i >= 2 {
-				// p1 и p2 — варианты одной модели, p3 — сам по себе: выдача сворачивает группу до одного.
+			if i < 2 {
+				snap.Card.TileKey = "p1"
+				snap.Card.OnlyVariant = i == 1
+			} else {
 				snap.Card.VariantsID = ""
 			}
 			snap.Card.Publication = taxonomy.Publication{Published: true, CategoryID: "c1"}
@@ -260,6 +262,8 @@ func TestRecommendationsCollapseGroupsAndGeneratedColumns(t *testing.T) {
 			}
 			snap := snapshot("t1", id, 2, 0)
 			snap.Card.VariantsID = "v1"
+			snap.Card.TileKey = "p1"
+			snap.Card.OnlyVariant = id == "p2"
 			// Проверка из снимка заменяет прежнюю только вместе с изменением проверяемой карточки.
 			snap.Card.Description = "Описание для категории c2"
 			snap.Card.Publication = taxonomy.Publication{Published: true, CategoryID: "c2"}
@@ -477,11 +481,12 @@ func TestRecommendationLimitsCandidatesBeforeVariantCollapse(t *testing.T) {
 			Categories: categories,
 			Limit:      3,
 		})
-		// В трёх лучших кандидатах p1 и p2 — варианты; p4 уже вне лимита магазина.
-		if err != nil || len(states) != 2 {
+		// Флаг исключает p2 до лимита: три кандидата — самостоятельные карточки p1, p3, p4.
+		if err != nil || len(states) != 3 {
 			t.Fatal(states, err)
 		}
-		if states[0].Product.State().ProductID != "p1" || states[1].Product.State().ProductID != "p3" {
+		if states[0].Product.State().ProductID != "p1" || states[1].Product.State().ProductID != "p3" ||
+			states[2].Product.State().ProductID != "p4" {
 			t.Fatal(states)
 		}
 	}
