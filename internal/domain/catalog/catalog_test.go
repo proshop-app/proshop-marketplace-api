@@ -214,8 +214,8 @@ func TestComposeOfferVisibility(t *testing.T) {
 	variant.Card.OnlyVariant = true
 	variantProduct, _ := catalog.NewProduct(variant, t1)
 	offer = catalog.ComposeOffer(variantProduct, nil, visibleSeller, allowedVerdict())
-	if !offer.Visible || !offer.Listed {
-		t.Fatalf("флаг витрины продавца не скрывает предложение площадки: %+v", offer)
+	if !offer.Visible || offer.Listed || !offer.CheckoutAvailable {
+		t.Fatalf("вариант доступен напрямую, но не своей карточкой: %+v", offer)
 	}
 	off := snapshot(1, t1)
 	off.Card.Visible = false

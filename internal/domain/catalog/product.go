@@ -21,6 +21,7 @@ type Category struct {
 
 // Card — то, что покупатель видит о товаре.
 type Card struct {
+	TileKey        string
 	ModelKey       string
 	ModelKeySource string
 	VariantKey     string

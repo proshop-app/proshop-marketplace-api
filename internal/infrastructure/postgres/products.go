@@ -83,6 +83,7 @@ type Products struct {
 
 // cardJSON — карточка товара в колонке jsonb.
 type cardJSON struct {
+	TileKey        string               `json:"tileKey,omitempty"`
 	Variants       *catalog.Variants    `json:"variants,omitempty"`
 	ModelKey       string               `json:"modelKey,omitempty"`
 	ModelKeySource string               `json:"modelKeySource,omitempty"`
@@ -286,6 +287,7 @@ func encodeCard(card catalog.Card) ([]byte, error) {
 		URL:            card.URL,
 		SKU:            card.SKU,
 		VariantsID:     card.VariantsID,
+		TileKey:        card.TileKey,
 		Visible:        card.Visible,
 		OnlyVariant:    card.OnlyVariant,
 	}
@@ -320,6 +322,7 @@ func decodeCard(raw []byte) (catalog.Card, error) {
 		URL:            doc.URL,
 		SKU:            doc.SKU,
 		VariantsID:     doc.VariantsID,
+		TileKey:        doc.TileKey,
 		Visible:        doc.Visible,
 		OnlyVariant:    doc.OnlyVariant,
 	}

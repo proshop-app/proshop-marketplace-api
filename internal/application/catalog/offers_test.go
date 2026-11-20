@@ -68,7 +68,7 @@ func TestOffersOrderVisibilityAndPrices(t *testing.T) {
 			t.Fatal(card)
 		}
 	}
-	if !reflect.DeepEqual(got, []string{"t2~p2", "t1~p1", "t2~p1"}) {
+	if !reflect.DeepEqual(got, []string{"t2~p2", "t1~unlisted", "t1~p1", "t2~p1"}) {
 		t.Fatal(got)
 	}
 	calls := platform.PriceContextCalls()

@@ -34,6 +34,7 @@ type productProjection struct {
 }
 
 type productSnapshot struct {
+	TileKey           string             `json:"tileKey"`
 	Assets            []json.RawMessage  `json:"assets"`
 	AverageRating     float64            `json:"averageRating"`
 	RatingsCount      int64              `json:"ratingsCount"`
@@ -181,6 +182,7 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 		card.Image = *product.Image
 	}
 	card.Assets = snapshotAssets(product.Assets, card.Image)
+	card.TileKey = product.TileKey
 	if product.VariantsID != nil {
 		card.VariantsID = *product.VariantsID
 	}
