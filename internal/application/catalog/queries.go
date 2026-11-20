@@ -3,9 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
-	"strings"
 	"sync"
-	"unicode/utf8"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 
@@ -25,6 +23,8 @@ const (
 	MaxWindow = 10000
 	// MaxQueryLength — длина строки поиска в символах.
 	MaxQueryLength = 200
+	// MaxQueryWords — число слов в строке поиска.
+	MaxQueryWords = 32
 	// MaxTenants — предел магазинов в фильтре каталога.
 	MaxTenants = 100
 )
@@ -162,12 +162,13 @@ func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 	if err := validateFacetSelection(query.Facets); err != nil {
 		return query, err
 	}
-	query.Text = strings.TrimSpace(query.Text)
+	text, err := NormalizeQueryText(query.Text)
+	if err != nil {
+		return query, err
+	}
+	query.Text = text
 	query.TrackQuery = query.TrackQuery && query.Text != "" && query.Offset == 0
 
-	if utf8.RuneCountInString(query.Text) > MaxQueryLength {
-		return query, ErrInvalidQuery.WithMessage("строка поиска длиннее 200 символов")
-	}
 	if len(query.TenantIDs) > MaxTenants {
 		return query, ErrInvalidQuery.WithMessage("слишком много магазинов")
 	}

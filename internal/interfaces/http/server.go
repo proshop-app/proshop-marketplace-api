@@ -364,7 +364,7 @@ func routes(deps Deps) []route {
 			readRequest,
 			http.MethodGet,
 			"/api/v1/catalog/sponsored",
-			publicBuyer(deps.Auth, promotion.sponsored),
+			publicOfferSearch(deps.Auth, promotion.sponsored),
 		},
 		{
 			ingestionRequest,
@@ -553,7 +553,7 @@ func routes(deps Deps) []route {
 			publicBuyer(deps.Auth, catalog.recommendations),
 		},
 		{readRequest, http.MethodGet, "/api/v1/catalog/offers/{offerId}/reviews", catalog.reviews},
-		{readRequest, http.MethodGet, "/api/v1/catalog/offers", publicBuyer(deps.Auth, catalog.list)},
+		{readRequest, http.MethodGet, "/api/v1/catalog/offers", publicOfferSearch(deps.Auth, catalog.list)},
 		{
 			readRequest,
 			http.MethodGet,

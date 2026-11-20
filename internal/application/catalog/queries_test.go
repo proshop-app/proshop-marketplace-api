@@ -3,6 +3,7 @@ package catalog_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,6 +58,7 @@ func TestSearchValidation(t *testing.T) {
 	}
 	cases := map[string]ports.OfferQuery{
 		"длинный запрос":        {Text: string(long)},
+		"слишком много слов":    {Text: strings.Repeat("а\ufeff", 32) + "а"},
 		"лимит больше 100":      {Limit: 101},
 		"отрицательный":         {Limit: -1},
 		"глубокая страница":     {Offset: 9990, Limit: 20},
