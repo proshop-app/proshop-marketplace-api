@@ -201,7 +201,7 @@ func (x *Index) Get(ctx context.Context, id string) (ports.OfferDocument, bool, 
 // Search передаёт текст, каноническую категорию и фильтры общему движку.
 func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.OfferPage, error) {
 	var result offerPage
-	_, err := x.request(
+	status, err := x.request(
 		ctx,
 		http.MethodPost,
 		"/search",
@@ -227,6 +227,9 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 		&result,
 	)
 
+	if status == http.StatusBadRequest {
+		return ports.OfferPage{}, ErrInvalid
+	}
 	if err != nil {
 		return ports.OfferPage{}, err
 	}
