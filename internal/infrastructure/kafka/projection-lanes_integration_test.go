@@ -45,7 +45,7 @@ type laneSnapshot struct {
 }
 
 func TestProjectionLaneRevisionOrder(t *testing.T) {
-	pool, _, uow := intakeDatabase(t)
+	pool, _, uow := intakeDatabase(t, measurePool)
 	prefix, group := unique("lane"), unique("marketplace-")
 	moderation := appmoderation.NewService(uow, clock.System{}, random.IDs{}, appmoderation.Config{})
 	router := kafka.NewRouter(appcatalog.NewProjector(uow, clock.System{}, moderation), nil)

@@ -20,12 +20,11 @@ func (s *server) runConsumers(ctx context.Context, group *errgroup.Group) {
 	metrics := kafka.NewConsumerMetrics(s.metrics)
 	ctx = ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(s.cfg.Database.Ingestion))
 
-	// Один воркер отдан массовой полосе. Основной цикл сохраняет хотя бы один.
 	group.Go(func() error {
-		return s.consume(ctx, router, metrics, cfg.GroupID, regular, max(1, cfg.Workers-1))
+		return s.consume(ctx, router, metrics, cfg.GroupID, regular, cfg.Workers-cfg.BulkWorkers)
 	})
 	group.Go(func() error {
-		return s.consume(ctx, router, metrics, cfg.GroupID+"-bulk", []string{bulk}, 1)
+		return s.consume(ctx, router, metrics, cfg.GroupID+"-bulk", []string{bulk}, cfg.BulkWorkers)
 	})
 }
 

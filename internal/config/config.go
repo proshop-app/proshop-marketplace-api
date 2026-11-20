@@ -180,13 +180,14 @@ type Search struct {
 	Timeout             time.Duration
 }
 
-// Kafka — брокеры установки и своя группа консьюмера.
+// Kafka — брокеры установки и параметры групп приёма.
 type Kafka struct {
 	Brokers     []string
 	TopicPrefix string
 	GroupID     string
 	MaxAttempts int
-	Workers     int
+	Workers     int // общий предел для обеих групп после ограничения пулом
+	BulkWorkers int
 	// ReferenceTopic — имя топика catalog.reference.changed без префикса; топик заводит сервер установки.
 	ReferenceTopic         string
 	OfferStatusTopic       string
@@ -265,6 +266,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			GroupID:                r.str("KAFKA_GROUP_ID", "marketplace"),
 			MaxAttempts:            r.positive("KAFKA_MAX_ATTEMPTS", 5),
 			Workers:                r.positive("KAFKA_WORKERS", 8),
+			BulkWorkers:            r.positive("KAFKA_BULK_WORKERS", 3),
 			ReferenceTopic:         r.str("KAFKA_TOPIC_REFERENCE_CHANGED", "catalog.reference.changed"),
 			OfferStatusTopic:       r.topic("KAFKA_TOPIC_OFFER_STATUS", "marketplace.offer.status"),
 			ParticipantStatusTopic: r.topic("KAFKA_TOPIC_PARTICIPANT_STATUS", "marketplace.participant.status"),

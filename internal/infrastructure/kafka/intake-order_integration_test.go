@@ -28,11 +28,11 @@ import (
 const countIntakeParked = `SELECT count(*) FROM parked_events`
 
 func TestIntakeSQLCounts(t *testing.T) {
-	_, queries, uow := intakeDatabase(t)
+	_, queries, uow := intakeDatabase(t, measurePool)
 	moderation := appmoderation.NewService(uow, clock.System{}, random.IDs{}, appmoderation.Config{})
 	projector := appcatalog.NewProjector(uow, clock.System{}, moderation)
 	ctx := context.Background()
-	message := intakeMessages("product", "topic")[0]
+	message := intakeMessages("product", "topic", 1)[0]
 	snapshot, err := kafka.DecodeProjectionSnapshot(message.Value, message.Time)
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestIntakeSQLCounts(t *testing.T) {
 }
 
 func TestIntakeBeforeRegistryPreservesDataAndReevaluates(t *testing.T) {
-	pool, _, uow := intakeDatabase(t)
+	pool, _, uow := intakeDatabase(t, measurePool)
 	moderation := appmoderation.NewService(uow, clock.System{}, random.IDs{}, appmoderation.Config{})
 	projector := appcatalog.NewProjector(uow, clock.System{}, moderation)
 	registry := appparticipant.NewRegistry(uow, clock.System{}, random.IDs{})
@@ -97,9 +97,9 @@ func TestIntakeBeforeRegistryPreservesDataAndReevaluates(t *testing.T) {
 		kafka.NewConsumerMetrics(prometheus.NewRegistry()),
 	)
 	messages := []kafkago.Message{
-		intakeMessages("product", kafka.TopicProductProjected)[0],
-		intakeMessages("price", kafka.TopicProductPriceUpdated)[0],
-		intakeMessages("stock", kafka.TopicStockItemUpdated)[0],
+		intakeMessages("product", kafka.TopicProductProjected, 1)[0],
+		intakeMessages("price", kafka.TopicProductPriceUpdated, 1)[0],
+		intakeMessages("stock", kafka.TopicStockItemUpdated, 1)[0],
 	}
 	for i, message := range messages {
 		message.Value = []byte(strings.ReplaceAll(string(message.Value), `"t0"`, `"late"`))

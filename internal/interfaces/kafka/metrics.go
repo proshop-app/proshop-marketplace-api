@@ -17,21 +17,21 @@ func NewConsumerMetrics(registerer prometheus.Registerer) *ConsumerMetrics {
 				Name: "marketplace_kafka_messages_total",
 				Help: "Сообщения Kafka по итогу: processed — обработано, parked — в отравленных.",
 			},
-			[]string{"topic", "tenant", "result"},
+			[]string{"topic", "result"},
 		),
 		parked: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "marketplace_kafka_parked_total",
 				Help: "Отравленные сообщения по причине.",
 			},
-			[]string{"topic", "tenant", "reason"},
+			[]string{"topic", "reason"},
 		),
 		failures: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "marketplace_kafka_handler_failures_total",
 				Help: "Неудачные попытки обработки, после которых сообщение повторяется.",
 			},
-			[]string{"topic", "tenant"},
+			[]string{"topic"},
 		),
 	}
 	registerer.MustRegister(m.messages, m.parked, m.failures)

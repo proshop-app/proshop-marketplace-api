@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"slices"
@@ -173,64 +174,88 @@ func TestConsumerParksMessageWithoutTenant(t *testing.T) {
 	}
 }
 
-func TestProjectionIntakeTelemetryByTopic(t *testing.T) {
+func TestIntakeTelemetryByTopic(t *testing.T) {
+	cases := []struct {
+		topic      string
+		badMessage func(string) kafkago.Message
+	}{
+		{kafka.TopicProductProjected, badProjection},
+		{kafka.TopicProductProjectedBulk, badProjection},
+		{kafka.TopicProductPriceUpdated, func(tenant string) kafkago.Message {
+			return message("p1", "{", tenantHeader(tenant))
+		}},
+		{kafka.TopicTenantCreated, func(tenant string) kafkago.Message {
+			return message("", fmt.Sprintf(`{"tenantId":%q,"at":"invalid"}`, tenant))
+		}},
+	}
 	registry := prometheus.NewRegistry()
-	metrics := kafka.NewConsumerMetrics(registry)
 	park := &parker{}
 	var journal bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&journal, nil))
-	for _, topic := range []string{kafka.TopicProductProjected, kafka.TopicProductProjectedBulk} {
-		c := kafka.NewConsumer(
-			&source{},
-			kafka.NewRouter(&recorder{}, &recorder{}),
-			park,
-			kafka.ConsumerConfig{TopicPrefix: "shop", Now: time.Now},
-			logger,
-			metrics,
-		)
+	c := kafka.NewConsumer(
+		&source{},
+		kafka.NewRouter(&recorder{}, &recorder{}),
+		park,
+		kafka.ConsumerConfig{
+			TopicPrefix: "shop",
+			Backoff:     func(int) time.Duration { return 0 },
+			Now:         time.Now,
+		},
+		slog.New(slog.NewTextHandler(&journal, nil)),
+		kafka.NewConsumerMetrics(registry),
+	)
+	for _, tc := range cases {
 		for _, tenant := range []string{"t1", "t2"} {
-			msg := message(`["`+tenant+`","p1"]`, "{", tenantHeader(tenant))
-			msg.Topic = "shop." + topic
+			journal.Reset()
+			park.failures = 1
+			msg := tc.badMessage(tenant)
+			msg.Topic = "shop." + tc.topic
 			if err := c.Process(context.Background(), msg); err != nil {
 				t.Fatal(err)
 			}
 			if got := park.events[len(park.events)-1].TenantID; got != tenant {
 				t.Fatalf("магазин в записи парковки: %q, ожидался %q", got, tenant)
 			}
-		}
-		if !strings.Contains(journal.String(), "topic="+topic+" ") {
-			t.Fatalf("в журнале нет темы %s", topic)
+			lines := strings.Split(strings.TrimSpace(journal.String()), "\n")
+			if len(lines) != 2 {
+				t.Fatalf("ожидался журнал ошибки парковки и отравленного сообщения: %s", journal.String())
+			}
+			for _, line := range lines {
+				if !strings.Contains(line, "topic="+tc.topic+" ") || !strings.Contains(line, "tenantId="+tenant+" ") {
+					t.Fatalf("нет темы или магазина в журнале: %s", line)
+				}
+			}
 		}
 	}
-	if strings.Contains(journal.String(), "tenantId=") {
-		t.Fatal("в журнале приёма проекций есть метка магазина")
-	}
+	assertIntakeMetrics(t, registry, len(cases))
+}
+
+func badProjection(tenant string) kafkago.Message {
+	return message(fmt.Sprintf(`[%q,"p1"]`, tenant), "{")
+}
+
+func assertIntakeMetrics(t *testing.T, registry *prometheus.Registry, topicCount int) {
+	t.Helper()
 	families, err := registry.Gather()
 	if err != nil {
 		t.Fatal(err)
 	}
-	byTopic := make(map[string]float64)
+	if len(families) != 3 {
+		t.Fatalf("ожидалось три семейства метрик, получено %d", len(families))
+	}
 	for _, family := range families {
-		if family.GetName() != "marketplace_kafka_parked_total" {
-			continue
+		if len(family.Metric) != topicCount {
+			t.Fatalf("%s: рядов %d, ожидалось %d", family.GetName(), len(family.Metric), topicCount)
 		}
 		for _, metric := range family.Metric {
-			var topic string
 			for _, label := range metric.Label {
-				switch label.GetName() {
-				case "topic":
-					topic = label.GetValue()
-				case "tenant":
-					if label.GetValue() != "" {
-						t.Fatal("в метрике проекций указан магазин")
-					}
+				if label.GetName() == "tenant" {
+					t.Fatalf("%s: лишняя метка tenant", family.GetName())
 				}
 			}
-			byTopic[topic] += metric.GetCounter().GetValue()
+			if metric.GetCounter().GetValue() != 2 {
+				t.Fatalf("%s: счётчик должен включать оба магазина", family.GetName())
+			}
 		}
-	}
-	if len(byTopic) != 2 || byTopic[kafka.TopicProductProjected] != 2 || byTopic[kafka.TopicProductProjectedBulk] != 2 {
-		t.Fatalf("парковки по темам проекций: %v", byTopic)
 	}
 }
 

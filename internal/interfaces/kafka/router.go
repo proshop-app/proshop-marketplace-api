@@ -86,25 +86,26 @@ func (r *Router) Handle(ctx context.Context, envelope Envelope) error {
 	return h(ctx, envelope)
 }
 
-// TenantHint — магазин сообщения для меток журналов и метрик: заголовок или
-// ключ проекции. Согласованность источников не проверяет; значение не по
-// формату идентификатора отбрасывается, чтобы повреждённые сообщения не
-// плодили метки.
+// TenantHint — магазин для диагностики: берёт первый допустимый id из
+// заголовка, составного ключа или тела. Согласованность проверяет обработчик.
 func TenantHint(message kafkago.Message) string {
-	candidate := tenantHeader(message)
-
-	if candidate == "" {
-		var key []string
-		if json.Unmarshal(message.Key, &key) == nil && len(key) == 2 {
-			candidate = key[0]
+	if tenant, err := ids.ParseTenantID(tenantHeader(message)); err == nil {
+		return string(tenant)
+	}
+	if candidate, _, err := projectionKey(message); err == nil {
+		if tenant, err := ids.ParseTenantID(candidate); err == nil {
+			return string(tenant)
 		}
 	}
-
-	if _, err := ids.ParseTenantID(candidate); err != nil {
-		return ""
+	var body struct {
+		TenantID string `json:"tenantId"`
 	}
-
-	return candidate
+	if json.Unmarshal(message.Value, &body) == nil {
+		if tenant, err := ids.ParseTenantID(body.TenantID); err == nil {
+			return string(tenant)
+		}
+	}
+	return ""
 }
 
 // tenantHeader — значение заголовка x-tenant; имя без учёта регистра.
