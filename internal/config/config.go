@@ -29,6 +29,7 @@ type Config struct {
 	HTTP       HTTP
 	Database   Database
 	Search     Search
+	Synonyms   Synonyms
 	Kafka      Kafka
 	Outbox     Outbox
 	Retention  Retention
@@ -242,6 +243,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			TrustedProxies:         r.nonNegative("HTTP_TRUST_PROXY", 0),
 		},
 		Database: r.database(),
+		Synonyms: r.synonyms(),
 		Search: Search{
 			CandidatesToken:     r.str("SEARCH_CANDIDATES_TOKEN", ""),
 			MaintenanceInterval: r.duration("SEARCH_MAINTENANCE_INTERVAL", time.Minute),
@@ -620,8 +622,8 @@ func (r *reader) validateReference(cfg Config) {
 		r.fail("REFERENCE_READ_TOKEN", fmt.Sprintf("не короче %d символов", minOperatorTokenLength))
 	}
 	if token == cfg.Operator.Token || token == cfg.Platform.Token || token == cfg.Identity.Secret ||
-		token == cfg.Identity.OperatorSecret {
-		reason := "отличается от OPERATOR_TOKEN, SERVICE_TOKEN_MARKETPLACE и секретов identity-hub"
+		token == cfg.Identity.OperatorSecret || token == cfg.Search.Token || token == cfg.Search.CandidatesToken {
+		reason := "отличается от операторского, служебных токенов магазина и поиска и секретов identity-hub"
 		r.fail("REFERENCE_READ_TOKEN", reason)
 	}
 }

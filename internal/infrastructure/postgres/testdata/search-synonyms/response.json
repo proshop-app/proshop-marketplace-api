@@ -1,0 +1,30 @@
+{
+  "batchId": "syn-2026-11-21-001",
+  "validatorVersion": 1,
+  "results": [
+    {
+      "id": "syn_bc35b98cab9b3989b3790beb01a87d4d",
+      "complete": true,
+      "scopesChecked": 5,
+      "sourceLiteralScopes": 1,
+      "targetLiteralScopes": 5,
+      "rescuedScopes": 3,
+      "decision": "pass",
+      "evidence": {
+        "fingerprint": "9f2c000000000000000000000000000000000000000000000000000000000000",
+        "checkedAt": "2026-11-21T18:00:00Z",
+        "taxonomyRevision": "17"
+      }
+    },
+    {
+      "id": "syn_6831b702633d716c816fdbf338519a00",
+      "complete": false,
+      "scopesChecked": 2,
+      "sourceLiteralScopes": 0,
+      "targetLiteralScopes": 1,
+      "rescuedScopes": 0,
+      "decision": "retry",
+      "evidence": {"fingerprint":"","checkedAt":"2026-11-21T18:00:00Z","taxonomyRevision":"17"}
+    }
+  ]
+}

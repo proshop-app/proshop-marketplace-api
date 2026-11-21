@@ -1,0 +1,17 @@
+{
+  "batchId": "syn-2026-11-21-001",
+  "rules": [
+    {
+      "id": "syn_6831b702633d716c816fdbf338519a00",
+      "from": "usb-хабы",
+      "to": "usb-концентраторы",
+      "scope": {"kind":"category","id":"computers.usb-hubs"}
+    },
+    {
+      "id": "syn_bc35b98cab9b3989b3790beb01a87d4d",
+      "from": "роутеры",
+      "to": "маршрутизаторы",
+      "scope": {"kind":"category","id":"computers.routers"}
+    }
+  ]
+}

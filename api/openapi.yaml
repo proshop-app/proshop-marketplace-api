@@ -36,7 +36,7 @@ tags:
       Реестр справочных сущностей для бэкендов платформы (сервер магазина, поиск).
       Чтение — токен читателя REFERENCE_READ_TOKEN, мутации — OPERATOR_TOKEN или сессия
       оператора; браузеру токены не выдаются.
-      Все ответы несут schemaVersion и revision, поля только добавляются.
+      Снимки несут schemaVersion и revision, поля только добавляются.
       Контракт — docs/reference.md.
 paths:
   /api/v1/buyer/profile:
@@ -3605,6 +3605,134 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ReferenceDiscovery" }
         "401": { $ref: "#/components/responses/Error" }
+  /api/v1/internal/reference/search-synonyms/snapshot:
+    get:
+      tags: [reference]
+      summary: Полный снимок общих поисковых синонимов
+      operationId: searchSynonymsSnapshot
+      security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
+      parameters:
+        - name: If-None-Match
+          in: header
+          schema: { type: string }
+      responses:
+        "200":
+          description: Полный снимок, до 512 КиБ
+          headers:
+            ETag:
+              schema: { type: string, example: '"42"' }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchSynonymSnapshot" }
+        "304":
+          description: Действует уже загруженная ревизия
+          headers:
+            ETag:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/reference/search-synonyms/rules:
+    get:
+      tags: [reference]
+      summary: Направления, источники и последние каталожные проверки
+      operationId: searchSynonymsRules
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      parameters:
+        - name: after
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Страница направлений в порядке идентификатора
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision, entries]
+                properties:
+                  revision: { type: integer, format: int64, minimum: 0 }
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/SearchSynonymEntry" }
+                  nextAfter: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/reference/search-synonyms/rules/{id}:
+    patch:
+      tags: [reference]
+      summary: Выключить направление
+      operationId: disableSearchSynonymRule
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedRevision, enabled, reason]
+              properties:
+                expectedRevision: { type: integer, format: int64, minimum: 0 }
+                enabled: { type: boolean, enum: [false] }
+                reason: { type: string, minLength: 1, maxLength: 256 }
+      responses:
+        "200":
+          description: Ревизия после отключения
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision]
+                properties:
+                  revision: { type: integer, format: int64, minimum: 0 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/operator/reference/search-synonyms/stop-list:
+    get:
+      tags: [reference]
+      summary: Прочитать общий стоп-лист
+      operationId: getSearchSynonymStopList
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      responses:
+        "200":
+          description: Общий стоп-лист и ревизия снимка
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchSynonymStopList" }
+        "401": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [reference]
+      summary: Заменить общий стоп-лист
+      operationId: replaceSearchSynonymStopList
+      security: [{ operatorToken: [] }, { operatorSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedRevision, blockedTerms, reason]
+              properties:
+                expectedRevision: { type: integer, format: int64, minimum: 0 }
+                blockedTerms: { $ref: "#/components/schemas/SearchSynonymBlockedTerms" }
+                reason: { type: string, minLength: 1, maxLength: 256 }
+      responses:
+        "200":
+          description: Опубликованный стоп-лист
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchSynonymStopList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/internal/reference/{dict}/snapshot:
     get:
       tags: [reference]
@@ -5300,6 +5428,90 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Participant" }
   schemas:
+    SearchSynonymBlockedTerms:
+      type: array
+      maxItems: 512
+      items: { type: string, minLength: 2, maxLength: 64 }
+    SearchSynonymStopList:
+      type: object
+      required: [revision, blockedTerms]
+      properties:
+        revision: { type: integer, format: int64, minimum: 0 }
+        blockedTerms: { $ref: "#/components/schemas/SearchSynonymBlockedTerms" }
+    SearchSynonymDirection:
+      type: object
+      required: [id, from, to, scope]
+      properties:
+        id: { type: string, example: syn_17 }
+        from: { type: string, minLength: 2, maxLength: 64 }
+        to: { type: string, minLength: 2, maxLength: 64 }
+        scope:
+          type: object
+          required: [kind, id]
+          properties:
+            kind: { type: string, enum: [category] }
+            id: { type: string, example: computers.routers }
+        concept: { type: string, description: Зарезервировано }
+    SearchSynonymSnapshot:
+      type: object
+      required: [schemaVersion, revision, rules, blockedTerms]
+      properties:
+        schemaVersion: { type: integer, enum: [1] }
+        revision: { type: integer, format: int64, minimum: 0 }
+        rules:
+          type: array
+          maxItems: 1000
+          items:
+            allOf:
+              - { $ref: "#/components/schemas/SearchSynonymDirection" }
+              - type: object
+                required: [phase]
+                properties:
+                  phase: { type: string, enum: [active] }
+        blockedTerms: { $ref: "#/components/schemas/SearchSynonymBlockedTerms" }
+    SearchSynonymEntry:
+      allOf:
+        - { $ref: "#/components/schemas/SearchSynonymDirection" }
+        - type: object
+          required: [phase, source, version, createdAt, expiresAt, nextCheck]
+          properties:
+            phase: { type: string, enum: [candidate, quarantined, active, disabled] }
+            source:
+              type: object
+              required: [kind, id, revision]
+              properties:
+                kind: { type: string, enum: [taxonomy_name, registry_alias, model] }
+                id: { type: string }
+                revision: { type: string }
+            version: { type: integer, format: int64, minimum: 1 }
+            createdAt: { type: string, format: date-time }
+            expiresAt: { type: string, format: date-time }
+            nextCheck: { type: string, format: date-time }
+            activatedAt: { type: string, format: date-time }
+            lastCheck: { $ref: "#/components/schemas/SearchSynonymCheck" }
+    SearchSynonymCheck:
+      type: object
+      required: [id, complete, scopesChecked, sourceLiteralScopes, targetLiteralScopes, rescuedScopes,
+                 decision, evidence, batchId, validatorVersion, recordedAt, outcome]
+      properties:
+        id: { type: string }
+        complete: { type: boolean }
+        scopesChecked: { type: integer, minimum: 0, maximum: 5 }
+        sourceLiteralScopes: { type: integer, minimum: 0, maximum: 5 }
+        targetLiteralScopes: { type: integer, minimum: 0, maximum: 5 }
+        rescuedScopes: { type: integer, minimum: 0, maximum: 5 }
+        decision: { type: string, enum: [pass, reject, retry] }
+        evidence:
+          type: object
+          required: [fingerprint, checkedAt, taxonomyRevision]
+          properties:
+            fingerprint: { type: string, pattern: '^(|[0-9a-fA-F]{64})$' }
+            checkedAt: { type: string, format: date-time }
+            taxonomyRevision: { type: string }
+        batchId: { type: string }
+        validatorVersion: { type: integer, enum: [0, 1] }
+        recordedAt: { type: string, format: date-time }
+        outcome: { type: string, enum: [pass, reject, retry] }
     ModerationBulkInput:
       type: object
       required: [note]

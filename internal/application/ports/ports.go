@@ -57,4 +57,5 @@ type Tx interface {
 	Carts() cart.Repository
 	Checkouts() checkout.Repository
 	Reference() reference.Repository
+	Synonyms() SynonymRepository
 }
