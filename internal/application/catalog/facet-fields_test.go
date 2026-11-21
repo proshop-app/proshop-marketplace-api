@@ -212,13 +212,18 @@ func TestFacetBudgetPinsRareColor(t *testing.T) {
 			{ID: "c4", Schema: "s2"},
 		},
 	}}
-	for _, color := range []taxonomy.Attribute{
-		{Code: "color", Type: "string", Facet: true, FacetPinned: true},
-		{Code: "color", Type: "string", Facet: true},
-		{Code: "color", Type: "string", Facet: true, FacetPinned: true, Deprecated: true},
-		{Code: "color", Type: "string"},
+	pinned, unpinned := true, false
+	for _, tc := range []struct {
+		color taxonomy.Attribute
+		want  bool
+	}{
+		{color: taxonomy.Attribute{Code: "color", Type: "string", Facet: true, FacetPinned: &pinned}, want: true},
+		{color: taxonomy.Attribute{Code: "color", Type: "string", Facet: true}, want: true},
+		{color: taxonomy.Attribute{Code: "color", Type: "string", Facet: true, FacetPinned: &unpinned}},
+		{color: taxonomy.Attribute{Code: "color", Type: "string", Facet: true, FacetPinned: &pinned, Deprecated: true}},
+		{color: taxonomy.Attribute{Code: "color", Type: "string"}},
 	} {
-		d.Attributes[len(d.Attributes)-1] = color
+		d.Attributes[len(d.Attributes)-1] = tc.color
 		store := fake.NewStore()
 		store.SeedTaxonomy(d)
 		queries := appcatalog.NewQueries(store, fake.NewIndex(), nil, nil, nil, fake.NewClock(time.Time{}))
@@ -235,7 +240,7 @@ func TestFacetBudgetPinsRareColor(t *testing.T) {
 						filters[code] = ports.AttributeFilter{Values: []string{"v1"}}
 					}
 				}
-				if id != "c2" && color.Facet && color.FacetPinned && !color.Deprecated {
+				if id != "c2" && tc.want {
 					want = append(want[:len(want)-1], "color")
 					if selected == 1 {
 						want[len(want)-2] = "a039"
@@ -253,7 +258,7 @@ func TestFacetBudgetPinsRareColor(t *testing.T) {
 					got = append(got, field.Code)
 				}
 				if !reflect.DeepEqual(got, want) {
-					t.Fatalf("область=%q выбрано=%d цвет=%+v: %v вместо %v", id, selected, color, got, want)
+					t.Fatalf("область=%q выбрано=%d цвет=%+v: %v вместо %v", id, selected, tc.color, got, want)
 				}
 			}
 		}

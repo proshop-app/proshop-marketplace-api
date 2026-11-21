@@ -48,6 +48,29 @@ func TestFacetOptionsOrderAndAllowedValues(t *testing.T) {
 	}
 }
 
+func TestLegacyColorFacetKeepsPaletteOrderAndSelection(t *testing.T) {
+	query := ports.OfferQuery{
+		FacetFields: []taxonomy.Attribute{
+			{Code: "color", Type: "enum", Facet: true, FacetOptions: []string{"Белый", "Красный"}},
+		},
+	}
+	white := ports.FacetBucket{Value: "Белый", Count: 1}
+	red := ports.FacetBucket{Value: "Красный", Count: 2}
+	facets := []ports.Facet{{Code: "attr.color", Count: 3, Values: []ports.FacetBucket{red, white}}}
+	got := visibleFacets(facets, 100, query)
+	if len(got) != 1 || !reflect.DeepEqual(got[0].Values, []ports.FacetBucket{white, red}) {
+		t.Fatalf("цвет с малым охватом потерян или изменён порядок палитры: %+v", got)
+	}
+
+	facets[0].Count = 1
+	facets[0].Values = []ports.FacetBucket{white}
+	query.Attributes = map[string]ports.AttributeFilter{"color": {Values: []string{white.Value}}}
+	got = visibleFacets(facets, 100, query)
+	if len(got) != 1 || !reflect.DeepEqual(got[0].Values, []ports.FacetBucket{white}) {
+		t.Fatalf("единственный выбранный цвет недоступен для снятия: %+v", got)
+	}
+}
+
 func TestFacetValuesMetaFromSnapshot(t *testing.T) {
 	red := taxonomy.ValueMeta{Hex: "#FF0000"}
 	many := taxonomy.ValueMeta{Swatch: "multicolor"}

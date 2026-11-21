@@ -39,7 +39,8 @@ type ValueMeta struct {
 
 // Attribute — скалярное поле; код имеет один тип и единицу во всей площадке.
 type Attribute struct {
-	FacetPinned        bool                 `json:"facetPinned,omitempty" yaml:"facetPinned,omitempty"`
+	// FacetPinned отличает отсутствие настройки в снимке от явного отключения.
+	FacetPinned        *bool                `json:"facetPinned,omitempty" yaml:"facetPinned,omitempty"`
 	FacetOptions       []string             `json:"facetOptions,omitempty" yaml:"-"`
 	FacetValuesByValue map[string][]string  `json:"facetValuesByValue,omitempty" yaml:"-"`
 	Format             string               `json:"format,omitempty" yaml:"format,omitempty"`
@@ -231,7 +232,7 @@ func (d Definition) Validate() error {
 }
 
 func (a Attribute) validate() error {
-	if a.FacetPinned && !a.Facet {
+	if a.FacetPinned != nil && *a.FacetPinned && !a.Facet {
 		return ErrInvalid.WithMessage("закрепление требует фасета: " + a.Code)
 	}
 

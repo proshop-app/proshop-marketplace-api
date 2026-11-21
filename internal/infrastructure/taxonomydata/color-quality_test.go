@@ -50,7 +50,7 @@ func TestPaletteSamplesAreComplete(t *testing.T) {
 		if field.Dictionary != colorpalette.Dictionary {
 			continue
 		}
-		if !field.FacetPinned {
+		if field.FacetPinned == nil || !*field.FacetPinned {
 			t.Fatal("цвет должен закрепляться данными поставки")
 		}
 		palette := colorpalette.Values()

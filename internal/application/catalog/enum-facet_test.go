@@ -15,6 +15,7 @@ import (
 
 func TestEnumFacetAndFilter(t *testing.T) {
 	ctx := context.Background()
+	pinned := true
 	d := taxonomy.Definition{
 		Attributes: []taxonomy.Attribute{
 			{
@@ -24,7 +25,7 @@ func TestEnumFacetAndFilter(t *testing.T) {
 				Dictionary:  "d1",
 				Values:      []string{"v1", "v2"},
 				Facet:       true,
-				FacetPinned: true,
+				FacetPinned: &pinned,
 			},
 		},
 		Schemas: map[string]taxonomy.Schema{
