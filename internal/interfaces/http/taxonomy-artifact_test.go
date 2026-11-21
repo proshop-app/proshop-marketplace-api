@@ -43,7 +43,7 @@ type releaseRepository struct {
 	store *releaseStore
 }
 
-func TestArtifactRelease16PublishedContract(t *testing.T) {
+func TestArtifactRelease17PublishedContract(t *testing.T) {
 	release, _, err := taxonomydata.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -66,6 +66,7 @@ func TestArtifactRelease16PublishedContract(t *testing.T) {
 	if pool := attributes.SelectionValues["size_clothing_men_ru"]; pool.ValuesMeta == nil {
 		t.Fatal("снимок не отдаёт действующий пул")
 	}
+	assertArtifactFacets(t, published["attributes"].body, release.Attributes)
 	var tree struct {
 		Categories []taxonomy.Category
 	}
@@ -82,6 +83,34 @@ func TestArtifactRelease16PublishedContract(t *testing.T) {
 	assertReleaseRetry(t, store, service, release)
 	if retry := captureTaxonomyContract(t, store, service); !reflect.DeepEqual(published, retry) {
 		t.Fatal("повтор поставки изменил опубликованные данные")
+	}
+}
+
+func assertArtifactFacets(t *testing.T, body string, definitions []taxonomy.Attribute) {
+	t.Helper()
+	var response struct {
+		Attributes []struct {
+			Code  string
+			Facet *bool
+		}
+	}
+	if err := json.Unmarshal([]byte(body), &response); err != nil {
+		t.Fatal(err)
+	}
+	fields := taxonomy.Definition{Attributes: definitions}.Fields()
+	facets := 0
+	for _, attribute := range response.Attributes {
+		field, found := fields[attribute.Code]
+		if !found || attribute.Facet == nil || *attribute.Facet != field.Facet {
+			t.Fatalf("неверный признак facet у %s", attribute.Code)
+		}
+		delete(fields, attribute.Code)
+		if *attribute.Facet {
+			facets++
+		}
+	}
+	if len(fields) != 0 || len(response.Attributes) != 2008 || facets != 560 {
+		t.Fatalf("определений %d, потеряно %d, фасетов %d", len(response.Attributes), len(fields), facets)
 	}
 }
 
@@ -116,8 +145,8 @@ func applyTaxonomyRelease(
 	seedTaxonomyBindingHeaders(store.Store, release.DictionaryBindings)
 	if err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 		previous := taxonomy.Release{
-			Version:  15,
-			Checksum: "d634b123343dff3bc5b3766d48eb14ebf0aa08dcb8b42bc1b2a280e8f81dfb5f",
+			Version:  16,
+			Checksum: "5e64e97f5c1bc99b2eb65e07ffdd97b1eda706076d1f3f43d8ab659b169cd323",
 		}
 		return tx.Taxonomy().RecordRelease(ctx, previous, before.Version, taxonomy.Definition{})
 	}); err != nil {
@@ -184,7 +213,7 @@ func assertReleaseRecord(t *testing.T, store *releaseStore, release taxonomy.Rel
 			return err
 		}
 		want := taxonomy.ReleaseState{
-			Version:          16,
+			Version:          release.Version,
 			Checksum:         release.Checksum,
 			PublishedVersion: 10,
 		}

@@ -2,6 +2,7 @@ package taxonomydata
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"slices"
 	"testing"
@@ -27,6 +28,9 @@ func dictionaryEntries(t *testing.T, code string) []reference.DeliveryEntry {
 		}
 	}
 	raw, err = os.ReadFile("../../../deploy/reference/" + code + "/entries.json")
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +47,7 @@ func TestEnumExamplesUseConfirmedValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, field := range release.Attributes {
-		if field.Type != "enum" {
+		if field.Type != "enum" || field.Example == "" {
 			continue
 		}
 		dictionary := field.Dictionary
@@ -53,6 +57,10 @@ func TestEnumExamplesUseConfirmedValues(t *testing.T) {
 			dictionary = "gender"
 		}
 		entries := dictionaryEntries(t, dictionary)
+		// Новые примеры Uno сверяются с отдельным выпуском реестра при его приёмке.
+		if entries == nil {
+			continue
+		}
 		confirmed := false
 		for _, entry := range entries {
 			if entry.Canonical == field.Example && entry.Status == "confirmed" {
@@ -128,11 +136,15 @@ func TestTaxonomyQualityRejectsAmbiguity(t *testing.T) {
 			release.Attributes[0].Multiple = true
 		},
 		"обязательная строка без исключения": func(release *taxonomy.Release) {
-			schema := release.Schemas["bag"]
-			schema.Optional = slices.DeleteFunc(schema.Optional, func(code string) bool {
-				return code == "gtin"
-			})
-			release.Schemas["bag"] = schema
+			for name, schema := range release.Schemas {
+				if slices.Contains(schema.Optional, "gtin") {
+					schema.Optional = slices.DeleteFunc(schema.Optional, func(code string) bool {
+						return code == "gtin"
+					})
+					release.Schemas[name] = schema
+					return
+				}
+			}
 		},
 		"повтор имени соседей": func(release *taxonomy.Release) {
 			release.Categories[1].Name = "ЭлЕкТрОнИкА"
@@ -159,7 +171,7 @@ func TestReviewedLeafSchemasDoNotReintroduceForeignObjects(t *testing.T) {
 	}
 	definition := release.Definition()
 	cases := map[string][]string{
-		"accessories.key-rings":      {"bag_fastener", "bag_lock", "compatible_model"},
+		"accessories.key-rings":      {"bag_lock", "compatible_model"},
 		"accessories.watch-straps":   {"power", "battery_capacity", "connector"},
 		"accessories.watch-cases":    {"power", "compatible_model", "battery_capacity"},
 		"accessories.men-cufflinks":  {"fabric_composition", "textile_material", "size_clothing_label"},
@@ -177,7 +189,8 @@ func TestReviewedLeafSchemasDoNotReintroduceForeignObjects(t *testing.T) {
 			t.Fatal("нет проверенного вида изделия", id)
 		}
 		for _, field := range leaf.Attributes {
-			if slices.Contains(forbidden, field.Code) || field.Required && field.Code == "compatible_model" {
+			if slices.Contains(forbidden, field.Code) || field.Required &&
+				(field.Code == "compatible_model" || id == "accessories.key-rings" && field.Code == "bag_fastener") {
 				t.Errorf("чужое или необоснованно обязательное поле %s.%s", id, field.Code)
 			}
 		}

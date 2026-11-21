@@ -58,7 +58,7 @@ func (s *Service) revalidatePage(
 	if err != nil {
 		return err
 	}
-	changes, failures, err := s.planRevalidation(ctx, tx, items, definition)
+	changes, failures, err := s.planRevalidation(ctx, tx, items, definition, job.Category)
 	if err != nil {
 		return err
 	}
@@ -101,8 +101,12 @@ func (s *Service) planRevalidation(
 	tx ports.Tx,
 	items []ports.RevalidationItem,
 	definition taxonomy.Definition,
+	category string,
 ) ([]ports.RevalidationChange, []ports.RevalidationFailure, error) {
-	checker := definition.Checker()
+	if len(items) == 0 {
+		return nil, nil, nil
+	}
+	checker := definition.CategoryChecker(category)
 	now := s.clock.Now()
 	products, failures := selectRevalidationProducts(items, definition.Version, checker, now)
 	changes, err := s.evaluateRevalidation(ctx, tx, products, definition, checker)

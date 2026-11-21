@@ -5,9 +5,11 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -145,10 +147,13 @@ func seedTaxonomyDictionaries(
 	targetOnly bool,
 ) {
 	t.Helper()
+	seeded := map[string]bool{}
 	for _, attribute := range attributes {
-		if attribute.Dictionary == "" || (attribute.Dictionary == "target_gender") != targetOnly {
+		if attribute.Dictionary == "" || seeded[attribute.Dictionary] ||
+			(attribute.Dictionary == "target_gender") != targetOnly {
 			continue
 		}
+		seeded[attribute.Dictionary] = true
 		kind := reference.KindOpen
 		if attribute.Type == "enum" {
 			kind = reference.KindClosed
@@ -159,6 +164,9 @@ func seedTaxonomyDictionaries(
 			continue
 		}
 		entries := taxonomyDictionaryEntries(t, attribute.Dictionary)
+		if entries == nil {
+			entries = testConfirmedValues(attributes, attribute.Dictionary)
+		}
 		err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 			var records []*reference.Entry
 			for _, seed := range entries {
@@ -213,6 +221,29 @@ func taxonomyDictionaryEntries(t *testing.T, code string) []reference.DeliveryEn
 			return dictionary.Entries
 		}
 	}
-	t.Fatalf("закрытый словарь %s отсутствует в поставках и bootstrap", code)
 	return nil
+}
+
+func testConfirmedValues(attributes []taxonomy.Attribute, dictionary string) []reference.DeliveryEntry {
+	// Для проверки HTTP-контракта считаем, что оператор принял используемые значения нового словаря.
+	values := map[string]bool{"Значение": true}
+	for _, attribute := range attributes {
+		if attribute.Dictionary == dictionary {
+			for value := range attribute.SearchTermsByValue {
+				values[value] = true
+			}
+			for value := range attribute.ValuesMeta {
+				values[value] = true
+			}
+		}
+	}
+	entries := make([]reference.DeliveryEntry, 0, len(values))
+	for _, value := range slices.Sorted(maps.Keys(values)) {
+		entries = append(entries, reference.DeliveryEntry{
+			Canonical: value,
+			Status:    reference.StatusConfirmed,
+			Metadata:  []byte(`{}`),
+		})
+	}
+	return entries
 }

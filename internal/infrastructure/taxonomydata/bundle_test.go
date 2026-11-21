@@ -232,15 +232,15 @@ func TestIdentityWarningsSourceRoundTrip(t *testing.T) {
 	}
 }
 
-func TestRelease16RequiresBrandWithoutReplacingTree(t *testing.T) {
+func TestRelease17RequiresBrandWithoutReplacingTree(t *testing.T) {
 	bundle := testArtifact(t)
 	release, coverage, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if release.Version != 16 || bundle.CategoryMigration != nil || bundle.MigrationSource != nil ||
+	if release.Version != 17 || bundle.CategoryMigration != nil || bundle.MigrationSource != nil ||
 		release.ReplaceCategories || coverage.Categories != 3974 || coverage.Leaves != 3555 {
-		t.Fatalf("параметры поставки 16: %+v", coverage)
+		t.Fatalf("параметры поставки 17: %+v", coverage)
 	}
 	var walk func([]taxonomy.Category)
 	walk = func(nodes []taxonomy.Category) {

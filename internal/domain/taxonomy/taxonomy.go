@@ -14,9 +14,8 @@ import (
 )
 
 const (
-	// MaxAttributes ограничивает глобальный каталог свойств, а не число полей одной карточки.
-	// Поисковый контракт передаёт характеристики списком проверенных скаляров.
-	MaxAttributes = 512
+	// MaxAttributes защищает от ошибочно разросшегося глобального каталога.
+	MaxAttributes = 4096
 	// MaxSchemaAttributes согласован с максимумом характеристик документа в sc-search v5.
 	MaxSchemaAttributes = 256
 	// MaxCategories ограничивает размер операторского дерева.
@@ -176,6 +175,9 @@ func (d Definition) Validate() error {
 	if d.Version < 1 || d.Version > MaxTaxonomyVersion || len(d.Categories) == 0 {
 		return ErrInvalid.WithMessage("нужны положительная версия и категории")
 	}
+	if len(d.Attributes) > MaxAttributes {
+		return ErrInvalid.WithMessage("слишком много определений атрибутов")
+	}
 	ids := map[string]bool{}
 	slugs := map[string]bool{}
 	fullNames := map[string]bool{}
@@ -220,6 +222,9 @@ func (d Definition) Validate() error {
 			slugs[c.Slug] = true
 			fullNames[c.FullName()] = true
 			ids[c.ID] = true
+			if len(ids) > MaxCategories {
+				return ErrInvalid.WithMessage("слишком много категорий")
+			}
 			if len(c.Children) > 0 {
 				if c.Schema != "" {
 					return ErrInvalid.WithMessage("у раздела не может быть схемы")
@@ -235,9 +240,6 @@ func (d Definition) Validate() error {
 	}
 	if err := walk(d.Categories, 1); err != nil {
 		return err
-	}
-	if len(ids) > MaxCategories || len(codes) > MaxAttributes {
-		return ErrInvalid.WithMessage("слишком много категорий или кодов атрибутов")
 	}
 	return d.validateDictionaryBindings(codes)
 }
@@ -345,7 +347,7 @@ func (d Definition) validateSchemas() (map[string]Attribute, error) {
 
 // Fields возвращает глобальные определения для поиска по нескольким категориям.
 func (d Definition) Fields() map[string]Attribute {
-	out := map[string]Attribute{}
+	out := make(map[string]Attribute, len(d.Attributes))
 	for _, a := range d.Attributes {
 		out[a.Code] = a
 	}
@@ -417,28 +419,61 @@ func (d Definition) categorySlugs() map[string]string {
 
 // Category возвращает полную схему и путь от корня до узла.
 func (d Definition) Category(id string) (CategorySchema, []string, bool) {
-	var find func([]Category, []string) (Category, []string, bool)
-	find = func(categories []Category, path []string) (Category, []string, bool) {
-		for _, c := range categories {
-			next := append(append([]string{}, path...), c.ID)
-			if c.ID == id {
-				return c, next, true
-			}
-			if found, p, ok := find(c.Children, next); ok {
-				return found, p, true
-			}
-		}
-		return Category{}, nil, false
+	scope, found := d.categoryContext(id)
+	return scope.Category, scope.Path, found
+}
+
+func (d Definition) categoryContext(id string) (checkContext, bool) {
+	var pathBuffer [MaxDepth]string
+	category, path, policy := findCategory(d.Categories, id, pathBuffer[:0], "auto")
+	if category == nil {
+		return checkContext{Category: CategorySchema{Attributes: []SchemaAttribute{}}}, false
 	}
-	category, path, ok := find(d.Categories, nil)
-	fields := categorySchema(category, d.Fields(), d.Schemas[category.Schema])
+	schema := d.Schemas[category.Schema]
+	fields := categorySchema(*category, d.schemaFields(schema), schema)
 	d.selectCategoryFields(&fields, path, d.dictionaryBindingIndex())
-	return fields, path, ok
+	return checkContext{Category: fields, Path: path, Policy: policy}, true
+}
+
+func findCategory(nodes []Category, id string, path []string, inherited string) (*Category, []string, string) {
+	for i := range nodes {
+		node := &nodes[i]
+		policy := inheritModerationPolicy(inherited, node.Moderation)
+		next := append(path, node.ID)
+		if node.ID == id {
+			return node, next, policy
+		}
+		if found, foundPath, foundPolicy := findCategory(node.Children, id, next, policy); found != nil {
+			return found, foundPath, foundPolicy
+		}
+	}
+	return nil, nil, "auto"
+}
+
+func (d Definition) schemaFields(schema Schema) map[string]Attribute {
+	fields := make(map[string]Attribute, len(schema.Attributes))
+	if len(schema.Attributes) == 0 {
+		return fields
+	}
+	for _, code := range schema.Attributes {
+		fields[code] = Attribute{}
+	}
+	// Для одной карточки размещаем в памяти только определения её схемы.
+	for i := range d.Attributes {
+		field := &d.Attributes[i]
+		if _, exists := fields[field.Code]; exists {
+			fields[field.Code] = *field
+		}
+	}
+	return fields
 }
 
 func categorySchema(category Category, fields map[string]Attribute, schema Schema) CategorySchema {
-	result := CategorySchema{Category: category, Attributes: []SchemaAttribute{}}
-	result.Identity = schema.Identity
+	result := CategorySchema{
+		Category:   category,
+		Identity:   schema.Identity,
+		Attributes: make([]SchemaAttribute, 0, len(schema.Attributes)),
+	}
 	for _, code := range schema.Attributes {
 		result.Attributes = append(result.Attributes, SchemaAttribute{
 			Attribute: fields[code],
@@ -479,9 +514,9 @@ func checkCategory(version int64, category CategorySchema, path []string, found 
 	p.Schema = category.Schema
 	p.CategoryPath = path
 	p.CategoryName = category.FullName()
-	fields := map[string]SchemaAttribute{}
+	fields := make(map[string]bool, len(category.Attributes))
 	for _, a := range category.Attributes {
-		fields[a.Code] = a
+		fields[a.Code] = true
 		raw, exists := card.Attributes[a.Code]
 		if identityEmpty(raw) && category.Identity.contains(a.Code) && !a.Required && !a.DictionarySelection {
 			continue
@@ -514,7 +549,7 @@ func checkCategory(version int64, category CategorySchema, path []string, found 
 		}
 	}
 	for code := range card.Attributes {
-		if _, exists := fields[code]; !exists {
+		if !fields[code] {
 			p.Issues = append(p.Issues, Issue{Code: "taxonomy.attribute_unknown", Attribute: code})
 		}
 	}

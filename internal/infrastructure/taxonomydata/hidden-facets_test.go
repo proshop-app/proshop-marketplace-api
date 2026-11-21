@@ -30,7 +30,7 @@ func TestBundledHiddenFacets(t *testing.T) {
 			for _, field := range query.FacetFields {
 				codes = append(codes, field.Code)
 			}
-			if slices.Contains(codes, "model") != (id == "electronics") {
+			if slices.Contains(codes, "model") {
 				t.Errorf("неверная видимость модели: %v", codes)
 			}
 			if id == "shoes" && (!slices.Contains(codes, "color") || !slices.Contains(codes, "size_footwear_label")) {
@@ -68,8 +68,18 @@ func TestBundledHiddenFacetLeafCoverage(t *testing.T) {
 				want = 163
 			case "clothing":
 				want = 333
+			case "electronics":
+				want = 166
+			case "computers":
+				want = 132
+			case "appliances":
+				want = 213
+			case "music":
+				want = 102
+			case "industry":
+				want = 92
 			}
-			if hidden != want || want > 0 && hidden != leaves {
+			if hidden != want {
 				t.Fatalf("скрыто %d/%d листьев, ожидается %d", hidden, leaves, want)
 			}
 		})

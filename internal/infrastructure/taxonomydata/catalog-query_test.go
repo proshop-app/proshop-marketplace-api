@@ -20,27 +20,27 @@ import (
 // Байты PrepareQuery и текст ошибок зафиксированы для ранжирования фасетов по охвату встроенной поставки.
 // Проверяем все поля FacetFields, порядок, типы фильтров, nil/пустые значения и остальные поля запроса.
 var bundledQueryDigests = map[string]string{
-	"":                                   "9c102e23bdc9da5b63a0e770540a53464fcb8559a27a6f2c4cc37dadd3fb142e",
-	"electronics":                        "ffb4fec5bbff919123e6401466cb3cda6f525eaaf5bbe2fac95b10ef6a3a53da",
-	"electronics.family-mobile":          "c35df6c34a1ddc303eeefe8e254c28df2aaef1d3d1f5a9a97ec97dcfdd6d31b4",
-	"electronics.smartphones":            "3cbd98e35c515deb0c0ca25396cf9dd11932882b0eec8ec43be544e340c226dc",
-	"clothing":                           "71ff16adbec3b4f85fb9d34540a03fba8368a2de3d779f476c194b24b826fb94",
-	"clothing.women":                     "b316b97702f9c0dfc4e6cc5460a718c7e43becad062ee2d93edc84503e77078f",
-	"clothing.women-family-underwear":    "45774a729029bc21ed86e4f470124ab973d3ae699a1eeacfe3436804fe4d9d70",
-	"clothing.bras":                      "61747b7c6aaf1f3bab3acb0f56cc2f6b1d95e2e295e396ba2a0a019ac41e4382",
-	"auto":                               "e41a070feea1baded5e810be1d80e56eaad0c4223224e86642bb4c4d68b3a26b",
-	"auto.family-parts":                  "0dab705d708432214a6406db49e3aa799c1b258f342fce854c5a7096a1394393",
-	"auto.family-parts-braking":          "d69bd768cc8a43e7eeea1fa83fe6bc3aa55c77154adb4464bf9554608d09bd05",
-	"auto.brake-pads":                    "964d5d14135c2b636b8d6d37f81c1243e2583097bb6c8ba9d85cacfd3425f3f7",
-	"pets":                               "5aa0c86d06fcdc19344deae5ee05683edb434082125de585e343d6f741285034",
-	"pets.family-food":                   "c187e33fbfdde3e160ca314fcfe6045612a51032105f6b627934e9a66ff07dc7",
-	"pets.pet-treats":                    "4b448acf8176ed6c0753d91a7f162fb98c543174cb9950e8fc4f3e4ee1d24206",
-	"industry":                           "6d2e6105dc8de066be335f74123b6dded1a0b892e523e885fa10fa4ab18eff1f",
-	"industry.family-equipment":          "49379362986d7c775ec907ca789ce6fd4d3b9f78f96a0dcc87aa4dd950ae8173",
-	"industry.family-equipment-machines": "f6311a8d6a481f83f11dfcf6f6378696bf2511dccadbf6bfb1206174388f1d55",
-	"industry.soldering-stations":        "b0d472fe9d0e4a5dd1ca923ef1fe0e3511487a3cf6d262f3a836397d26f126eb",
-	"food":                               "f645369735b76576ce2ef8353571ceae5b04d91a7183bc2ea6c2111ba087dd38",
-	"food.grains":                        "15b5bad5b75d9f2ead4d3e04aa20948d2b1afef922a233037092d106d6620900",
+	"":                                   "e797e08375191de556dfccc6454a0a84020a0593869629a5645a7d95a7dbed94",
+	"electronics":                        "5737d732dca7e7799973e2f9d0d5e59687a33f2d7913cdf1f5032d5a2c1f4561",
+	"electronics.family-mobile":          "0d478986930f8130b39a38bb5967e2386a975ce3fdb9fd59d08b0b5001b7a484",
+	"electronics.smartphones":            "d9e87eddb6d7561ac7cbb8d1ceb314eea2cc96a3eac63f9a82e0b463903f86f1",
+	"clothing":                           "aeba73fb01eecd4ed5084ffceb63bce8460ad43a02ef4c97b0c8cd8eab2bf206",
+	"clothing.women":                     "bc42e3140f0040fd0df8461ecdf486ae4fbe0081ffafd860770061851b9c4ffe",
+	"clothing.women-family-underwear":    "06d65de56c9231d5e1904b4f81051924c732859e1ee12f98012056a9640b6d15",
+	"clothing.bras":                      "e033a835d5844a7fe7be4a04e3528ace3d1a1fce0b17f06f9cafee36e9f4addb",
+	"auto":                               "8420c467efe3f65befad418c7568abd11d89283923fc3115c0d68ba3e2f87410",
+	"auto.family-parts":                  "57cc041056876d78a8ff4ef7954989f0a85d426e037db07e53b0dd05672e6901",
+	"auto.family-parts-braking":          "70c7ce383e8374ef5a2651c3e537006b2b06692af1d90ebcf96ef774cf86b1d4",
+	"auto.brake-pads":                    "54e3154f4cd2b63ecc975b44dee3309342aff88d14519546d8ec0a1f084290ec",
+	"pets":                               "5e0d5b96e65dbba04e00160552b53e597884d745b2ce9b9258f34ec5d9b74c5d",
+	"pets.family-food":                   "97d23848219b25d42b9674122e1b92344a1e909d478cb9507df965c45c5a2e6b",
+	"pets.pet-treats":                    "4070eb150035dddc88dc4968a3bceea1a03b70eda270df2912fea2634a31b4de",
+	"industry":                           "baa9035316966f9a31a4925c76e819f12cdb56f865447672eed21684912a65aa",
+	"industry.family-equipment":          "654b61105db59b075796c23e62473ace53abd31cd8014db321f060959035eac0",
+	"industry.family-equipment-machines": "d4e5d3511d58eacc7f9f4e22b6e4e8894a2c737a6d233be40061969fb3119c6c",
+	"industry.soldering-stations":        "d1ff67ec89abc3550cee394e384dd9f83fb1236f1f623ed6ca655915b69325c9",
+	"food":                               "1ab2d73efb386733a62195901e6baaf109cc78bb5134bdc27b7dd4055d9830f0",
+	"food.grains":                        "8e022962c8d6a7a2207805de61114b81a214663fa2ccbdd7104da8d9b12e4a66",
 }
 
 func TestBundledCatalogPrepareQuery(t *testing.T) {
@@ -156,7 +156,7 @@ func TestBundledCatalogFacetCoverage(t *testing.T) {
 			want := []taxonomy.Attribute{}
 			for _, code := range d.Schemas[category.Schema].Attributes {
 				field := fields[code]
-				if field.Facet && !field.Deprecated {
+				if field.Facet && !field.Deprecated && !slices.Contains(d.Schemas[category.Schema].HiddenFacets, code) {
 					want = append(want, field)
 				}
 			}

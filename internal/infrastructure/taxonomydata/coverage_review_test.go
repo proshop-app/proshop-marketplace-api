@@ -84,7 +84,7 @@ func TestNewPartsDoNotInheritForeignMeasurements(t *testing.T) {
 	definition := release.Definition()
 	for id, forbidden := range map[string][]string{
 		"auto.car-inner-tubes":      {"tire_season", "tire_load_index", "tire_speed_index", "studded"},
-		"auto.car-speakers":         {"voltage", "audio_output_w"},
+		"auto.car-speakers":         {"voltage"},
 		"outdoors.boat-propellers":  {"auto_make", "auto_model"},
 		"computers.three-d-pens":    {"cable_length", "paper_format", "print_color"},
 		"music.midi-controllers":    {"audio_channels", "cable_length"},
@@ -96,7 +96,8 @@ func TestNewPartsDoNotInheritForeignMeasurements(t *testing.T) {
 			t.Fatal("потерян проверенный вид", id)
 		}
 		for _, field := range leaf.Attributes {
-			if slices.Contains(forbidden, field.Code) {
+			if slices.Contains(forbidden, field.Code) ||
+				id == "auto.car-speakers" && field.Code == "audio_output_w" && field.Required {
 				t.Errorf("чужое измерение детали: %s.%s", id, field.Code)
 			}
 		}

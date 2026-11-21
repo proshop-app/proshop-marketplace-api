@@ -39,6 +39,15 @@ func (d Definition) Checker() Checker {
 	return result
 }
 
+// CategoryChecker готовит проверку страницы карточек одной категории.
+func (d Definition) CategoryChecker(id string) Checker {
+	scope, found := d.categoryContext(id)
+	if !found {
+		return Checker{version: d.Version}
+	}
+	return Checker{version: d.Version, categories: map[string]checkContext{id: scope}}
+}
+
 // Check использует ту же проверку, что Definition.Check.
 func (c Checker) Check(card *Card) Publication {
 	var scope checkContext

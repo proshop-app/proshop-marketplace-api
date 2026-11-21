@@ -53,6 +53,7 @@ type RevalidationFailure struct {
 
 // RevalidationStore ограничивает пакетную запись и изоляцию постоянной ошибки одной карточки.
 type RevalidationStore interface {
+	// Page читает карточки только для категории задания.
 	Page(context.Context, taxonomy.Revalidation, int) ([]RevalidationItem, error)
 	Moderation(context.Context, []ids.OfferID) (map[ids.OfferID]RevalidationModeration, error)
 	Save(context.Context, []RevalidationChange) ([]RevalidationFailure, error)

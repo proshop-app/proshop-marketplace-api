@@ -35,7 +35,7 @@ func productTypeDefinition(t *testing.T) taxonomy.Definition {
 func TestBundledProductType(t *testing.T) {
 	d := productTypeDefinition(t)
 	field := d.Fields()["product_type"]
-	if d.Version != 16 || field.Name != "Тип" || field.Type != "enum" || field.Dictionary != "product_type" ||
+	if field.Name != "Тип" || field.Type != "enum" || field.Dictionary != "product_type" ||
 		!field.Facet || field.FacetPinned == nil || !*field.FacetPinned ||
 		field.Multiple || field.RequiredReason == "" {
 		t.Fatalf("тип: %+v", field)

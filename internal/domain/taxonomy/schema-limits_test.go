@@ -28,3 +28,18 @@ func TestSchemaFitsSearchDocument(t *testing.T) {
 		t.Fatal("схема длиннее поискового документа разрешена")
 	}
 }
+
+func TestGlobalAttributeLimit(t *testing.T) {
+	d := definition()
+	for len(d.Attributes) < taxonomy.MaxAttributes {
+		code := fmt.Sprintf("extra_%d", len(d.Attributes))
+		d.Attributes = append(d.Attributes, taxonomy.Attribute{Code: code, Name: code, Type: "string"})
+	}
+	if err := d.Validate(); err != nil {
+		t.Fatal("защитный предел отклонил допустимый каталог", err)
+	}
+	d.Attributes = append(d.Attributes, taxonomy.Attribute{Code: "overflow", Name: "Поле", Type: "string"})
+	if err := d.Validate(); err == nil {
+		t.Fatal("принят каталог сверх защитного предела")
+	}
+}
