@@ -8,7 +8,12 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-const pickupSourceTenants = publicPriceTenants + ` AND p.enabled `
+const pickupSourceTenants = `SELECT p.tenant_id FROM participants p
+    JOIN tenants t ON t.tenant_id = p.tenant_id
+    WHERE p.stage = 'connected'
+        AND p.delivery_valid
+        AND t.status = 'active'
+        AND p.enabled`
 const pickupSourceCursor = ` AND p.tenant_id > $1 ORDER BY p.tenant_id LIMIT $2`
 const pickupVisibleSources = pickupSourceTenants + pickupSourceCursor
 

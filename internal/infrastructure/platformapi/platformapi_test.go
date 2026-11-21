@@ -155,8 +155,8 @@ func TestErrors(t *testing.T) {
 
 func TestMarketplaceDisabled(t *testing.T) {
 	routes := map[string][2]string{
-		"POST /api/v1/internal/marketplace/pricing/contexts": {"", "marketplace_disabled.json"},
-		"POST " + prefix + "/delivery/quote":                 {"", "marketplace_disabled.json"},
+		"POST /api/v1/internal/marketplace/tenants/t1/items/check": {"", "marketplace_disabled.json"},
+		"POST " + prefix + "/delivery/quote":                       {"", "marketplace_disabled.json"},
 	}
 	disabled := server(t, routes, http.StatusForbidden)
 

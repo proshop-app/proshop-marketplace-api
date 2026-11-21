@@ -16,12 +16,6 @@ type category struct {
 	URL  string `json:"url"`
 }
 
-type priceProfile struct {
-	Key            string `json:"key"`
-	Price          int64  `json:"price"`
-	EffectivePrice int64  `json:"effectivePrice"`
-}
-
 type offerDocument struct {
 	TileKey           string                       `json:"tileKey,omitempty"`
 	OnlyVariant       bool                         `json:"onlyVariant,omitempty"`
@@ -30,7 +24,6 @@ type offerDocument struct {
 	ModelKey          string                       `json:"modelKey,omitempty"`
 	ModelKeySource    string                       `json:"modelKeySource,omitempty"`
 	VariantKey        string                       `json:"variantKey,omitempty"`
-	PriceProfiles     []priceProfile               `json:"priceProfiles"`
 	CategoryPath      []string                     `json:"categoryPath"`
 	Delivery          participant.DeliverySettings `json:"delivery"`
 	Categories        []category                   `json:"categories"`
@@ -68,23 +61,22 @@ type attribute struct {
 }
 
 type offerQuery struct {
-	Exact         bool                             `json:"exact,omitempty"`
-	TrackQuery    bool                             `json:"trackQuery"`
-	GroupID       string                           `json:"groupId,omitempty"`
-	PriceContexts map[string]string                `json:"priceContexts"`
-	Attributes    map[string]ports.AttributeFilter `json:"attributes"`
-	FacetFields   []facetField                     `json:"facetFields"`
-	Facets        *[]ports.FacetCode               `json:"facets,omitempty"`
-	InStockSet    bool                             `json:"inStockSet"`
-	Text          string                           `json:"text"`
-	TenantIDs     []string                         `json:"tenantIds"`
-	CategoryID    string                           `json:"categoryId"`
-	PriceMin      *int64                           `json:"priceMin"`
-	PriceMax      *int64                           `json:"priceMax"`
-	InStock       bool                             `json:"inStock"`
-	Sort          string                           `json:"sort"`
-	Offset        int                              `json:"offset"`
-	Limit         int                              `json:"limit"`
+	Exact       bool                             `json:"exact,omitempty"`
+	TrackQuery  bool                             `json:"trackQuery"`
+	GroupID     string                           `json:"groupId,omitempty"`
+	Attributes  map[string]ports.AttributeFilter `json:"attributes"`
+	FacetFields []facetField                     `json:"facetFields"`
+	Facets      *[]ports.FacetCode               `json:"facets,omitempty"`
+	InStockSet  bool                             `json:"inStockSet"`
+	Text        string                           `json:"text"`
+	TenantIDs   []string                         `json:"tenantIds"`
+	CategoryID  string                           `json:"categoryId"`
+	PriceMin    *int64                           `json:"priceMin"`
+	PriceMax    *int64                           `json:"priceMax"`
+	InStock     bool                             `json:"inStock"`
+	Sort        string                           `json:"sort"`
+	Offset      int                              `json:"offset"`
+	Limit       int                              `json:"limit"`
 }
 
 type offerPage struct {

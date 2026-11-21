@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
@@ -47,27 +46,19 @@ const (
 					md5(p.tenant_id || '~' || p.product_id) AS offer_key
 				FROM catalog_products p
 				JOIN moderation_verdicts mv ON mv.tenant_id = p.tenant_id AND mv.product_id = p.product_id
-				CROSS JOIN LATERAL (
-					SELECT CASE WHEN $7::jsonb IS NULL OR ($4::bigint IS NULL AND $5::bigint IS NULL)
-						THEN p.default_price ELSE
-						(SELECT (profile->>'effectivePrice')::bigint
-						 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.price_profiles) = 'array'
-						 THEN p.price_profiles ELSE '[]'::jsonb END) profile
-						 WHERE profile->>'key' = $7::jsonb->>p.tenant_id) END AS price
-				) pricing
-				WHERE p.tenant_id = m.tenant_id AND p.on_sale AND p.default_price IS NOT NULL
-					AND mv.status = 'allowed' AND pricing.price IS NOT NULL
+				WHERE p.tenant_id = m.tenant_id AND p.on_sale AND p.price IS NOT NULL
+					AND mv.status = 'allowed'
 					AND NOT COALESCE((p.card->>'onlyVariant')::boolean, false)
 					AND NOT EXISTS (
 						SELECT 1 FROM catalog_products excluded
 						WHERE excluded.tenant_id = p.tenant_id AND excluded.tile_key = p.tile_key
 							AND excluded.tenant_id || '~' || excluded.product_id = ANY($2::text[])
 					)
-					AND ($4::bigint IS NULL OR pricing.price >= $4)
-					AND ($5::bigint IS NULL OR pricing.price <= $5)
+					AND ($4::bigint IS NULL OR p.price >= $4)
+					AND ($5::bigint IS NULL OR p.price <= $5)
 					AND (cardinality($1::text[]) = 0 OR p.category_id = ANY($1::text[]))
 				ORDER BY ` + recommendationRank + `
-				LIMIT $8
+				LIMIT $7
 			) candidate
 			WHERE m.enabled AND m.delivery_valid AND t.status = 'active'
 				AND ($3 = '' OR m.delivery_settings->'regions' ? $3)
@@ -81,10 +72,10 @@ const (
 		), selected AS (
 			SELECT *, row_number() OVER (ORDER BY
 				CASE WHEN $6 = '' OR tenant_id <> $6 THEN 0 ELSE 1 END,
-				GREATEST(tenant_rank - (($8::int + 3) / 4), 0), ` + recommendationRank + `) AS position
+				GREATEST(tenant_rank - (($7::int + 3) / 4), 0), ` + recommendationRank + `) AS position
 			FROM ranked
 			ORDER BY position
-			LIMIT $8
+			LIMIT $7
 		)
 		` + offerSelect + `
 		JOIN selected s ON s.tenant_id = p.tenant_id AND s.product_id = p.product_id
@@ -160,14 +151,6 @@ func (r *CatalogFeatures) Recommend(
 	for _, id := range filter.Excluded {
 		excluded = append(excluded, id.String())
 	}
-	var contexts any
-	if filter.PriceContexts != nil {
-		raw, err := json.Marshal(filter.PriceContexts)
-		if err != nil {
-			return nil, err
-		}
-		contexts = string(raw)
-	}
 	args := []any{
 		categories,
 		excluded,
@@ -175,7 +158,6 @@ func (r *CatalogFeatures) Recommend(
 		filter.PriceMin,
 		filter.PriceMax,
 		string(filter.OtherTenant),
-		contexts,
 		filter.Limit,
 	}
 	var result []ports.OfferState

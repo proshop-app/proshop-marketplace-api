@@ -40,7 +40,6 @@ type OfferCard struct {
 
 // OfferList — страница выдачи и фасеты.
 type OfferList struct {
-	Pricing    string
 	Correction *ports.OfferCorrection
 	Facets     []ports.Facet
 	Total      int
@@ -102,7 +101,6 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 		return OfferList{}, err
 	}
 	list := OfferList{
-		Pricing:    pricingMode(normalized.BuyerID, normalized.PriceContexts),
 		Correction: page.Correction,
 		Facets:     visibleFacets(page.Facets, page.Total, normalized),
 		Total:      page.Total,
@@ -121,36 +119,13 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 }
 
 // Offer — карточка предложения; скрытое предложение не отдаётся.
-func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID, buyerID ids.UUID) (OfferCard, error) {
+func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID) (OfferCard, error) {
 	doc, found, err := q.index.Get(ctx, offerID.String())
 	if err != nil {
 		return OfferCard{}, err
 	}
 	if !found || !doc.Visible {
 		return OfferCard{}, catalog.ErrOfferNotFound
-	}
-
-	contexts, err := q.priceContexts(ctx, buyerID, string(offerID.Tenant))
-	if err != nil {
-		return OfferCard{}, err
-	}
-	key := priceProfileKey(contexts, offerID.Tenant)
-	var publicState ports.OfferState
-	if key == "" {
-		err = q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-			var err error
-			publicState, err = tx.Offers().Offer(ctx, offerID.Tenant, offerID.Product)
-			return err
-		})
-		if errors.Is(err, catalog.ErrProductNotFound) {
-			return OfferCard{}, catalog.ErrOfferNotFound
-		}
-		if err != nil {
-			return OfferCard{}, err
-		}
-	}
-	if err := priceOffer(&doc, key, publicState); err != nil {
-		return OfferCard{}, err
 	}
 
 	return OfferCard{
@@ -237,7 +212,7 @@ func (q *Queries) Publication(ctx context.Context, id ids.OfferID) (PublicationV
 	return publication, err
 }
 
-// PrepareQuery сохраняет одинаковые фильтры и ценовой контекст для органики и рекламы.
+// PrepareQuery сохраняет одинаковые фильтры для органики и рекламы.
 func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (ports.OfferQuery, error) {
 	normalized, err := normalize(query)
 	if err != nil {
@@ -275,15 +250,6 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 		}
 		return nil
 	}); err != nil {
-		return ports.OfferQuery{}, err
-	}
-	// Фасету магазинов нужны ценовые контексты и невыбранных продавцов.
-	tenantFilter := ""
-	if normalized.GroupID != "" {
-		tenantFilter = normalized.TenantIDs[0]
-	}
-	normalized.PriceContexts, err = q.priceContexts(ctx, normalized.BuyerID, tenantFilter)
-	if err != nil {
 		return ports.OfferQuery{}, err
 	}
 	return normalized, nil

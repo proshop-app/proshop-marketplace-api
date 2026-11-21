@@ -186,9 +186,8 @@ func TestPriceProjectionReusesValidation(t *testing.T) {
 			before := e.view(t, "p1")
 			previous, _ := e.store.Product("t1", "p1")
 			snapshot := reviewedProjectionSnapshot(e, 2)
-			snapshot.Price = money.FromKopecks(200)
-			snapshot.PriceProfiles[0].Price = money.FromKopecks(200)
-			snapshot.PriceProfiles[0].EffectivePrice = money.FromKopecks(180)
+			snapshot.BasePrice = money.FromKopecks(200)
+			snapshot.Price = money.FromKopecks(180)
 			snapshot.Available++
 			applyProjectionSnapshot(t, projector, snapshot)
 			if calls["taxonomy"] != 0 || calls["rules"] != 0 || calls["participants"] != 0 ||
@@ -207,7 +206,7 @@ func TestPriceProjectionReusesValidation(t *testing.T) {
 			product, _ := e.store.Product("t1", "p1")
 			if !reflect.DeepEqual(previous.Card.Publication, product.Card.Publication) ||
 				after.Verdict.Status != before.Verdict.Status || after.Verdict.Revision != 2 ||
-				!reflect.DeepEqual(after.Verdict.Reasons, before.Verdict.Reasons) || product.Price.Kopecks() != 200 {
+				!reflect.DeepEqual(after.Verdict.Reasons, before.Verdict.Reasons) || product.Price.Kopecks() != 180 {
 				t.Fatal("прежняя проверка или новая цена потеряны", product, after)
 			}
 			if pending && (after.Case == nil || after.Case.Revision != 2 ||
@@ -233,9 +232,12 @@ func TestProjectionValidationInputsTriggerEvaluation(t *testing.T) {
 		{name: "description", edit: func(p *catalog.Snapshot) { p.Card.Description = "Другой текст" }},
 		{name: "image", edit: func(p *catalog.Snapshot) { p.Card.Image = "image-2" }},
 		{name: "category", edit: func(p *catalog.Snapshot) { p.Card.Marketplace.CategoryID = "c2" }},
-		{name: "attribute", edit: func(p *catalog.Snapshot) {
-			p.Card.Marketplace.Attributes["a1"] = json.RawMessage(`false`)
-		}},
+		{
+			name: "attribute",
+			edit: func(p *catalog.Snapshot) {
+				p.Card.Marketplace.Attributes["a1"] = json.RawMessage(`false`)
+			},
+		},
 		{name: "published", edit: func(p *catalog.Snapshot) { p.Card.Marketplace.Published = false }},
 		{name: "marketplace removed", edit: func(p *catalog.Snapshot) { p.Card.Marketplace = nil }},
 		{name: "deleted", edit: func(p *catalog.Snapshot) { p.Deleted = true }},
@@ -266,34 +268,45 @@ func TestPriceProjectionRefreshesStaleValidation(t *testing.T) {
 		edit func(environment)
 	}{
 		{name: "taxonomy version", edit: func(e environment) { e.store.SeedTaxonomy(reviewedProjectionTaxonomy(2)) }},
-		{name: "rules revision", edit: func(e environment) {
-			err := e.store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
-				return tx.ModerationRules().AddPhrase(ctx, moderation.StopPhrase{Key: "phrase", Text: "phrase"})
-			})
-			if err != nil {
-				panic(err)
-			}
-		}},
-		{name: "participant trust", edit: func(e environment) {
-			member, _ := e.store.Participant("t1")
-			member.Trust = participant.Probation
-			e.store.SeedParticipant(member)
-		}},
-		{name: "unchecked publication", edit: func(e environment) {
-			product, _ := e.store.Product("t1", "p1")
-			product.Card.Publication.Version = 0
-			e.store.SeedProduct(product)
-		}},
-		{name: "unchecked verdict", edit: func(e environment) {
-			e.store.SeedVerdict(moderation.VerdictState{TenantID: "t1", ProductID: "p1"})
-		}},
+		{
+			name: "rules revision",
+			edit: func(e environment) {
+				err := e.store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
+					return tx.ModerationRules().AddPhrase(ctx, moderation.StopPhrase{Key: "phrase", Text: "phrase"})
+				})
+				if err != nil {
+					panic(err)
+				}
+			},
+		},
+		{
+			name: "participant trust",
+			edit: func(e environment) {
+				member, _ := e.store.Participant("t1")
+				member.Trust = participant.Probation
+				e.store.SeedParticipant(member)
+			},
+		},
+		{
+			name: "unchecked publication",
+			edit: func(e environment) {
+				product, _ := e.store.Product("t1", "p1")
+				product.Card.Publication.Version = 0
+				e.store.SeedProduct(product)
+			},
+		},
+		{
+			name: "unchecked verdict",
+			edit: func(e environment) {
+				e.store.SeedVerdict(moderation.VerdictState{TenantID: "t1", ProductID: "p1"})
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			e, calls, projector := projectionReuseEnvironment(t, false)
 			test.edit(e)
 			snapshot := reviewedProjectionSnapshot(e, 2)
-			snapshot.Price = money.FromKopecks(200)
 			applyProjectionSnapshot(t, projector, snapshot)
 			if calls["evaluate"] != 1 || calls["taxonomy"] == 0 || calls["reuse"] != 0 ||
 				calls["enqueue:moderation.offer.status"] != 1 {
@@ -318,7 +331,7 @@ func TestProjectionReuseRollsBackAtomically(t *testing.T) {
 	failure := errors.New("ошибка COMMIT")
 	e.store.FailCommit = failure
 	snapshot := reviewedProjectionSnapshot(e, 2)
-	snapshot.PriceProfiles[0].EffectivePrice = money.FromKopecks(80)
+	snapshot.Price = money.FromKopecks(80)
 	err := projector.ApplyProduct(context.Background(), appcatalog.ProductEvent{
 		EventID:  "rollback",
 		Snapshot: snapshot,

@@ -23,7 +23,7 @@ type Offer struct {
 	Card    Card
 	// Price — цена продажи: промо-цена, если она ниже прайса, иначе прайс.
 	Price money.Money
-	// BasePrice — прайс магазина.
+	// BasePrice — публичная цена канала до акций.
 	BasePrice money.Money
 	Available int
 	InStock   bool
@@ -54,14 +54,9 @@ func ComposeOffer(product *Product, signals *Signals, seller Seller, verdict *mo
 		return offer
 	}
 
-	profile, found := SelectPrice(state.PriceProfiles, DefaultPriceProfile)
-
-	if !found {
+	if !state.HasPrice {
 		return offer
 	}
-
-	base := profile.Price
-	price := profile.EffectivePrice
 	available := state.Available
 
 	if signals != nil {
@@ -74,8 +69,8 @@ func ComposeOffer(product *Product, signals *Signals, seller Seller, verdict *mo
 
 	offer.Rating = ProductRating(state.AverageRating, state.RatingsCount)
 	offer.Card = state.Card
-	offer.Price = price
-	offer.BasePrice = base
+	offer.Price = state.Price
+	offer.BasePrice = state.BasePrice
 	offer.Available = available
 	offer.InStock = available > 0
 	offer.Visible = seller.Visible && state.Card.Visible && state.Card.Publication.Published && verdict.Allowed()

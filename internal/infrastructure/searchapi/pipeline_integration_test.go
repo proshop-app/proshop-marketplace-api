@@ -152,7 +152,7 @@ func TestProjectionToIndex(t *testing.T) {
 					Revision:  1,
 					At:        now.Now(),
 					Available: 3,
-					Price:     money.FromKopecks(int64(10000 * (i + 1))),
+
 					Card: catalog.Card{
 						Marketplace: &taxonomy.Card{
 							CategoryID: "c1",
@@ -173,18 +173,9 @@ func TestProjectionToIndex(t *testing.T) {
 							},
 						},
 					},
-					PriceProfiles: []catalog.PriceProfile{
-						{
-							Key:            catalog.DefaultPriceProfile,
-							Price:          money.FromKopecks(int64(10000 * (i + 1))),
-							EffectivePrice: money.FromKopecks(int64(10000 * (i + 1))),
-						},
-						{
-							Key:            "marketplace:group",
-							Price:          money.FromKopecks(int64(8000 * i)),
-							EffectivePrice: money.FromKopecks(int64(8000 * i)),
-						},
-					},
+					HasPrice:  true,
+					Price:     money.FromKopecks(int64(10000 * (i + 1))),
+					BasePrice: money.FromKopecks(int64(10000 * (i + 1))),
 				},
 			},
 		)
@@ -209,11 +200,7 @@ func TestProjectionToIndex(t *testing.T) {
 				Name:    "Неполная карточка",
 				Visible: true,
 			},
-			PriceProfiles: []catalog.PriceProfile{
-				{
-					Key: catalog.DefaultPriceProfile,
-				},
-			},
+			HasPrice: true,
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -282,25 +269,22 @@ func TestProjectionToIndex(t *testing.T) {
 			Tenant:  "t1",
 			Product: "p1",
 		},
-		"",
 	)
 
 	if err != nil || !card.Offer.CheckoutAvailable || card.Offer.SellerName != "Первый магазин" {
 		t.Fatalf("карточка после настроек участия: %+v, %v", card, err)
 	}
 
-	if len(card.Offer.PriceProfiles) != 2 ||
+	if card.Offer.Price != 10000 ||
 		!reflect.DeepEqual(card.Offer.Attributes["a3"], json.RawMessage(`false`)) ||
 		!reflect.DeepEqual(card.Offer.Delivery, w3PipelineIntegrationDelivery) ||
 		len(card.Offer.Categories) != 1 || card.Offer.Categories[0].ID != "c1" {
 		t.Fatalf("потеряны проверенные данные предложения: %+v", card)
 	}
-	buyer := ids.UUID("11111111-1111-4111-8111-111111111111")
-	platform.SetBuyerProfile(buyer, "t1", "marketplace:group")
-	personalized, err := queries.Search(ctx, ports.OfferQuery{
-		BuyerID: buyer,
-		Sort:    ports.SortPriceAsc,
-		Limit:   1,
+	publicPage, err := queries.Search(ctx, ports.OfferQuery{
+
+		Sort:  ports.SortPriceAsc,
+		Limit: 1,
 		Attributes: map[string]ports.AttributeFilter{
 			"a2": {
 				Min: "1.5",
@@ -309,9 +293,9 @@ func TestProjectionToIndex(t *testing.T) {
 		},
 	})
 
-	if err != nil || personalized.Total != 2 || len(personalized.Items) != 1 ||
-		personalized.Items[0].Offer.ID != "t1~p1" || personalized.Items[0].Offer.Price != 0 {
-		t.Fatalf("цена покупателя и фильтр до пагинации: %+v, %v", personalized, err)
+	if err != nil || publicPage.Total != 2 || len(publicPage.Items) != 1 ||
+		publicPage.Items[0].Offer.ID != "t1~p1" || publicPage.Items[0].Offer.Price != 10000 {
+		t.Fatalf("публичная цена и фильтр до пагинации: %+v, %v", publicPage, err)
 	}
 
 	if _, err := queries.Offer(
@@ -320,7 +304,6 @@ func TestProjectionToIndex(t *testing.T) {
 			Tenant:  "t1",
 			Product: "invalid",
 		},
-		"",
 	); err == nil {
 		t.Fatal("карточка без обязательного атрибута стала публичной")
 	}
@@ -363,7 +346,6 @@ func TestProjectionToIndex(t *testing.T) {
 			Tenant:  "t1",
 			Product: "p1",
 		},
-		"",
 	); err == nil {
 		t.Fatal("после перестроения скрытое предложение по-прежнему скрыто")
 	}

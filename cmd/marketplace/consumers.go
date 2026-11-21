@@ -15,7 +15,7 @@ import (
 
 func (s *server) runConsumers(ctx context.Context, group *errgroup.Group) {
 	cfg := s.cfg.Kafka
-	router := kafka.NewRouter(s.app.projector, s.app.registry).WithPriceContexts(s.app.priceContexts)
+	router := kafka.NewRouter(s.app.projector, s.app.registry)
 	regular, bulk := kafka.SubscriptionTopics(cfg.TopicPrefix, router)
 	metrics := kafka.NewConsumerMetrics(s.metrics)
 	ctx = ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(s.cfg.Database.Ingestion))

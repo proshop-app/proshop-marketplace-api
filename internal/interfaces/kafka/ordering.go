@@ -15,7 +15,6 @@ const (
 	orderPartition orderingKind = iota
 	orderProduct
 	orderTenant
-	orderBuyer
 )
 
 // Вид входит в ключ: покупатель, товар и запись реестра не разделяют очередь случайно.
@@ -31,8 +30,8 @@ func messageKey(message kafkago.Message, prefix string) orderingKey {
 	topic := strings.TrimPrefix(message.Topic, prefixOf(prefix))
 	var key orderingKey
 	switch topic {
-	case TopicProductProjected, TopicProductProjectedBulk, TopicPriceContextChanged:
-		key = pairedKey(message, topic)
+	case TopicProductProjected, TopicProductProjectedBulk:
+		key = pairedKey(message)
 	case TopicStockItemUpdated, TopicProductPriceUpdated:
 		key = signalKey(message, topic)
 	default:
@@ -46,17 +45,13 @@ func messageKey(message kafkago.Message, prefix string) orderingKey {
 	return orderingKey{kind: orderPartition, topic: message.Topic, partition: message.Partition}
 }
 
-func pairedKey(message kafkago.Message, topic string) orderingKey {
+func pairedKey(message kafkago.Message) orderingKey {
 	tenant, entity, err := projectionKey(message)
 	if err != nil {
 		return orderingKey{}
 	}
 	kind := orderProduct
 	_, err = ids.ParseProductID(entity)
-	if topic == TopicPriceContextChanged {
-		kind = orderBuyer
-		_, err = ids.ParseUUID(entity)
-	}
 	if _, tenantErr := ids.ParseTenantID(tenant); tenantErr != nil || err != nil {
 		return orderingKey{}
 	}

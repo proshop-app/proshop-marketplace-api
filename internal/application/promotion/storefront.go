@@ -102,13 +102,6 @@ func (s *Service) Sponsored(ctx context.Context, query ports.OfferQuery) ([]Spon
 			if code == "search_slot" {
 				priced := relevant[c.Target.OfferID.String()]
 				doc.Price, doc.BasePrice = priced.Price, priced.BasePrice
-			} else if query.PriceContexts != nil {
-				profile, ok := catalog.SelectPrice(doc.PriceProfiles, query.PriceContexts[c.TenantID])
-				if !ok {
-					continue
-				}
-				doc.Price = profile.EffectivePrice.Kopecks()
-				doc.BasePrice = profile.Price.Kopecks()
 			}
 			candidates = append(candidates, c)
 			docs[c.ID] = doc

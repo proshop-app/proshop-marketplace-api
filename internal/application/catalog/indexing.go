@@ -392,12 +392,11 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 		version += state.Tenant.Version()
 	}
 	doc := ports.OfferDocument{
-		PriceProfiles: product.PriceProfiles,
-		ID:            offer.ID.String(),
-		TenantID:      string(product.TenantID),
-		ProductID:     string(product.ProductID),
-		UpdatedAt:     updatedAt,
-		Version:       version,
+		ID:        offer.ID.String(),
+		TenantID:  string(product.TenantID),
+		ProductID: string(product.ProductID),
+		UpdatedAt: updatedAt,
+		Version:   version,
 	}
 
 	if !offer.Visible {

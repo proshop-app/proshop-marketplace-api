@@ -12,7 +12,6 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -66,7 +65,6 @@ func TestOfferIDsResponse(t *testing.T) {
 			Regions:  []string{"RU-MOW"},
 		},
 	})
-	platform.SetBuyerProfile("buyer", "t1", "personal")
 	for _, product := range []string{"p1", "p2"} {
 		doc := ports.OfferDocument{
 			ID:          "t1~" + product,
@@ -80,18 +78,8 @@ func TestOfferIDsResponse(t *testing.T) {
 				Carriers: []string{"cdek", "yandex"},
 				Regions:  []string{"RU-MOW"},
 			},
-			PriceProfiles: []catalog.PriceProfile{
-				{
-					Key:            catalog.DefaultPriceProfile,
-					Price:          money.FromKopecks(10000),
-					EffectivePrice: money.FromKopecks(10000),
-				},
-				{
-					Key:            "personal",
-					Price:          money.FromKopecks(9000),
-					EffectivePrice: money.FromKopecks(8000),
-				},
-			},
+			Price:     money.FromKopecks(10000).Kopecks(),
+			BasePrice: money.FromKopecks(10000).Kopecks(),
 		}
 		if err := index.Put(context.Background(), []ports.OfferDocument{doc}); err != nil {
 			t.Fatal(err)
@@ -116,9 +104,6 @@ func TestOfferIDsResponse(t *testing.T) {
 			t.Fatal(page.Items)
 		}
 		wantPrice := rubles(10000)
-		if buyer != "" {
-			wantPrice = 8000
-		}
 		for _, item := range page.Items {
 			if item.Price != wantPrice || item.DeliveryAvailable == nil || !*item.DeliveryAvailable {
 				t.Fatal(item)

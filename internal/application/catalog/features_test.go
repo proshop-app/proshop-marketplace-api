@@ -13,7 +13,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestRecommendationRulesAndSingleCandidateQuery(t *testing.T) {
@@ -23,7 +22,11 @@ func TestRecommendationRulesAndSingleCandidateQuery(t *testing.T) {
 	platform := fake.NewPlatform()
 	features := &fake.CatalogFeatures{}
 	queries := app.NewQueries(store, fake.NewIndex(), platform, features, features, fake.NewClock(time.Time{}))
-	result, err := queries.Recommend(ctx, app.RecommendationRequest{Context: "home", Region: "RU-MOW", Limit: 5})
+	result, err := queries.Recommend(ctx, app.RecommendationRequest{
+		Context: app.RecommendationContextHome,
+		Region:  "RU-MOW",
+		Limit:   5,
+	})
 	if err != nil || result.Reason != "popular" || features.Calls != 1 || features.Filter.Region != "RU-MOW" {
 		t.Fatal(result, err, features)
 	}
@@ -31,14 +34,18 @@ func TestRecommendationRulesAndSingleCandidateQuery(t *testing.T) {
 		Categories: []string{"c1"},
 		Purchased:  []ids.OfferID{{Tenant: "t1", Product: "p1"}},
 	}
-	result, err = queries.Recommend(ctx, app.RecommendationRequest{Context: "home", BuyerID: "buyer", Limit: 5})
+	result, err = queries.Recommend(ctx, app.RecommendationRequest{
+		Context: app.RecommendationContextHome,
+		BuyerID: "buyer",
+		Limit:   5,
+	})
 	if err != nil || result.Reason != "popular" || features.Calls != 3 ||
 		len(features.Filter.Categories) != 0 || len(features.Filter.Excluded) != 1 {
 		t.Fatal(result, err, features)
 	}
 	seedProduct(store, "t1", "p1")
 	result, err = queries.Recommend(ctx, app.RecommendationRequest{
-		Context: "offer",
+		Context: app.RecommendationContextOffer,
 		OfferID: ids.OfferID{Tenant: "t1", Product: "p1"},
 		Limit:   5,
 	})
@@ -92,12 +99,11 @@ func TestRatingSortPlacesUnratedLast(t *testing.T) {
 	for i, rating := range []*catalog.Rating{nil, {Value: 4.7, Count: 2}, {Value: 4.7, Count: 10}} {
 		id := []string{"t1~p1", "t1~p2", "t1~p3"}[i]
 		doc := ports.OfferDocument{
-			ID:            id,
-			Listed:        true,
-			Visible:       true,
-			Version:       1,
-			Rating:        rating,
-			PriceProfiles: snapshot("t1", "p1", 1, t0).PriceProfiles,
+			ID:      id,
+			Listed:  true,
+			Visible: true,
+			Version: 1,
+			Rating:  rating,
 		}
 		if err := index.Put(ctx, []ports.OfferDocument{doc}); err != nil {
 			t.Fatal(err)
@@ -130,14 +136,7 @@ func recommendationStates(t *testing.T, store *fake.Store) []ports.OfferState {
 				product.Card.Visible = false
 			}
 			if tenant == "t4" {
-				product.PriceProfiles = nil
-			}
-			if tenant == "t2" {
-				product.PriceProfiles = append(product.PriceProfiles, catalog.PriceProfile{
-					Key:            "marketplace:buyer",
-					Price:          money.FromKopecks(9000),
-					EffectivePrice: money.FromKopecks(8000),
-				})
+				product.HasPrice = false
 			}
 			state.Product = catalog.RestoreProduct(product)
 			states = append(states, state)
@@ -154,11 +153,10 @@ func TestRecommendationAssemblyAndBuyerPrices(t *testing.T) {
 	states := recommendationStates(t, store)
 	seedProduct(store, "t1", "p0")
 	platform := fake.NewPlatform()
-	platform.SetBuyerProfile("buyer", "t2", "marketplace:buyer")
 	features := &fake.CatalogFeatures{States: states}
 	q := app.NewQueries(store, fake.NewIndex(), platform, features, features, fake.NewClock(time.Time{}))
 	request := app.RecommendationRequest{
-		Context: "offer",
+		Context: app.RecommendationContextOffer,
 		OfferID: ids.OfferID{Tenant: "t1", Product: "p0"},
 		Limit:   10,
 	}
@@ -178,12 +176,12 @@ func TestRecommendationAssemblyAndBuyerPrices(t *testing.T) {
 	}
 	request.BuyerID = "buyer"
 	result, err = q.Recommend(context.Background(), request)
-	if err != nil || len(result.Items) != 2 || result.Items[0].Offer.Price != 8000 ||
-		result.Items[0].Offer.BasePrice != 9000 {
+	if err != nil || len(result.Items) != 2 || result.Items[0].Offer.Price != 10000 ||
+		result.Items[0].Offer.BasePrice != 10000 {
 		t.Fatal(result, err)
 	}
-	if features.Calls != 2 {
-		t.Fatal("персональная выдача попала в гостевой кэш")
+	if features.Calls != 1 {
+		t.Fatal("общий отбор карточки не использовал гостевой кэш")
 	}
 }
 
@@ -199,7 +197,10 @@ func TestPersonalFallbackReturnsPopular(t *testing.T) {
 		},
 	}
 	q := app.NewQueries(store, fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(time.Time{}))
-	result, err := q.Recommend(context.Background(), app.RecommendationRequest{Context: "home", BuyerID: "buyer"})
+	result, err := q.Recommend(context.Background(), app.RecommendationRequest{
+		Context: app.RecommendationContextHome,
+		BuyerID: "buyer",
+	})
 	if err != nil || result.Reason != "popular" || len(result.Items) != 2 || features.Calls != 2 {
 		t.Fatal(result, err, features.Calls)
 	}
@@ -207,7 +208,10 @@ func TestPersonalFallbackReturnsPopular(t *testing.T) {
 		t.Fatal(features.Filter)
 	}
 	features.CategoryStates["empty"] = states
-	result, err = q.Recommend(context.Background(), app.RecommendationRequest{Context: "home", BuyerID: "buyer"})
+	result, err = q.Recommend(context.Background(), app.RecommendationRequest{
+		Context: app.RecommendationContextHome,
+		BuyerID: "buyer",
+	})
 	if err != nil || result.Reason != "personal" || len(result.Items) != 2 {
 		t.Fatal(result, err)
 	}
@@ -221,7 +225,7 @@ func TestGuestRecommendationExpiryAndSameTenant(t *testing.T) {
 	clock := fake.NewClock(t0)
 	q := app.NewQueries(store, fake.NewIndex(), fake.NewPlatform(), features, features, clock)
 	request := app.RecommendationRequest{
-		Context: "offer",
+		Context: app.RecommendationContextOffer,
 		OfferID: ids.OfferID{Tenant: "t1", Product: "p0"},
 	}
 	for _, advance := range []time.Duration{0, time.Minute - time.Nanosecond, time.Nanosecond} {
@@ -250,20 +254,22 @@ func TestGuestRecommendationExpiryAndSameTenant(t *testing.T) {
 func TestGuestRecommendationsShareMissAndDoNotCacheErrors(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	var first sync.Once
-	features := &fake.CatalogFeatures{RecommendHook: func(ctx context.Context) error {
-		first.Do(func() {
-			close(started)
-			<-release
-		})
-		if _, ok := ctx.Deadline(); !ok {
-			t.Error("у общей загрузки нет таймаута")
-		}
-		return ctx.Err()
-	}}
+	features := &fake.CatalogFeatures{
+		RecommendHook: func(ctx context.Context) error {
+			first.Do(func() {
+				close(started)
+				<-release
+			})
+			if _, ok := ctx.Deadline(); !ok {
+				t.Error("у общей загрузки нет таймаута")
+			}
+			return ctx.Err()
+		},
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	q := app.NewQueries(fake.NewStore(), fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(t0))
-	request := app.RecommendationRequest{Context: "home"}
+	request := app.RecommendationRequest{Context: app.RecommendationContextHome}
 	var wg sync.WaitGroup
 	ready := make(chan struct{}, 20)
 	for i := 0; i < 20; i++ {
@@ -320,7 +326,7 @@ func TestViewedRecommendationsForGuestAndBuyer(t *testing.T) {
 		q := app.NewQueries(store, fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(t0))
 		viewed := ids.OfferID{Tenant: "t1", Product: "p1"}
 		result, err := q.Recommend(context.Background(), app.RecommendationRequest{
-			Context: "home",
+			Context: app.RecommendationContextHome,
 			BuyerID: buyer,
 			Viewed:  []ids.OfferID{viewed, viewed},
 		})
@@ -343,18 +349,20 @@ func TestViewedRecommendationsForGuestAndBuyer(t *testing.T) {
 
 func TestGuestRecommendationsCancelSQLWhenLastWaiterLeaves(t *testing.T) {
 	started, stopped := make(chan struct{}), make(chan struct{})
-	features := &fake.CatalogFeatures{RecommendHook: func(ctx context.Context) error {
-		close(started)
-		<-ctx.Done()
-		close(stopped)
-		return ctx.Err()
-	}}
+	features := &fake.CatalogFeatures{
+		RecommendHook: func(ctx context.Context) error {
+			close(started)
+			<-ctx.Done()
+			close(stopped)
+			return ctx.Err()
+		},
+	}
 	q := app.NewQueries(fake.NewStore(), fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(t0))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		_, err := q.Recommend(ctx, app.RecommendationRequest{Context: "home"})
+		_, err := q.Recommend(ctx, app.RecommendationRequest{Context: app.RecommendationContextHome})
 		done <- err
 	}()
 	<-started

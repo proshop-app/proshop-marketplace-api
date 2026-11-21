@@ -59,15 +59,15 @@ func TestIdenticalProjectionContentRejectsBusinessChanges(t *testing.T) {
 		},
 		{
 			name: "promo price",
-			edit: func(state *catalog.ProductState) { state.PromoPrice = nil },
+			edit: func(state *catalog.ProductState) { state.BasePrice = money.Money{} },
 		},
 		{
 			name: "price profile value",
-			edit: func(state *catalog.ProductState) { state.PriceProfiles[0].EffectivePrice = money.FromKopecks(89) },
+			edit: func(state *catalog.ProductState) { state.Price = money.FromKopecks(89) },
 		},
 		{
 			name: "price profile membership",
-			edit: func(state *catalog.ProductState) { state.PriceProfiles = nil },
+			edit: func(state *catalog.ProductState) { state.HasPrice = false },
 		},
 		{
 			name: "sales",
@@ -191,25 +191,19 @@ func TestIdenticalProjectionContentRejectsBusinessChanges(t *testing.T) {
 func reviewedProjectionContent(t *testing.T) catalog.ProductState {
 	t.Helper()
 	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
-	promo := money.FromKopecks(90)
 	marketplacePrice := json.Number("1.00")
 	product, err := catalog.NewProduct(
 		catalog.Snapshot{
-			PriceProfiles: []catalog.PriceProfile{{
-				Key:            catalog.DefaultPriceProfile,
-				Price:          money.FromKopecks(100),
-				EffectivePrice: money.FromKopecks(90),
-			}},
+
 			TenantID:      "t1",
 			ProductID:     "p1",
 			Revision:      16,
 			SalesCount:    3,
 			AverageRating: 3.5,
 			RatingsCount:  2,
-			Price:         money.FromKopecks(100),
-			PromoPrice:    &promo,
-			Available:     4,
-			At:            now,
+
+			Available: 4,
+			At:        now,
 			Card: catalog.Card{
 				ModelKey:       "derived-key",
 				ModelKeySource: "derived-source",
@@ -249,6 +243,9 @@ func reviewedProjectionContent(t *testing.T) catalog.ProductState {
 				VariantsID:  "group-1",
 				Visible:     true,
 			},
+			HasPrice:  true,
+			Price:     money.FromKopecks(90),
+			BasePrice: money.FromKopecks(100),
 		},
 		now,
 	)

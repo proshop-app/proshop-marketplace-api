@@ -70,6 +70,22 @@ func TestOfferSearchQueryTextHTTP(t *testing.T) {
 		Registerer: prometheus.NewRegistry(),
 		Logger:     slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelError})),
 	})
+	for _, path := range []string{
+		"/api/v1/catalog/offers/t1~p1",
+		"/api/v1/catalog/variants/t1/group",
+	} {
+		store.calls = 0
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		r.Header.Set(moneyUnitHeader, "RUB")
+		r.Header.Set("Authorization", "Bearer "+access.Token)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, r)
+		if store.calls != 0 ||
+			strings.Contains(response.Header().Get("Cache-Control"), "public") != (response.Code == http.StatusOK) {
+			t.Fatal(path, store.calls, response.Header())
+		}
+	}
+
 	text32 := "\ufeff" + strings.Repeat("я\u0085", 16) + strings.Repeat("я\ufeff", 15) + "я\u200bя\u180eя \t"
 	for _, path := range []string{"/api/v1/catalog/offers", "/api/v1/catalog/sponsored"} {
 		t.Run(path, func(t *testing.T) {
@@ -84,10 +100,18 @@ func TestOfferSearchQueryTextHTTP(t *testing.T) {
 				return response
 			}
 
-			index.calls = 0
+			store.calls, index.calls = 0, 0
 			response := request(text32, "", false)
 			if response.Code != http.StatusOK || index.calls != 1 {
 				t.Fatal(response.Code, response.Body.String(), index.calls)
+			}
+
+			guestCalls := store.calls
+			store.calls = 0
+			response = request(text32, "", true)
+			if response.Code != http.StatusOK || store.calls != guestCalls ||
+				response.Header().Get("Cache-Control") != "public, max-age=30" {
+				t.Fatal("публичная выдача зависит от входа", response.Code, store.calls, guestCalls, response.Header())
 			}
 
 			store.calls, index.calls = 0, 0

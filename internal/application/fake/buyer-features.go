@@ -7,7 +7,6 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -187,7 +186,7 @@ func (r buyerFeatures) FavoritesPage(
 	return items[start:end], len(items), nil
 }
 
-func (r buyerFeatures) PriceDrops(ctx context.Context, id ids.UUID, contexts map[ids.TenantID]string) (int, error) {
+func (r buyerFeatures) PriceDrops(ctx context.Context, id ids.UUID) (int, error) {
 	count := 0
 	for _, item := range r.d.Saved[id][ports.PriceWatches] {
 		key, err := ids.ParseOfferID(item.Offer.ID)
@@ -199,10 +198,6 @@ func (r buyerFeatures) PriceDrops(ctx context.Context, id ids.UUID, contexts map
 			continue
 		}
 		doc, ok := appcatalog.Document(state)
-		keyName := contexts[key.Tenant]
-		price, found := catalog.SelectPrice(doc.PriceProfiles, keyName)
-		ok = ok && found
-		doc.Price = price.EffectivePrice.Kopecks()
 		if ok && doc.Visible && buyer.PriceDropped(item.PriceAtWatch, money.FromKopecks(doc.Price), item.TargetPrice) {
 			count++
 		}
@@ -252,20 +247,4 @@ func (g *GeoIP) Cached(_ context.Context, _ string) (*buyer.Region, bool) {
 // LocateUncached имитирует запрос провайдера после промаха кэша.
 func (g *GeoIP) LocateUncached(ctx context.Context, ip string) (*buyer.Region, error) {
 	return g.Locate(ctx, ip)
-}
-
-func (r buyerFeatures) WatchTenants(_ context.Context, id ids.UUID) ([]ids.TenantID, error) {
-	tenants := []ids.TenantID{}
-	seen := map[ids.TenantID]bool{}
-	for _, item := range r.d.Saved[id][ports.PriceWatches] {
-		key, err := ids.ParseOfferID(item.Offer.ID)
-		if err != nil {
-			return nil, err
-		}
-		if !seen[key.Tenant] {
-			tenants = append(tenants, key.Tenant)
-			seen[key.Tenant] = true
-		}
-	}
-	return tenants, nil
 }

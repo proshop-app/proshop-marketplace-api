@@ -23,18 +23,30 @@ func TestValidationContentDependencies(t *testing.T) {
 		{name: "marketplace presence", edit: func(p *catalog.ProductState) { p.Card.Marketplace = nil }},
 		{name: "category", edit: func(p *catalog.ProductState) { p.Card.Marketplace.CategoryID = "c2" }},
 		{name: "published", edit: func(p *catalog.ProductState) { p.Card.Marketplace.Published = false }},
-		{name: "attribute value", edit: func(p *catalog.ProductState) {
-			p.Card.Marketplace.Attributes["a1"] = json.RawMessage(`"v2"`)
-		}},
-		{name: "attribute removed", edit: func(p *catalog.ProductState) {
-			delete(p.Card.Marketplace.Attributes, "a1")
-		}},
-		{name: "attribute added", edit: func(p *catalog.ProductState) {
-			p.Card.Marketplace.Attributes["a2"] = json.RawMessage(`true`)
-		}},
-		{name: "GTIN attribute", edit: func(p *catalog.ProductState) {
-			p.Card.Marketplace.Attributes["gtin"] = json.RawMessage(`"0000000000000"`)
-		}},
+		{
+			name: "attribute value",
+			edit: func(p *catalog.ProductState) {
+				p.Card.Marketplace.Attributes["a1"] = json.RawMessage(`"v2"`)
+			},
+		},
+		{
+			name: "attribute removed",
+			edit: func(p *catalog.ProductState) {
+				delete(p.Card.Marketplace.Attributes, "a1")
+			},
+		},
+		{
+			name: "attribute added",
+			edit: func(p *catalog.ProductState) {
+				p.Card.Marketplace.Attributes["a2"] = json.RawMessage(`true`)
+			},
+		},
+		{
+			name: "GTIN attribute",
+			edit: func(p *catalog.ProductState) {
+				p.Card.Marketplace.Attributes["gtin"] = json.RawMessage(`"0000000000000"`)
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -53,15 +65,21 @@ func TestValidationContentIgnoresUnrelatedFields(t *testing.T) {
 		edit func(*catalog.ProductState)
 	}{
 		{name: "price", edit: func(p *catalog.ProductState) { p.Price = money.FromKopecks(200) }},
-		{name: "promo price", edit: func(p *catalog.ProductState) { p.PromoPrice = nil }},
-		{name: "price profile price", edit: func(p *catalog.ProductState) {
-			p.PriceProfiles[0].Price = money.FromKopecks(200)
-		}},
-		{name: "price profile effective price", edit: func(p *catalog.ProductState) {
-			p.PriceProfiles[0].EffectivePrice = money.FromKopecks(180)
-		}},
-		{name: "price profile membership", edit: func(p *catalog.ProductState) { p.PriceProfiles = nil }},
-		{name: "price profile key", edit: func(p *catalog.ProductState) { p.PriceProfiles[0].Key = "marketplace:p2" }},
+		{name: "promo price", edit: func(p *catalog.ProductState) { p.BasePrice = money.Money{} }},
+		{
+			name: "price profile price",
+			edit: func(p *catalog.ProductState) {
+				p.BasePrice = money.FromKopecks(200)
+			},
+		},
+		{
+			name: "price profile effective price",
+			edit: func(p *catalog.ProductState) {
+				p.Price = money.FromKopecks(180)
+			},
+		},
+		{name: "price profile membership", edit: func(p *catalog.ProductState) { p.HasPrice = false }},
+		{name: "price profile key", edit: func(p *catalog.ProductState) { p.HasPrice = false }},
 		{name: "marketplace price", edit: func(p *catalog.ProductState) { p.Card.Marketplace.Price = nil }},
 		{name: "available", edit: func(p *catalog.ProductState) { p.Available++ }},
 		{name: "sales count", edit: func(p *catalog.ProductState) { p.SalesCount++ }},
@@ -85,9 +103,12 @@ func TestValidationContentIgnoresUnrelatedFields(t *testing.T) {
 		{name: "model key", edit: func(p *catalog.ProductState) { p.Card.ModelKey = "new" }},
 		{name: "model key source", edit: func(p *catalog.ProductState) { p.Card.ModelKeySource = "new" }},
 		{name: "variant key", edit: func(p *catalog.ProductState) { p.Card.VariantKey = "new" }},
-		{name: "derived publication", edit: func(p *catalog.ProductState) {
-			p.Card.Publication = taxonomy.Publication{}
-		}},
+		{
+			name: "derived publication",
+			edit: func(p *catalog.ProductState) {
+				p.Card.Publication = taxonomy.Publication{}
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

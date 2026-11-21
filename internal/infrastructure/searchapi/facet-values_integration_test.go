@@ -9,9 +9,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestFacetValuesSearchContract(t *testing.T) {
@@ -22,27 +20,26 @@ func TestFacetValuesSearchContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	docs := []ports.OfferDocument{{
-		ID:                   "t1~p1",
-		TenantID:             "t1",
-		ProductID:            "p1",
-		Name:                 "Товар",
-		SellerSlug:           "t1",
-		SellerName:           "Магазин",
-		CategoryID:           "c1",
-		CategoryPath:         []string{"c1"},
-		Attributes:           map[string]json.RawMessage{"a1": json.RawMessage(`"v1"`)},
-		AttributeFacetValues: map[string][]string{"a1": {"v2", "v3"}},
-		Visible:              true,
-		Listed:               true,
-		Version:              1,
-		UpdatedAt:            time.Now(),
-		PriceProfiles: []catalog.PriceProfile{{
-			Key:            catalog.DefaultPriceProfile,
-			Price:          money.FromKopecks(100),
-			EffectivePrice: money.FromKopecks(100),
-		}},
-	}}
+	docs := []ports.OfferDocument{
+		{
+			ID:                   "t1~p1",
+			TenantID:             "t1",
+			ProductID:            "p1",
+			Name:                 "Товар",
+			SellerSlug:           "t1",
+			SellerName:           "Магазин",
+			CategoryID:           "c1",
+			CategoryPath:         []string{"c1"},
+			Attributes:           map[string]json.RawMessage{"a1": json.RawMessage(`"v1"`)},
+			AttributeFacetValues: map[string][]string{"a1": {"v2", "v3"}},
+			Visible:              true,
+			Listed:               true,
+			Version:              1,
+			UpdatedAt:            time.Now(),
+			Price:                int64(100),
+			BasePrice:            int64(100),
+		},
+	}
 	if err := index.PutGeneration(ctx, generation, docs); err != nil {
 		t.Fatal(err)
 	}

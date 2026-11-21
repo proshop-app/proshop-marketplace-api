@@ -135,10 +135,6 @@ func (c *Client) QuoteDelivery(
 		"items":           itemsJSON(request.Items),
 	}
 
-	if request.BuyerID != "" {
-		body["buyerId"] = request.BuyerID
-	}
-
 	if request.DispatchReview != nil {
 		body["dispatchReview"] = request.DispatchReview
 	}
@@ -201,9 +197,8 @@ func (c *Client) call(
 	path string,
 	payload any,
 	out any,
-	logTenant ...ids.TenantID,
 ) error {
-	return c.callWithRefusal(ctx, method, tenantID, path, payload, out, refusal, logTenant...)
+	return c.callWithRefusal(ctx, method, tenantID, path, payload, out, refusal)
 }
 
 func (c *Client) callWithRefusal(
@@ -214,7 +209,6 @@ func (c *Client) callWithRefusal(
 	payload any,
 	out any,
 	parseRefusal func(string, string, ids.TenantID, *http.Response) error,
-	logTenant ...ids.TenantID,
 ) error {
 	request, err := c.newRequest(ctx, method, tenantID, path, payload)
 	if err != nil {
@@ -228,9 +222,6 @@ func (c *Client) callWithRefusal(
 	defer func() { _ = reply.Body.Close() }()
 
 	if reply.StatusCode != http.StatusOK {
-		if len(logTenant) > 0 {
-			tenantID = logTenant[0]
-		}
 		return responseRefusal(method, path, tenantID, reply, parseRefusal)
 	}
 	return decodeResponse(reply.Body, out)
@@ -309,7 +300,6 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 		case reply.StatusCode == http.StatusNotFound && body.Code == "ORDER_NOT_FOUND":
 			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
 		}
-		// Общий ценовой контекст журналирует обёртка порта с ограничением частоты.
 		if tenant != "" {
 			slog.Warn(
 				"неизвестный отказ сервера магазина",

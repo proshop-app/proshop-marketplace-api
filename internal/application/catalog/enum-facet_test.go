@@ -10,22 +10,23 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
 func TestEnumFacetAndFilter(t *testing.T) {
 	ctx := context.Background()
 	d := taxonomy.Definition{
-		Attributes: []taxonomy.Attribute{{
-			Code:        "a1",
-			Name:        "Вид",
-			Type:        "enum",
-			Dictionary:  "d1",
-			Values:      []string{"v1", "v2"},
-			Facet:       true,
-			FacetPinned: true,
-		}},
+		Attributes: []taxonomy.Attribute{
+			{
+				Code:        "a1",
+				Name:        "Вид",
+				Type:        "enum",
+				Dictionary:  "d1",
+				Values:      []string{"v1", "v2"},
+				Facet:       true,
+				FacetPinned: true,
+			},
+		},
 		Schemas: map[string]taxonomy.Schema{
 			"s1": {Attributes: []string{"a1"}},
 			"s2": {},
@@ -61,16 +62,15 @@ func TestEnumFacetAndFilter(t *testing.T) {
 		}
 		publication := d.Check(&taxonomy.Card{CategoryID: id, Published: true, Attributes: attributes})
 		doc := ports.OfferDocument{
-			ID:            fmt.Sprintf("t1~p%d", i),
-			TenantID:      "t1",
-			Name:          "Товар",
-			CategoryID:    id,
-			CategoryPath:  publication.CategoryPath,
-			Attributes:    publication.Attributes,
-			Listed:        true,
-			Visible:       true,
-			Version:       1,
-			PriceProfiles: []catalog.PriceProfile{{Key: catalog.DefaultPriceProfile}},
+			ID:           fmt.Sprintf("t1~p%d", i),
+			TenantID:     "t1",
+			Name:         "Товар",
+			CategoryID:   id,
+			CategoryPath: publication.CategoryPath,
+			Attributes:   publication.Attributes,
+			Listed:       true,
+			Visible:      true,
+			Version:      1,
 		}
 		if err := index.Put(ctx, []ports.OfferDocument{doc}); err != nil {
 			t.Fatal(err)

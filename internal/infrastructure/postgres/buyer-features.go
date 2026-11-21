@@ -8,13 +8,11 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 const (
-	getBuyerWatchTenants  = `SELECT DISTINCT tenant_id FROM buyer_price_watches WHERE buyer_id = $1 ORDER BY tenant_id`
 	countBuyerFavorites   = `SELECT count(*) FROM buyer_favorites WHERE buyer_id = $1`
 	getBuyerFavoritesPage = `SELECT snapshot FROM buyer_favorites
   WHERE buyer_id = $1 ORDER BY created_at DESC, tenant_id, product_id LIMIT $2 OFFSET $3`
@@ -23,16 +21,11 @@ const (
   JOIN participants pa ON pa.tenant_id = p.tenant_id
   JOIN tenants t ON t.tenant_id = p.tenant_id
   JOIN moderation_verdicts mv ON mv.tenant_id = p.tenant_id AND mv.product_id = p.product_id
-  CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.price_profiles) = 'array'
-  THEN p.price_profiles ELSE '[]'::jsonb END) AS profile(body)
   WHERE w.buyer_id = $1 AND NOT p.deleted AND pa.enabled AND pa.delivery_valid AND t.status = 'active'
   AND mv.status = 'allowed' AND COALESCE((p.card->>'visible')::boolean, false)
   AND COALESCE((p.card->'publication'->>'published')::boolean, false)
-  AND EXISTS(SELECT 1 FROM jsonb_array_elements(p.price_profiles) AS public_profile(body)
-  WHERE public_profile.body->>'key' = $3)
-  AND profile.body->>'key' = $2::jsonb->>p.tenant_id
-  AND (profile.body->>'effectivePrice')::bigint < w.price_at_watch
-  AND (w.target_price IS NULL OR (profile.body->>'effectivePrice')::bigint <= w.target_price)`
+  AND p.price < w.price_at_watch
+  AND (w.target_price IS NULL OR p.price <= w.target_price)`
 	putBuyerFavorite = `INSERT INTO buyer_favorites(buyer_id, tenant_id, product_id, snapshot)
   VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`
 
@@ -285,13 +278,9 @@ func (r *BuyerFeatures) FavoritesPage(
 }
 
 // PriceDrops считает действующие цены без чтения сохранённых карточек.
-func (r *BuyerFeatures) PriceDrops(ctx context.Context, id ids.UUID, contexts map[ids.TenantID]string) (int, error) {
+func (r *BuyerFeatures) PriceDrops(ctx context.Context, id ids.UUID) (int, error) {
 	var count int
-	raw, err := json.Marshal(contexts)
-	if err != nil {
-		return 0, err
-	}
-	err = rawSQL(ctx, r.db, countBuyerPriceDrops, string(id), raw, catalog.DefaultPriceProfile).Row().Scan(&count)
+	err := rawSQL(ctx, r.db, countBuyerPriceDrops, string(id)).Row().Scan(&count)
 	return count, err
 }
 
@@ -330,24 +319,4 @@ func (r *BuyerFeatures) UpdateTarget(
 	}
 	_, err := execSQL(ctx, r.db, updateWatchTarget, string(id), string(offer.Tenant), string(offer.Product), price)
 	return err
-}
-
-// WatchTenants читает только магазины наблюдений, без снимков товаров.
-func (r *BuyerFeatures) WatchTenants(ctx context.Context, id ids.UUID) ([]ids.TenantID, error) {
-	rows, err := rawSQL(ctx, r.db, getBuyerWatchTenants, string(id)).Rows()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	tenants := []ids.TenantID{}
-	for rows.Next() {
-		var tenant string
-		if err := rows.Scan(&tenant); err != nil {
-			return nil, err
-		}
-		tenants = append(tenants, ids.TenantID(tenant))
-	}
-	return tenants, rows.Err()
 }

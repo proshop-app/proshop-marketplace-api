@@ -48,8 +48,6 @@ type productSnapshot struct {
 	Image             *string            `json:"image"`
 	URL               string             `json:"url"`
 	SKU               string             `json:"sku"`
-	Price             *json.Number       `json:"price"`
-	PromoPrice        *json.Number       `json:"promoPrice"`
 	AvailableQuantity *json.Number       `json:"availableQuantity"`
 	Categories        []snapshotGroup    `json:"categories"`
 	VariantsID        *string            `json:"variantsId"`
@@ -132,25 +130,13 @@ func productProjected(ctx context.Context, projections Projections, envelope Env
 }
 
 func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
-	if product.Price == nil {
-		return ErrInvalidPayload.WithMessage("у товара нет цены")
-	}
-
-	price, err := rubles(*product.Price)
-	if err != nil {
-		return err
-	}
-
-	profiles, err := snapshotPrices(product.PriceProfiles)
-	if err != nil {
-		return err
-	}
-	snapshot.PriceProfiles = profiles
 	snapshot.SalesCount = product.SalesCount
 	snapshot.AverageRating = product.AverageRating
 	snapshot.RatingsCount = product.RatingsCount
 
-	snapshot.Price = price
+	if err := snapshotPrices(snapshot, product.PriceProfiles); err != nil {
+		return err
+	}
 	if product.Marketplace != nil && product.Marketplace.Price != nil {
 		marketplacePrice, err := rubles(*product.Marketplace.Price)
 		if err != nil || marketplacePrice.IsNegative() {
@@ -158,18 +144,11 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 		}
 	}
 
-	if product.PromoPrice != nil {
-		promo, err := rubles(*product.PromoPrice)
-		if err != nil {
-			return err
-		}
-
-		snapshot.PromoPrice = &promo
-	}
-
-	if snapshot.Available, err = quantity(product.AvailableQuantity); err != nil {
+	available, err := quantity(product.AvailableQuantity)
+	if err != nil {
 		return err
 	}
+	snapshot.Available = available
 	card := catalog.Card{
 		Marketplace: product.Marketplace,
 		Name:        product.Name,
@@ -330,16 +309,19 @@ func tenantEvent(ctx context.Context, registry Registry, envelope Envelope) erro
 		status = participant.TenantDeleted
 	}
 
-	return registry.Apply(ctx, appparticipant.RegistryEvent{EventID: envelope.EventID, Event: participant.RegistryEvent{
-		TenantID: tenant,
-		Slug:     record.Slug,
-		Name:     record.Name,
-		Status:   status,
-		Cell:     record.Cell,
-		Plan:     nullable(record.Plan),
-		Hosts:    nullable(record.Hosts),
-		At:       at.UTC().Truncate(time.Microsecond),
-	}})
+	return registry.Apply(ctx, appparticipant.RegistryEvent{
+		EventID: envelope.EventID,
+		Event: participant.RegistryEvent{
+			TenantID: tenant,
+			Slug:     record.Slug,
+			Name:     record.Name,
+			Status:   status,
+			Cell:     record.Cell,
+			Plan:     nullable(record.Plan),
+			Hosts:    nullable(record.Hosts),
+			At:       at.UTC().Truncate(time.Microsecond),
+		},
+	})
 }
 
 func nullable(raw json.RawMessage) json.RawMessage {

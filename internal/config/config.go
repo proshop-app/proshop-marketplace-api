@@ -29,30 +29,29 @@ type DaData struct {
 
 // Config — настройки процесса маркетплейса.
 type Config struct {
-	City          City
-	PriceContexts PriceContexts
-	DaData        DaData
-	Promotion     Promotion
-	Moderation    Moderation
-	ModelKeys     bool
-	Identity      Identity
-	HTTP          HTTP
-	Database      Database
-	Search        Search
-	Kafka         Kafka
-	Outbox        Outbox
-	Retention     Retention
-	Operator      Operator
-	Redis         Redis
-	SmsRu         SmsRu
-	Login         Login
-	Platform      Platform
-	Cart          Cart
-	Checkout      Checkout
-	Delivery      Delivery
-	Settings      Settings
-	Reference     Reference
-	LogLevel      string
+	City       City
+	DaData     DaData
+	Promotion  Promotion
+	Moderation Moderation
+	ModelKeys  bool
+	Identity   Identity
+	HTTP       HTTP
+	Database   Database
+	Search     Search
+	Kafka      Kafka
+	Outbox     Outbox
+	Retention  Retention
+	Operator   Operator
+	Redis      Redis
+	SmsRu      SmsRu
+	Login      Login
+	Platform   Platform
+	Cart       Cart
+	Checkout   Checkout
+	Delivery   Delivery
+	Settings   Settings
+	Reference  Reference
+	LogLevel   string
 }
 
 // Redis — сессии покупателей и лимиты частоты.
@@ -241,10 +240,9 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	r := reader{env: env}
 
 	cfg := Config{
-		City:          r.city(),
-		PriceContexts: r.priceContexts(),
-		Promotion:     r.promotion(),
-		Identity:      r.identity(),
+		City:      r.city(),
+		Promotion: r.promotion(),
+		Identity:  r.identity(),
 		HTTP: HTTP{
 			RequestTimeout:         r.duration("HTTP_REQUEST_TIMEOUT", 25*time.Second),
 			ReferenceImportTimeout: r.duration("HTTP_REFERENCE_IMPORT_TIMEOUT", 120*time.Second),

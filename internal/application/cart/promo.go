@@ -26,7 +26,6 @@ func (s *Service) SetPromo(ctx context.Context, buyer ids.UUID, tenant ids.Tenan
 func PriceGroups(
 	ctx context.Context,
 	platform ports.PlatformAPI,
-	buyer ids.UUID,
 	groups []cart.Group,
 ) (map[ids.TenantID]ports.GroupPricing, error) {
 	var mu sync.Mutex
@@ -48,7 +47,7 @@ func PriceGroups(
 				return
 			}
 			defer func() { <-limit }()
-			request := ports.GroupPricingRequest{BuyerID: buyer}
+			request := ports.GroupPricingRequest{}
 			if group.PromoCode != nil {
 				request.PromoCode = group.PromoCode.Code
 			}

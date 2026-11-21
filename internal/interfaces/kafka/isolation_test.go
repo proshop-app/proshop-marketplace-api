@@ -12,24 +12,17 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
-	"github.com/proshop-app/proshop-marketplace/internal/application/pricecontexts"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
 )
 
 type registryFunc func(context.Context, appparticipant.RegistryEvent) error
 
-type contextFunc func(context.Context, pricecontexts.Changed) error
-
 func (f registryFunc) Apply(ctx context.Context, event appparticipant.RegistryEvent) error {
 	return f(ctx, event)
 }
 
-func (f contextFunc) Invalidate(ctx context.Context, event pricecontexts.Changed) error {
-	return f(ctx, event)
-}
-
-func TestConsumerIsolatesRegistryTenantsAndBuyerContexts(t *testing.T) {
-	for _, registry := range []bool{false, true} {
+func TestConsumerIsolatesRegistryTenants(t *testing.T) {
+	for _, registry := range []bool{true} {
 		t.Run(fmt.Sprint("registry=", registry), func(t *testing.T) {
 			blocked := make(chan struct{}, 1)
 			independent := make(chan struct{}, 1)
@@ -45,10 +38,7 @@ func TestConsumerIsolatesRegistryTenantsAndBuyerContexts(t *testing.T) {
 			registryHandler := registryFunc(func(ctx context.Context, e appparticipant.RegistryEvent) error {
 				return handle(ctx, e.Event.TenantID == "t1")
 			})
-			contextHandler := contextFunc(func(ctx context.Context, e pricecontexts.Changed) error {
-				return handle(ctx, e.BuyerID == "00000000-0000-4000-8000-000000000001")
-			})
-			router := kafka.NewRouter(&recorder{}, registryHandler).WithPriceContexts(contextHandler)
+			router := kafka.NewRouter(&recorder{}, registryHandler)
 			source := bufferedSource(isolatedMessage(registry, 0), isolatedMessage(registry, 1))
 			consumer := kafka.NewConsumer(
 				source,
@@ -79,16 +69,7 @@ func TestConsumerIsolatesRegistryTenantsAndBuyerContexts(t *testing.T) {
 }
 
 func isolatedMessage(registry bool, offset int64) kafkago.Message {
-	id := fmt.Sprintf("00000000-0000-4000-8000-%012d", offset+1)
-	tenant := "t1"
-	topic := kafka.TopicPriceContextChanged
-	key := fmt.Sprintf(`["%s","%s"]`, tenant, id)
-	body := fmt.Sprintf(
-		`{"version":1,"tenantId":%q,"buyerId":%q,"revision":1,"at":%q,"reason":"group_changed"}`,
-		tenant,
-		id,
-		published.Format(time.RFC3339),
-	)
+	var tenant, topic, key, body string
 	if registry {
 		tenant = fmt.Sprint("t", offset+1)
 		topic = kafka.TopicTenantCreated

@@ -57,18 +57,6 @@ func (t sourceTx) Registry() participant.Registry {
 	return sourceRegistry{Registry: t.Tx.Registry(), c: t.c}
 }
 
-func (r sourceParticipants) PublicTenants(
-	ctx context.Context,
-	f []ids.TenantID,
-	after ids.TenantID,
-	n int,
-) ([]ids.TenantID, error) {
-	r.c.pages.Add(1)
-	page, err := r.Repository.PublicTenants(ctx, f, after, n)
-	r.c.rows.Add(int64(len(page)))
-	return page, err
-}
-
 func (r sourceParticipants) Batch(
 	ctx context.Context,
 	keys []ids.TenantID,

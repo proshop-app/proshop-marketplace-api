@@ -9,10 +9,8 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	app "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
-	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 func TestSponsoredPrepareQueryAndPrices(t *testing.T) {
@@ -23,8 +21,7 @@ func TestSponsoredPrepareQueryAndPrices(t *testing.T) {
 	e.store.SeedPromotion(c)
 	e.clock.Advance(72 * time.Hour)
 	query := ports.OfferQuery{
-		CategoryID:    "c1",
-		PriceContexts: map[ids.TenantID]string{"t1": catalog.DefaultPriceProfile},
+		CategoryID: "c1",
 	}
 	rows, err := e.service.Sponsored(ctx, query)
 	if err != nil || len(rows) != 1 || rows[0].Offer.Price != 100 {

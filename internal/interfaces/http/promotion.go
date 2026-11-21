@@ -639,7 +639,6 @@ func (h *promotionHandlers) sponsored(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	query.BuyerID = BuyerID(r.Context())
 	rows, err := h.service.Sponsored(r.Context(), query)
 	if err != nil {
 		writeError(w, r, err)
@@ -656,6 +655,7 @@ func (h *promotionHandlers) sponsored(w http.ResponseWriter, r *http.Request) {
 			Offer:       offer,
 		})
 	}
+	w.Header().Set("Cache-Control", publicCatalogCacheControl)
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 

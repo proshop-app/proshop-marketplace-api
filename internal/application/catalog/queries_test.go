@@ -84,7 +84,7 @@ func TestOfferCard(t *testing.T) {
 	_, queries := indexed(t)
 	ctx := context.Background()
 
-	card, err := queries.Offer(ctx, ids.OfferID{Tenant: "t1", Product: "p1"}, "")
+	card, err := queries.Offer(ctx, ids.OfferID{Tenant: "t1", Product: "p1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,12 +92,12 @@ func TestOfferCard(t *testing.T) {
 		t.Fatalf("карточка: %+v", card)
 	}
 
-	_, err = queries.Offer(ctx, ids.OfferID{Tenant: "t2", Product: "p1"}, "")
+	_, err = queries.Offer(ctx, ids.OfferID{Tenant: "t2", Product: "p1"})
 	if !errors.Is(err, catalog.ErrOfferNotFound) {
 		t.Fatalf("скрытое предложение: ожидалось ErrOfferNotFound, получено %v", err)
 	}
 
-	_, err = queries.Offer(ctx, ids.OfferID{Tenant: "t9", Product: "p9"}, "")
+	_, err = queries.Offer(ctx, ids.OfferID{Tenant: "t9", Product: "p9"})
 	if !errors.Is(err, catalog.ErrOfferNotFound) {
 		t.Fatalf("нет предложения: ожидалось ErrOfferNotFound, получено %v", err)
 	}

@@ -135,12 +135,12 @@ func TestReviewedProjectionBusinessChangeRequiresEvaluation(t *testing.T) {
 		},
 		{
 			name: "promo price",
-			edit: func(snapshot *catalog.Snapshot) { snapshot.PromoPrice = nil },
+			edit: func(snapshot *catalog.Snapshot) { snapshot.BasePrice = money.Money{} },
 		},
 		{
 			name: "price profile",
 			edit: func(snapshot *catalog.Snapshot) {
-				snapshot.PriceProfiles[0].EffectivePrice = money.FromKopecks(89)
+				snapshot.Price = money.FromKopecks(89)
 			},
 		},
 		{
@@ -416,12 +416,14 @@ func applyReviewedProjection(t *testing.T, e environment, snapshot catalog.Snaps
 func reviewedProjectionTaxonomy(version int64) taxonomy.Definition {
 	return taxonomy.Definition{
 		Version: version,
-		Attributes: []taxonomy.Attribute{{
-			Code:               "a1",
-			Name:               "Атрибут",
-			Type:               "boolean",
-			SearchTermsByValue: map[string][]string{"true": {"выражение"}},
-		}},
+		Attributes: []taxonomy.Attribute{
+			{
+				Code:               "a1",
+				Name:               "Атрибут",
+				Type:               "boolean",
+				SearchTermsByValue: map[string][]string{"true": {"выражение"}},
+			},
+		},
 		Schemas: map[string]taxonomy.Schema{"s1": {Attributes: []string{"a1"}}},
 		Categories: []taxonomy.Category{
 			{ID: "c1", Name: "Категория 1", Slug: "c1", Schema: "s1"},
@@ -431,24 +433,18 @@ func reviewedProjectionTaxonomy(version int64) taxonomy.Definition {
 }
 
 func reviewedProjectionSnapshot(e environment, revision int64) catalog.Snapshot {
-	promo := money.FromKopecks(90)
 	marketplacePrice := json.Number("1.00")
 	return catalog.Snapshot{
-		PriceProfiles: []catalog.PriceProfile{{
-			Key:            catalog.DefaultPriceProfile,
-			Price:          money.FromKopecks(100),
-			EffectivePrice: money.FromKopecks(90),
-		}},
+
 		TenantID:      "t1",
 		ProductID:     "p1",
 		Revision:      revision,
 		SalesCount:    3,
 		AverageRating: 3.5,
 		RatingsCount:  2,
-		Price:         money.FromKopecks(100),
-		PromoPrice:    &promo,
-		Available:     4,
-		At:            e.clock.Now(),
+
+		Available: 4,
+		At:        e.clock.Now(),
 		Card: catalog.Card{
 			Marketplace: &taxonomy.Card{
 				Price:      &marketplacePrice,
@@ -477,5 +473,8 @@ func reviewedProjectionSnapshot(e environment, revision int64) catalog.Snapshot 
 			VariantsID:  "group-1",
 			Visible:     true,
 		},
+		HasPrice:  true,
+		Price:     money.FromKopecks(90),
+		BasePrice: money.FromKopecks(100),
 	}
 }

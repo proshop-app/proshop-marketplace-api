@@ -9,12 +9,12 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-func (r participants) PublicTenants(
+func (r participants) publicTenants(
 	ctx context.Context,
 	filter []ids.TenantID,
 	after ids.TenantID,
 	limit int,
-) ([]ids.TenantID, error) {
+) []ids.TenantID {
 	result := []ids.TenantID{}
 	for tenant, p := range r.d.participants {
 		if tenant <= after || (filter != nil && !slices.Contains(filter, tenant)) {
@@ -26,7 +26,7 @@ func (r participants) PublicTenants(
 		}
 	}
 	slices.Sort(result)
-	return result[:min(limit, len(result))], nil
+	return result[:min(limit, len(result))]
 }
 
 func (r participants) ScanIDs(_ context.Context, after ids.TenantID, limit int) ([]ids.TenantID, error) {
@@ -78,10 +78,7 @@ func (r participants) PickupSources(
 	}) {
 		return nil, delivery.ErrInvalidCarrier
 	}
-	keys, err := r.PublicTenants(ctx, nil, after, len(r.d.participants))
-	if err != nil {
-		return nil, err
-	}
+	keys := r.publicTenants(ctx, nil, after, len(r.d.participants))
 	result := []ids.TenantID{}
 	for _, key := range keys {
 		if r.d.participants[key].Enabled {

@@ -26,18 +26,17 @@ func TestCatalogFeaturesHTTP(t *testing.T) {
 	q := appcatalog.NewQueries(store, index, platform, features, features, fake.NewClock(time.Time{}))
 	h := catalogHandlers{queries: q}
 	platform.Reviews = []ports.Review{{Author: "Имя", Rating: 5, CreatedAt: time.Now()}}
-	if err := index.Put(context.Background(), []ports.OfferDocument{{
-		ID:      "t1~p1",
-		Visible: true,
-		Listed:  true,
-		Version: 1,
-		Rating:  &catalog.Rating{Value: 4.5, Count: 2},
-		PriceProfiles: []catalog.PriceProfile{{
-			Key:            catalog.DefaultPriceProfile,
-			Price:          money.FromKopecks(100),
-			EffectivePrice: money.FromKopecks(100),
-		}},
-	}}); err != nil {
+	if err := index.Put(context.Background(), []ports.OfferDocument{
+		{
+			ID:        "t1~p1",
+			Visible:   true,
+			Listed:    true,
+			Version:   1,
+			Rating:    &catalog.Rating{Value: 4.5, Count: 2},
+			Price:     money.FromKopecks(100).Kopecks(),
+			BasePrice: money.FromKopecks(100).Kopecks(),
+		},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
@@ -77,12 +76,14 @@ func TestCatalogFeaturesHTTP(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || page.Total != 1 {
 		t.Fatal(page, err)
 	}
-	index.Facets = []ports.Facet{{
-		Code:    "price",
-		Type:    "number",
-		Count:   1,
-		Buckets: []ports.PriceBucket{{From: 0, To: 1000, Count: 1}},
-	}}
+	index.Facets = []ports.Facet{
+		{
+			Code:    "price",
+			Type:    "number",
+			Count:   1,
+			Buckets: []ports.PriceBucket{{From: 0, To: 1000, Count: 1}},
+		},
+	}
 	list := httptest.NewRecorder()
 	h.list(list, httptest.NewRequest(http.MethodGet, "/offers?sort=rating", nil))
 	var offers offerPageJSON

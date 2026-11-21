@@ -167,7 +167,7 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 	if _, err := created.SetPromoCodes(codes, s.clock.Now()); err != nil {
 		return checkout.State{}, err
 	}
-	checks, err := s.check(ctx, buyerID, created.Groups())
+	checks, err := s.check(ctx, created.Groups())
 	if err != nil {
 		return checkout.State{}, s.verifyOnPromoError(ctx, buyerID, err)
 	}
@@ -250,7 +250,7 @@ func (s *Service) selectDelivery(
 		RegionCode:      point.RegionCode,
 	}
 
-	quotes := s.quote(ctx, buyerID, groups, selection)
+	quotes := s.quote(ctx, groups, selection)
 
 	choose := func(c *checkout.Checkout, now time.Time) error {
 		return c.SelectDelivery(selection, quotes, now)
@@ -295,7 +295,7 @@ func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (ch
 			return current.Confirm(now)
 		})
 	}
-	checks, err := s.check(ctx, buyerID, c.Groups())
+	checks, err := s.check(ctx, c.Groups())
 	if err != nil {
 		return checkout.State{}, s.verifyOnPromoError(ctx, buyerID, err)
 	}
@@ -362,7 +362,7 @@ func (s *Service) confirmQuoted(
 			}
 		}
 
-		requoted = s.groupQuotes(ctx, buyerID, groups, c.Delivery())
+		requoted = s.groupQuotes(ctx, groups, c.Delivery())
 	}
 
 	var confirmErr error
@@ -411,7 +411,6 @@ func (s *Service) confirmQuoted(
 // ожидания. Не ответивший продавец получает расчёт «магазин не ответил».
 func (s *Service) quote(
 	ctx context.Context,
-	buyerID ids.UUID,
 	groups []checkout.Group,
 	selection checkout.Selection,
 ) map[ids.TenantID]delivery.Quote {
@@ -421,12 +420,11 @@ func (s *Service) quote(
 			fresh[i].Quote = nil
 		}
 	}
-	return s.quoteSelections(ctx, buyerID, fresh, func(checkout.Group) *checkout.Selection { return &selection })
+	return s.quoteSelections(ctx, fresh, func(checkout.Group) *checkout.Selection { return &selection })
 }
 
 func (s *Service) quoteSelections(
 	ctx context.Context,
-	buyerID ids.UUID,
 	groups []checkout.Group,
 	selection func(checkout.Group) *checkout.Selection,
 ) map[ids.TenantID]delivery.Quote {
@@ -456,7 +454,7 @@ func (s *Service) quoteSelections(
 		wg.Add(1)
 		go func(group checkout.Group, selected checkout.Selection) {
 			defer wg.Done()
-			q := s.quoteGroup(ctx, buyerID, group, selected)
+			q := s.quoteGroup(ctx, group, selected)
 			mu.Lock()
 			quotes[group.TenantID] = q
 			mu.Unlock()
@@ -468,7 +466,6 @@ func (s *Service) quoteSelections(
 
 func (s *Service) quoteGroup(
 	ctx context.Context,
-	buyerID ids.UUID,
 	group checkout.Group,
 	selection checkout.Selection,
 ) delivery.Quote {
@@ -500,7 +497,6 @@ func (s *Service) quoteGroup(
 		group.TenantID,
 		ports.QuoteRequest{
 			DispatchReview:  review,
-			BuyerID:         buyerID,
 			Carrier:         selection.Carrier,
 			PickupPointCode: selection.PickupPointCode,
 			City:            selection.City,
@@ -548,7 +544,6 @@ func (s *Service) deliverySettings(
 // check спрашивает у магазинов цену и наличие позиций покупки.
 func (s *Service) check(
 	ctx context.Context,
-	buyerID ids.UUID,
 	groups []checkout.Group,
 ) (map[ids.OfferID]checkout.PriceCheck, error) {
 	cartGroups := make([]cart.Group, 0, len(groups))
@@ -581,7 +576,7 @@ func (s *Service) check(
 		cartGroups = append(cartGroups, cartGroup)
 	}
 
-	results, err := appcart.PriceGroups(ctx, s.platform, buyerID, cartGroups)
+	results, err := appcart.PriceGroups(ctx, s.platform, cartGroups)
 	if err != nil {
 		return nil, err
 	}

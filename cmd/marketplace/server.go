@@ -26,14 +26,12 @@ import (
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/platformguard"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/application/pricecontexts"
 	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/contextcache"
 	infrakafka "github.com/proshop-app/proshop-marketplace/internal/infrastructure/kafka"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/localgeoip"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/password"
@@ -57,8 +55,6 @@ const referenceStatsInterval = time.Minute
 type services struct {
 	cities        *appbuyer.Cities
 	statuses      *moderationstatus.Service
-	contextCache  *redis.PriceContexts
-	priceContexts *pricecontexts.Service
 	buyerFeatures *appbuyer.Features
 
 	promotion         *apppromotion.Service
@@ -132,8 +128,6 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return err
 	}
 	defer func() { _ = s.app.writer.Close() }()
-	defer func() { _ = s.app.contextCache.Close() }()
-	defer s.app.priceContexts.Stop()
 
 	if err := s.prepareIndexes(ctx); err != nil {
 		return err
@@ -192,31 +186,8 @@ func (s *server) services(ctx context.Context) (services, error) {
 		telemetry.NewPlatform(s.metrics),
 		s.logger,
 	)
-	contextMetrics := telemetry.NewPriceContexts(s.metrics)
-	sharedContexts := redis.NewPriceContexts(s.cache, keyPrefix, cfg.PriceContexts.Size, contextMetrics)
-	contextCache := contextcache.NewFallback(
-		sharedContexts,
-		contextcache.NewMemory(cfg.PriceContexts.Size, now, contextMetrics),
-	)
-	contexts := pricecontexts.New(
-		ctx,
-		pricecontexts.Config{
-			TTL:           cfg.PriceContexts.TTL,
-			StaleTTL:      cfg.PriceContexts.StaleTTL,
-			LoadTimeout:   cfg.PriceContexts.LoadTimeout,
-			MaxConcurrent: cfg.PriceContexts.MaxConcurrent,
-		},
-		uow,
-		platform,
-		contextCache,
-		now,
-		identities,
-		contextMetrics,
-	)
-
 	// корзина и покупка узнают об отказе участия первыми — по нему сверка настроек внеочередная
 	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
-	displayPlatform := contexts.ForDisplay(resyncing)
 	settings := appparticipant.NewSettings(uow, platform, now, identities)
 	var candidates ports.ReferenceCandidates
 	if cfg.Reference.CandidatesInterval > 0 && cfg.Search.CandidatesToken != "" {
@@ -275,7 +246,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 			IPLimit:       appbuyer.Limit(cfg.Login.IPLimit),
 		},
 	)
-	auth.WithPriceContexts(contexts)
 	carts := appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL)
 	checkouts := appcheckout.NewService(
 		uow,
@@ -301,7 +271,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 	projector := appcatalog.NewProjector(uow, now, moderation)
 	registry := appparticipant.NewRegistry(uow, now, identities)
-	replay := kafka.NewReplay(kafka.NewRouter(projector, registry).WithPriceContexts(contexts), cfg.Kafka.TopicPrefix)
+	replay := kafka.NewReplay(kafka.NewRouter(projector, registry), cfg.Kafka.TopicPrefix)
 	events := messaging.NewEvents(uow, now, replay)
 	var operatorTokens ports.IdentityTokens
 	if cfg.Operator.Email != "" {
@@ -380,7 +350,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 
 	features := postgres.NewCatalogFeatures(s.store.pool)
-	queries := appcatalog.NewQueries(uow, s.store.index, displayPlatform, features, features, now)
+	queries := appcatalog.NewQueries(uow, s.store.index, resyncing, features, features, now)
 	location, err := time.LoadLocation(cfg.Promotion.Timezone)
 	if err != nil {
 		return services{}, err
@@ -401,12 +371,10 @@ func (s *server) services(ctx context.Context) (services, error) {
 			upstream,
 			redis.NewLimiter(s.cache, keyPrefix),
 		),
-		contextCache:  sharedContexts,
-		priceContexts: contexts,
 		buyerFeatures: appbuyer.NewFeatures(
 			uow,
 			s.geoIP(),
-			displayPlatform,
+
 			redis.NewLimiter(s.cache, keyPrefix),
 			pickups,
 		),

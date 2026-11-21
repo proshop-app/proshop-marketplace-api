@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"slices"
 	"sort"
@@ -40,8 +39,8 @@ type VariantItem struct {
 	Image     string            `json:"image,omitempty"`
 }
 
-// Variants загружает группу отдельно от карточки с контекстом покупателя.
-func (q *Queries) Variants(ctx context.Context, tenantID, groupID string, buyerID ids.UUID) (*VariantBlock, error) {
+// Variants загружает группу отдельно от карточки.
+func (q *Queries) Variants(ctx context.Context, tenantID, groupID string) (*VariantBlock, error) {
 	if _, err := ids.ParseTenantID(tenantID); err != nil {
 		return nil, err
 	}
@@ -52,82 +51,7 @@ func (q *Queries) Variants(ctx context.Context, tenantID, groupID string, buyerI
 	if err != nil {
 		return nil, err
 	}
-	contexts, err := q.priceContexts(ctx, buyerID, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	keys, err := variantOfferIDs(group.Items)
-	if err != nil {
-		return nil, err
-	}
-	key := priceProfileKey(contexts, ids.TenantID(tenantID))
-	var publicStates map[ids.OfferID]ports.OfferState
-	if key == "" && len(keys) > 0 {
-		publicStates, err = q.variantPublicStates(ctx, keys)
-		if err != nil {
-			return nil, err
-		}
-	}
-	group.Items, err = pricedVariants(group.Items, keys, key, publicStates)
-	if err != nil {
-		return nil, err
-	}
 	return variantBlock(tenantID, groupID, group), nil
-}
-
-func variantOfferIDs(items []ports.OfferDocument) ([]ids.OfferID, error) {
-	keys := make([]ids.OfferID, len(items))
-	for i, item := range items {
-		key, err := ids.ParseOfferID(item.ID)
-		if err != nil {
-			return nil, err
-		}
-		keys[i] = key
-	}
-	return keys, nil
-}
-
-func (q *Queries) variantPublicStates(
-	ctx context.Context,
-	keys []ids.OfferID,
-) (map[ids.OfferID]ports.OfferState, error) {
-	var states []ports.OfferState
-	err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		var err error
-		states, err = tx.Offers().Batch(ctx, keys)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	byID := make(map[ids.OfferID]ports.OfferState, len(states))
-	for _, state := range states {
-		if state.Product != nil {
-			product := state.Product.State()
-			byID[ids.OfferID{Tenant: product.TenantID, Product: product.ProductID}] = state
-		}
-	}
-	return byID, nil
-}
-
-func pricedVariants(
-	items []ports.OfferDocument,
-	keys []ids.OfferID,
-	key string,
-	publicStates map[ids.OfferID]ports.OfferState,
-) ([]ports.OfferDocument, error) {
-	priced := make([]ports.OfferDocument, 0, len(items))
-	for i, doc := range items {
-		err := priceOffer(&doc, key, publicStates[keys[i]])
-		if errors.Is(err, catalog.ErrOfferNotFound) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		priced = append(priced, doc)
-	}
-	return priced, nil
 }
 
 func variantBlock(tenantID, groupID string, group ports.OfferGroup) *VariantBlock {

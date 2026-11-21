@@ -11,7 +11,6 @@ import (
 )
 
 type groupPricingJSON struct {
-	TenantID  ids.TenantID    `json:"tenantId"`
 	PromoCode *promoCodeJSON  `json:"promoCode"`
 	Items     []itemCheckJSON `json:"items"`
 }
@@ -22,25 +21,22 @@ func (c *Client) PriceGroup(
 	tenant ids.TenantID,
 	request ports.GroupPricingRequest,
 ) (ports.GroupPricing, error) {
-	buyer, code, items := request.BuyerID, request.PromoCode, request.Items
-	var answer struct {
-		Items []groupPricingJSON `json:"items"`
-	}
+	code, items := request.PromoCode, request.Items
+	var group groupPricingJSON
 	body := map[string]any{
-		"buyerId":   buyer,
-		"tenantIds": []ids.TenantID{tenant},
-		"items":     itemsJSON(items),
+		"items": itemsJSON(items),
 	}
 	if code != "" {
 		body["promoCode"] = code
 	}
-	if err := c.call(ctx, http.MethodPost, "", "/pricing/contexts", body, &answer, tenant); err != nil {
+	if err := c.call(ctx, http.MethodPost, tenant, "/items/check", body, &group); err != nil {
 		return ports.GroupPricing{}, err
 	}
-	if len(answer.Items) != 1 || answer.Items[0].TenantID != tenant {
-		return ports.GroupPricing{}, ErrInvalidResponse
-	}
-	group := answer.Items[0]
+	return group.pricing(request)
+}
+
+func (group groupPricingJSON) pricing(request ports.GroupPricingRequest) (ports.GroupPricing, error) {
+	items, code := request.Items, request.PromoCode
 	if code != "" && group.PromoCode == nil {
 		return ports.GroupPricing{}, ErrInvalidResponse
 	}

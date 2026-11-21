@@ -22,7 +22,7 @@ const projectionRecoveryTestEvent = `{
 	"product":{
 		"id":"p1",
 		"name":"Товар",
-		"price":100,
+		"price":100,"priceProfiles":[{"key":"marketplace:default","price":100,"effectivePrice":100}],
 		"availableQuantity":2,
 		"conditions":{"isVisible":true},
 		"marketplace":{"categoryId":"c1","attributes":{}}

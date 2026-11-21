@@ -53,6 +53,7 @@ const (
 			"name": "Чайник",
 			"price": 1990.5,
 			"promoPrice": null,
+			"priceProfiles": [{"key":"marketplace:default","price":2100,"effectivePrice":1990.5}],
 			"availableQuantity": 4,
 			"categories": [],
 			"conditions": {"isVisible": true}
@@ -497,7 +498,8 @@ func TestConsumerEndToEnd(t *testing.T) {
 	projected := `
 		SELECT count(*)
 		FROM catalog_products
-		WHERE tenant_id = 't1' AND product_id = 'p1' AND price = 199050 AND available = 4`
+		WHERE tenant_id = 't1' AND product_id = 'p1' AND price = 199050
+			AND base_price = 210000 AND available = 4`
 	if n := count(t, pool, projected); n != 1 {
 		t.Fatal("снимок товара в копейках")
 	}

@@ -1,0 +1,9 @@
+{
+  "promoCode": {
+    "code": "SAVE",
+    "valid": true,
+    "discount": 11,
+    "message": null
+  },
+  "items": []
+}

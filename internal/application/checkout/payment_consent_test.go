@@ -10,7 +10,6 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	pricecatalog "github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
@@ -36,23 +35,18 @@ func addConsentThirdShop(t *testing.T, e *env) {
 		ctx,
 		[]ports.OfferDocument{
 			{
-				ID:                consentThirdOffer.String(),
-				TenantID:          "t3",
-				ProductID:         "p1",
-				Name:              "Товар",
-				Price:             50000,
+				ID:        consentThirdOffer.String(),
+				TenantID:  "t3",
+				ProductID: "p1",
+				Name:      "Товар",
+
 				Available:         5,
 				Visible:           true,
 				Listed:            true,
 				CheckoutAvailable: true,
 				Version:           1,
-				PriceProfiles: []pricecatalog.PriceProfile{
-					{
-						Key:            pricecatalog.DefaultPriceProfile,
-						Price:          money.FromKopecks(50000),
-						EffectivePrice: money.FromKopecks(50000),
-					},
-				},
+				Price:             money.FromKopecks(50000).Kopecks(),
+				BasePrice:         money.FromKopecks(50000).Kopecks(),
 			},
 		},
 	); err != nil {

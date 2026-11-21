@@ -25,9 +25,9 @@ const (
 	throughputPostgresVersion = `SHOW server_version`
 	seedThroughputProducts    = `INSERT INTO catalog_products
         (tenant_id, product_id, revision, deleted, card, price, available,
-            projected_at, version, updated_at, price_profiles)
+            projected_at, version, updated_at, base_price)
         SELECT 't' || t, 'p' || lpad(n::text, 5, '0'), 1, false, $1::jsonb -> ((n-1) % 10), 100, 1,
-            now(), 1, now(), '[]'::jsonb FROM generate_series(1,100) t CROSS JOIN generate_series(1,200) n`
+            now(), 1, now(), 100 FROM generate_series(1,100) t CROSS JOIN generate_series(1,200) n`
 )
 
 // TestTaxonomyRevalidationThroughput запускается явно: замер сохраняет рабочую паузу, без -race.

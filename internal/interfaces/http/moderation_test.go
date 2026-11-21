@@ -65,11 +65,9 @@ func newModerationEnv(t *testing.T) moderationEnv {
 				Name:        "Товар",
 				Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
 			},
-			PriceProfiles: []catalog.PriceProfile{{
-				Key:            catalog.DefaultPriceProfile,
-				Price:          money.FromKopecks(19999),
-				EffectivePrice: money.FromKopecks(19999),
-			}},
+			HasPrice:  true,
+			Price:     money.FromKopecks(19999),
+			BasePrice: money.FromKopecks(19999),
 		},
 	})
 	if err != nil {

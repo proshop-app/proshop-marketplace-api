@@ -46,7 +46,7 @@ func TestTemporaryProductReviewPreservesOrderUntilPaymentDeadline(t *testing.T) 
 							Status:    moderation.Pending,
 						},
 					)
-					product.PriceProfiles = nil
+					product.HasPrice = false
 				case "unpublished":
 					product.Card.Publication.Published = false
 				case "unpublished_unreviewed":

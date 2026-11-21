@@ -34,14 +34,13 @@ type BuyerInterests interface {
 
 // RecommendationFilter отбирает кандидатов до пагинации одним запросом проекции.
 type RecommendationFilter struct {
-	Categories    []string
-	Excluded      []ids.OfferID
-	OtherTenant   ids.TenantID
-	Region        string
-	PriceMin      *int64
-	PriceMax      *int64
-	PriceContexts map[ids.TenantID]string
-	Limit         int
+	Categories  []string
+	Excluded    []ids.OfferID
+	OtherTenant ids.TenantID
+	Region      string
+	PriceMin    *int64
+	PriceMax    *int64
+	Limit       int
 }
 
 // RecommendationOffers возвращает согласованные снимки кандидатов без N+1.

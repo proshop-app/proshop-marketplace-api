@@ -90,7 +90,7 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 	deps := transport.Deps{
 		RequestTimeout:         time.Minute,
 		ReferenceImportTimeout: time.Minute,
-		Features:               appbuyer.NewFeatures(e.store, e.geo, e.platform, e.limiter, e.pickups),
+		Features:               appbuyer.NewFeatures(e.store, e.geo, e.limiter, e.pickups),
 		Taxonomy:               apptaxonomy.NewService(e.store, e.clock, nil),
 		Catalog: appcatalog.NewQueries(
 			e.store,
@@ -195,7 +195,7 @@ func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID
 		Revision:  1,
 		At:        t0,
 		Available: 2,
-		Price:     money.FromKopecks(price),
+
 		Card: catalog.Card{
 			Marketplace: &taxonomy.Card{CategoryID: "c1", Published: true},
 			Publication: taxonomy.Publication{
@@ -211,13 +211,9 @@ func (e *env) seedOffer(t *testing.T, tenant ids.TenantID, product ids.ProductID
 			Visible:     true,
 			Categories:  []catalog.Category{{ID: "c1", Name: "Категория"}},
 		},
-		PriceProfiles: []catalog.PriceProfile{
-			{
-				Key:            catalog.DefaultPriceProfile,
-				Price:          money.FromKopecks(price),
-				EffectivePrice: money.FromKopecks(price),
-			},
-		},
+		HasPrice:  true,
+		Price:     money.FromKopecks(price),
+		BasePrice: money.FromKopecks(price),
 	}
 
 	p, err := catalog.NewProduct(snapshot, t0)

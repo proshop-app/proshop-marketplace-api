@@ -11,18 +11,15 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func TestOffersOrderVisibilityAndPrices(t *testing.T) {
 	store, index, platform := fake.NewStore(), fake.NewIndex(), fake.NewPlatform()
 	for _, tenant := range []ids.TenantID{"t1", "t2"} {
 		seedSeller(store, tenant, participant.TenantActive, true)
-		platform.SetBuyerProfile("buyer", tenant, "personal")
 	}
 	requested := []ids.OfferID{
 		{Tenant: "t2", Product: "p2"},
@@ -42,22 +39,19 @@ func TestOffersOrderVisibilityAndPrices(t *testing.T) {
 			TenantID:  string(id.Tenant),
 			ProductID: string(id.Product),
 			Visible:   id.Product != "hidden",
+			Price:     9000,
+			BasePrice: 12000,
 			Listed:    id.Product != "unlisted",
-			PriceProfiles: []catalog.PriceProfile{{
-				Key:            "personal",
-				Price:          money.FromKopecks(12000),
-				EffectivePrice: money.FromKopecks(9000),
-			}},
 		}
 		if id.Product == "no-price" {
-			doc.PriceProfiles = nil
+			doc.Visible = false
 		}
 		if err := index.Put(context.Background(), []ports.OfferDocument{doc}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	queries := appcatalog.NewQueries(store, index, platform, nil, nil, fake.NewClock(time.Time{}))
-	cards, err := queries.Offers(context.Background(), requested, "buyer")
+	cards, err := queries.Offers(context.Background(), requested)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,10 +65,7 @@ func TestOffersOrderVisibilityAndPrices(t *testing.T) {
 	if !reflect.DeepEqual(got, []string{"t2~p2", "t1~unlisted", "t1~p1", "t2~p1"}) {
 		t.Fatal(got)
 	}
-	calls := platform.PriceContextCalls()
-	if len(calls) != 2 || calls[0] == calls[1] {
-		t.Fatal("контекст должен вычисляться один раз на магазин", calls)
-	}
+
 }
 
 func TestOffersIndexFailure(t *testing.T) {
@@ -91,7 +82,7 @@ func TestOffersIndexFailure(t *testing.T) {
 		{Tenant: "t1", Product: "p1"},
 		{Tenant: "t1", Product: "p2"},
 	}
-	cards, err := queries.Offers(context.Background(), requested, "")
+	cards, err := queries.Offers(context.Background(), requested)
 	if cards != nil || !errors.Is(err, failure) || errs.CodeOf(err) != errs.Unavailable {
 		t.Fatal(cards, err)
 	}
@@ -124,7 +115,7 @@ func TestOffersConcurrency(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		_, err := queries.Offers(ctx, requested, "")
+		_, err := queries.Offers(ctx, requested)
 		done <- err
 	}()
 	for range 5 {

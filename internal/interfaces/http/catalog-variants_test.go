@@ -60,13 +60,8 @@ func TestSeparateVariantRequestAndCardReference(t *testing.T) {
 				},
 			},
 		},
-		PriceProfiles: []catalog.PriceProfile{
-			{
-				Key:            catalog.DefaultPriceProfile,
-				Price:          money.FromKopecks(12345),
-				EffectivePrice: money.FromKopecks(12000),
-			},
-		},
+		Price:     money.FromKopecks(12000).Kopecks(),
+		BasePrice: money.FromKopecks(12345).Kopecks(),
 	}
 	small := doc
 	small.ID, small.ProductID = "seller~s", "s"

@@ -11,7 +11,6 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	pricecatalog "github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	pricemoney "github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -70,13 +69,8 @@ func TestCanonicalFiltersAndCoverage(t *testing.T) {
 			Listed:       true,
 			Visible:      true,
 			Version:      1,
-			PriceProfiles: []pricecatalog.PriceProfile{
-				{
-					Key:            pricecatalog.DefaultPriceProfile,
-					Price:          pricemoney.FromKopecks(0),
-					EffectivePrice: pricemoney.FromKopecks(0),
-				},
-			},
+			Price:        pricemoney.FromKopecks(0).Kopecks(),
+			BasePrice:    pricemoney.FromKopecks(0).Kopecks(),
 		}
 		if err := index.Put(ctx, []ports.OfferDocument{doc}); err != nil {
 			t.Fatal(err)

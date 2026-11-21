@@ -11,12 +11,11 @@ func (h *catalogHandlers) variants(w http.ResponseWriter, r *http.Request) {
 		r.Context(),
 		r.PathValue("tenantId"),
 		r.PathValue("groupId"),
-		BuyerID(r.Context()),
 	)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Cache-Control", publicCatalogCacheControl)
 	writeJSON(w, http.StatusOK, variantResponse(block))
 }

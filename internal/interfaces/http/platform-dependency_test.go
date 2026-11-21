@@ -16,7 +16,6 @@ import (
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/platformguard"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/application/pricecontexts"
 	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
@@ -29,19 +28,16 @@ import (
 )
 
 type dependencyFixture struct {
-	contexts       *pricecontexts.Service
-	contextCache   *fake.PriceContextCache
-	contextMetrics *fake.PriceContextMetrics
-	store          *fake.Store
-	upstream       *fake.Platform
-	guarded        *platformguard.Client
-	metrics        *fake.PlatformMetrics
-	clock          *fake.Clock
-	catalog        *catalogHandlers
-	promotion      *promotionHandlers
-	cart           *cartHandlers
-	buyer          *buyerFeatureHandlers
-	shops          *participantHandlers
+	store     *fake.Store
+	upstream  *fake.Platform
+	guarded   *platformguard.Client
+	metrics   *fake.PlatformMetrics
+	clock     *fake.Clock
+	catalog   *catalogHandlers
+	promotion *promotionHandlers
+	cart      *cartHandlers
+	buyer     *buyerFeatureHandlers
+	shops     *participantHandlers
 }
 
 type dependencyRoute struct {
@@ -69,28 +65,19 @@ func newDependencyFixture(t *testing.T) *dependencyFixture {
 		Enabled:  true,
 		Delivery: participant.DeliverySettings{Regions: []string{"RU-MOW"}, Carriers: []string{"cdek", "yandex"}},
 	})
-	profiles := []catalog.PriceProfile{
-		{
-			Key:            catalog.DefaultPriceProfile,
-			Price:          money.FromKopecks(10000),
-			EffectivePrice: money.FromKopecks(10000),
-		},
-		{
-			Key:            "marketplace:buyer",
-			Price:          money.FromKopecks(8000),
-			EffectivePrice: money.FromKopecks(8000),
-		},
-	}
 	store.SeedProduct(catalog.ProductState{
-		TenantID:      "t1",
-		ProductID:     "p1",
-		PriceProfiles: profiles,
-		Available:     3,
+		TenantID:  "t1",
+		ProductID: "p1",
+
+		Available: 3,
 		Card: catalog.Card{
 			Name:        "Товар",
 			Visible:     true,
 			Publication: taxonomy.Publication{Published: true, CategoryID: "c1"},
 		},
+		HasPrice:  true,
+		Price:     money.FromKopecks(10000),
+		BasePrice: money.FromKopecks(10000),
 	})
 	store.SeedVerdict(moderation.VerdictState{TenantID: "t1", ProductID: "p1", Status: moderation.Allowed})
 	var state ports.OfferState
@@ -145,7 +132,6 @@ func newDependencyFixture(t *testing.T) *dependencyFixture {
 		Target:        promotion.Target{OfferID: id, CategoryID: "c1"},
 		Period:        promotion.Period{From: "2026-11-01", To: "2026-11-02"},
 	})
-	upstream.SetBuyerProfile("b1", "t1", "marketplace:buyer")
 	upstream.Reviews = []ports.Review{{Author: "Имя", Rating: 5, CreatedAt: now}}
 	metrics := &fake.PlatformMetrics{}
 	guardConfig := platformguard.Config{
@@ -171,48 +157,24 @@ func newDependencyFixture(t *testing.T) *dependencyFixture {
 	}
 	guarded := platformguard.New(upstream, guardConfig, clock, metrics, nil)
 	features := &fake.CatalogFeatures{States: []ports.OfferState{state}}
-	contextCache := &fake.PriceContextCache{}
-	contextMetrics := &fake.PriceContextMetrics{Events: make(chan string, 256)}
-	loadCtx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	contexts := pricecontexts.New(
-		loadCtx,
-		pricecontexts.Config{
-			TTL:           time.Second,
-			StaleTTL:      time.Minute,
-			LoadTimeout:   time.Second,
-			MaxConcurrent: 2,
-		},
-		store,
-		guarded,
-		contextCache,
-		clock,
-		&fake.IDs{},
-		contextMetrics,
-	)
-	t.Cleanup(contexts.Stop)
-	display := contexts.ForDisplay(guarded)
-	queries := appcatalog.NewQueries(store, index, display, features, features, clock)
+	queries := appcatalog.NewQueries(store, index, guarded, features, features, clock)
 	promotions := apppromotion.NewService(store, clock, &fake.IDs{}, index, apppromotion.Config{
 		Catalog:     queries,
 		Location:    time.UTC,
 		Random:      fake.Random{},
 		SearchDepth: 100,
 	})
-	buyers := appbuyer.NewFeatures(store, nil, display, fake.NewLimiter(), &fake.PickupLookup{})
+	buyers := appbuyer.NewFeatures(store, nil, fake.NewLimiter(), &fake.PickupLookup{})
 	return &dependencyFixture{
-		contexts:       contexts,
-		contextCache:   contextCache,
-		contextMetrics: contextMetrics,
-		store:          store,
-		upstream:       upstream,
-		guarded:        guarded,
-		metrics:        metrics,
-		clock:          clock,
-		catalog:        &catalogHandlers{queries: queries},
-		promotion:      &promotionHandlers{service: promotions},
-		cart:           &cartHandlers{carts: appcart.NewService(store, index, guarded, &fake.IDs{}, clock, time.Hour)},
-		buyer:          &buyerFeatureHandlers{service: buyers},
+		store:     store,
+		upstream:  upstream,
+		guarded:   guarded,
+		metrics:   metrics,
+		clock:     clock,
+		catalog:   &catalogHandlers{queries: queries},
+		promotion: &promotionHandlers{service: promotions},
+		cart:      &cartHandlers{carts: appcart.NewService(store, index, guarded, &fake.IDs{}, clock, time.Hour)},
+		buyer:     &buyerFeatureHandlers{service: buyers},
 		shops: &participantHandlers{
 			service:       appparticipant.NewService(store, clock, &fake.IDs{}),
 			buyerFeatures: buyers,
@@ -227,7 +189,7 @@ func dependencyRoutes() []dependencyRoute {
 			handler: func(f *dependencyFixture) http.HandlerFunc {
 				return f.catalog.list
 			},
-			operation: "price_contexts",
+			operation: "",
 			array:     "items",
 		},
 		{
@@ -235,7 +197,7 @@ func dependencyRoutes() []dependencyRoute {
 			handler: func(f *dependencyFixture) http.HandlerFunc {
 				return f.catalog.list
 			},
-			operation: "price_contexts",
+			operation: "",
 			array:     "items",
 		},
 		{
@@ -243,7 +205,7 @@ func dependencyRoutes() []dependencyRoute {
 			handler: func(f *dependencyFixture) http.HandlerFunc {
 				return f.catalog.recommendations
 			},
-			operation: "price_contexts",
+			operation: "",
 			array:     "items",
 		},
 		{
@@ -251,7 +213,7 @@ func dependencyRoutes() []dependencyRoute {
 			handler: func(f *dependencyFixture) http.HandlerFunc {
 				return f.catalog.recommendations
 			},
-			operation: "price_contexts",
+			operation: "",
 			array:     "items",
 		},
 		{
@@ -259,7 +221,7 @@ func dependencyRoutes() []dependencyRoute {
 			handler: func(f *dependencyFixture) http.HandlerFunc {
 				return f.promotion.sponsored
 			},
-			operation: "price_contexts",
+			operation: "",
 			array:     "items",
 		},
 		{
@@ -267,7 +229,7 @@ func dependencyRoutes() []dependencyRoute {
 			handler: func(f *dependencyFixture) http.HandlerFunc {
 				return f.promotion.sponsored
 			},
-			operation: "price_contexts",
+			operation: "",
 			array:     "items",
 		},
 		{
@@ -275,7 +237,7 @@ func dependencyRoutes() []dependencyRoute {
 			handler: func(f *dependencyFixture) http.HandlerFunc {
 				return f.catalog.card
 			},
-			operation: "price_contexts",
+			operation: "",
 			array:     "",
 		},
 		{
@@ -299,7 +261,7 @@ func dependencyRoutes() []dependencyRoute {
 			handler: func(f *dependencyFixture) http.HandlerFunc {
 				return f.buyer.favorites
 			},
-			operation: "price_contexts",
+			operation: "",
 			array:     "",
 		},
 		{
@@ -307,7 +269,7 @@ func dependencyRoutes() []dependencyRoute {
 			handler: func(f *dependencyFixture) http.HandlerFunc {
 				return f.buyer.watches
 			},
-			operation: "price_contexts",
+			operation: "",
 			array:     "",
 		},
 		{
@@ -315,7 +277,7 @@ func dependencyRoutes() []dependencyRoute {
 			handler: func(f *dependencyFixture) http.HandlerFunc {
 				return f.buyer.profile
 			},
-			operation: "price_contexts",
+			operation: "",
 			array:     "",
 		},
 		{
@@ -351,22 +313,6 @@ func TestPlatformDependencyReadRoutes(t *testing.T) {
 				t.Run(name, func(t *testing.T) {
 					f := newDependencyFixture(t)
 					if stale {
-						if _, err := f.contextCache.Begin(context.Background(), "b1", "seed", time.Minute); err != nil {
-							t.Fatal(err)
-						}
-						_, err := f.contextCache.Store(
-							context.Background(),
-							"b1",
-							"seed",
-							ports.PriceContextEntry{
-								LoadedAt: f.clock.Now(),
-								Profiles: map[ids.TenantID]string{"t1": "marketplace:buyer"},
-							},
-							time.Minute,
-						)
-						if err != nil {
-							t.Fatal(err)
-						}
 						_, _ = f.guarded.ProductReviews(context.Background(), "t1", "p1", 20, 0)
 						f.clock.Advance(2 * time.Second)
 					}
@@ -390,9 +336,6 @@ func TestPlatformDependencyReadRoutes(t *testing.T) {
 					if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 						t.Fatal(err)
 					}
-					if route.operation == "price_contexts" {
-						waitContextLoad(t, f.contextMetrics)
-					}
 					if route.operation != "" {
 						outcome := "error"
 						if timeout {
@@ -413,9 +356,6 @@ func TestPlatformDependencyReadRoutes(t *testing.T) {
 					}
 					if route.path == "/api/v1/catalog/offers/t1~p1" {
 						price := float64(100)
-						if stale {
-							price = 80
-						}
 						if body["price"] != price {
 							t.Fatal("цена карточки", body)
 						}
@@ -450,81 +390,12 @@ func TestPlatformDependencyCartVerifyStaysStrict(t *testing.T) {
 	}
 }
 
-func TestPlatformDependencyCardRespectsHiddenProjection(t *testing.T) {
-	f := newDependencyFixture(t)
-	f.store.SeedParticipant(participant.State{TenantID: "t1", Slug: "shop", Enabled: false})
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/offers/t1~p1", nil)
-	request.SetPathValue("offerId", "t1~p1")
-	request = request.WithContext(context.WithValue(request.Context(), keyBuyer, ids.UUID("b1")))
-	response := httptest.NewRecorder()
-	f.catalog.card(response, request)
-	if response.Code != http.StatusNotFound {
-		t.Fatal("устаревший индекс раскрыл скрытого продавца", response.Code, response.Body.String())
-	}
-}
-
-func waitContextLoad(t *testing.T, metrics *fake.PriceContextMetrics) {
-	t.Helper()
-	deadline := time.After(2 * time.Second)
-	for {
-		select {
-		case event := <-metrics.Events:
-			if event == "load:ok" || event == "load:error" || event == "load:timeout" {
-				return
-			}
-		case <-deadline:
-			t.Fatal("фоновая загрузка не закончилась")
-		}
-	}
-}
-
-func TestContextMissReturnsPublicPageBeforeServer(t *testing.T) {
-	f := newDependencyFixture(t)
-	started := make(chan struct{}, 1)
-	release := make(chan struct{})
-	f.upstream.CallHook = func(ctx context.Context, _ string) error {
-		started <- struct{}{}
-		select {
-		case <-release:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/offers", nil)
-	request = request.WithContext(context.WithValue(request.Context(), keyBuyer, ids.UUID("b1")))
-	response := httptest.NewRecorder()
-	f.catalog.list(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatal(response.Code, response.Body.String())
-	}
-	var page offerPageJSON
-	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
-		t.Fatal(err)
-	}
-	if page.Pricing != "public" || page.Total != 1 || page.Items[0].Price != 10000 {
-		t.Fatal(response.Body.String())
-	}
-	<-started
-	close(release)
-	waitContextLoad(t, f.contextMetrics)
-	response = httptest.NewRecorder()
-	f.catalog.list(response, request)
-	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
-		t.Fatal(err)
-	}
-	if page.Pricing != "personal" || page.Items[0].Price != 8000 {
-		t.Fatal(response.Body.String())
-	}
-}
-
-func TestGuestContextCacheDoesNotChangeResponse(t *testing.T) {
+func TestPublicPriceMatchesAuthenticatedResponse(t *testing.T) {
 	f := newDependencyFixture(t)
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/offers", nil)
 	before := httptest.NewRecorder()
 	f.catalog.list(before, request)
-	f.contexts.Preload("b1")
-	waitContextLoad(t, f.contextMetrics)
+	request = request.WithContext(context.WithValue(request.Context(), keyBuyer, ids.UUID("b1")))
 	after := httptest.NewRecorder()
 	f.catalog.list(after, request)
 	if before.Code != http.StatusOK || before.Body.String() != after.Body.String() {
@@ -536,8 +407,5 @@ func TestGuestContextCacheDoesNotChangeResponse(t *testing.T) {
 	}
 	if _, found := body["pricing"]; found {
 		t.Fatal("гостевой контракт получил новое поле", after.Body.String())
-	}
-	if before.Header().Get("Cache-Control") != after.Header().Get("Cache-Control") {
-		t.Fatal("изменился кэш гостя")
 	}
 }

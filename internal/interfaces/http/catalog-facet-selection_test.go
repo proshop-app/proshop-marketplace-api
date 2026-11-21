@@ -18,7 +18,6 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -31,28 +30,29 @@ func facetSelectionHandler(t *testing.T) catalogHandlers {
 			"s1": {Attributes: []string{"a1"}},
 		},
 		Categories: []taxonomy.Category{{ID: "c1", Schema: "s1"}},
-		Attributes: []taxonomy.Attribute{{
-			Code:  "a1",
-			Type:  "enum",
-			Facet: true,
-		}},
-	})
-	if err := index.Put(context.Background(), []ports.OfferDocument{{
-		ID:         "t1~p1",
-		TenantID:   "t1",
-		CategoryID: "c1",
-		Visible:    true,
-		Listed:     true,
-		Version:    1,
-		Attributes: map[string]json.RawMessage{
-			"a1": json.RawMessage(`"v1"`),
+		Attributes: []taxonomy.Attribute{
+			{
+				Code:  "a1",
+				Type:  "enum",
+				Facet: true,
+			},
 		},
-		PriceProfiles: []catalog.PriceProfile{{
-			Key:            catalog.DefaultPriceProfile,
-			Price:          money.FromKopecks(100),
-			EffectivePrice: money.FromKopecks(100),
-		}},
-	}}); err != nil {
+	})
+	if err := index.Put(context.Background(), []ports.OfferDocument{
+		{
+			ID:         "t1~p1",
+			TenantID:   "t1",
+			CategoryID: "c1",
+			Visible:    true,
+			Listed:     true,
+			Version:    1,
+			Attributes: map[string]json.RawMessage{
+				"a1": json.RawMessage(`"v1"`),
+			},
+			Price:     money.FromKopecks(100).Kopecks(),
+			BasePrice: money.FromKopecks(100).Kopecks(),
+		},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	return catalogHandlers{

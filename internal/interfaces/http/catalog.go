@@ -54,7 +54,6 @@ type offerJSON struct {
 }
 
 type offerPageJSON struct {
-	Pricing    string               `json:"pricing,omitempty"`
 	Correction *offerCorrectionJSON `json:"correction,omitempty"`
 	Facets     []facetJSON          `json:"facets"`
 	Items      []offerJSON          `json:"items"`
@@ -132,7 +131,6 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query.BuyerID = BuyerID(r.Context())
 	list, err := h.queries.Search(r.Context(), query)
 	if err != nil {
 		writeError(w, r, err)
@@ -153,12 +151,11 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := offerPageJSON{
-		Pricing: list.Pricing,
-		Facets:  facets,
-		Items:   make([]offerJSON, 0, len(list.Items)),
-		Total:   list.Total,
-		Limit:   limit,
-		Offset:  query.Offset,
+		Facets: facets,
+		Items:  make([]offerJSON, 0, len(list.Items)),
+		Total:  list.Total,
+		Limit:  limit,
+		Offset: query.Offset,
 	}
 	if list.Correction != nil {
 		body.Correction = &offerCorrectionJSON{
@@ -172,6 +169,7 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		body.Items = append(body.Items, item)
 	}
 
+	w.Header().Set("Cache-Control", publicCatalogCacheControl)
 	writeJSON(w, http.StatusOK, body)
 }
 
@@ -188,7 +186,7 @@ func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	card, err := h.queries.Offer(r.Context(), offerID, BuyerID(r.Context()))
+	card, err := h.queries.Offer(r.Context(), offerID)
 	if err != nil {
 		writeError(w, r, err)
 
@@ -200,6 +198,7 @@ func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
 	}
 	body := toOfferJSON(cards[0], true)
 	annotateDelivery(&body, r)
+	w.Header().Set("Cache-Control", publicCatalogCacheControl)
 	writeJSON(w, http.StatusOK, body)
 }
 
@@ -221,12 +220,16 @@ func parseCatalogOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 }
 
 func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
+	text, err := appcatalog.NormalizeQueryText(r.URL.Query().Get("q"))
+	if err != nil {
+		return ports.OfferQuery{}, err
+	}
 	if err := validateDeliveryContext(r); err != nil {
 		return ports.OfferQuery{}, err
 	}
 	values := r.URL.Query()
 	query := ports.OfferQuery{
-		Text:       values.Get("q"),
+		Text:       text,
 		TenantIDs:  values["tenant"],
 		GroupID:    values.Get("groupId"),
 		CategoryID: values.Get("category"),
@@ -283,8 +286,6 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 		}
 		query.Attributes[code] = filter
 	}
-	var err error
-
 	if query.Limit, err = intParam(values.Get("limit")); err != nil {
 		return query, appcatalog.ErrInvalidQuery.WithMessage("limit — целое число")
 	}

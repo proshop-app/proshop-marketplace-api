@@ -27,7 +27,8 @@ import (
 const laneSnapshotPayload = `{
 	"version":1,"tenantId":"t0","productId":%q,"revision":%d,"operation":"upsert",
 	"product":{
-		"id":%q,"name":"Товар","price":%d,
+		"id":%q,"name":"Товар",
+		"priceProfiles":[{"key":"marketplace:default","price":%d,"effectivePrice":%d}],
 		"variantsId":"v1",
 		"variants":{"groupId":"v1","position":0,
 			"axes":[{"key":"platform.a1","code":"a1","name":"Атрибут","value":%q}]},
@@ -144,6 +145,7 @@ func (s laneSnapshot) message(topic, product string) kafkago.Message {
 		s.revision,
 		product,
 		s.revision,
+		s.revision,
 		s.variant,
 		s.published,
 		s.onlyVariant,
@@ -168,7 +170,13 @@ func (s laneSnapshot) check(t *testing.T, got catalog.ProductState) {
 		t.Fatalf("состояние ревизии %d: %+v", s.revision, got)
 	}
 	if s.deleted {
+		if got.HasPrice || got.Price.Kopecks() != 0 || got.BasePrice.Kopecks() != 0 {
+			t.Fatalf("цены удалённого товара: %+v", got)
+		}
 		return
+	}
+	if !got.HasPrice || got.Price.Kopecks() != s.revision*100 || got.BasePrice.Kopecks() != s.revision*100 {
+		t.Fatalf("публичная цена ревизии %d: %+v", s.revision, got)
 	}
 	variants := got.Card.Variants
 	if got.Card.Visible != s.published || got.Card.OnlyVariant != s.onlyVariant ||

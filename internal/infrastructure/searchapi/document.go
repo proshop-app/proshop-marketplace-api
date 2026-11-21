@@ -5,7 +5,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 func toDocument(doc ports.OfferDocument) (offerDocument, error) {
@@ -42,7 +41,6 @@ func toDocument(doc ports.OfferDocument) (offerDocument, error) {
 		}
 	}
 	out := offerDocument{
-		PriceProfiles:     encodePrices(doc.PriceProfiles),
 		Rating:            doc.Rating,
 		CategoryID:        doc.CategoryID,
 		CategoryPath:      doc.CategoryPath,
@@ -131,14 +129,6 @@ func fromDocument(doc offerDocument) (ports.OfferDocument, error) {
 		CheckoutAvailable:    doc.CheckoutAvailable,
 		UpdatedAt:            doc.UpdatedAt,
 		Version:              doc.Version,
-	}
-
-	for _, profile := range doc.PriceProfiles {
-		out.PriceProfiles = append(out.PriceProfiles, catalog.PriceProfile{
-			Key:            profile.Key,
-			Price:          money.FromKopecks(profile.Price),
-			EffectivePrice: money.FromKopecks(profile.EffectivePrice),
-		})
 	}
 
 	for _, c := range doc.Categories {

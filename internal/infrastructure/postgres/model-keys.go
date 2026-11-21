@@ -30,10 +30,7 @@ const (
             AND p.card->'publication'->>'published' = 'true'
             AND jsonb_array_length(pa.delivery_settings->'regions') > 0
             AND jsonb_array_length(pa.delivery_settings->'carriers') > 0
-            AND EXISTS (
-                SELECT 1 FROM jsonb_array_elements(p.price_profiles) profile
-                WHERE profile->>'key' = 'marketplace:default'
-            )`
+            AND p.price IS NOT NULL`
 	modelKeyCounts = `WITH published AS (` + publishedModelKeys + `),
         grouped AS (
             SELECT direction, schema, source, model_key, COUNT(*) AS offers,

@@ -47,29 +47,18 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	var result any
 	var err error
 	switch {
-	case strings.HasSuffix(r.URL.Path, "/pricing/contexts"):
-		var body struct {
-			TenantIDs []ids.TenantID
-			Items     []ports.ItemRequest
-		}
-		err = json.NewDecoder(r.Body).Decode(&body)
-		if err == nil && len(body.TenantIDs) == 1 {
-			result = map[string]any{
-				"items": []any{
-					map[string]any{
-						"tenantId": body.TenantIDs[0],
-						"items": []any{
-							map[string]any{
-								"productId":         "p1",
-								"available":         true,
-								"availableQuantity": 3,
-								"price":             199000,
-								"discounts":         []any{},
-							},
-						},
-					},
+	case strings.HasSuffix(r.URL.Path, "/items/check"):
+		result = map[string]any{
+			"promoCode": nil,
+			"items": []any{
+				map[string]any{
+					"productId":         "p1",
+					"available":         true,
+					"availableQuantity": 3,
+					"price":             199000,
+					"discounts":         []any{},
 				},
-			}
+			},
 		}
 	case strings.HasSuffix(r.URL.Path, "/delivery/pickup-points"):
 		answer := s.points

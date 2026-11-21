@@ -27,12 +27,14 @@ func TestPrepareFacetSelectionPreservesDefaultsAndFilters(t *testing.T) {
 			"s1": {Attributes: []string{"a1"}},
 		},
 		Categories: []taxonomy.Category{{ID: "c1", Schema: "s1"}},
-		Attributes: []taxonomy.Attribute{{
-			Code:   "a1",
-			Type:   "enum",
-			Values: []string{"v1"},
-			Facet:  true,
-		}},
+		Attributes: []taxonomy.Attribute{
+			{
+				Code:   "a1",
+				Type:   "enum",
+				Values: []string{"v1"},
+				Facet:  true,
+			},
+		},
 	})
 	index := &fake.PromotionIndex{}
 	queries := appcatalog.NewQueries(store, index, nil, nil, nil, fake.NewClock(time.Time{}))
@@ -83,7 +85,7 @@ func TestPrepareFacetSelectionPreservesDefaultsAndFilters(t *testing.T) {
 			if !reflect.DeepEqual(got.Facets, tc.facets) || len(got.FacetFields) != tc.wantFields {
 				t.Fatalf("выбор фасетов потерян: %+v", got)
 			}
-			if got.Attributes["a1"].Type != "enum" || got.PriceContexts != nil {
+			if got.Attributes["a1"].Type != "enum" {
 				t.Fatalf("изменены нормализация фильтра или гостевая цена: %+v", got)
 			}
 		})
@@ -111,23 +113,24 @@ func TestFacetSelectionPreservesCardsPricesSortAndPagination(t *testing.T) {
 	store, index, platform := fake.NewStore(), fake.NewIndex(), fake.NewPlatform()
 	for _, tenant := range []ids.TenantID{"t1", "t2"} {
 		seedSeller(store, tenant, participant.TenantActive, true)
-		platform.SetBuyerProfile("buyer", tenant, "marketplace:buyer")
 	}
 	store.SeedTaxonomy(taxonomy.Definition{
 		Schemas: map[string]taxonomy.Schema{
 			"s1": {Attributes: []string{"a1"}},
 		},
 		Categories: []taxonomy.Category{{ID: "c1", Schema: "s1"}},
-		Attributes: []taxonomy.Attribute{{
-			Code:   "a1",
-			Type:   "enum",
-			Values: []string{"v1", "v2"},
-			Facet:  true,
-		}},
+		Attributes: []taxonomy.Attribute{
+			{
+				Code:   "a1",
+				Type:   "enum",
+				Values: []string{"v1", "v2"},
+				Facet:  true,
+			},
+		},
 	})
 	for i := 0; i < 6; i++ {
 		tenant := []string{"t1", "t2"}[i%2]
-		price, personal := money.FromKopecks(int64(100+i*10)), money.FromKopecks(int64(200-i*10))
+		price := money.FromKopecks(int64(100 + i*10))
 		doc := ports.OfferDocument{
 			ID:         fmt.Sprintf("%s~p%d", tenant, i),
 			TenantID:   tenant,
@@ -141,10 +144,8 @@ func TestFacetSelectionPreservesCardsPricesSortAndPagination(t *testing.T) {
 			Version:    1,
 			Rating:     &catalog.Rating{Value: 4.5, Count: int64(i + 1)},
 			Attributes: map[string]json.RawMessage{"a1": json.RawMessage(`"v1"`)},
-			PriceProfiles: []catalog.PriceProfile{
-				{Key: catalog.DefaultPriceProfile, Price: price, EffectivePrice: price},
-				{Key: "marketplace:buyer", Price: personal, EffectivePrice: personal},
-			},
+			Price:      price.Kopecks(),
+			BasePrice:  price.Kopecks(),
 		}
 		if err := index.Put(context.Background(), []ports.OfferDocument{doc}); err != nil {
 			t.Fatal(err)
@@ -170,10 +171,10 @@ func TestFacetSelectionPreservesCardsPricesSortAndPagination(t *testing.T) {
 			ports.SortRating,
 		} {
 			query := ports.OfferQuery{
-				BuyerID: buyer,
-				Sort:    order,
-				Limit:   2,
-				Offset:  1,
+
+				Sort:   order,
+				Limit:  2,
+				Offset: 1,
 				Attributes: map[string]ports.AttributeFilter{
 					"a1": {Values: []string{"v1"}},
 				},
@@ -213,12 +214,14 @@ func TestFacetSelectionAlwaysValidatesTaxonomy(t *testing.T) {
 			"s1": {Attributes: []string{"a1"}},
 		},
 		Categories: []taxonomy.Category{{ID: "c1", Schema: "s1"}},
-		Attributes: []taxonomy.Attribute{{
-			Code:   "a1",
-			Type:   "enum",
-			Values: []string{"v1"},
-			Facet:  true,
-		}},
+		Attributes: []taxonomy.Attribute{
+			{
+				Code:   "a1",
+				Type:   "enum",
+				Values: []string{"v1"},
+				Facet:  true,
+			},
+		},
 	})
 	queries := appcatalog.NewQueries(store, fake.NewIndex(), nil, nil, nil, fake.NewClock(time.Time{}))
 	none := []ports.FacetCode{}

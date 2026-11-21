@@ -70,7 +70,6 @@ type OfferDocument struct {
 	ModelKey             string
 	ModelKeySource       string
 	VariantKey           string
-	PriceProfiles        []catalog.PriceProfile
 	CategoryID           string
 	CategoryPath         []string
 	Attributes           map[string]json.RawMessage
@@ -124,14 +123,12 @@ const MaxSearchAttributes = 256
 // OfferQuery — поиск по выдаче каталога.
 type OfferQuery struct {
 	// Exact запрещает исправления опечаток, раскладки и транслита, сохраняя остальные правила поиска.
-	Exact         bool
-	TrackQuery    bool
-	GroupID       string
-	BuyerID       ids.UUID
-	PriceContexts map[ids.TenantID]string
-	InStockSet    bool
-	Attributes    map[string]AttributeFilter
-	FacetFields   []taxonomy.Attribute
+	Exact       bool
+	TrackQuery  bool
+	GroupID     string
+	InStockSet  bool
+	Attributes  map[string]AttributeFilter
+	FacetFields []taxonomy.Attribute
 	// nil сохраняет все фасеты; пустой список отключает их, attributes включает поля таксономии.
 	Facets     *[]FacetCode
 	Text       string

@@ -22,7 +22,7 @@ type buyerFeatureHandlers struct {
 }
 
 type alertsJSON struct {
-	PriceDrops *int `json:"priceDrops"`
+	PriceDrops int `json:"priceDrops"`
 }
 
 type profileJSON struct {

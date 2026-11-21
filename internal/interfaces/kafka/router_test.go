@@ -31,7 +31,7 @@ type recorder struct {
 
 const productBody = `{"version":1,"tenantId":"t1","productId":"p1","revision":7,"operation":"upsert","product":{
 	"id":"p1","name":"Товар","description":"Описание","image":null,"url":"/p1","sku":"S1",
-	"price":1999.9,"promoPrice":1499.995,"availableQuantity":3,"salesCount":9007199254740993,
+	"availableQuantity":3,"salesCount":9007199254740993,
 	"averageRating":4.7,"ratingsCount":12,
 	"categories":[{"id":"c1","name":"","title":"Категория","url":"/c1"}],"tags":["t-1"],
 	"marketplace":{"categoryId":"c1","attributes":{"a1":"v1","a2":1.5,"a3":false},"published":true},
@@ -93,7 +93,7 @@ func TestProductProjected(t *testing.T) {
 	if got.EventID != "ev" || s.TenantID != "t1" || s.ProductID != "p1" || s.Revision != 7 || s.Deleted {
 		t.Fatalf("конверт: %+v", got)
 	}
-	if s.Price.Kopecks() != 199990 || s.PromoPrice == nil || s.PromoPrice.Kopecks() != 150000 || s.Available != 3 {
+	if s.HasPrice || s.Available != 3 {
 		t.Fatalf("цены в копейках и остаток: %+v", s)
 	}
 	if s.Card.Name != "Товар" || s.Card.Categories[0].Name != "Категория" || !s.Card.Visible ||
@@ -144,21 +144,16 @@ func TestProductProjectedRejects(t *testing.T) {
 		"цена с экспонентой": {
 			message(`["t1","p1"]`, `{
 				"version": 1, "tenantId": "t1", "productId": "p1", "revision": 1, "operation": "upsert",
-				"product": {"id": "p1", "name": "x", "price": 1e3}
-			}`),
-			kafka.ErrInvalidPayload,
-		},
-		"без цены": {
-			message(`["t1","p1"]`, `{
-				"version": 1, "tenantId": "t1", "productId": "p1", "revision": 1, "operation": "upsert",
-				"product": {"id": "p1", "name": "x"}
+				"product": {"id": "p1", "priceProfiles": [
+                    {"key":"marketplace:default","price":1e3,"effectivePrice":1}
+                ]}
 			}`),
 			kafka.ErrInvalidPayload,
 		},
 		"дробный остаток": {
 			message(`["t1","p1"]`, `{
 				"version": 1, "tenantId": "t1", "productId": "p1", "revision": 1, "operation": "upsert",
-				"product": {"id": "p1", "name": "x", "price": 1, "availableQuantity": 1.5}
+				"product": {"id": "p1", "name": "x", "availableQuantity": 1.5}
 			}`),
 			kafka.ErrInvalidPayload,
 		},
@@ -441,5 +436,20 @@ func TestProductAssets(t *testing.T) {
 				t.Fatalf("галерея: %v, ожидалась %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestProjectionIgnoresRootPrices(t *testing.T) {
+	for _, fields := range []string{"", `"price":"unused","promoPrice":{},`} {
+		profiles := `"priceProfiles":[{"key":"marketplace:default","price":12,"effectivePrice":10}],`
+		body := strings.Replace(productBody, `"availableQuantity":`, fields+profiles+`"availableQuantity":`, 1)
+		rec, err := handle(t, kafka.TopicProductProjected, message(`["t1","p1"]`, body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot := rec.products[0].Snapshot
+		if !snapshot.HasPrice || snapshot.Price.Kopecks() != 1000 || snapshot.BasePrice.Kopecks() != 1200 {
+			t.Fatal("цена должна браться только из публичного профиля")
+		}
 	}
 }

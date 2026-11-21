@@ -107,7 +107,7 @@ func TestRegionReadsCacheOnceOnMiss(t *testing.T) {
 	client.AddHook(hook)
 	source := &fake.GeoIP{Region: &buyer.Region{Code: "RU-AD"}}
 	cache := redis.NewGeoIP(client, source, "test:", "01234567890123456789012345678901")
-	service := appbuyer.NewFeatures(fake.NewStore(), cache, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
+	service := appbuyer.NewFeatures(fake.NewStore(), cache, fake.NewLimiter(), &fake.PickupLookup{})
 	region, err := service.Region(context.Background(), "", "192.0.2.1")
 	if err != nil || region.Source != appbuyer.RegionIP || hook.reads != 1 || source.Calls != 1 {
 		t.Fatal(region, err, hook.reads, source.Calls)
@@ -127,7 +127,7 @@ func TestGeoIPCachedRegionDuringProviderFailure(t *testing.T) {
 	}
 	hook.values["test:geoip:down"] = "1"
 	source.Err = errors.New("провайдер недоступен")
-	service := appbuyer.NewFeatures(fake.NewStore(), cache, fake.NewPlatform(), fake.NewLimiter(), &fake.PickupLookup{})
+	service := appbuyer.NewFeatures(fake.NewStore(), cache, fake.NewLimiter(), &fake.PickupLookup{})
 	region, err := service.Region(ctx, "", "192.0.2.2")
 	if err != nil || region.Source != appbuyer.RegionIP || region.Code == nil || *region.Code != "RU-AD" ||
 		source.Calls != 1 {

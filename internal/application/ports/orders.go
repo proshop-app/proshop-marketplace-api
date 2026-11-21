@@ -60,7 +60,6 @@ type OrderItem struct {
 // CreateOrderRequest — сохранённая команда магазина с ключом группы.
 type CreateOrderRequest struct {
 	PromoCode          string           `json:"promoCode,omitempty"`
-	BuyerID            ids.UUID         `json:"buyerId,omitempty"`
 	ExternalCheckoutID string           `json:"externalCheckoutId"`
 	GroupID            ids.TenantID     `json:"groupId"`
 	Items              []OrderItem      `json:"items"`

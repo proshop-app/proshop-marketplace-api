@@ -14,6 +14,11 @@ import (
 )
 
 const (
+	// RecommendationContextHome выбирает рекомендации для главной страницы.
+	RecommendationContextHome = "home"
+	// RecommendationContextOffer выбирает похожие предложения для карточки.
+	RecommendationContextOffer = "offer"
+
 	// MaxViewedOffers ограничивает число переданных просмотров до удаления повторов.
 	MaxViewedOffers = 20
 
@@ -70,7 +75,7 @@ func (q *Queries) Reviews(ctx context.Context, id ids.OfferID, limit, offset int
 // Recommend читает кандидатов пачкой; пустой персональный отбор заменяет популярным.
 func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) (Recommendations, error) {
 	result := Recommendations{Items: []OfferCard{}, Reason: "popular"}
-	if request.Context != "home" && request.Context != "offer" ||
+	if request.Context != RecommendationContextHome && request.Context != RecommendationContextOffer ||
 		(request.Region != "" && !regions.ValidRU(request.Region)) {
 		return result, ErrInvalidQuery.WithMessage("неизвестный контекст или регион")
 	}
@@ -83,16 +88,11 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 	if err != nil {
 		return result, err
 	}
-	contexts, err := q.priceContexts(ctx, request.BuyerID, "")
-	if err != nil {
-		return result, err
-	}
 	filter := ports.RecommendationFilter{
-		Limit:         query.Limit,
-		Region:        request.Region,
-		PriceContexts: contexts,
+		Limit:  query.Limit,
+		Region: request.Region,
 	}
-	if request.Context == "offer" {
+	if request.Context == RecommendationContextOffer {
 		var state ports.OfferState
 		err = q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var readErr error
@@ -106,16 +106,7 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 		if !ok || !doc.Visible {
 			return result, catalog.ErrOfferNotFound
 		}
-		key := priceProfileKey(contexts, request.OfferID.Tenant)
-		if request.BuyerID != "" && key == "" {
-			return result, nil
-		}
-		profile, ok := catalog.SelectPrice(doc.PriceProfiles, key)
-		if !ok {
-			return result, catalog.ErrOfferNotFound
-		}
-		price := profile.EffectivePrice.Kopecks()
-		low, high := recommendationPriceBounds(price)
+		low, high := recommendationPriceBounds(doc.Price)
 		filter.PriceMin, filter.PriceMax = &low, &high
 		filter.Categories = []string{doc.CategoryID}
 		filter.Excluded = []ids.OfferID{request.OfferID}
@@ -133,7 +124,7 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 	if err != nil {
 		return result, err
 	}
-	appendRecommendations(&result, states, contexts, filter.OtherTenant)
+	appendRecommendations(&result, states, filter.OtherTenant)
 	if result.Reason == "personal" && len(result.Items) == 0 {
 		filter.Categories = nil
 		result.Reason = "popular"
@@ -141,7 +132,7 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 		if err != nil {
 			return result, err
 		}
-		appendRecommendations(&result, states, contexts, "")
+		appendRecommendations(&result, states, "")
 	}
 	return result, nil
 }
@@ -149,7 +140,6 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 func appendRecommendations(
 	result *Recommendations,
 	states []ports.OfferState,
-	contexts map[ids.TenantID]string,
 	otherTenant ids.TenantID,
 ) {
 	for _, state := range states {
@@ -157,12 +147,6 @@ func appendRecommendations(
 		if !ok || !doc.Visible {
 			continue
 		}
-		key := priceProfileKey(contexts, state.Product.State().TenantID)
-		profile, ok := catalog.SelectPrice(doc.PriceProfiles, key)
-		if !ok {
-			continue
-		}
-		doc.Price, doc.BasePrice = profile.EffectivePrice.Kopecks(), profile.Price.Kopecks()
 		result.Items = append(result.Items, OfferCard{Offer: doc})
 	}
 	if otherTenant != "" {
@@ -173,13 +157,13 @@ func appendRecommendations(
 	}
 }
 
-// recommendCandidates кэширует только гостевой отбор; персональные цены никогда не разделяются.
+// recommendCandidates разделяет общий отбор; домашние интересы покупателей не кэшируются.
 func (q *Queries) recommendCandidates(
 	ctx context.Context,
 	request RecommendationRequest,
 	filter ports.RecommendationFilter,
 ) ([]ports.OfferState, error) {
-	if request.BuyerID != "" {
+	if request.Context == RecommendationContextHome && request.BuyerID != "" {
 		return q.recommendations.Recommend(ctx, filter)
 	}
 	if err := ctx.Err(); err != nil {
@@ -257,13 +241,6 @@ func (q *Queries) loadRecommendationCandidates(
 		delete(q.recommendationLoads, key)
 	}
 	close(pending.done)
-}
-
-func priceProfileKey(contexts map[ids.TenantID]string, tenant ids.TenantID) string {
-	if contexts == nil {
-		return catalog.DefaultPriceProfile
-	}
-	return contexts[tenant]
 }
 
 // recommendationPriceBounds — ceil(0.6*p), floor(1.4*p) без переполнения.

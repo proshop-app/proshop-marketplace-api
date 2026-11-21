@@ -257,13 +257,8 @@ func TestUnchangedPublicationVersionRemainsValidForReaders(t *testing.T) {
 			Name:         "Товар",
 			CategoryID:   "c2",
 			CategoryPath: []string{"c2"},
-			PriceProfiles: []catalog.PriceProfile{
-				{
-					Key:            catalog.DefaultPriceProfile,
-					Price:          money.FromKopecks(100),
-					EffectivePrice: money.FromKopecks(100),
-				},
-			},
+			Price:        money.FromKopecks(100).Kopecks(),
+			BasePrice:    money.FromKopecks(100).Kopecks(),
 		},
 	}); err != nil {
 		t.Fatal(err)
