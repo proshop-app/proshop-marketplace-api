@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -271,20 +270,20 @@ func TestBuyerPublicShopCacheAndHiddenSubscriptions(t *testing.T) {
 	}
 }
 
-func TestBuyerRegionAnonymousLimit(t *testing.T) {
+func TestCitySuggestionsLimit(t *testing.T) {
 	e := newEnv(t)
 	e.limiter.RetryAfter = 17 * time.Second
 	for i := 0; i < 30; i++ {
-		result := e.session(t, http.MethodGet, "/api/v1/region", "", "")
+		result := e.session(t, http.MethodGet, "/api/v1/delivery/cities?value=test", "", "")
 		if result.status != http.StatusOK {
 			t.Fatal(result)
 		}
 	}
-	result := e.session(t, http.MethodGet, "/api/v1/region", "", "")
-	if result.body["error"].(map[string]any)["message"] != "превышен лимит подсказок региона, повторите через 17s" {
+	result := e.session(t, http.MethodGet, "/api/v1/delivery/cities?value=test", "", "")
+	if result.status != http.StatusTooManyRequests || result.header.Get("Retry-After") != "17" {
 		t.Fatal(result)
 	}
-	if result.status != http.StatusTooManyRequests || result.header.Get("Retry-After") != "17" {
+	if result.body["error"].(map[string]any)["message"] != "превышен лимит подсказок региона, повторите через 17s" {
 		t.Fatal(result)
 	}
 }
@@ -321,28 +320,29 @@ func TestBuyerFavoritesPaginationHTTP(t *testing.T) {
 	}
 }
 
-func TestBuyerRegionIPAndAuthenticatedLimit(t *testing.T) {
+func TestBuyerRegionUsesLocalCityWithoutLimiter(t *testing.T) {
 	e := newEnv(t)
-	e.geo.Region = &buyer.Region{Code: "RU-AD"}
-	cookie := e.login(t)
-	for i := 0; i < 30; i++ {
-		result := e.session(t, http.MethodGet, "/api/v1/region", "", "")
-		if result.status != http.StatusOK || result.body["source"] != "ip" {
-			t.Fatal(result)
+	e.citySource.Detection = ports.DetectedCity{
+		City:       "Город",
+		Country:    "RU",
+		RegionCode: "RU-AD",
+	}
+	city := e.session(t, http.MethodGet, "/api/v1/city", "", "")
+	if city.status != http.StatusOK || city.body["regionCode"] != "RU-AD" {
+		t.Fatal(city)
+	}
+	for _, cookie := range []string{"", e.login(t)} {
+		for i := 0; i < 31; i++ {
+			result := e.session(t, http.MethodGet, "/api/v1/region", "", cookie)
+			if result.status != http.StatusOK || result.body["source"] != "ip" ||
+				result.body["code"] != city.body["regionCode"] || result.body["name"] != "Республика Адыгея" {
+				t.Fatal(result)
+			}
+		}
+		if calls := e.limiter.Calls(); calls != 0 {
+			t.Fatalf("вызовов лимитера: %d, ожидалось 0", calls)
 		}
 	}
-
-	for i := 0; i < 31; i++ {
-		result := e.session(t, http.MethodGet, "/api/v1/region", "", cookie)
-		if result.status != http.StatusOK || result.body["source"] != "ip" {
-			t.Fatal(result)
-		}
-	}
-	result := e.session(t, http.MethodGet, "/api/v1/region", "", "")
-	if result.status != http.StatusTooManyRequests {
-		t.Fatal(result)
-	}
-
 }
 
 func TestBuyerProfilePartialAndNull(t *testing.T) {

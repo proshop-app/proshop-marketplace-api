@@ -145,7 +145,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BuyerRegionResult"
-        "429": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
   /api/v1/buyer/favorites:

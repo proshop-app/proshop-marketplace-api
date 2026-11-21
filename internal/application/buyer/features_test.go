@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	app "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
@@ -45,7 +44,7 @@ func seedFeatureOffer(store *fake.Store, price int64, visible bool) {
 func TestSavedPriceAndUnavailable(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	service := app.NewFeatures(store, nil, fake.NewLimiter(), &fake.PickupLookup{})
+	service := app.NewFeatures(store, nil, &fake.PickupLookup{})
 	seedFeatureOffer(store, 100, true)
 	offer := ids.OfferID{Tenant: "t1", Product: "p1"}
 	for _, kind := range []ports.SavedKind{ports.Favorites, ports.PriceWatches} {
@@ -91,7 +90,7 @@ func TestSavedPriceAndUnavailable(t *testing.T) {
 func TestFeatureLimitAndRollback(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	service := app.NewFeatures(store, nil, fake.NewLimiter(), &fake.PickupLookup{})
+	service := app.NewFeatures(store, nil, &fake.PickupLookup{})
 	seedFeatureOffer(store, 100, true)
 	err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		for i := 0; i < buyer.FavoritesLimit; i++ {
@@ -129,15 +128,22 @@ func TestFeatureLimitAndRollback(t *testing.T) {
 func TestRegionPriority(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	geo := &fake.GeoIP{Region: &buyer.Region{Code: "RU-AD"}}
-	service := app.NewFeatures(store, geo, fake.NewLimiter(), &fake.PickupLookup{})
-	result, err := service.Region(ctx, featureBuyer, "192.0.2.1")
-	if err != nil || result.Source != "ip" {
+	detector := &fake.Cities{Detection: ports.DetectedCity{
+		City:       "Город",
+		Country:    "RU",
+		RegionCode: "RU-AD",
+	}}
+	service := app.NewFeatures(store, detector, &fake.PickupLookup{})
+	const ip = "192.0.2.1"
+
+	result, err := service.Region(ctx, featureBuyer, ip)
+	if err != nil || result.Source != "ip" || result.Code == nil || *result.Code != "RU-AD" ||
+		result.Name == nil || *result.Name != "Республика Адыгея" || len(detector.IPs) != 1 || detector.IPs[0] != ip {
 		t.Fatalf("IP: %+v %v", result, err)
 	}
 	err = store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		p := buyer.RestoreProfile(buyer.ProfileState{})
-		_, err := p.SelectPickup(buyer.Pickup{Provider: "cdek", Code: "p1", RegionCode: "RU-AD"})
+		_, err := p.SelectPickup(buyer.Pickup{Provider: "cdek", Code: "p1", RegionCode: "RU-KR"})
 		if err != nil {
 			return err
 		}
@@ -146,8 +152,9 @@ func TestRegionPriority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err = service.Region(ctx, featureBuyer, "192.0.2.1")
-	if err != nil || result.Source != "pickup" || geo.Calls != 1 {
+	result, err = service.Region(ctx, featureBuyer, ip)
+	if err != nil || result.Source != "pickup" || result.Code == nil || *result.Code != "RU-KR" ||
+		len(detector.IPs) != 1 {
 		t.Fatal(result, err)
 	}
 	err = store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -165,21 +172,17 @@ func TestRegionPriority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err = service.Region(ctx, featureBuyer, "192.0.2.1")
-	if err != nil || result.Source != "profile" || *result.Code != "RU-AL" || geo.Calls != 1 {
+	result, err = service.Region(ctx, featureBuyer, ip)
+	if err != nil || result.Source != "profile" || result.Code == nil || *result.Code != "RU-AL" ||
+		len(detector.IPs) != 1 {
 		t.Fatal(result, err)
-	}
-	serviceWithoutGeo := app.NewFeatures(store, nil, fake.NewLimiter(), &fake.PickupLookup{})
-	none, err := serviceWithoutGeo.Region(ctx, "", "192.0.2.1")
-	if err != nil || none.Source != "none" || none.Code != nil {
-		t.Fatal(none, err)
 	}
 }
 
 func TestSubscriptionsAreIdempotentAndCounted(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	service := app.NewFeatures(store, nil, fake.NewLimiter(), &fake.PickupLookup{})
+	service := app.NewFeatures(store, nil, &fake.PickupLookup{})
 	err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		return tx.StoreCards().Save(ctx, ports.StoreRecord{
 			PagePublic: true,
@@ -221,7 +224,7 @@ func TestSubscriptionsAreIdempotentAndCounted(t *testing.T) {
 func TestWatchTargetChangeAndFavoritesPagination(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	service := app.NewFeatures(store, nil, fake.NewLimiter(), &fake.PickupLookup{})
+	service := app.NewFeatures(store, nil, &fake.PickupLookup{})
 	seedFeatureOffer(store, 100, true)
 	offer := ids.OfferID{Tenant: "t1", Product: "p1"}
 	if err := service.PutSaved(ctx, featureBuyer, ports.PriceWatches, offer, nil); err != nil {
@@ -266,7 +269,7 @@ func TestWatchTargetChangeAndFavoritesPagination(t *testing.T) {
 func TestWatchAndSubscriptionLimits(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	service := app.NewFeatures(store, nil, fake.NewLimiter(), &fake.PickupLookup{})
+	service := app.NewFeatures(store, nil, &fake.PickupLookup{})
 	if err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		for i := 0; i < buyer.PriceWatchesLimit; i++ {
 			if err := tx.BuyerFeatures().PutSaved(ctx, featureBuyer, ports.PriceWatches, ports.SavedOffer{
@@ -301,56 +304,26 @@ func TestWatchAndSubscriptionLimits(t *testing.T) {
 	}
 }
 
-func TestRegionProviderLimit(t *testing.T) {
-	ctx := context.Background()
-	geo := &fake.GeoIP{Region: &buyer.Region{Code: "RU-AD"}, CacheHit: true}
-	limiter := fake.NewLimiter()
-	service := app.NewFeatures(fake.NewStore(), geo, limiter, &fake.PickupLookup{})
-	for i := 0; i < 40; i++ {
-		if result, err := service.Region(ctx, "", "192.0.2.1"); err != nil || result.Source != app.RegionIP {
-			t.Fatal(result, err)
-		}
-	}
-	if geo.Calls != 0 {
-		t.Fatal("попадание в кэш вызвало провайдера")
-	}
-	geo.CacheHit = false
-	for i := 0; i < 30; i++ {
-		if _, err := service.Region(ctx, "", "192.0.2.1"); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := service.Region(ctx, "", "192.0.2.2"); !errors.Is(err, buyer.ErrRegionLimit) {
-		t.Fatal(err)
-	}
-	if geo.Calls != 30 {
-		t.Fatal(geo.Calls)
-	}
-	if _, err := service.Region(ctx, featureBuyer, "192.0.2.2"); err != nil {
-		t.Fatal(err)
-	}
-	limiter.Err = errors.New("лимитер недоступен")
-	if result, err := service.Region(ctx, "", "192.0.2.2"); err != nil || result.Source != app.RegionIP {
-		t.Fatal(result, err)
-	}
-	if geo.Calls != 32 {
-		t.Fatal(geo.Calls)
-	}
-}
-
-func TestRegionLimitRetryHint(t *testing.T) {
-	limiter := fake.NewLimiter()
-	geo := &fake.GeoIP{}
-	service := app.NewFeatures(fake.NewStore(), geo, limiter, &fake.PickupLookup{})
-	ctx := context.Background()
-	for i := 0; i < 30; i++ {
-		if _, err := service.Region(ctx, "", "192.0.2.1"); err != nil {
-			t.Fatal(err)
-		}
-	}
-	_, err := service.Region(ctx, "", "192.0.2.1")
-	var limited *app.RegionLimitError
-	if !errors.As(err, &limited) || limited.RetryAfter <= 0 || limited.RetryAfter > time.Minute {
-		t.Fatal(err)
+func TestRegionWithoutLocalHint(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		code string
+		err  error
+	}{
+		{name: "база недоступна", err: ports.ErrCityUnavailable},
+		{name: "город не определён"},
+		{name: "регион неизвестен", code: "RU-UNKNOWN"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			detector := &fake.Cities{
+				Detection: ports.DetectedCity{RegionCode: tc.code},
+				Error:     tc.err,
+			}
+			service := app.NewFeatures(nil, detector, nil)
+			result, err := service.Region(context.Background(), "", "192.0.2.1")
+			if err != nil || result != (app.RegionView{Source: "none"}) || len(detector.IPs) != 1 {
+				t.Fatal(result, detector.IPs, err)
+			}
+		})
 	}
 }

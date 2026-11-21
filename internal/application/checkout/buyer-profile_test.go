@@ -27,7 +27,7 @@ func TestPickupAndProfileCommitTogether(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.store.FailCommit = nil
-	profiles := appbuyer.NewFeatures(e.store, nil, fake.NewLimiter(), &fake.PickupLookup{})
+	profiles := appbuyer.NewFeatures(e.store, nil, &fake.PickupLookup{})
 	profile, err := profiles.Profile(ctx, buyerID)
 	if err != nil || profile.PickupPoint != nil {
 		t.Fatal(profile, err)

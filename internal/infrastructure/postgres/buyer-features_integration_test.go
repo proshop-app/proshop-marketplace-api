@@ -275,7 +275,7 @@ func TestSubscriptionsIncludePublicPageWithoutReadyCard(t *testing.T) {
 		}
 	}
 	save()
-	service := appbuyer.NewFeatures(uow, nil, fake.NewLimiter(), &fake.PickupLookup{})
+	service := appbuyer.NewFeatures(uow, nil, &fake.PickupLookup{})
 	if err := service.Subscribe(ctx, buyerA, "t1", ports.Subscribed); err != nil {
 		t.Fatal(err)
 	}
