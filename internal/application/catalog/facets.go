@@ -15,7 +15,12 @@ import (
 // FacetCoveragePercent — каждый пятый результат: убирает редкие поля, сохраняя полезные в смешанной выдаче.
 const FacetCoveragePercent = 20
 
-func visibleFacets(facets []ports.Facet, total int, query ports.OfferQuery) []ports.Facet {
+func displayFacets(
+	facets []ports.Facet,
+	total int,
+	query ports.OfferQuery,
+	display facetDisplay,
+) []ports.Facet {
 	// При total=0 снятие собственного фильтра ещё может вернуть варианты.
 	out := []ports.Facet{}
 	for _, f := range facets {
@@ -27,7 +32,7 @@ func visibleFacets(facets []ports.Facet, total int, query ports.OfferQuery) []po
 			continue
 		}
 		f = orderFacet(f, query.FacetFields)
-		f = facetValuesMeta(f, query.FacetFields)
+		f = displayFacetValues(f, query.FacetFields, display)
 		if visibleAttributeFacet(f, total, query) {
 			out = append(out, f)
 		}
@@ -143,20 +148,37 @@ func orderFacet(facet ports.Facet, fields []taxonomy.Attribute) ports.Facet {
 	return facet
 }
 
-// Образцы значений берутся из снимка таксономии, по которому построен фасет.
-func facetValuesMeta(facet ports.Facet, fields []taxonomy.Attribute) ports.Facet {
+// Представление значений берётся из того же снимка, по которому построен фасет.
+func displayFacetValues(facet ports.Facet, fields []taxonomy.Attribute, display facetDisplay) ports.Facet {
 	for _, field := range fields {
-		if facet.Code != "attr."+field.Code || len(field.ValuesMeta) == 0 {
+		if facet.Code != "attr."+field.Code {
 			continue
 		}
-		values := make([]ports.FacetBucket, len(facet.Values))
-		for i, bucket := range facet.Values {
-			if meta, ok := field.ValuesMeta[bucket.Value]; ok {
-				bucket.Meta = &meta
-			}
-			values[i] = bucket
+		if field.Name != "" {
+			facet.Name = field.BuyerName()
 		}
-		facet.Values = values
+		if len(field.ValuesMeta) == 0 && !field.DictionarySelection {
+			break
+		}
+		values := append([]ports.FacetBucket(nil), facet.Values...)
+		for i := range values {
+			values[i].Meta = display.meta(field, values[i].Value).DisplayMeta()
+		}
+		if field.DictionarySelection {
+			sortAttributeValues(
+				values,
+				func(bucket ports.FacetBucket) string { return bucket.Value },
+				func(bucket ports.FacetBucket) *int {
+					if bucket.Meta == nil {
+						return nil
+					}
+					return bucket.Meta.Order
+				},
+			)
+		}
+		if len(values) > 0 {
+			facet.Values = values
+		}
 		break
 	}
 	return facet

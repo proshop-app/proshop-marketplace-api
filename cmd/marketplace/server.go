@@ -49,7 +49,11 @@ import (
 )
 
 // referenceStatsInterval — как часто обновлять метрики ревизии и очереди кандидатов реестра.
-const referenceStatsInterval = time.Minute
+const (
+	referenceStatsInterval    = time.Minute
+	taxonomyDisplayInterval   = 5 * time.Second
+	taxonomySelectionInterval = 15 * time.Second
+)
 
 // services — сценарии приложения процесса.
 type services struct {
@@ -133,6 +137,9 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return err
 	}
 
+	if err := s.app.queries.RefreshTaxonomyDisplay(ctx); err != nil {
+		return fmt.Errorf("снимок отображения таксономии: %w", err)
+	}
 	return s.run(ctx)
 }
 
@@ -466,6 +473,8 @@ func (s *server) jobs() []func(context.Context) error {
 
 	runners := []func(context.Context) error{
 		s.cityDetector.Run,
+		s.refreshTaxonomyDisplay,
+		s.refreshTaxonomySelection,
 		func(ctx context.Context) error {
 			return s.app.moderationMetrics.Run(ctx, s.app.moderation, cfg.Moderation.MetricsInterval, s.logger)
 		},

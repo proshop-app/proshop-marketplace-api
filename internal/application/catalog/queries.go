@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 
@@ -34,8 +35,9 @@ var ErrInvalidQuery = errs.New(errs.Invalid, "catalog.invalid_query", "неко�
 
 // OfferCard — проверенное предложение каталога.
 type OfferCard struct {
-	SellersCount *int
-	Offer        ports.OfferDocument
+	AttributeDetails map[string]AttributeDisplay
+	SellersCount     *int
+	Offer            ports.OfferDocument
 }
 
 // OfferList — страница выдачи и фасеты.
@@ -48,6 +50,8 @@ type OfferList struct {
 
 // Queries — чтение выдачи и карточек.
 type Queries struct {
+	display             atomic.Pointer[taxonomyDisplay]
+	displayMu           sync.Mutex
 	clock               ports.Clock
 	recommendationLoads map[string]*recommendationLoad
 	recommendationMu    sync.Mutex
@@ -92,7 +96,7 @@ func NewQueries(
 
 // Search — страница выдачи каталога. Пустые лимит и порядок берутся по умолчанию.
 func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList, error) {
-	normalized, err := q.PrepareQuery(ctx, query)
+	normalized, presentation, err := q.prepareQuery(ctx, query)
 	if err != nil {
 		return OfferList{}, err
 	}
@@ -102,7 +106,7 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 	}
 	list := OfferList{
 		Correction: page.Correction,
-		Facets:     visibleFacets(page.Facets, page.Total, normalized),
+		Facets:     displayFacets(page.Facets, page.Total, normalized, presentation),
 		Total:      page.Total,
 		Items:      make([]OfferCard, 0, len(page.Items)),
 	}
@@ -129,7 +133,8 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID) (OfferCard, er
 	}
 
 	return OfferCard{
-		Offer: doc,
+		Offer:            doc,
+		AttributeDetails: q.display.Load().attributes(doc),
 	}, nil
 }
 
@@ -214,11 +219,17 @@ func (q *Queries) Publication(ctx context.Context, id ids.OfferID) (PublicationV
 
 // PrepareQuery сохраняет одинаковые фильтры для органики и рекламы.
 func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (ports.OfferQuery, error) {
+	normalized, _, err := q.prepareQuery(ctx, query)
+	return normalized, err
+}
+
+func (q *Queries) prepareQuery(ctx context.Context, query ports.OfferQuery) (ports.OfferQuery, facetDisplay, error) {
 	normalized, err := normalize(query)
 	if err != nil {
-		return ports.OfferQuery{}, err
+		return ports.OfferQuery{}, facetDisplay{}, err
 	}
 
+	var presentation facetDisplay
 	if err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		d, err := tx.Taxonomy().Current(ctx)
 		if err != nil {
@@ -232,9 +243,16 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 			}
 			nodes = []taxonomy.Category{category.Category}
 		}
-		fields, coverage := scopeFields(d, nodes, normalized.CategoryID != "")
+		view := q.displayFor(d)
+		fields, coverage, sources := scopeFields(
+			view,
+			nodes,
+			normalized.CategoryID != "",
+			normalized.WantsFacet(ports.FacetAttributes),
+		)
+		presentation = facetDisplay{taxonomy: view, sources: sources}
 		if normalized.CategoryID == "" {
-			fields = d.Fields()
+			fields = view.fields
 		}
 		if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
 			return err
@@ -250,7 +268,7 @@ func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (por
 		}
 		return nil
 	}); err != nil {
-		return ports.OfferQuery{}, err
+		return ports.OfferQuery{}, facetDisplay{}, err
 	}
-	return normalized, nil
+	return normalized, presentation, nil
 }

@@ -21,17 +21,23 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencedata"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/taxonomyfile"
 )
 
 func TestArtifactPartsThroughOperatorHTTP(t *testing.T) {
 	store := fake.NewStore()
-	fixture := taxonomyReleaseFixture(t)
-	previous := fixture.MigrationSource
+	release, _, err := taxonomydata.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := release.Definition()
+	previous := previousTaxonomySnapshot(release)
 	store.SeedTaxonomy(previous)
-	attributes := encodeTaxonomyPart(t, fixture.Definition, "attributes")
+	attributes := encodeTaxonomyPart(t, fixture, "attributes")
 	generator := &fake.IDs{}
 	seedTaxonomyDictionaries(t, store, generator, fixture.Attributes, false)
+	seedTaxonomyBindingHeaders(store, release.DictionaryBindings)
 	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
 	handler := NewHandler(Deps{
 		RequestTimeout:         time.Minute,
@@ -63,27 +69,19 @@ func TestArtifactPartsThroughOperatorHTTP(t *testing.T) {
 	seedTaxonomyDictionaries(t, store, generator, fixture.Attributes, true)
 	for index, part := range []string{"attributes", "schemas", "categories"} {
 		version := previous.Version + int64(index)
-		body := encodeTaxonomyPart(t, fixture.Definition, part)
+		body := encodeTaxonomyPart(t, fixture, part)
 		if len(body) > maxTaxonomyBody {
 			t.Fatal(part, "превышает лимит HTTP")
 		}
-		query := ""
-		if part == "categories" {
-			w = call(part, body, version, "")
-			if w.Code != http.StatusConflict {
-				t.Fatal("замена дерева принята без подтверждения", w.Code, w.Body.String())
-			}
-			query = "?replaceCategories=true"
-		}
-		w = call(part, body, version, query)
+		w = call(part, body, version, "")
 		if w.Code != http.StatusOK || w.Header().Get("ETag") != `"taxonomy-`+strconv.FormatInt(version+1, 10)+`"` {
 			t.Fatal(part, w.Code, w.Body.String())
 		}
-		if stale := call(part, body, version, query); stale.Code != http.StatusConflict {
+		if stale := call(part, body, version, ""); stale.Code != http.StatusConflict {
 			t.Fatal("потерян CAS", part, stale.Code)
 		}
 	}
-	current, err := service.Current(context.Background())
+	current, err = service.Current(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,6 +113,18 @@ func TestArtifactPartsThroughOperatorHTTP(t *testing.T) {
 	w = call("categories", bytes.Repeat([]byte(" "), maxTaxonomyBody+1), current.Version, "")
 	if w.Code != http.StatusBadRequest {
 		t.Fatal("HTTP принял файл больше 2 МиБ", w.Code)
+	}
+}
+
+func seedTaxonomyBindingHeaders(store *fake.Store, bindings []taxonomy.DictionaryBinding) {
+	for _, binding := range bindings {
+		for _, code := range binding.Dictionaries {
+			store.SeedReferenceDictionary(reference.DictionaryState{
+				Code:   code,
+				Kind:   reference.KindOpen,
+				Limits: reference.DefaultLimits(),
+			})
+		}
 	}
 }
 

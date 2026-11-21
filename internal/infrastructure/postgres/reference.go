@@ -45,6 +45,9 @@ const (
 		FROM reference.dictionaries
 		ORDER BY code`
 
+	selectDictionaryRevisions = `
+		SELECT code, revision FROM reference.dictionaries WHERE code = ANY($1::text[])`
+
 	updateDictionary = `
 		UPDATE reference.dictionaries
 		SET revision = $2,
@@ -71,6 +74,12 @@ const (
 		SELECT ` + entryColumns + `
 		FROM reference.entries e
 		WHERE e.dictionary_code = $1
+		ORDER BY e.id`
+
+	selectConfirmedEntries = `
+		SELECT ` + entryColumns + `
+		FROM reference.entries e
+		WHERE e.dictionary_code = $1 AND e.status = 'confirmed'
 		ORDER BY e.id`
 
 	listReferenceEntries = `
@@ -250,6 +259,25 @@ func (r *References) Dictionaries(ctx context.Context) ([]*reference.Dictionary,
 	return out, rows.Err()
 }
 
+// DictionaryRevisions читает головы выбранных словарей одним запросом.
+func (r *References) DictionaryRevisions(ctx context.Context, codes []string) (map[string]int64, error) {
+	rows, err := rawSQL(ctx, r.db, selectDictionaryRevisions, codes).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := make(map[string]int64, len(codes))
+	for rows.Next() {
+		var code string
+		var revision int64
+		if err := rows.Scan(&code, &revision); err != nil {
+			return nil, err
+		}
+		out[code] = revision
+	}
+	return out, rows.Err()
+}
+
 // SaveDictionary переносит голову журнала и счётчик записей; строка уже заблокирована.
 func (r *References) SaveDictionary(ctx context.Context, dict *reference.Dictionary) error {
 	state := dict.State()
@@ -285,6 +313,11 @@ func (r *References) Entries(ctx context.Context, dictionary string, list []ids.
 // AllEntries — все записи словаря для полного снимка.
 func (r *References) AllEntries(ctx context.Context, dictionary string) ([]*reference.Entry, error) {
 	return r.entries(ctx, selectAllReferenceEntries, dictionary)
+}
+
+// ConfirmedEntries читает только записи, доступные для выбора по таксономии.
+func (r *References) ConfirmedEntries(ctx context.Context, dictionary string) ([]*reference.Entry, error) {
+	return r.entries(ctx, selectConfirmedEntries, dictionary)
 }
 
 // List — страница записей по частоте встреч.

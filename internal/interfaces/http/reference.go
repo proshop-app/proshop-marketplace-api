@@ -14,6 +14,7 @@ import (
 
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -81,6 +82,7 @@ type snapshotAliasJSON struct {
 }
 
 type snapshotEntryJSON struct {
+	Meta       *taxonomy.ValueMeta `json:"meta,omitempty"`
 	Directions []string            `json:"directions"`
 	Order      int                 `json:"order"`
 	Label      string              `json:"label,omitempty"`
@@ -93,6 +95,7 @@ type snapshotEntryJSON struct {
 }
 
 type snapshotMetadata struct {
+	taxonomy.ValueMeta
 	Directions []string `json:"directions"`
 	Order      int      `json:"order"`
 	Label      string   `json:"label"`
@@ -267,6 +270,11 @@ func (h *referenceHandlers) snapshot(w http.ResponseWriter, r *http.Request) {
 		var metadata snapshotMetadata
 		_ = json.Unmarshal(entry.Metadata, &metadata)
 		item.Directions, item.Order, item.Label = metadata.Directions, metadata.Order, metadata.Label
+		if meta := metadata.DisplayMeta(); entry.Status == reference.StatusConfirmed && meta != nil {
+			if err := meta.Validate(entry.CanonicalName); err == nil {
+				item.Meta = meta
+			}
+		}
 		if item.Directions == nil {
 			item.Directions = []string{}
 		}

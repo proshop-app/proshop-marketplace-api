@@ -28,29 +28,30 @@ type categoryJSON struct {
 
 // offerJSON — предложение в ответе. Суммы — числовые рубли.
 type offerJSON struct {
-	SellersCount      *int                       `json:"sellersCount,omitempty"`
-	Assets            *[]string                  `json:"assets,omitempty"`
-	Rating            *catalog.Rating            `json:"rating"`
-	Variants          *variantGroupJSON          `json:"variants,omitempty"`
-	DeliveryAvailable *bool                      `json:"deliveryAvailable,omitempty"`
-	CategoryID        string                     `json:"categoryId"`
-	Attributes        map[string]json.RawMessage `json:"attributes"`
-	ID                string                     `json:"id"`
-	TenantID          string                     `json:"tenantId"`
-	ProductID         string                     `json:"productId"`
-	Seller            sellerJSON                 `json:"seller"`
-	Name              string                     `json:"name"`
-	Description       string                     `json:"description,omitempty"`
-	Image             string                     `json:"image,omitempty"`
-	URL               string                     `json:"url,omitempty"`
-	SKU               string                     `json:"sku,omitempty"`
-	Categories        []categoryJSON             `json:"categories"`
-	Price             rubles                     `json:"price"`
-	BasePrice         rubles                     `json:"basePrice"`
-	Available         int                        `json:"available"`
-	InStock           bool                       `json:"inStock"`
-	CheckoutAvailable bool                       `json:"checkoutAvailable"`
-	UpdatedAt         time.Time                  `json:"updatedAt"`
+	SellersCount      *int                                   `json:"sellersCount,omitempty"`
+	Assets            *[]string                              `json:"assets,omitempty"`
+	Rating            *catalog.Rating                        `json:"rating"`
+	Variants          *variantGroupJSON                      `json:"variants,omitempty"`
+	DeliveryAvailable *bool                                  `json:"deliveryAvailable,omitempty"`
+	CategoryID        string                                 `json:"categoryId"`
+	AttributeDetails  map[string]appcatalog.AttributeDisplay `json:"attributeDetails,omitempty"`
+	Attributes        map[string]json.RawMessage             `json:"attributes"`
+	ID                string                                 `json:"id"`
+	TenantID          string                                 `json:"tenantId"`
+	ProductID         string                                 `json:"productId"`
+	Seller            sellerJSON                             `json:"seller"`
+	Name              string                                 `json:"name"`
+	Description       string                                 `json:"description,omitempty"`
+	Image             string                                 `json:"image,omitempty"`
+	URL               string                                 `json:"url,omitempty"`
+	SKU               string                                 `json:"sku,omitempty"`
+	Categories        []categoryJSON                         `json:"categories"`
+	Price             rubles                                 `json:"price"`
+	BasePrice         rubles                                 `json:"basePrice"`
+	Available         int                                    `json:"available"`
+	InStock           bool                                   `json:"inStock"`
+	CheckoutAvailable bool                                   `json:"checkoutAvailable"`
+	UpdatedAt         time.Time                              `json:"updatedAt"`
 }
 
 type offerPageJSON struct {
@@ -106,6 +107,7 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 		assets := append([]string{}, doc.Assets...)
 		out.Assets = &assets
 		out.Description = doc.Description
+		out.AttributeDetails = card.AttributeDetails
 		if doc.Variants != nil {
 			out.Variants = &variantGroupJSON{GroupID: doc.Variants.GroupID}
 		}

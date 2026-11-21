@@ -117,7 +117,14 @@ func (d Definition) validateDictionaryBindings(fields map[string]Attribute) erro
 	for _, scope := range scopes {
 		for code := range scope.attributes {
 			field := fields[code]
-			if field.Type == "string" && len(hintDictionaries(field, scope.path, index)) > MaxHintDictionaries {
+			if field.Type != "string" {
+				continue
+			}
+			dictionaries := hintDictionaries(field, scope.path, index)
+			if field.DictionarySelection && len(dictionaries) != 1 {
+				return ErrInvalid.WithMessage("выбор требует одного справочника в разделе: " + code)
+			}
+			if len(dictionaries) > MaxHintDictionaries {
 				return ErrInvalid.WithMessage("слишком много итоговых источников подсказок")
 			}
 		}

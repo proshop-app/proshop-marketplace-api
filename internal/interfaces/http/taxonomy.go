@@ -101,6 +101,7 @@ func (h *taxonomyHandlers) current(w http.ResponseWriter, r *http.Request) {
 	if taxonomyCached(w, r, d.Version) {
 		return
 	}
+	d.Attributes = d.CatalogAttributes()
 	writeJSON(w, http.StatusOK, d)
 }
 
@@ -143,7 +144,7 @@ func (h *taxonomyHandlers) readPart(w http.ResponseWriter, r *http.Request, part
 	var value any
 	switch part {
 	case "attributes":
-		value = d.Attributes
+		value = d.CatalogAttributes()
 	case "schemas":
 		value = d.Schemas
 	case "categories":
@@ -151,7 +152,11 @@ func (h *taxonomyHandlers) readPart(w http.ResponseWriter, r *http.Request, part
 	case "dictionary-bindings":
 		value = d.DictionaryBindings
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"version": d.Version, part: value})
+	response := map[string]any{"version": d.Version, part: value}
+	if part == "attributes" && len(d.SelectionValues) > 0 {
+		response["selectionValues"] = d.SelectionValues
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *taxonomyHandlers) publication(w http.ResponseWriter, r *http.Request) {

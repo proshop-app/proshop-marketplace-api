@@ -57,7 +57,7 @@ func TestLegacyColorFacetKeepsPaletteOrderAndSelection(t *testing.T) {
 	white := ports.FacetBucket{Value: "Белый", Count: 1}
 	red := ports.FacetBucket{Value: "Красный", Count: 2}
 	facets := []ports.Facet{{Code: "attr.color", Count: 3, Values: []ports.FacetBucket{red, white}}}
-	got := visibleFacets(facets, 100, query)
+	got := displayFacets(facets, 100, query, facetDisplay{})
 	if len(got) != 1 || !reflect.DeepEqual(got[0].Values, []ports.FacetBucket{white, red}) {
 		t.Fatalf("цвет с малым охватом потерян или изменён порядок палитры: %+v", got)
 	}
@@ -65,7 +65,7 @@ func TestLegacyColorFacetKeepsPaletteOrderAndSelection(t *testing.T) {
 	facets[0].Count = 1
 	facets[0].Values = []ports.FacetBucket{white}
 	query.Attributes = map[string]ports.AttributeFilter{"color": {Values: []string{white.Value}}}
-	got = visibleFacets(facets, 100, query)
+	got = displayFacets(facets, 100, query, facetDisplay{})
 	if len(got) != 1 || !reflect.DeepEqual(got[0].Values, []ports.FacetBucket{white}) {
 		t.Fatalf("единственный выбранный цвет недоступен для снятия: %+v", got)
 	}
@@ -91,7 +91,7 @@ func TestFacetValuesMetaFromSnapshot(t *testing.T) {
 		{Value: "Разноцветный", Count: 1, Meta: &many},
 		{Value: "Без образца", Count: 1},
 	}
-	got := facetValuesMeta(facet, fields)
+	got := displayFacetValues(facet, fields, facetDisplay{})
 	if !reflect.DeepEqual(got.Values, want) {
 		t.Fatalf("неверные образцы: %+v", got.Values)
 	}
@@ -99,7 +99,7 @@ func TestFacetValuesMetaFromSnapshot(t *testing.T) {
 		t.Fatal("образцы записаны в исходный фасет")
 	}
 	size := ports.Facet{Code: "attr.size", Values: []ports.FacetBucket{{Value: "M", Count: 1}}}
-	if got := facetValuesMeta(size, fields); got.Values[0].Meta != nil {
+	if got := displayFacetValues(size, fields, facetDisplay{}); got.Values[0].Meta != nil {
 		t.Fatal("образец у значения без valuesMeta")
 	}
 }

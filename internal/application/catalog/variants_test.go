@@ -48,7 +48,7 @@ func TestVariantBlockScopeOrderAndDuplicates(t *testing.T) {
 	group := ports.OfferGroup{
 		Items: []ports.OfferDocument{duplicate, current, foreign, hidden, small, noAxes},
 	}
-	block := variantBlock("seller", "group", group)
+	block := variantBlock("seller", "group", group, nil)
 	if len(block.Items) != 3 || len(block.Options) != 1 {
 		t.Fatalf("состав: %+v", block)
 	}
@@ -71,7 +71,7 @@ func TestVariantValuesFollowFirstPositionThenID(t *testing.T) {
 			variantOffer("seller~a", "L", 1),
 		},
 	}
-	block := variantBlock("seller", "group", group)
+	block := variantBlock("seller", "group", group, nil)
 	if strings.Join(block.Options[0].Values, ",") != "L,S,M" {
 		t.Fatalf("значения идут по первому появлению, без таксономии: %+v", block.Options)
 	}
@@ -114,7 +114,7 @@ func TestVariantBlockMixedAxisSets(t *testing.T) {
 			previous := slog.Default()
 			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
 			t.Cleanup(func() { slog.SetDefault(previous) })
-			block := variantBlock("seller", "group", group)
+			block := variantBlock("seller", "group", group, nil)
 			wantAxes, wantItems, wantWarnings := 2, 2, 3
 			if legacyFirst {
 				wantAxes, wantItems, wantWarnings = 1, 1, 4
@@ -159,7 +159,7 @@ func TestVariantBlockAllItemsMultipleAxesAndOrderedJSON(t *testing.T) {
 			}
 			group.Items = append(group.Items, offer)
 		}
-		block := variantBlock("seller", "group", group)
+		block := variantBlock("seller", "group", group, nil)
 		if len(block.Items) != 200 || len(block.Options) != count || !block.Truncated {
 			t.Fatalf("обрезанная группа: %+v", block)
 		}

@@ -23,9 +23,15 @@ func ValidateFacetValues(values []string) error {
 }
 
 func (a Attribute) facetValues(raw json.RawMessage) []string {
+	if !a.DictionarySelection && len(a.FacetValuesByValue) == 0 {
+		return nil
+	}
 	var value string
 	if json.Unmarshal(raw, &value) != nil {
 		return nil
+	}
+	if a.DictionarySelection {
+		return slices.Clone(a.ValuesMeta[value].Covers)
 	}
 	return slices.Clone(a.FacetValuesByValue[value])
 }

@@ -2038,6 +2038,7 @@ paths:
                   attributes:
                     type: array
                     items: { $ref: "#/components/schemas/TaxonomyAttribute" }
+                  selectionValues: { $ref: "#/components/schemas/TaxonomySelectionValues" }
         "304": { description: Версия не изменилась }
   /api/v1/taxonomy/schemas:
     get:
@@ -7131,6 +7132,7 @@ components:
       additionalProperties: false
       required: [version, attributes, schemas, categories]
       properties:
+        selectionValues: { $ref: "#/components/schemas/TaxonomySelectionValues" }
         dictionaryBindings:
           type: array
           maxItems: 4096
@@ -7189,6 +7191,9 @@ components:
         values: { type: array, items: { type: string }, readOnly: true, description: Снимок confirmed закрытого словаря }
         unit: { type: string, description: Единица только для number }
         facet: { type: boolean, default: false }
+        displayName: { type: string, maxLength: 256, description: Короткое имя для покупателя }
+        hint: { type: string, maxLength: 1024, description: Подсказка продавцу }
+        dictionarySelection: { type: boolean, const: true, description: Только каноническая подтверждённая строка }
         valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
         facetOptions:
           type: array
@@ -7218,10 +7223,8 @@ components:
         searchTermsByValue: { $ref: "#/components/schemas/TaxonomySearchTermsByValue" }
     TaxonomySearchTermsByValue:
       type: object
-      maxProperties: 256
       description: >-
-        Только enum и boolean. Ключ — точное каноническое значение снимка values
-        либо строка true/false. Пустой список отключает выражения этого значения.
+        Ключ — каноническое значение справочника либо строка true/false. Пустой список отключает выражения этого значения.
         Выражения без управляющих символов, с одиночными обычными пробелами;
         дубли без учёта регистра и ё/е запрещены. Это контекст поиска, не фасеты.
       additionalProperties:
@@ -7231,13 +7234,32 @@ components:
       maxItems: 8
       uniqueItems: true
       items: { type: string, minLength: 1, maxLength: 128 }
-    TaxonomyValuesMeta:
+    TaxonomySelectionValues:
       type: object
+      description: Подтверждённые записи каждого действующего справочника выбора по коду словаря
       additionalProperties:
         type: object
+        required: [valuesMeta]
         properties:
-          hex: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
-          swatch: { type: string, enum: [multicolor, pattern] }
+          valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
+          searchTermsByValue: { $ref: "#/components/schemas/TaxonomySearchTermsByValue" }
+    TaxonomyValuesMeta:
+      type: object
+      description: Метаданные по каноническому значению. В пуле выбора пустой объект подтверждает допустимое значение.
+      additionalProperties: { $ref: "#/components/schemas/TaxonomyValueMeta" }
+    TaxonomyValueMeta:
+      type: object
+      properties:
+        hex: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+        swatch: { type: string, enum: [multicolor, pattern] }
+        secondaryLabel: { type: string, minLength: 1, maxLength: 120 }
+        covers:
+          type: array
+          minItems: 2
+          maxItems: 8
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 120 }
+        order: { type: integer, description: Порядок значения в справочнике }
     TaxonomySchemaIdentity:
       type: object
       additionalProperties: false
@@ -7286,6 +7308,9 @@ components:
         facet: { type: boolean }
         required: { type: boolean }
         values: { type: array, items: { type: string } }
+        displayName: { type: string, maxLength: 256, description: Короткое имя для покупателя }
+        hint: { type: string, maxLength: 1024, description: Подсказка продавцу }
+        dictionarySelection: { type: boolean, const: true, description: Только каноническая подтверждённая строка }
         valuesMeta: { $ref: "#/components/schemas/TaxonomyValuesMeta" }
         facetOptions:
           type: array
@@ -7362,10 +7387,12 @@ components:
             required: [code]
             properties:
               attribute: { type: string }
+              message: { type: string }
               code:
                 type: string
                 enum: [taxonomy.card_missing, taxonomy.category_unknown, taxonomy.attribute_unknown,
-                       taxonomy.type, taxonomy.required, taxonomy.enum_value, taxonomy.unpublished, identity_incomplete]
+                       taxonomy.type, taxonomy.required, taxonomy.enum_value, taxonomy.dictionary_value,
+                       taxonomy.unpublished, identity_incomplete]
     Rating:
       type: [object, "null"]
       description: null при отсутствии оценок; магазин — средневзвешенное видимых предложений.
@@ -7459,14 +7486,7 @@ components:
                 type: string
               count:
                 type: integer
-              meta:
-                type: object
-                description: >-
-                  Образец значения из снимка таксономии (valuesMeta атрибута): hex или swatch.
-                  Есть только у значений с образцом; по нему витрина рисует палитру без схемы категории.
-                properties:
-                  hex: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
-                  swatch: { type: string, enum: [multicolor, pattern] }
+              meta: { $ref: "#/components/schemas/TaxonomyValueMeta" }
     Error:
       type: object
       required: [error]
@@ -7550,6 +7570,15 @@ components:
           description: Категория площадки
         attributes:
           $ref: '#/components/schemas/CanonicalAttributes'
+        attributeDetails:
+          type: object
+          description: Покупательские имена и метаданные по кодам характеристик. Только в карточке.
+          additionalProperties:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string }
+              meta: { $ref: "#/components/schemas/TaxonomyValueMeta" }
         id:
           type: string
           examples:
@@ -7636,10 +7665,19 @@ components:
               code: { type: string }
               name: { type: string }
               values:
-                description: Порядок позиций группы (position, затем id); упорядочивание по схеме категории выполняет клиент.
+                description: Порядок справочника для контролируемых строк, иначе порядок появления в группе.
                 type: array
                 uniqueItems: true
                 items: { type: string }
+              valueDetails:
+                type: array
+                description: Те же канонические значения в том же порядке с метаданными витрины.
+                items:
+                  type: object
+                  required: [value]
+                  properties:
+                    value: { type: string }
+                    meta: { $ref: "#/components/schemas/TaxonomyValueMeta" }
         truncated:
           type: boolean
           description: При превышении потолка в 200 предложений текущая карточка может отсутствовать в items.
@@ -8761,6 +8799,7 @@ components:
                 items: { type: string }
               order: { type: integer, default: 0 }
               label: { type: string }
+              meta: { $ref: "#/components/schemas/TaxonomyValueMeta" }
               key: { type: string }
               status: { $ref: "#/components/schemas/ReferenceStatus" }
               mergedInto: { type: string, format: uuid }

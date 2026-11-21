@@ -141,6 +141,7 @@ func (s *Service) changeHints(ctx context.Context, expected int64, change change
 			return taxonomy.ErrConflict
 		}
 		version = next.Version
+		previous := next
 		changed, err := change(ctx, repository, &next)
 		if err != nil || !changed {
 			return err
@@ -148,13 +149,20 @@ func (s *Service) changeHints(ctx context.Context, expected int64, change change
 		if err := next.Validate(); err != nil {
 			return err
 		}
-		if err := validateOpenHintSources(ctx, tx.Reference(), next.DictionaryBindings); err != nil {
+		if err := updateDictionaryRules(ctx, tx.Reference(), &next); err != nil {
 			return err
 		}
-		// Подсказки не меняют валидацию карточек: закрытые Values и товарные проекции остаются как есть.
 		next.Version++
 		if err := repository.Save(ctx, next, version); err != nil {
 			return err
+		}
+		if len(next.SelectionValues) > 0 {
+			categories := taxonomy.AffectedCategories(previous, next)
+			if len(categories) > 0 {
+				if err := repository.QueueRevalidation(ctx, next.Version, categories); err != nil {
+					return err
+				}
+			}
 		}
 		version = next.Version
 		return nil
@@ -162,13 +170,15 @@ func (s *Service) changeHints(ctx context.Context, expected int64, change change
 	return version, err
 }
 
-func validateOpenHintSources(
-	ctx context.Context,
-	registry ports.TaxonomyDictionaries,
-	rules []taxonomy.DictionaryBinding,
-) error {
+func updateDictionaryRules(ctx context.Context, registry ports.TaxonomyDictionaries, next *taxonomy.Definition) error {
+	selection := next.SelectionDictionaries()
 	unique := map[string]bool{}
-	for _, rule := range rules {
+	for _, code := range selection {
+		if _, found := next.SelectionValues[code]; !found {
+			unique[code] = true
+		}
+	}
+	for _, rule := range next.DictionaryBindings {
 		for _, code := range rule.Dictionaries {
 			unique[code] = true
 		}
@@ -191,5 +201,30 @@ func validateOpenHintSources(
 			return taxonomy.ErrInvalid.WithMessage("источник подсказок должен быть open: " + code)
 		}
 	}
+	return updateSelectionSources(ctx, registry, next, selection)
+}
+
+func updateSelectionSources(
+	ctx context.Context,
+	registry ports.TaxonomyDictionaries,
+	next *taxonomy.Definition,
+	codes []string,
+) error {
+	if len(codes) == 0 {
+		return nil
+	}
+	values := make(map[string]taxonomy.DictionaryValues, len(codes))
+	for _, code := range codes {
+		if existing, found := next.SelectionValues[code]; found {
+			values[code] = existing
+			continue
+		}
+		pool, err := loadSelectionValues(ctx, registry, code)
+		if err != nil {
+			return err
+		}
+		values[code] = pool
+	}
+	next.SelectionValues = values
 	return nil
 }

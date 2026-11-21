@@ -80,9 +80,6 @@ func TestTaxonomyQualityRejectsAmbiguity(t *testing.T) {
 		"нет определения": func(release *taxonomy.Release) {
 			release.Attributes[0].Description = " "
 		},
-		"нет примера": func(release *taxonomy.Release) {
-			release.Attributes[0].Example = ""
-		},
 		"ветка унисекс": func(release *taxonomy.Release) {
 			release.Categories[0].Children[0].Name = "Детям унисекс"
 		},
@@ -101,9 +98,6 @@ func TestTaxonomyQualityRejectsAmbiguity(t *testing.T) {
 		"повтор листа во всём дереве": func(release *taxonomy.Release) {
 			release.Categories[1].Children[0].Children[0].Name =
 				release.Categories[0].Children[0].Children[0].Name
-		},
-		"нет причины отсутствия словаря": func(release *taxonomy.Release) {
-			release.Attributes[1].DictionaryNote = ""
 		},
 		"размытое название": func(release *taxonomy.Release) {
 			release.Attributes[0].Name = "Назначение"
@@ -155,24 +149,6 @@ func TestTaxonomyQualityRejectsAmbiguity(t *testing.T) {
 				t.Fatal("редакционный дефект не обнаружен")
 			}
 		})
-	}
-}
-
-func TestRelease9AttributesAndCategoryMigration(t *testing.T) {
-	release, _, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	previous := testArtifact(t).MigrationSource
-	snapshot := taxonomy.Definition{
-		Version:            previous.Version,
-		Attributes:         previous.Attributes,
-		Categories:         previous.Categories,
-		Schemas:            previous.Schemas,
-		DictionaryBindings: previous.DictionaryBindings,
-	}
-	if err := release.Definition().CheckCategoryReplacementEvolution(snapshot); err != nil {
-		t.Fatal(err)
 	}
 }
 

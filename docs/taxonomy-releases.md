@@ -4,16 +4,16 @@
 [uno-reference-data](https://github.com/proshop-app/uno-reference-data).
 Площадка закрепляет номер, SHA-256 файла и Git-коммит источника в
 [`release.lock.json`](../internal/infrastructure/taxonomydata/release.lock.json).
-Договор JSON v1 описан в [uno-reference-data](https://github.com/proshop-app/uno-reference-data/blob/132eccff41b0e91448e702c6ac75dd0ca8374df3/README.md#договор-артефакта-с-загрузчиком-площадки).
-Текущий артефакт — `releases/taxonomy-v15.json`. Закрытые значения и палитра
-разрешаются при публикации по реестру. Рабочий снимок хранится в PostgreSQL.
+Договор JSON v1 описан в [uno-reference-data](https://github.com/proshop-app/uno-reference-data/blob/c7ab314073a84595e6b410570ecb9c01fec11938/README.md#договор-артефакта-с-загрузчиком-площадки).
+Текущий артефакт — `releases/taxonomy-v16.json`. Значения закрытых словарей,
+палитра и подтверждённые пулы выбора собираются из реестра при публикации. Рабочий снимок хранится в PostgreSQL.
 
 ## Сборка и проверка
 
 ```bash
 make taxonomy-artifact UNO_REFERENCE_DATA_DIR=/path/to/uno-reference-data
 # Или из уже сохранённого файла:
-make taxonomy-artifact TAXONOMY_BUNDLE=/path/to/taxonomy-v15.json
+make taxonomy-artifact TAXONOMY_BUNDLE=/path/to/taxonomy-v16.json
 go run ./cmd/taxonomy check
 go run ./cmd/taxonomy check --export
 ```
@@ -31,13 +31,41 @@ go run ./cmd/taxonomy check --export
 `go:embed` включает файл в загрузчик. Загрузчик повторно сверяет SHA-256,
 проверяет формат, номер, ссылки и разворачивает схемы до подключения к БД.
 Площадка собирает отдельный образ загрузчика через
-`make taxonomy-image TAXONOMY_IMAGE=proshop-marketplace-taxonomy:uno-15`.
+`make taxonomy-image TAXONOMY_IMAGE=proshop-marketplace-taxonomy:uno-16`.
 Docker запускает проверку собранного бинарника на этапе сборки. В рабочем
 окружении загрузчику нужен только PostgreSQL для команд, меняющих снимок.
 `check --review --direction accessories` выводит матрицу листьев выбранного
 направления. `check --export` выводит развёрнутый JSON до разрешения словарей.
 
-## Выкат JSON-артефакта поставки 15
+## Выкат поставки 16 поверх 15
+
+1. Опубликовать закреплённый коммит Uno с `taxonomy-v16.json` и контрольной суммой.
+   Применить `reference-bootstrap`. Импортировать из того же checkout пакет
+   `taxonomy/reference/size-markings-v2.json` штатной командой
+   `marketplace reference import --file <путь>`. Проверить подтверждённый пул стран.
+2. Провести редакционную приёмку размерных кандидатов и сверить хранимые
+   маркировки и наличие `brand`. Пакет размеров приходит со статусом `candidate`.
+   В незаполненной сетке любая указанная маркировка получает `taxonomy.dictionary_value`.
+3. Применить `taxonomy apply` после миграций и подготовки словарей. При правках
+   головы использовать штатный `--expected-version` после сверки. Дерево 15 и 16
+   совпадает, подтверждение замены и таблица переносов не нужны. Дождаться
+   перепроверки карточек и обработки поискового outbox.
+
+Обязательное поле `brand` использует `taxonomy.required`. Площадка скрывает
+карточки с ошибками публикации и показывает причины в операторской диагностике.
+В опубликованный пул входят точные канонические строки со статусом `confirmed`.
+Фоновая сверка публикует новую версию таксономии при изменении этих пулов и
+ставит перепроверку затронутых категорий, если изменился допуск или проекция.
+
+Снимок `/api/v1/taxonomy/attributes` содержит `selectionValues` по кодам словарей.
+Для полного снимка потребитель сопоставляет их с `/api/v1/taxonomy/dictionary-sources`
+по общей версии. В схеме отдельного раздела `attributes[].valuesMeta` уже раскрыт
+для его сетки. `name` и `hint` адресованы продавцу, `displayName` с запасным
+`name` — покупателю. Для поиска `searchTermsByValue` из пула выбираются по
+фактическому значению, а `covers` передаётся в `facetValues` контракта оферт.
+Форма метаданных и остальных ответов описана в [OpenAPI](../api/openapi.yaml).
+
+## История выката JSON-артефакта поставки 15
 
 1. Сначала принять и опубликовать коммит Uno из `release.lock.json`, в котором
    находятся `taxonomy-v15.json` и `taxonomy-v15.sha256.json`. Площадка использует

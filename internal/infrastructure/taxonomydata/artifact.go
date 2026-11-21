@@ -128,6 +128,11 @@ func (attributes *artifactAttributes) UnmarshalJSON(body []byte) error {
 		if field.Values != nil || field.FacetOptions != nil || field.FacetValuesByValue != nil {
 			return fmt.Errorf("атрибут %s: вычисляемое поле в исходнике", field.Code)
 		}
+		for _, meta := range field.ValuesMeta {
+			if meta.Order != nil {
+				return fmt.Errorf("атрибут %s: порядок значений задаётся в реестре", field.Code)
+			}
+		}
 		decoded = append(decoded, field.Attribute)
 	}
 	*attributes = decoded

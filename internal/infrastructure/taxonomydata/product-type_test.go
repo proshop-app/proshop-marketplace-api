@@ -35,7 +35,7 @@ func productTypeDefinition(t *testing.T) taxonomy.Definition {
 func TestBundledProductType(t *testing.T) {
 	d := productTypeDefinition(t)
 	field := d.Fields()["product_type"]
-	if d.Version != 15 || field.Name != "Тип" || field.Type != "enum" || field.Dictionary != "product_type" ||
+	if d.Version != 16 || field.Name != "Тип" || field.Type != "enum" || field.Dictionary != "product_type" ||
 		!field.Facet || field.FacetPinned == nil || !*field.FacetPinned ||
 		field.Multiple || field.RequiredReason == "" {
 		t.Fatalf("тип: %+v", field)
@@ -141,6 +141,7 @@ func TestBundledProductTypePinControlsSearchFacet(t *testing.T) {
 	queries := appcatalog.NewQueries(store, index, fake.NewPlatform(), nil, nil, fake.NewClock(time.Time{}))
 	for _, pinned := range []bool{true, false} {
 		if !pinned {
+			d.Version++
 			for i := range d.Attributes {
 				if d.Attributes[i].Code == "product_type" {
 					d.Attributes[i].FacetPinned = &pinned

@@ -18,13 +18,15 @@ const defaultPinnedFacetCode = "color"
 // scopeFields не ищет каждый лист заново от корня: на большой таксономии это квадратичная работа.
 // Фильтры разрешены по объединению схем, охват фасетов считается по листьям области.
 func scopeFields(
-	d taxonomy.Definition,
+	view *taxonomyDisplay,
 	nodes []taxonomy.Category,
 	collectUnion bool,
-) (map[string]taxonomy.Attribute, map[string]int) {
-	fields := d.Fields()
+	collectSources bool,
+) (map[string]taxonomy.Attribute, map[string]int, map[string][]string) {
+	fields := view.fields
 	union := map[string]taxonomy.Attribute{}
 	coverage := map[string]int{}
+	sources := map[string][]string{}
 	var collect func([]taxonomy.Category)
 	collect = func(nodes []taxonomy.Category) {
 		for _, node := range nodes {
@@ -32,19 +34,25 @@ func scopeFields(
 				collect(node.Children)
 				continue
 			}
-			schema := d.Schemas[node.Schema]
+			schema := view.definition.Schemas[node.Schema]
 			for _, code := range schema.Attributes {
 				if collectUnion {
 					union[code] = fields[code]
 				}
 				if !slices.Contains(schema.HiddenFacets, code) {
 					coverage[code]++
+					if collectSources {
+						source := view.sources[node.ID][code]
+						if source != "" && !slices.Contains(sources[code], source) {
+							sources[code] = append(sources[code], source)
+						}
+					}
 				}
 			}
 		}
 	}
 	collect(nodes)
-	return union, coverage
+	return union, coverage, sources
 }
 
 func selectFacetFields(

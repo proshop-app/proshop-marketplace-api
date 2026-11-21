@@ -40,6 +40,14 @@ func resolveDictionaries(ctx context.Context, registry ports.TaxonomyDictionarie
 		sorted = append(sorted, code)
 	}
 	sort.Strings(sorted)
+	selected := map[string]bool{}
+	for _, code := range d.SelectionDictionaries() {
+		selected[code] = true
+	}
+	d.SelectionValues = nil
+	if len(selected) > 0 {
+		d.SelectionValues = make(map[string]taxonomy.DictionaryValues, len(selected))
+	}
 	kinds := map[string]reference.Kind{}
 	values := map[string][]string{}
 	colorMetadata := map[string]json.RawMessage{}
@@ -56,6 +64,13 @@ func resolveDictionaries(ctx context.Context, registry ports.TaxonomyDictionarie
 			return taxonomy.ErrInvalid.WithMessage("словарь не существует: " + code)
 		}
 		kinds[code] = dictionary.State().Kind
+		if selected[code] {
+			values, err := loadSelectionValues(ctx, registry, code)
+			if err != nil {
+				return err
+			}
+			d.SelectionValues[code] = values
+		}
 		if kinds[code] != reference.KindClosed {
 			continue
 		}

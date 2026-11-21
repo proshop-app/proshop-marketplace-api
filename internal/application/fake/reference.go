@@ -196,6 +196,20 @@ func (r references) Entries(ctx context.Context, dictionary string, list []ids.U
 	return out, nil
 }
 
+func (r references) DictionaryRevisions(_ context.Context, codes []string) (map[string]int64, error) {
+	out := make(map[string]int64, len(codes))
+	for _, code := range codes {
+		if dictionary, found := r.d.reference.dictionaries[code]; found {
+			out[code] = dictionary.Revision
+		}
+	}
+	return out, nil
+}
+
+func (r references) ConfirmedEntries(_ context.Context, dictionary string) ([]*reference.Entry, error) {
+	return r.sorted(dictionary, reference.StatusConfirmed), nil
+}
+
 func (r references) AllEntries(_ context.Context, dictionary string) ([]*reference.Entry, error) {
 	return r.sorted(dictionary, ""), nil
 }

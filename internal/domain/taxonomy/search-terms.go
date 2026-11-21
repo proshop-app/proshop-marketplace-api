@@ -23,7 +23,7 @@ func (a Attribute) validateSearchTerms() error {
 		return nil
 	}
 	if a.Type != "enum" && a.Type != "boolean" {
-		return ErrInvalid.WithMessage("поисковые выражения допустимы только для enum и boolean")
+		return ErrInvalid.WithMessage("явные поисковые выражения допустимы только для enum и boolean")
 	}
 	if len(a.SearchTermsByValue) > 256 {
 		return ErrInvalid.WithMessage("слишком много значений с поисковыми выражениями")
@@ -52,7 +52,7 @@ func ValidateSearchTerms(terms []string) error {
 	}
 	seen := make(map[string]bool, len(terms))
 	for _, term := range terms {
-		key := strings.ReplaceAll(strings.ToLower(term), "ё", "е")
+		key := SearchTermKey(term)
 		if term == "" || term != reference.Collapse(term) || !utf8.ValidString(term) ||
 			utf8.RuneCountInString(term) > MaxSearchTermRunes || strings.ContainsFunc(term, unicode.IsControl) ||
 			seen[key] {
@@ -63,15 +63,27 @@ func ValidateSearchTerms(terms []string) error {
 	return nil
 }
 
+// SearchTermKey задаёт равенство выражений, согласованное с поисковым контрактом.
+func SearchTermKey(term string) string {
+	return strings.ReplaceAll(strings.ToLower(term), "ё", "е")
+}
+
 // Вызывается только после проверки скаляра схемой: строка "true" не может
 // воспользоваться выражениями логического значения true.
 func (a Attribute) searchTerms(raw json.RawMessage) []string {
+	terms := a.SearchTermsByValue
+	if a.DictionarySelection {
+		terms = a.dictionarySearchTerms
+	}
+	if len(terms) == 0 {
+		return nil
+	}
 	value := strings.TrimSpace(string(raw))
-	if a.Type == "enum" {
+	if a.Type == "enum" || a.Type == "string" {
 		if err := json.Unmarshal(raw, &value); err != nil {
 			return nil
 		}
 	}
 
-	return slices.Clone(a.SearchTermsByValue[value])
+	return slices.Clone(terms[value])
 }

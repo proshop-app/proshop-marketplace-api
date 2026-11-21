@@ -19,9 +19,9 @@ type Revalidation struct {
 }
 
 // AffectedCategories сравнивает тот же контекст, который исполняет Checker.Check.
-// DictionaryBindings задают подсказки и не участвуют в Check.
+// Для выбора правила определяют пул, а из метаданных в проекцию попадает покрытие.
 func AffectedCategories(previous, next Definition) []string {
-	before, after := previous.Checker(), next.Checker()
+	before, after := previous.revalidationDefinition().Checker(), next.revalidationDefinition().Checker()
 	changed := []string{}
 	for id, old := range before.categories {
 		current, exists := after.categories[id]
@@ -36,4 +36,27 @@ func AffectedCategories(previous, next Definition) []string {
 	}
 	slices.Sort(changed)
 	return changed
+}
+
+func (d Definition) revalidationDefinition() Definition {
+	d.Attributes = slices.Clone(d.Attributes)
+	for i := range d.Attributes {
+		field := &d.Attributes[i]
+		field.DisplayName = ""
+		field.Hint = ""
+		field.ValuesMeta = nil
+	}
+	if len(d.SelectionValues) > 0 {
+		pools := make(map[string]DictionaryValues, len(d.SelectionValues))
+		for code, pool := range d.SelectionValues {
+			values := make(map[string]ValueMeta, len(pool.ValuesMeta))
+			for value, meta := range pool.ValuesMeta {
+				values[value] = ValueMeta{Covers: meta.Covers}
+			}
+			pool.ValuesMeta = values
+			pools[code] = pool
+		}
+		d.SelectionValues = pools
+	}
+	return d
 }

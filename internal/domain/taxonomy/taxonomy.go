@@ -31,35 +31,42 @@ var (
 	categoryIDPattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,127}$`)
 )
 
-// ValueMeta задаёт визуальное представление значения перечисления.
+// ValueMeta задаёт данные отображения справочного значения.
 type ValueMeta struct {
-	Hex    string `json:"hex,omitempty" yaml:"hex,omitempty"`
-	Swatch string `json:"swatch,omitempty" yaml:"swatch,omitempty"`
+	SecondaryLabel string   `json:"secondaryLabel,omitempty" yaml:"secondaryLabel,omitempty"`
+	Covers         []string `json:"covers,omitempty" yaml:"covers,omitempty"`
+	Order          *int     `json:"order,omitempty" yaml:"-"`
+	Hex            string   `json:"hex,omitempty" yaml:"hex,omitempty"`
+	Swatch         string   `json:"swatch,omitempty" yaml:"swatch,omitempty"`
 }
 
 // Attribute — скалярное поле; код имеет один тип и единицу во всей площадке.
 type Attribute struct {
+	dictionarySearchTerms map[string][]string
 	// FacetPinned отличает отсутствие настройки в снимке от явного отключения.
-	FacetPinned        *bool                `json:"facetPinned,omitempty" yaml:"facetPinned,omitempty"`
-	FacetOptions       []string             `json:"facetOptions,omitempty" yaml:"-"`
-	FacetValuesByValue map[string][]string  `json:"facetValuesByValue,omitempty" yaml:"-"`
-	Format             string               `json:"format,omitempty" yaml:"format,omitempty"`
-	SearchTermsByValue map[string][]string  `json:"searchTermsByValue,omitempty" yaml:"searchTermsByValue,omitempty"`
-	ValuesMeta         map[string]ValueMeta `json:"valuesMeta,omitempty" yaml:"valuesMeta,omitempty"`
-	Code               string               `json:"code" yaml:"code"`
-	Name               string               `json:"name" yaml:"name"`
-	Type               string               `json:"type" yaml:"type"`
-	Dictionary         string               `json:"dictionary,omitempty" yaml:"dictionary,omitempty"`
-	Values             []string             `json:"values,omitempty" yaml:"-"`
-	Unit               string               `json:"unit,omitempty" yaml:"unit,omitempty"`
-	Facet              bool                 `json:"facet" yaml:"facet"`
-	Description        string               `json:"description,omitempty" yaml:"description,omitempty"`
-	DictionaryNote     string               `json:"dictionaryNote,omitempty" yaml:"dictionaryNote,omitempty"`
-	Example            string               `json:"example,omitempty" yaml:"example,omitempty"`
-	RequiredReason     string               `json:"requiredReason,omitempty" yaml:"requiredReason,omitempty"`
-	Multiple           bool                 `json:"multiple,omitempty" yaml:"multiple,omitempty"`
-	Variant            bool                 `json:"variant,omitempty" yaml:"variant,omitempty"`
-	Deprecated         bool                 `json:"deprecated,omitempty" yaml:"deprecated,omitempty"`
+	FacetPinned         *bool                `json:"facetPinned,omitempty" yaml:"facetPinned,omitempty"`
+	FacetOptions        []string             `json:"facetOptions,omitempty" yaml:"-"`
+	FacetValuesByValue  map[string][]string  `json:"facetValuesByValue,omitempty" yaml:"-"`
+	Format              string               `json:"format,omitempty" yaml:"format,omitempty"`
+	SearchTermsByValue  map[string][]string  `json:"searchTermsByValue,omitempty" yaml:"searchTermsByValue,omitempty"`
+	ValuesMeta          map[string]ValueMeta `json:"valuesMeta,omitempty" yaml:"valuesMeta,omitempty"`
+	Code                string               `json:"code" yaml:"code"`
+	Name                string               `json:"name" yaml:"name"`
+	DisplayName         string               `json:"displayName,omitempty" yaml:"displayName,omitempty"`
+	Hint                string               `json:"hint,omitempty" yaml:"hint,omitempty"`
+	DictionarySelection bool                 `json:"dictionarySelection,omitempty" yaml:"dictionarySelection,omitempty"`
+	Type                string               `json:"type" yaml:"type"`
+	Dictionary          string               `json:"dictionary,omitempty" yaml:"dictionary,omitempty"`
+	Values              []string             `json:"values,omitempty" yaml:"-"`
+	Unit                string               `json:"unit,omitempty" yaml:"unit,omitempty"`
+	Facet               bool                 `json:"facet" yaml:"facet"`
+	Description         string               `json:"description,omitempty" yaml:"description,omitempty"`
+	DictionaryNote      string               `json:"dictionaryNote,omitempty" yaml:"dictionaryNote,omitempty"`
+	Example             string               `json:"example,omitempty" yaml:"example,omitempty"`
+	RequiredReason      string               `json:"requiredReason,omitempty" yaml:"requiredReason,omitempty"`
+	Multiple            bool                 `json:"multiple,omitempty" yaml:"multiple,omitempty"`
+	Variant             bool                 `json:"variant,omitempty" yaml:"variant,omitempty"`
+	Deprecated          bool                 `json:"deprecated,omitempty" yaml:"deprecated,omitempty"`
 }
 
 // Category ссылается на схему только в листе, чтобы дерево не дублировало атрибуты.
@@ -114,6 +121,9 @@ type CategorySchema struct {
 
 // Definition — неизменяемый снимок версии таксономии.
 type Definition struct {
+	// SelectionValues заполняется только при публикации из реестра.
+	SelectionValues map[string]DictionaryValues `json:"selectionValues,omitempty" yaml:"-"`
+
 	DictionaryBindings []DictionaryBinding `json:"dictionaryBindings,omitempty" yaml:"dictionaryBindings,omitempty"`
 	Version            int64               `json:"version" yaml:"version"`
 	Attributes         []Attribute         `json:"attributes" yaml:"attributes"`
@@ -133,6 +143,7 @@ type Card struct {
 type Issue struct {
 	Code      string `json:"code"`
 	Attribute string `json:"attribute,omitempty"`
+	Message   string `json:"message,omitempty"`
 }
 
 // Publication — результат проверки и доверенный контекст поисковой проекции.
@@ -243,7 +254,8 @@ func (a Attribute) validate() error {
 		return ErrInvalid.WithMessage("неверный код или имя атрибута")
 	}
 	// Карточка хранит скаляр: метаданные не должны обещать неподдерживаемый массив.
-	if a.Multiple || utf8.RuneCountInString(a.Description) > 1024 ||
+	if a.Multiple || !validOptionalText(a.DisplayName, 256) || !validOptionalText(a.Hint, 1024) ||
+		utf8.RuneCountInString(a.Description) > 1024 ||
 		utf8.RuneCountInString(a.DictionaryNote) > 512 || utf8.RuneCountInString(a.Example) > 256 ||
 		utf8.RuneCountInString(a.RequiredReason) > 512 {
 		return ErrInvalid.WithMessage("неверные пояснения или множественность атрибута")
@@ -253,6 +265,9 @@ func (a Attribute) validate() error {
 	}
 	if a.Dictionary != "" && a.Type != "enum" && a.Type != "string" {
 		return ErrInvalid.WithMessage("словарь допустим только у enum и string")
+	}
+	if a.DictionarySelection && a.Type != "string" {
+		return ErrInvalid.WithMessage("выбор из справочника допустим только для строкового атрибута: " + a.Code)
 	}
 	if err := a.validateValuesMeta(); err != nil {
 		return err
@@ -416,7 +431,9 @@ func (d Definition) Category(id string) (CategorySchema, []string, bool) {
 		return Category{}, nil, false
 	}
 	category, path, ok := find(d.Categories, nil)
-	return categorySchema(category, d.Fields(), d.Schemas[category.Schema]), path, ok
+	fields := categorySchema(category, d.Fields(), d.Schemas[category.Schema])
+	d.selectCategoryFields(&fields, path, d.dictionaryBindingIndex())
+	return fields, path, ok
 }
 
 func categorySchema(category Category, fields map[string]Attribute, schema Schema) CategorySchema {
@@ -466,7 +483,7 @@ func checkCategory(version int64, category CategorySchema, path []string, found 
 	for _, a := range category.Attributes {
 		fields[a.Code] = a
 		raw, exists := card.Attributes[a.Code]
-		if identityEmpty(raw) && category.Identity.contains(a.Code) && !a.Required {
+		if identityEmpty(raw) && category.Identity.contains(a.Code) && !a.Required && !a.DictionarySelection {
 			continue
 		}
 		if !exists {
@@ -476,6 +493,14 @@ func checkCategory(version int64, category CategorySchema, path []string, found 
 			continue
 		}
 		issue := a.check(raw)
+		if issue == "taxonomy.dictionary_value" {
+			p.Issues = append(p.Issues, Issue{
+				Code:      "taxonomy.dictionary_value",
+				Attribute: a.Code,
+				Message:   "Выберите подтверждённое значение из справочника раздела",
+			})
+			continue
+		}
 		if issue != "" {
 			p.Issues = append(p.Issues, Issue{Code: issue, Attribute: a.Code})
 		} else {
@@ -519,6 +544,11 @@ func (a Attribute) check(raw json.RawMessage) string {
 		}
 		if strings.TrimSpace(value) == "" || utf8.RuneCountInString(value) > 1024 {
 			return "taxonomy.type"
+		}
+		if a.DictionarySelection {
+			if _, found := a.ValuesMeta[value]; !found {
+				return "taxonomy.dictionary_value"
+			}
 		}
 		if a.Type == "enum" {
 			for _, allowed := range a.Values {
