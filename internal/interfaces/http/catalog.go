@@ -56,6 +56,7 @@ type offerJSON struct {
 
 type offerPageJSON struct {
 	Correction *offerCorrectionJSON `json:"correction,omitempty"`
+	Receipt    string               `json:"receipt,omitempty"`
 	Facets     []facetJSON          `json:"facets"`
 	Items      []offerJSON          `json:"items"`
 	Total      int                  `json:"total"`
@@ -71,6 +72,7 @@ type offerCorrectionJSON struct {
 type catalogHandlers struct {
 	sellers ports.SellersCounts
 	queries *appcatalog.Queries
+	search  *searchHandlers
 }
 
 func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
@@ -121,7 +123,16 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 
 // list — выдача: GET /api/v1/catalog/offers?q=&tenant=&category=&priceMin=&priceMax=&inStock=&sort=&limit=&offset=
 func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Has("ids") {
+	values := r.URL.Query()
+	observe, requested := values["observe"]
+	if requested {
+		if len(observe) != 1 || observe[0] != "1" {
+			writeError(w, r, appcatalog.ErrInvalidQuery.WithMessage("observe — 1"))
+			return
+		}
+		w.Header().Set("Cache-Control", "private, no-store")
+	}
+	if values.Has("ids") {
 		h.listIDs(w, r)
 		return
 	}
@@ -131,6 +142,10 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 
 		return
+	}
+	query.Observe = requested && query.Text != ""
+	if query.Observe {
+		query.BuyerKey = h.search.buyerKey(r)
 	}
 
 	list, err := h.queries.Search(r.Context(), query)
@@ -153,11 +168,12 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := offerPageJSON{
-		Facets: facets,
-		Items:  make([]offerJSON, 0, len(list.Items)),
-		Total:  list.Total,
-		Limit:  limit,
-		Offset: query.Offset,
+		Receipt: list.Receipt,
+		Facets:  facets,
+		Items:   make([]offerJSON, 0, len(list.Items)),
+		Total:   list.Total,
+		Limit:   limit,
+		Offset:  query.Offset,
 	}
 	if list.Correction != nil {
 		body.Correction = &offerCorrectionJSON{
@@ -171,7 +187,13 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		body.Items = append(body.Items, item)
 	}
 
-	w.Header().Set("Cache-Control", publicCatalogCacheControl)
+	writeOfferPage(w, body)
+}
+
+func writeOfferPage(w http.ResponseWriter, body offerPageJSON) {
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", publicCatalogCacheControl)
+	}
 	writeJSON(w, http.StatusOK, body)
 }
 

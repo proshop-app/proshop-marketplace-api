@@ -165,6 +165,8 @@ type Database struct {
 // Search — общий движок каталога площадки.
 type Search struct {
 	CandidatesToken     string
+	PurchaseToken       string
+	AnalyticsKey        string
 	MaintenanceInterval time.Duration
 	URL                 string
 	Token               string
@@ -246,6 +248,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		Synonyms: r.synonyms(),
 		Search: Search{
 			CandidatesToken:     r.str("SEARCH_CANDIDATES_TOKEN", ""),
+			PurchaseToken:       r.required("SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN"),
+			AnalyticsKey:        r.required("SEARCH_ANALYTICS_KEY"),
 			MaintenanceInterval: r.duration("SEARCH_MAINTENANCE_INTERVAL", time.Minute),
 			URL:                 r.httpURL("SEARCH_URL"),
 			Token:               r.required("SEARCH_MARKETPLACE_TOKEN"),
@@ -341,6 +345,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	if cfg.Search.Token != "" && (cfg.Search.Token == cfg.Operator.Token || cfg.Search.Token == cfg.Platform.Token) {
 		r.fail("SEARCH_MARKETPLACE_TOKEN", "отдельный токен поискового сервиса")
 	}
+	r.searchFeedbackSecrets(cfg)
 
 	if strings.TrimSpace(cfg.Kafka.GroupID) == "" {
 		r.fail("KAFKA_GROUP_ID", "не может быть пустым")

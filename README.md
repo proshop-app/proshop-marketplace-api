@@ -63,6 +63,8 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `DATABASE_MAX_CONNS` | | `10` | размер пула, в полном конфиге 4–1000 |
 | `SEARCH_URL` | да | — | адрес общего `proshop-search` без `/api` |
 | `SEARCH_MARKETPLACE_TOKEN` | да | — | отдельный служебный токен поиска, ≥ 32 символов |
+| `SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN` | да | — | отдельный токен с допуском на запись поисковых покупок, ≥ 32 байт |
+| `SEARCH_ANALYTICS_KEY` | да | — | отдельный HMAC-ключ псевдонимов покупателей, ≥ 32 байт, общий для реплик API |
 | `SEARCH_TIMEOUT`, `SEARCH_MAINTENANCE_INTERVAL` | | `35s`, `1m` | срок HTTP-запроса и период проверки пересборки |
 | `MARKETPLACE_PUBLIC_URL` | да | — | адрес витрины для возврата с кассы-заглушки |
 | `PAYMENT_STUB` | | `false` | тестовая оплата; без неё создание заказов и оплата недоступны (503) |
@@ -613,7 +615,7 @@ API без параметра не отправляет поле и сохран
 ## Общий поиск предложений
 
 Переход, порядок обновления и откат описаны в [docs/shared-search.md](docs/shared-search.md).
-`make dev` требует запущенный `proshop-search` с тем же `SEARCH_MARKETPLACE_TOKEN`;
+`make dev` требует запущенный `proshop-search` с согласованными токенами каталога и поисковых покупок;
 одного compose этого репозитория для поиска предложений недостаточно.
 API таксономии, её PostgreSQL-таблицы и поставка данных используют реализацию master.
 

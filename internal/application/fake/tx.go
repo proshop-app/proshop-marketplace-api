@@ -261,6 +261,15 @@ func (o outbox) Enqueue(_ context.Context, task ports.NewTask) error {
 	return nil
 }
 
+func (o outbox) EnqueueBatch(ctx context.Context, tasks []ports.NewTask) error {
+	for _, task := range tasks {
+		if err := o.Enqueue(ctx, task); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (i inbox) MarkProcessed(_ context.Context, eventID string, at time.Time) (bool, error) {
 	if _, ok := i.d.processed[eventID]; ok {
 		return false, nil

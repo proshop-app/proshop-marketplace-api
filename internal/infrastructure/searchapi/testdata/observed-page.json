@@ -1,0 +1,8 @@
+{
+  "items": [{"id":"seller-a~p42","tenantId":"seller-a","productId":"p42"}],
+  "facets": [],
+  "total": 1,
+  "limit": 20,
+  "offset": 0,
+  "receipt": "03af0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab"
+}

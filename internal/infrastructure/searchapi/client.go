@@ -31,15 +31,17 @@ var (
 
 // Config — адрес и отдельный служебный токен поискового API.
 type Config struct {
-	URL     string
-	Token   string
-	Timeout time.Duration
+	URL           string
+	Token         string
+	PurchaseToken string
+	Timeout       time.Duration
 }
 
 // Index реализует порт индекса предложений через proshop-search.
 type Index struct {
 	base            string
 	token           string
+	purchaseToken   string
 	client          *http.Client
 	referenceBearer string
 }
@@ -53,10 +55,14 @@ func New(cfg Config) (*Index, error) {
 		(parsed.Path != "" && parsed.Path != "/") || len(cfg.Token) < 32 || cfg.Timeout <= 0 {
 		return nil, fmt.Errorf("некорректные настройки поискового сервиса")
 	}
+	if cfg.PurchaseToken != "" && (len(cfg.PurchaseToken) < 32 || cfg.PurchaseToken == cfg.Token) {
+		return nil, fmt.Errorf("нужен отдельный токен подтверждения покупок")
+	}
 
 	return &Index{
-		base:  strings.TrimRight(cfg.URL, "/") + apiPath,
-		token: cfg.Token,
+		base:          strings.TrimRight(cfg.URL, "/") + apiPath,
+		token:         cfg.Token,
+		purchaseToken: cfg.PurchaseToken,
 		client: &http.Client{
 			Timeout: cfg.Timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -188,6 +194,8 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 		offerQuery{
 			Exact:       query.Exact,
 			TrackQuery:  query.TrackQuery,
+			Observe:     query.Observe,
+			BuyerKey:    query.BuyerKey,
 			Attributes:  query.Attributes,
 			FacetFields: wireFacetFields(query),
 			Facets:      wireFacetSelection(query.Facets),
@@ -218,6 +226,7 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 	}
 	page := ports.OfferPage{
 		Correction: correction,
+		Receipt:    result.Receipt,
 		Facets:     result.Facets,
 		Total:      result.Total,
 		Items:      make([]ports.OfferDocument, 0, len(result.Items)),

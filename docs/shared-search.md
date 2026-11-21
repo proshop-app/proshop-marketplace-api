@@ -8,8 +8,8 @@ Backend маркетплейса сохраняет проекции в PostgreS
 
 ## Контракт и сохранённое поведение
 
-Служебные маршруты `/api/v1/internal/marketplace/*` защищены отдельным
-`SEARCH_MARKETPLACE_TOKEN`. Маркетплейсу нужны `SEARCH_URL`, этот токен,
+Служебные маршруты каталога и обратной связи `/api/v1/internal/marketplace/*`
+принимают `SEARCH_MARKETPLACE_TOKEN` в `X-Admin-Id`. Маркетплейсу нужны `SEARCH_URL`, этот токен,
 `SEARCH_TIMEOUT` (35 секунд) и `SEARCH_MAINTENANCE_INTERVAL` (минута).
 `GET /status` возвращает `contractVersion` и `ready`; ожидаемую версию задаёт
 константа в `internal/infrastructure/searchapi/client.go`. Старый контракт
@@ -59,6 +59,27 @@ keyword-ранжирование, фасеты и
 Общий поиск ограничивает каждый запрос каталогом площадки и опубликованными
 видимыми предложениями. Идентичность включает tenant и product; версии
 защищают от поздних снимков, снятие публикации оставляет tombstone.
+
+## Обратная связь V1
+
+`GET /api/v1/catalog/offers?q=товар&observe=1` включает наблюдение порции.
+API передаёт `observe: true` в существующем `POST /api/v1/internal/marketplace/search`.
+При проверенном access там же передаётся `buyerKey`. API переносит опциональный
+`receipt` из выдачи поиска. Ответ с `observe=1` имеет `Cache-Control: private, no-store`.
+
+`POST /api/v1/search/feedback` передаёт `kind`, `receipt` и `offerIds` для показов
+либо `offerId` для клика во внутренний `POST /api/v1/internal/marketplace/feedback`.
+Лимит составляет 120 POST в минуту на IP и 16 КиБ на тело. Лимитер разделяется
+между репликами API. Для клика с проверенным access API добавляет `buyerKey`.
+При сбое лимитера или поиска API возвращает `200 {"data":false}`.
+
+Для V1 `buyerKey` — 64 строчных hex-символа HMAC-SHA256 от `marketplace`, нулевого
+байта и локального `buyerId`. Все реплики API используют общий `SEARCH_ANALYTICS_KEY`.
+Оплата группы в той же транзакции ставит `search.purchase` в PostgreSQL outbox.
+Пул из четырёх обработчиков посылает её в `POST /api/v1/internal/marketplace/search-purchases`
+с отдельным `SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN` в `X-Admin-Id`. При `503` и потере
+ответа он отправляет то же событие с тем же `eventId`, максимум до двух часов от
+`paidObservedAt`. `200 {"data":{"attributed":0}}` завершает доставку.
 
 ## Пакетная доставка из outbox
 

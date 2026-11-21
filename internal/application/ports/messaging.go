@@ -45,6 +45,8 @@ type Task struct {
 // Outbox — запись задач внутри транзакции.
 type Outbox interface {
 	Enqueue(ctx context.Context, task NewTask) error
+	// EnqueueBatch записывает пачку одним запросом. Непустые DedupKey внутри пачки различны.
+	EnqueueBatch(context.Context, []NewTask) error
 }
 
 // ClaimRequest — сколько задач взять и до какого времени их держать.

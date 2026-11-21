@@ -2425,6 +2425,14 @@ paths:
             отправке поиска, не для подсказок или изменения фасетов. Без параметра учёт выключен.
             Учитывается только при непустом q и offset=0; иначе игнорируется.
             Любое значение, кроме true и 1, — 400.
+        - name: observe
+          in: query
+          schema: { type: string, enum: ['1'] }
+          description: >-
+            Запросить квитанцию этой порции органической выдачи при непустом q. Действует при догрузке.
+            Без q и при запросе ids квитанция отсутствует. При observe=1 ответ имеет Cache-Control private, no-store.
+            Access покупателя необязателен. Если его не удаётся проверить, выдача обслуживается как гостевая.
+            Параметр передаётся один раз; другие значения дают 400.
         - name: q
           in: query
           schema: { type: string, maxLength: 200 }
@@ -2492,9 +2500,54 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "200":
           description: Страница выдачи
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: ['public, max-age=30', 'private, no-store'] }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/OfferPage" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/search/feedback:
+    post:
+      tags: [catalog]
+      operationId: recordSearchFeedback
+      summary: Показы или клик в органической выдаче
+      description: >-
+        Передать квитанцию и предложения той порции, где случилось событие. Размер тела до 16384 байт.
+        Принимается до 120 запросов в минуту на адрес. Для клика можно передать обычный access покупателя.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/SearchImpression"
+                - $ref: "#/components/schemas/SearchClick"
+            examples:
+              impression:
+                value:
+                  kind: impression
+                  receipt: '03af0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab'
+                  offerIds: ['seller-a~p42']
+              click:
+                value:
+                  kind: click
+                  receipt: '03af0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab'
+                  offerId: 'seller-a~p42'
+      responses:
+        "200":
+          description: >-
+            data=true, если принято хотя бы одно предложение. data=false при отказе приёма,
+            в том числе при превышении частоты, истечении квитанции или сбое хранилища.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: boolean }
         "400": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
   /api/v1/catalog/variants/{tenantId}/{groupId}:
@@ -7987,6 +8040,8 @@ components:
       properties:
         correction:
           $ref: "#/components/schemas/OfferCorrection"
+        receipt:
+          $ref: "#/components/schemas/SearchReceipt"
         items:
           type: array
           items: { $ref: "#/components/schemas/Offer" }
@@ -8002,6 +8057,34 @@ components:
         total: { type: integer }
         limit: { type: integer }
         offset: { type: integer }
+    SearchReceipt:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+      description: Непрозрачная квитанция конкретной порции органической выдачи.
+    SearchFeedbackOfferId:
+      type: string
+      maxLength: 257
+      pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}~[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+    SearchImpression:
+      type: object
+      additionalProperties: false
+      required: [kind, receipt, offerIds]
+      properties:
+        kind: { type: string, enum: [impression] }
+        receipt: { $ref: "#/components/schemas/SearchReceipt" }
+        offerIds:
+          type: array
+          minItems: 1
+          maxItems: 48
+          items: { $ref: "#/components/schemas/SearchFeedbackOfferId" }
+    SearchClick:
+      type: object
+      additionalProperties: false
+      required: [kind, receipt, offerId]
+      properties:
+        kind: { type: string, enum: [click] }
+        receipt: { $ref: "#/components/schemas/SearchReceipt" }
+        offerId: { $ref: "#/components/schemas/SearchFeedbackOfferId" }
     OfferCorrection:
       type: object
       required: [query, kind]

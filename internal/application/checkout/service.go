@@ -12,6 +12,7 @@ import (
 
 	appcart "github.com/proshop-app/proshop-marketplace/internal/application/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/application/searchfeedback"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -24,6 +25,7 @@ const updateRetryDelay = 10 * time.Millisecond
 
 // Config — сроки расчётов.
 type Config struct {
+	SearchBuyerKeys *searchfeedback.BuyerKeys
 	// OrderCallTimeout — уже настроенный HTTP-бюджет адаптера; аренда не должна пережидать его.
 	OrderCallTimeout time.Duration
 	// QuoteTTL — дольше этого цена доставки не держится, что бы ни обещал магазин.
@@ -666,7 +668,6 @@ func (s *Service) updateSelection(
 			return checkout.ErrNotFound
 		}
 		previous := c.State()
-		before := previous.Version
 		if err := mutate(c, s.clock.Now()); err != nil {
 			return err
 		}
@@ -676,13 +677,16 @@ func (s *Service) updateSelection(
 				return err
 			}
 		}
-		if c.State().Version != before {
+		state = c.State()
+		if state.Version != previous.Version {
 			if err := tx.Checkouts().Update(ctx, c); err != nil {
+				return err
+			}
+			if err := s.enqueueSearchPurchases(ctx, tx, previous, state); err != nil {
 				return err
 			}
 		}
 
-		state = c.State()
 		s.observeTransitions(tx, previous, state)
 
 		return nil

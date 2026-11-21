@@ -28,6 +28,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
+	"github.com/proshop-app/proshop-marketplace/internal/application/searchfeedback"
 	appsynonyms "github.com/proshop-app/proshop-marketplace/internal/application/synonyms"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
@@ -79,6 +80,9 @@ type services struct {
 	carts             *appcart.Service
 	directory         *appdelivery.Service
 	checkouts         *appcheckout.Service
+	searchFeedback    *searchfeedback.Feedback
+	searchBuyerKeys   *searchfeedback.BuyerKeys
+	searchPurchases   *messaging.Dispatcher
 	dispatcher        *messaging.Dispatcher
 	creation          *appcheckout.Executor
 	janitor           *messaging.Janitor
@@ -258,6 +262,8 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 	)
 	carts := appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL)
+	searchBuyerKeys := searchfeedback.NewBuyerKeys(cfg.Search.AnalyticsKey)
+	limiter := redis.NewLimiter(s.cache, keyPrefix)
 	checkouts := appcheckout.NewService(
 		uow,
 		resyncing,
@@ -266,6 +272,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		identities,
 		now,
 		appcheckout.Config{
+			SearchBuyerKeys:  searchBuyerKeys,
 			OrderCallTimeout: cfg.Platform.Timeout,
 			QuoteTTL:         cfg.Checkout.QuoteTTL,
 			ReturnBaseURL:    cfg.Checkout.ReturnBaseURL,
@@ -332,6 +339,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 				appcheckout.TaskExpireCreation,
 				appcheckout.TaskPollOrder,
 				appcheckout.TaskCancelOrder,
+				searchfeedback.TaskPurchase,
 			},
 			Batch:     cfg.Outbox.Batch,
 			PerTenant: cfg.Outbox.PerTenant,
@@ -407,6 +415,9 @@ func (s *server) services(ctx context.Context) (services, error) {
 		carts:             carts,
 		directory:         pickups,
 		checkouts:         checkouts,
+		searchFeedback:    searchfeedback.NewFeedback(s.store.index, limiter),
+		searchBuyerKeys:   searchBuyerKeys,
+		searchPurchases:   searchPurchaseDispatcher(postgres.NewTaskQueue(s.store.pool), now, s.store.index),
 		dispatcher:        dispatcher,
 		creation: appcheckout.NewExecutor(
 			postgres.NewTaskQueue(s.store.pool),
@@ -519,6 +530,7 @@ func (s *server) jobs() []func(context.Context) error {
 		).Run,
 		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
 		jobs.NewCreationRunner(s.app.creation, s.logger, outbox.RecordOutcome).Run,
+		func(ctx context.Context) error { return outbox.RunLane(ctx, s.app.searchPurchases) },
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
 		jobs.NewOutboxRetryStatsRunner(
 			s.app.dispatcher,
@@ -567,20 +579,22 @@ func (s *server) httpServer() *http.Server {
 		Features:               s.app.buyerFeatures,
 		Cities:                 s.app.cities,
 
-		Promotion:      s.app.promotion,
-		ServerAPIToken: cfg.Promotion.ServerAPIToken,
-		Moderation:     s.app.moderation,
-		Taxonomy:       s.app.taxonomy,
-		Catalog:        s.app.queries,
-		SellersCounts:  postgres.NewSellersCounts(s.store.pool),
-		Participants:   s.app.participants,
-		Auth:           s.app.auth,
-		Carts:          s.app.carts,
-		Directory:      s.app.directory,
-		Checkouts:      s.app.checkouts,
-		Reference:      s.app.reference,
-		Synonyms:       s.app.synonyms,
-		OperatorToken:  cfg.Operator.Token,
+		Promotion:       s.app.promotion,
+		ServerAPIToken:  cfg.Promotion.ServerAPIToken,
+		Moderation:      s.app.moderation,
+		Taxonomy:        s.app.taxonomy,
+		Catalog:         s.app.queries,
+		SearchFeedback:  s.app.searchFeedback,
+		SearchBuyerKeys: s.app.searchBuyerKeys,
+		SellersCounts:   postgres.NewSellersCounts(s.store.pool),
+		Participants:    s.app.participants,
+		Auth:            s.app.auth,
+		Carts:           s.app.carts,
+		Directory:       s.app.directory,
+		Checkouts:       s.app.checkouts,
+		Reference:       s.app.reference,
+		Synonyms:        s.app.synonyms,
+		OperatorToken:   cfg.Operator.Token,
 		// потребители реестра читают своим токеном, мутации — только у оператора
 		ReferenceReadToken: cfg.Reference.ReadToken,
 		OperatorAuth:       s.app.operatorAuth,
