@@ -1,65 +1,58 @@
 package taxonomydata
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
-// CategoryMigration делает разрыв кодов явной, проверяемой частью поставки.
-type CategoryMigration struct {
-	FromRelease int64             `yaml:"fromRelease"`
-	ToRelease   int64             `yaml:"toRelease"`
-	Mappings    []CategoryMapping `yaml:"mappings"`
+// categoryMigration делает разрыв кодов явной, проверяемой частью поставки.
+type categoryMigration struct {
+	FromRelease int64             `json:"fromRelease"`
+	ToRelease   int64             `json:"toRelease"`
+	Mappings    []categoryMapping `json:"mappings"`
 }
 
-// CategoryMapping задаёт все допустимые назначения; split требует разбора карточки.
-type CategoryMapping struct {
-	From   string   `yaml:"from"`
-	To     []string `yaml:"to"`
-	Action string   `yaml:"action"`
-	Reason string   `yaml:"reason"`
+// categoryMapping задаёт все допустимые назначения; split требует разбора карточки.
+type categoryMapping struct {
+	From   string   `json:"from"`
+	To     []string `json:"to"`
+	Action string   `json:"action"`
+	Reason string   `json:"reason"`
 }
 
-func migrationFrom(source fs.FS, release taxonomy.Release) (CategoryMigration, error) {
-	var migration CategoryMigration
-	if _, err := fs.Stat(source, dataDirectory+"category-migration.yaml"); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return migration, nil
-		}
-		return migration, err
-	}
-	if err := decodeFile(source, "category-migration.yaml", &migration); err != nil {
-		return migration, err
-	}
+func validateCategoryMigration(migration categoryMigration, previous, next []taxonomy.Category) error {
 	if migration.FromRelease < 1 || migration.ToRelease <= migration.FromRelease || len(migration.Mappings) == 0 {
-		return migration, fmt.Errorf("%w: неверные версии миграции категорий", ErrInvalidBundle)
+		return fmt.Errorf("%w: неверные версии миграции категорий", ErrInvalidBundle)
 	}
-	seen := map[string]bool{}
+	sources := map[string]bool{}
+	collectMigrationLeaves(previous, sources)
 	leaves := map[string]bool{}
-	collectMigrationLeaves(release.Categories, leaves)
+	collectMigrationLeaves(next, leaves)
 	for _, mapping := range migration.Mappings {
-		if mapping.From == "" || seen[mapping.From] || mapping.Reason == "" {
-			return migration, fmt.Errorf("%w: повтор или пустая строка миграции", ErrInvalidBundle)
+		if !sources[mapping.From] || mapping.Reason == "" {
+			return fmt.Errorf("%w: неверный исходный лист миграции %s", ErrInvalidBundle, mapping.From)
 		}
-		seen[mapping.From] = true
+		delete(sources, mapping.From)
 		valid := mapping.Action == "unchanged" && len(mapping.To) == 1 && mapping.To[0] == mapping.From ||
 			(mapping.Action == "merge" || mapping.Action == "renamed") && len(mapping.To) == 1 ||
 			mapping.Action == "split" && len(mapping.To) > 1 || mapping.Action == "deleted" && len(mapping.To) == 0
 		if !valid {
-			return migration, fmt.Errorf("%w: неверный вид переноса %s", ErrInvalidBundle, mapping.From)
+			return fmt.Errorf("%w: неверный вид переноса %s", ErrInvalidBundle, mapping.From)
 		}
 		targets := map[string]bool{}
 		for _, id := range mapping.To {
 			if !leaves[id] || targets[id] {
-				return migration, fmt.Errorf("%w: неверный адресат переноса %s", ErrInvalidBundle, id)
+				return fmt.Errorf("%w: неверный адресат переноса %s", ErrInvalidBundle, id)
 			}
 			targets[id] = true
 		}
 	}
-	return migration, nil
+	if len(sources) != 0 {
+		return fmt.Errorf("%w: не покрыты %d исходных листьев миграции", ErrInvalidBundle, len(sources))
+	}
+
+	return nil
 }
 
 func collectMigrationLeaves(categories []taxonomy.Category, leaves map[string]bool) {

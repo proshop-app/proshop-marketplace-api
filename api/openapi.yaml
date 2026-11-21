@@ -7259,7 +7259,7 @@ components:
     TaxonomySchemaSource:
       type: object
       additionalProperties: false
-      description: Исходник schemas.yaml; extends разворачивается сервером, abstract не выдаётся в API
+      description: Исходное определение схемы; extends разворачивается сервером, abstract не выдаётся в API
       properties:
         identityWarnings: { type: boolean, description: "Наследуется; false отключает переходный режим" }
         identity: { $ref: "#/components/schemas/TaxonomySchemaIdentity" }

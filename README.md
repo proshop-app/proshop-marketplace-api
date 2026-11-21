@@ -10,7 +10,10 @@ Kafka, Redis. Проект — `proshop-server/docs/marketplace-mvp.md`, пра�
 
 ## Запуск
 
-Нужны Docker с Compose и Go 1.23.2. Глобально ничего ставить не нужно.
+Нужны Docker с Compose, Go 1.23.2, Python 3 и локальный артефакт таксономии.
+По умолчанию `make dev` берёт выпуск из `../uno-reference-data`. Можно указать
+`UNO_REFERENCE_DATA_DIR` или точный путь `TAXONOMY_BUNDLE`.
+[Вход сборки и тестов](docs/taxonomy-releases.md#сборка-и-проверка).
 
 ```bash
 make dev
@@ -36,7 +39,8 @@ Kafka `29094`, Redis `26379`; любой меняется переменной
 | `make test-integration` | интеграционные тесты на compose (поднимает его сам) |
 | `make lint` | golangci-lint v2.3.1 с `depguard` по слоям |
 | `make migrate` | миграции к `DATABASE_URL` (`go run ./cmd/migrate up`; ещё `down`, `status`) |
-| `make taxonomy-check` / `make taxonomy-manifest` | проверить поставку и манифест YAML без БД |
+| `make taxonomy-artifact` | сверить SHA-256 входного JSON и подготовить его для сборки и тестов |
+| `make taxonomy-check` | проверить встроенную поставку без БД |
 | `make reindex` | перестроить индекс предложений из проекции |
 | `make build` | `bin/marketplace`, `bin/migrate`, `bin/taxonomy` |
 | `make image` | образ: сборка на `golang:1.23.2-alpine`, запуск на `scratch` |
@@ -461,8 +465,8 @@ Down восстанавливает пустую JSONB-структуру без
 `product.marketplace` в проекции товара и всех прежних условий
 видимости продавца/товара. Контракт и причины отказа —
 [«Карточка маркетплейса»](docs/server-contract.md#карточка-маркетплейса).
-Данные поставки 4 — три нормализованных YAML-файла и манифест:
-`attributes.yaml`, `schemas.yaml`, `categories.yaml`, `manifest.yaml`.
+Источник таксономии — `uno-reference-data`. Загрузчик получает закреплённый
+`taxonomy-v15.json` при сборке.
 Формат и пример частей — [taxonomy-data.md](docs/taxonomy-data.md),
 выпуск и откат — [taxonomy-releases.md](docs/taxonomy-releases.md).
 
@@ -472,24 +476,22 @@ Enum ссылается на закрытый словарь; string может 
 При публикации confirmed-значения закрытых словарей сохраняются в снимке;
 проверка карточек, фасеты и варианты используют этот снимок.
 Код нельзя удалить; type, unit и dictionary неизменны.
-Лимиты: 4096 категорий, 256 атрибутов, глубина 16.
+Лимиты: 4096 категорий, 512 глобальных атрибутов, 256 полей схемы, глубина 16.
 
 ```bash
 make migrate
 make reference-bootstrap
 make reference-apply
 make taxonomy-check
-go run ./cmd/taxonomy manifest
-make taxonomy-apply
+go run ./cmd/taxonomy apply --confirm-category-replacement
 ```
 
-Последняя команда намеренно не подтверждает замену дерева: для поставки 10
-после проверки оператор запускает `go run ./cmd/taxonomy apply --confirm-category-replacement`.
-Если опубликованный снимок изменён оператором, дополнительно требуется
-проверенная `--expected-version`. Для чистой среды разработки весь порядок
-выполняет `make dev`.
+Этот порядок предназначен для первой установки 15. На стендах с уже
+применённой 15 достаточно [сверки перед заменой образа](docs/taxonomy-releases.md#выкат-json-артефакта-поставки-15).
+Для чистой среды разработки весь порядок выполняет `make dev`.
 
-Оператор правит части через API с If-Match. Команда `taxonomy load`,
+Штатные изменения таксономии выпускаются в Uno. Операторские правки частей
+через API с If-Match предназначены для согласованных аварийных исправлений. Команда `taxonomy load`,
 цель `taxonomy-load` и прежний развёрнутый пример удалены.
 Откат к старому формату снимка запрещён; миграции JSONB не нужны.
 

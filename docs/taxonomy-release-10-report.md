@@ -68,7 +68,7 @@
 
 ## Миграция и словари
 
-Все 1085 исходных листьев 9 учтены: 783 unchanged, 24 renamed, 45 merge, 233 split, 0 deleted. [Машинная таблица](../internal/infrastructure/taxonomydata/data/category-migration.yaml) не выполняет автоматическое переназначение. При split запрещён выбор первого адресата без разбора карточки.
+Все 1085 исходных листьев 9 учтены: 783 unchanged, 24 renamed, 45 merge, 233 split, 0 deleted. [Машинная таблица](https://github.com/proshop-app/uno-reference-data/blob/132eccff41b0e91448e702c6ac75dd0ca8374df3/history/taxonomy/category-migrations.json) не выполняет автоматическое переназначение. При split запрещён выбор первого адресата без разбора карточки.
 
 Активных строковых атрибутов без словаря — 8: точные идентификаторы и свободный текст, с `dictionaryNote`, `facet=false`. Новые поля — `maternity`, `nursing_access`, `soil_ph_min/max`, `soil_moisture_min/max`, `ac_output_w`. Существующие коды не переименовывались; 196 ссылок на словари сохранены.
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +23,17 @@ func TestCheckDoesNotNeedDatabase(t *testing.T) {
 	var info bundleInfo
 	if err := json.Unmarshal(output.Bytes(), &info); err != nil || info.Coverage.Leaves == 0 {
 		t.Fatalf("нет отчёта о комплекте: %s, %v", output.String(), err)
+	}
+}
+
+func TestArtifactRelease15ExportMatchesYAML(t *testing.T) {
+	const want = "16124f6b35157795b6111c22644148e048678327960d1c2a8e94a4db43b7a1bf"
+	var output, diagnostics bytes.Buffer
+	if code := run([]string{"check", "--export"}, &output, &diagnostics); code != 0 {
+		t.Fatalf("code=%d: %s", code, diagnostics.String())
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(output.Bytes())); got != want {
+		t.Fatalf("SHA-256 развёрнутой выгрузки %s, ожидался %s", got, want)
 	}
 }
 

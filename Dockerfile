@@ -17,11 +17,13 @@ RUN find /reference -type d -exec chmod 0555 {} \; \
  && find /reference -type f -exec chmod 0444 {} \;
 
 COPY cmd ./cmd
+# make taxonomy-artifact помещает проверенный JSON в контекст сборки.
 COPY internal ./internal
 COPY pkg ./pkg
 RUN go build -trimpath -ldflags="-s -w" -o /out/marketplace ./cmd/marketplace \
  && go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate \
  && go build -trimpath -ldflags="-s -w" -o /out/taxonomy ./cmd/taxonomy \
+ && /out/taxonomy check >/dev/null \
  && go build -trimpath -ldflags="-s -w" -o /out/geoip-update ./cmd/geoip
 
 FROM scratch AS taxonomy

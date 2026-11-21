@@ -7,7 +7,7 @@
 ## Категории
 
 Полная машинная таблица —
-[`data/category-migration.yaml`](../internal/infrastructure/taxonomydata/data/category-migration.yaml):
+[`data/category-migration.yaml`](https://github.com/proshop-app/uno-reference-data/blob/132eccff41b0e91448e702c6ac75dd0ca8374df3/history/taxonomy/category-migrations.json):
 каждый из 1085 листьев поставки 9 имеет ровно одну строку. Действия:
 `unchanged` — сохранённый код и смысл вида, `renamed` — переименование, `merge` — общий
 канонический адресат, `split` — выбор по виду, основному разделу или аудитории, `deleted` — удаление

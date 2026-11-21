@@ -108,7 +108,8 @@ price/inStock и селектор фасетов сохраняют свои п�
 проверяет корень и каждый узел реальной поставки. Переменная
 `TAXONOMY_CONTRACT_DIR` сохраняет CSV, snapshot и wire-запросы.
 
-`bash scripts/check-search-taxonomy.sh /путь/к/sc-search` строит этот корпус
+`bash scripts/check-search-taxonomy.sh /путь/к/proshop-search` готовит
+закреплённый артефакт Uno и строит этот корпус
 и проверяет все 3975 запросов настоящим `marketplace.ValidateQuery` поиска,
 а snapshot — загрузчиком операторских подсказок. Без этой команды внешние
 корпусные тесты поиска пропускаются; его граничные тесты автономны.

@@ -178,6 +178,18 @@ domain ← application ← interfaces, infrastructure        сборка гра
 
 `make test` идёт с `-race`. Красное чинится, не пропускается.
 
+## Таксономия при сборке
+
+Таксономия выпускается в `uno-reference-data`. Файл `release.lock.json` пакета
+`taxonomydata` закрепляет номер, SHA-256 точных байтов и коммит Uno. Make вызывает
+`make taxonomy-artifact`: путь к checkout берётся из `UNO_REFERENCE_DATA_DIR`
+(по умолчанию `../uno-reference-data`), путь к готовому JSON — из `TAXONOMY_BUNDLE`.
+Подготовка через Python 3 проверяет SHA-256 и копирует JSON в игнорируемый путь
+для `go:embed`. Для прямых команд Go и Docker выполнить этот шаг один раз и
+повторять при смене закрепления. Локальная подготовка и тесты работают без сети.
+CI берёт тот же выпуск из закреплённого коммита Uno. Договор и порядок выката —
+[taxonomy-releases.md](docs/taxonomy-releases.md).
+
 ## Одна команда
 
 `make dev` — compose (PostgreSQL 16, OpenSearch, Kafka KRaft, Redis),
