@@ -73,8 +73,6 @@ func TestStoreCardHTTP(t *testing.T) {
 		Features: appbuyer.NewFeatures(
 			store,
 			nil,
-
-			fake.NewLimiter(),
 			&fake.PickupLookup{},
 		),
 		Registerer:     prometheus.NewRegistry(),

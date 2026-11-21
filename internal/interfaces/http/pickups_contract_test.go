@@ -108,7 +108,7 @@ func TestPickupPublicContract(t *testing.T) {
 
 func TestProfilePickupContract(t *testing.T) {
 	service, _, store := pickupHTTP(t)
-	features := appbuyer.NewFeatures(store, nil, fake.NewLimiter(), service)
+	features := appbuyer.NewFeatures(store, nil, service)
 	handler := &buyerFeatureHandlers{service: features}
 	for _, test := range []struct {
 		body   string

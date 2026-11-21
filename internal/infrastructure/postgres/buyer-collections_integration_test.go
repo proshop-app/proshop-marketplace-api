@@ -134,7 +134,7 @@ func TestBuyerCollectionConcurrentLimit(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal(ctx.Err())
 			}
-			service := appbuyer.NewFeatures(uow, nil, fake.NewLimiter(), &fake.PickupLookup{})
+			service := appbuyer.NewFeatures(uow, nil, &fake.PickupLookup{})
 			results, started := make(chan error, 2), make(chan struct{}, 2)
 			for _, id := range []ids.ProductID{"p1", "p2"} {
 				go func() {
@@ -201,7 +201,7 @@ func TestBuyerPriceDropSQLAndFavoritePage(t *testing.T) {
 	uow := postgres.NewUnitOfWork(pgtest.Pool(t))
 	seedBuyerFeatureOffers(t, uow)
 	ctx := context.Background()
-	service := appbuyer.NewFeatures(uow, nil, fake.NewLimiter(), &fake.PickupLookup{})
+	service := appbuyer.NewFeatures(uow, nil, &fake.PickupLookup{})
 	for _, id := range []ids.ProductID{"p1", "p2"} {
 		offer := ids.OfferID{Tenant: "t1", Product: id}
 		if err := service.PutSaved(ctx, buyerA, ports.Favorites, offer, nil); err != nil {
@@ -274,7 +274,7 @@ func TestPriceDropCounterMatchesList(t *testing.T) {
 			uow := postgres.NewUnitOfWork(pool)
 			seedBuyerFeatureOffers(t, uow)
 			ctx := context.Background()
-			service := appbuyer.NewFeatures(uow, nil, fake.NewLimiter(), &fake.PickupLookup{})
+			service := appbuyer.NewFeatures(uow, nil, &fake.PickupLookup{})
 			offer := ids.OfferID{Tenant: "t1", Product: "p1"}
 			if err := service.PutSaved(ctx, buyerA, ports.PriceWatches, offer, nil); err != nil {
 				t.Fatal(err)

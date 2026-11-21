@@ -3,15 +3,27 @@ package buyer
 import (
 	"context"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ipnet"
 )
 
+const (
+	citySuggestLimit  = 30
+	citySuggestWindow = time.Minute
+)
+
 // ErrCityQuery — недопустимый поисковый запрос города.
 var ErrCityQuery = errs.New(errs.Invalid, "buyer.city_query", "введите название города от 2 до 120 символов")
+
+// RegionLimitError передаёт транспорту время до открытия окна лимитера подсказок.
+type RegionLimitError struct {
+	RetryAfter time.Duration
+}
 
 // Cities — общесайтовая подсказка города, независимая от входа и состава покупки.
 type Cities struct {
@@ -43,7 +55,7 @@ func (s *Cities) Suggest(ctx context.Context, ip, value string) ([]ports.CitySug
 }
 
 func (s *Cities) allow(ctx context.Context, ip string) error {
-	allowed, retry, err := s.limiter.Allow(ctx, "city:"+ipnet.Network(ip), regionRequestLimit, regionRequestWindow)
+	allowed, retry, err := s.limiter.Allow(ctx, "city:"+ipnet.Network(ip), citySuggestLimit, citySuggestWindow)
 	if err != nil {
 		return err
 	}
@@ -52,3 +64,9 @@ func (s *Cities) allow(ctx context.Context, ip string) error {
 	}
 	return nil
 }
+
+func (e *RegionLimitError) Error() string {
+	return "превышен лимит подсказок региона, повторите через " + e.RetryAfter.Round(time.Second).String()
+}
+
+func (e *RegionLimitError) Unwrap() error { return buyer.ErrRegionLimit.WithMessage(e.Error()) }

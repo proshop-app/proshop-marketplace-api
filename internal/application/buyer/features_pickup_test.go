@@ -18,7 +18,7 @@ func TestProfileKeepsUnchangedPickupWithoutLookup(t *testing.T) {
 			{Carrier: "cdek", Code: "p1", City: "Город", Address: "Адрес", RegionCode: "RU-AD"},
 		},
 	}
-	service := app.NewFeatures(fake.NewStore(), nil, fake.NewLimiter(), lookup)
+	service := app.NewFeatures(fake.NewStore(), nil, lookup)
 	saved, err := service.Patch(ctx, featureBuyer, func(state buyer.ProfileState) (buyer.ProfileState, error) {
 		state.PickupPoint = &buyer.Pickup{Provider: "cdek", Code: "p1", City: "Город"}
 		return state, nil

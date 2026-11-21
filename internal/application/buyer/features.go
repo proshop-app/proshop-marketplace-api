@@ -2,9 +2,7 @@ package buyer
 
 import (
 	"context"
-	"log/slog"
 	"slices"
-	"time"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -13,7 +11,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/ipnet"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 	"github.com/proshop-app/proshop-marketplace/pkg/regions"
 )
@@ -25,23 +22,15 @@ const (
 	RegionProfile = "profile"
 	// RegionPickup — регион сохранённого пункта выдачи.
 	RegionPickup = "pickup"
-	// RegionIP — подсказка провайдера по адресу клиента.
-	RegionIP            = "ip"
-	regionRequestLimit  = 30
-	regionRequestWindow = time.Minute
+	// RegionIP — локальная подсказка по адресу клиента.
+	RegionIP = "ip"
 )
-
-// RegionLimitError передаёт транспорту время до открытия окна лимитера.
-type RegionLimitError struct {
-	RetryAfter time.Duration
-}
 
 // Features — покупательские сценарии в одной транзакции на изменение.
 type Features struct {
-	points  ports.ProfilePickupLookup
-	uow     ports.UnitOfWork
-	geo     ports.GeoIP
-	limiter ports.RateLimiter
+	points   ports.ProfilePickupLookup
+	uow      ports.UnitOfWork
+	detector ports.CityDetector
 }
 
 // Alerts — счётчик достигнутых ценовых условий.
@@ -72,14 +61,9 @@ type SavedView struct {
 	Dropped      bool
 }
 
-// NewFeatures — собирает сценарии; nil GeoIP отключает IP-подсказку.
-func NewFeatures(
-	uow ports.UnitOfWork,
-	geo ports.GeoIP,
-	limiter ports.RateLimiter,
-	points ports.ProfilePickupLookup,
-) *Features {
-	return &Features{uow: uow, geo: geo, limiter: limiter, points: points}
+// NewFeatures — собирает сценарии; nil detector отключает IP-подсказку.
+func NewFeatures(uow ports.UnitOfWork, detector ports.CityDetector, points ports.ProfilePickupLookup) *Features {
+	return &Features{uow: uow, detector: detector, points: points}
 }
 
 // Profile возвращает сохранённый профиль и актуальное число снижений.
@@ -196,38 +180,23 @@ func (s *Features) Region(ctx context.Context, id ids.UUID, ip string) (RegionVi
 			return result, err
 		}
 	}
-	if result.Source != RegionNone || s.geo == nil || ipnet.Network(ip) == "" {
+	if result.Source != RegionNone || s.detector == nil {
 		return result, nil
 	}
-	locate := s.geo.Locate
-	if cache, ok := s.geo.(ports.GeoIPCache); ok {
-		if region, hit := cache.Cached(ctx, ip); hit {
-			return geoRegion(region), nil
-		}
-		locate = cache.LocateUncached
-	}
-	if id == "" {
-		key := "region:" + ipnet.Network(ip)
-		allowed, retryAfter, err := s.limiter.Allow(ctx, key, regionRequestLimit, regionRequestWindow)
-		if err != nil {
-			slog.WarnContext(ctx, "Сбой лимитера подсказки региона", "error", err)
-		} else if !allowed {
-			return result, &RegionLimitError{RetryAfter: retryAfter}
-		}
-	}
-	region, err := locate(ctx, ip)
+	return s.regionByIP(ctx, ip), nil
+}
+
+func (s *Features) regionByIP(ctx context.Context, ip string) RegionView {
+	city, err := s.detector.DetectCity(ctx, ip)
 	if err != nil {
-		// Геолокация — подсказка: сбой провайдера не блокирует витрину, вид сбоя пишет адаптер.
-		return result, nil //nolint:nilerr // ответ без региона — штатный исход подсказки
+		// Отказ локальной базы оставляет покупателю ручной выбор региона.
+		return RegionView{Source: RegionNone}
 	}
-	if region == nil {
-		return result, nil
-	}
-	name, ok := regions.Name(region.Code)
+	name, ok := regions.Name(city.RegionCode)
 	if !ok {
-		return result, nil
+		return RegionView{Source: RegionNone}
 	}
-	return regionView(buyer.Region{Code: region.Code, Name: name}, RegionIP), nil
+	return regionView(buyer.Region{Code: city.RegionCode, Name: name}, RegionIP)
 }
 
 func regionView(region buyer.Region, source string) RegionView {
@@ -441,17 +410,3 @@ func pricedDocument(state ports.OfferState) (ports.OfferDocument, bool) {
 	}
 	return doc, true
 }
-
-func geoRegion(region *buyer.Region) RegionView {
-	if region != nil {
-		if name, ok := regions.Name(region.Code); ok {
-			return regionView(buyer.Region{Code: region.Code, Name: name}, RegionIP)
-		}
-	}
-	return RegionView{Source: RegionNone}
-}
-
-func (e *RegionLimitError) Error() string {
-	return "превышен лимит подсказок региона, повторите через " + e.RetryAfter.Round(time.Second).String()
-}
-func (e *RegionLimitError) Unwrap() error { return buyer.ErrRegionLimit.WithMessage(e.Error()) }

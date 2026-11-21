@@ -164,7 +164,7 @@ func newDependencyFixture(t *testing.T) *dependencyFixture {
 		Random:      fake.Random{},
 		SearchDepth: 100,
 	})
-	buyers := appbuyer.NewFeatures(store, nil, fake.NewLimiter(), &fake.PickupLookup{})
+	buyers := appbuyer.NewFeatures(store, nil, &fake.PickupLookup{})
 	return &dependencyFixture{
 		store:     store,
 		upstream:  upstream,

@@ -8,9 +8,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/dadata"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/smsru"
 )
@@ -84,12 +82,4 @@ func callCheck(ctx context.Context, cfg config.Config, logger *slog.Logger) port
 	}
 
 	return client
-}
-
-func (s *server) geoIP() ports.GeoIP {
-	if s.cfg.DaData.APIKey == "" {
-		return nil
-	}
-	source := dadata.New(s.cfg.DaData.APIKey, dadata.Endpoint)
-	return redis.NewGeoIP(s.cache, source, keyPrefix, s.cfg.DaData.CacheSecret)
 }

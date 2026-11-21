@@ -2,8 +2,6 @@ package http
 
 import (
 	"encoding/json"
-	"errors"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -118,11 +116,6 @@ func (h *buyerFeatureHandlers) patchProfile(w http.ResponseWriter, r *http.Reque
 func (h *buyerFeatureHandlers) region(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.Region(r.Context(), BuyerID(r.Context()), clientIP(r, h.trustedProxies))
 	if err != nil {
-		var limited *appbuyer.RegionLimitError
-		if errors.As(err, &limited) {
-			seconds := max(1, int(math.Ceil(limited.RetryAfter.Seconds())))
-			w.Header().Set("Retry-After", strconv.Itoa(seconds))
-		}
 		writeError(w, r, err)
 		return
 	}

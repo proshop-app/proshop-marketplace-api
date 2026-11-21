@@ -75,17 +75,6 @@ type BuyerFeatures interface {
 	Subscribers(context.Context, ids.TenantID, ids.UUID) (int, bool, error)
 }
 
-// GeoIP — определяет регион по адресу без сохранения его в профиле.
-type GeoIP interface {
-	Locate(context.Context, string) (*buyer.Region, error)
-}
-
-// GeoIPCache позволяет не расходовать лимит провайдера при попадании в кэш.
-type GeoIPCache interface {
-	Cached(context.Context, string) (*buyer.Region, bool)
-	LocateUncached(context.Context, string) (*buyer.Region, error)
-}
-
 // Snapshot оставляет только публичные поля карточки.
 func Snapshot(doc OfferDocument) OfferSnapshot {
 	categories := make([]SnapshotCategory, 0, len(doc.Categories))

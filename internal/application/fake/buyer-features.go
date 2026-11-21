@@ -23,20 +23,6 @@ type buyerFeatures struct {
 	store *data
 }
 
-// GeoIP задаёт ответ геолокации и считает обращения в тестах.
-type GeoIP struct {
-	CacheHit bool
-	Region   *buyer.Region
-	Err      error
-	Calls    int
-}
-
-// Locate — возвращает регион или nil при отсутствии подсказки.
-func (g *GeoIP) Locate(_ context.Context, _ string) (*buyer.Region, error) {
-	g.Calls++
-	return g.Region, g.Err
-}
-
 func newBuyerFeaturesData() *buyerFeaturesData {
 	return &buyerFeaturesData{
 		Order:    map[ids.UUID][]ids.TenantID{},
@@ -237,14 +223,4 @@ func (r buyerFeatures) UpdateTarget(
 		}
 	}
 	return nil
-}
-
-// Cached позволяет проверять, что попадание в кэш не расходует лимит.
-func (g *GeoIP) Cached(_ context.Context, _ string) (*buyer.Region, bool) {
-	return g.Region, g.CacheHit
-}
-
-// LocateUncached имитирует запрос провайдера после промаха кэша.
-func (g *GeoIP) LocateUncached(ctx context.Context, ip string) (*buyer.Region, error) {
-	return g.Locate(ctx, ip)
 }

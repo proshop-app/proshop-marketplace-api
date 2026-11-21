@@ -46,6 +46,7 @@ type Limiter struct {
 	Err        error
 	mu         sync.Mutex
 	counts     map[string]int
+	calls      int
 }
 
 // Platform — API сервера установки в памяти.
@@ -218,6 +219,7 @@ func (l *Limiter) Allow(_ context.Context, key string, limit int, window time.Du
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	l.calls++
 	if l.Err != nil {
 		return false, 0, l.Err
 	}
@@ -231,6 +233,13 @@ func (l *Limiter) Allow(_ context.Context, key string, limit int, window time.Du
 	}
 
 	return true, 0, nil
+}
+
+// Calls возвращает число обращений к лимитеру, включая завершившиеся ошибкой.
+func (l *Limiter) Calls() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.calls
 }
 
 // NewPlatform — пустой сервер.

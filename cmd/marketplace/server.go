@@ -373,9 +373,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		),
 		buyerFeatures: appbuyer.NewFeatures(
 			uow,
-			s.geoIP(),
-
-			redis.NewLimiter(s.cache, keyPrefix),
+			s.cityDetector,
 			pickups,
 		),
 

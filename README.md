@@ -731,9 +731,10 @@ SQL через `CROSS JOIN LATERAL` берёт не больше `limit` луч�
 Удаление сохранённого `marketplace.delivery.carriers` на сервере: шаг мигратора
 `remove-marketplace-carriers` (dry-run, затем `--apply`); регионы сохраняются.
 
-## Локальная подсказка города
+## Локальная подсказка города и региона
 
-`GET /api/v1/city` использует опубликованную DB-IP City Lite и встроенный
-HFLabs/city, без передачи/сохранения IP. Поставка базы — отдельный `/geoip` и
-месячный CronJob на PVC; отсутствие файла сохраняет ручной выбор.
+`GET /api/v1/city` и IP-подсказка `GET /api/v1/region` используют один детектор
+с DB-IP City Lite и встроенным HFLabs/city, без передачи и сохранения IP.
+Ежемесячный CronJob запускает `/geoip-update` и обновляет базу на PVC.
+Ручной выбор доступен и без файла базы.
 [Договор, лицензии, приватность и обновление](internal/infrastructure/localgeoip/README.md).

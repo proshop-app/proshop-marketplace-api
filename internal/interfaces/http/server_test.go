@@ -42,7 +42,7 @@ var t0 = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
 type env struct {
 	checkouts  *appcheckout.Service
 	limiter    *fake.Limiter
-	geo        *fake.GeoIP
+	citySource *fake.Cities
 	refreshKey string
 	server     *httptest.Server
 	store      *fake.Store
@@ -65,14 +65,14 @@ var w3ServerDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"},
 func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 	t.Helper()
 	e := &env{
-		geo:      &fake.GeoIP{},
-		limiter:  fake.NewLimiter(),
-		store:    fake.NewStore(),
-		index:    fake.NewIndex(),
-		clock:    fake.NewClock(t0),
-		calls:    fake.NewCalls(),
-		platform: fake.NewPlatform(),
-		pickups:  &fake.PickupLookup{},
+		citySource: &fake.Cities{},
+		limiter:    fake.NewLimiter(),
+		store:      fake.NewStore(),
+		index:      fake.NewIndex(),
+		clock:      fake.NewClock(t0),
+		calls:      fake.NewCalls(),
+		platform:   fake.NewPlatform(),
+		pickups:    &fake.PickupLookup{},
 	}
 	e.store.SeedTaxonomy(taxonomy.Definition{
 		Attributes: []taxonomy.Attribute{{Code: "a0", Name: "Поле", Type: "string"}},
@@ -90,7 +90,8 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 	deps := transport.Deps{
 		RequestTimeout:         time.Minute,
 		ReferenceImportTimeout: time.Minute,
-		Features:               appbuyer.NewFeatures(e.store, e.geo, e.limiter, e.pickups),
+		Cities:                 appbuyer.NewCities(e.citySource, e.citySource, e.limiter),
+		Features:               appbuyer.NewFeatures(e.store, e.citySource, e.pickups),
 		Taxonomy:               apptaxonomy.NewService(e.store, e.clock, nil),
 		Catalog: appcatalog.NewQueries(
 			e.store,
