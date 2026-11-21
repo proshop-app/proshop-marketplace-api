@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -113,8 +114,18 @@ func (i *Indexer) sendOfferBatch(
 			i.batchObserver.ObserveBatch(len(docs), time.Since(started), err)
 		}
 	}
-	// Только постоянный отказ документа требует дробления. При сетевом сбое
-	// повторяем всю пачку с отсрочкой, без лавины запросов к недоступному поиску.
+	var capacity *ports.OfferCapacityError
+	if errors.As(err, &capacity) {
+		for _, key := range capacity.Deferred {
+			for _, n := range positions[key] {
+				failures[n] = ports.ErrOfferCapacity
+			}
+		}
+		docs = docs[capacity.UnconfirmedFrom:]
+		err = capacity.UnconfirmedError
+	}
+	// Только постоянный отказ требует дробления. Сетевой сбой оставляет
+	// неподтверждённые документы на повтор с отсрочкой.
 	if errs.CodeOf(err) == errs.Invalid && len(docs) > 1 {
 		middle := len(docs) / 2
 		i.sendOfferBatch(ctx, docs[:middle], positions, failures)

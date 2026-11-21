@@ -12,6 +12,17 @@ import (
 // request не повторяет мутации транспортом: ответ может потеряться уже после
 // записи. Outbox повторит версионированную пачку, а rebuild сверит поколение.
 func (x *Index) request(ctx context.Context, method, path string, payload, out any) (int, error) {
+	return x.requestWithCapacity(ctx, method, path, payload, out, nil)
+}
+
+func (x *Index) requestWithCapacity(
+	ctx context.Context,
+	method string,
+	path string,
+	payload any,
+	out any,
+	capacity *capacityResponse,
+) (int, error) {
 	var body io.Reader
 
 	if payload != nil {
@@ -39,6 +50,9 @@ func (x *Index) request(ctx context.Context, method, path string, payload, out a
 	}()
 
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		if capacity != nil && response.StatusCode == http.StatusServiceUnavailable {
+			*capacity = readCapacityResponse(response.Body)
+		}
 		// Не прокидываем тело чужой ошибки и служебные заголовки в публичный API.
 		message := fmt.Sprintf("поиск ответил HTTP %d", response.StatusCode)
 
