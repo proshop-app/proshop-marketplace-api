@@ -69,7 +69,7 @@ func (s *feedbackSink) Feedback(_ context.Context, event ports.SearchFeedback) (
 	return s.err == nil, s.err
 }
 
-func newFeedbackHTTP(t *testing.T) feedbackHTTPEnv {
+func newFeedbackHTTP(t *testing.T, enabled bool) feedbackHTTPEnv {
 	t.Helper()
 	ctx := context.Background()
 	clock := fake.NewClock(time.Now())
@@ -98,12 +98,19 @@ func newFeedbackHTTP(t *testing.T) feedbackHTTPEnv {
 	}
 	keys := searchfeedback.NewBuyerKeys(strings.Repeat("k", 32))
 	sink, limiter := &feedbackSink{}, fake.NewLimiter()
+	var service *searchfeedback.Feedback
+	buyerKey := keys.Key(feedbackBuyer)
+	if enabled {
+		service = searchfeedback.NewFeedback(sink, limiter, keys)
+	} else {
+		keys = nil
+	}
 	handler := NewHandler(Deps{
 		RequestTimeout:         time.Second,
 		ReferenceImportTimeout: time.Second,
 		Auth:                   appbuyer.NewAuth(store, nil, tokens, nil, nil, clock, appbuyer.AuthConfig{}),
 		Catalog:                appcatalog.NewQueries(store, index, nil, nil, nil, clock),
-		SearchFeedback:         searchfeedback.NewFeedback(sink, limiter),
+		SearchFeedback:         service,
 		SearchBuyerKeys:        keys,
 		TrustedProxies:         1,
 		Registerer:             prometheus.NewRegistry(),
@@ -115,7 +122,7 @@ func newFeedbackHTTP(t *testing.T) feedbackHTTPEnv {
 		limiter: limiter,
 		tokens:  tokens,
 		sink:    sink,
-		key:     keys.Key(feedbackBuyer),
+		key:     buyerKey,
 		token:   access.Token,
 	}
 }
@@ -136,7 +143,7 @@ func (e feedbackHTTPEnv) send(method, path, body, cookie, bearer, ip string) *ht
 }
 
 func TestCatalogSearchObservation(t *testing.T) {
-	e := newFeedbackHTTP(t)
+	e := newFeedbackHTTP(t, true)
 	const route = "/api/v1/catalog/offers"
 	const observed = route + "?q=товар&observe=1&offset=20&track=1"
 	response := e.send(http.MethodGet, observed, "", e.token, "", "")
@@ -171,8 +178,24 @@ func TestCatalogSearchObservation(t *testing.T) {
 	}
 }
 
+func TestCatalogSearchAndFeedbackWithObservationDisabled(t *testing.T) {
+	e := newFeedbackHTTP(t, false)
+	const path = "/api/v1/catalog/offers?q=товар&observe=1"
+	response := e.send(http.MethodGet, path, "", e.token, "", "")
+	assertObservation(t, response, "", "private, no-store")
+	if e.index.Query.Observe || e.index.Query.BuyerKey != "" || e.tokens.calls != 0 {
+		t.Fatal("выключенное наблюдение вызвало поиск с данными покупателя")
+	}
+
+	response = e.send(http.MethodPost, "/api/v1/search/feedback", feedbackClick, e.token, "", "198.51.100.2")
+	assertFeedback(t, response, false)
+	if len(e.sink.events) != 0 || e.limiter.Calls() != 0 || e.tokens.calls != 0 {
+		t.Fatal("выключенная обратная связь вызвала внешние зависимости")
+	}
+}
+
 func TestCatalogSearchObservationSurvivesIdentityAndReceiptFailures(t *testing.T) {
-	e := newFeedbackHTTP(t)
+	e := newFeedbackHTTP(t, true)
 	const path = "/api/v1/catalog/offers?q=товар&observe=1"
 	for _, token := range []string{"invalid", e.token} {
 		if token == e.token {
@@ -217,7 +240,7 @@ func assertObservation(t *testing.T, response *httptest.ResponseRecorder, receip
 }
 
 func TestSearchFeedbackHTTP(t *testing.T) {
-	e := newFeedbackHTTP(t)
+	e := newFeedbackHTTP(t, true)
 	const path = "/api/v1/search/feedback"
 	const address = "198.51.100.2"
 	assertFeedback(t, e.send(http.MethodPost, path, feedbackShow, e.token, "", address), true)
@@ -252,7 +275,7 @@ func TestSearchFeedbackHTTP(t *testing.T) {
 }
 
 func TestSearchFeedbackRejectsMalformedBeforeDependencies(t *testing.T) {
-	e := newFeedbackHTTP(t)
+	e := newFeedbackHTTP(t, true)
 	const path = "/api/v1/search/feedback"
 	const limit = searchfeedback.MaxBodyBytes
 	const showPrefix = `{"kind":"impression","receipt":"` + feedbackReceipt + `","offerIds":[`

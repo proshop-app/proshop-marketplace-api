@@ -262,8 +262,18 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 	)
 	carts := appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL)
-	searchBuyerKeys := searchfeedback.NewBuyerKeys(cfg.Search.AnalyticsKey)
-	limiter := redis.NewLimiter(s.cache, keyPrefix)
+	var searchBuyerKeys *searchfeedback.BuyerKeys
+	var feedback *searchfeedback.Feedback
+	var purchases *messaging.Dispatcher
+	if cfg.Search.FeedbackEnabled() {
+		searchBuyerKeys = searchfeedback.NewBuyerKeys(cfg.Search.AnalyticsKey)
+		feedback = searchfeedback.NewFeedback(s.store.index, redis.NewLimiter(s.cache, keyPrefix), searchBuyerKeys)
+		purchases = searchPurchaseDispatcher(postgres.NewTaskQueue(s.store.pool), now, s.store.index)
+	} else {
+		s.logger.Warn(
+			"обратная связь поиска выключена: нужны SEARCH_ANALYTICS_KEY и SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN",
+		)
+	}
 	checkouts := appcheckout.NewService(
 		uow,
 		resyncing,
@@ -415,9 +425,9 @@ func (s *server) services(ctx context.Context) (services, error) {
 		carts:             carts,
 		directory:         pickups,
 		checkouts:         checkouts,
-		searchFeedback:    searchfeedback.NewFeedback(s.store.index, limiter),
+		searchFeedback:    feedback,
 		searchBuyerKeys:   searchBuyerKeys,
-		searchPurchases:   searchPurchaseDispatcher(postgres.NewTaskQueue(s.store.pool), now, s.store.index),
+		searchPurchases:   purchases,
 		dispatcher:        dispatcher,
 		creation: appcheckout.NewExecutor(
 			postgres.NewTaskQueue(s.store.pool),
@@ -518,6 +528,9 @@ func (s *server) jobs() []func(context.Context) error {
 		})
 	}
 	outbox := jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics)
+	if s.app.searchPurchases != nil {
+		runners = append(runners, func(ctx context.Context) error { return outbox.RunLane(ctx, s.app.searchPurchases) })
+	}
 	return append(runners, []func(context.Context) error{
 		func(ctx context.Context) error {
 			return jobs.RunTaxonomyRevalidation(ctx, s.app.taxonomy, s.logger)
@@ -530,7 +543,6 @@ func (s *server) jobs() []func(context.Context) error {
 		).Run,
 		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
 		jobs.NewCreationRunner(s.app.creation, s.logger, outbox.RecordOutcome).Run,
-		func(ctx context.Context) error { return outbox.RunLane(ctx, s.app.searchPurchases) },
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
 		jobs.NewOutboxRetryStatsRunner(
 			s.app.dispatcher,

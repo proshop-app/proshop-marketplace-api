@@ -248,8 +248,8 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		Synonyms: r.synonyms(),
 		Search: Search{
 			CandidatesToken:     r.str("SEARCH_CANDIDATES_TOKEN", ""),
-			PurchaseToken:       r.required("SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN"),
-			AnalyticsKey:        r.required("SEARCH_ANALYTICS_KEY"),
+			PurchaseToken:       r.str("SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN", ""),
+			AnalyticsKey:        r.str("SEARCH_ANALYTICS_KEY", ""),
 			MaintenanceInterval: r.duration("SEARCH_MAINTENANCE_INTERVAL", time.Minute),
 			URL:                 r.httpURL("SEARCH_URL"),
 			Token:               r.required("SEARCH_MARKETPLACE_TOKEN"),

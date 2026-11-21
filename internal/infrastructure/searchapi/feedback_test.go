@@ -48,6 +48,64 @@ func TestSearchObservationWire(t *testing.T) {
 	}
 }
 
+func TestSearchRetriesBadObservationOnceWithoutBuyerData(t *testing.T) {
+	for _, outcome := range []struct {
+		name           string
+		observe        bool
+		secondRejected bool
+		wantCalls      int32
+	}{
+		{name: "выдача восстановлена", observe: true, wantCalls: 2},
+		{name: "повтор также отклонён", observe: true, secondRejected: true, wantCalls: 2},
+		{name: "обычный запрос без повтора", wantCalls: 1},
+	} {
+		t.Run(outcome.name, func(t *testing.T) {
+			var calls atomic.Int32
+			client := feedbackSearchClient(t, func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]json.RawMessage
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Error(err)
+				}
+				first := calls.Add(1) == 1
+				if first && outcome.observe {
+					if string(body["observe"]) != "true" || string(body["buyerKey"]) != `"`+wireBuyerKey+`"` {
+						t.Errorf("отсутствуют сведения для наблюдения: %v", body)
+					}
+				} else if body["observe"] != nil || body["buyerKey"] != nil {
+					t.Error("повтор отправил данные наблюдения")
+				}
+				if string(body["trackQuery"]) != "true" || string(body["text"]) != `"кроссовки"` {
+					t.Error("потеряны параметры текстового запроса")
+				}
+				if first || outcome.secondRejected {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				_, _ = io.WriteString(w, `{"total":1,"items":[]}`)
+			})
+			query := ports.OfferQuery{
+				Text:       "кроссовки",
+				Observe:    outcome.observe,
+				TrackQuery: true,
+			}
+			if outcome.observe {
+				query.BuyerKey = wireBuyerKey
+			}
+			page, err := client.Search(context.Background(), query)
+			if calls.Load() != outcome.wantCalls {
+				t.Fatalf("запросов %d, ожидалось %d", calls.Load(), outcome.wantCalls)
+			}
+			if !outcome.observe || outcome.secondRejected {
+				if !errors.Is(err, ErrInvalid) {
+					t.Fatal(err)
+				}
+			} else if err != nil || page.Total != 1 || page.Receipt != "" {
+				t.Fatal(page, err)
+			}
+		})
+	}
+}
+
 func TestSearchFeedbackWire(t *testing.T) {
 	for _, item := range []struct {
 		file   string

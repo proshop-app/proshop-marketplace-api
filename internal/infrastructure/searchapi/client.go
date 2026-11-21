@@ -4,6 +4,7 @@ package searchapi
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -186,33 +187,34 @@ func (x *Index) Get(ctx context.Context, id string) (ports.OfferDocument, bool, 
 
 // Search передаёт текст, каноническую категорию и фильтры общему движку.
 func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.OfferPage, error) {
+	payload := offerQuery{
+		Exact:       query.Exact,
+		TrackQuery:  query.TrackQuery,
+		Observe:     query.Observe,
+		BuyerKey:    query.BuyerKey,
+		Attributes:  query.Attributes,
+		FacetFields: wireFacetFields(query),
+		Facets:      wireFacetSelection(query.Facets),
+		InStockSet:  query.InStockSet,
+		Text:        query.Text,
+		TenantIDs:   query.TenantIDs,
+		GroupID:     query.GroupID,
+		CategoryID:  query.CategoryID,
+		PriceMin:    query.PriceMin,
+		PriceMax:    query.PriceMax,
+		InStock:     query.InStock,
+		Sort:        string(query.Sort),
+		Offset:      query.Offset,
+		Limit:       query.Limit,
+	}
 	var result offerPage
-	status, err := x.request(
-		ctx,
-		http.MethodPost,
-		"/search",
-		offerQuery{
-			Exact:       query.Exact,
-			TrackQuery:  query.TrackQuery,
-			Observe:     query.Observe,
-			BuyerKey:    query.BuyerKey,
-			Attributes:  query.Attributes,
-			FacetFields: wireFacetFields(query),
-			Facets:      wireFacetSelection(query.Facets),
-			InStockSet:  query.InStockSet,
-			Text:        query.Text,
-			TenantIDs:   query.TenantIDs,
-			GroupID:     query.GroupID,
-			CategoryID:  query.CategoryID,
-			PriceMin:    query.PriceMin,
-			PriceMax:    query.PriceMax,
-			InStock:     query.InStock,
-			Sort:        string(query.Sort),
-			Offset:      query.Offset,
-			Limit:       query.Limit,
-		},
-		&result,
-	)
+	status, err := x.request(ctx, http.MethodPost, "/search", payload, &result)
+	if status == http.StatusBadRequest && payload.Observe {
+		slog.WarnContext(ctx, "поиск отклонил наблюдение: повтор запроса без observe")
+		payload.Observe = false
+		payload.BuyerKey = ""
+		status, err = x.request(ctx, http.MethodPost, "/search", payload, &result)
+	}
 
 	if status == http.StatusBadRequest {
 		return ports.OfferPage{}, ErrInvalid

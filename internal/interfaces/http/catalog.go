@@ -143,7 +143,7 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
-	query.Observe = requested && query.Text != ""
+	query.Observe = requested && query.Text != "" && h.search.feedback != nil
 	if query.Observe {
 		query.BuyerKey = h.search.buyerKey(r)
 	}

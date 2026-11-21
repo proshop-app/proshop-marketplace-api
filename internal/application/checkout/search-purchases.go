@@ -3,17 +3,21 @@ package checkout
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/url"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/application/searchfeedback"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 )
 
-// enqueueSearchPurchases выполняется после условной записи группы в той же транзакции.
-func (s *Service) enqueueSearchPurchases(ctx context.Context, tx ports.Tx, before, after checkout.State) error {
+const searchPurchaseEnqueueTimeout = 250 * time.Millisecond
+
+// enqueueSearchPurchases сохраняет необязательный сигнал после фиксации PAID.
+func (s *Service) enqueueSearchPurchases(ctx context.Context, before, after checkout.State) {
 	if s.config.SearchBuyerKeys == nil {
-		return nil
+		return
 	}
 	var buyerKey string
 	var tasks []ports.NewTask
@@ -26,14 +30,23 @@ func (s *Service) enqueueSearchPurchases(ctx context.Context, tx ports.Tx, befor
 		}
 		task, err := searchPurchaseTask(after, group, buyerKey)
 		if err != nil {
-			return err
+			slog.WarnContext(ctx, "не удалось подготовить поисковое событие оплаты")
+			return
 		}
 		tasks = append(tasks, task)
 	}
 	if len(tasks) == 0 {
-		return nil
+		return
 	}
-	return tx.Outbox().EnqueueBatch(ctx, tasks)
+
+	ctx, cancel := context.WithTimeout(ctx, searchPurchaseEnqueueTimeout)
+	defer cancel()
+	if err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		return tx.Outbox().EnqueueBatch(ctx, tasks)
+	}); err != nil {
+		// Ошибки SQL могут содержать данные строки outbox.
+		slog.WarnContext(ctx, "не удалось поставить поисковое событие оплаты")
+	}
 }
 
 func searchPurchaseTask(state checkout.State, group checkout.Group, buyerKey string) (ports.NewTask, error) {

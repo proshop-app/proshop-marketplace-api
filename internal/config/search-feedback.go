@@ -2,6 +2,11 @@ package config
 
 import "slices"
 
+// FeedbackEnabled разрешает наблюдение только при полном наборе секретов.
+func (s Search) FeedbackEnabled() bool {
+	return s.AnalyticsKey != "" && s.PurchaseToken != ""
+}
+
 func (r *reader) searchFeedbackSecrets(cfg Config) {
 	search := cfg.Search
 	otherTokens := []string{search.Token, search.CandidatesToken, cfg.Operator.Token, cfg.Platform.Token}

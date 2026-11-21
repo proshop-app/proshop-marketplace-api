@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/netip"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -40,6 +41,7 @@ type BuyerKeys struct {
 type Feedback struct {
 	sink    ports.SearchFeedbackSink
 	limiter ports.RateLimiter
+	keys    *BuyerKeys
 }
 
 // NewBuyerKeys закрепляет общий ключ аналитики процесса.
@@ -52,22 +54,40 @@ func (k *BuyerKeys) Key(buyerID ids.UUID) string {
 	if buyerID == "" {
 		return ""
 	}
+	return k.digest("marketplace", string(buyerID))
+}
+
+func (k *BuyerKeys) digest(scope, value string) string {
 	mac := hmac.New(sha256.New, k.key)
-	_, _ = mac.Write([]byte("marketplace\x00" + string(buyerID)))
+	_, _ = mac.Write([]byte(scope + "\x00" + value))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // NewFeedback подключает общий лимитер и приёмник поиска.
-func NewFeedback(sink ports.SearchFeedbackSink, limiter ports.RateLimiter) *Feedback {
-	return &Feedback{sink: sink, limiter: limiter}
+func NewFeedback(sink ports.SearchFeedbackSink, limiter ports.RateLimiter, keys *BuyerKeys) *Feedback {
+	return &Feedback{sink: sink, limiter: limiter, keys: keys}
 }
 
 // Allow расходует одну попытку на POST, включая пачку показов.
 func (f *Feedback) Allow(ctx context.Context, address string) bool {
 	ctx, cancel := context.WithTimeout(ctx, limitTimeout)
 	defer cancel()
-	allowed, _, err := f.limiter.Allow(ctx, "search:feedback:"+address, ratePerMinute, time.Minute)
+	networkKey := f.keys.digest("marketplace-feedback-network", feedbackNetwork(address))
+	allowed, _, err := f.limiter.Allow(ctx, "search:feedback:"+networkKey, ratePerMinute, time.Minute)
 	return err == nil && allowed
+}
+
+func feedbackNetwork(address string) string {
+	ip, err := netip.ParseAddr(address)
+	if err != nil {
+		return ""
+	}
+	ip = ip.Unmap().WithZone("")
+	bits := ip.BitLen()
+	if ip.Is6() {
+		bits = 64
+	}
+	return netip.PrefixFrom(ip, bits).Masked().String()
 }
 
 // Record сообщает, принял ли поиск хотя бы одно предложение события.

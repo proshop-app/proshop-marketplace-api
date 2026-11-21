@@ -658,7 +658,7 @@ func (s *Service) updateSelection(
 	after func(context.Context, ports.Tx, *checkout.Checkout) error,
 	mutate func(*checkout.Checkout, time.Time) error,
 ) (checkout.State, error) {
-	var state checkout.State
+	var previous, state checkout.State
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Checkouts().Get(ctx, checkoutID)
 		if err != nil {
@@ -667,7 +667,7 @@ func (s *Service) updateSelection(
 		if c.BuyerID() != buyerID {
 			return checkout.ErrNotFound
 		}
-		previous := c.State()
+		previous = c.State()
 		if err := mutate(c, s.clock.Now()); err != nil {
 			return err
 		}
@@ -682,15 +682,16 @@ func (s *Service) updateSelection(
 			if err := tx.Checkouts().Update(ctx, c); err != nil {
 				return err
 			}
-			if err := s.enqueueSearchPurchases(ctx, tx, previous, state); err != nil {
-				return err
-			}
 		}
 
 		s.observeTransitions(tx, previous, state)
 
 		return nil
 	})
+
+	if err == nil && state.Version != previous.Version {
+		s.enqueueSearchPurchases(ctx, previous, state)
+	}
 
 	return state, err
 }
