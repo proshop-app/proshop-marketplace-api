@@ -634,7 +634,6 @@ func (h *promotionHandlers) availability(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *promotionHandlers) sponsored(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "public, max-age=30")
 	query, err := parseOfferQuery(r)
 	if err != nil {
 		writeError(w, r, err)
@@ -656,6 +655,7 @@ func (h *promotionHandlers) sponsored(w http.ResponseWriter, r *http.Request) {
 			Offer:       offer,
 		})
 	}
+	w.Header().Set("Cache-Control", publicCatalogCacheControl)
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 

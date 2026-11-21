@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const publicCatalogCacheControl = "public, max-age=30"
+
 // publicCached проверяет слабые и сильные ETag для публичных GET.
 func publicCached(w http.ResponseWriter, r *http.Request, etag string) bool {
 	w.Header().Set("ETag", etag)

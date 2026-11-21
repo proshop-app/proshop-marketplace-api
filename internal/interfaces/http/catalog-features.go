@@ -33,7 +33,7 @@ func (h *catalogHandlers) reviews(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=30")
+	w.Header().Set("Cache-Control", publicCatalogCacheControl)
 	writeJSON(w, http.StatusOK, page)
 }
 

@@ -119,7 +119,6 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 
 // list — выдача: GET /api/v1/catalog/offers?q=&tenant=&category=&priceMin=&priceMax=&inStock=&sort=&limit=&offset=
 func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "public, max-age=30")
 	if r.URL.Query().Has("ids") {
 		h.listIDs(w, r)
 		return
@@ -170,12 +169,12 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		body.Items = append(body.Items, item)
 	}
 
+	w.Header().Set("Cache-Control", publicCatalogCacheControl)
 	writeJSON(w, http.StatusOK, body)
 }
 
 // card — карточка: GET /api/v1/catalog/offers/{offerId}
 func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "public, max-age=30")
 	if err := validateDeliveryContext(r); err != nil {
 		writeError(w, r, err)
 		return
@@ -199,6 +198,7 @@ func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
 	}
 	body := toOfferJSON(cards[0], true)
 	annotateDelivery(&body, r)
+	w.Header().Set("Cache-Control", publicCatalogCacheControl)
 	writeJSON(w, http.StatusOK, body)
 }
 

@@ -80,7 +80,8 @@ func TestOfferSearchQueryTextHTTP(t *testing.T) {
 		r.Header.Set("Authorization", "Bearer "+access.Token)
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, r)
-		if store.calls != 0 || response.Header().Get("Cache-Control") != "public, max-age=30" {
+		if store.calls != 0 ||
+			strings.Contains(response.Header().Get("Cache-Control"), "public") != (response.Code == http.StatusOK) {
 			t.Fatal(path, store.calls, response.Header())
 		}
 	}
