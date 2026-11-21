@@ -24,6 +24,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
+	appsynonyms "github.com/proshop-app/proshop-marketplace/internal/application/synonyms"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 )
 
@@ -54,6 +55,7 @@ type Deps struct {
 	Directory              *appdelivery.Service
 	Checkouts              *appcheckout.Service
 	Reference              *appreference.Service
+	Synonyms               *appsynonyms.Service
 	OperatorToken          string
 	// ReferenceReadToken — токен читателя реестра: снимок, resolve и чтение записей без прав оператора.
 	ReferenceReadToken string
@@ -102,6 +104,7 @@ func routes(deps Deps) []route {
 	shipping := &deliveryHandlers{directory: deps.Directory}
 	checkouts := &checkoutHandlers{checkouts: deps.Checkouts}
 	registry := newReferenceHandlers(deps.Reference, deps.Registerer)
+	synonyms := synonymHandlers{service: deps.Synonyms}
 	gateway := &operatorHandlers{
 		auth:           deps.OperatorAuth,
 		events:         deps.Events,
@@ -682,6 +685,11 @@ func routes(deps Deps) []route {
 		{readRequest, http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
 		{backgroundRequest, http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},
 
+		{backgroundRequest, http.MethodGet, synonymSnapshotPath, reader(synonyms.snapshot)},
+		{backgroundRequest, http.MethodGet, operatorSynonymPath + "/rules", operator(synonyms.list)},
+		{backgroundRequest, http.MethodPatch, operatorSynonymPath + "/rules/{id}", operator(synonyms.disable)},
+		{backgroundRequest, http.MethodGet, operatorSynonymPath + "/stop-list", operator(synonyms.stopList)},
+		{backgroundRequest, http.MethodPut, operatorSynonymPath + "/stop-list", operator(synonyms.replaceStopList)},
 		{backgroundRequest, http.MethodGet, "/api/v1/operator/reference", operator(registry.summaries)},
 		{
 			importRequest,

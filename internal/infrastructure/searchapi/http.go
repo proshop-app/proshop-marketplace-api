@@ -39,6 +39,12 @@ func (x *Index) requestWithCapacity(
 		return 0, ErrUnavailable.Wrap(err)
 	}
 	request.Header.Set("X-Admin-Id", x.token)
+	replyLimit := int64(responseLimit)
+	if x.referenceBearer != "" {
+		request.Header.Del("X-Admin-Id")
+		request.Header.Set("Authorization", "Bearer "+x.referenceBearer)
+		replyLimit = synonymReplyLimit
+	}
 	request.Header.Set("Content-Type", "application/json")
 	response, err := x.client.Do(request)
 
@@ -66,9 +72,9 @@ func (x *Index) requestWithCapacity(
 
 		return response.StatusCode, nil
 	}
-	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, responseLimit+1))
+	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, replyLimit+1))
 
-	if err != nil || len(bodyBytes) > responseLimit {
+	if err != nil || int64(len(bodyBytes)) > replyLimit {
 		return response.StatusCode, ErrUnavailable.WithMessage("некорректный размер ответа поиска")
 	}
 

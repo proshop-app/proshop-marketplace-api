@@ -34,13 +34,21 @@ jobs:
           ref: ${{ steps.taxonomy.outputs.ref }}
           token: ${{ secrets.UNO_REFERENCE_DATA_TOKEN || github.token }}
           path: tmp/uno-reference-data
-          sparse-checkout: releases
+          sparse-checkout: |
+            releases
+            taxonomy/reference
           persist-credentials: false
       - run: make taxonomy-artifact TAXONOMY_BUNDLE= UNO_REFERENCE_DATA_DIR=tmp/uno-reference-data
       - uses: actions/upload-artifact@v4
         with:
           name: taxonomy-bundle
           path: internal/infrastructure/taxonomydata/taxonomy-bundle.json
+          if-no-files-found: error
+          overwrite: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: taxonomy-reference-imports
+          path: tmp/uno-reference-data/taxonomy/reference
           if-no-files-found: error
           overwrite: true
 
@@ -90,13 +98,17 @@ jobs:
         with:
           name: taxonomy-bundle
           path: tmp/taxonomy
+      - uses: actions/download-artifact@v4
+        with:
+          name: taxonomy-reference-imports
+          path: tmp/uno-reference-data/taxonomy/reference
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
       - name: Ядро для OpenSearch
         run: sudo sysctl -w vm.max_map_count=262144
-      - run: make test-integration
+      - run: make test-integration UNO_REFERENCE_DATA_DIR=tmp/uno-reference-data
       - name: Журналы сервисов
         if: failure()
         run: docker compose logs

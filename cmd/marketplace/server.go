@@ -28,6 +28,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
+	appsynonyms "github.com/proshop-app/proshop-marketplace/internal/application/synonyms"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
@@ -42,6 +43,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/storecache"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/synonymmodel"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
@@ -82,6 +84,7 @@ type services struct {
 	janitor           *messaging.Janitor
 	parker            *messaging.Parker
 	reference         *appreference.Service
+	synonyms          *appsynonyms.Service
 	candidates        ports.ReferenceCandidates
 	// writer публикует события площадки; закрывается после остановки разбора outbox
 	writer *infrakafka.Writer
@@ -219,6 +222,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	references := appreference.NewService(uow, now, identities, writer, appreference.Config{
 		Topic: cfg.Kafka.FullTopic(cfg.Kafka.ReferenceTopic),
 	})
+	synonyms := s.searchSynonyms(uow, now, writer)
 	models := appcatalog.NewModelKeys(
 		referencecatalog.New(references),
 		telemetry.NewModelKeys(s.metrics),
@@ -321,6 +325,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 				appparticipant.TaskSyncSettings,
 				moderationstatus.TaskParticipant,
 				appreference.TaskChanged,
+				appsynonyms.TaskChanged,
 			},
 			ExcludeKinds: []string{
 				appcheckout.TaskCreateOrder,
@@ -341,6 +346,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			appparticipant.TaskSyncSettings:  settings.HandleTask,
 			ports.TaskStoreCard:              participants.RefreshStoreCard,
 			appreference.TaskChanged:         references.HandleTask,
+			appsynonyms.TaskChanged:          synonyms.HandleTask,
 			moderationstatus.TaskOffer:       statuses.HandleTask,
 			moderationstatus.TaskParticipant: statuses.HandleTask,
 		},
@@ -411,6 +417,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		janitor:    janitor,
 		parker:     messaging.NewParker(uow),
 		reference:  references,
+		synonyms:   synonyms,
 		candidates: candidates,
 		writer:     writer,
 	}, nil
@@ -492,6 +499,13 @@ func (s *server) jobs() []func(context.Context) error {
 			cfg.Reference.CandidatesInterval,
 		)).Run)
 	}
+	if interval := cfg.Synonyms.Interval; interval > 0 {
+		schedule := postgres.NewScheduledWork(s.store.pool, "reference-search-synonyms", interval)
+		runner := jobs.NewReferenceSynonymsRunner(s.app.synonyms, schedule, interval, s.logger, s.metrics)
+		runners = append(runners, func(ctx context.Context) error {
+			return runner.Run(ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(cfg.Database.Background)))
+		})
+	}
 	outbox := jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics)
 	return append(runners, []func(context.Context) error{
 		func(ctx context.Context) error {
@@ -565,6 +579,7 @@ func (s *server) httpServer() *http.Server {
 		Directory:      s.app.directory,
 		Checkouts:      s.app.checkouts,
 		Reference:      s.app.reference,
+		Synonyms:       s.app.synonyms,
 		OperatorToken:  cfg.Operator.Token,
 		// потребители реестра читают своим токеном, мутации — только у оператора
 		ReferenceReadToken: cfg.Reference.ReadToken,
@@ -592,4 +607,28 @@ func (s *server) httpServer() *http.Server {
 func (promotionRandom) IntN(n int) int {
 	// #nosec G404 -- Ротация не использует криптографических секретов.
 	return mathrand.IntN(n)
+}
+
+func (s *server) searchSynonyms(uow ports.UnitOfWork, now ports.Clock, writer ports.Publisher) *appsynonyms.Service {
+	cfg := s.cfg
+	topic := cfg.Kafka.FullTopic(appsynonyms.EventTopic)
+	var validator ports.SynonymValidator
+	if cfg.Reference.ReadToken != "" {
+		validator = s.store.index.SynonymValidator(cfg.Reference.ReadToken)
+	}
+	service := appsynonyms.New(uow, now, validator, writer, topic)
+	if cfg.Synonyms.ModelURL == "" {
+		return service
+	}
+	model, err := synonymmodel.New(
+		cfg.Synonyms.ModelURL,
+		cfg.Synonyms.ModelToken,
+		cfg.Synonyms.ModelName,
+		cfg.Search.Timeout,
+	)
+	if err != nil {
+		s.logger.Error("поисковые синонимы: модель отключена", slog.Any("error", err))
+		return service
+	}
+	return service.WithModel(model)
 }

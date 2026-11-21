@@ -73,6 +73,7 @@ type data struct {
 	checkouts            map[ids.UUID]checkout.State
 	leases               map[string]lease
 	reference            *referenceData
+	synonyms             *synonymData
 }
 
 type lease struct {
@@ -116,6 +117,7 @@ func (d *data) clone() *data {
 		checkouts:            maps.Clone(d.checkouts),
 		leases:               maps.Clone(d.leases),
 		reference:            d.reference.clone(),
+		synonyms:             d.synonyms.clone(),
 	}
 }
 

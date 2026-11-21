@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -13,12 +14,14 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	app "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres/pgtest"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencedata"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
@@ -43,7 +46,7 @@ func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Повторяем весь путь dev: пустые open и история старых поставок должны остаться неизменными.
+	// Повторяем начальный импорт: пустые open и история старых поставок должны остаться неизменными.
 	for attempt := 0; attempt < 2; attempt++ {
 		imported, err := registry.Import(ctx, "", input)
 		if err != nil {
@@ -69,6 +72,7 @@ func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
 			}
 		}
 	}
+	importReleaseDictionaries(ctx, t, registry)
 	release.ConfirmCategoryReplacement = true
 	service := app.NewService(postgres.NewUnitOfWork(pool), clock.System{}, nil)
 	results := make(chan taxonomy.ReleaseResult, 2)
@@ -110,6 +114,61 @@ func TestReleaseFullBundleAndConcurrentRetry(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("дубли поставки: %d", count)
+	}
+}
+
+func importReleaseDictionaries(ctx context.Context, t *testing.T, registry *appreference.Service) {
+	t.Helper()
+
+	dir := os.Getenv("UNO_REFERENCE_DATA_DIR")
+	if dir == "" {
+		dir = "../../../../uno-reference-data"
+	}
+	source := os.DirFS(filepath.Join(dir, "taxonomy", "reference"))
+	for _, name := range []string{"size-markings-v2.json", "verticals-v17.json"} {
+		input, err := referencedata.LoadImport(source, name)
+		if err != nil {
+			t.Fatalf("справочники выпуска %s в %s: %v", name, dir, err)
+		}
+		results, err := registry.Import(ctx, "", input)
+		if err != nil {
+			t.Fatalf("импорт справочников выпуска %s: %v", name, err)
+		}
+		confirmNewClosedDictionaries(ctx, t, registry, input.Dictionaries, results)
+	}
+}
+
+func confirmNewClosedDictionaries(
+	ctx context.Context,
+	t *testing.T,
+	registry *appreference.Service,
+	dictionaries []reference.ImportDictionary,
+	results []appreference.ImportResult,
+) {
+	t.Helper()
+
+	closed := make(map[string]bool)
+	for _, dictionary := range dictionaries {
+		closed[dictionary.Code] = dictionary.Kind == reference.KindClosed
+	}
+	// Закрытый словарь должен иметь подтверждённые значения до публикации таксономии.
+	// У ранее загруженных словарей, включая палитру, такой набор уже есть.
+	for _, result := range results {
+		if !result.Created || !closed[result.Code] {
+			continue
+		}
+		if _, err := registry.Review(ctx, appreference.ReviewCommand{
+			Dictionary: result.Code,
+			IfMatch:    result.Revision,
+			Status:     reference.StatusConfirmed,
+			Selection: reference.ReviewSelection{
+				Mode:        reference.ReviewAllCandidates,
+				ExcludedIDs: []ids.UUID{},
+			},
+			Meta: reference.Meta{Actor: "integration-test", Source: reference.SourceOperator},
+		}); err != nil {
+			t.Fatalf("подтверждение значений словаря %s: %v", result.Code, err)
+		}
 	}
 }
 

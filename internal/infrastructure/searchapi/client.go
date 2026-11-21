@@ -38,9 +38,10 @@ type Config struct {
 
 // Index реализует порт индекса предложений через proshop-search.
 type Index struct {
-	base   string
-	token  string
-	client *http.Client
+	base            string
+	token           string
+	client          *http.Client
+	referenceBearer string
 }
 
 // New создаёт клиент с таймаутом и запретом переноса токена через redirect.
