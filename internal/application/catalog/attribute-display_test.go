@@ -70,12 +70,12 @@ func TestSelectedValuePresentation(t *testing.T) {
 		},
 	}
 	display := facetDisplay{taxonomy: view, sources: map[string][]string{"size": {"d1"}}}
-	got := displayFacetValues(facet, []taxonomy.Attribute{field}, display)
+	got := displayFacetValues(facet, field, display)
 	if got.Name != field.DisplayName || got.Values[0].Value != "46" || got.Values[0].Meta.SecondaryLabel != "XL" {
 		t.Fatalf("фасет: %+v", got)
 	}
 	display.sources["size"] = []string{"d1", "d2"}
-	mixed := displayFacetValues(facet, []taxonomy.Attribute{field}, display)
+	mixed := displayFacetValues(facet, field, display)
 	if mixed.Values[1].Value != "46" || mixed.Values[1].Meta != nil {
 		t.Fatalf("фасет с неоднозначной маркировкой: %+v", mixed)
 	}

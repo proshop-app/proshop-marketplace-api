@@ -24,6 +24,8 @@ func (d Definition) Checker() Checker {
 			policy := inheritModerationPolicy(inherited, node.Moderation)
 			children := node.Children
 			node.Children = nil
+			node.FacetLayout = nil
+			node.PriorityFilters = nil
 			current := append(append([]string{}, path...), node.ID)
 			category := categorySchema(node, fields, d.Schemas[node.Schema])
 			d.selectCategoryFields(&category, current, bindings)

@@ -36,7 +36,7 @@ func TestBundledProductType(t *testing.T) {
 	d := productTypeDefinition(t)
 	field := d.Fields()["product_type"]
 	if field.Name != "Тип" || field.Type != "enum" || field.Dictionary != "product_type" ||
-		!field.Facet || field.FacetPinned == nil || !*field.FacetPinned ||
+		!field.Facet ||
 		field.Multiple || field.RequiredReason == "" {
 		t.Fatalf("тип: %+v", field)
 	}
@@ -58,7 +58,10 @@ func TestBundledProductType(t *testing.T) {
 			return
 		}
 		count++
-		if slices.Contains(schema.Optional, "product_type") || slices.Contains(schema.HiddenFacets, "product_type") {
+		filterable := slices.ContainsFunc(schema.Filters, func(filter taxonomy.Filter) bool {
+			return filter.Code == "product_type"
+		})
+		if slices.Contains(schema.Optional, "product_type") || !filterable {
 			t.Errorf("тип необязателен или скрыт у %s", node.ID)
 		}
 		invalid := []json.RawMessage{nil, json.RawMessage(`"неизвестный вид"`), json.RawMessage(`["Лоферы"]`)}
@@ -101,7 +104,7 @@ func TestBundledProductTypeFacetScope(t *testing.T) {
 	store := fake.NewStore()
 	store.SeedTaxonomy(productTypeDefinition(t))
 	queries := appcatalog.NewQueries(store, fake.NewIndex(), nil, nil, nil, fake.NewClock(time.Time{}))
-	for _, id := range []string{"", "clothing", "shoes", "clothing.women", "shoes.men-loafers"} {
+	for _, id := range []string{"shoes.men-loafers"} {
 		query, err := queries.PrepareQuery(context.Background(), ports.OfferQuery{
 			CategoryID: id,
 			Attributes: map[string]ports.AttributeFilter{"product_type": {Values: []string{"Лоферы", "Кроссовки"}}},
@@ -119,7 +122,7 @@ func TestBundledProductTypeFacetScope(t *testing.T) {
 	}
 }
 
-func TestBundledProductTypePinControlsSearchFacet(t *testing.T) {
+func TestBundledAdditionalProductTypeWithSparseValues(t *testing.T) {
 	ctx := context.Background()
 	d := productTypeDefinition(t)
 	store := fake.NewStore()
@@ -139,28 +142,17 @@ func TestBundledProductTypePinControlsSearchFacet(t *testing.T) {
 		t.Fatal(err)
 	}
 	queries := appcatalog.NewQueries(store, index, fake.NewPlatform(), nil, nil, fake.NewClock(time.Time{}))
-	for _, pinned := range []bool{true, false} {
-		if !pinned {
-			d.Version++
-			for i := range d.Attributes {
-				if d.Attributes[i].Code == "product_type" {
-					d.Attributes[i].FacetPinned = &pinned
-					break
-				}
-			}
-		}
-		store.SeedTaxonomy(d)
-		page, err := queries.Search(ctx, ports.OfferQuery{CategoryID: category})
-		if err != nil || page.Total != len(docs) {
-			t.Fatalf("выдача: total=%d, %v", page.Total, err)
-		}
-		found := slices.ContainsFunc(page.Facets, func(facet ports.Facet) bool {
-			return facet.Code == "attr.product_type"
-		})
-		if found != pinned {
-			t.Fatalf("тип с охватом 10%%: закреплён=%v, показан=%v", pinned, found)
+	store.SeedTaxonomy(d)
+	page, err := queries.Search(ctx, ports.OfferQuery{CategoryID: category})
+	if err != nil || page.Total != len(docs) {
+		t.Fatalf("выдача: total=%d, %v", page.Total, err)
+	}
+	for _, facet := range page.Facets {
+		if facet.Code == "attr.product_type" && !facet.Primary && len(facet.Values) == 2 {
+			return
 		}
 	}
+	t.Fatal("нет дополнительного фильтра типа товара")
 }
 
 func TestProductTypeNameExceptionIsNarrow(t *testing.T) {

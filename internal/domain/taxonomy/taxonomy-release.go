@@ -26,6 +26,8 @@ var (
 
 // Release — неизменяемая поставка; её номер независим от версии публикации.
 type Release struct {
+	FacetKeys                  []string
+	RootFilters                []Filter
 	ReplaceCategories          bool
 	ConfirmCategoryReplacement bool
 	DictionaryBindings         []DictionaryBinding
@@ -133,6 +135,8 @@ func PlanTaxonomyRollback(
 // Definition отделяет номер поставки от номера опубликованного снимка.
 func (r Release) Definition() Definition {
 	return Definition{
+		FacetKeys:          r.FacetKeys,
+		RootFilters:        r.RootFilters,
 		DictionaryBindings: r.DictionaryBindings,
 		Version:            r.Version,
 		Attributes:         r.Attributes,

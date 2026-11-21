@@ -106,7 +106,7 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 	}
 	list := OfferList{
 		Correction: page.Correction,
-		Facets:     displayFacets(page.Facets, page.Total, normalized, presentation),
+		Facets:     displayFacets(page.Facets, normalized, presentation),
 		Total:      page.Total,
 		Items:      make([]OfferCard, 0, len(page.Items)),
 	}
@@ -235,36 +235,30 @@ func (q *Queries) prepareQuery(ctx context.Context, query ports.OfferQuery) (por
 		if err != nil {
 			return err
 		}
-		nodes := d.Categories
-		if normalized.CategoryID != "" {
-			category, _, ok := d.Category(normalized.CategoryID)
-			if !ok {
-				return ErrInvalidQuery.WithMessage("неизвестная категория")
-			}
-			nodes = []taxonomy.Category{category.Category}
-		}
 		view := q.displayFor(d)
-		fields, coverage, sources := scopeFields(
-			view,
-			nodes,
-			normalized.CategoryID != "",
-			normalized.WantsFacet(ports.FacetAttributes),
-		)
-		presentation = facetDisplay{taxonomy: view, sources: sources}
-		if normalized.CategoryID == "" {
-			fields = view.fields
+		panel, found := view.panels[normalized.CategoryID]
+		if !found {
+			return ErrInvalidQuery.WithMessage("неизвестная категория")
 		}
-		if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
-			return err
+		if len(normalized.Attributes) > 0 {
+			fields := make(map[string]taxonomy.Attribute, len(normalized.Attributes))
+			for _, filter := range panel.filters {
+				if _, selected := normalized.Attributes[filter.Code]; selected {
+					fields[filter.Code] = view.fields[filter.Code]
+				}
+			}
+			if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
+				return err
+			}
+			for code, filter := range normalized.Attributes {
+				filter.Type = fields[code].Type
+				normalized.Attributes[code] = filter
+			}
 		}
-		for code, filter := range normalized.Attributes {
-			filter.Type = fields[code].Type
-			normalized.Attributes[code] = filter
-		}
-		// Поля берутся заново из таксономии, повторная подготовка не дублирует фасеты.
-		normalized.FacetFields = []taxonomy.Attribute{}
-		if normalized.WantsFacet(ports.FacetAttributes) {
-			normalized.FacetFields = selectFacetFields(fields, coverage, normalized.Attributes)
+		presentation = facetDisplay{
+			taxonomy: view,
+			sources:  panel.sources,
+			order:    panel.apply(&normalized, view.fields),
 		}
 		return nil
 	}); err != nil {

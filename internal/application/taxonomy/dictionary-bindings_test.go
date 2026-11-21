@@ -40,7 +40,7 @@ func bindingRelease() taxonomy.Release {
 func TestHintImportBindingReviewAndRollbackPreserveFreeStrings(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	original := stringDefinition(1, "")
+	original := compiledDefinition(t, stringDefinition(1, ""))
 	store.SeedTaxonomy(original)
 	clock := fake.NewClock(time.Now())
 	service := apptaxonomy.NewService(store, clock, nil)
@@ -165,7 +165,7 @@ func TestStringHintBindingRejectsClosedDictionaryAndProtectsOperatorEdit(t *test
 		t.Run(operation, func(t *testing.T) {
 			ctx := context.Background()
 			store := fake.NewStore()
-			original := stringDefinition(1, "")
+			original := compiledDefinition(t, stringDefinition(1, ""))
 			store.SeedTaxonomy(original)
 			seedValues(t, store, "v1")
 			service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)

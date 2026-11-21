@@ -73,7 +73,7 @@ func TestArtifactPartsThroughOperatorHTTP(t *testing.T) {
 		version := previous.Version + int64(index)
 		body := encodeTaxonomyPart(t, fixture, part)
 		if len(body) > maxTaxonomyBody {
-			t.Fatal(part, "превышает лимит HTTP")
+			t.Fatalf("%s превышает лимит HTTP: %d байт", part, len(body))
 		}
 		w = call(part, body, version, "")
 		if w.Code != http.StatusOK || w.Header().Get("ETag") != `"taxonomy-`+strconv.FormatInt(version+1, 10)+`"` {

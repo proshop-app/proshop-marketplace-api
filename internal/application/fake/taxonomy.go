@@ -44,6 +44,13 @@ func (r taxonomies) Save(_ context.Context, d taxonomy.Definition, expected int6
 
 // SeedTaxonomy задаёт схему для тестов сценариев.
 func (s *Store) SeedTaxonomy(d taxonomy.Definition) {
+	if d.FacetKeys == nil {
+		var err error
+		d, err = d.CompileFacets(false)
+		if err != nil {
+			panic(err)
+		}
+	}
 	s.read(func(data *data) {
 		data.taxonomy = cloneTaxonomy(d)
 		data.taxonomyVersions[d.Version] = cloneTaxonomy(d)

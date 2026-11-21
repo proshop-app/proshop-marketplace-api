@@ -66,7 +66,8 @@ func TestArtifactRelease17PublishedContract(t *testing.T) {
 	if pool := attributes.SelectionValues["size_clothing_men_ru"]; pool.ValuesMeta == nil {
 		t.Fatal("снимок не отдаёт действующий пул")
 	}
-	assertArtifactFacets(t, published["attributes"].body, release.Attributes)
+	assertArtifactFacets(t, published["attributes"].body, release.Definition())
+	assertArtifactCategorySchema(t, service)
 	var tree struct {
 		Categories []taxonomy.Category
 	}
@@ -86,7 +87,7 @@ func TestArtifactRelease17PublishedContract(t *testing.T) {
 	}
 }
 
-func assertArtifactFacets(t *testing.T, body string, definitions []taxonomy.Attribute) {
+func assertArtifactFacets(t *testing.T, body string, definition taxonomy.Definition) {
 	t.Helper()
 	var response struct {
 		Attributes []struct {
@@ -97,11 +98,12 @@ func assertArtifactFacets(t *testing.T, body string, definitions []taxonomy.Attr
 	if err := json.Unmarshal([]byte(body), &response); err != nil {
 		t.Fatal(err)
 	}
-	fields := taxonomy.Definition{Attributes: definitions}.Fields()
+	fields := definition.Fields()
 	facets := 0
 	for _, attribute := range response.Attributes {
-		field, found := fields[attribute.Code]
-		if !found || attribute.Facet == nil || *attribute.Facet != field.Facet {
+		_, found := fields[attribute.Code]
+		want := slices.Contains(definition.FacetKeys, attribute.Code)
+		if !found || attribute.Facet == nil || *attribute.Facet != want {
 			t.Fatalf("неверный признак facet у %s", attribute.Code)
 		}
 		delete(fields, attribute.Code)
@@ -109,8 +111,30 @@ func assertArtifactFacets(t *testing.T, body string, definitions []taxonomy.Attr
 			facets++
 		}
 	}
-	if len(fields) != 0 || len(response.Attributes) != 2008 || facets != 560 {
+	if len(fields) != 0 || len(response.Attributes) != 2009 || facets != 809 {
 		t.Fatalf("определений %d, потеряно %d, фасетов %d", len(response.Attributes), len(fields), facets)
+	}
+}
+
+func assertArtifactCategorySchema(t *testing.T, service *apptaxonomy.Service) {
+	t.Helper()
+	handler := taxonomyHandlers{service: service}
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.SetPathValue("id", "electronics.smartphones")
+	handler.schema(response, request)
+	var leaf taxonomyCategorySchema
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &leaf) != nil ||
+		len(leaf.Filters) != 18 || leaf.Filters[0] != (taxonomy.Filter{Code: "storage_capacity", Primary: true}) ||
+		leaf.Filters[6] != (taxonomy.Filter{Code: "esim_support"}) {
+		t.Fatalf("неверная панель листа: %v", leaf.Filters)
+	}
+	fields := map[string]bool{}
+	for _, field := range leaf.Attributes {
+		fields[field.Code] = field.Facet
+	}
+	if !fields["esim_support"] || fields["country"] || fields["model"] {
+		t.Fatalf("неверный признак фильтруемости листа: %v", fields)
 	}
 }
 

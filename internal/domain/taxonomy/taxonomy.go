@@ -42,8 +42,7 @@ type ValueMeta struct {
 // Attribute — скалярное поле; код имеет один тип и единицу во всей площадке.
 type Attribute struct {
 	dictionarySearchTerms map[string][]string
-	// FacetPinned отличает отсутствие настройки в снимке от явного отключения.
-	FacetPinned         *bool                `json:"facetPinned,omitempty" yaml:"facetPinned,omitempty"`
+
 	FacetOptions        []string             `json:"facetOptions,omitempty" yaml:"-"`
 	FacetValuesByValue  map[string][]string  `json:"facetValuesByValue,omitempty" yaml:"-"`
 	Format              string               `json:"format,omitempty" yaml:"format,omitempty"`
@@ -70,7 +69,9 @@ type Attribute struct {
 
 // Category ссылается на схему только в листе, чтобы дерево не дублировало атрибуты.
 type Category struct {
-	Axis string `json:"axis,omitempty" yaml:"axis,omitempty"`
+	FacetLayout     *FacetLayout `json:"facetLayout,omitempty" yaml:"facetLayout,omitempty"`
+	PriorityFilters []Filter     `json:"priorityFilters,omitempty" yaml:"-"`
+	Axis            string       `json:"axis,omitempty" yaml:"axis,omitempty"`
 	// NameScope ограничивает редакционную уникальность имён разделом аудитории.
 	NameScope bool `json:"nameScope,omitempty" yaml:"nameScope,omitempty"`
 	// Definition задаёт границу вида изделия, а не поисковые синонимы.
@@ -97,12 +98,14 @@ type SchemaIdentity struct {
 type Schema struct {
 	Identity *SchemaIdentity `json:"identity,omitempty" yaml:"identity,omitempty"`
 	// Указатель отличает наследование от явного отключения предупреждений.
-	IdentityWarnings *bool    `json:"identityWarnings,omitempty" yaml:"identityWarnings,omitempty"`
-	Extends          string   `json:"extends,omitempty" yaml:"extends,omitempty"`
-	Abstract         bool     `json:"abstract,omitempty" yaml:"abstract,omitempty"`
-	Attributes       []string `json:"attributes" yaml:"attributes"`
-	Optional         []string `json:"optional,omitempty" yaml:"optional,omitempty"`
-	HiddenFacets     []string `json:"hiddenFacets,omitempty" yaml:"hiddenFacets,omitempty"`
+	IdentityWarnings *bool                    `json:"identityWarnings,omitempty" yaml:"identityWarnings,omitempty"`
+	Extends          string                   `json:"extends,omitempty" yaml:"extends,omitempty"`
+	Abstract         bool                     `json:"abstract,omitempty" yaml:"abstract,omitempty"`
+	Attributes       []string                 `json:"attributes" yaml:"attributes"`
+	Optional         []string                 `json:"optional,omitempty" yaml:"optional,omitempty"`
+	FacetOverrides   map[string]FacetOverride `json:"facetOverrides,omitempty" yaml:"facetOverrides,omitempty"`
+	FacetLayout      *FacetLayout             `json:"facetLayout,omitempty" yaml:"facetLayout,omitempty"`
+	Filters          []Filter                 `json:"filters" yaml:"-"`
 }
 
 // SchemaAttribute содержит обязательность только в контексте схемы.
@@ -120,6 +123,10 @@ type CategorySchema struct {
 
 // Definition — неизменяемый снимок версии таксономии.
 type Definition struct {
+	// FacetKeys — отсортированное объединение фильтров всех листьев.
+	FacetKeys   []string `json:"facetKeys" yaml:"-"`
+	RootFilters []Filter `json:"rootFilters" yaml:"-"`
+
 	// SelectionValues заполняется только при публикации из реестра.
 	SelectionValues map[string]DictionaryValues `json:"selectionValues,omitempty" yaml:"-"`
 
@@ -245,10 +252,6 @@ func (d Definition) Validate() error {
 }
 
 func (a Attribute) validate() error {
-	if a.FacetPinned != nil && *a.FacetPinned && !a.Facet {
-		return ErrInvalid.WithMessage("закрепление требует фасета: " + a.Code)
-	}
-
 	if a.Format != "" && a.Format != "gtin" && a.Format != "isbn" {
 		return ErrInvalid.WithMessage("неизвестный format атрибута " + a.Code + ": " + a.Format)
 	}
@@ -325,13 +328,6 @@ func (d Definition) validateSchemas() (map[string]Attribute, error) {
 				return nil, ErrInvalid.WithMessage("неверный optional")
 			}
 			optional[code] = true
-		}
-		hidden := map[string]bool{}
-		for _, code := range schema.HiddenFacets {
-			if !seen[code] || hidden[code] {
-				return nil, ErrInvalid.WithMessage("неверный hiddenFacets")
-			}
-			hidden[code] = true
 		}
 		if err := schema.validateIdentity(key, fields); err != nil {
 			return nil, err

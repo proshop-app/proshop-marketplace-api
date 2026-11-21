@@ -15,7 +15,7 @@ import (
 	pricemoney "github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
-func TestCanonicalFiltersAndCoverage(t *testing.T) {
+func TestCanonicalFiltersAndSparseFacets(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
 	index := fake.NewIndex()
@@ -78,7 +78,7 @@ func TestCanonicalFiltersAndCoverage(t *testing.T) {
 	}
 	q := appcatalog.NewQueries(store, index, fake.NewPlatform(), nil, nil, fake.NewClock(time.Time{}))
 	page, err := q.Search(ctx, ports.OfferQuery{Limit: 1, Offset: 8})
-	if err != nil || page.Total != 10 || len(page.Facets) != 6 {
+	if err != nil || page.Total != 10 || len(page.Facets) != 7 {
 		t.Fatalf("%+v %v", page, err)
 	}
 	found := map[string]ports.Facet{}
@@ -88,8 +88,8 @@ func TestCanonicalFiltersAndCoverage(t *testing.T) {
 	if found["attr.a1"].Count != 2 || found["attr.a2"].Min.String() != "0" || found["attr.a2"].Max.String() != "9" {
 		t.Fatalf("фасеты считаются до пагинации: %+v", found)
 	}
-	if _, ok := found["attr.a3"]; ok {
-		t.Fatal("редкое поле показывается")
+	if found["attr.a3"].Count != 1 {
+		t.Fatal("фильтр с редкими значениями потерян")
 	}
 	if _, ok := found["attr.a4"]; ok {
 		t.Fatal("поле без facet показывается")

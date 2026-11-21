@@ -23,11 +23,13 @@ type taxonomyDisplay struct {
 	definition taxonomy.Definition
 	fields     map[string]taxonomy.Attribute
 	sources    map[string]map[string]string
+	panels     map[string]facetPanel
 }
 
 type facetDisplay struct {
 	taxonomy *taxonomyDisplay
 	sources  map[string][]string
+	order    []taxonomy.Filter
 }
 
 type valueOrder struct {
@@ -67,6 +69,7 @@ func (q *Queries) displayFor(definition taxonomy.Definition) *taxonomyDisplay {
 		fields:     definition.Fields(),
 		sources:    definition.SelectionSources(),
 	}
+	view.panels = view.buildFacetPanels()
 	if current == nil || current.definition.Version < definition.Version {
 		q.display.Store(view)
 	}

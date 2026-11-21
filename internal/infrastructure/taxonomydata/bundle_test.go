@@ -101,6 +101,28 @@ func TestArtifactRejectsInvalidJSON(t *testing.T) {
 			body: bytes.Replace(artifactBytes, []byte(`"facet":`), []byte(`"unexpected":true,"facet":`), 1),
 			want: `unknown field "unexpected"`,
 		},
+		"поле раскладки": {
+			body: bytes.Replace(
+				artifactBytes,
+				[]byte(`"facetLayout": {`),
+				[]byte(`"facetLayout": {"unexpected":true,`),
+				1,
+			),
+			want: `unknown field "unexpected"`,
+		},
+		"старое закрепление": {
+			body: bytes.Replace(artifactBytes, []byte(`"facet":`), []byte(`"facetPinned":true,"facet":`), 1),
+			want: "недопустимый facetPinned",
+		},
+		"старое выключение": {
+			body: bytes.Replace(
+				artifactBytes,
+				[]byte(`"facetOverrides":`),
+				[]byte(`"hiddenFacets":[],"facetOverrides":`),
+				1,
+			),
+			want: "недопустимый hiddenFacets",
+		},
 		"вычисляемое поле": {
 			body: bytes.Replace(artifactBytes, []byte(`"facet":`), []byte(`"values":null,"facet":`), 1),
 			want: "вычисляемое поле в исходнике",
@@ -115,7 +137,8 @@ func TestArtifactRejectsInvalidJSON(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := decodeArtifact(test.body); err == nil || !strings.Contains(err.Error(), test.want) {
+			lock := releaseLock{Release: 17, SHA256: fmt.Sprintf("%x", sha256.Sum256(test.body))}
+			if _, _, err := loadArtifact(test.body, lock); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatal(err)
 			}
 		})

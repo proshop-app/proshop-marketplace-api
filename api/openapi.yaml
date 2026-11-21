@@ -2380,13 +2380,13 @@ paths:
         разные коды — AND. Для number: attr.<код>.min и attr.<код>.max (включительно),
         либо точное значение. Неизвестный код, неверный тип/словарь/диапазон — 400.
         Пример: ?category=c1&attr.a1=v1&attr.a1=v2&attr.a2.min=1.5&attr.a2.max=10.
-        Фасеты считаются до пагинации со всеми фильтрами, кроме собственного; category — со всеми. Атрибутные —
-        только общие для всех листьев области поля с facet=true (без deprecated), при покрытии >=20%.
-        Максимум 32 поля: выбранные общие фильтры первыми, далее по коду; ответ упорядочен по коду.
-        Не более 256 фильтров атрибутов; превышение — 400. Базовые фасеты не входят в бюджет;
-        без селекторов category, tenant, price, inStock — всегда.
-        facets=none отключает все фасеты; список выбирает только перечисленные базовые,
-        attributes добавляет общие атрибутные фасеты области по указанному правилу.
+        Отбор по характеристикам разрешён по кодам панели выбранной области.
+        Фасеты считаются до пагинации со всеми фильтрами, кроме собственного; category — со всеми.
+        Порядок фасетов листа задан схемой. Ветка использует собственные приоритеты или пересечение
+        фильтров листьев, выдача без категории — общее пересечение. primary задаёт группу каждого фасета.
+        Максимум 32 характеристики в панели, плюс до четырёх встроенных фасетов по контексту.
+        facets=none отключает все фасеты. Список выбирает перечисленные доступные встроенные,
+        attributes добавляет характеристики выбранной панели.
         API обновляется раньше витрины: предыдущая версия отклоняет новые none/attributes/повторы.
         Размер страницы не определяет выбор фасетов. Фильтры и total от селекторов не меняются.
         Числа: min/max; остальные: до 256 наиболее частых значений с count.
@@ -2468,8 +2468,9 @@ paths:
                   type: string
                   enum: [category, tenant, inStock, price, attributes]
           description: >-
-            Список через запятую и/или повтором параметра, без пробелов. Без селекторов — все фасеты.
-            none — пустой массив в ответе. Список — только указанные базовые; attributes включает атрибутные.
+            Список через запятую и/или повтором параметра, без пробелов. Без селекторов возвращается панель области.
+            none даёт пустой массив. Список выбирает указанные доступные встроенные фасеты.
+            Код attributes включает характеристики панели.
             Неизвестный код, повтор кода, none с другим значением — 400.
             Устаревший facets= сохраняет только атрибуты, с attributeFacets=false отключает всё.
             В отличие от PR44, частичный список без флага больше не добавляет атрибуты автоматически.
@@ -2478,8 +2479,9 @@ paths:
           deprecated: true
           schema: { type: boolean }
           description: >-
-            Псевдоним PR44: строго true/false один раз. Без facets false оставляет четыре базовых,
-            true сохраняет все фасеты. С явным списком true добавляет attributes; false оставляет базовые.
+            Псевдоним PR44 принимает строго true/false один раз. Без facets false оставляет доступные
+            встроенные фасеты, true сохраняет всю панель. С явным списком true добавляет attributes,
+            false оставляет выбранные доступные встроенные фасеты.
             Явные attributes с false или none с true несовместимы (400). Новым клиентам использовать facets.
         - name: sort
           in: query
@@ -7132,6 +7134,16 @@ components:
       additionalProperties: false
       required: [version, attributes, schemas, categories]
       properties:
+        facetKeys:
+          type: [array, "null"]
+          readOnly: true
+          description: Отсортированные коды характеристик, фильтруемых хотя бы в одном листе.
+          items: { type: string }
+        rootFilters:
+          type: [array, "null"]
+          readOnly: true
+          description: Характеристики в панели выдачи без выбранной категории.
+          items: { $ref: "#/components/schemas/TaxonomyFilter" }
         selectionValues: { $ref: "#/components/schemas/TaxonomySelectionValues" }
         dictionaryBindings:
           type: array
@@ -7163,6 +7175,12 @@ components:
         title: { type: string, minLength: 1, maxLength: 256 }
         slug: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 128 }
         schema: { type: string, description: Только у листа; ключ схемы набора }
+        priorityFilters:
+          type: array
+          readOnly: true
+          description: Итоговые приоритеты ветки. Порядок значим. Встроенные коды начинаются с @.
+          items: { $ref: "#/components/schemas/TaxonomyFilter" }
+        facetLayout: { $ref: "#/components/schemas/TaxonomyFacetLayout" }
         axis: { type: string, description: Ось деления узла среди его соседей }
         nameScope: { type: boolean, description: Отдельная область уникальности коротких имён в разделе аудитории }
         definition: { type: string, maxLength: 1024, description: Граница вида изделия }
@@ -7174,11 +7192,6 @@ components:
       additionalProperties: false
       required: [code, name, type]
       properties:
-        facetPinned:
-          type: boolean
-          description: >-
-            true закрепляет фасет в бюджете без порога охвата, false отключает закрепление.
-            При отсутствии поля закрепляется только color. Без выбора закреплённому фасету нужны два значения.
         format: { type: string, enum: [gtin, isbn], description: "Формат идентификатора независимо от кода атрибута" }
         code: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
         name: { type: string, minLength: 1, maxLength: 256 }
@@ -7190,7 +7203,9 @@ components:
           description: Для enum — closed, для string — open
         values: { type: array, items: { type: string }, readOnly: true, description: Снимок confirmed закрытого словаря }
         unit: { type: string, description: Единица только для number }
-        facet: { type: boolean, default: false }
+        facet:
+          type: boolean
+          description: В JSON-снимке true у кодов, фильтруемых хотя бы в одном листе. В исходном YAML это глобальное правило.
         displayName: { type: string, maxLength: 256, description: Короткое имя для покупателя }
         hint: { type: string, maxLength: 1024, description: Подсказка продавцу }
         dictionarySelection: { type: boolean, const: true, description: Только каноническая подтверждённая строка }
@@ -7268,16 +7283,42 @@ components:
         model: { type: array, minItems: 1, uniqueItems: true, items: { type: string } }
         axes: { type: [array, "null"], uniqueItems: true, items: { type: string } }
         exact: { type: array, uniqueItems: true, items: { type: string } }
+    TaxonomyFilter:
+      type: object
+      additionalProperties: false
+      required: [code, primary]
+      properties:
+        code:
+          type: string
+          pattern: '^([a-z][a-z0-9_]{0,63}|@(price|inStock|seller|category))$'
+        primary: { type: boolean, description: Основной фильтр }
+    TaxonomyFacetLayout:
+      type: object
+      additionalProperties: false
+      required: [primary, additional]
+      properties:
+        primary: { type: array, uniqueItems: true, items: { type: string } }
+        additional: { type: array, uniqueItems: true, items: { type: string } }
+    TaxonomyFacetOverrides:
+      type: object
+      propertyNames: { pattern: '^[a-z][a-z0-9_]{0,63}$' }
+      additionalProperties: { type: string, enum: ["on", "off", default] }
     TaxonomySchema:
       type: object
       additionalProperties: false
-      required: [attributes]
+      required: [attributes, filters]
       properties:
         identityWarnings: { type: boolean, description: "Наследуется; false отключает переходный режим" }
         identity: { $ref: "#/components/schemas/TaxonomySchemaIdentity" }
         attributes: { type: array, minItems: 1, uniqueItems: true, items: { type: string } }
         optional: { type: array, uniqueItems: true, items: { type: string }, description: Подмножество attributes }
-        hiddenFacets: { type: array, uniqueItems: true, items: { type: string }, description: "Подмножество attributes, скрытое из фильтров" }
+        filters:
+          type: array
+          readOnly: true
+          description: Итоговые фильтры листа в порядке показа.
+          items: { $ref: "#/components/schemas/TaxonomyFilter" }
+        facetOverrides: { $ref: "#/components/schemas/TaxonomyFacetOverrides" }
+        facetLayout: { $ref: "#/components/schemas/TaxonomyFacetLayout" }
     TaxonomySchemaSource:
       type: object
       additionalProperties: false
@@ -7289,23 +7330,19 @@ components:
         abstract: { type: boolean, default: false }
         attributes: { type: array, uniqueItems: true, items: { type: string } }
         optional: { type: array, uniqueItems: true, items: { type: string }, description: Включая унаследованные поля }
-        hiddenFacets: { type: array, uniqueItems: true, items: { type: string }, description: "Наследуется и дополняется, включая унаследованные поля" }
+        facetOverrides: { $ref: "#/components/schemas/TaxonomyFacetOverrides" }
+        facetLayout: { $ref: "#/components/schemas/TaxonomyFacetLayout" }
     TaxonomySchemaAttribute:
       type: object
       required: [code, name, type, required]
       properties:
-        facetPinned:
-          type: boolean
-          description: >-
-            true закрепляет фасет в бюджете без порога охвата, false отключает закрепление.
-            При отсутствии поля закрепляется только color. Без выбора закреплённому фасету нужны два значения.
         format: { type: string, enum: [gtin, isbn], description: "Формат идентификатора независимо от кода атрибута" }
         code: { type: string }
         name: { type: string }
         type: { type: string, enum: [enum, string, number, boolean] }
         unit: { type: string }
         dictionary: { type: string, maxLength: 32, pattern: '^[a-z][a-z0-9_]{0,31}$' }
-        facet: { type: boolean }
+        facet: { type: boolean, description: Фильтруемость характеристики в этом листе }
         required: { type: boolean }
         values: { type: array, items: { type: string } }
         displayName: { type: string, maxLength: 256, description: Короткое имя для покупателя }
@@ -7340,7 +7377,7 @@ components:
         searchTermsByValue: { $ref: "#/components/schemas/TaxonomySearchTermsByValue" }
     TaxonomyCategorySchema:
       type: object
-      required: [id, name, slug, attributes]
+      required: [id, name, slug, attributes, filters]
       properties:
         identity: { $ref: "#/components/schemas/TaxonomySchemaIdentity" }
         id: { type: string }
@@ -7349,6 +7386,13 @@ components:
         slug: { type: string }
         schema: { type: string }
         children: { type: array, items: { $ref: "#/components/schemas/TaxonomyCategory" } }
+        filters:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyFilter" }
+        priorityFilters:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyFilter" }
+        facetLayout: { $ref: "#/components/schemas/TaxonomyFacetLayout" }
         attributes:
           type: array
           items: { $ref: "#/components/schemas/TaxonomySchemaAttribute" }
@@ -7423,7 +7467,11 @@ components:
       - type
       - count
       - values
+      - primary
       properties:
+        primary:
+          type: boolean
+          description: true для основных фильтров, false для дополнительных.
         buckets:
           type: array
           maxItems: 20
@@ -7732,11 +7780,12 @@ components:
           items: { $ref: "#/components/schemas/Offer" }
         facets:
           description: >-
-            Состав определяется параметром facets; массив обязателен, при none всегда [] (не null).
+            Выбранная панель в порядке показа. Параметр facets сужает состав, none даёт [].
             Счётчики и min/max учитывают все фильтры, кроме собственного фильтра фасета.
             category учитывает все фильтры. Значения внутри фасета объединяются через ИЛИ,
             разные фасеты — через И. total и items учитывают все фильтры.
           type: array
+          maxItems: 36
           items: { $ref: "#/components/schemas/Facet" }
         total: { type: integer }
         limit: { type: integer }

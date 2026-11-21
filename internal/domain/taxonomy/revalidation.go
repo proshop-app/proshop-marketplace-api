@@ -44,6 +44,7 @@ func (d Definition) revalidationDefinition() Definition {
 		field := &d.Attributes[i]
 		field.DisplayName = ""
 		field.Hint = ""
+		field.Facet = false
 		field.ValuesMeta = nil
 	}
 	if len(d.SelectionValues) > 0 {

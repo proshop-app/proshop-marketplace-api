@@ -60,9 +60,7 @@ func (r *Taxonomy) load(ctx context.Context) (taxonomy.Definition, error) {
 	if err := rawSQL(ctx, r.db, selectTaxonomy).Row().Scan(&raw); err != nil {
 		return taxonomy.Definition{}, err
 	}
-	var d taxonomy.Definition
-	err := json.Unmarshal(raw, &d)
-	return d, err
+	return decodeTaxonomySnapshot(raw)
 }
 
 // Version читает неизменяемое доказательство прежней привязки, не восстанавливая снимок целиком.
@@ -78,6 +76,35 @@ func (r *Taxonomy) Version(ctx context.Context, version int64) (taxonomy.Definit
 	var d taxonomy.Definition
 	err = json.Unmarshal(raw, &d)
 	return d, err
+}
+
+// Старые опубликованные снимки хранят развёрнутые hiddenFacets. Преобразуем их
+// при чтении версии, включая исходный снимок отката.
+func decodeTaxonomySnapshot(raw []byte) (taxonomy.Definition, error) {
+	var d taxonomy.Definition
+	if err := json.Unmarshal(raw, &d); err != nil || d.Version == 0 || d.FacetKeys != nil {
+		return d, err
+	}
+	var legacy struct {
+		Schemas map[string]struct {
+			HiddenFacets []string `json:"hiddenFacets"`
+		} `json:"schemas"`
+	}
+	if err := json.Unmarshal(raw, &legacy); err != nil {
+		return taxonomy.Definition{}, err
+	}
+	for name, previous := range legacy.Schemas {
+		if len(previous.HiddenFacets) == 0 {
+			continue
+		}
+		schema := d.Schemas[name]
+		schema.FacetOverrides = make(map[string]taxonomy.FacetOverride, len(previous.HiddenFacets))
+		for _, code := range previous.HiddenFacets {
+			schema.FacetOverrides[code] = taxonomy.FacetOff
+		}
+		d.Schemas[name] = schema
+	}
+	return d.CompileFacets(false)
 }
 
 // Lock блокирует загрузчиков и приём карточек на время замены схемы.

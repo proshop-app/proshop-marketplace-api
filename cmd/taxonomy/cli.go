@@ -92,7 +92,7 @@ func run(args []string, output, diagnostics io.Writer) int {
 			value := bundleExport{
 				Release:    release.Version,
 				Checksum:   release.Checksum,
-				Definition: release.Definition(),
+				Definition: release.Definition().CatalogSnapshot(),
 			}
 			if err := json.NewEncoder(output).Encode(value); err != nil {
 				return 1

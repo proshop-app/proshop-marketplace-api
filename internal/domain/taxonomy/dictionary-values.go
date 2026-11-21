@@ -50,19 +50,27 @@ func (d Definition) selectCategoryFields(
 	}
 }
 
-// CatalogAttributes раскрывает глобальный источник. Для раздела нужен Category.
+// CatalogAttributes раскрывает глобальный словарь и признак включения в индекс поиска.
 func (d Definition) CatalogAttributes() []Attribute {
 	out := slices.Clone(d.Attributes)
 	index := d.dictionaryBindingIndex()
 	for i, a := range out {
+		_, a.Facet = slices.BinarySearch(d.FacetKeys, a.Code)
 		if a.DictionarySelection {
 			dictionaries := hintDictionaries(a, nil, index)
 			if len(dictionaries) == 1 {
-				out[i] = a.selectValues(d.SelectionValues[dictionaries[0]])
+				a = a.selectValues(d.SelectionValues[dictionaries[0]])
 			}
 		}
+		out[i] = a
 	}
 	return out
+}
+
+// CatalogSnapshot подставляет признак индекса и глобальные значения в определение для потребителей.
+func (d Definition) CatalogSnapshot() Definition {
+	d.Attributes = d.CatalogAttributes()
+	return d
 }
 
 // SelectionSources возвращает сетки разделов для фасетов и карточек.

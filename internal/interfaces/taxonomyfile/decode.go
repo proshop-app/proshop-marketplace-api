@@ -46,7 +46,20 @@ func EncodePart(d taxonomy.Definition, part string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return yaml.Marshal(target)
+	if part != "schemas" {
+		return yaml.Marshal(target)
+	}
+	// Развёрнутая раскладка фильтров остаётся в пределах лимита загрузки.
+	var body bytes.Buffer
+	encoder := yaml.NewEncoder(&body)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(target); err != nil {
+		return nil, err
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+	return body.Bytes(), nil
 }
 
 func partTarget(d *taxonomy.Definition, part string) (any, error) {

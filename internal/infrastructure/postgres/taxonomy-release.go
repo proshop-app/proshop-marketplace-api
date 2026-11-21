@@ -41,7 +41,8 @@ func (r *Taxonomy) LatestRelease(ctx context.Context) (*taxonomy.ReleaseRecord, 
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(raw, &record.Previous); err != nil {
+	record.Previous, err = decodeTaxonomySnapshot(raw)
+	if err != nil {
 		return nil, err
 	}
 	return &record, nil
