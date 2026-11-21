@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	appbuyer "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
-	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -29,19 +28,6 @@ func publicBuyer(auth *appbuyer.Auth, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		next(w, withBuyer(r, session.BuyerID))
-	}
-}
-
-// publicOfferSearch проверяет текст до чтения покупателя из базы при проверке сессии.
-func publicOfferSearch(auth *appbuyer.Auth, next http.HandlerFunc) http.HandlerFunc {
-	authenticated := publicBuyer(auth, next)
-	return func(w http.ResponseWriter, r *http.Request) {
-		if _, err := appcatalog.NormalizeQueryText(r.URL.Query().Get("q")); err != nil {
-			w.Header().Set("Cache-Control", "private, no-store")
-			writeError(w, r, err)
-			return
-		}
-		authenticated(w, r)
 	}
 }
 

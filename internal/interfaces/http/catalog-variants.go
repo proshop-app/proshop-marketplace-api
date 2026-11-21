@@ -7,6 +7,7 @@ type variantGroupJSON struct {
 }
 
 func (h *catalogHandlers) variants(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "public, max-age=30")
 	block, err := h.queries.Variants(
 		r.Context(),
 		r.PathValue("tenantId"),
@@ -16,6 +17,5 @@ func (h *catalogHandlers) variants(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	w.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(w, http.StatusOK, variantResponse(block))
 }

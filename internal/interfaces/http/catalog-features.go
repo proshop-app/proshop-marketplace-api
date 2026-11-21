@@ -62,7 +62,7 @@ func (h *catalogHandlers) recommendations(w http.ResponseWriter, r *http.Request
 		writeError(w, r, appcatalog.ErrInvalidQuery.WithMessage("limit должен быть целым числом"))
 		return
 	}
-	if request.Context == "offer" {
+	if request.Context == appcatalog.RecommendationContextOffer {
 		request.OfferID, err = ids.ParseOfferID(values.Get("offerId"))
 		if err != nil {
 			writeError(w, r, err)

@@ -119,6 +119,7 @@ func toOfferJSON(card appcatalog.OfferCard, withDescription bool) offerJSON {
 
 // list — выдача: GET /api/v1/catalog/offers?q=&tenant=&category=&priceMin=&priceMax=&inStock=&sort=&limit=&offset=
 func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "public, max-age=30")
 	if r.URL.Query().Has("ids") {
 		h.listIDs(w, r)
 		return
@@ -174,6 +175,7 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 
 // card — карточка: GET /api/v1/catalog/offers/{offerId}
 func (h *catalogHandlers) card(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "public, max-age=30")
 	if err := validateDeliveryContext(r); err != nil {
 		writeError(w, r, err)
 		return
@@ -218,12 +220,16 @@ func parseCatalogOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 }
 
 func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
+	text, err := appcatalog.NormalizeQueryText(r.URL.Query().Get("q"))
+	if err != nil {
+		return ports.OfferQuery{}, err
+	}
 	if err := validateDeliveryContext(r); err != nil {
 		return ports.OfferQuery{}, err
 	}
 	values := r.URL.Query()
 	query := ports.OfferQuery{
-		Text:       values.Get("q"),
+		Text:       text,
 		TenantIDs:  values["tenant"],
 		GroupID:    values.Get("groupId"),
 		CategoryID: values.Get("category"),
@@ -280,8 +286,6 @@ func parseOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 		}
 		query.Attributes[code] = filter
 	}
-	var err error
-
 	if query.Limit, err = intParam(values.Get("limit")); err != nil {
 		return query, appcatalog.ErrInvalidQuery.WithMessage("limit — целое число")
 	}

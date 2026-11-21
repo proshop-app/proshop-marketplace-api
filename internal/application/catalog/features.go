@@ -14,6 +14,11 @@ import (
 )
 
 const (
+	// RecommendationContextHome выбирает рекомендации для главной страницы.
+	RecommendationContextHome = "home"
+	// RecommendationContextOffer выбирает похожие предложения для карточки.
+	RecommendationContextOffer = "offer"
+
 	// MaxViewedOffers ограничивает число переданных просмотров до удаления повторов.
 	MaxViewedOffers = 20
 
@@ -70,7 +75,7 @@ func (q *Queries) Reviews(ctx context.Context, id ids.OfferID, limit, offset int
 // Recommend читает кандидатов пачкой; пустой персональный отбор заменяет популярным.
 func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) (Recommendations, error) {
 	result := Recommendations{Items: []OfferCard{}, Reason: "popular"}
-	if request.Context != "home" && request.Context != "offer" ||
+	if request.Context != RecommendationContextHome && request.Context != RecommendationContextOffer ||
 		(request.Region != "" && !regions.ValidRU(request.Region)) {
 		return result, ErrInvalidQuery.WithMessage("неизвестный контекст или регион")
 	}
@@ -87,7 +92,7 @@ func (q *Queries) Recommend(ctx context.Context, request RecommendationRequest) 
 		Limit:  query.Limit,
 		Region: request.Region,
 	}
-	if request.Context == "offer" {
+	if request.Context == RecommendationContextOffer {
 		var state ports.OfferState
 		err = q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var readErr error
@@ -152,13 +157,13 @@ func appendRecommendations(
 	}
 }
 
-// recommendCandidates кэширует только гостевой отбор; интересы покупателей не разделяются.
+// recommendCandidates разделяет общий отбор; домашние интересы покупателей не кэшируются.
 func (q *Queries) recommendCandidates(
 	ctx context.Context,
 	request RecommendationRequest,
 	filter ports.RecommendationFilter,
 ) ([]ports.OfferState, error) {
-	if request.BuyerID != "" {
+	if request.Context == RecommendationContextHome && request.BuyerID != "" {
 		return q.recommendations.Recommend(ctx, filter)
 	}
 	if err := ctx.Err(); err != nil {

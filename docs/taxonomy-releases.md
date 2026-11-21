@@ -197,7 +197,7 @@ TAXONOMY_REVALIDATION_BENCH=1 go test -tags integration -count=1 -v \
 вычислен из `publication.categoryId`. При нормальном приёме они совпадают,
 но повреждённая/непроверенная публикация не должна определять отбор исходных
 карточек. Существующий `catalog_recommendations_category` здесь не подходит:
-он частичный (`on_sale AND default_price IS NOT NULL`), исключает требующие
+он частичный (`on_sale AND price IS NOT NULL`), исключает требующие
 перепроверки карточки и упорядочен по рейтингу продаж перед ключом товара.
 Полный keyset-обход исходных карточек требует другого индекса.
 

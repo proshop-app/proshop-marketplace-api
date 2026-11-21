@@ -22,7 +22,11 @@ func TestRecommendationRulesAndSingleCandidateQuery(t *testing.T) {
 	platform := fake.NewPlatform()
 	features := &fake.CatalogFeatures{}
 	queries := app.NewQueries(store, fake.NewIndex(), platform, features, features, fake.NewClock(time.Time{}))
-	result, err := queries.Recommend(ctx, app.RecommendationRequest{Context: "home", Region: "RU-MOW", Limit: 5})
+	result, err := queries.Recommend(ctx, app.RecommendationRequest{
+		Context: app.RecommendationContextHome,
+		Region:  "RU-MOW",
+		Limit:   5,
+	})
 	if err != nil || result.Reason != "popular" || features.Calls != 1 || features.Filter.Region != "RU-MOW" {
 		t.Fatal(result, err, features)
 	}
@@ -30,14 +34,18 @@ func TestRecommendationRulesAndSingleCandidateQuery(t *testing.T) {
 		Categories: []string{"c1"},
 		Purchased:  []ids.OfferID{{Tenant: "t1", Product: "p1"}},
 	}
-	result, err = queries.Recommend(ctx, app.RecommendationRequest{Context: "home", BuyerID: "buyer", Limit: 5})
+	result, err = queries.Recommend(ctx, app.RecommendationRequest{
+		Context: app.RecommendationContextHome,
+		BuyerID: "buyer",
+		Limit:   5,
+	})
 	if err != nil || result.Reason != "popular" || features.Calls != 3 ||
 		len(features.Filter.Categories) != 0 || len(features.Filter.Excluded) != 1 {
 		t.Fatal(result, err, features)
 	}
 	seedProduct(store, "t1", "p1")
 	result, err = queries.Recommend(ctx, app.RecommendationRequest{
-		Context: "offer",
+		Context: app.RecommendationContextOffer,
 		OfferID: ids.OfferID{Tenant: "t1", Product: "p1"},
 		Limit:   5,
 	})
@@ -148,7 +156,7 @@ func TestRecommendationAssemblyAndBuyerPrices(t *testing.T) {
 	features := &fake.CatalogFeatures{States: states}
 	q := app.NewQueries(store, fake.NewIndex(), platform, features, features, fake.NewClock(time.Time{}))
 	request := app.RecommendationRequest{
-		Context: "offer",
+		Context: app.RecommendationContextOffer,
 		OfferID: ids.OfferID{Tenant: "t1", Product: "p0"},
 		Limit:   10,
 	}
@@ -172,8 +180,8 @@ func TestRecommendationAssemblyAndBuyerPrices(t *testing.T) {
 		result.Items[0].Offer.BasePrice != 10000 {
 		t.Fatal(result, err)
 	}
-	if features.Calls != 2 {
-		t.Fatal("персональная выдача попала в гостевой кэш")
+	if features.Calls != 1 {
+		t.Fatal("общий отбор карточки не использовал гостевой кэш")
 	}
 }
 
@@ -189,7 +197,10 @@ func TestPersonalFallbackReturnsPopular(t *testing.T) {
 		},
 	}
 	q := app.NewQueries(store, fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(time.Time{}))
-	result, err := q.Recommend(context.Background(), app.RecommendationRequest{Context: "home", BuyerID: "buyer"})
+	result, err := q.Recommend(context.Background(), app.RecommendationRequest{
+		Context: app.RecommendationContextHome,
+		BuyerID: "buyer",
+	})
 	if err != nil || result.Reason != "popular" || len(result.Items) != 2 || features.Calls != 2 {
 		t.Fatal(result, err, features.Calls)
 	}
@@ -197,7 +208,10 @@ func TestPersonalFallbackReturnsPopular(t *testing.T) {
 		t.Fatal(features.Filter)
 	}
 	features.CategoryStates["empty"] = states
-	result, err = q.Recommend(context.Background(), app.RecommendationRequest{Context: "home", BuyerID: "buyer"})
+	result, err = q.Recommend(context.Background(), app.RecommendationRequest{
+		Context: app.RecommendationContextHome,
+		BuyerID: "buyer",
+	})
 	if err != nil || result.Reason != "personal" || len(result.Items) != 2 {
 		t.Fatal(result, err)
 	}
@@ -211,7 +225,7 @@ func TestGuestRecommendationExpiryAndSameTenant(t *testing.T) {
 	clock := fake.NewClock(t0)
 	q := app.NewQueries(store, fake.NewIndex(), fake.NewPlatform(), features, features, clock)
 	request := app.RecommendationRequest{
-		Context: "offer",
+		Context: app.RecommendationContextOffer,
 		OfferID: ids.OfferID{Tenant: "t1", Product: "p0"},
 	}
 	for _, advance := range []time.Duration{0, time.Minute - time.Nanosecond, time.Nanosecond} {
@@ -255,7 +269,7 @@ func TestGuestRecommendationsShareMissAndDoNotCacheErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	q := app.NewQueries(fake.NewStore(), fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(t0))
-	request := app.RecommendationRequest{Context: "home"}
+	request := app.RecommendationRequest{Context: app.RecommendationContextHome}
 	var wg sync.WaitGroup
 	ready := make(chan struct{}, 20)
 	for i := 0; i < 20; i++ {
@@ -312,7 +326,7 @@ func TestViewedRecommendationsForGuestAndBuyer(t *testing.T) {
 		q := app.NewQueries(store, fake.NewIndex(), fake.NewPlatform(), features, features, fake.NewClock(t0))
 		viewed := ids.OfferID{Tenant: "t1", Product: "p1"}
 		result, err := q.Recommend(context.Background(), app.RecommendationRequest{
-			Context: "home",
+			Context: app.RecommendationContextHome,
 			BuyerID: buyer,
 			Viewed:  []ids.OfferID{viewed, viewed},
 		})
@@ -348,7 +362,7 @@ func TestGuestRecommendationsCancelSQLWhenLastWaiterLeaves(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		_, err := q.Recommend(ctx, app.RecommendationRequest{Context: "home"})
+		_, err := q.Recommend(ctx, app.RecommendationRequest{Context: app.RecommendationContextHome})
 		done <- err
 	}()
 	<-started

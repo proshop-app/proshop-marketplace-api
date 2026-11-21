@@ -6,6 +6,8 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 )
 
+const marketplaceDefaultPriceProfile = "marketplace:default"
+
 type priceProfileJSON struct {
 	Key            string      `json:"key"`
 	Price          json.Number `json:"price"`
@@ -15,7 +17,7 @@ type priceProfileJSON struct {
 // snapshotPrices берёт только публичную цену канала; остальные профили не хранятся.
 func snapshotPrices(snapshot *catalog.Snapshot, values []priceProfileJSON) error {
 	for _, value := range values {
-		if value.Key != "marketplace:default" {
+		if value.Key != marketplaceDefaultPriceProfile {
 			continue
 		}
 		if snapshot.HasPrice {
