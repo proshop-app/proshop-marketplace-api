@@ -1,6 +1,9 @@
 package taxonomy
 
-import "slices"
+import (
+	"maps"
+	"slices"
+)
 
 // ExpandSchemas разворачивает единственный исходник схем перед сохранением снимка.
 // Абстрактные наборы не попадают в API; optional наследуется и может расширяться.
@@ -40,7 +43,8 @@ func expandSchemas(source map[string]Schema) (map[string]Schema, error) {
 			}
 			schema.Attributes = slices.Clone(parent.Attributes)
 			schema.Optional = slices.Clone(parent.Optional)
-			schema.HiddenFacets = slices.Clone(parent.HiddenFacets)
+			schema.FacetOverrides = maps.Clone(parent.FacetOverrides)
+			schema.FacetLayout = parent.FacetLayout
 			schema.Identity = parent.Identity
 			schema.IdentityWarnings = parent.IdentityWarnings
 		}
@@ -78,14 +82,19 @@ func expandSchemas(source map[string]Schema) (map[string]Schema, error) {
 				schema.Optional = append(schema.Optional, code)
 			}
 		}
-		seen = map[string]bool{}
-		for _, code := range recipe.HiddenFacets {
-			if !slices.Contains(schema.Attributes, code) || seen[code] {
-				return Schema{}, ErrInvalid.WithMessage("неверный hiddenFacets: " + name + "." + code)
+		if len(recipe.FacetOverrides) > 0 {
+			if schema.FacetOverrides == nil {
+				schema.FacetOverrides = map[string]FacetOverride{}
 			}
-			seen[code] = true
-			if !slices.Contains(schema.HiddenFacets, code) {
-				schema.HiddenFacets = append(schema.HiddenFacets, code)
+			maps.Copy(schema.FacetOverrides, recipe.FacetOverrides)
+		}
+		if recipe.FacetLayout != nil {
+			schema.FacetLayout = recipe.FacetLayout
+		}
+		if schema.FacetLayout != nil {
+			schema.FacetLayout = &FacetLayout{
+				Primary:    slices.Clone(schema.FacetLayout.Primary),
+				Additional: slices.Clone(schema.FacetLayout.Additional),
 			}
 		}
 		if len(schema.Attributes) == 0 {
@@ -119,6 +128,9 @@ func (d Definition) ExpandSchemaSource() (map[string]Schema, error) {
 	}
 	out := map[string]Schema{}
 	for name, schema := range resolved {
+		if err := schema.validateFacetOverrides(name, fields); err != nil {
+			return nil, err
+		}
 		if err := schema.validateIdentity(name, fields); err != nil {
 			return nil, err
 		}

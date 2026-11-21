@@ -101,6 +101,28 @@ func TestArtifactRejectsInvalidJSON(t *testing.T) {
 			body: bytes.Replace(artifactBytes, []byte(`"facet":`), []byte(`"unexpected":true,"facet":`), 1),
 			want: `unknown field "unexpected"`,
 		},
+		"поле раскладки": {
+			body: bytes.Replace(
+				artifactBytes,
+				[]byte(`"facetLayout": {`),
+				[]byte(`"facetLayout": {"unexpected":true,`),
+				1,
+			),
+			want: `unknown field "unexpected"`,
+		},
+		"старое закрепление": {
+			body: bytes.Replace(artifactBytes, []byte(`"facet":`), []byte(`"facetPinned":true,"facet":`), 1),
+			want: "недопустимый facetPinned",
+		},
+		"старое выключение": {
+			body: bytes.Replace(
+				artifactBytes,
+				[]byte(`"facetOverrides":`),
+				[]byte(`"hiddenFacets":[],"facetOverrides":`),
+				1,
+			),
+			want: "недопустимый hiddenFacets",
+		},
 		"вычисляемое поле": {
 			body: bytes.Replace(artifactBytes, []byte(`"facet":`), []byte(`"values":null,"facet":`), 1),
 			want: "вычисляемое поле в исходнике",
@@ -115,7 +137,8 @@ func TestArtifactRejectsInvalidJSON(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := decodeArtifact(test.body); err == nil || !strings.Contains(err.Error(), test.want) {
+			lock := releaseLock{Release: 17, SHA256: fmt.Sprintf("%x", sha256.Sum256(test.body))}
+			if _, _, err := loadArtifact(test.body, lock); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatal(err)
 			}
 		})
@@ -145,15 +168,6 @@ func TestArtifactRejectsInvalidDefinitions(t *testing.T) {
 		"нет иконки корня": func(bundle *artifact) {
 			bundle.Categories[0].Icon = ""
 		},
-		"миграция другой поставки": func(bundle *artifact) {
-			bundle.CategoryMigration.ToRelease++
-		},
-		"неполная миграция": func(bundle *artifact) {
-			bundle.CategoryMigration.Mappings = bundle.CategoryMigration.Mappings[1:]
-		},
-		"неизвестный адресат миграции": func(bundle *artifact) {
-			bundle.CategoryMigration.Mappings[0].To[0] = "missing"
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			bundle := testArtifact(t)
@@ -169,7 +183,6 @@ func TestArtifactWithoutHistoricalChecksumUsesJSONDigest(t *testing.T) {
 	bundle := testArtifact(t)
 	bundle.Manifest.Checksum = ""
 	bundle.Manifest.Release++
-	bundle.CategoryMigration.ToRelease++
 	body, err := json.Marshal(bundle)
 	if err != nil {
 		t.Fatal(err)
@@ -239,5 +252,65 @@ func TestIdentityWarningsSourceRoundTrip(t *testing.T) {
 	if resolved["child"].IdentityWarnings == nil || *resolved["child"].IdentityWarnings ||
 		resolved["inherited"].IdentityWarnings == nil || !*resolved["inherited"].IdentityWarnings {
 		t.Fatal("потерян явный false или наследуемый true при повторном разборе JSON")
+	}
+}
+
+func TestRelease17RequiresBrandWithoutReplacingTree(t *testing.T) {
+	bundle := testArtifact(t)
+	release, coverage, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if release.Version != 17 || bundle.CategoryMigration != nil || bundle.MigrationSource != nil ||
+		release.ReplaceCategories || coverage.Categories != 3974 || coverage.Leaves != 3555 {
+		t.Fatalf("параметры поставки 17: %+v", coverage)
+	}
+	var walk func([]taxonomy.Category)
+	walk = func(nodes []taxonomy.Category) {
+		for _, node := range nodes {
+			if len(node.Children) == 0 {
+				schema := release.Schemas[node.Schema]
+				if !slices.Contains(schema.Attributes, "brand") || slices.Contains(schema.Optional, "brand") {
+					t.Errorf("brand необязателен у %s", node.ID)
+				}
+			}
+			walk(node.Children)
+		}
+	}
+	walk(release.Categories)
+}
+
+func TestArtifactRejectsIncompleteCategoryMigration(t *testing.T) {
+	release := taxonomy.Release{
+		Version:           2,
+		ReplaceCategories: true,
+		Categories:        []taxonomy.Category{{ID: "c1"}, {ID: "c2"}},
+	}
+	for _, change := range []func(*categoryMigration){
+		func(m *categoryMigration) { m.ToRelease++ },
+		func(m *categoryMigration) { m.Mappings = m.Mappings[1:] },
+		func(m *categoryMigration) { m.Mappings[0].To[0] = "missing" },
+	} {
+		bundle := artifact{
+			MigrationSource: &migrationSource{
+				Version:            1,
+				artifactDefinition: artifactDefinition{Categories: release.Categories},
+			},
+			CategoryMigration: &categoryMigration{
+				FromRelease: 1,
+				ToRelease:   2,
+				Mappings: []categoryMapping{
+					{From: "c1", To: []string{"c1"}, Action: "unchanged", Reason: "точное совпадение"},
+					{From: "c2", To: []string{"c2"}, Action: "unchanged", Reason: "точное совпадение"},
+				},
+			},
+		}
+		if err := validateArtifactMigration(bundle, release); err != nil {
+			t.Fatal(err)
+		}
+		change(bundle.CategoryMigration)
+		if err := validateArtifactMigration(bundle, release); err == nil {
+			t.Fatal("принята неполная миграция категорий")
+		}
 	}
 }

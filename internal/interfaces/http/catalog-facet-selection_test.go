@@ -22,6 +22,11 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
+type facetCountingIndex struct {
+	ports.OfferIndex
+	queries []ports.OfferQuery
+}
+
 func facetSelectionHandler(t *testing.T) catalogHandlers {
 	t.Helper()
 	store, index := fake.NewStore(), fake.NewIndex()
@@ -279,4 +284,111 @@ func TestCatalogFacetResponseBytesAfterRublesMigration(t *testing.T) {
 	if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), want) {
 		t.Fatalf("ответ без селектора изменился: %s", response.Body.String())
 	}
+}
+
+func TestCatalogPanelOrderHTTP(t *testing.T) {
+	ctx := context.Background()
+	store, index := fake.NewStore(), fake.NewIndex()
+	store.SeedTaxonomy(taxonomy.Definition{
+		Attributes: []taxonomy.Attribute{
+			{Code: "a1", Type: "string", Facet: true},
+			{Code: "a2", Type: "string"},
+			{Code: "a3", Type: "string", Facet: true},
+		},
+		Schemas: map[string]taxonomy.Schema{
+			"s1": {
+				Attributes:     []string{"a1", "a2", "a3"},
+				FacetOverrides: map[string]taxonomy.FacetOverride{"a2": taxonomy.FacetOn},
+				FacetLayout: &taxonomy.FacetLayout{
+					Primary:    []string{"a2"},
+					Additional: []string{"a3", "a1"},
+				},
+			},
+		},
+		Categories: []taxonomy.Category{
+			{
+				ID: "c1",
+				FacetLayout: &taxonomy.FacetLayout{
+					Primary: []string{
+						taxonomy.FilterPrice,
+						"a2",
+						taxonomy.FilterInStock,
+						taxonomy.FilterSeller,
+						taxonomy.FilterCategory,
+					},
+					Additional: []string{},
+				},
+				Children: []taxonomy.Category{{ID: "c2", Schema: "s1"}},
+			},
+		},
+	})
+	if err := index.Put(ctx, []ports.OfferDocument{{
+		ID:           "t1~p1",
+		TenantID:     "t1",
+		CategoryID:   "c2",
+		CategoryPath: []string{"c1", "c2"},
+		Listed:       true,
+		Visible:      true,
+		Version:      1,
+		Attributes: map[string]json.RawMessage{
+			"a1": json.RawMessage(`"v1"`),
+			"a2": json.RawMessage(`"v2"`),
+		},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	search := &facetCountingIndex{OfferIndex: index}
+	handler := catalogHandlers{
+		queries: appcatalog.NewQueries(store, search, nil, nil, nil, fake.NewClock(time.Time{})),
+	}
+	for _, tc := range []struct {
+		query   string
+		codes   []string
+		primary []bool
+		fields  []string
+	}{
+		{
+			query:   "category=c2&facets=attributes",
+			codes:   []string{"attr.a2", "attr.a1"},
+			primary: []bool{true, false},
+			fields:  []string{"a2", "a3", "a1"},
+		},
+		{
+			query:   "category=c1",
+			codes:   []string{"price", "attr.a2", "inStock", "tenant", "category"},
+			primary: []bool{true, true, true, true, true},
+			fields:  []string{"a2"},
+		},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			search.queries = nil
+			response := httptest.NewRecorder()
+			handler.list(response, httptest.NewRequest(http.MethodGet, "/offers?"+tc.query, nil))
+			var page offerPageJSON
+			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil {
+				t.Fatal(response.Code, response.Body.String())
+			}
+			if len(search.queries) != 1 {
+				t.Fatalf("поисковых запросов: %d", len(search.queries))
+			}
+			var codes, fields []string
+			var primary []bool
+			for _, facet := range page.Facets {
+				codes = append(codes, facet.Code)
+				primary = append(primary, facet.Primary)
+			}
+			for _, field := range search.queries[0].FacetFields {
+				fields = append(fields, field.Code)
+			}
+			if !reflect.DeepEqual(codes, tc.codes) || !reflect.DeepEqual(primary, tc.primary) ||
+				!reflect.DeepEqual(fields, tc.fields) {
+				t.Fatalf("ответ %v, основные %v, запрос %v", codes, primary, fields)
+			}
+		})
+	}
+}
+
+func (index *facetCountingIndex) Search(ctx context.Context, query ports.OfferQuery) (ports.OfferPage, error) {
+	index.queries = append(index.queries, query)
+	return index.OfferIndex.Search(ctx, query)
 }

@@ -14,9 +14,8 @@ import (
 )
 
 const (
-	// MaxAttributes ограничивает глобальный каталог свойств, а не число полей одной карточки.
-	// Поисковый контракт передаёт характеристики списком проверенных скаляров.
-	MaxAttributes = 512
+	// MaxAttributes защищает от ошибочно разросшегося глобального каталога.
+	MaxAttributes = 4096
 	// MaxSchemaAttributes согласован с максимумом характеристик документа в sc-search v5.
 	MaxSchemaAttributes = 256
 	// MaxCategories ограничивает размер операторского дерева.
@@ -31,40 +30,48 @@ var (
 	categoryIDPattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,127}$`)
 )
 
-// ValueMeta задаёт визуальное представление значения перечисления.
+// ValueMeta задаёт данные отображения справочного значения.
 type ValueMeta struct {
-	Hex    string `json:"hex,omitempty" yaml:"hex,omitempty"`
-	Swatch string `json:"swatch,omitempty" yaml:"swatch,omitempty"`
+	SecondaryLabel string   `json:"secondaryLabel,omitempty" yaml:"secondaryLabel,omitempty"`
+	Covers         []string `json:"covers,omitempty" yaml:"covers,omitempty"`
+	Order          *int     `json:"order,omitempty" yaml:"-"`
+	Hex            string   `json:"hex,omitempty" yaml:"hex,omitempty"`
+	Swatch         string   `json:"swatch,omitempty" yaml:"swatch,omitempty"`
 }
 
 // Attribute — скалярное поле; код имеет один тип и единицу во всей площадке.
 type Attribute struct {
-	// FacetPinned отличает отсутствие настройки в снимке от явного отключения.
-	FacetPinned        *bool                `json:"facetPinned,omitempty" yaml:"facetPinned,omitempty"`
-	FacetOptions       []string             `json:"facetOptions,omitempty" yaml:"-"`
-	FacetValuesByValue map[string][]string  `json:"facetValuesByValue,omitempty" yaml:"-"`
-	Format             string               `json:"format,omitempty" yaml:"format,omitempty"`
-	SearchTermsByValue map[string][]string  `json:"searchTermsByValue,omitempty" yaml:"searchTermsByValue,omitempty"`
-	ValuesMeta         map[string]ValueMeta `json:"valuesMeta,omitempty" yaml:"valuesMeta,omitempty"`
-	Code               string               `json:"code" yaml:"code"`
-	Name               string               `json:"name" yaml:"name"`
-	Type               string               `json:"type" yaml:"type"`
-	Dictionary         string               `json:"dictionary,omitempty" yaml:"dictionary,omitempty"`
-	Values             []string             `json:"values,omitempty" yaml:"-"`
-	Unit               string               `json:"unit,omitempty" yaml:"unit,omitempty"`
-	Facet              bool                 `json:"facet" yaml:"facet"`
-	Description        string               `json:"description,omitempty" yaml:"description,omitempty"`
-	DictionaryNote     string               `json:"dictionaryNote,omitempty" yaml:"dictionaryNote,omitempty"`
-	Example            string               `json:"example,omitempty" yaml:"example,omitempty"`
-	RequiredReason     string               `json:"requiredReason,omitempty" yaml:"requiredReason,omitempty"`
-	Multiple           bool                 `json:"multiple,omitempty" yaml:"multiple,omitempty"`
-	Variant            bool                 `json:"variant,omitempty" yaml:"variant,omitempty"`
-	Deprecated         bool                 `json:"deprecated,omitempty" yaml:"deprecated,omitempty"`
+	dictionarySearchTerms map[string][]string
+
+	FacetOptions        []string             `json:"facetOptions,omitempty" yaml:"-"`
+	FacetValuesByValue  map[string][]string  `json:"facetValuesByValue,omitempty" yaml:"-"`
+	Format              string               `json:"format,omitempty" yaml:"format,omitempty"`
+	SearchTermsByValue  map[string][]string  `json:"searchTermsByValue,omitempty" yaml:"searchTermsByValue,omitempty"`
+	ValuesMeta          map[string]ValueMeta `json:"valuesMeta,omitempty" yaml:"valuesMeta,omitempty"`
+	Code                string               `json:"code" yaml:"code"`
+	Name                string               `json:"name" yaml:"name"`
+	DisplayName         string               `json:"displayName,omitempty" yaml:"displayName,omitempty"`
+	Hint                string               `json:"hint,omitempty" yaml:"hint,omitempty"`
+	DictionarySelection bool                 `json:"dictionarySelection,omitempty" yaml:"dictionarySelection,omitempty"`
+	Type                string               `json:"type" yaml:"type"`
+	Dictionary          string               `json:"dictionary,omitempty" yaml:"dictionary,omitempty"`
+	Values              []string             `json:"values,omitempty" yaml:"-"`
+	Unit                string               `json:"unit,omitempty" yaml:"unit,omitempty"`
+	Facet               bool                 `json:"facet" yaml:"facet"`
+	Description         string               `json:"description,omitempty" yaml:"description,omitempty"`
+	DictionaryNote      string               `json:"dictionaryNote,omitempty" yaml:"dictionaryNote,omitempty"`
+	Example             string               `json:"example,omitempty" yaml:"example,omitempty"`
+	RequiredReason      string               `json:"requiredReason,omitempty" yaml:"requiredReason,omitempty"`
+	Multiple            bool                 `json:"multiple,omitempty" yaml:"multiple,omitempty"`
+	Variant             bool                 `json:"variant,omitempty" yaml:"variant,omitempty"`
+	Deprecated          bool                 `json:"deprecated,omitempty" yaml:"deprecated,omitempty"`
 }
 
 // Category ссылается на схему только в листе, чтобы дерево не дублировало атрибуты.
 type Category struct {
-	Axis string `json:"axis,omitempty" yaml:"axis,omitempty"`
+	FacetLayout     *FacetLayout `json:"facetLayout,omitempty" yaml:"facetLayout,omitempty"`
+	PriorityFilters []Filter     `json:"priorityFilters,omitempty" yaml:"-"`
+	Axis            string       `json:"axis,omitempty" yaml:"axis,omitempty"`
 	// NameScope ограничивает редакционную уникальность имён разделом аудитории.
 	NameScope bool `json:"nameScope,omitempty" yaml:"nameScope,omitempty"`
 	// Definition задаёт границу вида изделия, а не поисковые синонимы.
@@ -91,12 +98,14 @@ type SchemaIdentity struct {
 type Schema struct {
 	Identity *SchemaIdentity `json:"identity,omitempty" yaml:"identity,omitempty"`
 	// Указатель отличает наследование от явного отключения предупреждений.
-	IdentityWarnings *bool    `json:"identityWarnings,omitempty" yaml:"identityWarnings,omitempty"`
-	Extends          string   `json:"extends,omitempty" yaml:"extends,omitempty"`
-	Abstract         bool     `json:"abstract,omitempty" yaml:"abstract,omitempty"`
-	Attributes       []string `json:"attributes" yaml:"attributes"`
-	Optional         []string `json:"optional,omitempty" yaml:"optional,omitempty"`
-	HiddenFacets     []string `json:"hiddenFacets,omitempty" yaml:"hiddenFacets,omitempty"`
+	IdentityWarnings *bool                    `json:"identityWarnings,omitempty" yaml:"identityWarnings,omitempty"`
+	Extends          string                   `json:"extends,omitempty" yaml:"extends,omitempty"`
+	Abstract         bool                     `json:"abstract,omitempty" yaml:"abstract,omitempty"`
+	Attributes       []string                 `json:"attributes" yaml:"attributes"`
+	Optional         []string                 `json:"optional,omitempty" yaml:"optional,omitempty"`
+	FacetOverrides   map[string]FacetOverride `json:"facetOverrides,omitempty" yaml:"facetOverrides,omitempty"`
+	FacetLayout      *FacetLayout             `json:"facetLayout,omitempty" yaml:"facetLayout,omitempty"`
+	Filters          []Filter                 `json:"filters" yaml:"-"`
 }
 
 // SchemaAttribute содержит обязательность только в контексте схемы.
@@ -114,6 +123,13 @@ type CategorySchema struct {
 
 // Definition — неизменяемый снимок версии таксономии.
 type Definition struct {
+	// FacetKeys — отсортированное объединение фильтров всех листьев.
+	FacetKeys   []string `json:"facetKeys" yaml:"-"`
+	RootFilters []Filter `json:"rootFilters" yaml:"-"`
+
+	// SelectionValues заполняется только при публикации из реестра.
+	SelectionValues map[string]DictionaryValues `json:"selectionValues,omitempty" yaml:"-"`
+
 	DictionaryBindings []DictionaryBinding `json:"dictionaryBindings,omitempty" yaml:"dictionaryBindings,omitempty"`
 	Version            int64               `json:"version" yaml:"version"`
 	Attributes         []Attribute         `json:"attributes" yaml:"attributes"`
@@ -133,6 +149,7 @@ type Card struct {
 type Issue struct {
 	Code      string `json:"code"`
 	Attribute string `json:"attribute,omitempty"`
+	Message   string `json:"message,omitempty"`
 }
 
 // Publication — результат проверки и доверенный контекст поисковой проекции.
@@ -164,6 +181,9 @@ func ValidCode(code string) bool { return codePattern.MatchString(code) }
 func (d Definition) Validate() error {
 	if d.Version < 1 || d.Version > MaxTaxonomyVersion || len(d.Categories) == 0 {
 		return ErrInvalid.WithMessage("нужны положительная версия и категории")
+	}
+	if len(d.Attributes) > MaxAttributes {
+		return ErrInvalid.WithMessage("слишком много определений атрибутов")
 	}
 	ids := map[string]bool{}
 	slugs := map[string]bool{}
@@ -209,6 +229,9 @@ func (d Definition) Validate() error {
 			slugs[c.Slug] = true
 			fullNames[c.FullName()] = true
 			ids[c.ID] = true
+			if len(ids) > MaxCategories {
+				return ErrInvalid.WithMessage("слишком много категорий")
+			}
 			if len(c.Children) > 0 {
 				if c.Schema != "" {
 					return ErrInvalid.WithMessage("у раздела не может быть схемы")
@@ -225,17 +248,10 @@ func (d Definition) Validate() error {
 	if err := walk(d.Categories, 1); err != nil {
 		return err
 	}
-	if len(ids) > MaxCategories || len(codes) > MaxAttributes {
-		return ErrInvalid.WithMessage("слишком много категорий или кодов атрибутов")
-	}
 	return d.validateDictionaryBindings(codes)
 }
 
 func (a Attribute) validate() error {
-	if a.FacetPinned != nil && *a.FacetPinned && !a.Facet {
-		return ErrInvalid.WithMessage("закрепление требует фасета: " + a.Code)
-	}
-
 	if a.Format != "" && a.Format != "gtin" && a.Format != "isbn" {
 		return ErrInvalid.WithMessage("неизвестный format атрибута " + a.Code + ": " + a.Format)
 	}
@@ -243,7 +259,8 @@ func (a Attribute) validate() error {
 		return ErrInvalid.WithMessage("неверный код или имя атрибута")
 	}
 	// Карточка хранит скаляр: метаданные не должны обещать неподдерживаемый массив.
-	if a.Multiple || utf8.RuneCountInString(a.Description) > 1024 ||
+	if a.Multiple || !validOptionalText(a.DisplayName, 256) || !validOptionalText(a.Hint, 1024) ||
+		utf8.RuneCountInString(a.Description) > 1024 ||
 		utf8.RuneCountInString(a.DictionaryNote) > 512 || utf8.RuneCountInString(a.Example) > 256 ||
 		utf8.RuneCountInString(a.RequiredReason) > 512 {
 		return ErrInvalid.WithMessage("неверные пояснения или множественность атрибута")
@@ -253,6 +270,9 @@ func (a Attribute) validate() error {
 	}
 	if a.Dictionary != "" && a.Type != "enum" && a.Type != "string" {
 		return ErrInvalid.WithMessage("словарь допустим только у enum и string")
+	}
+	if a.DictionarySelection && a.Type != "string" {
+		return ErrInvalid.WithMessage("выбор из справочника допустим только для строкового атрибута: " + a.Code)
 	}
 	if err := a.validateValuesMeta(); err != nil {
 		return err
@@ -309,13 +329,6 @@ func (d Definition) validateSchemas() (map[string]Attribute, error) {
 			}
 			optional[code] = true
 		}
-		hidden := map[string]bool{}
-		for _, code := range schema.HiddenFacets {
-			if !seen[code] || hidden[code] {
-				return nil, ErrInvalid.WithMessage("неверный hiddenFacets")
-			}
-			hidden[code] = true
-		}
 		if err := schema.validateIdentity(key, fields); err != nil {
 			return nil, err
 		}
@@ -330,7 +343,7 @@ func (d Definition) validateSchemas() (map[string]Attribute, error) {
 
 // Fields возвращает глобальные определения для поиска по нескольким категориям.
 func (d Definition) Fields() map[string]Attribute {
-	out := map[string]Attribute{}
+	out := make(map[string]Attribute, len(d.Attributes))
 	for _, a := range d.Attributes {
 		out[a.Code] = a
 	}
@@ -402,26 +415,61 @@ func (d Definition) categorySlugs() map[string]string {
 
 // Category возвращает полную схему и путь от корня до узла.
 func (d Definition) Category(id string) (CategorySchema, []string, bool) {
-	var find func([]Category, []string) (Category, []string, bool)
-	find = func(categories []Category, path []string) (Category, []string, bool) {
-		for _, c := range categories {
-			next := append(append([]string{}, path...), c.ID)
-			if c.ID == id {
-				return c, next, true
-			}
-			if found, p, ok := find(c.Children, next); ok {
-				return found, p, true
-			}
-		}
-		return Category{}, nil, false
+	scope, found := d.categoryContext(id)
+	return scope.Category, scope.Path, found
+}
+
+func (d Definition) categoryContext(id string) (checkContext, bool) {
+	var pathBuffer [MaxDepth]string
+	category, path, policy := findCategory(d.Categories, id, pathBuffer[:0], "auto")
+	if category == nil {
+		return checkContext{Category: CategorySchema{Attributes: []SchemaAttribute{}}}, false
 	}
-	category, path, ok := find(d.Categories, nil)
-	return categorySchema(category, d.Fields(), d.Schemas[category.Schema]), path, ok
+	schema := d.Schemas[category.Schema]
+	fields := categorySchema(*category, d.schemaFields(schema), schema)
+	d.selectCategoryFields(&fields, path, d.dictionaryBindingIndex())
+	return checkContext{Category: fields, Path: path, Policy: policy}, true
+}
+
+func findCategory(nodes []Category, id string, path []string, inherited string) (*Category, []string, string) {
+	for i := range nodes {
+		node := &nodes[i]
+		policy := inheritModerationPolicy(inherited, node.Moderation)
+		next := append(path, node.ID)
+		if node.ID == id {
+			return node, next, policy
+		}
+		if found, foundPath, foundPolicy := findCategory(node.Children, id, next, policy); found != nil {
+			return found, foundPath, foundPolicy
+		}
+	}
+	return nil, nil, "auto"
+}
+
+func (d Definition) schemaFields(schema Schema) map[string]Attribute {
+	fields := make(map[string]Attribute, len(schema.Attributes))
+	if len(schema.Attributes) == 0 {
+		return fields
+	}
+	for _, code := range schema.Attributes {
+		fields[code] = Attribute{}
+	}
+	// Для одной карточки размещаем в памяти только определения её схемы.
+	for i := range d.Attributes {
+		field := &d.Attributes[i]
+		if _, exists := fields[field.Code]; exists {
+			fields[field.Code] = *field
+		}
+	}
+	return fields
 }
 
 func categorySchema(category Category, fields map[string]Attribute, schema Schema) CategorySchema {
-	result := CategorySchema{Category: category, Attributes: []SchemaAttribute{}}
-	result.Identity = schema.Identity
+	result := CategorySchema{
+		Category:   category,
+		Identity:   schema.Identity,
+		Attributes: make([]SchemaAttribute, 0, len(schema.Attributes)),
+	}
 	for _, code := range schema.Attributes {
 		result.Attributes = append(result.Attributes, SchemaAttribute{
 			Attribute: fields[code],
@@ -462,11 +510,11 @@ func checkCategory(version int64, category CategorySchema, path []string, found 
 	p.Schema = category.Schema
 	p.CategoryPath = path
 	p.CategoryName = category.FullName()
-	fields := map[string]SchemaAttribute{}
+	fields := make(map[string]bool, len(category.Attributes))
 	for _, a := range category.Attributes {
-		fields[a.Code] = a
+		fields[a.Code] = true
 		raw, exists := card.Attributes[a.Code]
-		if identityEmpty(raw) && category.Identity.contains(a.Code) && !a.Required {
+		if identityEmpty(raw) && category.Identity.contains(a.Code) && !a.Required && !a.DictionarySelection {
 			continue
 		}
 		if !exists {
@@ -476,6 +524,14 @@ func checkCategory(version int64, category CategorySchema, path []string, found 
 			continue
 		}
 		issue := a.check(raw)
+		if issue == "taxonomy.dictionary_value" {
+			p.Issues = append(p.Issues, Issue{
+				Code:      "taxonomy.dictionary_value",
+				Attribute: a.Code,
+				Message:   "Выберите подтверждённое значение из справочника раздела",
+			})
+			continue
+		}
 		if issue != "" {
 			p.Issues = append(p.Issues, Issue{Code: issue, Attribute: a.Code})
 		} else {
@@ -489,7 +545,7 @@ func checkCategory(version int64, category CategorySchema, path []string, found 
 		}
 	}
 	for code := range card.Attributes {
-		if _, exists := fields[code]; !exists {
+		if !fields[code] {
 			p.Issues = append(p.Issues, Issue{Code: "taxonomy.attribute_unknown", Attribute: code})
 		}
 	}
@@ -519,6 +575,11 @@ func (a Attribute) check(raw json.RawMessage) string {
 		}
 		if strings.TrimSpace(value) == "" || utf8.RuneCountInString(value) > 1024 {
 			return "taxonomy.type"
+		}
+		if a.DictionarySelection {
+			if _, found := a.ValuesMeta[value]; !found {
+				return "taxonomy.dictionary_value"
+			}
 		}
 		if a.Type == "enum" {
 			for _, allowed := range a.Values {

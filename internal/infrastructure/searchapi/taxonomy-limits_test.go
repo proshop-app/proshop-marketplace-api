@@ -26,7 +26,7 @@ type releaseSnapshot struct {
 	definition taxonomy.Definition
 }
 
-// TestReleaseSearchLimits использует поставляемые YAML, а не уменьшенную копию схемы.
+// TestReleaseSearchLimits использует поставляемый артефакт, а не уменьшенную копию схемы.
 // TAXONOMY_CONTRACT_DIR сохраняет корпус для проверки настоящим валидатором sc-search.
 func TestReleaseSearchLimits(t *testing.T) {
 	release, coverage, err := taxonomydata.Load()
@@ -39,19 +39,13 @@ func TestReleaseSearchLimits(t *testing.T) {
 	corpus := []offerQuery{}
 	report := []string{"category,kind,legacyFacets,facets"}
 	globalFields := definition.Fields()
-	facetCount := 0
-	for _, field := range definition.Attributes {
-		if field.Facet {
-			facetCount++
-		}
-	}
 	t.Logf(
 		"release=%d nodes=%d leaves=%d attributes=%d facets=%d",
 		release.Version,
 		coverage.Categories,
 		coverage.Leaves,
 		coverage.Attributes,
-		facetCount,
+		len(definition.FacetKeys),
 	)
 	var walk func(taxonomy.Category, int)
 	walk = func(node taxonomy.Category, depth int) {
@@ -130,7 +124,7 @@ func TestReleaseSearchLimits(t *testing.T) {
 		}
 		for name, value := range map[string]any{
 			"queries.json":  corpus,
-			"snapshot.json": definition,
+			"snapshot.json": definition.CatalogSnapshot(),
 		} {
 			data, err := json.Marshal(value)
 			if err != nil {

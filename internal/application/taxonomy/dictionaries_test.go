@@ -67,7 +67,7 @@ func TestDictionaryFailuresDoNotPublish(t *testing.T) {
 	for _, name := range []string{"missing", "kind", "empty", "metadata"} {
 		t.Run(name, func(t *testing.T) {
 			store := fake.NewStore()
-			original := schema(1)
+			original := compiledDefinition(t, schema(1))
 			store.SeedTaxonomy(original)
 			input := schema(1)
 			switch name {
@@ -250,7 +250,7 @@ func TestOnlyConfirmedValuesArePublished(t *testing.T) {
 
 func TestSchemaImportExpandsInheritanceBeforeSnapshot(t *testing.T) {
 	store := fake.NewStore()
-	original := schema(1)
+	original := compiledDefinition(t, schema(1))
 	store.SeedTaxonomy(original)
 	seedValues(t, store, "v1")
 	input := schema(1)

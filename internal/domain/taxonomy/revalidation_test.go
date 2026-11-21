@@ -262,6 +262,13 @@ func TestCheckerMatchesDefinitionCheckAndBindingsOnlyChangeHints(t *testing.T) {
 		if !reflect.DeepEqual(definition.Check(card), checker.Check(card)) {
 			t.Fatal("контекст изменил результат Check", card)
 		}
+		if card != nil {
+			scoped := definition.CategoryChecker(card.CategoryID)
+			if !reflect.DeepEqual(checker.Check(card), scoped.Check(card)) ||
+				checker.ModerationPolicy(card.CategoryID) != scoped.ModerationPolicy(card.CategoryID) {
+				t.Fatal("проверка по категории изменила результат или политику модерации", card.CategoryID)
+			}
+		}
 	}
 	before := definition.Check(cards[2])
 	definition.DictionaryBindings = []taxonomy.DictionaryBinding{

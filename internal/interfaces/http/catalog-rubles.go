@@ -33,6 +33,7 @@ type priceBucketJSON struct {
 }
 
 type facetJSON struct {
+	Primary bool                `json:"primary"`
 	Buckets []priceBucketJSON   `json:"buckets,omitempty"`
 	Code    string              `json:"code"`
 	Name    string              `json:"name"`
@@ -73,12 +74,13 @@ func facetResponses(facets []ports.Facet) ([]facetJSON, error) {
 	result := make([]facetJSON, 0, len(facets))
 	for _, facet := range facets {
 		item := facetJSON{
-			Code:   facet.Code,
-			Name:   facet.Name,
-			Type:   facet.Type,
-			Unit:   facet.Unit,
-			Count:  facet.Count,
-			Values: facet.Values,
+			Primary: facet.Primary,
+			Code:    facet.Code,
+			Name:    facet.Name,
+			Type:    facet.Type,
+			Unit:    facet.Unit,
+			Count:   facet.Count,
+			Values:  facet.Values,
 		}
 		if facet.Min != nil {
 			item.Min = facet.Min

@@ -32,6 +32,7 @@ type PriceBucket struct {
 
 // Facet — агрегация по всей отфильтрованной выдаче до пагинации.
 type Facet struct {
+	Primary bool          `json:"-"`
 	Buckets []PriceBucket `json:"buckets,omitempty"`
 	Code    string        `json:"code"`
 	Name    string        `json:"name"`

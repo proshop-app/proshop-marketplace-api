@@ -2,92 +2,112 @@ package catalog
 
 import (
 	"slices"
-	"sort"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
-// MaxAttributeFacets ограничивает стоимость агрегаций и размер панели покупателя.
-// Это бюджет интерфейса, не размер глобального справочника; контракт поиска допускает 256.
-const MaxAttributeFacets = 32
+// MaxAttributeFacets — бюджет агрегаций по характеристикам в одном запросе.
+const MaxAttributeFacets = taxonomy.MaxAttributeFilters
 
-// defaultPinnedFacetCode закрепляется, когда снимок таксономии не задаёт facetPinned.
-const defaultPinnedFacetCode = "color"
-
-// scopeFields не ищет каждый лист заново от корня: на большой таксономии это квадратичная работа.
-// Фильтры разрешены по объединению схем, охват фасетов считается по листьям области.
-func scopeFields(
-	d taxonomy.Definition,
-	nodes []taxonomy.Category,
-	collectUnion bool,
-) (map[string]taxonomy.Attribute, map[string]int) {
-	fields := d.Fields()
-	union := map[string]taxonomy.Attribute{}
-	coverage := map[string]int{}
-	var collect func([]taxonomy.Category)
-	collect = func(nodes []taxonomy.Category) {
-		for _, node := range nodes {
-			if len(node.Children) > 0 {
-				collect(node.Children)
-				continue
-			}
-			schema := d.Schemas[node.Schema]
-			for _, code := range schema.Attributes {
-				if collectUnion {
-					union[code] = fields[code]
-				}
-				if !slices.Contains(schema.HiddenFacets, code) {
-					coverage[code]++
-				}
-			}
-		}
-	}
-	collect(nodes)
-	return union, coverage
+var builtinFacetOrder = [...]string{
+	taxonomy.FilterCategory,
+	taxonomy.FilterSeller,
+	taxonomy.FilterPrice,
+	taxonomy.FilterInStock,
 }
 
-func selectFacetFields(
-	fields map[string]taxonomy.Attribute,
-	coverage map[string]int,
-	filters map[string]ports.AttributeFilter,
-) []taxonomy.Attribute {
-	out := []taxonomy.Attribute{}
-	for code := range coverage {
-		field := fields[code]
-		if field.Facet && !field.Deprecated {
-			out = append(out, field)
-		}
-	}
-	// Закреплённые и выбранные поля сохраняют управление фильтром при исчерпании бюджета.
-	// Остальные упорядочены по убыванию охвата, при равенстве — по коду.
-	sort.Slice(out, func(i, j int) bool {
-		leftPinned, rightPinned := isFacetPinned(out[i]), isFacetPinned(out[j])
-		if leftPinned != rightPinned {
-			return leftPinned
-		}
-		_, left := filters[out[i].Code]
-		_, right := filters[out[j].Code]
-		if left != right {
-			return left
-		}
-		if coverage[out[i].Code] != coverage[out[j].Code] {
-			return coverage[out[i].Code] > coverage[out[j].Code]
-		}
-		return out[i].Code < out[j].Code
-	})
-	if len(out) > MaxAttributeFacets {
-		out = out[:MaxAttributeFacets]
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].Code < out[j].Code
-	})
-	return out
+type facetPanel struct {
+	filters    []taxonomy.Filter
+	sources    map[string][]string
+	priorities bool
 }
 
-func isFacetPinned(field taxonomy.Attribute) bool {
-	if field.FacetPinned != nil {
-		return *field.FacetPinned
+func (v *taxonomyDisplay) buildFacetPanels() map[string]facetPanel {
+	panels := make(map[string]facetPanel)
+	var visit func(taxonomy.Category) facetPanel
+	visit = func(node taxonomy.Category) facetPanel {
+		if len(node.Children) == 0 {
+			panel := facetPanel{filters: v.definition.Schemas[node.Schema].Filters}
+			for code, source := range v.sources[node.ID] {
+				for _, filter := range panel.filters {
+					if filter.Code == code {
+						panel.addSource(code, source)
+						break
+					}
+				}
+			}
+			panels[node.ID] = panel
+			return panel
+		}
+		panel := facetPanel{filters: node.PriorityFilters, priorities: node.FacetLayout != nil}
+		for _, child := range node.Children {
+			for code, sources := range visit(child).sources {
+				for _, source := range sources {
+					panel.addSource(code, source)
+				}
+			}
+		}
+		panels[node.ID] = panel
+		return panel
 	}
-	return field.Code == defaultPinnedFacetCode
+	visit(taxonomy.Category{Children: v.definition.Categories, PriorityFilters: v.definition.RootFilters})
+	return panels
+}
+
+func (p *facetPanel) addSource(code, source string) {
+	if p.sources == nil {
+		p.sources = map[string][]string{}
+	}
+	if !slices.Contains(p.sources[code], source) {
+		p.sources[code] = append(p.sources[code], source)
+	}
+}
+
+func (p facetPanel) apply(query *ports.OfferQuery, fields map[string]taxonomy.Attribute) []taxonomy.Filter {
+	order := make([]taxonomy.Filter, 0, min(len(p.filters), MaxAttributeFacets)+len(builtinFacetOrder))
+	query.FacetFields = []taxonomy.Attribute{}
+	includeAttributes := query.WantsFacet(ports.FacetAttributes)
+	var selection []ports.FacetCode
+	if !p.priorities {
+		for _, code := range builtinFacetOrder {
+			if query.WantsFacet(wireBuiltin(code)) {
+				order = append(order, taxonomy.Filter{Code: code, Primary: true})
+			}
+		}
+	}
+	for _, filter := range p.filters {
+		if code := wireBuiltin(filter.Code); code != "" {
+			if query.WantsFacet(code) {
+				selection = append(selection, code)
+				order = append(order, filter)
+			}
+			continue
+		}
+		if includeAttributes && len(query.FacetFields) < MaxAttributeFacets {
+			query.FacetFields = append(query.FacetFields, fields[filter.Code])
+			order = append(order, filter)
+		}
+	}
+	if p.priorities {
+		if includeAttributes {
+			selection = append(selection, ports.FacetAttributes)
+		}
+		query.Facets = &selection
+	}
+	return order
+}
+
+func wireBuiltin(code string) ports.FacetCode {
+	switch code {
+	case taxonomy.FilterPrice:
+		return ports.FacetPrice
+	case taxonomy.FilterInStock:
+		return ports.FacetInStock
+	case taxonomy.FilterSeller:
+		return ports.FacetTenant
+	case taxonomy.FilterCategory:
+		return ports.FacetCategory
+	}
+	return ""
 }

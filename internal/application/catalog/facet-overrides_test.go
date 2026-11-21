@@ -3,6 +3,7 @@ package catalog_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -13,10 +14,10 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
-func TestHiddenFacetsScopeAndFilterUnion(t *testing.T) {
+func TestFacetOverridesLimitSearchScope(t *testing.T) {
 	var schemas map[string]taxonomy.Schema
 	body := []byte(`{
-		"s1": {"attributes": ["a1", "a2", "color"], "hiddenFacets": ["a1", "color"]},
+		"s1": {"attributes": ["a1", "a2", "color"], "facetOverrides": {"a1": "off", "color": "off"}},
 		"s2": {"attributes": ["a1", "a2", "color"]}
 	}`)
 	err := json.Unmarshal(body, &schemas)
@@ -48,23 +49,23 @@ func TestHiddenFacetsScopeAndFilterUnion(t *testing.T) {
 	store.SeedTaxonomy(d)
 	queries := appcatalog.NewQueries(store, fake.NewIndex(), nil, nil, nil, fake.NewClock(time.Time{}))
 	for id, want := range map[string][]string{
-		"":   {"a1", "a2", "color"},
-		"c1": {"a1", "a2", "color"},
+		"":   {"a2"},
+		"c1": {"a2"},
 		"c2": {"a2"},
 		"c3": {"a2"},
 		"c5": {"a1", "a2", "color"},
 	} {
 		t.Run(id, func(t *testing.T) {
-			prepared, err := queries.PrepareQuery(context.Background(), ports.OfferQuery{
+			prepared, err := queries.PrepareQuery(context.Background(), ports.OfferQuery{CategoryID: id})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = queries.PrepareQuery(context.Background(), ports.OfferQuery{
 				CategoryID: id,
-				Attributes: map[string]ports.AttributeFilter{
-					"a1":    {Values: []string{"v1"}},
-					"color": {Values: []string{"v1"}},
-				},
+				Attributes: map[string]ports.AttributeFilter{"a1": {Values: []string{"v1"}}},
 			})
-			if err != nil || prepared.Attributes["a1"].Type != "string" ||
-				prepared.Attributes["color"].Type != "string" {
-				t.Fatalf("скрытый фасет изменил допустимость фильтра: %+v, %v", prepared, err)
+			if (id == "c5" && err != nil) || (id != "c5" && !errors.Is(err, appcatalog.ErrInvalidQuery)) {
+				t.Fatalf("допустимость фильтра a1: %v", err)
 			}
 			codes := []string{}
 			for _, field := range prepared.FacetFields {

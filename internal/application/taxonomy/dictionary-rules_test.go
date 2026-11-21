@@ -28,6 +28,7 @@ func hintRuleStore(t *testing.T) (*fake.Store, *apptaxonomy.Service, taxonomy.De
 		Values:     []string{"v1"},
 		ValuesMeta: map[string]taxonomy.ValueMeta{"v1": {Hex: "#112233"}},
 	})
+	current = compiledDefinition(t, current)
 	store.SeedTaxonomy(current)
 	for _, code := range []string{"a1", "d1", "d2"} {
 		store.SeedReferenceDictionary(reference.DictionaryState{
@@ -236,6 +237,7 @@ func TestReleasePreservesAbsentRulesAndRejectsDanglingScopes(t *testing.T) {
 	current.DictionaryBindings = []taxonomy.DictionaryBinding{
 		{CategoryID: "c1", AttributeCode: "a1", Mode: "extend", Dictionaries: []string{"d1"}},
 	}
+	current = compiledDefinition(t, current)
 	store.SeedTaxonomy(current)
 	for _, code := range []string{"a1", "d1"} {
 		store.SeedReferenceDictionary(reference.DictionaryState{Code: code, Kind: reference.KindOpen})

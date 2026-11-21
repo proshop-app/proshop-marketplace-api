@@ -106,6 +106,12 @@ func (s *Service) LoadPartWithOptions(
 		if err := next.Validate(); err != nil {
 			return err
 		}
+		if !frozenValues || next.FacetKeys == nil {
+			next, err = next.CompileFacets(false)
+			if err != nil {
+				return err
+			}
+		}
 		checkEvolution := next.CheckEvolution
 		if options.ReplaceCategories {
 			checkEvolution = next.CheckCategoryReplacementEvolution

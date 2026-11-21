@@ -154,7 +154,7 @@ func TestEveryClothingAndFootwearLeafRequiresMarkedSize(t *testing.T) {
 			}
 			leaf, _, found := definition.Category(category.ID)
 			markedSize := code
-			if category.Schema == "clothing_headwear" {
+			if slices.Contains(definition.Schemas[category.Schema].Attributes, "headwear_size_label") {
 				// Профессиональный колпак маркируется размером головного убора, а не тела.
 				markedSize = "headwear_size_label"
 			}

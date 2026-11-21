@@ -70,6 +70,12 @@ func (s *Service) changeRelease(
 		if err := next.Validate(); err != nil {
 			return err
 		}
+		if next.FacetKeys == nil {
+			next, err = next.CompileFacets(false)
+			if err != nil {
+				return err
+			}
+		}
 		if !rollback {
 			if err := resolveDictionaries(ctx, tx.Reference(), &next); err != nil {
 				return err

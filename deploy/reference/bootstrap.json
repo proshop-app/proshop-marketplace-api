@@ -2481,13 +2481,37 @@
             "entries": []
         },
         {
+            "code": "size_clothing_kids_height",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
             "code": "size_clothing_label",
             "kind": "open",
             "release": 1,
             "entries": []
         },
         {
+            "code": "size_clothing_women_ru",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "size_clothing_men_ru",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
             "code": "size_footwear_label",
+            "kind": "open",
+            "release": 1,
+            "entries": []
+        },
+        {
+            "code": "size_footwear_ru",
             "kind": "open",
             "release": 1,
             "entries": []

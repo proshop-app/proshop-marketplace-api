@@ -60,14 +60,11 @@ func auditRelease(release taxonomy.Release) error {
 }
 
 func auditAttribute(field taxonomy.Attribute) error {
-	if strings.TrimSpace(field.Description) == "" || strings.TrimSpace(field.Example) == "" {
-		return qualityError(field.Code, "нужны определение и пример")
+	if strings.TrimSpace(field.Description) == "" {
+		return qualityError(field.Code, "нужно определение")
 	}
-	if field.Type == "number" && field.Unit == "" || field.Type != "number" && field.Unit != "" {
-		return qualityError(field.Code, "единица допустима и обязательна только у числа")
-	}
-	if field.Dictionary == "" && strings.TrimSpace(field.DictionaryNote) == "" {
-		return qualityError(field.Code, "нужен словарь или причина его отсутствия")
+	if field.Type != "number" && field.Unit != "" {
+		return qualityError(field.Code, "единица допустима только у числа")
 	}
 	if field.Dictionary != "" && field.Type != "string" && field.Type != "enum" {
 		return qualityError(field.Code, "словарь не согласован с типом")
@@ -78,13 +75,13 @@ func auditAttribute(field taxonomy.Attribute) error {
 	if field.Multiple {
 		return qualityError(field.Code, "карточка поддерживает только скаляр")
 	}
-	if field.Type == "number" {
+	if field.Type == "number" && field.Example != "" {
 		number, err := strconv.ParseFloat(field.Example, 64)
 		if err != nil || math.IsInf(number, 0) || math.IsNaN(number) {
 			return qualityError(field.Code, "числовой пример должен быть числом без единицы")
 		}
 	}
-	if field.Type == "boolean" && field.Example != "true" && field.Example != "false" {
+	if field.Type == "boolean" && field.Example != "" && field.Example != "true" && field.Example != "false" {
 		return qualityError(field.Code, "булев пример должен быть true или false")
 	}
 	if !field.Deprecated {

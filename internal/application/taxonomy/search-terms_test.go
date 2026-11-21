@@ -18,7 +18,7 @@ import (
 func TestSearchTermsOnlyPublicationPreservesFrozenDictionaries(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()
-	original := schema(11)
+	original := compiledDefinition(t, schema(11))
 	original.Attributes[0].Values = []string{"v1", "v2"}
 	original.Attributes[0].ValuesMeta = map[string]taxonomy.ValueMeta{"v1": {Hex: "#FFFFFF"}}
 	store.SeedTaxonomy(original)

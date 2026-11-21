@@ -45,6 +45,15 @@ func schema(version int64) taxonomy.Definition {
 	}
 }
 
+func compiledDefinition(t *testing.T, source taxonomy.Definition) taxonomy.Definition {
+	t.Helper()
+	definition, err := source.CompileFacets(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return definition
+}
+
 func TestLoadAndRevalidate(t *testing.T) {
 	ctx := context.Background()
 	store := fake.NewStore()

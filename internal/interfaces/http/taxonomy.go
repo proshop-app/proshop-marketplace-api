@@ -20,6 +20,11 @@ type taxonomyHandlers struct {
 	sources dictionarySourcesCache
 }
 
+type taxonomyCategorySchema struct {
+	taxonomy.CategorySchema
+	Filters []taxonomy.Filter `json:"filters"`
+}
+
 func taxonomyCached(w http.ResponseWriter, r *http.Request, version int64) bool {
 	etag := `"taxonomy-` + strconv.FormatInt(version, 10) + `"`
 	w.Header().Set("X-Taxonomy-Version", strconv.FormatInt(version, 10))
@@ -44,7 +49,19 @@ func (h *taxonomyHandlers) schema(w http.ResponseWriter, r *http.Request) {
 	if taxonomyCached(w, r, d.Version) {
 		return
 	}
-	writeJSON(w, http.StatusOK, category)
+	filters := d.Schemas[category.Schema].Filters
+	if filters == nil {
+		filters = []taxonomy.Filter{}
+	}
+	filterable := make(map[string]bool, len(filters))
+	for _, filter := range filters {
+		filterable[filter.Code] = true
+	}
+	for i := range category.Attributes {
+		field := &category.Attributes[i]
+		field.Facet = filterable[field.Code]
+	}
+	writeJSON(w, http.StatusOK, taxonomyCategorySchema{CategorySchema: category, Filters: filters})
 }
 
 func (h *taxonomyHandlers) version(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +118,7 @@ func (h *taxonomyHandlers) current(w http.ResponseWriter, r *http.Request) {
 	if taxonomyCached(w, r, d.Version) {
 		return
 	}
-	writeJSON(w, http.StatusOK, d)
+	writeJSON(w, http.StatusOK, d.CatalogSnapshot())
 }
 
 func (h *taxonomyHandlers) attributes(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +160,7 @@ func (h *taxonomyHandlers) readPart(w http.ResponseWriter, r *http.Request, part
 	var value any
 	switch part {
 	case "attributes":
-		value = d.Attributes
+		value = d.CatalogAttributes()
 	case "schemas":
 		value = d.Schemas
 	case "categories":
@@ -151,7 +168,11 @@ func (h *taxonomyHandlers) readPart(w http.ResponseWriter, r *http.Request, part
 	case "dictionary-bindings":
 		value = d.DictionaryBindings
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"version": d.Version, part: value})
+	response := map[string]any{"version": d.Version, part: value}
+	if part == "attributes" && len(d.SelectionValues) > 0 {
+		response["selectionValues"] = d.SelectionValues
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *taxonomyHandlers) publication(w http.ResponseWriter, r *http.Request) {

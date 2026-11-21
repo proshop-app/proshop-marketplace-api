@@ -17,15 +17,20 @@ type checkContext struct {
 func (d Definition) Checker() Checker {
 	result := Checker{version: d.Version, categories: map[string]checkContext{}}
 	fields := d.Fields()
+	bindings := d.dictionaryBindingIndex()
 	var walk func([]Category, []string, string)
 	walk = func(nodes []Category, path []string, inherited string) {
 		for _, node := range nodes {
 			policy := inheritModerationPolicy(inherited, node.Moderation)
 			children := node.Children
 			node.Children = nil
+			node.FacetLayout = nil
+			node.PriorityFilters = nil
 			current := append(append([]string{}, path...), node.ID)
+			category := categorySchema(node, fields, d.Schemas[node.Schema])
+			d.selectCategoryFields(&category, current, bindings)
 			result.categories[node.ID] = checkContext{
-				Category: categorySchema(node, fields, d.Schemas[node.Schema]),
+				Category: category,
 				Path:     current,
 				Policy:   policy,
 			}
@@ -34,6 +39,15 @@ func (d Definition) Checker() Checker {
 	}
 	walk(d.Categories, nil, "auto")
 	return result
+}
+
+// CategoryChecker готовит проверку страницы карточек одной категории.
+func (d Definition) CategoryChecker(id string) Checker {
+	scope, found := d.categoryContext(id)
+	if !found {
+		return Checker{version: d.Version}
+	}
+	return Checker{version: d.Version, categories: map[string]checkContext{id: scope}}
 }
 
 // Check использует ту же проверку, что Definition.Check.

@@ -72,6 +72,10 @@ func assertTaxonomyDictionaries(t *testing.T, dictionaries map[string]suppliedDi
 		if attribute.Type == "enum" {
 			kind = reference.KindClosed
 		}
+		// Поставки Uno регистрируют новые словари отдельно от bootstrap площадки.
+		if _, bundled := dictionaries[code]; !bundled {
+			continue
+		}
 		dictionary := requireDictionary(t, dictionaries, code, kind)
 		if kind != reference.KindClosed {
 			continue
@@ -99,7 +103,9 @@ func assertTaxonomyDictionaries(t *testing.T, dictionaries map[string]suppliedDi
 	for _, binding := range release.DictionaryBindings {
 		for _, code := range binding.Dictionaries {
 			required[code] = true
-			requireDictionary(t, dictionaries, code, reference.KindOpen)
+			if _, bundled := dictionaries[code]; bundled {
+				requireDictionary(t, dictionaries, code, reference.KindOpen)
+			}
 		}
 	}
 	for _, item := range input.Dictionaries {

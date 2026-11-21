@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 
@@ -34,8 +35,9 @@ var ErrInvalidQuery = errs.New(errs.Invalid, "catalog.invalid_query", "неко�
 
 // OfferCard — проверенное предложение каталога.
 type OfferCard struct {
-	SellersCount *int
-	Offer        ports.OfferDocument
+	AttributeDetails map[string]AttributeDisplay
+	SellersCount     *int
+	Offer            ports.OfferDocument
 }
 
 // OfferList — страница выдачи и фасеты.
@@ -48,6 +50,8 @@ type OfferList struct {
 
 // Queries — чтение выдачи и карточек.
 type Queries struct {
+	display             atomic.Pointer[taxonomyDisplay]
+	displayMu           sync.Mutex
 	clock               ports.Clock
 	recommendationLoads map[string]*recommendationLoad
 	recommendationMu    sync.Mutex
@@ -92,7 +96,7 @@ func NewQueries(
 
 // Search — страница выдачи каталога. Пустые лимит и порядок берутся по умолчанию.
 func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList, error) {
-	normalized, err := q.PrepareQuery(ctx, query)
+	normalized, presentation, err := q.prepareQuery(ctx, query)
 	if err != nil {
 		return OfferList{}, err
 	}
@@ -102,7 +106,7 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 	}
 	list := OfferList{
 		Correction: page.Correction,
-		Facets:     visibleFacets(page.Facets, page.Total, normalized),
+		Facets:     displayFacets(page.Facets, normalized, presentation),
 		Total:      page.Total,
 		Items:      make([]OfferCard, 0, len(page.Items)),
 	}
@@ -129,7 +133,8 @@ func (q *Queries) Offer(ctx context.Context, offerID ids.OfferID) (OfferCard, er
 	}
 
 	return OfferCard{
-		Offer: doc,
+		Offer:            doc,
+		AttributeDetails: q.display.Load().attributes(doc),
 	}, nil
 }
 
@@ -214,43 +219,50 @@ func (q *Queries) Publication(ctx context.Context, id ids.OfferID) (PublicationV
 
 // PrepareQuery сохраняет одинаковые фильтры для органики и рекламы.
 func (q *Queries) PrepareQuery(ctx context.Context, query ports.OfferQuery) (ports.OfferQuery, error) {
+	normalized, _, err := q.prepareQuery(ctx, query)
+	return normalized, err
+}
+
+func (q *Queries) prepareQuery(ctx context.Context, query ports.OfferQuery) (ports.OfferQuery, facetDisplay, error) {
 	normalized, err := normalize(query)
 	if err != nil {
-		return ports.OfferQuery{}, err
+		return ports.OfferQuery{}, facetDisplay{}, err
 	}
 
+	var presentation facetDisplay
 	if err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		d, err := tx.Taxonomy().Current(ctx)
 		if err != nil {
 			return err
 		}
-		nodes := d.Categories
-		if normalized.CategoryID != "" {
-			category, _, ok := d.Category(normalized.CategoryID)
-			if !ok {
-				return ErrInvalidQuery.WithMessage("неизвестная категория")
+		view := q.displayFor(d)
+		panel, found := view.panels[normalized.CategoryID]
+		if !found {
+			return ErrInvalidQuery.WithMessage("неизвестная категория")
+		}
+		if len(normalized.Attributes) > 0 {
+			fields := make(map[string]taxonomy.Attribute, len(normalized.Attributes))
+			for _, filter := range panel.filters {
+				if _, selected := normalized.Attributes[filter.Code]; selected {
+					fields[filter.Code] = view.fields[filter.Code]
+				}
 			}
-			nodes = []taxonomy.Category{category.Category}
+			if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
+				return err
+			}
+			for code, filter := range normalized.Attributes {
+				filter.Type = fields[code].Type
+				normalized.Attributes[code] = filter
+			}
 		}
-		fields, coverage := scopeFields(d, nodes, normalized.CategoryID != "")
-		if normalized.CategoryID == "" {
-			fields = d.Fields()
-		}
-		if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
-			return err
-		}
-		for code, filter := range normalized.Attributes {
-			filter.Type = fields[code].Type
-			normalized.Attributes[code] = filter
-		}
-		// Поля берутся заново из таксономии, повторная подготовка не дублирует фасеты.
-		normalized.FacetFields = []taxonomy.Attribute{}
-		if normalized.WantsFacet(ports.FacetAttributes) {
-			normalized.FacetFields = selectFacetFields(fields, coverage, normalized.Attributes)
+		presentation = facetDisplay{
+			taxonomy: view,
+			sources:  panel.sources,
+			order:    panel.apply(&normalized, view.fields),
 		}
 		return nil
 	}); err != nil {
-		return ports.OfferQuery{}, err
+		return ports.OfferQuery{}, facetDisplay{}, err
 	}
-	return normalized, nil
+	return normalized, presentation, nil
 }

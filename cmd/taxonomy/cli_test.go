@@ -26,8 +26,8 @@ func TestCheckDoesNotNeedDatabase(t *testing.T) {
 	}
 }
 
-func TestArtifactRelease15ExportMatchesYAML(t *testing.T) {
-	const want = "16124f6b35157795b6111c22644148e048678327960d1c2a8e94a4db43b7a1bf"
+func TestArtifactRelease17Export(t *testing.T) {
+	const want = "60d4ed6a535837e56041b41bbaa337346c0ab70a57100a3d084963925d1aa594"
 	var output, diagnostics bytes.Buffer
 	if code := run([]string{"check", "--export"}, &output, &diagnostics); code != 0 {
 		t.Fatalf("code=%d: %s", code, diagnostics.String())
@@ -76,11 +76,11 @@ func TestRemoveHintRequiresNarrowExplicitCASAndHistoricalProof(t *testing.T) {
 	}
 }
 
-func TestApplyRequiresCategoryReplacementAcknowledgementBeforeDatabase(t *testing.T) {
+func TestApplyPinnedReleaseNeedsNoCategoryReplacementConfirmation(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
 	var output, diagnostics bytes.Buffer
 	if code := run([]string{"apply"}, &output, &diagnostics); code != 2 ||
-		!strings.Contains(diagnostics.String(), "--confirm-category-replacement") {
+		!strings.Contains(diagnostics.String(), "DATABASE_URL") {
 		t.Fatal(code, diagnostics.String())
 	}
 }

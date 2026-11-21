@@ -43,6 +43,7 @@ type Repository interface {
 	LockDictionary(ctx context.Context, code string) (*Dictionary, error)
 	Dictionary(ctx context.Context, code string) (*Dictionary, error)
 	Dictionaries(ctx context.Context) ([]*Dictionary, error)
+	DictionaryRevisions(ctx context.Context, codes []string) (map[string]int64, error)
 	SaveDictionary(ctx context.Context, dict *Dictionary) error
 
 	// Append пишет запись журнала первой в изменении и возвращает её ревизию.
@@ -59,6 +60,7 @@ type Repository interface {
 	// CandidateEntryIDs возвращает не более limit кандидатов, исключая список, в порядке id.
 	CandidateEntryIDs(ctx context.Context, dictionary string, excluded []ids.UUID, limit int) ([]ids.UUID, error)
 	AllEntries(ctx context.Context, dictionary string) ([]*Entry, error)
+	ConfirmedEntries(ctx context.Context, dictionary string) ([]*Entry, error)
 	List(ctx context.Context, dictionary string, filter ListFilter) ([]*Entry, int, error)
 	// MergedInto — записи, объединённые в id: при новом объединении они переносятся дальше.
 	MergedInto(ctx context.Context, dictionary string, id ids.UUID) ([]*Entry, error)

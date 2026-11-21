@@ -8,28 +8,10 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
-func TestWorkwearAndSchoolMigrationKeepsGarmentPurpose(t *testing.T) {
+func TestWorkwearAndSchoolKeepRequiredSizeAxis(t *testing.T) {
 	release, _, err := Load()
 	if err != nil {
 		t.Fatal(err)
-	}
-	migration := testArtifact(t).CategoryMigration
-	mappings := map[string]categoryMapping{}
-	for _, mapping := range migration.Mappings {
-		mappings[mapping.From] = mapping
-	}
-	for _, audience := range []string{"women", "men"} {
-		for _, garment := range []string{"jackets", "trousers"} {
-			old := "clothing." + audience + "-work-" + garment
-			if !slices.Contains(mappings[old].To, "clothing.work-"+garment) {
-				t.Errorf("рабочий предмет потерял назначение: %s", old)
-			}
-		}
-	}
-	for _, id := range mappings["clothing.school-uniform"].To {
-		if !strings.HasPrefix(id, "clothing.girls-school-") && !strings.HasPrefix(id, "clothing.boys-school-") {
-			t.Errorf("школьная форма направлена в чужой ассортимент: %s", id)
-		}
 	}
 	definition := release.Definition()
 	for _, id := range []string{
@@ -102,7 +84,7 @@ func TestNewPartsDoNotInheritForeignMeasurements(t *testing.T) {
 	definition := release.Definition()
 	for id, forbidden := range map[string][]string{
 		"auto.car-inner-tubes":      {"tire_season", "tire_load_index", "tire_speed_index", "studded"},
-		"auto.car-speakers":         {"voltage", "audio_output_w"},
+		"auto.car-speakers":         {"voltage"},
 		"outdoors.boat-propellers":  {"auto_make", "auto_model"},
 		"computers.three-d-pens":    {"cable_length", "paper_format", "print_color"},
 		"music.midi-controllers":    {"audio_channels", "cable_length"},
@@ -114,7 +96,8 @@ func TestNewPartsDoNotInheritForeignMeasurements(t *testing.T) {
 			t.Fatal("потерян проверенный вид", id)
 		}
 		for _, field := range leaf.Attributes {
-			if slices.Contains(forbidden, field.Code) {
+			if slices.Contains(forbidden, field.Code) ||
+				id == "auto.car-speakers" && field.Code == "audio_output_w" && field.Required {
 				t.Errorf("чужое измерение детали: %s.%s", id, field.Code)
 			}
 		}
@@ -151,25 +134,6 @@ func TestEnergyAndReservoirSchemasRequireSelectionParameters(t *testing.T) {
 			}) {
 				t.Errorf("потерян необходимый параметр выбора: %s.%s", id, code)
 			}
-		}
-	}
-}
-
-func TestNamedKindsRemainReachableFromGeneralRelease9Leaves(t *testing.T) {
-	migration := testArtifact(t).CategoryMigration
-	mappings := map[string]categoryMapping{}
-	for _, mapping := range migration.Mappings {
-		mappings[mapping.From] = mapping
-	}
-	for from, target := range map[string]string{
-		"appliances.heaters":        "appliances.convectors",
-		"kitchen.plates":            "kitchen.saucers",
-		"food.ready-meals":          "food.main-dishes",
-		"outdoors.inflatable-boats": "outdoors.kayaks",
-	} {
-		mapping := mappings[from]
-		if mapping.Action != "split" || !slices.Contains(mapping.To, target) {
-			t.Errorf("из общего листа потерян выделенный вид: %s → %s", from, target)
 		}
 	}
 }

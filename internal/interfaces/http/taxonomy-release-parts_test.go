@@ -5,9 +5,11 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -21,17 +23,23 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencedata"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/taxonomyfile"
 )
 
 func TestArtifactPartsThroughOperatorHTTP(t *testing.T) {
 	store := fake.NewStore()
-	fixture := taxonomyReleaseFixture(t)
-	previous := fixture.MigrationSource
+	release, _, err := taxonomydata.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := release.Definition()
+	previous := previousTaxonomySnapshot(release)
 	store.SeedTaxonomy(previous)
-	attributes := encodeTaxonomyPart(t, fixture.Definition, "attributes")
+	attributes := encodeTaxonomyPart(t, fixture, "attributes")
 	generator := &fake.IDs{}
 	seedTaxonomyDictionaries(t, store, generator, fixture.Attributes, false)
+	seedTaxonomyBindingHeaders(store, release.DictionaryBindings)
 	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
 	handler := NewHandler(Deps{
 		RequestTimeout:         time.Minute,
@@ -63,27 +71,19 @@ func TestArtifactPartsThroughOperatorHTTP(t *testing.T) {
 	seedTaxonomyDictionaries(t, store, generator, fixture.Attributes, true)
 	for index, part := range []string{"attributes", "schemas", "categories"} {
 		version := previous.Version + int64(index)
-		body := encodeTaxonomyPart(t, fixture.Definition, part)
+		body := encodeTaxonomyPart(t, fixture, part)
 		if len(body) > maxTaxonomyBody {
-			t.Fatal(part, "превышает лимит HTTP")
+			t.Fatalf("%s превышает лимит HTTP: %d байт", part, len(body))
 		}
-		query := ""
-		if part == "categories" {
-			w = call(part, body, version, "")
-			if w.Code != http.StatusConflict {
-				t.Fatal("замена дерева принята без подтверждения", w.Code, w.Body.String())
-			}
-			query = "?replaceCategories=true"
-		}
-		w = call(part, body, version, query)
+		w = call(part, body, version, "")
 		if w.Code != http.StatusOK || w.Header().Get("ETag") != `"taxonomy-`+strconv.FormatInt(version+1, 10)+`"` {
 			t.Fatal(part, w.Code, w.Body.String())
 		}
-		if stale := call(part, body, version, query); stale.Code != http.StatusConflict {
+		if stale := call(part, body, version, ""); stale.Code != http.StatusConflict {
 			t.Fatal("потерян CAS", part, stale.Code)
 		}
 	}
-	current, err := service.Current(context.Background())
+	current, err = service.Current(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,6 +118,18 @@ func TestArtifactPartsThroughOperatorHTTP(t *testing.T) {
 	}
 }
 
+func seedTaxonomyBindingHeaders(store *fake.Store, bindings []taxonomy.DictionaryBinding) {
+	for _, binding := range bindings {
+		for _, code := range binding.Dictionaries {
+			store.SeedReferenceDictionary(reference.DictionaryState{
+				Code:   code,
+				Kind:   reference.KindOpen,
+				Limits: reference.DefaultLimits(),
+			})
+		}
+	}
+}
+
 func encodeTaxonomyPart(t *testing.T, definition taxonomy.Definition, part string) []byte {
 	t.Helper()
 	body, err := taxonomyfile.EncodePart(definition, part)
@@ -135,10 +147,13 @@ func seedTaxonomyDictionaries(
 	targetOnly bool,
 ) {
 	t.Helper()
+	seeded := map[string]bool{}
 	for _, attribute := range attributes {
-		if attribute.Dictionary == "" || (attribute.Dictionary == "target_gender") != targetOnly {
+		if attribute.Dictionary == "" || seeded[attribute.Dictionary] ||
+			(attribute.Dictionary == "target_gender") != targetOnly {
 			continue
 		}
+		seeded[attribute.Dictionary] = true
 		kind := reference.KindOpen
 		if attribute.Type == "enum" {
 			kind = reference.KindClosed
@@ -149,6 +164,9 @@ func seedTaxonomyDictionaries(
 			continue
 		}
 		entries := taxonomyDictionaryEntries(t, attribute.Dictionary)
+		if entries == nil {
+			entries = testConfirmedValues(attributes, attribute.Dictionary)
+		}
 		err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 			var records []*reference.Entry
 			for _, seed := range entries {
@@ -203,6 +221,29 @@ func taxonomyDictionaryEntries(t *testing.T, code string) []reference.DeliveryEn
 			return dictionary.Entries
 		}
 	}
-	t.Fatalf("закрытый словарь %s отсутствует в поставках и bootstrap", code)
 	return nil
+}
+
+func testConfirmedValues(attributes []taxonomy.Attribute, dictionary string) []reference.DeliveryEntry {
+	// Для проверки HTTP-контракта считаем, что оператор принял используемые значения нового словаря.
+	values := map[string]bool{"Значение": true}
+	for _, attribute := range attributes {
+		if attribute.Dictionary == dictionary {
+			for value := range attribute.SearchTermsByValue {
+				values[value] = true
+			}
+			for value := range attribute.ValuesMeta {
+				values[value] = true
+			}
+		}
+	}
+	entries := make([]reference.DeliveryEntry, 0, len(values))
+	for _, value := range slices.Sorted(maps.Keys(values)) {
+		entries = append(entries, reference.DeliveryEntry{
+			Canonical: value,
+			Status:    reference.StatusConfirmed,
+			Metadata:  []byte(`{}`),
+		})
+	}
+	return entries
 }

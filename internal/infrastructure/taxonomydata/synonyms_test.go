@@ -59,8 +59,7 @@ func TestReviewedSynonymsHaveOneLeafPerScope(t *testing.T) {
 	walk(release.Categories, "")
 }
 
-func TestSequentialImportSchemasOnlyPreserveRelease9References(t *testing.T) {
-	previous := testArtifact(t).MigrationSource
+func TestSequentialImportSchemasStayOutsideLeafSchemas(t *testing.T) {
 	release, _, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +75,7 @@ func TestSequentialImportSchemasOnlyPreserveRelease9References(t *testing.T) {
 	}
 	walk(release.Categories)
 	for key, reason := range sequentialImportSchemas {
-		if reason == "" || len(previous.Schemas[key].Attributes) == 0 || len(release.Schemas[key].Attributes) == 0 {
+		if reason == "" || len(release.Schemas[key].Attributes) == 0 {
 			t.Errorf("необоснованное исключение совместимости: %s", key)
 		}
 	}

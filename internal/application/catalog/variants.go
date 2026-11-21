@@ -8,6 +8,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -21,10 +22,17 @@ type VariantBlock struct {
 
 // VariantOption содержит метаданные оси и только существующие значения.
 type VariantOption struct {
-	Key    string   `json:"key"`
-	Code   string   `json:"code"`
-	Name   string   `json:"name"`
-	Values []string `json:"values"`
+	ValueDetails []VariantValue `json:"valueDetails,omitempty"`
+	Key          string         `json:"key"`
+	Code         string         `json:"code"`
+	Name         string         `json:"name"`
+	Values       []string       `json:"values"`
+}
+
+// VariantValue несёт каноническое значение оси и данные витрины.
+type VariantValue struct {
+	Value string              `json:"value"`
+	Meta  *taxonomy.ValueMeta `json:"meta,omitempty"`
 }
 
 // VariantItem — предложение со значениями всех осей и выбранной ценой.
@@ -51,15 +59,15 @@ func (q *Queries) Variants(ctx context.Context, tenantID, groupID string) (*Vari
 	if err != nil {
 		return nil, err
 	}
-	return variantBlock(tenantID, groupID, group), nil
+	return variantBlock(tenantID, groupID, group, q.display.Load()), nil
 }
 
-func variantBlock(tenantID, groupID string, group ports.OfferGroup) *VariantBlock {
+func variantBlock(tenantID, groupID string, group ports.OfferGroup, view *taxonomyDisplay) *VariantBlock {
 	offers := compatibleVariants(tenantID, groupID, group.Items)
 	items := variantItems(offers)
 	return &VariantBlock{
 		GroupID:   groupID,
-		Options:   variantOptions(offers, items),
+		Options:   variantOptions(offers, items, view),
 		Items:     items,
 		Truncated: group.Truncated,
 	}
@@ -123,18 +131,24 @@ func variantItems(offers []ports.OfferDocument) []VariantItem {
 	return items
 }
 
-func variantOptions(offers []ports.OfferDocument, items []VariantItem) []VariantOption {
+func variantOptions(
+	offers []ports.OfferDocument,
+	items []VariantItem,
+	view *taxonomyDisplay,
+) []VariantOption {
 	options := []VariantOption{}
 	if len(offers) == 0 {
 		return options
 	}
 	for _, axis := range offers[0].Variants.Axes {
-		options = append(options, VariantOption{
+		option := VariantOption{
 			Key:    axis.Key,
 			Code:   axis.Code,
 			Name:   axis.Name,
 			Values: variantValues(items, axis.Key),
-		})
+		}
+		view.presentVariantOption(&option, offers)
+		options = append(options, option)
 	}
 	return options
 }
