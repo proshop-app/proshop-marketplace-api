@@ -132,6 +132,47 @@ func TestOfferBatchRetriesWholeFailureWithBackoff(t *testing.T) {
 	}
 }
 
+func TestOfferBatchDefersOnlyRejectedOffer(t *testing.T) {
+	store, index, clock := seedOfferBatch(t, 2)
+	enqueueOffer(t, store, "t1", "p0")
+	index.RejectPut = func(docs []ports.OfferDocument) error {
+		return &ports.OfferCapacityError{
+			Deferred:        []ids.OfferID{{Tenant: "t1", Product: "p0"}},
+			UnconfirmedFrom: len(docs),
+		}
+	}
+	d := batchDispatcher(store, index, clock)
+	ctx := context.Background()
+	outcomes, err := d.RunOnce(ctx)
+	if err != nil || len(outcomes) != 3 {
+		t.Fatalf("первый проход: %+v, %v", outcomes, err)
+	}
+	for _, row := range store.OutboxRows() {
+		if row.Kind != appcatalog.TaskSyncOffer {
+			continue
+		}
+		if row.DoneAt == nil && (!row.NextAt.Equal(t1.Add(time.Second)) || row.LastError == "") {
+			t.Fatalf("отклонённая задача должна ждать: %+v", row)
+		}
+	}
+	seedSeller(store, "t2", participant.TenantActive, true)
+	seedProduct(store, "t2", "p0")
+	enqueueOffer(t, store, "t2", "p0")
+	index.RejectPut = nil
+	outcomes, err = d.RunOnce(ctx)
+	if err != nil || len(outcomes) != 1 || outcomes[0].Task.TenantID != "t2" || outcomes[0].Err != nil {
+		t.Fatalf("новое предложение другого продавца: %+v, %v", outcomes, err)
+	}
+	clock.Advance(time.Second)
+	outcomes, err = d.RunOnce(ctx)
+	if err != nil || len(outcomes) != 2 || len(index.PutBatches) != 3 {
+		t.Fatalf("повтор двух задач одного предложения: %+v, %v", outcomes, err)
+	}
+	if retry := index.PutBatches[2]; len(retry) != 1 || retry[0].ID != "t1~p0" {
+		t.Fatalf("повтор отправил лишние документы: %v", retry)
+	}
+}
+
 func TestOfferBatchIsolatesPoison(t *testing.T) {
 	store, index, clock := seedOfferBatch(t, 5)
 	index.RejectPut = func(docs []ports.OfferDocument) error {

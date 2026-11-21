@@ -9,6 +9,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -162,6 +163,17 @@ type OfferGroup struct {
 	Truncated bool
 }
 
+// OfferCapacityError сообщает об отложенных предложениях уже разобранного
+// префикса Put. Хвост от UnconfirmedFrom отдельным результатом не подтверждён.
+type OfferCapacityError struct {
+	Deferred         []ids.OfferID
+	UnconfirmedFrom  int
+	UnconfirmedError error
+}
+
+// ErrOfferCapacity оставляет задачу предложения для повтора.
+var ErrOfferCapacity = errs.New(errs.Unavailable, "search.generation_capacity", "часть индекса предложений заполнена")
+
 // OfferIndex — индекс предложений.
 type OfferIndex interface {
 	Group(context.Context, string, string) (OfferGroup, error)
@@ -169,7 +181,8 @@ type OfferIndex interface {
 	NeedsRebuild(ctx context.Context) (bool, error)
 	// Exists — рабочий индекс заведён.
 	Exists(ctx context.Context) (bool, error)
-	// Put пишет документы в рабочий индекс; документ с версией ниже записанной пропускается.
+	// Put пишет документы в рабочий индекс, пропуская устаревшие версии.
+	// Частичное подтверждение возвращается как OfferCapacityError.
 	Put(ctx context.Context, docs []OfferDocument) error
 	// Get — документ по идентификатору; нет — found=false.
 	Get(ctx context.Context, id string) (doc OfferDocument, found bool, err error)
@@ -181,4 +194,12 @@ type OfferIndex interface {
 	PutGeneration(ctx context.Context, generation string, docs []OfferDocument) error
 	// Activate делает поколение рабочим и удаляет прежние.
 	Activate(ctx context.Context, generation string) error
+}
+
+func (e *OfferCapacityError) Error() string {
+	return ErrOfferCapacity.Error()
+}
+
+func (e *OfferCapacityError) Unwrap() error {
+	return ErrOfferCapacity
 }
