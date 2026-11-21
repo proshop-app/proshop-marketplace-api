@@ -10,22 +10,13 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
-)
 
-const taxonomyData = "../../infrastructure/taxonomydata/data/"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
+)
 
 type spec struct {
 	Paths      map[string]map[string]any `yaml:"paths"`
 	Components map[string]map[string]any `yaml:"components"`
-}
-
-type bundledCategory struct {
-	ID       string            `json:"id"`
-	Children []bundledCategory `json:"children"`
-}
-
-type bundledAttribute struct {
-	Code string `json:"code"`
 }
 
 func loadSpec(t *testing.T) (spec, []byte) {
@@ -109,13 +100,12 @@ func TestOpenAPITaxonomyPatternsAcceptBundle(t *testing.T) {
 	idPattern := schemaPattern(t, doc, "TaxonomyCategory", "id")
 	codePattern := schemaPattern(t, doc, "TaxonomyAttribute", "code")
 
-	var categories []bundledCategory
-	readBundle(t, "categories.yaml", &categories)
+	release, _, err := taxonomydata.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	var attributes []bundledAttribute
-	readBundle(t, "attributes.yaml", &attributes)
-
-	pending := categories
+	pending := slices.Clone(release.Categories)
 	for len(pending) > 0 {
 		category := pending[0]
 		pending = append(pending[1:], category.Children...)
@@ -125,7 +115,7 @@ func TestOpenAPITaxonomyPatternsAcceptBundle(t *testing.T) {
 		}
 	}
 
-	for _, attribute := range attributes {
+	for _, attribute := range release.Attributes {
 		if !codePattern.MatchString(attribute.Code) {
 			t.Errorf("код атрибута поставки не проходит шаблон OpenAPI: %q", attribute.Code)
 		}
@@ -144,19 +134,6 @@ func schemaPattern(t *testing.T, doc spec, schema, property string) *regexp.Rege
 	}
 
 	return regexp.MustCompile(pattern)
-}
-
-func readBundle(t *testing.T, name string, target any) {
-	t.Helper()
-
-	raw, err := os.ReadFile(taxonomyData + name)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := yaml.Unmarshal(raw, target); err != nil {
-		t.Fatalf("%s не разбирается: %v", name, err)
-	}
 }
 
 func TestOpenAPIOrderSeller(t *testing.T) {

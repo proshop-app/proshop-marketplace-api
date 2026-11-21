@@ -1,7 +1,7 @@
 package taxonomydata
 
 // sequentialImportSchemas сохраняет только ключи схем листьев поставки 9,
-// необходимые между загрузкой новых schemas.yaml и заменой categories.yaml.
+// необходимые между операторской загрузкой схем и заменой категорий.
 // Новые листья на эти схемы не ссылаются; убрать можно после миграции всех стендов.
 var sequentialImportSchemas = map[string]string{
 	"phone_accessory":   "Чехлы и аксессуары телефона прежних категорий",

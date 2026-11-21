@@ -35,11 +35,14 @@ export REDIS_URL PLATFORM_API_URL SERVICE_TOKEN_MARKETPLACE SMSRU_MODE SEARCH_UR
 
 IMAGE ?= proshop-marketplace:dev
 TAXONOMY_IMAGE ?= proshop-marketplace-taxonomy:dev
+UNO_REFERENCE_DATA_DIR ?= ../uno-reference-data
+TAXONOMY_BUNDLE ?=
 
 .PHONY: dev infra-up infra-down migrate reindex test test-integration lint build image
+.PHONY: taxonomy-artifact taxonomy-check taxonomy-apply taxonomy-rollback taxonomy-image
 
 ## dev: инфраструктура, миграции, словари, таксономия и сервис с перезапуском при правках
-dev: infra-up
+dev: taxonomy-artifact infra-up
 	$(MAKE) migrate
 	$(MAKE) reference-bootstrap
 	$(MAKE) reference-apply
@@ -64,48 +67,47 @@ reindex:
 	go run ./cmd/marketplace reindex
 
 ## test: юнит-тесты домена, приложения, транспорта и сторож слоистости
-test:
+test: taxonomy-artifact
 	go test -race -count=1 ./...
 
 ## test-integration: интеграционные тесты инфраструктуры на compose
-test-integration: infra-up
+test-integration: taxonomy-artifact infra-up
 	go test -race -count=1 -tags integration ./internal/infrastructure/...
 
 ## lint: golangci-lint с depguard по слоям
-lint:
+lint: taxonomy-artifact
 	$(GOLANGCI_LINT) run ./...
 
 ## build: бинарники сервиса, миграций и загрузчика таксономии в bin/
-build:
+build: taxonomy-artifact
 	CGO_ENABLED=0 go build -trimpath -o bin/marketplace ./cmd/marketplace
 	CGO_ENABLED=0 go build -trimpath -o bin/migrate ./cmd/migrate
 	CGO_ENABLED=0 go build -trimpath -o bin/taxonomy ./cmd/taxonomy
 	CGO_ENABLED=0 go build -trimpath -o bin/geoip-update ./cmd/geoip
 
 ## image: образ сервиса
-image:
+image: taxonomy-artifact
 	docker build -t $(IMAGE) .
 
-.PHONY: taxonomy-manifest
-## taxonomy-manifest: проверить манифест исходных YAML
-taxonomy-manifest:
-	go run ./cmd/taxonomy manifest
+## taxonomy-artifact: проверить локальный артефакт и подготовить его для go:embed
+taxonomy-artifact:
+	python3 scripts/stage-taxonomy.py "$(or $(TAXONOMY_BUNDLE),$(UNO_REFERENCE_DATA_DIR))"
 
 ## taxonomy-check: проверить встроенную поставку без базы и внешних сервисов
-taxonomy-check:
+taxonomy-check: taxonomy-artifact
 	go run ./cmd/taxonomy check
 
 ## taxonomy-apply: идемпотентно установить готовую поставку после миграций
 # Вне dev оператор должен явно подтвердить замену: существующие товары могут требовать переназначения.
-taxonomy-apply:
+taxonomy-apply: taxonomy-artifact
 	go run ./cmd/taxonomy apply
 
 ## taxonomy-rollback: восстановить предыдущее содержимое новой версией
-taxonomy-rollback:
+taxonomy-rollback: taxonomy-artifact
 	go run ./cmd/taxonomy rollback
 
 ## taxonomy-image: собрать готовый образ с данными каталога
-taxonomy-image:
+taxonomy-image: taxonomy-artifact
 	docker build --target taxonomy -t $(TAXONOMY_IMAGE) .
 
 .PHONY: reference-apply

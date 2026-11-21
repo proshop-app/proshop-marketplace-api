@@ -1,10 +1,7 @@
 package taxonomydata
 
 import (
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
-	"io/fs"
 	"os"
 	"slices"
 	"testing"
@@ -166,57 +163,16 @@ func TestRelease9AttributesAndCategoryMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile("testdata/release-9.json")
-	if err != nil {
+	previous := testArtifact(t).MigrationSource
+	snapshot := taxonomy.Definition{
+		Version:            previous.Version,
+		Attributes:         previous.Attributes,
+		Categories:         previous.Categories,
+		Schemas:            previous.Schemas,
+		DictionaryBindings: previous.DictionaryBindings,
+	}
+	if err := release.Definition().CheckCategoryReplacementEvolution(snapshot); err != nil {
 		t.Fatal(err)
-	}
-	if fmt.Sprintf("%x", sha256.Sum256(raw)) !=
-		"3389d0c4d0a06bd5cdd830537c8f9a79844f0c501b959fb7fc0874a35acc037e" {
-		t.Fatal("изменён базовый снимок поставки 9")
-	}
-	var previous taxonomy.Definition
-	if err := json.Unmarshal(raw, &previous); err != nil {
-		t.Fatal(err)
-	}
-	if err := release.Definition().CheckCategoryReplacementEvolution(previous); err != nil {
-		t.Fatal(err)
-	}
-	migration, err := migrationFrom(bundled, release)
-	if err != nil || migration.FromRelease != 9 || migration.ToRelease != release.Version {
-		t.Fatal(migration, err)
-	}
-	mappings := map[string]CategoryMapping{}
-	for _, mapping := range migration.Mappings {
-		mappings[mapping.From] = mapping
-	}
-	var walk func([]taxonomy.Category)
-	walk = func(categories []taxonomy.Category) {
-		for _, old := range categories {
-			if len(old.Children) == 0 {
-				if _, found := mappings[old.ID]; !found {
-					t.Errorf("не учтён лист поставки 9: %s", old.ID)
-				}
-				delete(mappings, old.ID)
-			}
-			walk(old.Children)
-		}
-	}
-	walk(previous.Categories)
-	if len(mappings) != 0 {
-		t.Fatal("лишние исходные коды миграции", mappings)
-	}
-}
-
-func TestEveryYAMLPartFitsOperatorUploadLimit(t *testing.T) {
-	entries, err := fs.ReadDir(bundled, "data")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, entry := range entries {
-		body, err := fs.ReadFile(bundled, "data/"+entry.Name())
-		if err != nil || len(body) > 2*1024*1024 {
-			t.Fatal("файл превышает лимит админки", entry.Name(), len(body), err)
-		}
 	}
 }
 

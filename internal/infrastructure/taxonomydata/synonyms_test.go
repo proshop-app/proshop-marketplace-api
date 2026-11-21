@@ -1,8 +1,6 @@
 package taxonomydata
 
 import (
-	"encoding/json"
-	"os"
 	"testing"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
@@ -62,14 +60,7 @@ func TestReviewedSynonymsHaveOneLeafPerScope(t *testing.T) {
 }
 
 func TestSequentialImportSchemasOnlyPreserveRelease9References(t *testing.T) {
-	body, err := os.ReadFile("testdata/release-9.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var previous taxonomy.Definition
-	if err := json.Unmarshal(body, &previous); err != nil {
-		t.Fatal(err)
-	}
+	previous := testArtifact(t).MigrationSource
 	release, _, err := Load()
 	if err != nil {
 		t.Fatal(err)

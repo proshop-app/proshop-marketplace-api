@@ -2,117 +2,36 @@
 package taxonomydata
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"embed"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"io/fs"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
-const dataDirectory = "data/"
-
-var (
-	//go:embed data/*.yaml
-	bundled   embed.FS
-	dataFiles = []string{"attributes.yaml", "schemas.yaml", "categories.yaml"}
-	// ErrInvalidBundle отделяет ошибки файлов поставки от ошибок структуры домена.
-	ErrInvalidBundle = errors.New("некорректный комплект данных каталога")
-)
+// ErrInvalidBundle отделяет ошибки файлов поставки от ошибок структуры домена.
+var ErrInvalidBundle = errors.New("некорректный комплект данных каталога")
 
 // Coverage проверяет полноту привязок поставки.
 type Coverage struct {
-	Directions   int `json:"directions" yaml:"directions"`
-	Categories   int `json:"categories" yaml:"categories"`
-	Leaves       int `json:"leaves" yaml:"leaves"`
-	Schemas      int `json:"schemas" yaml:"schemas"`
-	Attributes   int `json:"attributes" yaml:"attributes"`
-	Dictionaries int `json:"dictionaries" yaml:"dictionaries"`
+	Directions   int `json:"directions"`
+	Categories   int `json:"categories"`
+	Leaves       int `json:"leaves"`
+	Schemas      int `json:"schemas"`
+	Attributes   int `json:"attributes"`
+	Dictionaries int `json:"dictionaries"`
 }
 
-// Manifest связывает номер поставки с точными байтами файлов.
-type Manifest struct {
-	ReplaceCategories bool     `json:"replaceCategories,omitempty" yaml:"replaceCategories,omitempty"`
-	Release           int64    `json:"release" yaml:"release"`
-	Checksum          string   `json:"checksum" yaml:"checksum"`
-	Coverage          Coverage `json:"coverage" yaml:"coverage"`
-}
-
-// Load проверяет встроенный комплект до подключения к БД.
-func Load() (taxonomy.Release, Coverage, error) { return load(bundled) }
-
-func load(source fs.FS) (taxonomy.Release, Coverage, error) {
-	var header Manifest
-	if err := decodeFile(source, "manifest.yaml", &header); err != nil {
-		return taxonomy.Release{}, Coverage{}, err
-	}
-	release, coverage, err := describe(source)
-	if err != nil {
-		return release, coverage, err
-	}
-	release.Version = header.Release
-	migration, err := migrationFrom(source, release)
-	if err != nil || migration.ToRelease != 0 && migration.ToRelease != header.Release {
-		return taxonomy.Release{}, Coverage{}, ErrInvalidBundle
-	}
-	if release.ReplaceCategories != header.ReplaceCategories {
-		return taxonomy.Release{}, Coverage{}, ErrInvalidBundle
-	}
-	if release.Checksum != header.Checksum || coverage != header.Coverage {
-		return taxonomy.Release{}, Coverage{}, ErrInvalidBundle
-	}
-	return release, coverage, taxonomy.ValidateRelease(release)
-}
-
-func describe(source fs.FS) (taxonomy.Release, Coverage, error) {
-	release := taxonomy.Release{Version: 1}
+func checkCoverage(release taxonomy.Release) (Coverage, error) {
 	var coverage Coverage
-	for file, target := range map[string]any{
-		"attributes.yaml": &release.Attributes,
-		"schemas.yaml":    &release.Schemas,
-		"categories.yaml": &release.Categories,
-	} {
-		if err := decodeFile(source, file, target); err != nil {
-			return release, coverage, err
-		}
-	}
-	schemas, err := release.Definition().ExpandSchemaSource()
-	if err != nil {
-		return release, coverage, err
-	}
-	release.Schemas = schemas
-	if _, err := fs.Stat(source, dataDirectory+"dictionary-bindings.yaml"); err == nil {
-		if err := decodeFile(source, "dictionary-bindings.yaml", &release.DictionaryBindings); err != nil {
-			return release, coverage, err
-		}
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return release, coverage, err
-	}
-	migration, err := migrationFrom(source, release)
-	if err != nil {
-		return release, coverage, err
-	}
-	release.ReplaceCategories = migration.ToRelease != 0
-	checksum, err := bundleChecksum(source)
-	if err != nil {
-		return release, coverage, err
-	}
-	release.Checksum = checksum
 	if err := taxonomy.ValidateRelease(release); err != nil {
-		return release, coverage, err
+		return coverage, err
 	}
 	if err := auditRelease(release); err != nil {
-		return release, coverage, err
+		return coverage, err
 	}
 	for _, root := range release.Categories {
 		if !taxonomy.ValidIcon(root.Icon) {
-			return release, coverage, fmt.Errorf("категория %s: %w", root.ID, ErrInvalidBundle)
+			return coverage, fmt.Errorf("категория %s: %w", root.ID, ErrInvalidBundle)
 		}
 	}
 	coverage.Directions = len(release.Categories)
@@ -148,95 +67,11 @@ func describe(source fs.FS) (taxonomy.Release, Coverage, error) {
 	}
 	for name := range release.Schemas {
 		if !usedSchemas[name] && sequentialImportSchemas[name] == "" {
-			return release, coverage, fmt.Errorf("%w: неиспользуемая схема %s", ErrInvalidBundle, name)
+			return coverage, fmt.Errorf("%w: неиспользуемая схема %s", ErrInvalidBundle, name)
 		}
 	}
 	if len(usedFields) != coverage.Attributes {
-		return release, coverage, ErrInvalidBundle
+		return coverage, ErrInvalidBundle
 	}
-	return release, coverage, nil
-}
-
-func decodeFile(source fs.FS, name string, target any) error {
-	body, err := fs.ReadFile(source, dataDirectory+name)
-	if err != nil {
-		return fmt.Errorf("%w: %s", ErrInvalidBundle, name)
-	}
-	var node yaml.Node
-	if err := yaml.Unmarshal(body, &node); err != nil {
-		return fmt.Errorf("%w: %s: %w", ErrInvalidBundle, name, err)
-	}
-	if hasReferences(&node) {
-		return fmt.Errorf("%w: якоря и ссылки в %s", ErrInvalidBundle, name)
-	}
-	decoder := yaml.NewDecoder(bytes.NewReader(body))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(target); err != nil {
-		return fmt.Errorf("%w: %s: %w", ErrInvalidBundle, name, err)
-	}
-	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
-		return fmt.Errorf("%w: лишние данные в %s", ErrInvalidBundle, name)
-	}
-	return nil
-}
-
-func hasReferences(node *yaml.Node) bool {
-	if node.Anchor != "" || node.Kind == yaml.AliasNode {
-		return true
-	}
-	for _, child := range node.Content {
-		if hasReferences(child) {
-			return true
-		}
-	}
-	return false
-}
-
-func bundleChecksum(source fs.FS) (string, error) {
-	hash := sha256.New()
-	files := append(append([]string{}, dataFiles...), "dictionary-bindings.yaml", "category-migration.yaml")
-	for _, name := range files {
-		body, err := fs.ReadFile(source, dataDirectory+name)
-		if errors.Is(err, fs.ErrNotExist) && (name == "dictionary-bindings.yaml" || name == "category-migration.yaml") {
-			continue
-		}
-		if err != nil {
-			return "", err
-		}
-		_, _ = hash.Write([]byte(name + "\x00"))
-		_, _ = hash.Write(body)
-	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-// PrepareManifest запрещает менять уже выпущенный номер при изменении данных.
-func PrepareManifest(source fs.FS, version int64, write bool) (Manifest, error) {
-	var current Manifest
-	if err := decodeFile(source, "manifest.yaml", &current); err != nil {
-		return Manifest{}, err
-	}
-	release, coverage, err := describe(source)
-	if err != nil {
-		return Manifest{}, err
-	}
-	if version == 0 {
-		version = current.Release
-	}
-	next := Manifest{
-		Release:           version,
-		Checksum:          release.Checksum,
-		Coverage:          coverage,
-		ReplaceCategories: release.ReplaceCategories,
-	}
-	migration, err := migrationFrom(source, release)
-	if err != nil || migration.ToRelease != 0 && migration.ToRelease != version {
-		return next, ErrInvalidBundle
-	}
-	if version < 1 || version > taxonomy.MaxTaxonomyVersion {
-		return next, ErrInvalidBundle
-	}
-	if next != current && (!write || version <= current.Release) {
-		return next, ErrInvalidBundle
-	}
-	return next, nil
+	return coverage, nil
 }

@@ -1,13 +1,13 @@
 package taxonomydata
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/json"
-	"io/fs"
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
-	"testing/fstest"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
@@ -73,154 +73,124 @@ func assertCategorySchemas(t *testing.T, definition taxonomy.Definition, categor
 	}
 }
 
-func TestBundleRejectsDamage(t *testing.T) {
-	tests := map[string]func(fstest.MapFS){
-		"изменён файл без новой суммы": func(files fstest.MapFS) {
-			files["data/categories.yaml"].Data = []byte("[]")
-		},
-		"неизвестное поле": func(files fstest.MapFS) {
-			files["data/manifest.yaml"].Data = []byte(`{"unexpected":true}`)
-		},
-		"неполный охват": func(files fstest.MapFS) {
-			var header Manifest
-			_ = yaml.Unmarshal(files["data/manifest.yaml"].Data, &header)
-			header.Coverage.Leaves++
-			files["data/manifest.yaml"].Data, _ = yaml.Marshal(header)
-		},
-		"ссылка на отсутствующую схему": func(files fstest.MapFS) {
-			var tree []taxonomy.Category
-			_ = yaml.Unmarshal(files["data/categories.yaml"].Data, &tree)
-			tree[0].Children[0].Children[0].Schema = "missing"
-			files["data/categories.yaml"].Data, _ = yaml.Marshal(tree)
-			updateChecksum(t, files)
-		},
-		"несуществующий обязательный атрибут": func(files fstest.MapFS) {
-			var schemas map[string]taxonomy.Schema
-			_ = yaml.Unmarshal(files["data/schemas.yaml"].Data, &schemas)
-			for key, schema := range schemas {
-				schema.Optional = append(schema.Optional, "missing")
-				schemas[key] = schema
-				break
-			}
-			files["data/schemas.yaml"].Data, _ = yaml.Marshal(schemas)
-			updateChecksum(t, files)
-		},
+func TestArtifactRejectsWrongPin(t *testing.T) {
+	var lock releaseLock
+	if err := json.Unmarshal(artifactLock, &lock); err != nil {
+		t.Fatal(err)
 	}
-	for name, damage := range tests {
+	changed := append(bytes.Clone(artifactBytes), '\n')
+	if _, _, err := loadArtifact(changed, lock); err == nil || !strings.Contains(err.Error(), "SHA-256") {
+		t.Fatalf("изменение точных байтов: %v", err)
+	}
+	lock.Release++
+	if _, _, err := loadArtifact(artifactBytes, lock); err == nil || !strings.Contains(err.Error(), "ожидался выпуск") {
+		t.Fatalf("другой номер закреплённого выпуска: %v", err)
+	}
+}
+
+func TestArtifactRejectsInvalidJSON(t *testing.T) {
+	for name, test := range map[string]struct {
+		body []byte
+		want string
+	}{
+		"поле корня": {
+			body: bytes.Replace(artifactBytes, []byte("{"), []byte(`{"unexpected":true,`), 1),
+			want: `unknown field "unexpected"`,
+		},
+		"поле атрибута": {
+			body: bytes.Replace(artifactBytes, []byte(`"facet":`), []byte(`"unexpected":true,"facet":`), 1),
+			want: `unknown field "unexpected"`,
+		},
+		"вычисляемое поле": {
+			body: bytes.Replace(artifactBytes, []byte(`"facet":`), []byte(`"values":null,"facet":`), 1),
+			want: "вычисляемое поле в исходнике",
+		},
+		"второй документ": {
+			body: append(bytes.Clone(artifactBytes), []byte(`{}`)...),
+			want: "лишние данные",
+		},
+		"версия формата": {
+			body: bytes.Replace(artifactBytes, []byte(`"schemaVersion": 1`), []byte(`"schemaVersion": 2`), 1),
+			want: "версия формата 2 не поддерживается",
+		},
+	} {
 		t.Run(name, func(t *testing.T) {
-			files := cloneBundle(t)
-			damage(files)
-			if _, _, err := load(files); err == nil {
+			if _, err := decodeArtifact(test.body); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestArtifactRejectsInvalidDefinitions(t *testing.T) {
+	for name, damage := range map[string]func(*artifact){
+		"неполный охват": func(bundle *artifact) {
+			bundle.Manifest.Coverage.Leaves++
+		},
+		"отсутствующая схема": func(bundle *artifact) {
+			bundle.Categories[0].Children[0].Children[0].Schema = "missing"
+		},
+		"несуществующий атрибут": func(bundle *artifact) {
+			key := "bag"
+			schema := bundle.Schemas[key]
+			schema.Optional = append(schema.Optional, "missing")
+			bundle.Schemas[key] = schema
+		},
+		"неверная иконка корня": func(bundle *artifact) {
+			bundle.Categories[0].Icon = "unknown-icon"
+		},
+		"иконка дочерней категории": func(bundle *artifact) {
+			bundle.Categories[0].Children[0].Icon = bundle.Categories[0].Icon
+		},
+		"нет иконки корня": func(bundle *artifact) {
+			bundle.Categories[0].Icon = ""
+		},
+		"миграция другой поставки": func(bundle *artifact) {
+			bundle.CategoryMigration.ToRelease++
+		},
+		"неполная миграция": func(bundle *artifact) {
+			bundle.CategoryMigration.Mappings = bundle.CategoryMigration.Mappings[1:]
+		},
+		"неизвестный адресат миграции": func(bundle *artifact) {
+			bundle.CategoryMigration.Mappings[0].To[0] = "missing"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bundle := testArtifact(t)
+			damage(&bundle)
+			if _, _, err := prepareArtifact(bundle, strings.Repeat("a", 64)); err == nil {
 				t.Fatal("повреждённая поставка принята")
 			}
 		})
 	}
 }
 
-func cloneBundle(t *testing.T) fstest.MapFS {
-	t.Helper()
-	files := make(fstest.MapFS)
-	err := fs.WalkDir(bundled, "data", func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return err
-		}
-		body, err := fs.ReadFile(bundled, path)
-		if err != nil {
-			return err
-		}
-		files[path] = &fstest.MapFile{Data: body}
-
-		return nil
-	})
+func TestArtifactWithoutHistoricalChecksumUsesJSONDigest(t *testing.T) {
+	bundle := testArtifact(t)
+	bundle.Manifest.Checksum = ""
+	bundle.Manifest.Release++
+	bundle.CategoryMigration.ToRelease++
+	body, err := json.Marshal(bundle)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	return files
+	lock := releaseLock{
+		Release: bundle.Manifest.Release,
+		SHA256:  fmt.Sprintf("%x", sha256.Sum256(body)),
+	}
+	release, _, err := loadArtifact(body, lock)
+	if err != nil || release.Version != lock.Release || release.Checksum != lock.SHA256 {
+		t.Fatalf("номер %d, checksum %s, ошибка %v", release.Version, release.Checksum, err)
+	}
 }
 
-func updateChecksum(t *testing.T, files fstest.MapFS) {
+func testArtifact(t *testing.T) artifact {
 	t.Helper()
-	var header Manifest
-	if err := yaml.Unmarshal(files["data/manifest.yaml"].Data, &header); err != nil {
-		t.Fatal(err)
-	}
-	checksum, err := bundleChecksum(files)
+	bundle, err := decodeArtifact(artifactBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	header.Checksum = checksum
-	files["data/manifest.yaml"].Data, _ = yaml.Marshal(header)
-}
-
-func TestManifestRequiresNewRelease(t *testing.T) {
-	files := cloneBundle(t)
-	current, err := PrepareManifest(files, 0, false)
-	if err != nil || current.Release < 1 {
-		t.Fatal(current, err)
-	}
-	files["data/attributes.yaml"].Data = append(files["data/attributes.yaml"].Data, []byte("\n# новая поставка\n")...)
-	if _, err := PrepareManifest(files, 0, false); err == nil {
-		t.Fatal("не замечено изменение байтов")
-	}
-	if _, err := PrepareManifest(files, current.Release, true); err == nil {
-		t.Fatal("перезапись выпущенного номера")
-	}
-	var migration CategoryMigration
-	if err := yaml.Unmarshal(files["data/category-migration.yaml"].Data, &migration); err != nil {
-		t.Fatal(err)
-	}
-	migration.ToRelease = current.Release + 1
-	files["data/category-migration.yaml"].Data, _ = yaml.Marshal(migration)
-	next, err := PrepareManifest(files, current.Release+1, true)
-	if err != nil || next.Checksum == current.Checksum || next.Coverage != current.Coverage {
-		t.Fatal(next, err)
-	}
-	files["data/manifest.yaml"].Data, _ = yaml.Marshal(next)
-	if _, _, err := load(files); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBundleRejectsYAMLReferencesAndExtraDocuments(t *testing.T) {
-	for _, body := range []string{
-		"- &a {code: a1, name: Поле, type: string}\n",
-		"- &a {code: a1, name: Поле, type: string}\n- *a\n",
-		"[]\n---\n[]\n",
-		"- code: a1\n  name: Поле\n  type: string\n  values: [v1]\n",
-	} {
-		files := cloneBundle(t)
-		files["data/attributes.yaml"].Data = []byte(body)
-		updateChecksum(t, files)
-		if _, _, err := load(files); err == nil {
-			t.Fatal("принят запрещённый YAML", body)
-		}
-	}
-}
-
-func TestIconsAreRootOnlyAndKnown(t *testing.T) {
-	for _, target := range []string{"root", "child", "missing"} {
-		t.Run(target, func(t *testing.T) {
-			files := cloneBundle(t)
-			var tree []taxonomy.Category
-			if err := yaml.Unmarshal(files["data/categories.yaml"].Data, &tree); err != nil {
-				t.Fatal(err)
-			}
-			switch target {
-			case "root":
-				tree[0].Icon = "unknown-icon"
-			case "child":
-				tree[0].Children[0].Icon = tree[0].Icon
-			case "missing":
-				tree[0].Icon = ""
-			}
-			files["data/categories.yaml"].Data, _ = yaml.Marshal(tree)
-			updateChecksum(t, files)
-			if _, _, err := load(files); err == nil {
-				t.Fatal("неверная иконка принята")
-			}
-		})
-	}
+	return bundle
 }
 
 func TestBundledIdentifierFormats(t *testing.T) {
@@ -238,20 +208,17 @@ func TestBundledIdentifierFormats(t *testing.T) {
 
 func TestIdentityWarningsSourceRoundTrip(t *testing.T) {
 	var source map[string]taxonomy.Schema
-	raw := []byte(`base:
-  abstract: true
-  attributes: [a1]
-  identityWarnings: true
-  identity:
-    model: [a1]
-    axes: []
-child:
-  extends: base
-  identityWarnings: false
-inherited:
-  extends: base
-`)
-	if err := yaml.Unmarshal(raw, &source); err != nil {
+	raw := []byte(`{
+		"base": {
+			"abstract": true,
+			"attributes": ["a1"],
+			"identityWarnings": true,
+			"identity": {"model": ["a1"], "axes": []}
+		},
+		"child": {"extends": "base", "attributes": [], "identityWarnings": false},
+		"inherited": {"extends": "base", "attributes": []}
+	}`)
+	if err := json.Unmarshal(raw, &source); err != nil {
 		t.Fatal(err)
 	}
 	encoded, err := json.Marshal(source)
@@ -271,6 +238,6 @@ inherited:
 	}
 	if resolved["child"].IdentityWarnings == nil || *resolved["child"].IdentityWarnings ||
 		resolved["inherited"].IdentityWarnings == nil || !*resolved["inherited"].IdentityWarnings {
-		t.Fatal("потерян явный false или наследуемый true при YAML/JSON round trip")
+		t.Fatal("потерян явный false или наследуемый true при повторном разборе JSON")
 	}
 }

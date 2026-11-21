@@ -13,11 +13,8 @@ func TestWorkwearAndSchoolMigrationKeepsGarmentPurpose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	migration, err := migrationFrom(bundled, release)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mappings := map[string]CategoryMapping{}
+	migration := testArtifact(t).CategoryMigration
+	mappings := map[string]categoryMapping{}
 	for _, mapping := range migration.Mappings {
 		mappings[mapping.From] = mapping
 	}
@@ -159,15 +156,8 @@ func TestEnergyAndReservoirSchemasRequireSelectionParameters(t *testing.T) {
 }
 
 func TestNamedKindsRemainReachableFromGeneralRelease9Leaves(t *testing.T) {
-	release, _, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	migration, err := migrationFrom(bundled, release)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mappings := map[string]CategoryMapping{}
+	migration := testArtifact(t).CategoryMigration
+	mappings := map[string]categoryMapping{}
 	for _, mapping := range migration.Mappings {
 		mappings[mapping.From] = mapping
 	}

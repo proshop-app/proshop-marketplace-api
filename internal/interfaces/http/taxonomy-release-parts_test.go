@@ -3,7 +3,6 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -25,22 +24,14 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/taxonomyfile"
 )
 
-const releaseDataPath = "../../infrastructure/taxonomydata/"
-
-func TestRelease10ActualFilesThroughHTTP(t *testing.T) {
+func TestArtifactPartsThroughOperatorHTTP(t *testing.T) {
 	store := fake.NewStore()
-	var previous taxonomy.Definition
-	if err := json.Unmarshal(release10Read(t, "testdata/release-9.json"), &previous); err != nil {
-		t.Fatal(err)
-	}
+	fixture := taxonomyReleaseFixture(t)
+	previous := fixture.MigrationSource
 	store.SeedTaxonomy(previous)
-	attributes := release10Read(t, "data/attributes.yaml")
-	input, err := taxonomyfile.DecodePart(bytes.NewReader(attributes), "attributes")
-	if err != nil {
-		t.Fatal(err)
-	}
+	attributes := encodeTaxonomyPart(t, fixture.Definition, "attributes")
 	generator := &fake.IDs{}
-	seedRelease10Dictionaries(t, store, generator, input.Attributes, false)
+	seedTaxonomyDictionaries(t, store, generator, fixture.Attributes, false)
 	service := apptaxonomy.NewService(store, fake.NewClock(time.Now()), nil)
 	handler := NewHandler(Deps{
 		RequestTimeout:         time.Minute,
@@ -69,10 +60,10 @@ func TestRelease10ActualFilesThroughHTTP(t *testing.T) {
 	if current.Version != previous.Version {
 		t.Fatal("ошибка реестра изменила версию")
 	}
-	seedRelease10Dictionaries(t, store, generator, input.Attributes, true)
+	seedTaxonomyDictionaries(t, store, generator, fixture.Attributes, true)
 	for index, part := range []string{"attributes", "schemas", "categories"} {
 		version := previous.Version + int64(index)
-		body := release10Read(t, "data/"+part+".yaml")
+		body := encodeTaxonomyPart(t, fixture.Definition, part)
 		if len(body) > maxTaxonomyBody {
 			t.Fatal(part, "превышает лимит HTTP")
 		}
@@ -92,7 +83,7 @@ func TestRelease10ActualFilesThroughHTTP(t *testing.T) {
 			t.Fatal("потерян CAS", part, stale.Code)
 		}
 	}
-	current, err = service.Current(context.Background())
+	current, err := service.Current(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,16 +118,16 @@ func TestRelease10ActualFilesThroughHTTP(t *testing.T) {
 	}
 }
 
-func release10Read(t *testing.T, name string) []byte {
+func encodeTaxonomyPart(t *testing.T, definition taxonomy.Definition, part string) []byte {
 	t.Helper()
-	body, err := os.ReadFile(releaseDataPath + name)
+	body, err := taxonomyfile.EncodePart(definition, part)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return body
 }
 
-func seedRelease10Dictionaries(
+func seedTaxonomyDictionaries(
 	t *testing.T,
 	store *fake.Store,
 	generator *fake.IDs,
@@ -157,7 +148,7 @@ func seedRelease10Dictionaries(
 		if kind != reference.KindClosed {
 			continue
 		}
-		entries := release10DictionaryEntries(t, attribute.Dictionary)
+		entries := taxonomyDictionaryEntries(t, attribute.Dictionary)
 		err := store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 			var records []*reference.Entry
 			for _, seed := range entries {
@@ -190,7 +181,7 @@ func seedRelease10Dictionaries(
 	}
 }
 
-func release10DictionaryEntries(t *testing.T, code string) []reference.DeliveryEntry {
+func taxonomyDictionaryEntries(t *testing.T, code string) []reference.DeliveryEntry {
 	t.Helper()
 	root := "../../../deploy/reference"
 	directory := root + "/" + code
