@@ -108,10 +108,13 @@ func attributeNumber(raw string) (float64, error) {
 	return value, nil
 }
 
-// Палитра задаёт порядок образцов; остальные фасеты упорядочены по числу товаров.
+// Палитра задаёт порядок образцов; явно закреплённые фасеты без палитры сортируются по числу товаров.
 func orderFacet(facet ports.Facet, fields []taxonomy.Attribute) ports.Facet {
 	for _, field := range fields {
-		if facet.Code == "attr."+field.Code && field.FacetPinned && len(field.FacetOptions) == 0 {
+		if facet.Code != "attr."+field.Code {
+			continue
+		}
+		if len(field.FacetOptions) == 0 && field.FacetPinned != nil && *field.FacetPinned {
 			sort.SliceStable(facet.Values, func(i, j int) bool {
 				if facet.Values[i].Count != facet.Values[j].Count {
 					return facet.Values[i].Count > facet.Values[j].Count
@@ -120,8 +123,8 @@ func orderFacet(facet ports.Facet, fields []taxonomy.Attribute) ports.Facet {
 			})
 			return facet
 		}
-		if facet.Code != "attr."+field.Code || len(field.FacetOptions) == 0 {
-			continue
+		if len(field.FacetOptions) == 0 {
+			break
 		}
 		order := map[string]int{}
 		for i, value := range field.FacetOptions {
@@ -168,7 +171,7 @@ func visibleAttributeFacet(facet ports.Facet, total int, query ports.OfferQuery)
 		if facet.Code != "attr."+field.Code {
 			continue
 		}
-		if field.FacetPinned {
+		if isFacetPinned(field) {
 			if len(query.Attributes[field.Code].Values) > 0 {
 				return true
 			}

@@ -3,6 +3,7 @@ package taxonomydata
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -35,7 +36,8 @@ func TestBundledProductType(t *testing.T) {
 	d := productTypeDefinition(t)
 	field := d.Fields()["product_type"]
 	if d.Version != 15 || field.Name != "Тип" || field.Type != "enum" || field.Dictionary != "product_type" ||
-		!field.Facet || !field.FacetPinned || field.Multiple || field.RequiredReason == "" {
+		!field.Facet || field.FacetPinned == nil || !*field.FacetPinned ||
+		field.Multiple || field.RequiredReason == "" {
 		t.Fatalf("тип: %+v", field)
 	}
 	count := 0
@@ -113,6 +115,49 @@ func TestBundledProductTypeFacetScope(t *testing.T) {
 		if !found || len(query.FacetFields) > appcatalog.MaxAttributeFacets ||
 			query.Attributes["product_type"].Type != "enum" {
 			t.Fatalf("%s: потерян тип или превышен бюджет: %+v", id, query)
+		}
+	}
+}
+
+func TestBundledProductTypePinControlsSearchFacet(t *testing.T) {
+	ctx := context.Background()
+	d := productTypeDefinition(t)
+	store := fake.NewStore()
+	index := fake.NewIndex()
+	const category = "shoes.men-loafers"
+	docs := make([]ports.OfferDocument, 20)
+	for i := range docs {
+		docs[i] = ports.OfferDocument{
+			ID:           fmt.Sprintf("t1~p%d", i),
+			CategoryPath: []string{category},
+			Listed:       true,
+		}
+	}
+	docs[0].Attributes = map[string]json.RawMessage{"product_type": json.RawMessage(`"Лоферы"`)}
+	docs[1].Attributes = map[string]json.RawMessage{"product_type": json.RawMessage(`"Кроссовки"`)}
+	if err := index.Put(ctx, docs); err != nil {
+		t.Fatal(err)
+	}
+	queries := appcatalog.NewQueries(store, index, fake.NewPlatform(), nil, nil, fake.NewClock(time.Time{}))
+	for _, pinned := range []bool{true, false} {
+		if !pinned {
+			for i := range d.Attributes {
+				if d.Attributes[i].Code == "product_type" {
+					d.Attributes[i].FacetPinned = &pinned
+					break
+				}
+			}
+		}
+		store.SeedTaxonomy(d)
+		page, err := queries.Search(ctx, ports.OfferQuery{CategoryID: category})
+		if err != nil || page.Total != len(docs) {
+			t.Fatalf("выдача: total=%d, %v", page.Total, err)
+		}
+		found := slices.ContainsFunc(page.Facets, func(facet ports.Facet) bool {
+			return facet.Code == "attr.product_type"
+		})
+		if found != pinned {
+			t.Fatalf("тип с охватом 10%%: закреплён=%v, показан=%v", pinned, found)
 		}
 	}
 }

@@ -12,6 +12,9 @@ import (
 // Это бюджет интерфейса, не размер глобального справочника; контракт поиска допускает 256.
 const MaxAttributeFacets = 32
 
+// defaultPinnedFacetCode закрепляется, когда снимок таксономии не задаёт facetPinned.
+const defaultPinnedFacetCode = "color"
+
 // scopeFields не ищет каждый лист заново от корня: на большой таксономии это квадратичная работа.
 // Фильтры разрешены по объединению схем, охват фасетов считается по листьям области.
 func scopeFields(
@@ -59,8 +62,9 @@ func selectFacetFields(
 	// Закреплённые и выбранные поля сохраняют управление фильтром при исчерпании бюджета.
 	// Остальные упорядочены по убыванию охвата, при равенстве — по коду.
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].FacetPinned != out[j].FacetPinned {
-			return out[i].FacetPinned
+		leftPinned, rightPinned := isFacetPinned(out[i]), isFacetPinned(out[j])
+		if leftPinned != rightPinned {
+			return leftPinned
 		}
 		_, left := filters[out[i].Code]
 		_, right := filters[out[j].Code]
@@ -79,4 +83,11 @@ func selectFacetFields(
 		return out[i].Code < out[j].Code
 	})
 	return out
+}
+
+func isFacetPinned(field taxonomy.Attribute) bool {
+	if field.FacetPinned != nil {
+		return *field.FacetPinned
+	}
+	return field.Code == defaultPinnedFacetCode
 }
