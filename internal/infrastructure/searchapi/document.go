@@ -30,6 +30,9 @@ func toDocument(doc ports.OfferDocument) (offerDocument, error) {
 		}
 		attributes[index].SearchTerms = append([]string(nil), terms...)
 	}
+	if doc.SalesTier > 3 {
+		return offerDocument{}, ErrInvalid.WithMessage("некорректная ступень продаж")
+	}
 	if doc.Rating != nil {
 		rating, err := catalog.NormalizeRating(doc.Rating.Value, doc.Rating.Count)
 		if err != nil {
@@ -41,6 +44,7 @@ func toDocument(doc ports.OfferDocument) (offerDocument, error) {
 		}
 	}
 	out := offerDocument{
+		SalesTier:         doc.SalesTier,
 		Rating:            doc.Rating,
 		CategoryID:        doc.CategoryID,
 		CategoryPath:      doc.CategoryPath,

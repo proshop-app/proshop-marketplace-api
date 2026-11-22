@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	contractVersion = 9
-	apiPath         = "/api/v1/internal/marketplace"
-	batchLimit      = 200
-	requestLimit    = 4 << 20
-	responseLimit   = 16 << 20
+	contractVersion         = 10
+	generationSchemaVersion = 11
+	apiPath                 = "/api/v1/internal/marketplace"
+	batchLimit              = 200
+	requestLimit            = 4 << 20
+	responseLimit           = 16 << 20
 )
 
 var (
@@ -91,8 +92,9 @@ func (x *Index) Ping(ctx context.Context) error {
 // Exists сообщает, есть ли рабочее поколение.
 func (x *Index) Exists(ctx context.Context) (bool, error) {
 	var result struct {
-		Ready           bool `json:"ready"`
-		ContractVersion int  `json:"contractVersion"`
+		Ready                   bool `json:"ready"`
+		ContractVersion         int  `json:"contractVersion"`
+		GenerationSchemaVersion int  `json:"generationSchemaVersion"`
 	}
 	_, err := x.request(ctx, http.MethodGet, "/status", nil, &result)
 
@@ -100,7 +102,7 @@ func (x *Index) Exists(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	if result.ContractVersion != contractVersion {
+	if result.ContractVersion != contractVersion || result.GenerationSchemaVersion != generationSchemaVersion {
 		return false, ErrUnavailable.WithMessage("поиск не поддерживает текущий контракт каталога")
 	}
 
