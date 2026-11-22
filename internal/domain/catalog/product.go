@@ -38,8 +38,6 @@ type Card struct {
 	VariantsID     string
 	// Visible — товар включён в каталоге магазина.
 	Visible bool
-	// OnlyVariant — товар показывается только внутри группы вариантов, не в выдаче.
-	OnlyVariant bool
 }
 
 // Snapshot — снимок товара из события проекции: полная карточка или удаление

@@ -94,7 +94,6 @@ func TestValidationContentIgnoresUnrelatedFields(t *testing.T) {
 		{name: "SKU", edit: func(p *catalog.ProductState) { p.Card.SKU = "sku-2" }},
 		{name: "store categories", edit: func(p *catalog.ProductState) { p.Card.Categories = nil }},
 		{name: "visible", edit: func(p *catalog.ProductState) { p.Card.Visible = false }},
-		{name: "only variant", edit: func(p *catalog.ProductState) { p.Card.OnlyVariant = true }},
 		{name: "variant group", edit: func(p *catalog.ProductState) { p.Card.VariantsID = "group-2" }},
 		{name: "variant presence", edit: func(p *catalog.ProductState) { p.Card.Variants = nil }},
 		{name: "variant position", edit: func(p *catalog.ProductState) { p.Card.Variants.Position++ }},

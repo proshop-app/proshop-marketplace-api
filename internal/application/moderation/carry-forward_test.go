@@ -188,10 +188,6 @@ func TestReviewedProjectionBusinessChangeRequiresEvaluation(t *testing.T) {
 			edit: func(snapshot *catalog.Snapshot) { snapshot.Card.Visible = false },
 		},
 		{
-			name: "only variant",
-			edit: func(snapshot *catalog.Snapshot) { snapshot.Card.OnlyVariant = true },
-		},
-		{
 			name: "variants group",
 			edit: func(snapshot *catalog.Snapshot) { snapshot.Card.VariantsID = "group-2" },
 		},

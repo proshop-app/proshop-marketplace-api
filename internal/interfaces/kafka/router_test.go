@@ -35,7 +35,7 @@ const productBody = `{"version":1,"tenantId":"t1","productId":"p1","revision":7,
 	"averageRating":4.7,"ratingsCount":12,
 	"categories":[{"id":"c1","name":"","title":"Категория","url":"/c1"}],"tags":["t-1"],
 	"marketplace":{"categoryId":"c1","attributes":{"a1":"v1","a2":1.5,"a3":false},"published":true},
-	"variantsId":"v1","tileKey":"p1","conditions":{"isVisible":true,"isOnlyVariant":false},"unknownField":42}}`
+	"variantsId":"v1","tileKey":"p1","conditions":{"isVisible":true},"unknownField":42}}`
 
 func (r *recorder) ApplyProduct(_ context.Context, e appcatalog.ProductEvent) error {
 	r.products = append(r.products, e)

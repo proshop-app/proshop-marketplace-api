@@ -96,7 +96,6 @@ type cardJSON struct {
 	Categories     []categoryJSON       `json:"categories,omitempty"`
 	VariantsID     string               `json:"variantsId,omitempty"`
 	Visible        bool                 `json:"visible"`
-	OnlyVariant    bool                 `json:"onlyVariant,omitempty"`
 }
 
 type categoryJSON struct {
@@ -274,7 +273,6 @@ func encodeCard(card catalog.Card) ([]byte, error) {
 		VariantsID:     card.VariantsID,
 		TileKey:        card.TileKey,
 		Visible:        card.Visible,
-		OnlyVariant:    card.OnlyVariant,
 	}
 
 	for _, category := range card.Categories {
@@ -309,7 +307,6 @@ func decodeCard(raw []byte) (catalog.Card, error) {
 		VariantsID:     doc.VariantsID,
 		TileKey:        doc.TileKey,
 		Visible:        doc.Visible,
-		OnlyVariant:    doc.OnlyVariant,
 	}
 
 	for _, category := range doc.Categories {

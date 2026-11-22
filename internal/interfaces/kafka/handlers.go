@@ -62,8 +62,7 @@ type snapshotGroup struct {
 }
 
 type snapshotFlags struct {
-	IsVisible     *bool `json:"isVisible"`
-	IsOnlyVariant *bool `json:"isOnlyVariant"`
+	IsVisible *bool `json:"isVisible"`
 }
 
 type stockItem struct {
@@ -173,13 +172,8 @@ func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
 	if err := card.Variants.Validate(card.VariantsID); err != nil {
 		return ErrInvalidPayload.Wrap(err)
 	}
-	if flags := product.Conditions; flags != nil {
-		if flags.IsVisible != nil {
-			card.Visible = *flags.IsVisible
-		}
-		if flags.IsOnlyVariant != nil {
-			card.OnlyVariant = *flags.IsOnlyVariant
-		}
+	if flags := product.Conditions; flags != nil && flags.IsVisible != nil {
+		card.Visible = *flags.IsVisible
 	}
 
 	for _, group := range product.Categories {

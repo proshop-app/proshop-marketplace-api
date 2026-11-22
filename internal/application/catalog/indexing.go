@@ -423,7 +423,6 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	doc.Categories = []catalog.Category{{ID: publication.CategoryID, Name: publication.CategoryName}}
 	doc.VariantsID = offer.Card.VariantsID
 	doc.TileKey = offer.Card.TileKey
-	doc.OnlyVariant = offer.Card.OnlyVariant
 	doc.Variants = offer.Card.Variants
 	doc.ModelKey = offer.Card.ModelKey
 	doc.ModelKeySource = offer.Card.ModelKeySource

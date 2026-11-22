@@ -64,7 +64,6 @@ type OfferStates interface {
 type OfferDocument struct {
 	SalesTier            uint8
 	TileKey              string
-	OnlyVariant          bool
 	AttributeFacetValues map[string][]string
 	AttributeSearchTerms map[string][]string
 	Rating               *catalog.Rating
