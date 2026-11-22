@@ -36,7 +36,7 @@ func (p *Platform) PaymentHold(ctx context.Context, tenant ids.TenantID, id stri
 		if !now.Before(order.ExpiresAt) {
 			return checkout.SellerOrder{}, &ports.OrderRefusal{Code: "ORDER_PAYMENT_EXPIRED"}
 		}
-		order.PaymentHeldUntil = now.Add(paymentHoldWindow)
+		order.PaymentHeldUntil = now.Add(paymentHoldWindow).Truncate(time.Millisecond)
 		if order.PaymentHeldUntil.Before(order.ExpiresAt) {
 			order.PaymentHeldUntil = order.ExpiresAt
 		}

@@ -107,7 +107,7 @@ type SellerOrders interface {
 		orderID string,
 		reason checkout.ReturnReason,
 	) (checkout.SellerOrder, error)
-	// OrderStatuses — сверка пачкой: один запрос на страницу заказов магазина, без треков.
+	// OrderStatuses — сверка пачкой: один запрос на страницу заказов магазина с причиной и отслеживанием.
 	OrderStatuses(ctx context.Context, tenantID ids.TenantID, orderIDs []string) ([]checkout.OrderStatus, error)
 }
 

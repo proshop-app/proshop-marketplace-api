@@ -151,7 +151,7 @@ func creationFailure(err error) (string, checkout.GroupStatus, []checkout.PriceC
 		switch refusal.Code {
 		case "DELIVERY_UNAVAILABLE", "DELIVERY_CHANGED":
 			return refusal.Code, checkout.GroupDeliveryUnavailable, nil
-		case "OUT_OF_STOCK", "ORDER_CHECKOUT_CANCELLED":
+		case "OUT_OF_STOCK", "ORDER_CHECKOUT_CANCELLED", "MARKETPLACE_PAYMENT_DUE_INVALID":
 			return refusal.Code, checkout.GroupRejected, nil
 		case "IDEMPOTENCY_CONFLICT":
 			return refusal.Code, checkout.GroupSellerUnreachable, nil

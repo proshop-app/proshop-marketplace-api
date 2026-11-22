@@ -75,3 +75,24 @@ func TestPaymentDueValidationAndIdempotentReplay(t *testing.T) {
 		t.Fatal("повтор не проверяет новый срок", repeated, err)
 	}
 }
+
+func TestFakeOrderTimesUseMilliseconds(t *testing.T) {
+	platform := fake.NewPlatform()
+	ctx := context.Background()
+	clock := fake.NewClock(platform.OrderNow.Add(345678 * time.Microsecond))
+	platform.OrderClock = clock
+	due := clock.Now().Add(10 * time.Minute)
+	order, err := platform.CreateOrder(ctx, "t1", ports.CreateOrderRequest{
+		ExternalCheckoutID: "checkout:t1",
+		GroupID:            "t1",
+		PaymentDueAt:       due,
+	})
+	if err != nil || !order.ExpiresAt.Equal(due.Truncate(time.Millisecond)) {
+		t.Fatal(order, err)
+	}
+	clock.Advance(9 * time.Minute)
+	held, err := platform.PaymentHold(ctx, "t1", order.OrderID)
+	if err != nil || !held.PaymentHeldUntil.Equal(clock.Now().Add(5*time.Minute).Truncate(time.Millisecond)) {
+		t.Fatal(held, err)
+	}
+}

@@ -3,16 +3,73 @@ package checkout_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 type deniedActions struct{}
+
+func TestBuyerActionsReturnCurrentPaymentViewIncludingRepeat(t *testing.T) {
+	for _, action := range []string{"cancel", "return"} {
+		t.Run(action, func(t *testing.T) {
+			e := setup(t)
+			ctx := context.Background()
+			purchase := confirmedPurchase(t, e)
+			created, err := beginAndExecute(ctx, e, buyerID, purchase.ID, orderContact)
+			if err != nil {
+				t.Fatal(err)
+			}
+			first, second := created.Groups[0], created.Groups[1]
+			e.store.SeedVerdict(moderation.VerdictState{
+				TenantID:  second.TenantID,
+				ProductID: "p1",
+				Status:    moderation.Pending,
+			})
+			if err := e.service.ConfirmPayment(ctx, buyerID, purchase.ID); err != nil {
+				t.Fatal(err)
+			}
+			command := func() (checkout.State, error) {
+				return e.service.CancelPaidOrder(ctx, buyerID, purchase.ID, first.TenantID)
+			}
+			if action == "return" {
+				e.platform.SetOrderStatus(first.OrderID, checkout.GroupDelivered, "")
+				if err := announceOrder(ctx, e, first.TenantID, purchase.ID, first.OrderID); err != nil {
+					t.Fatal(err)
+				}
+				command = func() (checkout.State, error) {
+					return e.service.RequestReturn(ctx, buyerID, purchase.ID, first.TenantID, checkout.ReturnDefective)
+				}
+			}
+
+			for _, hold := range []string{checkout.HoldModerationPending, checkout.HoldPaymentExpired} {
+				view, err := command()
+				if err != nil {
+					t.Fatal(err)
+				}
+				current, err := e.service.Get(ctx, buyerID, purchase.ID)
+				if err != nil || current.Groups[1].PaymentHold != hold || !reflect.DeepEqual(view, current) {
+					t.Fatalf(
+						"ожидался снимок GET с paymentHold=%s, получено %q, ошибка GET=%v",
+						hold,
+						view.Groups[1].PaymentHold,
+						err,
+					)
+				}
+				e.clock.Advance(checkout.PaymentWindow)
+			}
+			if e.platform.ActionCalls(first.TenantID) != 1 {
+				t.Fatal("повтор не должен отправлять команду магазину")
+			}
+		})
+	}
+}
 
 func TestBuyerCancelsOneShopOrderAndRepeatDoesNotCallShop(t *testing.T) {
 	e := setup(t)

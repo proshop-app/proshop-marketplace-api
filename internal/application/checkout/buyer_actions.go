@@ -75,7 +75,7 @@ func (s *Service) buyerAction(
 		return checkout.State{}, err
 	}
 	if !needed {
-		return c.State(), nil
+		return s.paymentView(ctx, c)
 	}
 	if err := s.allowAction(ctx, buyerID); err != nil {
 		return checkout.State{}, err
@@ -93,7 +93,11 @@ func (s *Service) buyerAction(
 		_, applyErr := c.ApplyOrderState(tenant, order, now)
 		return applyErr
 	}
-	return s.retrySelection(saveCtx, buyerID, id, nil, apply)
+	state, err := s.retrySelection(saveCtx, buyerID, id, nil, apply)
+	if err != nil {
+		return state, err
+	}
+	return s.paymentView(ctx, checkout.Restore(state))
 }
 
 // SetActionLimiter подключает лимит команд покупателя; общий на все реплики — в Redis.

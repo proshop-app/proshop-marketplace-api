@@ -107,6 +107,8 @@ type OrderStatus struct {
 	Steps            []OrderStep
 	ReturnRequest    *ReturnRequest
 	Status           GroupStatus
+	Reason           string
+	Tracking         *Tracking
 	Revision         int64
 }
 
@@ -134,12 +136,9 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 	if c.state.CartConsumed && c.state.Contact != contact {
 		return false, ErrSnapshotChanged
 	}
-	due := now.Add(PaymentWindow)
-	for _, group := range c.state.Groups {
-		if !group.ExpiresAt.IsZero() {
-			due = group.ExpiresAt
-			break
-		}
+	due, err := c.OrderPaymentDue(now)
+	if err != nil {
+		return false, err
 	}
 	c.state.Contact = contact
 	c.state.Status = StatusCreatingOrders
@@ -164,14 +163,36 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 			if g.QuotePending() {
 				return false, ErrSellerUnavailable
 			}
-			g.Status = GroupCreating
-			if g.ExpiresAt.IsZero() {
+			// Неизвестный исход требует того же запроса: магазин мог уже создать заказ.
+			if g.ExpiresAt.IsZero() || g.Status == GroupDeliveryRequoted ||
+				(g.CreateToken == "" && g.CreateFailures == 0) {
 				g.ExpiresAt = due
 			}
+			g.Status = GroupCreating
 		}
 	}
 	c.rollup()
 	return true, c.touch(now)
+}
+
+// OrderPaymentDue выбирает исходный срок живых неоплаченных заказов или срок нового намерения.
+func (c *Checkout) OrderPaymentDue(now time.Time) (time.Time, error) {
+	var due time.Time
+	for _, g := range c.state.Groups {
+		if g.OrderID == "" || g.Excluded() || g.EffectiveStatus() != GroupAwaitingPayment {
+			continue
+		}
+		if !g.ExpiresAt.After(now) {
+			return time.Time{}, ErrPaymentExpired
+		}
+		if due.IsZero() || g.ExpiresAt.Before(due) {
+			due = g.ExpiresAt
+		}
+	}
+	if due.IsZero() {
+		due = now.Add(PaymentWindow).Truncate(time.Millisecond)
+	}
+	return due, nil
 }
 
 // AttachOrder допускает восстановление после потери ответа, включая уже истёкшее окно.

@@ -42,6 +42,8 @@ type orderStatusJSON struct {
 	Steps            []checkout.OrderStep    `json:"steps"`
 	ReturnRequest    *checkout.ReturnRequest `json:"returnRequest"`
 	Status           checkout.GroupStatus    `json:"status"`
+	Reason           string                  `json:"reason"`
+	Tracking         *trackingJSON           `json:"tracking"`
 	Revision         int64                   `json:"revision"`
 }
 
@@ -106,7 +108,17 @@ func (c *Client) OrderStatuses(
 			)
 			continue
 		}
-		statuses = append(statuses, checkout.OrderStatus(item))
+		statuses = append(statuses, checkout.OrderStatus{
+			PaymentHeldUntil: item.PaymentHeldUntil,
+			OrderID:          item.OrderID,
+			Number:           item.Number,
+			Steps:            item.Steps,
+			ReturnRequest:    item.ReturnRequest,
+			Status:           item.Status,
+			Reason:           item.Reason,
+			Tracking:         item.Tracking.domain(),
+			Revision:         item.Revision,
+		})
 	}
 	return statuses, nil
 }

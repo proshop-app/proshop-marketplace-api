@@ -133,9 +133,7 @@ func (s *Service) reconcileBatch(ctx context.Context, batch reconcileBatch, run 
 	return true
 }
 
-// resolveMismatch применяет статус из ответа сверки. Заказ дочитывается целиком, только когда
-// новому статусу нужны причина или отслеживание: первая сверка после простоя событий не должна
-// превращаться в запрос на каждый заказ. Не применившееся расхождение — сигнал оператору.
+// resolveMismatch применяет состояние из ответа пачки. Не применившееся расхождение — сигнал оператору.
 func (s *Service) resolveMismatch(
 	ctx context.Context,
 	entry checkout.ReconcileEntry,
@@ -149,17 +147,12 @@ func (s *Service) resolveMismatch(
 		Steps:            status.Steps,
 		ReturnRequest:    status.ReturnRequest,
 		Status:           status.Status,
+		Reason:           status.Reason,
+		Tracking:         status.Tracking,
 		Revision:         status.Revision,
 	}
-	var err error
-	if status.Status != entry.Status && statusNeedsDetails(status.Status) {
-		order, err = s.platform.GetOrder(ctx, entry.TenantID, entry.OrderID)
-	}
-	changed := false
-	if err == nil {
-		changed, err = s.applyReconciled(ctx, entry, order, purchases)
-	}
-	if changed {
+	changed, err := s.applyReconciled(ctx, entry, order, purchases)
+	if err == nil && changed {
 		return eventStatusMismatch
 	}
 	slog.Warn(
@@ -191,15 +184,6 @@ func (s *Service) applyReconciled(
 		err = s.uow.Do(ctx, apply)
 	}
 	return changed, err
-}
-
-// statusNeedsDetails — статусы, у которых покупателю показывается отслеживание или причина.
-func statusNeedsDetails(status checkout.GroupStatus) bool {
-	switch status {
-	case checkout.GroupShipped, checkout.GroupAwaitingPickup, checkout.GroupReturned, checkout.GroupCancelled:
-		return true
-	}
-	return false
 }
 
 func (r *reconcileRun) fail(tenant ids.TenantID, err error) {

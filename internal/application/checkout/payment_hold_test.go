@@ -66,6 +66,70 @@ func TestPaymentHoldWindowAndRepeat(t *testing.T) {
 	}
 }
 
+func TestCreateHoldAndPayWithMicrosecondClock(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	e.clock.Advance(345678 * time.Microsecond)
+	purchase := confirmedPurchase(t, e)
+	due := e.clock.Now().Add(checkout.PaymentWindow).Truncate(time.Millisecond)
+	created, err := beginAndExecute(ctx, e, buyerID, purchase.ID, orderContact)
+	if err != nil || created.Status != checkout.StatusAwaitingPayment {
+		t.Fatal(created.Status, err)
+	}
+	for _, group := range created.Groups {
+		if group.OrderID == "" || !group.ExpiresAt.Equal(due) {
+			t.Fatal(group)
+		}
+	}
+
+	e.clock.Advance(checkout.PaymentWindow - time.Second)
+	holdNow := e.clock.Now()
+	held, err := e.service.Pay(ctx, buyerID, purchase.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, group := range held.Groups {
+		if !group.PaymentHeldUntil.Equal(holdNow.Add(5 * time.Minute).Truncate(time.Millisecond)) {
+			t.Fatal("удержание магазина должно иметь точность до миллисекунд", group)
+		}
+	}
+	e.clock.Advance(time.Second)
+	if err := e.service.ConfirmPayment(ctx, buyerID, purchase.ID); err != nil {
+		t.Fatal(err)
+	}
+	paid, err := e.service.Get(ctx, buyerID, purchase.ID)
+	if err != nil || paid.Status != checkout.StatusPaid || len(e.platform.StubPaymentCalls()) != 2 {
+		t.Fatal(paid.Status, err)
+	}
+}
+
+func TestInvalidShopPaymentDueRejectsCreationAndReturnsItems(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	if _, err := e.carts.Remove(ctx, buyerID, p2); err != nil {
+		t.Fatal(err)
+	}
+	purchase := confirmedPurchase(t, e)
+	e.platform.FailCreate("t1", &ports.OrderRefusal{Code: "MARKETPLACE_PAYMENT_DUE_INVALID"})
+	state, err := beginAndExecute(ctx, e, buyerID, purchase.ID, orderContact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.clock.Advance(checkout.CreationRetryDelay)
+	if err := executeTasks(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	group := state.Groups[0]
+	if group.Status != checkout.GroupRejected || group.LastErrorCode != "MARKETPLACE_PAYMENT_DUE_INVALID" ||
+		!group.CartReturned || len(e.platform.OrderRequests("t1")) != 1 || e.platform.OrderCount() != 0 {
+		t.Fatal("срок отклонён окончательно, товар должен вернуться без повтора создания", group)
+	}
+	basket, err := e.carts.Get(ctx, buyerID)
+	if err != nil || len(basket.Lines) != 1 || basket.Lines[0].Offer != p1 || basket.Lines[0].Quantity != 2 {
+		t.Fatal(basket, err)
+	}
+}
+
 func TestPaymentHoldPartialFailureAndParallelRetry(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()

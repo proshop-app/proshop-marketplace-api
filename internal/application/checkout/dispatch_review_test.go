@@ -3,6 +3,7 @@ package checkout_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -53,12 +54,15 @@ func TestChangedDispatchOriginRequiresNewConsentBeforeOrderRetry(t *testing.T) {
 	if err := executeTasks(ctx, e); err != nil {
 		t.Fatal(err)
 	}
-	if e.platform.OrderCount() != 0 {
+	if e.platform.OrderCount() != 0 || len(e.platform.OrderRequests("t1")) != 1 {
 		t.Fatal("повтор без согласия покупателя")
 	}
+	e.clock.Advance(started.Groups[0].ExpiresAt.Add(time.Second).Sub(e.clock.Now()))
 	e.platform.FailCreate("t1", nil)
 	final := reconfirmPurchase(t, e, purchase.ID)
-	if final.Groups[0].OrderID == "" || final.Groups[0].ExternalCheckoutID != started.Groups[0].ExternalCheckoutID {
+	wantDue := e.clock.Now().Add(checkout.PaymentWindow)
+	if final.Groups[0].OrderID == "" || final.Groups[0].ExternalCheckoutID != started.Groups[0].ExternalCheckoutID ||
+		!final.Groups[0].ExpiresAt.Equal(wantDue) {
 		t.Fatal(final)
 	}
 	repeated, err := e.service.CreateOrders(ctx, buyerID, purchase.ID, orderContact)
@@ -129,10 +133,57 @@ func TestDispatchReviewPreservesOtherShopOrderAcrossNewConsent(t *testing.T) {
 	}
 	preserved := review.Groups[1].OrderID
 	e.platform.FailCreate("t1", nil)
+	e.clock.Advance(time.Minute)
 	final := reconfirmPurchase(t, e, purchase.ID)
 	if final.Groups[1].OrderID != preserved || final.Groups[0].OrderID == "" ||
-		len(e.platform.OrderRequests("t2")) != 1 || e.platform.OrderCount() != 2 {
+		len(e.platform.OrderRequests("t2")) != 1 || e.platform.OrderCount() != 2 ||
+		!final.Groups[0].ExpiresAt.Equal(review.Groups[1].ExpiresAt) {
 		t.Fatal("заказ здорового магазина не должен пересоздаваться", final)
+	}
+}
+
+func TestDispatchReviewRejectsExpiredLiveOrderBeforeShopCall(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	purchase := confirmedPurchase(t, e)
+	started, err := e.service.CreateOrders(ctx, buyerID, purchase.ID, orderContact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(map[string]any{
+		"BuyerID":    buyerID,
+		"CheckoutID": purchase.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.service.HandleOrderTask(ctx, ports.Task{
+		Kind:     appcheckout.TaskCreateOrder,
+		TenantID: "t2",
+		Payload:  payload,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	e.platform.FailCreate("t1", &ports.OrderRefusal{
+		Code:                   checkout.DispatchOriginChanged,
+		DispatchReviewRevision: 1,
+	})
+	if err := executeTasks(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	e.clock.Advance(started.Groups[1].ExpiresAt.Sub(e.clock.Now()))
+	if _, err := e.service.Confirm(ctx, buyerID, purchase.ID); err != nil {
+		t.Fatal(err)
+	}
+	quotes := len(e.platform.QuoteRequests())
+	outbox := len(e.store.OutboxRows())
+	_, err = e.service.CreateOrders(ctx, buyerID, purchase.ID, orderContact)
+	if !errors.Is(err, checkout.ErrPaymentExpired) {
+		t.Fatal("истёкший срок живого заказа должен закрыть создание", err)
+	}
+	if len(e.platform.QuoteRequests()) != quotes ||
+		len(e.store.OutboxRows()) != outbox || e.platform.OrderCount() != 1 {
+		t.Fatal("после истечения срока не должно быть расчёта или новой команды создания")
 	}
 }
 

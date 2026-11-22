@@ -115,7 +115,7 @@ func (p *Platform) CreateOrder(
 		Carrier:         delivery.Carrier(request.Carrier),
 		PickupPointCode: request.PickupPointCode,
 		OrderID:         fmt.Sprintf("order-%d", len(p.orders)+1),
-		ExpiresAt:       request.PaymentDueAt,
+		ExpiresAt:       request.PaymentDueAt.Truncate(time.Millisecond),
 		Total:           total,
 		Status:          checkout.GroupAwaitingPayment,
 	}
@@ -188,6 +188,8 @@ func (p *Platform) OrderStatuses(
 				Steps:            order.Steps,
 				ReturnRequest:    order.ReturnRequest,
 				Status:           order.Status,
+				Reason:           order.Reason,
+				Tracking:         order.Tracking,
 				Revision:         order.Revision,
 			})
 		}

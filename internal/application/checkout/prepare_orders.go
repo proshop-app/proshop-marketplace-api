@@ -33,6 +33,9 @@ func (s *Service) prepareOrders(
 	if c.Status() == checkout.StatusDraft {
 		return c.State(), checkout.ErrTransition
 	}
+	if _, err := c.OrderPaymentDue(s.clock.Now()); err != nil {
+		return c.State(), err
+	}
 	reviewed, changed, err := s.reviewReadiness(ctx, c)
 	if err != nil {
 		return reviewed, err

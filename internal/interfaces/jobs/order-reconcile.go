@@ -12,16 +12,18 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
-// OrderReconcileInterval — страховочная сверка статусов заказов с магазинами раз в сутки:
-// штатно статусы приходят событиями, сверка лишь находит пропущенное.
-const OrderReconcileInterval = 24 * time.Hour
+const (
+	// OrderReconcileInterval — общий суточный интервал сверки для всех реплик.
+	OrderReconcileInterval        = 24 * time.Hour
+	orderReconcileAttemptInterval = time.Hour
+)
 
 // OrderReconciler — суточная сверка статусов заказов пачкой.
 type OrderReconciler interface {
 	ReconcileOrders(ctx context.Context) (appcheckout.ReconcileResult, error)
 }
 
-// OrderReconcileRunner запускает сверку раз в интервал, один раз на все реплики.
+// OrderReconcileRunner проверяет готовность суточной сверки раз в час.
 type OrderReconcileRunner struct {
 	reconciler OrderReconciler
 	schedule   ports.IndexRebuildLock
@@ -61,8 +63,15 @@ func NewOrderReconcileRunner(
 	return r
 }
 
-// Run сверяет сразу и далее раз в интервал до отмены контекста.
+// Run пробует запустить сверку сразу и затем каждый час до отмены контекста.
 func (r *OrderReconcileRunner) Run(ctx context.Context) error {
+	return r.run(ctx, wait)
+}
+
+func (r *OrderReconcileRunner) run(
+	ctx context.Context,
+	waitNextAttempt func(context.Context, time.Duration) bool,
+) error {
 	for {
 		var result appcheckout.ReconcileResult
 		err := r.schedule.WithLock(ctx, func(ctx context.Context) error {
@@ -79,7 +88,7 @@ func (r *OrderReconcileRunner) Run(ctx context.Context) error {
 			r.record(result)
 		}
 
-		if !wait(ctx, OrderReconcileInterval) {
+		if !waitNextAttempt(ctx, orderReconcileAttemptInterval) {
 			return nil
 		}
 	}
