@@ -47,11 +47,11 @@ func (h *searchHandlers) buyerKey(r *http.Request) string {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), budget)
 	defer cancel()
-	session, err := h.auth.Authenticate(ctx, token)
-	if err != nil {
+	buyerID, err := h.auth.BuyerIDFromAccess(ctx, token)
+	if err != nil || ctx.Err() != nil {
 		return ""
 	}
-	return h.keys.Key(session.BuyerID)
+	return h.keys.Key(buyerID)
 }
 
 func (h *searchHandlers) record(w http.ResponseWriter, r *http.Request) {
