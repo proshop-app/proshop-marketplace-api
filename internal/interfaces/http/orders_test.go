@@ -123,6 +123,12 @@ func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
 	if operator.status != http.StatusOK || len(items) != 1 {
 		t.Fatalf("панель: %+v", operator)
 	}
+	if item, _ := items[0].(map[string]any); item["recipient"] != nil {
+		t.Fatalf("получатель оператору не отдаётся: %+v", item)
+	}
+	if own := e.session(t, http.MethodGet, path, "", cookie); own.body["recipient"] == nil {
+		t.Fatalf("покупатель видит получателя своей покупки: %+v", own)
+	}
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
 	runOrderWorker(t, e)
 	refreshed := e.session(t, http.MethodGet, path, "", cookie)

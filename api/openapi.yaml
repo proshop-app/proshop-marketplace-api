@@ -8668,6 +8668,15 @@ components:
         updatedAt:
           type: string
           format: date-time
+        recipient:
+          type: object
+          required: [name, phone]
+          properties:
+            name:
+              type: string
+            phone:
+              type: string
+          description: Снимок получателя; только в ответе покупателю этой покупки, списки его не содержат.
         confirmedAt:
           type:
           - string

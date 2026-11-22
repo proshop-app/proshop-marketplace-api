@@ -93,6 +93,7 @@ type selectionJSON struct {
 
 // checkoutJSON — покупка; суммы — рубли из согласованного снимка.
 type checkoutJSON struct {
+	Recipient            *checkout.Contact   `json:"recipient,omitempty"`
 	Carriers             []string            `json:"carriers"`
 	ConfirmationRequired bool                `json:"confirmationRequired"`
 	PaymentStarted       bool                `json:"paymentStarted"`
@@ -316,6 +317,11 @@ func (h *checkoutHandlers) responseBody(
 		return body, err
 	}
 	setGroupSellers(&body, sellers)
+	// Получатель — персональные данные: виден покупателю этой покупки, оператору не отдаётся.
+	if state.Contact.Phone != "" && BuyerID(r.Context()) == state.BuyerID {
+		recipient := state.Contact
+		body.Recipient = &recipient
+	}
 	return body, nil
 }
 
