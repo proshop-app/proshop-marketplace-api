@@ -68,18 +68,18 @@ func TestOrdersTransitions(t *testing.T) {
 		t.Fatalf("повтор ответа: %v", err)
 	}
 	first.Status = checkout.GroupPaid
-	if _, err := c.Observe("t1", first, t0.Add(time.Minute), t0); err != nil {
+	if _, err := c.Observe("t1", first, t0); err != nil {
 		t.Fatal(err)
 	}
 	if c.Status() != checkout.StatusPartiallyPaid {
 		t.Fatal(c.State())
 	}
 	first.Status = checkout.GroupAwaitingPayment
-	if _, err := c.Observe("t1", first, t0, t0); !errors.Is(err, checkout.ErrTransition) {
+	if _, err := c.Observe("t1", first, t0); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
 	second.Status = checkout.GroupPaid
-	if _, err := c.Observe("t2", second, t0, t0); err != nil {
+	if _, err := c.Observe("t2", second, t0); err != nil {
 		t.Fatal(err)
 	}
 	if c.Status() != checkout.StatusPaid {
@@ -102,11 +102,11 @@ func TestExpiryNeedsSellerCancellation(t *testing.T) {
 	}
 	// Оплата могла пройти в последнюю секунду: истечение локальных часов не отменяет заказ.
 	first.Status = checkout.GroupPaid
-	if _, err := c.Observe("t1", first, expired, expired); err != nil {
+	if _, err := c.Observe("t1", first, expired); err != nil {
 		t.Fatal(err)
 	}
 	second.Status, second.Reason = checkout.GroupCancelled, "payment_expired"
-	if _, err := c.Observe("t2", second, expired, expired); err != nil {
+	if _, err := c.Observe("t2", second, expired); err != nil {
 		t.Fatal(err)
 	}
 	if c.Status() != checkout.StatusPaid {
@@ -125,7 +125,7 @@ func TestAllCancelledAndSnapshotIsolation(t *testing.T) {
 	for i := range c.Groups() {
 		order := attach(t, c, i)
 		order.Status, order.Reason = checkout.GroupCancelled, "payment_expired"
-		if _, err := c.Observe(c.Groups()[i].TenantID, order, t0, t0); err != nil {
+		if _, err := c.Observe(c.Groups()[i].TenantID, order, t0); err != nil {
 			t.Fatal(err)
 		}
 	}

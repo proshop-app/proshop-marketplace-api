@@ -190,7 +190,7 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 		return c.rejectOrderPickup(g, order, now)
 	}
 	g.OrderID, g.ExpiresAt = order.OrderID, order.ExpiresAt
-	g.NextPollAt = now
+	g.NextPollAt = order.ExpiresAt.Add(PaymentExpiryGrace)
 	if !g.CancellationConfirmed {
 		g.LastOrderStatus = GroupAwaitingPayment
 	}
@@ -207,7 +207,7 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 // Observe принимает только допустимые переходы. Истечение окна запрещает оплату,
 // но отмену подтверждает магазин: он мог получить оплату перед границей окна.
 // Состояние с меньшим номером перехода — опоздавшее: оно не меняет группу.
-func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Time, now time.Time) (bool, error) {
+func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, now time.Time) (bool, error) {
 	g := c.group(tenant)
 	if g == nil {
 		return false, ErrNotFound
@@ -226,14 +226,13 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	if order.Status == GroupCancelled && order.Reason == "" {
 		return false, ErrInvalidOrder
 	}
-	if g.Status == order.Status && g.Reason == order.Reason && g.NextPollAt.Equal(next) &&
-		g.OrderRevision == order.Revision {
+	if g.Status == order.Status && g.Reason == order.Reason &&
+		g.OrderRevision == order.Revision && g.PollFailures == 0 && g.LastErrorCode == "" {
 		return false, nil
 	}
 	if !g.Abandoned {
 		g.Status, g.Reason = order.Status, order.Reason
 	}
-	g.NextPollAt = next
 	g.PollFailures = 0
 	g.LastErrorCode = ""
 	if g.LastOrderStatus != order.Status || g.OrderStatusAt.IsZero() {
@@ -250,6 +249,9 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	if g.CancellationBlocked && (order.Status == GroupDelivered ||
 		order.Status == GroupReturned || order.Status == GroupCancelled) {
 		g.ReconciliationRequired = false
+	}
+	if _, needed := g.pollAt(); !needed {
+		g.NextPollAt = time.Time{}
 	}
 	c.rollup()
 

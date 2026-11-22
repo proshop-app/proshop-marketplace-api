@@ -80,7 +80,7 @@ func (c *Checkout) Pay(now time.Time) (bool, error) {
 		g.Status, g.LastOrderStatus = GroupPaid, GroupPaid
 		g.Reason, g.LastErrorCode, g.PollToken = "", "", ""
 		g.PollFailures = 0
-		g.NextPollAt = now
+		g.NextPollAt = time.Time{}
 		g.OrderStatusAt = now
 	}
 	c.rollup()

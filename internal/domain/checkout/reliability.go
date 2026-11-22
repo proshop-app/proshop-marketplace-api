@@ -20,6 +20,12 @@ const (
 	OrderRetryCap = 10 * time.Minute
 	// OrderSlowPoll — сверка магазина, который долго не отвечает.
 	OrderSlowPoll = 30 * time.Minute
+	// PaymentExpiryGrace даёт событию отмены дойти после точной задачи магазина.
+	PaymentExpiryGrace = 2 * time.Minute
+	// PaymentOutcomeDelay даёт запросу оплаты завершиться до страховочного GET.
+	PaymentOutcomeDelay = 30 * time.Second
+	// Отказ отмены означает исполнение заказа: события ведут его, редкий GET страхует их потерю.
+	blockedCancellationPoll = 10 * time.Minute
 	// ReconcileInFlightFor — сколько заказ сверяется, не меняя статуса: дольше исполняемый заказ —
 	// забота оператора, а не ежесуточного запроса магазину.
 	ReconcileInFlightFor = 60 * 24 * time.Hour
@@ -76,18 +82,27 @@ func (g Group) CreationDue(now time.Time) bool {
 		!g.Abandoned && !g.CreateExhausted && !g.CreationExpired(now) && !now.Before(g.NextCreateAt)
 }
 
-// PollDue оставляет опрос только неоплаченному заказу: его окно оплаты коротко, а подтверждение
-// денег не должно зависеть от одного канала. Статусы оплаченного заказа приходят событием магазина.
-// Отказ отмены уже исполняемого заказа сверяется опросом до его завершения, как прежде.
+// PollDue страхует потерю события после срока и неизвестный исход отправленной оплаты.
 func (g Group) PollDue(now time.Time) bool {
-	if g.Status == GroupCreationExpired {
-		return false
+	at, found := g.pollAt()
+	return found && !now.Before(at)
+}
+
+func (g Group) pollAt() (time.Time, bool) {
+	if g.Status == GroupCreationExpired || g.OrderID == "" {
+		return time.Time{}, false
 	}
 	if g.Abandoned {
-		return g.CancellationBlocked && g.ReconciliationRequired && g.OrderID != "" && !now.Before(g.NextPollAt)
+		return g.NextPollAt, g.CancellationBlocked && g.ReconciliationRequired
 	}
-	return g.OrderID != "" && g.Status != GroupCancelled && !paidStatus(g.EffectiveStatus()) &&
-		!now.Before(g.NextPollAt)
+	if g.Status == GroupCancelled || paidStatus(g.EffectiveStatus()) {
+		return time.Time{}, false
+	}
+	at := g.NextPollAt
+	if !g.PaymentPending && at.Before(g.ExpiresAt.Add(PaymentExpiryGrace)) {
+		at = g.ExpiresAt.Add(PaymentExpiryGrace)
+	}
+	return at, true
 }
 
 // ReconcileUntil — до какого времени заказ участвует в суточной сверке пачкой; ноль — не участвует.
@@ -241,7 +256,7 @@ func (c *Checkout) CompletePoll(
 	tenant ids.TenantID,
 	token string,
 	order SellerOrder,
-	next, now time.Time,
+	now time.Time,
 ) (bool, error) {
 	g := c.group(tenant)
 	if g == nil {
@@ -250,8 +265,9 @@ func (c *Checkout) CompletePoll(
 	if g.PollToken != token {
 		return false, nil
 	}
-	changed, err := c.Observe(tenant, order, next, now)
+	changed, err := c.Observe(tenant, order, now)
 	if err == nil {
+		g.schedulePollResult(now)
 		g.PollToken = ""
 		g.Tracking = cloneTracking(order.Tracking)
 		if !changed {
@@ -261,7 +277,28 @@ func (c *Checkout) CompletePoll(
 	return changed, err
 }
 
-// ApplyOrderState принимает состояние заказа из события магазина или сверки: срок опроса не меняется.
+func (g *Group) schedulePollResult(now time.Time) {
+	if _, needed := g.pollAt(); !needed {
+		g.NextPollAt = time.Time{}
+		return
+	}
+	if g.Abandoned {
+		g.NextPollAt = now.Add(blockedCancellationPoll)
+		return
+	}
+	// Долгая просрочка требует более редкой сверки, но успешное ожидание оплаты не является отказом.
+	delay := min(max(now.Sub(g.ExpiresAt.Add(PaymentExpiryGrace)), OrderRetryBase), OrderSlowPoll)
+	g.NextPollAt = now.Add(delay)
+}
+
+func (g Group) pollRetryDelay() time.Duration {
+	if g.PollFailures >= MaxOrderFailures && !g.Abandoned {
+		return OrderSlowPoll
+	}
+	return retryDelay(g.PollFailures)
+}
+
+// ApplyOrderState снимает страховочную проверку, когда событие уже принесло итог магазина.
 // Заказ, которого у группы нет, — ErrNotFound: событие относится не к этой покупке.
 // Отмена неоплаченного заказа значима только для группы, ждущей оплату: отмену по команде площадки
 // ведёт её собственный сценарий, и событие магазина не должно подменить его причину и итог.
@@ -276,7 +313,7 @@ func (c *Checkout) ApplyOrderState(tenant ids.TenantID, order SellerOrder, now t
 	if ownCancellation || g.outranUnnumbered(order) {
 		return false, nil
 	}
-	changed, err := c.Observe(tenant, order, g.NextPollAt, now)
+	changed, err := c.Observe(tenant, order, now)
 	if err != nil || !changed {
 		return false, err
 	}
@@ -314,13 +351,12 @@ func (c *Checkout) FailPoll(tenant ids.TenantID, token, reason string, now time.
 	if g.PollFailures < MaxOrderFailures {
 		g.PollFailures++
 	}
-	g.NextPollAt = now.Add(retryDelay(g.PollFailures))
+	g.NextPollAt = now.Add(g.pollRetryDelay())
 	if g.PollFailures >= MaxOrderFailures && !g.Abandoned {
 		if g.Status != GroupSellerUnreachable {
 			g.LastOrderStatus = g.Status
 		}
 		g.Status, g.Reason = GroupSellerUnreachable, reason
-		g.NextPollAt = now.Add(OrderSlowPoll)
 	}
 	c.rollup()
 	return true, c.touch(now)
@@ -363,11 +399,7 @@ func retryDelay(failures int) time.Duration {
 
 // NextWorkAt возвращает ближайшую сверку или возврат; нулевое время означает работу сразу.
 func (g Group) NextWorkAt() (time.Time, bool) {
-	var next time.Time
-	found := g.PollDue(g.NextPollAt)
-	if found {
-		next = g.NextPollAt
-	}
+	next, found := g.pollAt()
 	if g.ReturnDue(g.NextReturnAt) && (!found || g.NextReturnAt.Before(next)) {
 		next, found = g.NextReturnAt, true
 	}

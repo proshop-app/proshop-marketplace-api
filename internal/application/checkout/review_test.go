@@ -118,6 +118,9 @@ func TestPartialCartReturnDoesNotBlockShippedOrPayment(t *testing.T) {
 		},
 	)
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupCancelled, "payment_expired")
+	if err := announceOrder(ctx, e, "t1", c.ID, state.Groups[0].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -125,6 +128,9 @@ func TestPartialCartReturnDoesNotBlockShippedOrPayment(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupPaid, "")
+	if err := announceOrder(ctx, e, "t2", c.ID, state.Groups[1].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.Advance(30 * time.Second)
 	if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
 		t.Fatal(err)
@@ -175,6 +181,7 @@ func TestFailedPollBackoffAndRecovery(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		e.clock.Advance(state.Groups[0].ExpiresAt.Add(checkout.PaymentExpiryGrace).Sub(e.clock.Now()))
 		firstID := state.Groups[0].OrderID
 		if invalidStatus {
 			e.platform.SetOrderStatus(firstID, "unknown_status", "")

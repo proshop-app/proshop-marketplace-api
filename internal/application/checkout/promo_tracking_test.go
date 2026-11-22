@@ -86,7 +86,7 @@ func TestTrackingPollSnapshotAndOwnership(t *testing.T) {
 		Number:  &number,
 		URL:     "https://example.test/123",
 	})
-	e.clock.Advance(61 * time.Second)
+	e.clock.Advance(state.Groups[0].ExpiresAt.Add(checkout.PaymentExpiryGrace).Sub(e.clock.Now()))
 	state, err = refreshOrders(ctx, e, buyerID, c.ID)
 	if err != nil || state.Groups[0].Tracking == nil || *state.Groups[0].Tracking.Number != "123" {
 		t.Fatal(state, err)

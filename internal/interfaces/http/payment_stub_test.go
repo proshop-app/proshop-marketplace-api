@@ -273,7 +273,7 @@ func TestCheckoutHasNoSellerPaymentLinks(t *testing.T) {
 	}
 }
 
-func TestPaymentStubPaidWithFailedPoll(t *testing.T) {
+func TestPaymentStubPaidDoesNotPollUnavailableShop(t *testing.T) {
 	e := newPaymentTest(t, true)
 	page := "/api/v1/payment-stub/" + string(paymentTestID)
 	if r := e.call(http.MethodPost, page+"/confirm", e.cookie, ""); r.Code != 303 {
@@ -307,9 +307,10 @@ func TestPaymentStubPaidWithFailedPoll(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if state.Groups[0].PollFailures < checkout.MaxOrderFailures {
-			e.clock.Advance(state.Groups[0].NextPollAt.Sub(e.clock.Now()))
+		if len(tasks) != 0 || state.Groups[0].PollFailures != 0 || !state.Groups[0].NextPollAt.IsZero() {
+			t.Fatal("оплаченный заказ не требует опроса", tasks, state.Groups[0])
 		}
+		e.clock.Advance(time.Hour)
 	}
 	access, err := e.tokens.Open(context.Background(), string(paymentTestBuyer))
 	if err != nil {

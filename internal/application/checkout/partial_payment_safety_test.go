@@ -95,6 +95,9 @@ func TestRemovingUnpaidGroupPreservesPaidShipmentAndAmount(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
+	if err := announceOrder(ctx, e, state.Groups[0].TenantID, state.ID, state.Groups[0].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.Advance(time.Minute)
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
@@ -105,6 +108,9 @@ func TestRemovingUnpaidGroupPreservesPaidShipmentAndAmount(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupShipped, "")
+	if err := announceOrder(ctx, e, state.Groups[0].TenantID, state.ID, state.Groups[0].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.Advance(15 * time.Minute)
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
@@ -188,6 +194,9 @@ func TestReadinessReviewAndCancellationPreservePaidGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
+	if err := announceOrder(ctx, e, state.Groups[0].TenantID, state.ID, state.Groups[0].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.Advance(time.Minute)
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
@@ -279,6 +288,9 @@ func TestPaidPurchaseCannotCreateOrPayRemovedGroupAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
+	if err := announceOrder(ctx, e, state.Groups[0].TenantID, state.ID, state.Groups[0].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.Advance(time.Minute)
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)

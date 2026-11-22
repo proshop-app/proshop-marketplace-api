@@ -190,11 +190,7 @@ func (s *Service) pollGroup(ctx context.Context, buyerID, id ids.UUID, tenant id
 	cancel()
 	_, err = s.update(ctx, buyerID, id, func(c *checkout.Checkout, now time.Time) error {
 		if failed == nil {
-			interval := paidPoll
-			if answer.Status == checkout.GroupAwaitingPayment {
-				interval = unpaidPoll
-			}
-			_, observeErr := c.CompletePoll(tenant, token, answer, now.Add(interval), now)
+			_, observeErr := c.CompletePoll(tenant, token, answer, now)
 			if observeErr == nil {
 				return nil
 			}

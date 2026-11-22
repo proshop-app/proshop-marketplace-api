@@ -47,6 +47,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	seedBuyer(t, uow, buyerA, "79251234567")
 	ctx := context.Background()
 	clock, platform := fake.NewClock(at(0)), fake.NewPlatform()
+	platform.OrderNow = clock.Now()
 	basket := cart.New("20000000-0000-4000-8000-000000000001", buyerA, clock.Now(), time.Hour)
 	offer := cart.Offer{
 		ID:        ids.OfferID{Tenant: "t1", Product: "p1"},
@@ -189,6 +190,18 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	if err != nil || len(purchases) != 1 {
 		t.Fatal(purchases, err)
 	}
+	if err := service.Resume(ctx); err != nil {
+		t.Fatal(err)
+	}
+	counts, err = queue.ReadyCounts(ctx, clock.Now())
+	if err != nil || counts[appcheckout.TaskPollOrder] != 0 {
+		t.Fatal("до срока опрос не нужен", counts, err)
+	}
+	state, err = service.Get(ctx, buyerA, c.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.Advance(state.Groups[0].ExpiresAt.Add(checkout.PaymentExpiryGrace).Sub(clock.Now()))
 	if err := service.Resume(ctx); err != nil {
 		t.Fatal(err)
 	}

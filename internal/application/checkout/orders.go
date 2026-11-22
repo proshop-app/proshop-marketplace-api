@@ -13,11 +13,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-const (
-	orderBatch = 100
-	unpaidPoll = 30 * time.Second
-	paidPoll   = 10 * time.Minute
-)
+const orderBatch = 100
 
 // CreateOrders фиксирует намерение и контакт до вызова магазина. Повтор использует тот же снимок.
 func (s *Service) CreateOrders(

@@ -109,7 +109,7 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 			return fmt.Errorf("фильтр ожидающих: %d %w", len(items), err)
 		}
 		order.Status = checkout.GroupPaid
-		if _, err := loaded.Observe("t1", order, at(20).Add(10*time.Minute), at(20)); err != nil {
+		if _, err := loaded.Observe("t1", order, at(20)); err != nil {
 			return err
 		}
 		return tx.Checkouts().Update(ctx, loaded)

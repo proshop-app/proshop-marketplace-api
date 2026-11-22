@@ -65,7 +65,7 @@ func TestPollBackoffCapAndMonotoneRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	order := attach(t, c, 0)
-	now := t0
+	now := order.ExpiresAt.Add(checkout.PaymentExpiryGrace)
 	for i := 0; i < checkout.MaxOrderFailures+2; i++ {
 		if _, err := c.ClaimPoll("t1", "token", now); err != nil {
 			t.Fatal(err)
@@ -86,7 +86,7 @@ func TestPollBackoffCapAndMonotoneRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	order.Status, order.Revision = checkout.GroupShipped, 3
-	if _, err := c.CompletePoll("t1", "recovery", order, now.Add(time.Minute), now); err != nil {
+	if _, err := c.CompletePoll("t1", "recovery", order, now); err != nil {
 		t.Fatal(err)
 	}
 	if c.Groups()[0].PollFailures != 0 || c.Groups()[0].Status != checkout.GroupShipped {
@@ -105,8 +105,8 @@ func TestPaidOrderLeavesPollingForEventsAndReconciliation(t *testing.T) {
 		t.Fatal(err)
 	}
 	order := attach(t, c, 0)
-	if g := c.Groups()[0]; !g.PollDue(t0) || !g.ReconcileUntil().IsZero() {
-		t.Fatal("неоплаченный заказ опрашивается и не входит в суточную сверку")
+	if g := c.Groups()[0]; g.PollDue(t0) || !g.ReconcileUntil().IsZero() {
+		t.Fatal("неоплаченный заказ ждёт срока и не входит в суточную сверку")
 	}
 	order.Status, order.Revision = checkout.GroupPaid, 2
 	if changed, err := c.ApplyOrderState("t1", order, t0); err != nil || !changed {
@@ -129,7 +129,7 @@ func TestLateStateAfterUnnumberedLocalStatusIsStale(t *testing.T) {
 	order := attach(t, c, 0)
 	// Статус без номера перехода: так его ставят оплата площадкой и отказ отмены.
 	order.Status = checkout.GroupShipped
-	if _, err := c.Observe("t1", order, t0, t0); err != nil {
+	if _, err := c.Observe("t1", order, t0); err != nil {
 		t.Fatal(err)
 	}
 	order.Status, order.Revision = checkout.GroupPaid, 2
@@ -178,7 +178,8 @@ func TestSettleWorkTouchesOnlyPurchaseWithoutDueWork(t *testing.T) {
 	// Как после чтения из хранилища: версия меняется только настоящим изменением.
 	c = checkout.Restore(c.State())
 	version := c.State().Version
-	if err := c.SettleWork(t0); err != nil || c.State().Version != version {
+	due := c.Groups()[0].ExpiresAt.Add(checkout.PaymentExpiryGrace)
+	if err := c.SettleWork(due); err != nil || c.State().Version != version {
 		t.Fatal("созревший опрос неоплаченного заказа — работа есть, покупка не трогается", err)
 	}
 	if err := c.SettleWork(t0.Add(-time.Hour)); err != nil || c.State().Version == version {
@@ -239,7 +240,7 @@ func TestReturnRemainingIsIsolatedFromSnapshot(t *testing.T) {
 	}
 	order := attach(t, c, 0)
 	order.Status, order.Reason = checkout.GroupCancelled, "payment_expired"
-	if _, err := c.Observe("t1", order, t0, t0); err != nil {
+	if _, err := c.Observe("t1", order, t0); err != nil {
 		t.Fatal(err)
 	}
 	remaining := []checkout.Line{{Offer: c.Groups()[0].Lines[0].Offer, Quantity: 1, Price: money.FromKopecks(100)}}
@@ -250,5 +251,23 @@ func TestReturnRemainingIsIsolatedFromSnapshot(t *testing.T) {
 	state.Groups[0].ReturnRemaining[0].Quantity = 99
 	if c.Groups()[0].ReturnRemaining[0].Quantity != 1 || c.Groups()[0].CartReturned {
 		t.Fatal(c.Groups()[0])
+	}
+}
+
+func TestLegacyPollDeadlineWaitsForExpiryGrace(t *testing.T) {
+	g := checkout.Group{
+		Status:     checkout.GroupAwaitingPayment,
+		OrderID:    "order",
+		ExpiresAt:  t0.Add(time.Hour),
+		NextPollAt: t0,
+	}
+	want := g.ExpiresAt.Add(checkout.PaymentExpiryGrace)
+	next, found := g.NextWorkAt()
+	if !found || !next.Equal(want) || g.PollDue(want.Add(-time.Nanosecond)) || !g.PollDue(want) {
+		t.Fatal("старый срок опроса не обходит срок оплаты с запасом", next, found)
+	}
+	g.PaymentPending = true
+	if next, found = g.NextWorkAt(); !found || !next.Equal(t0) || !g.PollDue(t0) {
+		t.Fatal("сохранённый срок неизвестной оплаты не заменяется сроком заказа", next, found)
 	}
 }

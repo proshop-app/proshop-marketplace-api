@@ -73,7 +73,7 @@ func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 	}
 }
 
-func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
+func TestBuyerOrdersAndReturnTrustShopEvent(t *testing.T) {
 	e := newEnv(t)
 	cookie := e.login(t)
 	me := e.session(t, http.MethodGet, "/api/v1/me", "", cookie)
@@ -129,8 +129,18 @@ func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
 	if own := e.session(t, http.MethodGet, path, "", cookie); own.body["recipient"] == nil {
 		t.Fatalf("покупатель видит получателя своей покупки: %+v", own)
 	}
-	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
-	runOrderWorker(t, e)
+	if err := e.checkouts.ApplyOrderEvent(context.Background(), appcheckout.OrderEvent{
+		EventID:    "shop-paid",
+		TenantID:   state.Groups[0].TenantID,
+		CheckoutID: id,
+		Order: checkout.SellerOrder{
+			OrderID:  state.Groups[0].OrderID,
+			Status:   checkout.GroupPaid,
+			Revision: 1,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	refreshed := e.session(t, http.MethodGet, path, "", cookie)
 	if refreshed.status != http.StatusOK || refreshed.body["status"] != "paid" || refreshed.body["nextPayment"] != nil {
 		t.Fatalf("источник статуса — магазин: %+v", refreshed)

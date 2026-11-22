@@ -134,13 +134,16 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(1), Limit: 100},
 		},
 		{
-			name:   "пора опрашивать известный заказ",
+			name:   "известный заказ ждёт срока",
 			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(10), Limit: 100},
-			want:   allIDs[3:4],
 		},
 		{
-			name:   "все задания готовы",
-			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(30), Limit: 100},
+			name:   "срок прошёл, запас ещё нет",
+			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(61), Limit: 100},
+		},
+		{
+			name:   "срок с запасом прошёл",
+			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(62), Limit: 100},
 			want:   allIDs[3:],
 		},
 		{
@@ -216,8 +219,17 @@ func TestCheckoutListRejectsChangedVersionBetweenQueries(t *testing.T) {
 	purchases := seedCheckoutList(t, uow)
 	trace := &checkoutListTrace{beforeGroups: func() {
 		purchase := purchases[3]
-		if _, err := purchase.ClaimPoll("t1", "concurrent-poll", at(10)); err != nil {
-			t.Fatal(err)
+		changed, err := purchase.ApplyOrderState(
+			"t1",
+			checkout.SellerOrder{
+				OrderID:  "o-t1",
+				Status:   checkout.GroupPaid,
+				Revision: 1,
+			},
+			at(10),
+		)
+		if err != nil || !changed {
+			t.Fatalf("параллельное изменение не состоялось: %v, %v", changed, err)
 		}
 		if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 			return tx.Checkouts().Update(ctx, purchase)
