@@ -39,6 +39,7 @@ type Config struct {
 
 // Service — покупка покупателя.
 type Service struct {
+	actions  ports.RateLimiter
 	observer ports.CheckoutObserver
 	carts    ports.CartVerifier
 	uow      ports.UnitOfWork

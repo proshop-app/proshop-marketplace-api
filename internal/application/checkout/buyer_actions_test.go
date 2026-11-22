@@ -3,11 +3,16 @@ package checkout_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
+
+type deniedActions struct{}
 
 func TestBuyerCancelsOneShopOrderAndRepeatDoesNotCallShop(t *testing.T) {
 	e := setup(t)
@@ -64,8 +69,11 @@ func TestBuyerCancellationKeepsStateWhenShopIsDown(t *testing.T) {
 	down := errors.New("нет связи")
 	e.platform.Fail(first.TenantID, down)
 	_, err := e.service.CancelPaidOrder(context.Background(), buyerID, state.ID, first.TenantID)
-	if !errors.Is(err, down) {
-		t.Fatal(err)
+	if !errors.Is(err, checkout.ErrOrderActionUnavailable) || !errors.Is(err, down) {
+		t.Fatal("покупателю — общий отказ, причина — в журнал", err)
+	}
+	if typed, ok := errs.As(err); !ok || strings.Contains(typed.Message(), down.Error()) {
+		t.Fatal("ответ сервера магазина не показывается покупателю", err)
 	}
 	if groupStatuses(t, e, state.ID)[0] != checkout.GroupPaid {
 		t.Fatal("без ответа магазина отмена не обещается")
@@ -117,5 +125,20 @@ func TestBuyerRequestsReturnOnceAndSeesRejection(t *testing.T) {
 	_, err = e.service.RequestReturn(ctx, buyerID, state.ID, first.TenantID, checkout.ReturnDefective)
 	if !errors.Is(err, checkout.ErrReturnUnavailable) {
 		t.Fatal("решённую заявку повторно не подают", err)
+	}
+}
+
+func (deniedActions) Allow(context.Context, string, int, time.Duration) (bool, time.Duration, error) {
+	return false, time.Minute, nil
+}
+
+func TestBuyerActionsAreLimitedBeforeShopCall(t *testing.T) {
+	e := setup(t)
+	state := paidPurchase(t, e)
+	first := state.Groups[0]
+	e.service.SetActionLimiter(deniedActions{})
+	_, err := e.service.CancelPaidOrder(context.Background(), buyerID, state.ID, first.TenantID)
+	if !errors.Is(err, checkout.ErrTooManyActions) || e.platform.ActionCalls(first.TenantID) != 0 {
+		t.Fatal("лимит срабатывает до запроса магазину", err)
 	}
 }

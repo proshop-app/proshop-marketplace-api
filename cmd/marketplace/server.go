@@ -314,6 +314,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 	)
 
+	checkouts.SetActionLimiter(redis.NewLimiter(s.cache, keyPrefix))
 	checkouts.SetObserver(jobs.NewCheckoutMetrics(s.logger, s.metrics))
 	dispatcher := messaging.NewDispatcher(
 		postgres.NewTaskQueue(s.store.pool),

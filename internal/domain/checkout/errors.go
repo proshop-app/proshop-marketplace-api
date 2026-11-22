@@ -36,6 +36,18 @@ var (
 	ErrReturnUnavailable = errs.New(errs.Conflict, "checkout.return_unavailable", "заявку на возврат подать нельзя")
 	// ErrReturnReason — причина вне словаря.
 	ErrReturnReason = errs.New(errs.Invalid, "checkout.return_reason", "выберите причину возврата")
+	// ErrOrderActionUnavailable — исход команды магазину неизвестен; подробности только в журнале.
+	ErrOrderActionUnavailable = errs.New(
+		errs.Unavailable,
+		"checkout.order_action_unavailable",
+		"магазин не подтвердил действие; обновите заказ и повторите",
+	)
+	// ErrTooManyActions — покупатель слишком часто шлёт команды магазинам.
+	ErrTooManyActions = errs.New(
+		errs.TooManyRequests,
+		"checkout.too_many_actions",
+		"слишком много действий подряд; повторите через минуту",
+	)
 	// ErrInvalidOrder — магазин вернул некорректный заказ или сумму.
 	ErrInvalidOrder = errs.New(errs.Unavailable, "checkout.invalid_order", "заказ магазина не по контракту")
 
