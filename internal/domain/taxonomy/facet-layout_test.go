@@ -91,11 +91,11 @@ func TestFacetLayoutRejectsInvalidPolicies(t *testing.T) {
 		})
 	}
 	d.Categories[0].FacetLayout = &FacetLayout{
-		Primary:    []string{FilterPrice, FilterInStock, FilterSeller, FilterCategory, "a1"},
+		Primary:    []string{FilterPrice, FilterInStock, FilterSeller, FilterCategory, "a2"},
 		Additional: []string{},
 	}
 	if _, err := d.CompileFacets(true); err == nil {
-		t.Fatal("ветка приняла фильтр, недоступный одному из листьев")
+		t.Fatal("ветка приняла фильтр, недоступный всем листьям")
 	}
 	d.Categories[0].FacetLayout = nil
 	schema := d.Schemas["s1"]
@@ -103,6 +103,47 @@ func TestFacetLayoutRejectsInvalidPolicies(t *testing.T) {
 	d.Schemas["s1"] = schema
 	if _, err := d.CompileFacets(true); err == nil {
 		t.Fatal("лист принял встроенный фильтр в схеме")
+	}
+}
+
+func TestBranchLayoutAcceptsFilterOfSomeLeaves(t *testing.T) {
+	d := Definition{
+		Attributes: []Attribute{
+			{Code: "size", Facet: true},
+			{Code: "color", Facet: true},
+		},
+		Categories: []Category{{
+			ID: "branch",
+			FacetLayout: &FacetLayout{
+				Primary:    []string{FilterPrice, "color", "size", FilterInStock, FilterSeller},
+				Additional: []string{},
+			},
+			Children: []Category{
+				{ID: "sized", Schema: "sized"},
+				{ID: "plain", Schema: "plain"},
+			},
+		}},
+		Schemas: map[string]Schema{
+			"sized": {Attributes: []string{"size", "color"}},
+			"plain": {Attributes: []string{"color"}},
+		},
+	}
+	compiled, err := d.CompileFacets(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Filter{
+		{Code: FilterPrice, Primary: true},
+		{Code: "color", Primary: true},
+		{Code: "size", Primary: true},
+		{Code: FilterInStock, Primary: true},
+		{Code: FilterSeller, Primary: true},
+	}
+	if !slices.Equal(compiled.Categories[0].PriorityFilters, want) {
+		t.Fatalf("фильтры ветки %v", compiled.Categories[0].PriorityFilters)
+	}
+	if !slices.Equal(compiled.RootFilters, []Filter{{Code: "color", Primary: true}}) {
+		t.Fatalf("корневые фильтры без раскладки остаются общими: %v", compiled.RootFilters)
 	}
 }
 
