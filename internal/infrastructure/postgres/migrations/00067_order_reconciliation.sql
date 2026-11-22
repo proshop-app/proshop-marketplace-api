@@ -1,11 +1,12 @@
 -- +goose Up
 -- Статусы оплаченного заказа приходят событием магазина; опрос остаётся только неоплаченным.
--- reconcile_until — срок суточной сверки пачкой: исполняемый заказ сверяется до смены статуса,
--- полученный — ограниченный срок. Полученные до миграции не имеют времени получения и в сверку не входят.
+-- reconcile_until — срок суточной сверки пачкой: сверяется только исполняемый заказ, ограниченный
+-- срок от смены статуса. Полученный заказ не сверяется: возврат приходит событием магазина.
 ALTER TABLE checkout_groups ADD COLUMN reconcile_until timestamptz;
 
 UPDATE checkout_groups
-SET reconcile_until = '9999-12-31T00:00:00Z'
+SET reconcile_until = NULLIF(order_progress->>'AwaitingSince', '0001-01-01T00:00:00Z')::timestamptz
+  + interval '1440 hours'
 WHERE order_progress->>'Abandoned' IS DISTINCT FROM 'true'
   AND COALESCE(order_progress->>'OrderID', '') <> ''
   AND (CASE

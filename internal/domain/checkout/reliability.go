@@ -20,17 +20,10 @@ const (
 	OrderRetryCap = 10 * time.Minute
 	// OrderSlowPoll — сверка магазина, который долго не отвечает.
 	OrderSlowPoll = 30 * time.Minute
-	// ReconcileDeliveredFor — сколько полученный заказ остаётся в страховочной сверке:
-	// возврат позже этого срока площадка узнаёт только из события магазина.
-	ReconcileDeliveredFor = 30 * 24 * time.Hour
 	// ReconcileInFlightFor — сколько заказ сверяется, не меняя статуса: дольше исполняемый заказ —
 	// забота оператора, а не ежесуточного запроса магазину.
 	ReconcileInFlightFor = 60 * 24 * time.Hour
 )
-
-// reconcileOpen — срок сверки заказа без времени статуса (сохранён до появления сверки):
-// первое же изменение статуса ограничит его.
-var reconcileOpen = time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
 
 // RecheckDelivery заменяет расчёты до первого заказа. Изменение платы возвращает покупку к подтверждению.
 func (c *Checkout) RecheckDelivery(quotes map[ids.TenantID]delivery.Quote, now time.Time) (bool, error) {
@@ -99,22 +92,23 @@ func (g Group) PollDue(now time.Time) bool {
 
 // ReconcileUntil — до какого времени заказ участвует в суточной сверке пачкой; ноль — не участвует.
 // Срок считается от последней смены статуса: набор сверки растёт с числом живых заказов,
-// а не с возрастом площадки. Полученный заказ сверяется ради возврата.
+// а не с возрастом площадки. Полученный заказ не сверяется: возврат приходит событием магазина
+// (решение владельца 2026-11-22).
 func (g Group) ReconcileUntil() time.Time {
 	if g.OrderID == "" || g.Abandoned {
 		return time.Time{}
 	}
 	switch g.EffectiveStatus() {
 	case GroupPaid, GroupAssembled, GroupShipped, GroupAwaitingPickup:
-		if g.OrderStatusAt.IsZero() {
-			return reconcileOpen
+		since := g.OrderStatusAt
+		if since.IsZero() {
+			// Статус сохранён без времени (до сверки или отказом отмены): срок — от создания заказа.
+			since = g.AwaitingSince
 		}
-		return g.OrderStatusAt.Add(ReconcileInFlightFor)
-	case GroupDelivered:
-		if g.OrderStatusAt.IsZero() {
+		if since.IsZero() {
 			return time.Time{}
 		}
-		return g.OrderStatusAt.Add(ReconcileDeliveredFor)
+		return since.Add(ReconcileInFlightFor)
 	}
 	return time.Time{}
 }

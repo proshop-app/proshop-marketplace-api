@@ -35,6 +35,7 @@ func TestOrderReconciliationBackfillMatchesDomain(t *testing.T) {
 	cases := []checkout.Group{
 		{Status: checkout.GroupAwaitingPayment, OrderID: "order", NextPollAt: at(20)},
 		{Status: checkout.GroupPaid, OrderID: "order", NextPollAt: at(20)},
+		{Status: checkout.GroupPaid, OrderID: "order", NextPollAt: at(20), AwaitingSince: at(5)},
 		{Status: checkout.GroupShipped, OrderID: "order", NextPollAt: at(20)},
 		{Status: checkout.GroupDelivered, OrderID: "order", NextPollAt: at(20)},
 		{Status: checkout.GroupReturned, OrderID: "order", NextPollAt: at(20)},
@@ -138,22 +139,22 @@ func TestReconcileDueWalksShopsWithoutPurchaseSnapshots(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	page(checkout.ReconcileCursor{}, now, 3)
-	if len(entries) != 3 || entries[0].TenantID != "t1" || entries[1].TenantID != "t1" ||
-		entries[2].TenantID != "t1" || entries[1].Status != checkout.GroupAssembled || entries[1].Revision != 5 ||
+	page(checkout.ReconcileCursor{}, now, 2)
+	if len(entries) != 2 || entries[0].TenantID != "t1" || entries[1].TenantID != "t1" ||
+		entries[1].Status != checkout.GroupAssembled || entries[1].Revision != 5 ||
 		entries[1].OrderID != "o-1-t1" || entries[1].CheckoutID != purchases[1].ID() {
 		t.Fatalf("заказы одного магазина идут подряд: %+v", entries)
 	}
-	last := entries[2]
-	page(checkout.ReconcileCursor{TenantID: last.TenantID, CheckoutID: last.CheckoutID}, now, 3)
+	last := entries[1]
+	page(checkout.ReconcileCursor{TenantID: last.TenantID, CheckoutID: last.CheckoutID}, now, 2)
 	if len(entries) != 1 || entries[0].TenantID != "t2" || entries[0].Status != checkout.GroupShipped {
-		t.Fatalf("продолжение обхода без возвращённого заказа: %+v", entries)
+		t.Fatalf("продолжение обхода без возвращённого и полученного: %+v", entries)
 	}
 
-	later := now.Add(checkout.ReconcileDeliveredFor + time.Minute)
+	later := now.Add(checkout.ReconcileInFlightFor + time.Minute)
 	page(checkout.ReconcileCursor{}, later, 10)
-	if len(entries) != 3 {
-		t.Fatalf("полученный заказ после срока в сверку не входит: %+v", entries)
+	if len(entries) != 0 {
+		t.Fatalf("заказ без движения после срока в сверку не входит: %+v", entries)
 	}
 	err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 		return tx.Checkouts().ExpireReconciliation(ctx, later)
@@ -162,8 +163,8 @@ func TestReconcileDueWalksShopsWithoutPurchaseSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	var until *time.Time
-	delivered := string(purchases[3].ID())
-	if err := pool.QueryRow(ctx, selectReconcileUntil, delivered, "t1").Scan(&until); err != nil || until != nil {
+	stuck := string(purchases[0].ID())
+	if err := pool.QueryRow(ctx, selectReconcileUntil, stuck, "t1").Scan(&until); err != nil || until != nil {
 		t.Fatalf("истёкший срок снят из индекса сверки: %v %v", until, err)
 	}
 }

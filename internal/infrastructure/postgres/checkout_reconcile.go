@@ -71,7 +71,7 @@ func (r *Checkouts) ReconcileDue(
 	return entries, rows.Err()
 }
 
-// ExpireReconciliation снимает со сверки полученные заказы, срок сверки которых прошёл.
+// ExpireReconciliation снимает со сверки заказы, которые не двигаются дольше срока сверки.
 func (r *Checkouts) ExpireReconciliation(ctx context.Context, now time.Time) error {
 	if _, err := execSQL(ctx, r.db, expireReconciliation, now); err != nil {
 		return fmt.Errorf("срок сверки заказов: %w", err)

@@ -188,8 +188,8 @@ func TestOrderStateFollowsShopRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := c.Groups()[0]
-	if !g.ReconcileUntil().Equal(delivered.Add(checkout.ReconcileDeliveredFor)) || g.OrderRevision != 11 {
-		t.Fatal(g.ReconcileUntil(), g.OrderRevision)
+	if !g.ReconcileUntil().IsZero() || g.OrderRevision != 11 {
+		t.Fatal("полученный заказ не сверяется", g.ReconcileUntil(), g.OrderRevision)
 	}
 	if _, err := apply(checkout.GroupReturned, 12, delivered); err != nil {
 		t.Fatal(err)

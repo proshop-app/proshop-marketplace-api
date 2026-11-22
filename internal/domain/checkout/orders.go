@@ -215,7 +215,7 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	g.NextPollAt = next
 	g.PollFailures = 0
 	g.LastErrorCode = ""
-	if g.LastOrderStatus != order.Status {
+	if g.LastOrderStatus != order.Status || g.OrderStatusAt.IsZero() {
 		g.OrderStatusAt = now
 	}
 	g.LastOrderStatus, g.OrderRevision = order.Status, order.Revision

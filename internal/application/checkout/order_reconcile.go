@@ -49,7 +49,7 @@ type reconcileRun struct {
 	result ReconcileResult
 }
 
-// ReconcileOrders — страховка событий: раз в сутки сверяет статусы исполняемых и недавно полученных
+// ReconcileOrders — страховка событий: раз в сутки сверяет статусы исполняемых
 // заказов одним запросом на страницу заказов магазина. Расхождение исправляется и считается.
 func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) {
 	now := s.clock.Now()

@@ -258,7 +258,7 @@ func TestReconcileIsolatesUnavailableShop(t *testing.T) {
 	}
 }
 
-func TestReconcileKeepsDeliveredOrderForLimitedTime(t *testing.T) {
+func TestDeliveredOrderLeavesReconcileAndReturnComesByEvent(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	state := paidPurchase(t, e)
@@ -268,17 +268,19 @@ func TestReconcileKeepsDeliveredOrderForLimitedTime(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	e.clock.Advance(checkout.ReconcileDeliveredFor - time.Hour)
-	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupReturned, "")
 	result, err := e.service.ReconcileOrders(ctx)
-	if err != nil || result.Checked != 2 || result.Mismatched != 1 {
-		t.Fatalf("возврат в срок сверки: %+v %v", result, err)
+	if err != nil || result.Checked != 0 {
+		t.Fatalf("полученный заказ не сверяется: %+v %v", result, err)
+	}
+	first := state.Groups[0]
+	if calls := e.platform.StatusCalls(first.TenantID); len(calls) != 0 {
+		t.Fatalf("по полученным заказам магазин не спрашивается: %v", calls)
+	}
+	e.platform.SetOrderStatus(first.OrderID, checkout.GroupReturned, "")
+	if err := announceOrder(ctx, e, first.TenantID, state.ID, first.OrderID); err != nil {
+		t.Fatal(err)
 	}
 	if groupStatuses(t, e, state.ID)[0] != checkout.GroupReturned {
-		t.Fatal("возврат после получения найден сверкой")
-	}
-	e.clock.Advance(2 * time.Hour)
-	if result, err = e.service.ReconcileOrders(ctx); err != nil || result.Checked != 0 {
-		t.Fatalf("после срока полученный заказ не сверяется: %+v %v", result, err)
+		t.Fatal("возврат после получения приходит событием магазина")
 	}
 }
