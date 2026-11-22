@@ -216,7 +216,7 @@ func TestSearchAndClickUseWarmBuyerMapping(t *testing.T) {
 	store := &feedbackUnitOfWork{UnitOfWork: fake.NewStore()}
 	tokens := appidentity.NewTokens(hub, identitycache.NewMappings(source, clock), nil, nil, nil, clock, time.Minute)
 	auth := appbuyer.NewAuth(store, nil, tokens, nil, nil, clock, appbuyer.AuthConfig{})
-	e := newFeedbackHTTPWithAuth(t, true, store, auth, clock)
+	e := newFeedbackHTTPWithAuth(t, true, fake.NewStore(), auth, clock)
 	assertObservation(t, e.send(http.MethodGet, search, "", token, "", ""), feedbackReceipt, "private, no-store")
 	if e.index.Query.BuyerKey != e.key || source.finds != 1 || store.calls != 0 {
 		t.Fatalf("прогрев: псевдоним %q, Find %d, транзакций %d", e.index.Query.BuyerKey, source.finds, store.calls)
