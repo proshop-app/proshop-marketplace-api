@@ -40,8 +40,7 @@ func (h *catalogHandlers) listIDs(w http.ResponseWriter, r *http.Request) {
 		annotateDelivery(&item, r)
 		body.Items = append(body.Items, item)
 	}
-	w.Header().Set("Cache-Control", publicCatalogCacheControl)
-	writeJSON(w, http.StatusOK, body)
+	writeOfferPage(w, body)
 }
 
 func parseOfferIDs(values url.Values) ([]ids.OfferID, error) {

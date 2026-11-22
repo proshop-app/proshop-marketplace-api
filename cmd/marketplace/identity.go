@@ -9,6 +9,7 @@ import (
 	"time"
 
 	appidentity "github.com/proshop-app/proshop-marketplace/internal/application/identity"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/identityhub"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
@@ -16,7 +17,24 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 )
 
-func (s *server) identityTokens(clientID, secret, realm string, ttl time.Duration) (*appidentity.Tokens, error) {
+const (
+	buyerRealm    = "marketplace"
+	operatorRealm = "platform"
+)
+
+func (s *server) identityIssuer(realm string) string {
+	return s.cfg.Identity.URL + "/realms/" + realm
+}
+
+func (s *server) identityMappings(realm, clientID string) ports.IdentityMappings {
+	return postgres.NewIdentityMappings(s.store.pool, s.identityIssuer(realm), clientID)
+}
+
+func (s *server) identityTokens(
+	clientID, secret, realm string,
+	ttl time.Duration,
+	mappings ports.IdentityMappings,
+) (*appidentity.Tokens, error) {
 	cfg := s.cfg.Identity
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if cfg.CAFile != "" {
@@ -46,7 +64,7 @@ func (s *server) identityTokens(clientID, secret, realm string, ttl time.Duratio
 		Transport: transport,
 		Timeout:   cfg.Timeout,
 	})
-	issuer := cfg.URL + "/realms/" + realm
+	issuer := s.identityIssuer(realm)
 	cipher, err := identityhub.NewCipher(cfg.EncryptionKey, issuer+":"+clientID)
 	if err != nil {
 		return nil, fmt.Errorf("ключ шифрования refresh некорректен")
@@ -54,7 +72,7 @@ func (s *server) identityTokens(clientID, secret, realm string, ttl time.Duratio
 
 	return appidentity.NewTokens(
 		hub,
-		postgres.NewIdentityMappings(s.store.pool, issuer, clientID),
+		mappings,
 		redis.NewIdentityRefreshes(s.cache, keyPrefix+clientID+":"),
 		cipher,
 		random.IDs{},

@@ -66,7 +66,7 @@ func TestOrderReconciliationBackfillMatchesDomain(t *testing.T) {
 		if _, err := pool.Exec(ctx, seedAllReconcileProgress, raw, at(20)); err != nil {
 			t.Fatal(err)
 		}
-		if err := migrateUpTo(ctx, pool, 67); err != nil {
+		if err := migrateUpTo(ctx, pool, 68); err != nil {
 			t.Fatal(err)
 		}
 		var until, work *time.Time

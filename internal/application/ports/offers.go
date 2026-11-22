@@ -62,6 +62,7 @@ type OfferStates interface {
 
 // OfferDocument — предложение в индексе поиска. Суммы — в копейках.
 type OfferDocument struct {
+	SalesTier            uint8
 	TileKey              string
 	OnlyVariant          bool
 	AttributeFacetValues map[string][]string
@@ -126,6 +127,8 @@ type OfferQuery struct {
 	// Exact запрещает исправления опечаток, раскладки и транслита, сохраняя остальные правила поиска.
 	Exact       bool
 	TrackQuery  bool
+	Observe     bool
+	BuyerKey    string
 	GroupID     string
 	InStockSet  bool
 	Attributes  map[string]AttributeFilter
@@ -146,6 +149,7 @@ type OfferQuery struct {
 // OfferPage — страница выдачи.
 type OfferPage struct {
 	Correction *OfferCorrection
+	Receipt    string
 	Facets     []Facet
 	Total      int
 	Items      []OfferDocument

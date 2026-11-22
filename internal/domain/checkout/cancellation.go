@@ -69,6 +69,9 @@ func (c *Checkout) BlockCancellation(
 		g.Status = g.EffectiveStatus()
 		g.Abandoned = true
 	}
+	if g.AwaitingSince.IsZero() {
+		g.AwaitingSince = now
+	}
 	g.OrderID, g.LastOrderStatus = orderID, status
 	if g.Status == GroupCreationExpired {
 		observed := Group{Status: status}

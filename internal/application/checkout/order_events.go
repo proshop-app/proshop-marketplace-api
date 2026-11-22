@@ -28,14 +28,17 @@ var ErrOrderEventRejected = errs.New(
 
 // ApplyOrderEvent применяет состояние заказа вместе с отметкой события: повтор доставки ничего не меняет.
 func (s *Service) ApplyOrderEvent(ctx context.Context, event OrderEvent) error {
-	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	var purchases []ports.NewTask
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		fresh, err := tx.Inbox().MarkProcessed(ctx, event.EventID, s.clock.Now())
 		if err != nil || !fresh {
 			return err
 		}
-		_, err = s.applyOrderState(ctx, tx, event.CheckoutID, event.TenantID, event.Order)
+		_, err = s.applyOrderState(ctx, tx, event.CheckoutID, event.TenantID, event.Order, &purchases)
 		return err
 	})
+	s.enqueueSearchPurchases(ctx, purchases)
+	return err
 }
 
 // applyOrderState сохраняет состояние заказа из события или сверки и сообщает, изменилась ли покупка.
@@ -47,6 +50,7 @@ func (s *Service) applyOrderState(
 	checkoutID ids.UUID,
 	tenant ids.TenantID,
 	order checkout.SellerOrder,
+	purchases *[]ports.NewTask,
 ) (bool, error) {
 	c, err := tx.Checkouts().Get(ctx, checkoutID)
 	if err != nil {
@@ -61,6 +65,7 @@ func (s *Service) applyOrderState(
 		return false, err
 	}
 	s.observeTransitions(tx, previous, c.State())
+	s.collectSearchPurchases(ctx, tx, previous, c.State(), purchases)
 	return true, nil
 }
 

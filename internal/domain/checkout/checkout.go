@@ -87,7 +87,7 @@ type Group struct {
 	DeliveryPrice    money.Money
 	Reason           string
 	NextPollAt       time.Time
-	AwaitingSince    time.Time
+	AwaitingSince    time.Time // Первое сохранённое подтверждение существования заказа.
 	CartReturned     bool
 	CurrentPrices    []PriceChange
 	LastErrorCode    string

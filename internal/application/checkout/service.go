@@ -12,6 +12,7 @@ import (
 
 	appcart "github.com/proshop-app/proshop-marketplace/internal/application/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/application/searchfeedback"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -24,6 +25,7 @@ const updateRetryDelay = 10 * time.Millisecond
 
 // Config — сроки расчётов.
 type Config struct {
+	SearchBuyerKeys *searchfeedback.BuyerKeys
 	// OrderCallTimeout — уже настроенный HTTP-бюджет адаптера; аренда не должна пережидать его.
 	OrderCallTimeout time.Duration
 	// QuoteTTL — дольше этого цена доставки не держится, что бы ни обещал магазин.
@@ -657,7 +659,8 @@ func (s *Service) updateSelection(
 	after func(context.Context, ports.Tx, *checkout.Checkout) error,
 	mutate func(*checkout.Checkout, time.Time) error,
 ) (checkout.State, error) {
-	var state checkout.State
+	var previous, state checkout.State
+	var purchases []ports.NewTask
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Checkouts().Get(ctx, checkoutID)
 		if err != nil {
@@ -666,8 +669,7 @@ func (s *Service) updateSelection(
 		if c.BuyerID() != buyerID {
 			return checkout.ErrNotFound
 		}
-		previous := c.State()
-		before := previous.Version
+		previous = c.State()
 		if err := mutate(c, s.clock.Now()); err != nil {
 			return err
 		}
@@ -677,17 +679,22 @@ func (s *Service) updateSelection(
 				return err
 			}
 		}
-		if c.State().Version != before {
+		state = c.State()
+		if state.Version != previous.Version {
 			if err := tx.Checkouts().Update(ctx, c); err != nil {
 				return err
 			}
 		}
 
-		state = c.State()
 		s.observeTransitions(tx, previous, state)
+		s.collectSearchPurchases(ctx, tx, previous, state, &purchases)
 
 		return nil
 	})
+
+	if err == nil && state.Version != previous.Version {
+		s.enqueueSearchPurchases(ctx, purchases)
+	}
 
 	return state, err
 }

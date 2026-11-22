@@ -17,6 +17,7 @@ type category struct {
 }
 
 type offerDocument struct {
+	SalesTier         uint8                        `json:"salesTier"`
 	TileKey           string                       `json:"tileKey,omitempty"`
 	OnlyVariant       bool                         `json:"onlyVariant,omitempty"`
 	Rating            *catalog.Rating              `json:"rating"`
@@ -63,6 +64,8 @@ type attribute struct {
 type offerQuery struct {
 	Exact       bool                             `json:"exact,omitempty"`
 	TrackQuery  bool                             `json:"trackQuery"`
+	Observe     bool                             `json:"observe,omitempty"`
+	BuyerKey    string                           `json:"buyerKey,omitempty"`
 	GroupID     string                           `json:"groupId,omitempty"`
 	Attributes  map[string]ports.AttributeFilter `json:"attributes"`
 	FacetFields []facetField                     `json:"facetFields"`
@@ -81,6 +84,7 @@ type offerQuery struct {
 
 type offerPage struct {
 	Correction *offerCorrection `json:"correction,omitempty"`
+	Receipt    string           `json:"receipt,omitempty"`
 	Facets     []ports.Facet    `json:"facets"`
 	Total      int              `json:"total"`
 	Items      []offerDocument  `json:"items"`
@@ -92,7 +96,8 @@ type offerCorrection struct {
 }
 
 type offerBatch struct {
-	Offers []offerDocument `json:"offers"`
+	ContractVersion int             `json:"contractVersion"`
+	Offers          []offerDocument `json:"offers"`
 }
 
 type offerIdentity struct {

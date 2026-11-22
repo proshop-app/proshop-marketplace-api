@@ -113,6 +113,7 @@ func (s *Service) reconcileBatch(ctx context.Context, batch reconcileBatch, run 
 	for _, status := range statuses {
 		known[status.OrderID] = status
 	}
+	var purchases []ports.NewTask
 	for _, entry := range batch.entries {
 		status, found := known[entry.OrderID]
 		outcome := ""
@@ -121,13 +122,14 @@ func (s *Service) reconcileBatch(ctx context.Context, batch reconcileBatch, run 
 			outcome = eventStatusMissing
 		case entry.Unreachable, status.Revision > entry.Revision,
 			status.Revision == entry.Revision && status.Status != entry.Status:
-			outcome = s.resolveMismatch(ctx, entry, status)
+			outcome = s.resolveMismatch(ctx, entry, status, &purchases)
 		}
 		run.count(outcome)
 		if outcome != "" && s.observer != nil {
 			s.observer.RecordCheckoutEvent(entry.TenantID, entry.CheckoutID, outcome)
 		}
 	}
+	s.enqueueSearchPurchases(ctx, purchases)
 	return true
 }
 
@@ -138,6 +140,7 @@ func (s *Service) resolveMismatch(
 	ctx context.Context,
 	entry checkout.ReconcileEntry,
 	status checkout.OrderStatus,
+	purchases *[]ports.NewTask,
 ) string {
 	order := checkout.SellerOrder{
 		PaymentHeldUntil: status.PaymentHeldUntil,
@@ -154,7 +157,7 @@ func (s *Service) resolveMismatch(
 	}
 	changed := false
 	if err == nil {
-		changed, err = s.applyReconciled(ctx, entry, order)
+		changed, err = s.applyReconciled(ctx, entry, order, purchases)
 	}
 	if changed {
 		return eventStatusMismatch
@@ -175,11 +178,12 @@ func (s *Service) applyReconciled(
 	ctx context.Context,
 	entry checkout.ReconcileEntry,
 	order checkout.SellerOrder,
+	purchases *[]ports.NewTask,
 ) (bool, error) {
 	var changed bool
 	apply := func(ctx context.Context, tx ports.Tx) error {
 		var err error
-		changed, err = s.applyOrderState(ctx, tx, entry.CheckoutID, entry.TenantID, order)
+		changed, err = s.applyOrderState(ctx, tx, entry.CheckoutID, entry.TenantID, order, purchases)
 		return err
 	}
 	err := s.uow.Do(ctx, apply)

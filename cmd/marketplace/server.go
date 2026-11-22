@@ -28,11 +28,13 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
+	"github.com/proshop-app/proshop-marketplace/internal/application/searchfeedback"
 	appsynonyms "github.com/proshop-app/proshop-marketplace/internal/application/synonyms"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/identitycache"
 	infrakafka "github.com/proshop-app/proshop-marketplace/internal/infrastructure/kafka"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/localgeoip"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/password"
@@ -79,6 +81,9 @@ type services struct {
 	carts             *appcart.Service
 	directory         *appdelivery.Service
 	checkouts         *appcheckout.Service
+	searchFeedback    *searchfeedback.Feedback
+	searchBuyerKeys   *searchfeedback.BuyerKeys
+	searchPurchases   *messaging.Dispatcher
 	dispatcher        *messaging.Dispatcher
 	creation          *appcheckout.Executor
 	janitor           *messaging.Janitor
@@ -148,17 +153,18 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 
 // services собирает сценарии приложения поверх хранилищ и внешних адаптеров.
 func (s *server) services(ctx context.Context) (services, error) {
+	cfg := s.cfg
+	now := clock.System{}
 	tokens, err := s.identityTokens(
-		s.cfg.Identity.ClientID,
-		s.cfg.Identity.Secret,
-		"marketplace",
-		s.cfg.Login.SessionTTL,
+		cfg.Identity.ClientID,
+		cfg.Identity.Secret,
+		buyerRealm,
+		cfg.Login.SessionTTL,
+		identitycache.NewMappings(s.identityMappings(buyerRealm, cfg.Identity.ClientID), now),
 	)
 	if err != nil {
 		return services{}, err
 	}
-	cfg := s.cfg
-	now := clock.System{}
 	identities := random.IDs{}
 	uow := storecache.NewUnitOfWork(
 		postgres.NewUnitOfWork(s.store.pool),
@@ -258,6 +264,18 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 	)
 	carts := appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL)
+	var searchBuyerKeys *searchfeedback.BuyerKeys
+	var feedback *searchfeedback.Feedback
+	var purchases *messaging.Dispatcher
+	if cfg.Search.FeedbackEnabled() {
+		searchBuyerKeys = searchfeedback.NewBuyerKeys(cfg.Search.AnalyticsKey)
+		feedback = searchfeedback.NewFeedback(s.store.index, redis.NewLimiter(s.cache, keyPrefix), searchBuyerKeys)
+		purchases = searchPurchaseDispatcher(postgres.NewTaskQueue(s.store.pool), now, s.store.index)
+	} else {
+		s.logger.Warn(
+			"обратная связь поиска выключена: нужны SEARCH_ANALYTICS_KEY и SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN",
+		)
+	}
 	checkouts := appcheckout.NewService(
 		uow,
 		resyncing,
@@ -266,6 +284,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		identities,
 		now,
 		appcheckout.Config{
+			SearchBuyerKeys:  searchBuyerKeys,
 			OrderCallTimeout: cfg.Platform.Timeout,
 			QuoteTTL:         cfg.Checkout.QuoteTTL,
 			ReturnBaseURL:    cfg.Checkout.ReturnBaseURL,
@@ -289,8 +308,9 @@ func (s *server) services(ctx context.Context) (services, error) {
 		operatorTokens, err = s.identityTokens(
 			cfg.Identity.OperatorClientID,
 			cfg.Identity.OperatorSecret,
-			"platform",
+			operatorRealm,
 			cfg.Operator.SessionTTL,
+			s.identityMappings(operatorRealm, cfg.Identity.OperatorClientID),
 		)
 		if err != nil {
 			return services{}, err
@@ -333,6 +353,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 				appcheckout.TaskExpireCreation,
 				appcheckout.TaskPollOrder,
 				appcheckout.TaskCancelOrder,
+				searchfeedback.TaskPurchase,
 			},
 			Batch:     cfg.Outbox.Batch,
 			PerTenant: cfg.Outbox.PerTenant,
@@ -408,6 +429,9 @@ func (s *server) services(ctx context.Context) (services, error) {
 		carts:             carts,
 		directory:         pickups,
 		checkouts:         checkouts,
+		searchFeedback:    feedback,
+		searchBuyerKeys:   searchBuyerKeys,
+		searchPurchases:   purchases,
 		dispatcher:        dispatcher,
 		creation: appcheckout.NewExecutor(
 			postgres.NewTaskQueue(s.store.pool),
@@ -508,6 +532,9 @@ func (s *server) jobs() []func(context.Context) error {
 		})
 	}
 	outbox := jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics)
+	if s.app.searchPurchases != nil {
+		runners = append(runners, func(ctx context.Context) error { return outbox.RunLane(ctx, s.app.searchPurchases) })
+	}
 	return append(runners, []func(context.Context) error{
 		func(ctx context.Context) error {
 			return jobs.RunTaxonomyRevalidation(ctx, s.app.taxonomy, s.logger)
@@ -576,20 +603,22 @@ func (s *server) httpServer() *http.Server {
 		Features:               s.app.buyerFeatures,
 		Cities:                 s.app.cities,
 
-		Promotion:      s.app.promotion,
-		ServerAPIToken: cfg.Promotion.ServerAPIToken,
-		Moderation:     s.app.moderation,
-		Taxonomy:       s.app.taxonomy,
-		Catalog:        s.app.queries,
-		SellersCounts:  postgres.NewSellersCounts(s.store.pool),
-		Participants:   s.app.participants,
-		Auth:           s.app.auth,
-		Carts:          s.app.carts,
-		Directory:      s.app.directory,
-		Checkouts:      s.app.checkouts,
-		Reference:      s.app.reference,
-		Synonyms:       s.app.synonyms,
-		OperatorToken:  cfg.Operator.Token,
+		Promotion:       s.app.promotion,
+		ServerAPIToken:  cfg.Promotion.ServerAPIToken,
+		Moderation:      s.app.moderation,
+		Taxonomy:        s.app.taxonomy,
+		Catalog:         s.app.queries,
+		SearchFeedback:  s.app.searchFeedback,
+		SearchBuyerKeys: s.app.searchBuyerKeys,
+		SellersCounts:   postgres.NewSellersCounts(s.store.pool),
+		Participants:    s.app.participants,
+		Auth:            s.app.auth,
+		Carts:           s.app.carts,
+		Directory:       s.app.directory,
+		Checkouts:       s.app.checkouts,
+		Reference:       s.app.reference,
+		Synonyms:        s.app.synonyms,
+		OperatorToken:   cfg.Operator.Token,
 		// потребители реестра читают своим токеном, мутации — только у оператора
 		ReferenceReadToken: cfg.Reference.ReadToken,
 		OperatorAuth:       s.app.operatorAuth,

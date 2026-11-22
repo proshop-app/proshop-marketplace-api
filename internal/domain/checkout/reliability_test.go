@@ -108,6 +108,11 @@ func TestPaidOrderLeavesPollingForEventsAndReconciliation(t *testing.T) {
 	if g := c.Groups()[0]; g.PollDue(t0) || !g.ReconcileUntil().IsZero() {
 		t.Fatal("неоплаченный заказ ждёт срока и не входит в суточную сверку")
 	}
+	pending := c.Groups()[0]
+	pending.PaymentPending = true
+	if !pending.ReconcileUntil().IsZero() {
+		t.Fatal("неизвестный исход оплаты не входит в суточную сверку")
+	}
 	order.Status, order.Revision = checkout.GroupPaid, 2
 	if changed, err := c.ApplyOrderState("t1", order, t0); err != nil || !changed {
 		t.Fatal(changed, err)

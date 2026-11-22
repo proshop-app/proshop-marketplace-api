@@ -24,7 +24,13 @@ const (
 
 	purgeDoneTasks = `
 		DELETE FROM outbox
-		WHERE id IN (SELECT id FROM outbox WHERE done_at < $1 LIMIT $2)`
+		WHERE id IN (
+			(SELECT id FROM outbox WHERE kind = 'search.purchase' AND failed_at < $1
+			 ORDER BY failed_at, id LIMIT $2)
+			UNION ALL
+			(SELECT id FROM outbox WHERE done_at < $1 LIMIT $2)
+			LIMIT $2
+		) AND (done_at < $1 OR (kind = 'search.purchase' AND failed_at < $1))`
 
 	purgeParkedEvents = `
 		DELETE FROM parked_events
