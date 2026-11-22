@@ -59,6 +59,12 @@ func NewRouter(projections Projections, registry Registry) *Router {
 	return r
 }
 
+// WithOrders подключает приём статусов заказов; без него роутер разбирает только каталог и реестр.
+func (r *Router) WithOrders(orders Orders) *Router {
+	r.handlers[TopicOrderStatusChanged] = bind(orders, orderStatusChanged)
+	return r
+}
+
 // bind привязывает обработчик к сценарию, который он вызывает.
 func bind[T any](target T, fn func(ctx context.Context, target T, envelope Envelope) error) handler {
 	return func(ctx context.Context, envelope Envelope) error {

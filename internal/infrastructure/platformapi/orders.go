@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -17,14 +16,35 @@ import (
 )
 
 type sellerOrderJSON struct {
-	Carrier         string               `json:"carrier"`
-	PickupPointCode string               `json:"pickupPointCode"`
-	Tracking        *trackingJSON        `json:"tracking"`
-	OrderID         string               `json:"orderId"`
-	ExpiresAt       time.Time            `json:"expiresAt"`
-	Total           *int64               `json:"total"`
-	Status          checkout.GroupStatus `json:"status"`
-	Reason          string               `json:"reason"`
+	PaymentHeldUntil time.Time               `json:"paymentHeldUntil"`
+	Carrier          string                  `json:"carrier"`
+	PickupPointCode  string                  `json:"pickupPointCode"`
+	Tracking         *trackingJSON           `json:"tracking"`
+	OrderID          string                  `json:"orderId"`
+	ExpiresAt        time.Time               `json:"expiresAt"`
+	Total            *int64                  `json:"total"`
+	Status           checkout.GroupStatus    `json:"status"`
+	Reason           string                  `json:"reason"`
+	Revision         int64                   `json:"revision"`
+	Number           string                  `json:"number"`
+	Steps            []checkout.OrderStep    `json:"steps"`
+	ReturnRequest    *checkout.ReturnRequest `json:"returnRequest"`
+}
+
+type orderStatusesJSON struct {
+	Items []orderStatusJSON `json:"items"`
+}
+
+type orderStatusJSON struct {
+	PaymentHeldUntil time.Time               `json:"paymentHeldUntil"`
+	OrderID          string                  `json:"orderId"`
+	Number           string                  `json:"number"`
+	Steps            []checkout.OrderStep    `json:"steps"`
+	ReturnRequest    *checkout.ReturnRequest `json:"returnRequest"`
+	Status           checkout.GroupStatus    `json:"status"`
+	Reason           string                  `json:"reason"`
+	Tracking         *trackingJSON           `json:"tracking"`
+	Revision         int64                   `json:"revision"`
 }
 
 // CreateOrder создаёт заказ магазина без открытия кассы по ключу покупки и группы.
@@ -63,33 +83,69 @@ func (c *Client) GetOrder(ctx context.Context, tenant ids.TenantID, id string) (
 	return order, err
 }
 
+// OrderStatuses читает статусы заказов магазина одним запросом; неизвестного магазину заказа в ответе нет.
+func (c *Client) OrderStatuses(
+	ctx context.Context,
+	tenant ids.TenantID,
+	orderIDs []string,
+) ([]checkout.OrderStatus, error) {
+	var answer orderStatusesJSON
+	body := map[string][]string{"orderIds": orderIDs}
+	if err := c.call(ctx, http.MethodPost, tenant, "/orders/statuses", body, &answer); err != nil {
+		return nil, err
+	}
+	statuses := make([]checkout.OrderStatus, 0, len(answer.Items))
+	for _, item := range answer.Items {
+		if item.OrderID == "" || item.Revision < 0 {
+			return nil, ErrInvalidResponse
+		}
+		// Заказ со статусом вне словаря остаётся для сверки неизвестным: остальные заказы магазина сверяются.
+		if !checkout.ShopOrderStatus(item.Status) {
+			slog.Warn(
+				"неизвестный статус заказа магазина",
+				slog.String("tenantId", string(tenant)),
+				slog.String("status", string(item.Status)),
+			)
+			continue
+		}
+		statuses = append(statuses, checkout.OrderStatus{
+			PaymentHeldUntil: item.PaymentHeldUntil,
+			OrderID:          item.OrderID,
+			Number:           item.Number,
+			Steps:            item.Steps,
+			ReturnRequest:    item.ReturnRequest,
+			Status:           item.Status,
+			Reason:           item.Reason,
+			Tracking:         item.Tracking.domain(),
+			Revision:         item.Revision,
+		})
+	}
+	return statuses, nil
+}
+
 func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
-	switch a.Status {
-	case checkout.GroupAwaitingPayment, checkout.GroupPaid, checkout.GroupCancelled,
-		checkout.GroupShipped, checkout.GroupDelivered, checkout.GroupReturned:
-	default:
+	if !checkout.ShopOrderStatus(a.Status) {
 		return checkout.SellerOrder{}, ports.ErrInvalidOrderStatus
 	}
-	if a.OrderID == "" || (a.Status == checkout.GroupCancelled && a.Reason == "") {
+	if a.OrderID == "" || a.Revision < 0 || (a.Status == checkout.GroupCancelled && a.Reason == "") {
 		return checkout.SellerOrder{}, ErrInvalidResponse
 	}
 	if creating && (a.Total == nil || *a.Total < 0 || a.ExpiresAt.IsZero()) {
 		return checkout.SellerOrder{}, ErrInvalidResponse
 	}
-	if a.Tracking != nil && (strings.TrimSpace(a.Tracking.Carrier) == "" || !checkout.ValidURL(a.Tracking.URL)) {
-		a.Tracking = nil
-	}
-	if a.Tracking != nil && a.Tracking.Number != nil && strings.TrimSpace(*a.Tracking.Number) == "" {
-		a.Tracking.Number = nil
-	}
 	order := checkout.SellerOrder{
-		Carrier:         delivery.Carrier(a.Carrier),
-		PickupPointCode: a.PickupPointCode,
-		OrderID:         a.OrderID,
-		ExpiresAt:       a.ExpiresAt,
-		Status:          a.Status,
-		Reason:          a.Reason,
-		Tracking:        a.Tracking.domain(),
+		Carrier:          delivery.Carrier(a.Carrier),
+		PickupPointCode:  a.PickupPointCode,
+		OrderID:          a.OrderID,
+		ExpiresAt:        a.ExpiresAt,
+		PaymentHeldUntil: a.PaymentHeldUntil,
+		Status:           a.Status,
+		Reason:           a.Reason,
+		Revision:         a.Revision,
+		Number:           a.Number,
+		Steps:            a.Steps,
+		ReturnRequest:    a.ReturnRequest,
+		Tracking:         a.Tracking.domain(),
 	}
 	if a.Total != nil {
 		order.Total = money.FromKopecks(*a.Total)

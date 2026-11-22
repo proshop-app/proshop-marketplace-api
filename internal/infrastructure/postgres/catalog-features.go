@@ -21,12 +21,15 @@ const (
 			WHERE c.buyer_id = $1 AND c.expires_at > now()
 			UNION
 			SELECT g.tenant_id, line->>'productId',
-				(g.order_progress->>'Status' IN ('paid', 'shipped', 'delivered'))
+				(g.order_progress->>'Status' IN (
+					'paid', 'assembled', 'shipped', 'awaiting_pickup', 'delivered'
+				))
 			FROM checkouts c JOIN checkout_groups g ON g.checkout_id = c.id,
 				jsonb_array_elements(g.lines) line
 			WHERE c.buyer_id = $1
 				AND g.order_progress->>'Status' IN (
-					'paid', 'shipped', 'delivered', 'awaiting_payment', 'creating_order'
+					'paid', 'assembled', 'shipped', 'awaiting_pickup', 'delivered',
+					'awaiting_payment', 'creating_order'
 				)
 		)
 		SELECT DISTINCT COALESCE(p.category_id, ''),

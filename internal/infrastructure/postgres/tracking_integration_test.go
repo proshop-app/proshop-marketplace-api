@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -40,6 +39,7 @@ func TestPollTrackingPersistsOutsideOrderProgress(t *testing.T) {
 			ExternalCheckoutID: string(buyerB) + ":t1",
 			Status:             checkout.GroupAwaitingPayment,
 			OrderID:            "o1",
+			ExpiresAt:          at(0),
 			Goods:              money.FromKopecks(100),
 			Lines: []checkout.Line{{
 				Offer:    ids.OfferID{Tenant: "t1", Product: "p1"},
@@ -58,14 +58,14 @@ func TestPollTrackingPersistsOutsideOrderProgress(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		claimed, err := loaded.ClaimPoll("t1", "poll", at(1))
+		claimed, err := loaded.ClaimPoll("t1", "poll", at(0).Add(checkout.PaymentExpiryGrace))
 		if err != nil {
 			return fmt.Errorf("захват опроса: %w", err)
 		}
 		if !claimed {
 			return errors.New("опрос не захвачен")
 		}
-		_, err = loaded.CompletePoll(
+		changed, err := loaded.CompletePoll(
 			"t1",
 			"poll",
 			checkout.SellerOrder{
@@ -73,11 +73,13 @@ func TestPollTrackingPersistsOutsideOrderProgress(t *testing.T) {
 				Status:   checkout.GroupShipped,
 				Tracking: &checkout.Tracking{Carrier: "carrier", Number: nil, URL: "https://example.test/123"},
 			},
-			at(1).Add(time.Minute),
-			at(1),
+			at(0).Add(checkout.PaymentExpiryGrace),
 		)
 		if err != nil {
 			return err
+		}
+		if !changed {
+			return errors.New("ответ опроса не применён")
 		}
 		return tx.Checkouts().Update(ctx, loaded)
 	}); err != nil {

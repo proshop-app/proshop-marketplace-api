@@ -44,6 +44,9 @@ func TestUnknownPaymentCanBeConfirmedAfterShopCancellation(t *testing.T) {
 	)
 	firstPay := payer.ConfirmPayment(ctx, buyerID, state.ID)
 	e.platform.SetOrderStatus(state.Groups[2].OrderID, checkout.GroupCancelled, "shop_cancelled")
+	if err := announceOrder(ctx, e, state.Groups[2].TenantID, state.ID, state.Groups[2].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	for range 2 {
 		e.clock.Advance(time.Minute)
 		if err := resumeAndExecute(ctx, e); err != nil {
@@ -108,6 +111,9 @@ func TestUnknownPaymentWithoutPaidGroupsCanConfirmNewComposition(t *testing.T) {
 	)
 	firstPay := payer.ConfirmPayment(ctx, buyerID, purchase.ID)
 	e.platform.SetOrderStatus(created.Groups[1].OrderID, checkout.GroupCancelled, "shop_cancelled")
+	if err := announceOrder(ctx, e, created.Groups[1].TenantID, created.ID, created.Groups[1].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	for range 2 {
 		e.clock.Advance(time.Minute)
 		if err := resumeAndExecute(ctx, e); err != nil {
@@ -180,6 +186,9 @@ func TestRefusedPaymentWithoutPaidGroupsCanConfirmNewComposition(t *testing.T) {
 	upstream := &refusePaymentAfterObservation{PlatformAPI: e.platform}
 	upstream.during = func() {
 		e.platform.SetOrderStatus(created.Groups[1].OrderID, checkout.GroupCancelled, "shop_cancelled")
+		if err := announceOrder(ctx, e, created.Groups[1].TenantID, created.ID, created.Groups[1].OrderID); err != nil {
+			t.Fatal(err)
+		}
 		e.clock.Advance(time.Minute)
 		_ = resumeAndExecute(ctx, e)
 	}

@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -79,16 +80,21 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 				PickupPointCode: "P1",
 				OrderID:         "o1",
 				Total:           money.FromKopecks(10000),
-				ExpiresAt:       at(60),
+				ExpiresAt:       at(0).Add(checkout.PaymentWindow),
 			},
 			now,
 		)
 		if err != nil {
 			return err
 		}
+		now = loaded.Groups()[0].PaymentDeadline().Add(checkout.PaymentExpiryGrace)
 		for range checkout.MaxOrderFailures {
-			if _, err := loaded.ClaimPoll("t1", "poll", now); err != nil {
+			claimed, err := loaded.ClaimPoll("t1", "poll", now)
+			if err != nil {
 				return err
+			}
+			if !claimed {
+				return errors.New("опрос не захвачен")
 			}
 			if _, err := loaded.FailPoll("t1", "poll", "invalid_status", now); err != nil {
 				return err
@@ -119,7 +125,6 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 				Status:          checkout.GroupCancelled,
 				Reason:          "payment_expired",
 			},
-			now,
 			now,
 		); err != nil {
 			return err

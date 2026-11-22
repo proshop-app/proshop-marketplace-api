@@ -41,6 +41,7 @@ type Config struct {
 
 // Service — покупка покупателя.
 type Service struct {
+	actions  ports.RateLimiter
 	observer ports.CheckoutObserver
 	carts    ports.CartVerifier
 	uow      ports.UnitOfWork
@@ -659,6 +660,7 @@ func (s *Service) updateSelection(
 	mutate func(*checkout.Checkout, time.Time) error,
 ) (checkout.State, error) {
 	var previous, state checkout.State
+	var purchases []ports.NewTask
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		c, err := tx.Checkouts().Get(ctx, checkoutID)
 		if err != nil {
@@ -685,12 +687,13 @@ func (s *Service) updateSelection(
 		}
 
 		s.observeTransitions(tx, previous, state)
+		s.collectSearchPurchases(ctx, tx, previous, state, &purchases)
 
 		return nil
 	})
 
 	if err == nil && state.Version != previous.Version {
-		s.enqueueSearchPurchases(ctx, previous, state)
+		s.enqueueSearchPurchases(ctx, purchases)
 	}
 
 	return state, err

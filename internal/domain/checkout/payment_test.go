@@ -21,7 +21,7 @@ func TestWholePaymentAndRepeat(t *testing.T) {
 		attach(t, c, 1)
 		if partial {
 			first.Status = checkout.GroupPaid
-			if _, err := c.Observe("t1", first, t0, t0); err != nil {
+			if _, err := c.Observe("t1", first, t0); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -42,7 +42,7 @@ func TestWholePaymentAndRepeat(t *testing.T) {
 			t.Fatal("повтор изменил покупку", err)
 		}
 		first.Status = checkout.GroupAwaitingPayment
-		if _, err := c.Observe("t1", first, t0, t0); !errors.Is(err, checkout.ErrTransition) {
+		if _, err := c.Observe("t1", first, t0); !errors.Is(err, checkout.ErrTransition) {
 			t.Fatal("опрос откатил оплату", err)
 		}
 	}
@@ -56,7 +56,7 @@ func TestPaymentInvalidatesInFlightPoll(t *testing.T) {
 	first := attach(t, c, 0)
 	second := attach(t, c, 1)
 	second.Status, second.Reason = checkout.GroupCancelled, "cancelled"
-	if _, err := c.Observe("t2", second, t0, t0); err != nil {
+	if _, err := c.Observe("t2", second, t0); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Confirm(t0); err != nil {
@@ -65,19 +65,23 @@ func TestPaymentInvalidatesInFlightPoll(t *testing.T) {
 	if _, err := c.BeginOrders(contact, t0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.ClaimPoll("t1", "old-poll", t0); err != nil {
+	if err := c.ClaimPayment("payment", c.PaymentOrders(), t0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Pay(t0); err != nil {
+	now := t0.Add(checkout.PaymentOutcomeDelay)
+	if claimed, err := c.ClaimPoll("t1", "old-poll", now); err != nil || !claimed {
 		t.Fatal(err)
 	}
-	if changed, err := c.CompletePoll("t1", "old-poll", first, t0, t0); err != nil || changed {
+	if _, err := c.Pay(now); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := c.CompletePoll("t1", "old-poll", first, now); err != nil || changed {
 		t.Fatal("поздний ответ изменил оплату", err)
 	}
 	if c.Groups()[0].Status != checkout.GroupPaid || c.Groups()[1].Status != checkout.GroupCancelled {
 		t.Fatal(c.State())
 	}
-	if changed, err := c.Pay(t0); err != nil || changed {
+	if changed, err := c.Pay(now); err != nil || changed {
 		t.Fatal("повтор с отменённой группой", err)
 	}
 }
@@ -111,7 +115,7 @@ func TestPartialPaymentCompositionNeedsConfirmationAndPreservesPaidOrder(t *test
 	attach(t, c, 1)
 	attach(t, c, 2)
 	first.Status = checkout.GroupPaid
-	if _, err := c.Observe("t1", first, t0, t0); err != nil {
+	if _, err := c.Observe("t1", first, t0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.RemoveGroup("t2", t0); err != nil {

@@ -19,6 +19,23 @@ type Filter struct {
 	WorkDueAt   time.Time
 }
 
+// ReconcileEntry — заказ магазина, статус которого площадка сверяет пачкой.
+type ReconcileEntry struct {
+	CheckoutID ids.UUID
+	TenantID   ids.TenantID
+	OrderID    string
+	Status     GroupStatus
+	Revision   int64
+	// Unreachable — группа показана покупателю как «магазин недоступен»: её возвращает любой ответ сверки.
+	Unreachable bool
+}
+
+// ReconcileCursor — место продолжения обхода сверки: магазин и покупка последней строки.
+type ReconcileCursor struct {
+	TenantID   ids.TenantID
+	CheckoutID ids.UUID
+}
+
 // Repository — покупки.
 type Repository interface {
 	List(context.Context, Filter) ([]*Checkout, error)
@@ -30,4 +47,8 @@ type Repository interface {
 	Add(ctx context.Context, checkout *Checkout) error
 	// Update сохраняет условно по исходным статусу и версии; не совпали — ErrConflict.
 	Update(ctx context.Context, checkout *Checkout) error
+	// ReconcileDue — страница заказов суточной сверки в порядке магазина и покупки, без снимков покупок.
+	ReconcileDue(ctx context.Context, after ReconcileCursor, now time.Time, limit int) ([]ReconcileEntry, error)
+	// ExpireReconciliation снимает со сверки заказы, срок которой истёк.
+	ExpireReconciliation(ctx context.Context, now time.Time) error
 }

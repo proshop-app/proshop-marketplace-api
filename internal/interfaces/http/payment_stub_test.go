@@ -41,6 +41,7 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 	ctx := context.Background()
 	clock := fake.NewClock(time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC))
 	store, platform := fake.NewStore(), fake.NewPlatform()
+	platform.OrderClock = clock
 	for _, tenant := range []ids.TenantID{"t1", "t2"} {
 		seedReadyPaymentSeller(store, tenant)
 	}
@@ -48,6 +49,7 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 		ctx,
 		"t1",
 		ports.CreateOrderRequest{
+			PaymentDueAt:       clock.Now().Add(checkout.PaymentWindow),
 			ExternalCheckoutID: string(paymentTestID),
 			GroupID:            "t1",
 			Items:              []ports.OrderItem{{ProductID: "p1", Quantity: 1, Price: money.FromKopecks(12345)}},
@@ -77,7 +79,7 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 					},
 				},
 				Quote:         &delivery.Quote{Status: delivery.QuoteAvailable},
-				ExpiresAt:     clock.Now().Add(time.Hour),
+				ExpiresAt:     order.ExpiresAt,
 				OrderID:       order.OrderID,
 				Status:        checkout.GroupAwaitingPayment,
 				Goods:         money.FromKopecks(12345),
@@ -273,7 +275,7 @@ func TestCheckoutHasNoSellerPaymentLinks(t *testing.T) {
 	}
 }
 
-func TestPaymentStubPaidWithFailedPoll(t *testing.T) {
+func TestPaymentStubPaidDoesNotPollUnavailableShop(t *testing.T) {
 	e := newPaymentTest(t, true)
 	page := "/api/v1/payment-stub/" + string(paymentTestID)
 	if r := e.call(http.MethodPost, page+"/confirm", e.cookie, ""); r.Code != 303 {
@@ -307,9 +309,10 @@ func TestPaymentStubPaidWithFailedPoll(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if state.Groups[0].PollFailures < checkout.MaxOrderFailures {
-			e.clock.Advance(state.Groups[0].NextPollAt.Sub(e.clock.Now()))
+		if len(tasks) != 0 || state.Groups[0].PollFailures != 0 || !state.Groups[0].NextPollAt.IsZero() {
+			t.Fatal("оплаченный заказ не требует опроса", tasks, state.Groups[0])
 		}
+		e.clock.Advance(time.Hour)
 	}
 	access, err := e.tokens.Open(context.Background(), string(paymentTestBuyer))
 	if err != nil {

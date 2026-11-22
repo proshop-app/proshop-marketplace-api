@@ -170,6 +170,19 @@ func TestPollLaneDoesNotBlockCreationOrGeneralOutbox(t *testing.T) {
 	if err := e.store.Complete(ctx, task.ID, task.Attempts, e.clock.Now()); err != nil {
 		t.Fatal(err)
 	}
+	// Потерянный ответ создания мог оставить у магазина уже просроченный заказ.
+	if err := e.store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		loaded, err := tx.Checkouts().Get(ctx, c.ID)
+		if err != nil {
+			return err
+		}
+		state := loaded.State()
+		state.Groups[0].ExpiresAt = e.clock.Now().Add(-checkout.PaymentExpiryGrace)
+		state.Groups[0].NextPollAt = e.clock.Now()
+		return tx.Checkouts().Update(ctx, checkout.Restore(state))
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if err := e.service.Resume(ctx); err != nil {
 		t.Fatal(err)
 	}

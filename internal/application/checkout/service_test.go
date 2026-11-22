@@ -138,6 +138,7 @@ func setup(t *testing.T) *env {
 	})
 
 	e.platform.OrderNow = t0
+	e.platform.OrderClock = e.clock
 	e.store.SeedParticipant(participant.State{
 		Stage:    participant.StageConnected,
 		TenantID: "t2",

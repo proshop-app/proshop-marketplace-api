@@ -107,6 +107,9 @@ func partiallyPaidConsentPurchase(t *testing.T, e *env) checkout.State {
 		t.Fatalf("ожидались три группы: %d", len(state.Groups))
 	}
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
+	if err := announceOrder(ctx, e, state.Groups[0].TenantID, state.ID, state.Groups[0].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.Advance(time.Minute)
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
@@ -158,6 +161,9 @@ func TestShopCancellationRequiresConfirmationAfterPartialPayment(t *testing.T) {
 	ctx := context.Background()
 	state := partiallyPaidConsentPurchase(t, e)
 	e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupCancelled, "shop_cancelled")
+	if err := announceOrder(ctx, e, state.Groups[1].TenantID, state.ID, state.Groups[1].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.Advance(time.Minute)
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
@@ -254,7 +260,7 @@ func TestShopCancellationDuringPaymentKeepsConsentRequired(t *testing.T) {
 			Status:  checkout.GroupCancelled,
 			Reason:  "shop_cancelled",
 		}
-		if _, err := purchase.Observe("t2", cancelled, now, now); err != nil {
+		if _, err := purchase.Observe("t2", cancelled, now); err != nil {
 			t.Fatal(err)
 		}
 		if !purchase.NeedsConfirmation() || !purchase.State().PaymentStarted ||

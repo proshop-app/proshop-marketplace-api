@@ -95,6 +95,7 @@ func TestStrictTimeoutsAndCodes(t *testing.T) {
 		"create_order",
 		"get_order",
 		"stub_payment",
+		"payment_hold",
 		"cancel_order",
 		"pickup_points",
 	}
@@ -139,6 +140,9 @@ func strictCallContext(ctx context.Context, c *Client, operation string) error {
 		return err
 	case "create_order":
 		_, err := c.CreateOrder(ctx, "t1", ports.CreateOrderRequest{})
+		return err
+	case "payment_hold":
+		_, err := c.PaymentHold(ctx, "t1", "o1")
 		return err
 	case "get_order":
 		_, err := c.GetOrder(ctx, "t1", "o1")

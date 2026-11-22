@@ -33,7 +33,9 @@ func (p *Platform) CreateOrder(
 	}
 	request.Items = append([]ports.OrderItem(nil), request.Items...)
 	p.orderRequests[tenant] = append(p.orderRequests[tenant], request)
-	raw, _ := json.Marshal(request)
+	identity := request
+	identity.PaymentDueAt = time.Time{}
+	raw, _ := json.Marshal(identity)
 	if body, ok := p.orderBodies[key]; ok && body != string(raw) {
 		return checkout.SellerOrder{}, &ports.OrderRefusal{Code: "IDEMPOTENCY_CONFLICT"}
 	}
@@ -43,6 +45,10 @@ func (p *Platform) CreateOrder(
 	}
 	if existing, ok := p.orders[key]; ok {
 		return existing, nil
+	}
+	if !p.orderNow().Before(request.PaymentDueAt) ||
+		request.PaymentDueAt.After(p.orderNow().Add(checkout.PaymentWindow+time.Minute)) {
+		return checkout.SellerOrder{}, &ports.OrderRefusal{Code: "MARKETPLACE_PAYMENT_DUE_INVALID"}
 	}
 	if refused, ok := p.orderRefusals[key]; ok {
 		return checkout.SellerOrder{}, refused
@@ -109,7 +115,7 @@ func (p *Platform) CreateOrder(
 		Carrier:         delivery.Carrier(request.Carrier),
 		PickupPointCode: request.PickupPointCode,
 		OrderID:         fmt.Sprintf("order-%d", len(p.orders)+1),
-		ExpiresAt:       p.OrderNow.Add(time.Hour),
+		ExpiresAt:       request.PaymentDueAt.Truncate(time.Millisecond),
 		Total:           total,
 		Status:          checkout.GroupAwaitingPayment,
 	}
@@ -152,8 +158,50 @@ func (p *Platform) SetOrderStatus(id string, status checkout.GroupStatus, reason
 			continue
 		}
 		order.Status, order.Reason = status, reason
+		order.Revision++
 		p.orders[key] = order
 	}
+}
+
+// OrderStatuses отдаёт статусы известных магазину заказов и считает запросы сверки.
+func (p *Platform) OrderStatuses(
+	ctx context.Context,
+	tenant ids.TenantID,
+	orderIDs []string,
+) ([]checkout.OrderStatus, error) {
+	if err := p.platformCall(ctx, "order_statuses"); err != nil {
+		return nil, err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.statusCalls[tenant] = append(p.statusCalls[tenant], len(orderIDs))
+	if err := p.failing[tenant]; err != nil {
+		return nil, err
+	}
+	var statuses []checkout.OrderStatus
+	for _, order := range p.orders {
+		if p.orderTenants[order.OrderID] == tenant && slices.Contains(orderIDs, order.OrderID) {
+			statuses = append(statuses, checkout.OrderStatus{
+				PaymentHeldUntil: order.PaymentHeldUntil,
+				OrderID:          order.OrderID,
+				Number:           order.Number,
+				Steps:            order.Steps,
+				ReturnRequest:    order.ReturnRequest,
+				Status:           order.Status,
+				Reason:           order.Reason,
+				Tracking:         order.Tracking,
+				Revision:         order.Revision,
+			})
+		}
+	}
+	return statuses, nil
+}
+
+// StatusCalls — размеры пачек сверки по магазину, в порядке запросов.
+func (p *Platform) StatusCalls(tenant ids.TenantID) []int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]int(nil), p.statusCalls[tenant]...)
 }
 
 // OrderCount считает созданные заказы для проверки идемпотентности.
@@ -277,6 +325,13 @@ func (p *Platform) StubPayment(ctx context.Context, tenant ids.TenantID, id stri
 		}
 		if order.Status != checkout.GroupAwaitingPayment {
 			return &ports.OrderRefusal{Code: "MARKETPLACE_STUB_PAYMENT_STATE"}
+		}
+		deadline := order.ExpiresAt
+		if !order.PaymentHeldUntil.IsZero() {
+			deadline = order.PaymentHeldUntil
+		}
+		if !p.orderNow().Before(deadline) {
+			return &ports.OrderRefusal{Code: "ORDER_PAYMENT_EXPIRED"}
 		}
 		p.stubPaid[key] = true
 		order.Status = checkout.GroupPaid

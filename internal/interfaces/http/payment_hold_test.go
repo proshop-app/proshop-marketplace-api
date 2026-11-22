@@ -20,6 +20,7 @@ func TestCheckoutHTTPReadsHeldGroupAndPaysAvailableRemainder(t *testing.T) {
 		ctx,
 		"t2",
 		ports.CreateOrderRequest{
+			PaymentDueAt:       e.clock.Now().Add(checkout.PaymentWindow),
 			ExternalCheckoutID: string(paymentTestID),
 			GroupID:            "t2",
 			Items:              []ports.OrderItem{{ProductID: "p1", Quantity: 1, Price: money.FromKopecks(500)}},

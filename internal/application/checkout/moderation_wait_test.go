@@ -125,6 +125,9 @@ func TestPendingReviewDoesNotExtendPaymentDeadline(t *testing.T) {
 		t.Fatal("проверка срока сделала платёж или отменила заказ вместо обычного истечения магазина")
 	}
 	e.platform.SetOrderStatus(before.Groups[0].OrderID, checkout.GroupCancelled, "payment_expired")
+	if err := announceOrder(ctx, e, before.Groups[0].TenantID, before.ID, before.Groups[0].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	if err := e.service.Resume(ctx); err != nil {
 		t.Fatal(err)
 	}

@@ -181,6 +181,7 @@ func TestCheckoutBuyerActionSQL(t *testing.T) {
 					ctx,
 					group.TenantID,
 					ports.CreateOrderRequest{
+						PaymentDueAt:       group.ExpiresAt,
 						Carrier:            string(current.Delivery().Carrier),
 						PickupPointCode:    current.Delivery().PickupPointCode,
 						ExternalCheckoutID: group.ExternalCheckoutID,

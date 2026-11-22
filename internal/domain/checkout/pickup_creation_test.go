@@ -51,7 +51,7 @@ func TestDifferentOrderPickupRequiresCancellationAndNewConsent(t *testing.T) {
 			PickupPointCode: "OTHER",
 			OrderID:         "wrong-pickup",
 			Total:           c.Groups()[0].Goods,
-			ExpiresAt:       t0.Add(time.Hour),
+			ExpiresAt:       t0.Add(checkout.PaymentWindow),
 			Status:          checkout.GroupAwaitingPayment,
 		}
 		var err error

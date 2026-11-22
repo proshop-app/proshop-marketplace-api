@@ -68,7 +68,8 @@ func cancellationRefusal(method, path string, tenant ids.TenantID, reply *http.R
 			return ErrInvalidResponse
 		}
 		switch body.Status {
-		case checkout.GroupPaid, checkout.GroupShipped, checkout.GroupDelivered, checkout.GroupReturned:
+		case checkout.GroupPaid, checkout.GroupAssembled, checkout.GroupShipped, checkout.GroupAwaitingPickup,
+			checkout.GroupDelivered, checkout.GroupReturned:
 			return &ports.OrderNotCancellable{OrderID: body.OrderID, Status: body.Status}
 		default:
 			return ErrInvalidResponse

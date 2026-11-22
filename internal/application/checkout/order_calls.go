@@ -151,7 +151,7 @@ func creationFailure(err error) (string, checkout.GroupStatus, []checkout.PriceC
 		switch refusal.Code {
 		case "DELIVERY_UNAVAILABLE", "DELIVERY_CHANGED":
 			return refusal.Code, checkout.GroupDeliveryUnavailable, nil
-		case "OUT_OF_STOCK", "ORDER_CHECKOUT_CANCELLED":
+		case "OUT_OF_STOCK", "ORDER_CHECKOUT_CANCELLED", "MARKETPLACE_PAYMENT_DUE_INVALID":
 			return refusal.Code, checkout.GroupRejected, nil
 		case "IDEMPOTENCY_CONFLICT":
 			return refusal.Code, checkout.GroupSellerUnreachable, nil
@@ -190,11 +190,7 @@ func (s *Service) pollGroup(ctx context.Context, buyerID, id ids.UUID, tenant id
 	cancel()
 	_, err = s.update(ctx, buyerID, id, func(c *checkout.Checkout, now time.Time) error {
 		if failed == nil {
-			interval := paidPoll
-			if answer.Status == checkout.GroupAwaitingPayment {
-				interval = unpaidPoll
-			}
-			_, observeErr := c.CompletePoll(tenant, token, answer, now.Add(interval), now)
+			_, observeErr := c.CompletePoll(tenant, token, answer, now)
 			if observeErr == nil {
 				return nil
 			}
@@ -227,6 +223,7 @@ func creationRequest(
 	fallback *checkout.Selection, contact checkout.Contact,
 ) ports.CreateOrderRequest {
 	request := ports.CreateOrderRequest{
+		PaymentDueAt:       group.ExpiresAt,
 		PromoCode:          group.PromoCode,
 		ExternalCheckoutID: group.ExternalCheckoutID,
 		GroupID:            tenant,

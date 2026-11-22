@@ -61,11 +61,12 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 	}
 	stale := checkout.Restore(c.State())
 	order := checkout.SellerOrder{
-		Carrier:         "cdek",
-		PickupPointCode: "P1",
-		OrderID:         "o1",
-		ExpiresAt:       at(60),
-		Total:           money.FromKopecks(10000),
+		Carrier:          "cdek",
+		PickupPointCode:  "P1",
+		OrderID:          "o1",
+		ExpiresAt:        at(0).Add(checkout.PaymentWindow),
+		PaymentHeldUntil: at(0).Add(checkout.PaymentWindow),
+		Total:            money.FromKopecks(10000),
 	}
 	if _, err := c.AttachOrder("t1", order, at(1)); err != nil {
 		t.Fatal(err)
@@ -95,7 +96,8 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 		state := loaded.State()
 		if state.Contact != contact ||
 			state.Groups[0].OrderID != "o1" ||
-			!state.Groups[0].ExpiresAt.Equal(at(60)) ||
+			!state.Groups[0].PaymentHeldUntil.Equal(order.PaymentHeldUntil) ||
+			!state.Groups[0].ExpiresAt.Equal(at(0).Add(checkout.PaymentWindow)) ||
 			state.Delivery.RegionCode != "RU-MOW" || state.Status != checkout.StatusAwaitingPayment {
 			return fmt.Errorf("после загрузки: %+v", state)
 		}
@@ -109,7 +111,7 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 			return fmt.Errorf("фильтр ожидающих: %d %w", len(items), err)
 		}
 		order.Status = checkout.GroupPaid
-		if _, err := loaded.Observe("t1", order, at(20).Add(10*time.Minute), at(20)); err != nil {
+		if _, err := loaded.Observe("t1", order, at(20)); err != nil {
 			return err
 		}
 		return tx.Checkouts().Update(ctx, loaded)

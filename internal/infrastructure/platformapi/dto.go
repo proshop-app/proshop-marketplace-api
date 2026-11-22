@@ -44,7 +44,7 @@ func (t *trackingJSON) domain() *checkout.Tracking {
 	if t == nil {
 		return nil
 	}
-	return &checkout.Tracking{Carrier: t.Carrier, Number: t.Number, URL: t.URL}
+	return checkout.NewTracking(t.Carrier, t.Number, t.URL)
 }
 
 // orderBody отделяет формат запроса сервера от снимка команды приложения.
@@ -60,6 +60,7 @@ func orderBody(r ports.CreateOrderRequest) map[string]any {
 		items = append(items, line)
 	}
 	body := map[string]any{
+		"paymentDueAt":       r.PaymentDueAt,
 		"externalCheckoutId": r.ExternalCheckoutID,
 		"groupId":            r.GroupID,
 		"items":              items,

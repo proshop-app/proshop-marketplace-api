@@ -61,6 +61,9 @@ func TestPaidGroupDoesNotBlockRemainingPayment(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
+	if err := announceOrder(ctx, e, state.Groups[0].TenantID, state.ID, state.Groups[0].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.Advance(time.Minute)
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
@@ -244,6 +247,9 @@ func TestReviewAfterPartialPaymentPreservesPaidOrder(t *testing.T) {
 	}
 	paidOrder := state.Groups[0].OrderID
 	e.platform.SetOrderStatus(paidOrder, checkout.GroupPaid, "")
+	if err := announceOrder(ctx, e, "t1", state.ID, paidOrder); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.Advance(time.Minute)
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -13,6 +15,7 @@ import (
 
 func orderRequest() ports.CreateOrderRequest {
 	return ports.CreateOrderRequest{
+		PaymentDueAt:       time.Date(2026, 10, 24, 11, 0, 0, 0, time.UTC),
 		ExternalCheckoutID: "checkout1:t1",
 		GroupID:            "t1",
 		Items:              []ports.OrderItem{{ProductID: "p1", Quantity: 2, Price: money.FromKopecks(199000)}},
@@ -113,5 +116,48 @@ func TestUnknownOrderStatusIsTypedFailure(t *testing.T) {
 	)
 	if _, err := client.GetOrder(context.Background(), "t1", "o1"); !errors.Is(err, ports.ErrInvalidOrderStatus) {
 		t.Fatalf("неизвестный статус должен запускать задержку опроса: %v", err)
+	}
+}
+
+func TestOrderStateCarriesRevisionAndNewStatuses(t *testing.T) {
+	client := server(
+		t,
+		map[string][2]string{"GET " + prefix + "/orders/o1": {"", "order_awaiting_pickup.json"}},
+		http.StatusOK,
+	)
+	order, err := client.GetOrder(context.Background(), "t1", "o1")
+	if err != nil || order.Status != checkout.GroupAwaitingPickup || order.Revision != 9 || order.Tracking == nil {
+		t.Fatalf("состояние заказа: %+v %v", order, err)
+	}
+}
+
+func TestOrderStatusesContract(t *testing.T) {
+	route := "POST " + prefix + "/orders/statuses"
+	client := server(
+		t,
+		map[string][2]string{route: {"order_statuses_request.json", "order_statuses.json"}},
+		http.StatusOK,
+	)
+	statuses, err := client.OrderStatuses(context.Background(), "t1", []string{"o1", "o2", "o3"})
+	expected := []checkout.OrderStatus{
+		{
+			OrderID: "o1",
+			Number:  "22112026-0003",
+			Steps: []checkout.OrderStep{
+				{Status: checkout.GroupAssembled, At: time.Date(2026, 11, 22, 8, 40, 0, 0, time.UTC)},
+			},
+			Status:   checkout.GroupAssembled,
+			Revision: 4,
+		},
+		{OrderID: "o2", Status: checkout.GroupReturned, Revision: 11},
+	}
+	if err != nil || !reflect.DeepEqual(statuses, expected) {
+		t.Fatalf("неизвестного магазину заказа в ответе нет: %+v %v", statuses, err)
+	}
+
+	client = server(t, map[string][2]string{route: {"", "order_statuses_unknown.json"}}, http.StatusOK)
+	statuses, err = client.OrderStatuses(context.Background(), "t1", []string{"o1"})
+	if err != nil || len(statuses) != 0 {
+		t.Fatalf("статус вне словаря не принимается и не валит пачку: %+v %v", statuses, err)
 	}
 }

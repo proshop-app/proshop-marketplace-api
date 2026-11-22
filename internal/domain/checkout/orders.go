@@ -35,8 +35,12 @@ const (
 	GroupPaid GroupStatus = "paid"
 	// GroupCancelled — магазин подтвердил отмену неоплаченного заказа.
 	GroupCancelled GroupStatus = "cancelled"
+	// GroupAssembled — заказ собран и ждёт передачи перевозчику.
+	GroupAssembled GroupStatus = "assembled"
 	// GroupShipped — заказ отправлен.
 	GroupShipped GroupStatus = "shipped"
+	// GroupAwaitingPickup — посылка ждёт покупателя в пункте выдачи.
+	GroupAwaitingPickup GroupStatus = "awaiting_pickup"
 	// GroupDelivered — заказ получен.
 	GroupDelivered GroupStatus = "delivered"
 	// GroupReturned — возврат оформлен магазином.
@@ -56,6 +60,12 @@ type Contact struct {
 	Name  string `json:"name"`
 }
 
+// maxOrderSteps и maxOrderNumber ограничивают снимок: статусов в договоре восемь, номер — короткая строка.
+const (
+	maxOrderSteps  = 8
+	maxOrderNumber = 64
+)
+
 // PriceChange — актуальная цена из отказа PRICE_CHANGED.
 type PriceChange struct {
 	ProductID ids.ProductID `json:"productId"`
@@ -64,14 +74,42 @@ type PriceChange struct {
 
 // SellerOrder — подтверждённый сервером снимок; возврат с кассы его не заменяет.
 type SellerOrder struct {
-	Carrier         delivery.Carrier
-	PickupPointCode string
-	Tracking        *Tracking
-	OrderID         string
-	ExpiresAt       time.Time
-	Total           money.Money
-	Status          GroupStatus
-	Reason          string
+	Carrier          delivery.Carrier
+	PickupPointCode  string
+	Tracking         *Tracking
+	OrderID          string
+	ExpiresAt        time.Time
+	PaymentHeldUntil time.Time
+	Total            money.Money
+	Status           GroupStatus
+	Reason           string
+	// Revision — номер перехода статуса у магазина; ноль в ответе создания.
+	Revision int64
+	// Number — номер заказа магазина для покупателя.
+	Number string
+	// Steps — путь заказа до текущего статуса; пусто — магазин его не прислал.
+	Steps []OrderStep
+	// ReturnRequest — заявка на возврат; nil — заявки нет.
+	ReturnRequest *ReturnRequest
+}
+
+// OrderStep — шаг заказа в ленте покупателя: статус и когда заказ в него пришёл.
+type OrderStep struct {
+	Status GroupStatus `json:"status"`
+	At     time.Time   `json:"at"`
+}
+
+// OrderStatus — строка суточной сверки: статус заказа магазина и номер перехода.
+type OrderStatus struct {
+	PaymentHeldUntil time.Time
+	OrderID          string
+	Number           string
+	Steps            []OrderStep
+	ReturnRequest    *ReturnRequest
+	Status           GroupStatus
+	Reason           string
+	Tracking         *Tracking
+	Revision         int64
 }
 
 // Tracking — номер и ссылка перевозчика из заказа сервера.
@@ -98,6 +136,10 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 	if c.state.CartConsumed && c.state.Contact != contact {
 		return false, ErrSnapshotChanged
 	}
+	due, err := c.OrderPaymentDue(now)
+	if err != nil {
+		return false, err
+	}
 	c.state.Contact = contact
 	c.state.Status = StatusCreatingOrders
 	for i := range c.state.Groups {
@@ -121,11 +163,36 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 			if g.QuotePending() {
 				return false, ErrSellerUnavailable
 			}
+			// Неизвестный исход требует того же запроса: магазин мог уже создать заказ.
+			if g.ExpiresAt.IsZero() || g.Status == GroupDeliveryRequoted ||
+				(g.CreateToken == "" && g.CreateFailures == 0) {
+				g.ExpiresAt = due
+			}
 			g.Status = GroupCreating
 		}
 	}
 	c.rollup()
 	return true, c.touch(now)
+}
+
+// OrderPaymentDue выбирает исходный срок живых неоплаченных заказов или срок нового намерения.
+func (c *Checkout) OrderPaymentDue(now time.Time) (time.Time, error) {
+	var due time.Time
+	for _, g := range c.state.Groups {
+		if g.OrderID == "" || g.Excluded() || g.EffectiveStatus() != GroupAwaitingPayment {
+			continue
+		}
+		if !g.ExpiresAt.After(now) {
+			return time.Time{}, ErrPaymentExpired
+		}
+		if due.IsZero() || g.ExpiresAt.Before(due) {
+			due = g.ExpiresAt
+		}
+	}
+	if due.IsZero() {
+		due = now.Add(PaymentWindow).Truncate(time.Millisecond)
+	}
+	return due, nil
 }
 
 // AttachOrder допускает восстановление после потери ответа, включая уже истёкшее окно.
@@ -148,7 +215,8 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	if err != nil {
 		return false, err
 	}
-	if order.OrderID == "" || order.ExpiresAt.IsZero() || total.Cmp(order.Total) != 0 {
+	if order.OrderID == "" || order.ExpiresAt.IsZero() ||
+		!order.ExpiresAt.Equal(g.ExpiresAt) || total.Cmp(order.Total) != 0 {
 		return false, ErrInvalidOrder
 	}
 	g.AwaitingSince = now
@@ -157,7 +225,8 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 		return c.rejectOrderPickup(g, order, now)
 	}
 	g.OrderID, g.ExpiresAt = order.OrderID, order.ExpiresAt
-	g.NextPollAt = now
+	g.PaymentHeldUntil = order.PaymentHeldUntil
+	g.NextPollAt = g.PaymentDeadline().Add(PaymentExpiryGrace)
 	if !g.CancellationConfirmed {
 		g.LastOrderStatus = GroupAwaitingPayment
 	}
@@ -172,10 +241,14 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 
 // Observe принимает только допустимые переходы. Истечение окна запрещает оплату,
 // но отмену подтверждает магазин: он мог получить оплату перед границей окна.
-func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Time, now time.Time) (bool, error) {
+// Состояние с меньшим номером перехода — опоздавшее: оно не меняет группу.
+func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, now time.Time) (bool, error) {
 	g := c.group(tenant)
 	if g == nil {
 		return false, ErrNotFound
+	}
+	if order.Revision < g.OrderRevision {
+		return false, nil
 	}
 	from := g.Status
 	if g.Abandoned || from == GroupSellerUnreachable {
@@ -188,16 +261,27 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	if order.Status == GroupCancelled && order.Reason == "" {
 		return false, ErrInvalidOrder
 	}
-	if g.Status == order.Status && g.Reason == order.Reason && g.NextPollAt.Equal(next) {
+	if g.Status == order.Status && g.Reason == order.Reason &&
+		g.OrderRevision == order.Revision && g.PollFailures == 0 && g.LastErrorCode == "" &&
+		(order.PaymentHeldUntil.IsZero() || g.PaymentHeldUntil.Equal(order.PaymentHeldUntil)) {
 		return false, nil
 	}
 	if !g.Abandoned {
 		g.Status, g.Reason = order.Status, order.Reason
 	}
-	g.NextPollAt = next
 	g.PollFailures = 0
 	g.LastErrorCode = ""
-	g.LastOrderStatus = order.Status
+	if g.LastOrderStatus != order.Status || g.OrderStatusAt.IsZero() {
+		g.OrderStatusAt = now
+	}
+	g.LastOrderStatus, g.OrderRevision = order.Status, order.Revision
+	g.recordProgress(order)
+	if !order.PaymentHeldUntil.IsZero() {
+		g.PaymentHeldUntil = order.PaymentHeldUntil
+		if !g.PaymentPending {
+			g.NextPollAt = g.PaymentDeadline().Add(PaymentExpiryGrace)
+		}
+	}
 	if g.Paid() || order.Status == GroupCancelled {
 		g.PaymentPending = false
 		if c.state.PaymentAttempt == "" {
@@ -207,6 +291,9 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	if g.CancellationBlocked && (order.Status == GroupDelivered ||
 		order.Status == GroupReturned || order.Status == GroupCancelled) {
 		g.ReconciliationRequired = false
+	}
+	if _, needed := g.pollAt(); !needed {
+		g.NextPollAt = time.Time{}
 	}
 	c.rollup()
 
@@ -273,23 +360,91 @@ func (c *Checkout) rollup() {
 	}
 }
 
+// allowed — порядок исполнения заказа. Пропуск шагов допустим; назад заказ идёт
+// только из собранного в работу: до передачи перевозчику магазин вправе вернуть его на сборку.
 func allowed(from, to GroupStatus) bool {
+	if from == to {
+		return orderStage(from) > 0
+	}
 	switch from {
 	case GroupAwaitingPayment:
-		return to == GroupAwaitingPayment || to == GroupCancelled || to == GroupPaid ||
-			to == GroupShipped || to == GroupDelivered || to == GroupReturned
-	case GroupPaid:
-		return to == GroupPaid || to == GroupShipped || to == GroupDelivered || to == GroupReturned
-	case GroupShipped:
-		return to == GroupShipped || to == GroupDelivered || to == GroupReturned
-	case GroupDelivered:
-		return to == GroupDelivered || to == GroupReturned
-	case GroupReturned:
-		return to == GroupReturned
-	case GroupCancelled:
-		return to == GroupCancelled
+		return orderStage(to) > 0
+	case GroupAssembled:
+		return to == GroupPaid || fulfilment(from, to)
+	case GroupPaid, GroupShipped, GroupAwaitingPickup, GroupDelivered:
+		return fulfilment(from, to)
 	}
 	return false
+}
+
+// ShopOrderStatus отличает словарь статусов заказа магазина от локальных статусов группы.
+func ShopOrderStatus(status GroupStatus) bool { return orderStage(status) > 0 }
+
+// fulfilment — движение оплаченного заказа вперёд; отмена неоплаченного сюда не входит.
+func fulfilment(from, to GroupStatus) bool {
+	return to != GroupCancelled && orderStage(to) > orderStage(from)
+}
+
+// orderStage — место статуса заказа магазина на его пути; ноль — локальный статус группы.
+func orderStage(status GroupStatus) int {
+	switch status {
+	case GroupAwaitingPayment:
+		return 1
+	case GroupPaid:
+		return 2
+	case GroupAssembled:
+		return 3
+	case GroupShipped:
+		return 4
+	case GroupAwaitingPickup:
+		return 5
+	case GroupDelivered:
+		return 6
+	case GroupReturned, GroupCancelled:
+		return 7
+	}
+	return 0
+}
+
+// NewTracking принимает отслеживание магазина только с перевозчиком и безопасной ссылкой;
+// пустой номер — отсутствие номера. Непригодное отслеживание — nil, статус заказа от него не зависит.
+func NewTracking(carrier string, number *string, link string) *Tracking {
+	if strings.TrimSpace(carrier) == "" || !ValidURL(link) {
+		return nil
+	}
+	if number != nil && strings.TrimSpace(*number) == "" {
+		number = nil
+	}
+	return &Tracking{Carrier: carrier, Number: number, URL: link}
+}
+
+// recordProgress сохраняет номер и путь заказа из состояния магазина. Время шага площадка не
+// выдумывает: состояние без них прежний снимок не стирает.
+func (g *Group) recordProgress(order SellerOrder) {
+	number := strings.TrimSpace(order.Number)
+	if number != "" && utf8.RuneCountInString(number) <= maxOrderNumber {
+		g.OrderNumber = number
+	}
+	if steps := knownSteps(order.Steps); len(steps) > 0 {
+		g.Steps = steps
+	}
+	if request := knownReturnRequest(order.ReturnRequest); request != nil {
+		g.ReturnRequest = request
+	}
+}
+
+// knownSteps оставляет шаги из словаря договора с настоящим временем.
+func knownSteps(values []OrderStep) []OrderStep {
+	var steps []OrderStep
+	for _, step := range values {
+		if len(steps) == maxOrderSteps {
+			break
+		}
+		if ShopOrderStatus(step.Status) && !step.At.IsZero() {
+			steps = append(steps, OrderStep{Status: step.Status, At: step.At.UTC()})
+		}
+	}
+	return steps
 }
 
 // ValidURL допускает абсолютные ссылки HTTP(S) без учётных данных.
@@ -311,6 +466,8 @@ func cloneState(state State) State {
 		}
 		g.Regions = append([]string(nil), g.Regions...)
 		g.Tracking = cloneTracking(g.Tracking)
+		g.Steps = append([]OrderStep(nil), g.Steps...)
+		g.ReturnRequest = cloneReturnRequest(g.ReturnRequest)
 		g.CurrentPrices = append([]PriceChange(nil), g.CurrentPrices...)
 		g.ReturnRemaining = append([]Line(nil), g.ReturnRemaining...)
 		for j := range g.ReturnRemaining {

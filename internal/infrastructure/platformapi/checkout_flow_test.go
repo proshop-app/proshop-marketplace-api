@@ -89,6 +89,17 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 				"orderId": cancelled.OrderID,
 			}
 		}
+	case strings.HasSuffix(r.URL.Path, "/payment-hold"):
+		id := strings.TrimSuffix(r.URL.Path, "/payment-hold")
+		id = id[strings.LastIndex(id, "/")+1:]
+		var order checkout.SellerOrder
+		order, err = s.platform.PaymentHold(ctx, tenant, id)
+		result = map[string]any{
+			"orderId":          order.OrderID,
+			"status":           order.Status,
+			"revision":         order.Revision,
+			"paymentHeldUntil": order.PaymentHeldUntil,
+		}
 	case strings.HasSuffix(r.URL.Path, "/stub-payment"):
 		var body struct{ Amount money.Money }
 		err = json.NewDecoder(r.Body).Decode(&body)
@@ -130,7 +141,7 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 				"orderId":         order.OrderID,
 				"carrier":         order.Carrier,
 				"pickupPointCode": order.PickupPointCode,
-				"expiresAt":       order.ExpiresAt,
+				"expiresAt":       order.ExpiresAt.Truncate(time.Millisecond),
 				"total":           order.Total,
 			}
 		}
@@ -146,28 +157,38 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
 func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
-	for _, action := range []string{"pay", "cancel", "redispatch"} {
+	for _, action := range []string{"pay", "cancel", "redispatch", "pay_micros"} {
 		t.Run(
 			action,
 			func(t *testing.T) {
 				ctx := context.Background()
 				now := time.Date(2026, 10, 24, 10, 0, 0, 0, time.UTC)
+				if action == "pay_micros" {
+					now = now.Add(345678 * time.Microsecond)
+				}
 				buyer := ids.UUID("00000000-0000-4000-8000-000000000002")
 				store, backend := fake.NewStore(), fake.NewPlatform()
 				backend.OrderNow = now
 				upstream := &pickupCheckoutServer{platform: backend, redispatch: action == "redispatch"}
 				readPickupFixture(t, "delivery_quote_available.json", &upstream.quote)
 				readPickupFixture(t, "pickups.json", &upstream.points)
-				server := httptest.NewServer(upstream)
-				defer server.Close()
+				baseURL := "https://shop.example.test"
+				if action != "pay_micros" {
+					server := httptest.NewServer(upstream)
+					defer server.Close()
+					baseURL = server.URL
+				}
 				clock := fake.NewClock(now)
 				client := New(
 					Config{
-						BaseURL: server.URL,
+						BaseURL: baseURL,
 						Token:   "service-token",
 						Timeout: time.Second,
 					},
 				)
+				if action == "pay_micros" {
+					client.http.Transport = handlerTransport(upstream)
+				}
 				guarded := platformguard.New(
 					client,
 					pickupGuardConfig(),
@@ -349,8 +370,9 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 				}
 				for tenant, carrier := range carriers {
 					requests := backend.OrderRequests(tenant)
+					due := now.Add(checkout.PaymentWindow).Truncate(time.Millisecond)
 					if len(requests) != 1 || requests[0].Carrier != carrier ||
-						requests[0].DeliveryPrice.Kopecks() != 0 {
+						requests[0].DeliveryPrice.Kopecks() != 0 || !requests[0].PaymentDueAt.Equal(due) {
 						t.Fatal(requests)
 					}
 					if _, err := guarded.CreateOrder(ctx, tenant, requests[0]); err != nil ||
@@ -400,6 +422,17 @@ func TestPickupCheckoutThroughShopHTTP(t *testing.T) {
 				}
 			},
 		)
+	}
+}
+
+func handlerTransport(handler http.Handler) reviewTransport {
+	return func(r *http.Request) (*http.Response, error) {
+		if r.Body != nil {
+			defer func() { _ = r.Body.Close() }()
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w.Result(), nil
 	}
 }
 

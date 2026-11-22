@@ -151,12 +151,16 @@ func (c *Checkout) ClaimPayment(token string, orders map[ids.TenantID]string, no
 		if g == nil || g.Paid() || g.Excluded() || g.OrderID != orderID || g.EffectiveStatus() != GroupAwaitingPayment {
 			return ErrTransition
 		}
-		if !now.Before(g.ExpiresAt) {
+		if !now.Before(g.PaymentDeadline()) {
 			return ErrPaymentExpired
 		}
 	}
 	for tenant := range orders {
-		c.group(tenant).PaymentPending = true
+		g := c.group(tenant)
+		if !g.PaymentPending {
+			g.NextPollAt, g.PollFailures = now.Add(PaymentOutcomeDelay), 0
+		}
+		g.PaymentPending = true
 	}
 	c.state.PaymentAttempt, c.state.PaymentStarted = token, true
 	return c.touch(now)
@@ -173,10 +177,14 @@ func (c *Checkout) FinishPayment(token string, result PaymentResult, now time.Ti
 		if result.Paid[g.TenantID] == g.OrderID && g.OrderID != "" && !g.Paid() {
 			g.Status, g.LastOrderStatus = GroupPaid, GroupPaid
 			g.Reason, g.LastErrorCode, g.PollToken = "", "", ""
-			g.NextPollAt, g.PollFailures = now, 0
+			g.NextPollAt, g.PollFailures = time.Time{}, 0
+			g.OrderStatusAt = now
 		}
 		if g.Paid() || result.Unpaid[g.TenantID] {
 			g.PaymentPending = false
+			if !g.Paid() {
+				g.NextPollAt = g.PaymentDeadline().Add(PaymentExpiryGrace)
+			}
 		}
 	}
 	c.state.PaymentAttempt = ""

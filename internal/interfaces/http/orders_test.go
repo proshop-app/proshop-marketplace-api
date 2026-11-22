@@ -73,7 +73,7 @@ func seedPurchase(t *testing.T, e *env, owner, id ids.UUID) {
 	}
 }
 
-func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
+func TestBuyerOrdersAndReturnTrustShopEvent(t *testing.T) {
 	e := newEnv(t)
 	cookie := e.login(t)
 	me := e.session(t, http.MethodGet, "/api/v1/me", "", cookie)
@@ -123,8 +123,24 @@ func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
 	if operator.status != http.StatusOK || len(items) != 1 {
 		t.Fatalf("панель: %+v", operator)
 	}
-	e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
-	runOrderWorker(t, e)
+	if item, _ := items[0].(map[string]any); item["recipient"] != nil {
+		t.Fatalf("получатель оператору не отдаётся: %+v", item)
+	}
+	if own := e.session(t, http.MethodGet, path, "", cookie); own.body["recipient"] == nil {
+		t.Fatalf("покупатель видит получателя своей покупки: %+v", own)
+	}
+	if err := e.checkouts.ApplyOrderEvent(context.Background(), appcheckout.OrderEvent{
+		EventID:    "shop-paid",
+		TenantID:   state.Groups[0].TenantID,
+		CheckoutID: id,
+		Order: checkout.SellerOrder{
+			OrderID:  state.Groups[0].OrderID,
+			Status:   checkout.GroupPaid,
+			Revision: 1,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	refreshed := e.session(t, http.MethodGet, path, "", cookie)
 	if refreshed.status != http.StatusOK || refreshed.body["status"] != "paid" || refreshed.body["nextPayment"] != nil {
 		t.Fatalf("источник статуса — магазин: %+v", refreshed)
@@ -133,6 +149,11 @@ func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
 	items, _ = cabinet.body["items"].([]any)
 	if cabinet.status != http.StatusOK || len(items) != 1 {
 		t.Fatalf("кабинет: %+v", cabinet)
+	}
+	groupURL := path + "/groups/" + string(state.Groups[0].TenantID)
+	if r := e.session(t, http.MethodPost, groupURL+"/return-request", `{"reason":"not_fit"}`, cookie); r.status !=
+		http.StatusConflict {
+		t.Fatalf("заявка только по полученному заказу: %+v", r)
 	}
 	if r := e.session(t, http.MethodPost, paidURL, "", cookie); r.status != http.StatusConflict {
 		t.Fatalf("оплаченная группа не требует доплаты: %+v", r)
@@ -148,6 +169,8 @@ func TestPurchaseEndpointsRequireOwner(t *testing.T) {
 	path := "/api/v1/checkout/" + string(id)
 	for _, request := range []struct{ method, suffix, body string }{
 		{http.MethodGet, "", ""},
+		{http.MethodPost, "/groups/t1/cancel-order", ""},
+		{http.MethodPost, "/groups/t1/return-request", `{"reason":"not_fit"}`},
 		{http.MethodGet, "/return?status=paid", ""},
 		{http.MethodPost, "/orders", `{"contact":{"phone":"79251234567","name":"Покупатель"}}`},
 		{http.MethodPost, "/pay", ""},

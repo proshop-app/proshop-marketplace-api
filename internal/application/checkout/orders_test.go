@@ -111,7 +111,7 @@ func TestPriceChangedKeepsSnapshotAndReturnsGroup(t *testing.T) {
 	}
 }
 
-func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
+func TestEventsAndCancelledCartReturnAreIdempotent(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
 	ctx := context.Background()
@@ -122,6 +122,11 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 	first, second := state.Groups[0], state.Groups[1]
 	e.platform.SetOrderStatus(first.OrderID, checkout.GroupPaid, "")
 	e.platform.SetOrderStatus(second.OrderID, checkout.GroupCancelled, "payment_expired")
+	for _, g := range state.Groups {
+		if err := announceOrder(ctx, e, g.TenantID, c.ID, g.OrderID); err != nil {
+			t.Fatal(err)
+		}
+	}
 	state, err = refreshOrders(ctx, e, buyerID, c.ID)
 	if err != nil || state.Status != checkout.StatusPaid {
 		t.Fatalf("сверка: %+v %v", state, err)
@@ -148,10 +153,18 @@ func TestPollingAndCancelledCartReturnAreIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.clock.Advance(11 * time.Minute)
+	polls := e.platform.PollCalls("t1")
 	e.platform.SetOrderStatus(first.OrderID, checkout.GroupShipped, "")
 	state, err = refreshOrders(ctx, e, buyerID, c.ID)
+	if err != nil || state.Groups[0].Status != checkout.GroupPaid || e.platform.PollCalls("t1") != polls {
+		t.Fatalf("оплаченный заказ не опрашивается: %+v %v", state, err)
+	}
+	if err := announceOrder(ctx, e, "t1", c.ID, first.OrderID); err != nil {
+		t.Fatal(err)
+	}
+	state, err = e.service.Get(ctx, buyerID, c.ID)
 	if err != nil || state.Groups[0].Status != checkout.GroupShipped {
-		t.Fatalf("трек: %+v %v", state, err)
+		t.Fatalf("статус из события магазина: %+v %v", state, err)
 	}
 }
 

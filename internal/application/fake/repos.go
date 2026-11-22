@@ -218,6 +218,45 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 	return found, nil
 }
 
+func (r checkouts) ReconcileDue(
+	_ context.Context,
+	after checkout.ReconcileCursor,
+	now time.Time,
+	limit int,
+) ([]checkout.ReconcileEntry, error) {
+	var found []checkout.ReconcileEntry
+	for _, state := range r.d.checkouts {
+		for _, g := range state.Groups {
+			passed := g.TenantID < after.TenantID ||
+				(g.TenantID == after.TenantID && state.ID <= after.CheckoutID)
+			if passed || !g.ReconcileUntil().After(now) {
+				continue
+			}
+			found = append(found, checkout.ReconcileEntry{
+				CheckoutID:  state.ID,
+				TenantID:    g.TenantID,
+				OrderID:     g.OrderID,
+				Status:      g.EffectiveStatus(),
+				Revision:    g.OrderRevision,
+				Unreachable: g.Status == checkout.GroupSellerUnreachable,
+			})
+		}
+	}
+	sort.Slice(found, func(i, j int) bool {
+		if found[i].TenantID != found[j].TenantID {
+			return found[i].TenantID < found[j].TenantID
+		}
+		return found[i].CheckoutID < found[j].CheckoutID
+	})
+	if len(found) > limit {
+		found = found[:limit]
+	}
+	return found, nil
+}
+
+// ExpireReconciliation в памяти не нужен: срок сверки считается из состояния группы.
+func (r checkouts) ExpireReconciliation(context.Context, time.Time) error { return nil }
+
 func checkoutWorkDue(state checkout.State, now time.Time) bool {
 	for _, g := range state.Groups {
 		if g.PollDue(now) || g.ReturnDue(now) {

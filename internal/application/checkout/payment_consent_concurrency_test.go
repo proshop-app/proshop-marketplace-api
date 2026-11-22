@@ -255,8 +255,14 @@ func TestShopCancellationReturnsGoodsOnceAndRequiresConfirmation(t *testing.T) {
 		}
 		if withPaid {
 			e.platform.SetOrderStatus(state.Groups[0].OrderID, checkout.GroupPaid, "")
+			if err := announceOrder(ctx, e, state.Groups[0].TenantID, state.ID, state.Groups[0].OrderID); err != nil {
+				t.Fatal(err)
+			}
 		}
 		e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupCancelled, "shop_cancelled")
+		if err := announceOrder(ctx, e, state.Groups[1].TenantID, state.ID, state.Groups[1].OrderID); err != nil {
+			t.Fatal(err)
+		}
 		for range 3 {
 			e.clock.Advance(time.Minute)
 			if err := resumeAndExecute(ctx, e); err != nil {

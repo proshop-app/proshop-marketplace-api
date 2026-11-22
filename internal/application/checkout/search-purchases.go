@@ -14,8 +14,14 @@ import (
 
 const searchPurchaseEnqueueTimeout = 250 * time.Millisecond
 
-// enqueueSearchPurchases сохраняет необязательный сигнал после фиксации PAID.
-func (s *Service) enqueueSearchPurchases(ctx context.Context, before, after checkout.State) {
+// collectSearchPurchases принимает решение о сигнале один раз для всех каналов оплаты.
+// В пачку попадают только зафиксированные переходы; запись outbox выполняет вызывающий после Do.
+func (s *Service) collectSearchPurchases(
+	ctx context.Context,
+	tx ports.Tx,
+	before, after checkout.State,
+	pending *[]ports.NewTask,
+) {
 	if s.config.SearchBuyerKeys == nil {
 		return
 	}
@@ -39,6 +45,14 @@ func (s *Service) enqueueSearchPurchases(ctx context.Context, before, after chec
 		return
 	}
 
+	tx.AfterCommit(func() { *pending = append(*pending, tasks...) })
+}
+
+// enqueueSearchPurchases сохраняет необязательные сигналы одной транзакцией на пачку.
+func (s *Service) enqueueSearchPurchases(ctx context.Context, tasks []ports.NewTask) {
+	if len(tasks) == 0 {
+		return
+	}
 	ctx, cancel := context.WithTimeout(ctx, searchPurchaseEnqueueTimeout)
 	defer cancel()
 	if err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {

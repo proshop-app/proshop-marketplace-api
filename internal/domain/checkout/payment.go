@@ -80,7 +80,8 @@ func (c *Checkout) Pay(now time.Time) (bool, error) {
 		g.Status, g.LastOrderStatus = GroupPaid, GroupPaid
 		g.Reason, g.LastErrorCode, g.PollToken = "", "", ""
 		g.PollFailures = 0
-		g.NextPollAt = now
+		g.NextPollAt = time.Time{}
+		g.OrderStatusAt = now
 	}
 	c.rollup()
 	return true, c.touch(now)
@@ -107,7 +108,7 @@ func (c *Checkout) PaymentComplete() bool {
 // CheckPaymentWindow проверяет все ожидающие заказы до первого внешнего платежа.
 func (c *Checkout) CheckPaymentWindow(now time.Time) error {
 	for _, g := range c.state.Groups {
-		if g.ReadyForPayment() && !now.Before(g.ExpiresAt) {
+		if g.ReadyForPayment() && !now.Before(g.PaymentDeadline()) {
 			return ErrPaymentExpired
 		}
 	}
@@ -166,7 +167,7 @@ func (c *Checkout) paymentPending() bool {
 
 func paidStatus(status GroupStatus) bool {
 	switch status {
-	case GroupPaid, GroupShipped, GroupDelivered, GroupReturned:
+	case GroupPaid, GroupAssembled, GroupShipped, GroupAwaitingPickup, GroupDelivered, GroupReturned:
 		return true
 	default:
 		return false

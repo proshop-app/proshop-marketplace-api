@@ -10,6 +10,7 @@ const (
 	TopicProductProjectedBulk = "catalog.product.projected.bulk"
 	TopicStockItemUpdated     = "stock.item.updated"
 	TopicProductPriceUpdated  = "catalog.product.price-updated"
+	TopicOrderStatusChanged   = "orders.order.marketplace-status-changed"
 	TopicTenantCreated        = "platform.tenant.created"
 	TopicTenantUpdated        = "platform.tenant.updated"
 	TopicTenantSuspended      = "platform.tenant.suspended"
@@ -30,13 +31,16 @@ var tenantTopics = []string{
 }
 
 // SubscriptionTopics делит топики на основную подписку и массовую полосу,
-// сохраняя один и тот же префикс установки.
+// сохраняя один и тот же префикс установки. Статусы заказов читает своя полоса.
 func SubscriptionTopics(prefix string, router *Router) (regular []string, bulk string) {
 	prefix = prefixOf(prefix)
 	for _, topic := range router.Topics() {
-		if topic != TopicProductProjectedBulk {
+		if topic != TopicProductProjectedBulk && topic != TopicOrderStatusChanged {
 			regular = append(regular, prefix+topic)
 		}
 	}
 	return regular, prefix + TopicProductProjectedBulk
 }
+
+// OrderStatusTopic — топик статусов заказов с префиксом установки.
+func OrderStatusTopic(prefix string) string { return prefixOf(prefix) + TopicOrderStatusChanged }

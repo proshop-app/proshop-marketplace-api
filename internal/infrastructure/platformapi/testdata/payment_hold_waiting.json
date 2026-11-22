@@ -1,0 +1,6 @@
+{
+  "orderId": "o1",
+  "status": "awaiting_payment",
+  "revision": 1,
+  "paymentHeldUntil": "2026-11-22T10:15:00Z"
+}

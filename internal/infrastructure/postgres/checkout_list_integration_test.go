@@ -74,6 +74,9 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 		allIDs[i] = purchase.ID()
 	}
 
+	// Страховочная работа считается от срока намерения, а не тарифа доставки.
+	paymentDue := at(0).Add(checkout.PaymentWindow)
+	workDue := paymentDue.Add(checkout.PaymentExpiryGrace)
 	filter := checkout.Filter{Limit: 2}
 	var paged []ids.UUID
 	for {
@@ -134,13 +137,16 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(1), Limit: 100},
 		},
 		{
-			name:   "пора опрашивать известный заказ",
-			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(10), Limit: 100},
-			want:   allIDs[3:4],
+			name:   "известный заказ ждёт срока",
+			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: paymentDue.Add(-time.Second), Limit: 100},
 		},
 		{
-			name:   "все задания готовы",
-			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(30), Limit: 100},
+			name:   "срок прошёл, запас ещё нет",
+			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: workDue.Add(-time.Microsecond), Limit: 100},
+		},
+		{
+			name:   "срок с запасом прошёл",
+			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: workDue, Limit: 100},
 			want:   allIDs[3:],
 		},
 		{
@@ -148,9 +154,19 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 			filter: checkout.Filter{
 				OrdersOnly:  true,
 				StuckBefore: at(15),
-				WorkDueAt:   at(9),
+				WorkDueAt:   workDue.Add(-time.Microsecond),
 				Limit:       100,
 			},
+		},
+		{
+			name: "ожидающий заказ пора опрашивать",
+			filter: checkout.Filter{
+				OrdersOnly:  true,
+				StuckBefore: at(15),
+				WorkDueAt:   workDue,
+				Limit:       100,
+			},
+			want: []ids.UUID{allIDs[3]},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -216,8 +232,17 @@ func TestCheckoutListRejectsChangedVersionBetweenQueries(t *testing.T) {
 	purchases := seedCheckoutList(t, uow)
 	trace := &checkoutListTrace{beforeGroups: func() {
 		purchase := purchases[3]
-		if _, err := purchase.ClaimPoll("t1", "concurrent-poll", at(10)); err != nil {
-			t.Fatal(err)
+		changed, err := purchase.ApplyOrderState(
+			"t1",
+			checkout.SellerOrder{
+				OrderID:  "o-t1",
+				Status:   checkout.GroupPaid,
+				Revision: 1,
+			},
+			at(10),
+		)
+		if err != nil || !changed {
+			t.Fatalf("параллельное изменение не состоялось: %v, %v", changed, err)
 		}
 		if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
 			return tx.Checkouts().Update(ctx, purchase)
@@ -457,7 +482,7 @@ func seedCheckoutList(t *testing.T, uow *postgres.UnitOfWork) []*checkout.Checko
 					Carrier:         "cdek",
 					PickupPointCode: "P1",
 					OrderID:         "o-" + string(group.TenantID),
-					ExpiresAt:       at(60),
+					ExpiresAt:       group.ExpiresAt,
 					Total:           total,
 				}
 				if _, err := purchase.AttachOrder(group.TenantID, order, value.at); err != nil {

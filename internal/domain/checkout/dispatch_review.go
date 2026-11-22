@@ -31,6 +31,7 @@ func (c *Checkout) BeginDispatchReview(
 	// Попытка уже была отправлена: явное удаление группы должно закрыть её ключ на сервере.
 	g.CreateFailures++
 	g.CreateToken = ""
+	g.ExpiresAt = time.Time{}
 	g.CreationDeadline = time.Time{}
 	g.NextCreateAt = time.Time{}
 	q := delivery.Unreachable(now)

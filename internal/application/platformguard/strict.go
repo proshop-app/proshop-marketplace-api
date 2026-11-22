@@ -97,6 +97,52 @@ func (c *Client) GetOrder(ctx context.Context, tenant ids.TenantID, order string
 	)
 }
 
+// CancelPaidOrder идёт в резерве оформления: это действие покупателя, а не фоновое чтение.
+func (c *Client) CancelPaidOrder(
+	ctx context.Context,
+	tenant ids.TenantID,
+	order string,
+) (checkout.SellerOrder, error) {
+	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
+	cancelOrder := func(ctx context.Context) (checkout.SellerOrder, error) {
+		return c.upstream.CancelPaidOrder(ctx, tenant, order)
+	}
+	return call(ctx, c, checkoutClass, "cancel_paid_order", c.cfg.StrictTimeout, cancelOrder)
+}
+
+// RequestReturn идёт в резерве оформления, как остальные команды покупателя.
+func (c *Client) RequestReturn(
+	ctx context.Context,
+	tenant ids.TenantID,
+	order string,
+	reason checkout.ReturnReason,
+) (checkout.SellerOrder, error) {
+	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
+	requestReturn := func(ctx context.Context) (checkout.SellerOrder, error) {
+		return c.upstream.RequestReturn(ctx, tenant, order, reason)
+	}
+	return call(ctx, c, checkoutClass, "request_return", c.cfg.StrictTimeout, requestReturn)
+}
+
+// OrderStatuses — фоновая сверка: идёт в доле чтений и не занимает резерв оформления.
+func (c *Client) OrderStatuses(
+	ctx context.Context,
+	tenant ids.TenantID,
+	orderIDs []string,
+) ([]checkout.OrderStatus, error) {
+	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
+	return call(
+		ctx,
+		c,
+		readClass,
+		"order_statuses",
+		c.cfg.ReadTimeout,
+		func(ctx context.Context) ([]checkout.OrderStatus, error) {
+			return c.upstream.OrderStatuses(ctx, tenant, orderIDs)
+		},
+	)
+}
+
 // StubPayment использует тот же общий лимит, что остальные обращения к ячейке.
 func (c *Client) StubPayment(ctx context.Context, tenant ids.TenantID, order string, amount money.Money) error {
 	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
@@ -155,4 +201,13 @@ func (c *Client) CancelOrder(
 		return c.upstream.CancelOrder(ctx, tenant, request)
 	}
 	return call(ctx, c, checkoutClass, "cancel_order", c.cfg.StrictTimeout, cancelOrder)
+}
+
+// PaymentHold — команда оформления без кэша и скрытых повторов.
+func (c *Client) PaymentHold(ctx context.Context, tenant ids.TenantID, order string) (checkout.SellerOrder, error) {
+	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
+	hold := func(ctx context.Context) (checkout.SellerOrder, error) {
+		return c.upstream.PaymentHold(ctx, tenant, order)
+	}
+	return call(ctx, c, checkoutClass, "payment_hold", c.cfg.StrictTimeout, hold)
 }

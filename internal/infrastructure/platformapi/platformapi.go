@@ -277,6 +277,11 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 	}
 	if json.Unmarshal(raw, &body) == nil && body.Code != "" {
 		switch {
+		case reply.StatusCode == http.StatusBadRequest && body.Code == "MARKETPLACE_PAYMENT_DUE_INVALID":
+			return &ports.OrderRefusal{Code: body.Code}
+		case reply.StatusCode == http.StatusConflict &&
+			(body.Code == "ORDER_PAYMENT_EXPIRED" || body.Code == "ORDER_NOT_AWAITING_PAYMENT"):
+			return &ports.OrderRefusal{Code: body.Code}
 		case reply.StatusCode == http.StatusServiceUnavailable && body.Code == "MARKETPLACE_TEMPORARY_FAILURE":
 			return ErrUnavailable.Wrap(&ports.OrderRefusal{Code: body.Code})
 		case reply.StatusCode == http.StatusConflict && strings.HasSuffix(path, "/stub-payment") &&

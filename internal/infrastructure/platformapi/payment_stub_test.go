@@ -24,6 +24,7 @@ func TestStubPaymentRecordedContract(t *testing.T) {
 		{"stub_payment_paid.json", 200, true},
 		{"stub_payment_amount.json", 409, false},
 		{"stub_payment_state.json", 409, false},
+		{"stub_payment_expired.json", 409, false},
 		{"order_not_found.json", 404, false},
 		{"order_shipped.json", 200, false},
 		{"stub_payment_temporary.json", 503, false},

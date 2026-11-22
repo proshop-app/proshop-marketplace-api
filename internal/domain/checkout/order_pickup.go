@@ -13,7 +13,6 @@ func (c *Checkout) rejectOrderPickup(g *Group, order SellerOrder, now time.Time)
 	g.Status, g.Reason = GroupDeliveryUnavailable, "Пункт выдачи заказа изменился. Проверьте состав покупки"
 	g.Quote = nil
 	g.ReconciliationRequired = !g.CancellationConfirmed
-	g.NextPollAt = now
 	c.reviewComposition()
 	return true, c.touch(now)
 }

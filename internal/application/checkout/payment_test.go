@@ -50,7 +50,7 @@ func TestSinglePaymentRecovery(t *testing.T) {
 				first := state.Groups[0]
 				if mode == "partial" {
 					e.platform.SetOrderStatus(first.OrderID, checkout.GroupPaid, "")
-					if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
+					if err := announceOrder(ctx, e, first.TenantID, c.ID, first.OrderID); err != nil {
 						t.Fatal(err)
 					}
 					// Уже оплаченный локально магазин больше не вызывается.
@@ -138,7 +138,6 @@ func TestSinglePaymentConcurrentUpdate(t *testing.T) {
 					OrderID: first.OrderID,
 					Status:  checkout.GroupPaid,
 				},
-				e.clock.Now(),
 				e.clock.Now(),
 			)
 			if err != nil {
@@ -287,17 +286,28 @@ func TestPaymentWithUnreachablePoll(t *testing.T) {
 			}
 		}
 		e.platform.Fail("t1", errors.New("нет связи"))
+		if !paid {
+			if err := e.service.ConfirmPayment(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrPaymentUnavailable) {
+				t.Fatal(err)
+			}
+			e.clock.Advance(checkout.PaymentOutcomeDelay)
+		}
 		for range checkout.MaxOrderFailures {
 			state, err := refreshOrders(ctx, e, buyerID, c.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if state.Groups[0].PollFailures < checkout.MaxOrderFailures {
+			if !paid && state.Groups[0].PollFailures < checkout.MaxOrderFailures {
 				e.clock.Advance(state.Groups[0].NextPollAt.Sub(e.clock.Now()))
 			}
 		}
 		state, _ := e.service.Get(ctx, buyerID, c.ID)
-		if state.Groups[0].Status != checkout.GroupSellerUnreachable {
+		// Оплаченный заказ не опрашивается: недоступность магазина не меняет его статус у покупателя.
+		expected := checkout.GroupSellerUnreachable
+		if paid {
+			expected = checkout.GroupPaid
+		}
+		if state.Groups[0].Status != expected {
 			t.Fatal(state)
 		}
 		if !paid {
