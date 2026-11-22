@@ -106,9 +106,11 @@ func batchDeferredOffers(offers []offerDocument, raw json.RawMessage) []ids.Offe
 // Ограничиваем и число карточек, и байты: длинные описания не блокируют outbox.
 func nextOfferBatch(docs []ports.OfferDocument) (offerBatch, error) {
 	batch := offerBatch{
-		Offers: make([]offerDocument, 0, min(len(docs), batchLimit)),
+		ContractVersion: contractVersion,
+		Offers:          make([]offerDocument, 0, min(len(docs), batchLimit)),
 	}
-	size := len(`{"offers":[]}`)
+	empty, _ := json.Marshal(batch)
+	size := len(empty)
 
 	for _, doc := range docs[:min(len(docs), batchLimit)] {
 		offer, err := toDocument(doc)
