@@ -204,11 +204,11 @@ func TestComposeOfferVisibility(t *testing.T) {
 		t.Fatalf("продавец без оплаты: виден, но без checkout: %+v", onboarding)
 	}
 	variant := snapshot(1, t1)
-	variant.Card.OnlyVariant = true
+	variant.Card.TileKey = "group-1"
 	variantProduct, _ := catalog.NewProduct(variant, t1)
 	offer = catalog.ComposeOffer(variantProduct, nil, visibleSeller, allowedVerdict())
-	if !offer.Visible || offer.Listed || !offer.CheckoutAvailable {
-		t.Fatalf("вариант доступен напрямую, но не своей карточкой: %+v", offer)
+	if !offer.Visible || !offer.Listed || !offer.CheckoutAvailable {
+		t.Fatalf("вариант группы стоит в выдаче, плитку сворачивает поиск: %+v", offer)
 	}
 	off := snapshot(1, t1)
 	off.Card.Visible = false

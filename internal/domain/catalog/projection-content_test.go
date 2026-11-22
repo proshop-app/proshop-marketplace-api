@@ -114,10 +114,6 @@ func TestIdenticalProjectionContentRejectsBusinessChanges(t *testing.T) {
 			edit: func(state *catalog.ProductState) { state.Card.Visible = false },
 		},
 		{
-			name: "only variant",
-			edit: func(state *catalog.ProductState) { state.Card.OnlyVariant = true },
-		},
-		{
 			name: "variant group",
 			edit: func(state *catalog.ProductState) { state.Card.VariantsID = "group-2" },
 		},

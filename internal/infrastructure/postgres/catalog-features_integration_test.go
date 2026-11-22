@@ -81,7 +81,6 @@ func seedRecommendationProducts(t *testing.T, uow *postgres.UnitOfWork, tenant i
 			snap := snapshot(tenant, id, 1, 0)
 			if i < 2 {
 				snap.Card.TileKey = "p1"
-				snap.Card.OnlyVariant = i == 1
 			} else {
 				snap.Card.VariantsID = ""
 			}
@@ -259,7 +258,10 @@ func TestRecommendationsCollapseGroupsAndGeneratedColumns(t *testing.T) {
 			snap := snapshot("t1", id, 2, 0)
 			snap.Card.VariantsID = "v1"
 			snap.Card.TileKey = "p1"
-			snap.Card.OnlyVariant = id == "p2"
+			// Плитку представляет вариант в наличии, хотя по рангу они равны.
+			if id == "p1" {
+				snap.Available = 0
+			}
 			// Проверка из снимка заменяет прежнюю только вместе с изменением проверяемой карточки.
 			snap.Card.Description = "Описание для категории c2"
 			snap.Card.Publication = taxonomy.Publication{Published: true, CategoryID: "c2"}
@@ -277,7 +279,8 @@ func TestRecommendationsCollapseGroupsAndGeneratedColumns(t *testing.T) {
 	}
 	repository := postgres.NewCatalogFeatures(pool)
 	states, err := repository.Recommend(ctx, ports.RecommendationFilter{Categories: []string{"c2"}, Limit: 20})
-	if err != nil || len(states) != 1 || states[0].Product.State().Card.VariantsID != "v1" {
+	if err != nil || len(states) != 1 || states[0].Product.State().Card.VariantsID != "v1" ||
+		states[0].Product.State().ProductID != "p2" {
 		t.Fatal(states, err)
 	}
 	states, err = repository.Recommend(ctx, ports.RecommendationFilter{
@@ -477,7 +480,7 @@ func TestRecommendationLimitsCandidatesBeforeVariantCollapse(t *testing.T) {
 			Categories: categories,
 			Limit:      3,
 		})
-		// Флаг исключает p2 до лимита: три кандидата — самостоятельные карточки p1, p3, p4.
+		// p2 сворачивается в плитку p1 после добора с запасом: три плитки — p1, p3, p4.
 		if err != nil || len(states) != 3 {
 			t.Fatal(states, err)
 		}

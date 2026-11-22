@@ -32,17 +32,16 @@ const laneSnapshotPayload = `{
 		"variantsId":"v1",
 		"variants":{"groupId":"v1","position":0,
 			"axes":[{"key":"platform.a1","code":"a1","name":"Атрибут","value":%q}]},
-		"conditions":{"isVisible":%t,"isOnlyVariant":%t},
+		"conditions":{"isVisible":%t},
 		"marketplace":{"categoryId":"c1","published":%t,"attributes":{}}
 	}
 }`
 
 type laneSnapshot struct {
-	revision    int64
-	deleted     bool
-	published   bool
-	onlyVariant bool
-	variant     string
+	revision  int64
+	deleted   bool
+	published bool
+	variant   string
 }
 
 func TestProjectionLaneRevisionOrder(t *testing.T) {
@@ -102,11 +101,11 @@ func TestProjectionLaneRevisionOrder(t *testing.T) {
 					stale: laneSnapshot{revision: 1, deleted: true},
 				},
 				{
-					fresh: laneSnapshot{revision: 4, published: true, onlyVariant: true, variant: "v4"},
+					fresh: laneSnapshot{revision: 4, published: true, variant: "v4"},
 					stale: laneSnapshot{revision: 3, variant: "v3"},
 				},
 				{
-					fresh: laneSnapshot{revision: 6, onlyVariant: true, variant: "v6"},
+					fresh: laneSnapshot{revision: 6, variant: "v6"},
 					stale: laneSnapshot{revision: 5, published: true, variant: "v5"},
 				},
 				{
@@ -148,7 +147,6 @@ func (s laneSnapshot) message(topic, product string) kafkago.Message {
 		s.revision,
 		s.variant,
 		s.published,
-		s.onlyVariant,
 		s.published,
 	)
 	if s.deleted {
@@ -179,7 +177,7 @@ func (s laneSnapshot) check(t *testing.T, got catalog.ProductState) {
 		t.Fatalf("публичная цена ревизии %d: %+v", s.revision, got)
 	}
 	variants := got.Card.Variants
-	if got.Card.Visible != s.published || got.Card.OnlyVariant != s.onlyVariant ||
+	if got.Card.Visible != s.published ||
 		variants == nil || len(variants.Axes) != 1 || variants.Axes[0].Value != s.variant {
 		t.Fatalf("карточка ревизии %d: %+v", s.revision, got.Card)
 	}

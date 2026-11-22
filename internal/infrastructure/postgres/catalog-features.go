@@ -37,21 +37,21 @@ const (
 		FROM interests i LEFT JOIN catalog_products p
 			ON p.tenant_id = i.tenant_id AND p.product_id = i.product_id`
 
-	// Каждый магазин даёт не больше limit кандидатов до свёртки и оконного ранжирования.
+	// Каждый магазин даёт кандидатов с запасом на свёртку вариантов одной плитки:
+	// иначе группа с десятком размеров занимала бы весь лимит магазина.
 	selectRecommendations = `
 		WITH eligible AS MATERIALIZED (
 			SELECT candidate.*
 			FROM participants m
 			JOIN tenants t ON t.tenant_id = m.tenant_id
 			CROSS JOIN LATERAL (
-				SELECT p.tenant_id, p.product_id, p.tile_key, p.sales_count,
+				SELECT p.tenant_id, p.product_id, p.tile_key, p.available, p.sales_count,
 					p.ratings_count, p.average_rating, p.updated_at,
 					md5(p.tenant_id || '~' || p.product_id) AS offer_key
 				FROM catalog_products p
 				JOIN moderation_verdicts mv ON mv.tenant_id = p.tenant_id AND mv.product_id = p.product_id
 				WHERE p.tenant_id = m.tenant_id AND p.on_sale AND p.price IS NOT NULL
 					AND mv.status = 'allowed'
-					AND NOT COALESCE((p.card->>'onlyVariant')::boolean, false)
 					AND NOT EXISTS (
 						SELECT 1 FROM catalog_products excluded
 						WHERE excluded.tenant_id = p.tenant_id AND excluded.tile_key = p.tile_key
@@ -61,14 +61,15 @@ const (
 					AND ($5::bigint IS NULL OR p.price <= $5)
 					AND (cardinality($1::text[]) = 0 OR p.category_id = ANY($1::text[]))
 				ORDER BY ` + recommendationRank + `
-				LIMIT $7
+				LIMIT $7 * ` + recommendationTileOversample + `
 			) candidate
 			WHERE m.enabled AND m.delivery_valid AND t.status = 'active'
 				AND ($3 = '' OR m.delivery_settings->'regions' ? $3)
 		), candidates AS (
+			-- Плитку представляет вариант в наличии, затем лучший по рангу.
 			SELECT DISTINCT ON (tenant_id, tile_key) *
 			FROM eligible
-			ORDER BY tenant_id, tile_key, ` + recommendationRank + `
+			ORDER BY tenant_id, tile_key, available > 0 DESC, ` + recommendationRank + `
 		), ranked AS (
 			SELECT *, row_number() OVER (PARTITION BY tenant_id ORDER BY ` + recommendationRank + `) AS tenant_rank
 			FROM candidates
@@ -83,6 +84,9 @@ const (
 		` + offerSelect + `
 		JOIN selected s ON s.tenant_id = p.tenant_id AND s.product_id = p.product_id
 		ORDER BY s.position`
+
+	// Запас кандидатов магазина на свёртку плиток: варианты одной плитки идут рядом по рангу.
+	recommendationTileOversample = `4`
 
 	recommendationRank = `sales_count DESC, ratings_count DESC, average_rating DESC,
 			updated_at DESC, offer_key, product_id`

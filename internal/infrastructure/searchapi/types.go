@@ -19,7 +19,6 @@ type category struct {
 type offerDocument struct {
 	SalesTier         uint8                        `json:"salesTier"`
 	TileKey           string                       `json:"tileKey,omitempty"`
-	OnlyVariant       bool                         `json:"onlyVariant,omitempty"`
 	Rating            *catalog.Rating              `json:"rating"`
 	Variants          *catalog.Variants            `json:"variants,omitempty"`
 	ModelKey          string                       `json:"modelKey,omitempty"`

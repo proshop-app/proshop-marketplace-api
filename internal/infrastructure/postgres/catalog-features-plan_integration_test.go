@@ -20,6 +20,8 @@ const (
 	// На малой фикстуре проверяем доступность индексного пути, а не стоимостной выбор планировщика.
 	recommendationPlanSettings = `SET LOCAL enable_seqscan = off`
 	recommendationPlanLimit    = 5
+	// Запас магазина на свёртку плиток — тот же, что в запросе рекомендаций.
+	recommendationPlanCandidates = recommendationPlanLimit * 4
 )
 
 type recommendationPlanNode struct {
@@ -123,11 +125,11 @@ func checkRecommendationPlan(t *testing.T, node recommendationPlanNode, limited 
 	if node.RelationName == "catalog_products" && strings.Contains(node.NodeType, "Seq Scan") {
 		t.Fatalf("последовательный проход по товарам: %+v", node)
 	}
-	if node.SubplanName == "CTE eligible" && node.ActualRows > 2*recommendationPlanLimit {
+	if node.SubplanName == "CTE eligible" && node.ActualRows > 2*recommendationPlanCandidates {
 		t.Fatalf("набор кандидатов не ограничен числом магазинов и limit: %+v", node)
 	}
 	if node.NodeType == "Limit" {
-		limited = node.ActualRows <= recommendationPlanLimit
+		limited = node.ActualRows <= recommendationPlanCandidates
 	}
 	// Сортировка под Limit потребовала бы прочитать весь набор магазина до отсечения.
 	if strings.Contains(node.NodeType, "Sort") {
