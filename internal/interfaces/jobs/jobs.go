@@ -91,12 +91,21 @@ func NewOutboxRunner(
 
 // Run крутит разбор до отмены контекста.
 func (r *OutboxRunner) Run(ctx context.Context) error {
+	return r.run(ctx, r.dispatcher, true)
+}
+
+// RunLane разбирает свои виды задач независимо и пишет в общие метрики outbox.
+func (r *OutboxRunner) RunLane(ctx context.Context, dispatcher Dispatcher) error {
+	return r.run(ctx, dispatcher, false)
+}
+
+func (r *OutboxRunner) run(ctx context.Context, dispatcher Dispatcher, countDepth bool) error {
 	for {
-		if time.Now().After(r.depthAt) {
+		if countDepth && time.Now().After(r.depthAt) {
 			r.recordDepth(ctx)
 			r.depthAt = time.Now().Add(r.interval)
 		}
-		outcomes, err := r.dispatcher.RunOnce(ctx)
+		outcomes, err := dispatcher.RunOnce(ctx)
 		r.record(outcomes)
 
 		if err != nil && ctx.Err() == nil {

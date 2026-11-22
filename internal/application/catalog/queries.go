@@ -43,6 +43,7 @@ type OfferCard struct {
 // OfferList — страница выдачи и фасеты.
 type OfferList struct {
 	Correction *ports.OfferCorrection
+	Receipt    string
 	Facets     []ports.Facet
 	Total      int
 	Items      []OfferCard
@@ -110,6 +111,9 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 		Total:      page.Total,
 		Items:      make([]OfferCard, 0, len(page.Items)),
 	}
+	if normalized.Observe && len(page.Items) != 0 {
+		list.Receipt = page.Receipt
+	}
 	for _, doc := range page.Items {
 		list.Items = append(
 			list.Items,
@@ -148,6 +152,10 @@ func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 	}
 	query.Text = text
 	query.TrackQuery = query.TrackQuery && query.Text != "" && query.Offset == 0
+	query.Observe = query.Observe && query.Text != ""
+	if !query.Observe {
+		query.BuyerKey = ""
+	}
 
 	if len(query.TenantIDs) > MaxTenants {
 		return query, ErrInvalidQuery.WithMessage("слишком много магазинов")

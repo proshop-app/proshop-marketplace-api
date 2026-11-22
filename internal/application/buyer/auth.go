@@ -207,6 +207,16 @@ func (a *Auth) Authenticate(ctx context.Context, token string) (buyer.Session, e
 	}, nil
 }
 
+// BuyerIDFromAccess возвращает привязку из проверенного access для псевдонима поиска.
+func (a *Auth) BuyerIDFromAccess(ctx context.Context, token string) (ids.UUID, error) {
+	access, err := a.tokens.Authenticate(ctx, token)
+	if err != nil {
+		return "", err
+	}
+
+	return ids.UUID(access.LocalID), nil
+}
+
 // Logout отзывает refresh, не пытаясь превратить JWT в серверную сессию.
 func (a *Auth) Logout(ctx context.Context, key string) error {
 	return a.tokens.Logout(ctx, key)

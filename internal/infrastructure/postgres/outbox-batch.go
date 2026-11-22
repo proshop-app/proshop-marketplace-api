@@ -12,6 +12,15 @@ import (
 )
 
 const (
+	insertTasks = `
+		INSERT INTO outbox (kind, tenant_id, dedup_key, payload, next_at, created_at)
+		SELECT kind, tenant_id, NULLIF(dedup_key, ''), payload, next_at, created_at
+		FROM jsonb_to_recordset($1::jsonb)
+		AS t(kind text, tenant_id text, dedup_key text, payload jsonb, next_at timestamptz, created_at timestamptz)
+		ON CONFLICT (dedup_key) WHERE done_at IS NULL AND attempts = 0 DO UPDATE
+		SET next_at = EXCLUDED.next_at
+		WHERE EXCLUDED.next_at < outbox.next_at`
+
 	resolveTasks = `
 		WITH results AS (
 			SELECT * FROM jsonb_to_recordset($1::jsonb)
@@ -35,6 +44,15 @@ const (
 		GROUP BY kind`
 )
 
+type newTaskRow struct {
+	Kind      string          `json:"kind"`
+	TenantID  string          `json:"tenant_id"`
+	DedupKey  string          `json:"dedup_key"`
+	Payload   json.RawMessage `json:"payload"`
+	NextAt    time.Time       `json:"next_at"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
 type taskResolution struct {
 	UnknownFailures int        `json:"unknown_failures"`
 	FailureReason   string     `json:"failure_reason"`
@@ -43,6 +61,39 @@ type taskResolution struct {
 	At              time.Time  `json:"at"`
 	NextAt          *time.Time `json:"next_at"`
 	Error           string     `json:"error"`
+}
+
+// EnqueueBatch добавляет позиции в транзакции вызывающего сценария.
+func (o *Outbox) EnqueueBatch(ctx context.Context, tasks []ports.NewTask) error {
+	switch len(tasks) {
+	case 0:
+		return nil
+	case 1:
+		return o.Enqueue(ctx, tasks[0])
+	}
+	rows := make([]newTaskRow, 0, len(tasks))
+	for _, task := range tasks {
+		next := task.AvailableAt
+		if next.IsZero() {
+			next = task.At
+		}
+		rows = append(rows, newTaskRow{
+			Kind:      task.Kind,
+			TenantID:  string(task.TenantID),
+			DedupKey:  task.DedupKey,
+			Payload:   task.Payload,
+			NextAt:    next,
+			CreatedAt: task.At,
+		})
+	}
+	encoded, err := json.Marshal(rows)
+	if err != nil {
+		return fmt.Errorf("пачка задач: %w", err)
+	}
+	if _, err := execSQL(ctx, o.db, insertTasks, string(encoded)); err != nil {
+		return fmt.Errorf("постановка пачки задач: %w", err)
+	}
+	return nil
 }
 
 // Resolve проверяет токены всей пачки в транзакции: конфликт откатывает все отметки.

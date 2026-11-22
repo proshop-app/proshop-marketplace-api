@@ -63,6 +63,8 @@ type attribute struct {
 type offerQuery struct {
 	Exact       bool                             `json:"exact,omitempty"`
 	TrackQuery  bool                             `json:"trackQuery"`
+	Observe     bool                             `json:"observe,omitempty"`
+	BuyerKey    string                           `json:"buyerKey,omitempty"`
 	GroupID     string                           `json:"groupId,omitempty"`
 	Attributes  map[string]ports.AttributeFilter `json:"attributes"`
 	FacetFields []facetField                     `json:"facetFields"`
@@ -81,6 +83,7 @@ type offerQuery struct {
 
 type offerPage struct {
 	Correction *offerCorrection `json:"correction,omitempty"`
+	Receipt    string           `json:"receipt,omitempty"`
 	Facets     []ports.Facet    `json:"facets"`
 	Total      int              `json:"total"`
 	Items      []offerDocument  `json:"items"`

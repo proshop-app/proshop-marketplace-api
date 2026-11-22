@@ -4,6 +4,7 @@ package searchapi
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -31,15 +32,17 @@ var (
 
 // Config — адрес и отдельный служебный токен поискового API.
 type Config struct {
-	URL     string
-	Token   string
-	Timeout time.Duration
+	URL           string
+	Token         string
+	PurchaseToken string
+	Timeout       time.Duration
 }
 
 // Index реализует порт индекса предложений через proshop-search.
 type Index struct {
 	base            string
 	token           string
+	purchaseToken   string
 	client          *http.Client
 	referenceBearer string
 }
@@ -53,10 +56,14 @@ func New(cfg Config) (*Index, error) {
 		(parsed.Path != "" && parsed.Path != "/") || len(cfg.Token) < 32 || cfg.Timeout <= 0 {
 		return nil, fmt.Errorf("некорректные настройки поискового сервиса")
 	}
+	if cfg.PurchaseToken != "" && (len(cfg.PurchaseToken) < 32 || cfg.PurchaseToken == cfg.Token) {
+		return nil, fmt.Errorf("нужен отдельный токен подтверждения покупок")
+	}
 
 	return &Index{
-		base:  strings.TrimRight(cfg.URL, "/") + apiPath,
-		token: cfg.Token,
+		base:          strings.TrimRight(cfg.URL, "/") + apiPath,
+		token:         cfg.Token,
+		purchaseToken: cfg.PurchaseToken,
 		client: &http.Client{
 			Timeout: cfg.Timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -180,31 +187,34 @@ func (x *Index) Get(ctx context.Context, id string) (ports.OfferDocument, bool, 
 
 // Search передаёт текст, каноническую категорию и фильтры общему движку.
 func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.OfferPage, error) {
+	payload := offerQuery{
+		Exact:       query.Exact,
+		TrackQuery:  query.TrackQuery,
+		Observe:     query.Observe,
+		BuyerKey:    query.BuyerKey,
+		Attributes:  query.Attributes,
+		FacetFields: wireFacetFields(query),
+		Facets:      wireFacetSelection(query.Facets),
+		InStockSet:  query.InStockSet,
+		Text:        query.Text,
+		TenantIDs:   query.TenantIDs,
+		GroupID:     query.GroupID,
+		CategoryID:  query.CategoryID,
+		PriceMin:    query.PriceMin,
+		PriceMax:    query.PriceMax,
+		InStock:     query.InStock,
+		Sort:        string(query.Sort),
+		Offset:      query.Offset,
+		Limit:       query.Limit,
+	}
 	var result offerPage
-	status, err := x.request(
-		ctx,
-		http.MethodPost,
-		"/search",
-		offerQuery{
-			Exact:       query.Exact,
-			TrackQuery:  query.TrackQuery,
-			Attributes:  query.Attributes,
-			FacetFields: wireFacetFields(query),
-			Facets:      wireFacetSelection(query.Facets),
-			InStockSet:  query.InStockSet,
-			Text:        query.Text,
-			TenantIDs:   query.TenantIDs,
-			GroupID:     query.GroupID,
-			CategoryID:  query.CategoryID,
-			PriceMin:    query.PriceMin,
-			PriceMax:    query.PriceMax,
-			InStock:     query.InStock,
-			Sort:        string(query.Sort),
-			Offset:      query.Offset,
-			Limit:       query.Limit,
-		},
-		&result,
-	)
+	status, err := x.request(ctx, http.MethodPost, "/search", payload, &result)
+	if status == http.StatusBadRequest && payload.Observe {
+		slog.WarnContext(ctx, "поиск отклонил наблюдение: повтор запроса без observe")
+		payload.Observe = false
+		payload.BuyerKey = ""
+		status, err = x.request(ctx, http.MethodPost, "/search", payload, &result)
+	}
 
 	if status == http.StatusBadRequest {
 		return ports.OfferPage{}, ErrInvalid
@@ -218,6 +228,7 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 	}
 	page := ports.OfferPage{
 		Correction: correction,
+		Receipt:    result.Receipt,
 		Facets:     result.Facets,
 		Total:      result.Total,
 		Items:      make([]ports.OfferDocument, 0, len(result.Items)),

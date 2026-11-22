@@ -41,9 +41,10 @@ func openStorage(ctx context.Context, cfg config.Config) (*storage, error) {
 	}
 
 	index, err := searchapi.New(searchapi.Config{
-		URL:     cfg.Search.URL,
-		Token:   cfg.Search.Token,
-		Timeout: cfg.Search.Timeout,
+		URL:           cfg.Search.URL,
+		Token:         cfg.Search.Token,
+		PurchaseToken: cfg.Search.PurchaseToken,
+		Timeout:       cfg.Search.Timeout,
 	})
 	if err != nil {
 		pool.Close()

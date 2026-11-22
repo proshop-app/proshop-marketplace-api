@@ -151,6 +151,7 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	if order.OrderID == "" || order.ExpiresAt.IsZero() || total.Cmp(order.Total) != 0 {
 		return false, ErrInvalidOrder
 	}
+	g.AwaitingSince = now
 	if c.state.Delivery == nil || order.Carrier != c.state.Delivery.Carrier ||
 		order.PickupPointCode != c.state.Delivery.PickupPointCode {
 		return c.rejectOrderPickup(g, order, now)
@@ -165,7 +166,6 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	} else {
 		g.Status, g.Reason = GroupAwaitingPayment, ""
 	}
-	g.AwaitingSince = now
 	c.rollup()
 	return true, c.touch(now)
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	apppromotion "github.com/proshop-app/proshop-marketplace/internal/application/promotion"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
+	"github.com/proshop-app/proshop-marketplace/internal/application/searchfeedback"
 	appsynonyms "github.com/proshop-app/proshop-marketplace/internal/application/synonyms"
 	apptaxonomy "github.com/proshop-app/proshop-marketplace/internal/application/taxonomy"
 )
@@ -49,6 +50,8 @@ type Deps struct {
 	Taxonomy               *apptaxonomy.Service
 	SellersCounts          ports.SellersCounts
 	Catalog                *appcatalog.Queries
+	SearchFeedback         *searchfeedback.Feedback
+	SearchBuyerKeys        *searchfeedback.BuyerKeys
 	Participants           *appparticipant.Service
 	Auth                   *appbuyer.Auth
 	Carts                  *appcart.Service
@@ -91,7 +94,13 @@ func routes(deps Deps) []route {
 	promotion := &promotionHandlers{service: deps.Promotion, trustedProxies: deps.TrustedProxies}
 	machine := func(next http.HandlerFunc) http.HandlerFunc { return serverAPI(deps.ServerAPIToken, next) }
 	moderation := &moderationHandlers{service: deps.Moderation}
-	catalog := &catalogHandlers{queries: deps.Catalog, sellers: deps.SellersCounts}
+	search := &searchHandlers{
+		feedback:       deps.SearchFeedback,
+		keys:           deps.SearchBuyerKeys,
+		auth:           deps.Auth,
+		trustedProxies: deps.TrustedProxies,
+	}
+	catalog := &catalogHandlers{queries: deps.Catalog, sellers: deps.SellersCounts, search: search}
 	taxonomy := &taxonomyHandlers{service: deps.Taxonomy, catalog: deps.Catalog}
 	participants := &participantHandlers{service: deps.Participants, buyerFeatures: deps.Features}
 	statuses := &statusHandlers{service: deps.Statuses}
@@ -557,6 +566,7 @@ func routes(deps Deps) []route {
 		},
 		{readRequest, http.MethodGet, "/api/v1/catalog/offers/{offerId}/reviews", catalog.reviews},
 		{readRequest, http.MethodGet, "/api/v1/catalog/offers", catalog.list},
+		{ingestionRequest, http.MethodPost, "/api/v1/search/feedback", search.record},
 		{
 			readRequest,
 			http.MethodGet,

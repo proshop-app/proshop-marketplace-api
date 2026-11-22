@@ -9,6 +9,11 @@ import (
 	"net/http"
 )
 
+type bodyLimits struct {
+	send    int
+	receive int
+}
+
 // request не повторяет мутации транспортом: ответ может потеряться уже после
 // записи. Outbox повторит версионированную пачку, а rebuild сверит поколение.
 func (x *Index) request(ctx context.Context, method, path string, payload, out any) (int, error) {
@@ -23,6 +28,16 @@ func (x *Index) requestWithCapacity(
 	out any,
 	capacity *capacityResponse,
 ) (int, error) {
+	return x.requestWith(ctx, method, path, x.token, payload, out, bodyLimits{receive: responseLimit}, capacity)
+}
+
+func (x *Index) requestWith(
+	ctx context.Context,
+	method, path, token string,
+	payload, out any,
+	limits bodyLimits,
+	capacity *capacityResponse,
+) (int, error) {
 	var body io.Reader
 
 	if payload != nil {
@@ -31,6 +46,9 @@ func (x *Index) requestWithCapacity(
 		if err != nil {
 			return 0, ErrInvalid.Wrap(err)
 		}
+		if limits.send > 0 && len(encoded) > limits.send {
+			return 0, ErrInvalid.WithMessage("тело запроса поиска превышает предел")
+		}
 		body = bytes.NewReader(encoded)
 	}
 	request, err := http.NewRequestWithContext(ctx, method, x.base+path, body)
@@ -38,12 +56,11 @@ func (x *Index) requestWithCapacity(
 	if err != nil {
 		return 0, ErrUnavailable.Wrap(err)
 	}
-	request.Header.Set("X-Admin-Id", x.token)
-	replyLimit := int64(responseLimit)
 	if x.referenceBearer != "" {
-		request.Header.Del("X-Admin-Id")
 		request.Header.Set("Authorization", "Bearer "+x.referenceBearer)
-		replyLimit = synonymReplyLimit
+		limits.receive = synonymReplyLimit
+	} else {
+		request.Header.Set("X-Admin-Id", token)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	response, err := x.client.Do(request)
@@ -72,9 +89,12 @@ func (x *Index) requestWithCapacity(
 
 		return response.StatusCode, nil
 	}
-	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, replyLimit+1))
+	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, int64(limits.receive)+1))
 
-	if err != nil || int64(len(bodyBytes)) > replyLimit {
+	if err != nil {
+		return 0, ErrUnavailable.WithMessage("не удалось прочитать ответ поиска")
+	}
+	if len(bodyBytes) > limits.receive {
 		return response.StatusCode, ErrUnavailable.WithMessage("некорректный размер ответа поиска")
 	}
 

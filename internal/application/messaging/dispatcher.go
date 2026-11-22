@@ -42,7 +42,9 @@ type Outcome struct {
 
 // DispatcherConfig — размеры пачки и аренда.
 type DispatcherConfig struct {
-	MaxAttempts    int
+	MaxAttempts int
+	// Kinds ограничивает выборку точечных задач выделенного пула.
+	Kinds          []string
 	ExcludeKinds   []string
 	OrderedKinds   []string
 	Batch          int
@@ -177,7 +179,7 @@ func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
 	for _, task := range tasks {
 		batchKinds[task.Kind] = true
 	}
-	request.Kinds = nil
+	request.Kinds = d.config.Kinds
 	request.AfterTenant = d.singleAfter
 	request.ExcludeKinds = append(request.ExcludeKinds, allBatchKinds...)
 	request.OrderedKinds = d.config.OrderedKinds
