@@ -373,7 +373,7 @@ DELIVERY_UNAVAILABLE; ненулевой `deliveryPrice` — 409 DELIVERY_CHANGE
 `GET /orders/{orderId}` — тот же доверенный канал, заказ только этого магазина.
 
 ```json
-{"orderId":"o1","status":"shipped","revision":7,"tracking":{"carrier":"carrier","number":"TRACK1","url":"https://example.test/TRACK1"}}
+{"orderId":"o1","number":"22112026-0003","steps":[{"status":"paid","at":"2026-11-22T08:39:00.000Z"},{"status":"shipped","at":"2026-11-24T05:15:00.000Z"}],"status":"shipped","revision":7,"tracking":{"carrier":"carrier","number":"TRACK1","url":"https://example.test/TRACK1"}}
 ```
 
 | status | Значение | Шаги магазина |
@@ -390,6 +390,11 @@ DELIVERY_UNAVAILABLE; ненулевой `deliveryPrice` — 409 DELIVERY_CHANGE
 Служебные шаги магазина до сборки покупателю неразличимы и статус не меняют.
 `revision` — номер перехода статуса заказа у магазина: растёт с каждой сменой статуса, в ответе
 создания отсутствует. Площадка не применяет состояние с номером меньше сохранённого.
+
+`number` — номер заказа магазина для покупателя (или null). `steps` — путь заказа до текущего статуса:
+служебные шаги схлопнуты, `at` — первый приход в видимый статус по часам магазина, не больше восьми
+шагов. Время шага площадка не выдумывает: состояние без `steps` прежнюю ленту не стирает.
+Те же поля — в событии статуса и в пакетной сверке.
 
 Магазин сам отменяет неоплаченный заказ и снимает резерв после своего окна.
 Маркетплейс запрещает оплату при now≥expiresAt, но не выводит отмену из
@@ -412,7 +417,9 @@ DELIVERY_UNAVAILABLE; ненулевой `deliveryPrice` — 409 DELIVERY_CHANGE
 | тело | состояние заказа на момент публикации, не разница с прежним |
 
 ```json
-{"version":1,"tenantId":"t1","externalCheckoutId":"<checkoutId>:t1","orderId":"o1","status":"awaiting_pickup","revision":9,
+{"version":1,"tenantId":"t1","externalCheckoutId":"<checkoutId>:t1","orderId":"o1","number":"22112026-0003",
+ "steps":[{"status":"paid","at":"2026-11-22T08:39:00.000Z"},{"status":"awaiting_pickup","at":"2026-11-25T11:05:00.000Z"}],
+ "status":"awaiting_pickup","revision":9,
  "tracking":{"carrier":"carrier","number":"TRACK1","url":"https://example.test/TRACK1"}}
 ```
 
@@ -439,7 +446,7 @@ DELIVERY_UNAVAILABLE; ненулевой `deliveryPrice` — 409 DELIVERY_CHANGE
 ```
 
 ```json
-{"items":[{"orderId":"o1","status":"assembled","revision":4},{"orderId":"o2","status":"returned","revision":11}]}
+{"items":[{"orderId":"o1","number":"22112026-0003","steps":[{"status":"assembled","at":"2026-11-22T08:40:00.000Z"}],"status":"assembled","revision":4},{"orderId":"o2","status":"returned","revision":11}]}
 ```
 
 В запросе от 1 до 200 идентификаторов заказов одного магазина; сервер отвечает одним чтением базы,

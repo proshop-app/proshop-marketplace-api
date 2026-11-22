@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"slices"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -138,10 +139,18 @@ func TestOrderStatusesContract(t *testing.T) {
 	)
 	statuses, err := client.OrderStatuses(context.Background(), "t1", []string{"o1", "o2", "o3"})
 	expected := []checkout.OrderStatus{
-		{OrderID: "o1", Status: checkout.GroupAssembled, Revision: 4},
+		{
+			OrderID: "o1",
+			Number:  "22112026-0003",
+			Steps: []checkout.OrderStep{
+				{Status: checkout.GroupAssembled, At: time.Date(2026, 11, 22, 8, 40, 0, 0, time.UTC)},
+			},
+			Status:   checkout.GroupAssembled,
+			Revision: 4,
+		},
 		{OrderID: "o2", Status: checkout.GroupReturned, Revision: 11},
 	}
-	if err != nil || !slices.Equal(statuses, expected) {
+	if err != nil || !reflect.DeepEqual(statuses, expected) {
 		t.Fatalf("неизвестного магазину заказа в ответе нет: %+v %v", statuses, err)
 	}
 

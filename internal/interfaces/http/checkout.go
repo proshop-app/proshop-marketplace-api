@@ -60,6 +60,8 @@ type checkoutGroupJSON struct {
 	Quote                     *quoteJSON           `json:"quote"`
 	Status                    checkout.GroupStatus `json:"status"`
 	OrderID                   string               `json:"orderId,omitempty"`
+	OrderNumber               string               `json:"orderNumber,omitempty"`
+	Steps                     []checkout.OrderStep `json:"steps"`
 	ExpiresAt                 *time.Time           `json:"expiresAt,omitempty"`
 	DeliveryPrice             rubles               `json:"deliveryPrice"`
 	Reason                    string               `json:"reason,omitempty"`
@@ -357,6 +359,8 @@ func checkoutGroupResponse(group checkout.Group) (checkoutGroupJSON, error) {
 		Goods:                     rubles(group.Goods.Kopecks()),
 		Status:                    group.Status,
 		OrderID:                   group.OrderID,
+		OrderNumber:               group.OrderNumber,
+		Steps:                     append([]checkout.OrderStep{}, group.Steps...),
 		DeliveryPrice:             rubles(group.DeliveryPrice.Kopecks()),
 		Reason:                    group.Reason,
 		PaymentHold:               group.PaymentHold,

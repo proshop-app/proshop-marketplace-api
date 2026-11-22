@@ -139,7 +139,13 @@ func (s *Service) resolveMismatch(
 	entry checkout.ReconcileEntry,
 	status checkout.OrderStatus,
 ) string {
-	order := checkout.SellerOrder{OrderID: status.OrderID, Status: status.Status, Revision: status.Revision}
+	order := checkout.SellerOrder{
+		OrderID:  status.OrderID,
+		Number:   status.Number,
+		Steps:    status.Steps,
+		Status:   status.Status,
+		Revision: status.Revision,
+	}
 	var err error
 	if status.Status != entry.Status && statusNeedsDetails(status.Status) {
 		order, err = s.platform.GetOrder(ctx, entry.TenantID, entry.OrderID)

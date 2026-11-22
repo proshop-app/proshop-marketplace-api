@@ -8428,6 +8428,26 @@ components:
           - delivery_unavailable
         orderId:
           type: string
+        orderNumber:
+          type: string
+          maxLength: 64
+          description: Номер заказа магазина для покупателя; нет, пока магазин его не сообщил.
+        steps:
+          type: array
+          maxItems: 8
+          description: >-
+            Путь заказа до текущего статуса по часам магазина; служебные шаги схлопнуты.
+            Пусто — магазин путь ещё не сообщил, время шагов площадка не выдумывает.
+          items:
+            type: object
+            required: [status, at]
+            properties:
+              status:
+                type: string
+                enum: [awaiting_payment, paid, assembled, shipped, awaiting_pickup, delivered, returned, cancelled]
+              at:
+                type: string
+                format: date-time
         expiresAt:
           type: string
           format: date-time
@@ -9261,6 +9281,26 @@ components:
           - delivery_unavailable
         orderId:
           type: string
+        orderNumber:
+          type: string
+          maxLength: 64
+          description: Номер заказа магазина для покупателя; нет, пока магазин его не сообщил.
+        steps:
+          type: array
+          maxItems: 8
+          description: >-
+            Путь заказа до текущего статуса по часам магазина; служебные шаги схлопнуты.
+            Пусто — магазин путь ещё не сообщил, время шагов площадка не выдумывает.
+          items:
+            type: object
+            required: [status, at]
+            properties:
+              status:
+                type: string
+                enum: [awaiting_payment, paid, assembled, shipped, awaiting_pickup, delivered, returned, cancelled]
+              at:
+                type: string
+                format: date-time
         expiresAt:
           type: string
           format: date-time

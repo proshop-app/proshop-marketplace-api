@@ -141,6 +141,34 @@ func TestLateStateAfterUnnumberedLocalStatusIsStale(t *testing.T) {
 	}
 }
 
+func TestOrderProgressKeepsShopTimesOnly(t *testing.T) {
+	c := ordersReady(t)
+	if _, err := c.BeginOrders(contact, t0); err != nil {
+		t.Fatal(err)
+	}
+	order := attach(t, c, 0)
+	order.Status, order.Revision, order.Number = checkout.GroupPaid, 2, "22112026-0003"
+	order.Steps = []checkout.OrderStep{
+		{Status: checkout.GroupPaid, At: t0},
+		{Status: checkout.GroupSellerUnreachable, At: t0},
+		{Status: checkout.GroupAssembled},
+	}
+	if _, err := c.ApplyOrderState("t1", order, t0); err != nil {
+		t.Fatal(err)
+	}
+	g := c.Groups()[0]
+	if g.OrderNumber != "22112026-0003" || len(g.Steps) != 1 || g.Steps[0].Status != checkout.GroupPaid {
+		t.Fatalf("в ленту попадают только статусы договора с временем магазина: %+v", g.Steps)
+	}
+	order.Status, order.Revision, order.Number, order.Steps = checkout.GroupAssembled, 3, "", nil
+	if _, err := c.ApplyOrderState("t1", order, t0); err != nil {
+		t.Fatal(err)
+	}
+	if g := c.Groups()[0]; g.OrderNumber == "" || len(g.Steps) != 1 {
+		t.Fatalf("состояние без номера и шагов прежние не стирает: %+v", g)
+	}
+}
+
 func TestSettleWorkTouchesOnlyPurchaseWithoutDueWork(t *testing.T) {
 	c := ordersReady(t)
 	if _, err := c.BeginOrders(contact, t0); err != nil {

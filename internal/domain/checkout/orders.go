@@ -60,6 +60,12 @@ type Contact struct {
 	Name  string `json:"name"`
 }
 
+// maxOrderSteps и maxOrderNumber ограничивают снимок: статусов в договоре восемь, номер — короткая строка.
+const (
+	maxOrderSteps  = 8
+	maxOrderNumber = 64
+)
+
 // PriceChange — актуальная цена из отказа PRICE_CHANGED.
 type PriceChange struct {
 	ProductID ids.ProductID `json:"productId"`
@@ -78,11 +84,23 @@ type SellerOrder struct {
 	Reason          string
 	// Revision — номер перехода статуса у магазина; ноль в ответе создания.
 	Revision int64
+	// Number — номер заказа магазина для покупателя.
+	Number string
+	// Steps — путь заказа до текущего статуса; пусто — магазин его не прислал.
+	Steps []OrderStep
+}
+
+// OrderStep — шаг заказа в ленте покупателя: статус и когда заказ в него пришёл.
+type OrderStep struct {
+	Status GroupStatus `json:"status"`
+	At     time.Time   `json:"at"`
 }
 
 // OrderStatus — строка суточной сверки: статус заказа магазина и номер перехода.
 type OrderStatus struct {
 	OrderID  string
+	Number   string
+	Steps    []OrderStep
 	Status   GroupStatus
 	Revision int64
 }
@@ -219,6 +237,7 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 		g.OrderStatusAt = now
 	}
 	g.LastOrderStatus, g.OrderRevision = order.Status, order.Revision
+	g.recordProgress(order)
 	if g.Paid() || order.Status == GroupCancelled {
 		g.PaymentPending = false
 		if c.state.PaymentAttempt == "" {
@@ -352,6 +371,32 @@ func NewTracking(carrier string, number *string, link string) *Tracking {
 	return &Tracking{Carrier: carrier, Number: number, URL: link}
 }
 
+// recordProgress сохраняет номер и путь заказа из состояния магазина. Время шага площадка не
+// выдумывает: состояние без них прежний снимок не стирает.
+func (g *Group) recordProgress(order SellerOrder) {
+	number := strings.TrimSpace(order.Number)
+	if number != "" && utf8.RuneCountInString(number) <= maxOrderNumber {
+		g.OrderNumber = number
+	}
+	if steps := knownSteps(order.Steps); len(steps) > 0 {
+		g.Steps = steps
+	}
+}
+
+// knownSteps оставляет шаги из словаря договора с настоящим временем.
+func knownSteps(values []OrderStep) []OrderStep {
+	var steps []OrderStep
+	for _, step := range values {
+		if len(steps) == maxOrderSteps {
+			break
+		}
+		if ShopOrderStatus(step.Status) && !step.At.IsZero() {
+			steps = append(steps, OrderStep{Status: step.Status, At: step.At.UTC()})
+		}
+	}
+	return steps
+}
+
 // ValidURL допускает абсолютные ссылки HTTP(S) без учётных данных.
 func ValidURL(value string) bool {
 	u, err := url.Parse(value)
@@ -371,6 +416,7 @@ func cloneState(state State) State {
 		}
 		g.Regions = append([]string(nil), g.Regions...)
 		g.Tracking = cloneTracking(g.Tracking)
+		g.Steps = append([]OrderStep(nil), g.Steps...)
 		g.CurrentPrices = append([]PriceChange(nil), g.CurrentPrices...)
 		g.ReturnRemaining = append([]Line(nil), g.ReturnRemaining...)
 		for j := range g.ReturnRemaining {

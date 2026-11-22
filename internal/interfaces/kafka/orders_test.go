@@ -15,7 +15,8 @@ const (
 	orderCheckoutID = "6f1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b"
 	orderKey        = `["t1","o1"]`
 	orderBody       = `{"version":1,"tenantId":"t1","externalCheckoutId":"` + orderCheckoutID + `:t1",
-	"orderId":"o1","status":"awaiting_pickup","revision":9,
+	"orderId":"o1","status":"awaiting_pickup","revision":9,"number":"22112026-0003",
+	"steps":[{"status":"paid","at":"2026-11-22T08:39:00.000Z"}],
 	"tracking":{"carrier":"carrier","number":"TRACK1","url":"https://example.test/TRACK1"},"unknownField":1}`
 )
 
@@ -48,6 +49,9 @@ func TestOrderStatusChanged(t *testing.T) {
 	order := event.Order
 	if order.OrderID != "o1" || order.Status != checkout.GroupAwaitingPickup || order.Revision != 9 {
 		t.Fatalf("состояние заказа: %+v", order)
+	}
+	if order.Number != "22112026-0003" || len(order.Steps) != 1 || order.Steps[0].Status != checkout.GroupPaid {
+		t.Fatalf("номер и путь заказа: %+v", order)
 	}
 	if order.Tracking == nil || order.Tracking.Carrier != "carrier" || *order.Tracking.Number != "TRACK1" {
 		t.Fatalf("отслеживание: %+v", order.Tracking)

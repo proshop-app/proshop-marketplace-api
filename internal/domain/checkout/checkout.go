@@ -100,7 +100,10 @@ type Group struct {
 	// OrderRevision — номер перехода статуса у магазина: опоздавшее состояние не применяется.
 	OrderRevision int64
 	// OrderStatusAt — когда площадка узнала текущий статус заказа; от него считается срок сверки.
-	OrderStatusAt   time.Time
+	OrderStatusAt time.Time
+	// OrderNumber и Steps — номер и путь заказа из состояния магазина.
+	OrderNumber     string
+	Steps           []OrderStep
 	ReturnFailed    bool
 	ReturnReason    string
 	ReturnRemaining []Line

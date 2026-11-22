@@ -25,6 +25,8 @@ type sellerOrderJSON struct {
 	Status          checkout.GroupStatus `json:"status"`
 	Reason          string               `json:"reason"`
 	Revision        int64                `json:"revision"`
+	Number          string               `json:"number"`
+	Steps           []checkout.OrderStep `json:"steps"`
 }
 
 type orderStatusesJSON struct {
@@ -33,6 +35,8 @@ type orderStatusesJSON struct {
 
 type orderStatusJSON struct {
 	OrderID  string               `json:"orderId"`
+	Number   string               `json:"number"`
+	Steps    []checkout.OrderStep `json:"steps"`
 	Status   checkout.GroupStatus `json:"status"`
 	Revision int64                `json:"revision"`
 }
@@ -121,6 +125,8 @@ func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
 		Status:          a.Status,
 		Reason:          a.Reason,
 		Revision:        a.Revision,
+		Number:          a.Number,
+		Steps:           a.Steps,
 		Tracking:        a.Tracking.domain(),
 	}
 	if a.Total != nil {

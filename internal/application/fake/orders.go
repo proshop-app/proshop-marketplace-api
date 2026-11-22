@@ -177,6 +177,8 @@ func (p *Platform) OrderStatuses(
 		if p.orderTenants[order.OrderID] == tenant && slices.Contains(orderIDs, order.OrderID) {
 			statuses = append(statuses, checkout.OrderStatus{
 				OrderID:  order.OrderID,
+				Number:   order.Number,
+				Steps:    order.Steps,
 				Status:   order.Status,
 				Revision: order.Revision,
 			})

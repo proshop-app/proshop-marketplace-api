@@ -30,6 +30,8 @@ type orderStatusEvent struct {
 	Status             checkout.GroupStatus `json:"status"`
 	Revision           int64                `json:"revision"`
 	Reason             string               `json:"reason"`
+	Number             string               `json:"number"`
+	Steps              []checkout.OrderStep `json:"steps"`
 	Tracking           *orderTracking       `json:"tracking"`
 }
 
@@ -76,6 +78,8 @@ func orderStatusChanged(ctx context.Context, orders Orders, envelope Envelope) e
 			Status:   event.Status,
 			Reason:   event.Reason,
 			Revision: event.Revision,
+			Number:   event.Number,
+			Steps:    event.Steps,
 			Tracking: event.Tracking.domain(),
 		},
 	})
