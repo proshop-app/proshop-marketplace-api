@@ -15,7 +15,7 @@ import (
 
 func (s *server) runConsumers(ctx context.Context, group *errgroup.Group) {
 	cfg := s.cfg.Kafka
-	router := kafka.NewRouter(s.app.projector, s.app.registry)
+	router := kafka.NewRouter(s.app.projector, s.app.registry).WithOrders(s.app.checkouts)
 	regular, bulk := kafka.SubscriptionTopics(cfg.TopicPrefix, router)
 	metrics := kafka.NewConsumerMetrics(s.metrics)
 	ctx = ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(s.cfg.Database.Ingestion))
@@ -25,6 +25,10 @@ func (s *server) runConsumers(ctx context.Context, group *errgroup.Group) {
 	})
 	group.Go(func() error {
 		return s.consume(ctx, router, metrics, cfg.GroupID+"-bulk", []string{bulk}, cfg.BulkWorkers)
+	})
+	group.Go(func() error {
+		orders := []string{kafka.OrderStatusTopic(cfg.TopicPrefix)}
+		return s.consume(ctx, router, metrics, cfg.GroupID+"-orders", orders, kafka.OrderWorkers)
 	})
 }
 

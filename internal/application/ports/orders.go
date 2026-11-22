@@ -95,6 +95,8 @@ type SellerOrders interface {
 	StubPayment(ctx context.Context, tenantID ids.TenantID, orderID string, amount money.Money) error
 	CreateOrder(context.Context, ids.TenantID, CreateOrderRequest) (checkout.SellerOrder, error)
 	GetOrder(context.Context, ids.TenantID, string) (checkout.SellerOrder, error)
+	// OrderStatuses — сверка пачкой: один запрос на страницу заказов магазина, без треков.
+	OrderStatuses(ctx context.Context, tenantID ids.TenantID, orderIDs []string) ([]checkout.OrderStatus, error)
 }
 
 // OrderRefusal — код отказа магазина из словаря §4; неизвестный код сохраняется для оператора.

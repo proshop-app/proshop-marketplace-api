@@ -20,7 +20,17 @@ const (
 	OrderRetryCap = 10 * time.Minute
 	// OrderSlowPoll — сверка магазина, который долго не отвечает.
 	OrderSlowPoll = 30 * time.Minute
+	// ReconcileDeliveredFor — сколько полученный заказ остаётся в страховочной сверке:
+	// возврат позже этого срока площадка узнаёт только из события магазина.
+	ReconcileDeliveredFor = 30 * 24 * time.Hour
+	// ReconcileInFlightFor — сколько заказ сверяется, не меняя статуса: дольше исполняемый заказ —
+	// забота оператора, а не ежесуточного запроса магазину.
+	ReconcileInFlightFor = 60 * 24 * time.Hour
 )
+
+// reconcileOpen — срок сверки заказа без времени статуса (сохранён до появления сверки):
+// первое же изменение статуса ограничит его.
+var reconcileOpen = time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
 
 // RecheckDelivery заменяет расчёты до первого заказа. Изменение платы возвращает покупку к подтверждению.
 func (c *Checkout) RecheckDelivery(quotes map[ids.TenantID]delivery.Quote, now time.Time) (bool, error) {
@@ -73,7 +83,9 @@ func (g Group) CreationDue(now time.Time) bool {
 		!g.Abandoned && !g.CreateExhausted && !g.CreationExpired(now) && !now.Before(g.NextCreateAt)
 }
 
-// PollDue учитывает срок следующего обращения и окончательные статусы.
+// PollDue оставляет опрос только неоплаченному заказу: его окно оплаты коротко, а подтверждение
+// денег не должно зависеть от одного канала. Статусы оплаченного заказа приходят событием магазина.
+// Отказ отмены уже исполняемого заказа сверяется опросом до его завершения, как прежде.
 func (g Group) PollDue(now time.Time) bool {
 	if g.Status == GroupCreationExpired {
 		return false
@@ -81,7 +93,41 @@ func (g Group) PollDue(now time.Time) bool {
 	if g.Abandoned {
 		return g.CancellationBlocked && g.ReconciliationRequired && g.OrderID != "" && !now.Before(g.NextPollAt)
 	}
-	return g.OrderID != "" && g.Status != GroupCancelled && g.Status != GroupReturned && !now.Before(g.NextPollAt)
+	return g.OrderID != "" && g.Status != GroupCancelled && !paidStatus(g.EffectiveStatus()) &&
+		!now.Before(g.NextPollAt)
+}
+
+// ReconcileUntil — до какого времени заказ участвует в суточной сверке пачкой; ноль — не участвует.
+// Срок считается от последней смены статуса: набор сверки растёт с числом живых заказов,
+// а не с возрастом площадки. Полученный заказ сверяется ради возврата.
+func (g Group) ReconcileUntil() time.Time {
+	if g.OrderID == "" || g.Abandoned {
+		return time.Time{}
+	}
+	switch g.EffectiveStatus() {
+	case GroupPaid, GroupAssembled, GroupShipped, GroupAwaitingPickup:
+		if g.OrderStatusAt.IsZero() {
+			return reconcileOpen
+		}
+		return g.OrderStatusAt.Add(ReconcileInFlightFor)
+	case GroupDelivered:
+		if g.OrderStatusAt.IsZero() {
+			return time.Time{}
+		}
+		return g.OrderStatusAt.Add(ReconcileDeliveredFor)
+	}
+	return time.Time{}
+}
+
+// SettleWork отмечает покупку изменённой, если её выбрали на фоновую работу, а созревшей работы
+// у групп нет: сохранение пересчитает сроки, и покупка перестанет выбираться каждый круг.
+func (c *Checkout) SettleWork(now time.Time) error {
+	for _, g := range c.state.Groups {
+		if next, found := g.NextWorkAt(); found && !now.Before(next) {
+			return nil
+		}
+	}
+	return c.touch(now)
 }
 
 // Returnable — группа без исполненного заказа, которую нужно вернуть в корзину.
@@ -219,6 +265,42 @@ func (c *Checkout) CompletePoll(
 		}
 	}
 	return changed, err
+}
+
+// ApplyOrderState принимает состояние заказа из события магазина или сверки: срок опроса не меняется.
+// Заказ, которого у группы нет, — ErrNotFound: событие относится не к этой покупке.
+// Отмена неоплаченного заказа значима только для группы, ждущей оплату: отмену по команде площадки
+// ведёт её собственный сценарий, и событие магазина не должно подменить его причину и итог.
+// Отслеживание без номера перехода не отзывается: состояние без него прежнее не стирает.
+func (c *Checkout) ApplyOrderState(tenant ids.TenantID, order SellerOrder, now time.Time) (bool, error) {
+	g := c.group(tenant)
+	if g == nil || g.OrderID == "" || g.OrderID != order.OrderID {
+		return false, ErrNotFound
+	}
+	ownCancellation := order.Status == GroupCancelled &&
+		(g.Abandoned || g.EffectiveStatus() != GroupAwaitingPayment)
+	if ownCancellation || g.outranUnnumbered(order) {
+		return false, nil
+	}
+	changed, err := c.Observe(tenant, order, g.NextPollAt, now)
+	if err != nil || !changed {
+		return false, err
+	}
+	g.PollToken = ""
+	if order.Tracking != nil {
+		g.Tracking = cloneTracking(order.Tracking)
+	}
+	return true, nil
+}
+
+// outranUnnumbered — статус группы получен без номера перехода (оплата площадкой, отказ отмены)
+// и уже дальше пришедшего: такое состояние опоздало, а не противоречит порядку исполнения.
+func (g Group) outranUnnumbered(order SellerOrder) bool {
+	known := g.EffectiveStatus()
+	if g.Abandoned {
+		known = g.LastOrderStatus
+	}
+	return g.OrderRevision == 0 && orderStage(order.Status) < orderStage(known)
 }
 
 // FailPoll сохраняет задержку даже при неизвестном статусе; после серии ошибок опрос становится редким.

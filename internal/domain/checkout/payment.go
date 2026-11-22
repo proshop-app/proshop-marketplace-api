@@ -81,6 +81,7 @@ func (c *Checkout) Pay(now time.Time) (bool, error) {
 		g.Reason, g.LastErrorCode, g.PollToken = "", "", ""
 		g.PollFailures = 0
 		g.NextPollAt = now
+		g.OrderStatusAt = now
 	}
 	c.rollup()
 	return true, c.touch(now)
@@ -166,7 +167,7 @@ func (c *Checkout) paymentPending() bool {
 
 func paidStatus(status GroupStatus) bool {
 	switch status {
-	case GroupPaid, GroupShipped, GroupDelivered, GroupReturned:
+	case GroupPaid, GroupAssembled, GroupShipped, GroupAwaitingPickup, GroupDelivered, GroupReturned:
 		return true
 	default:
 		return false

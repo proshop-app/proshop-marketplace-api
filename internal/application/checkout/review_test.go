@@ -131,6 +131,9 @@ func TestPartialCartReturnDoesNotBlockShippedOrPayment(t *testing.T) {
 	}
 	e.platform.SetOrderStatus(state.Groups[1].OrderID, checkout.GroupShipped, "")
 	e.clock.Advance(10 * time.Minute)
+	if err := announceOrder(ctx, e, state.Groups[1].TenantID, c.ID, state.Groups[1].OrderID); err != nil {
+		t.Fatal(err)
+	}
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}

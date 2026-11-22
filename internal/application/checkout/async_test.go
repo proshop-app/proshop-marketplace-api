@@ -3,6 +3,7 @@ package checkout_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -214,6 +215,20 @@ func TestAsyncPartialCancelAndCabinet(t *testing.T) {
 	if _, err := e.service.Pay(ctx, buyerID, c.ID); !errors.Is(err, checkout.ErrTransition) {
 		t.Fatal(err)
 	}
+}
+
+// announceOrder доставляет состояние заказа так, как это делает событие магазина.
+func announceOrder(ctx context.Context, e *env, tenant ids.TenantID, id ids.UUID, orderID string) error {
+	order, err := e.platform.GetOrder(ctx, tenant, orderID)
+	if err != nil {
+		return err
+	}
+	return e.service.ApplyOrderEvent(ctx, appcheckout.OrderEvent{
+		EventID:    fmt.Sprintf("orders:%s:%d", orderID, order.Revision),
+		TenantID:   tenant,
+		CheckoutID: id,
+		Order:      order,
+	})
 }
 
 func refreshOrders(ctx context.Context, e *env, buyer, id ids.UUID) (checkout.State, error) {

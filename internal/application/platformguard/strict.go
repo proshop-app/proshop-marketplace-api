@@ -97,6 +97,25 @@ func (c *Client) GetOrder(ctx context.Context, tenant ids.TenantID, order string
 	)
 }
 
+// OrderStatuses — фоновая сверка: идёт в доле чтений и не занимает резерв оформления.
+func (c *Client) OrderStatuses(
+	ctx context.Context,
+	tenant ids.TenantID,
+	orderIDs []string,
+) ([]checkout.OrderStatus, error) {
+	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
+	return call(
+		ctx,
+		c,
+		readClass,
+		"order_statuses",
+		c.cfg.ReadTimeout,
+		func(ctx context.Context) ([]checkout.OrderStatus, error) {
+			return c.upstream.OrderStatuses(ctx, tenant, orderIDs)
+		},
+	)
+}
+
 // StubPayment использует тот же общий лимит, что остальные обращения к ячейке.
 func (c *Client) StubPayment(ctx context.Context, tenant ids.TenantID, order string, amount money.Money) error {
 	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)

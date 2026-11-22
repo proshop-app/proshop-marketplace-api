@@ -97,6 +97,10 @@ type Group struct {
 	PollFailures    int
 	PollToken       string
 	LastOrderStatus GroupStatus
+	// OrderRevision — номер перехода статуса у магазина: опоздавшее состояние не применяется.
+	OrderRevision int64
+	// OrderStatusAt — когда площадка узнала текущий статус заказа; от него считается срок сверки.
+	OrderStatusAt   time.Time
 	ReturnFailed    bool
 	ReturnReason    string
 	ReturnRemaining []Line

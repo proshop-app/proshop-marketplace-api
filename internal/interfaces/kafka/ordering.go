@@ -15,6 +15,7 @@ const (
 	orderPartition orderingKind = iota
 	orderProduct
 	orderTenant
+	orderOrder
 )
 
 // Вид входит в ключ: покупатель, товар и запись реестра не разделяют очередь случайно.
@@ -34,6 +35,8 @@ func messageKey(message kafkago.Message, prefix string) orderingKey {
 		key = pairedKey(message)
 	case TopicStockItemUpdated, TopicProductPriceUpdated:
 		key = signalKey(message, topic)
+	case TopicOrderStatusChanged:
+		key = orderKey(message)
 	default:
 		if strings.HasPrefix(topic, "platform.tenant.") {
 			key = registryKey(message)

@@ -297,7 +297,12 @@ func TestPaymentWithUnreachablePoll(t *testing.T) {
 			}
 		}
 		state, _ := e.service.Get(ctx, buyerID, c.ID)
-		if state.Groups[0].Status != checkout.GroupSellerUnreachable {
+		// Оплаченный заказ не опрашивается: недоступность магазина не меняет его статус у покупателя.
+		expected := checkout.GroupSellerUnreachable
+		if paid {
+			expected = checkout.GroupPaid
+		}
+		if state.Groups[0].Status != expected {
 			t.Fatal(state)
 		}
 		if !paid {

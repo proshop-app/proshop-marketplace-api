@@ -174,6 +174,7 @@ func (c *Checkout) FinishPayment(token string, result PaymentResult, now time.Ti
 			g.Status, g.LastOrderStatus = GroupPaid, GroupPaid
 			g.Reason, g.LastErrorCode, g.PollToken = "", "", ""
 			g.NextPollAt, g.PollFailures = now, 0
+			g.OrderStatusAt = now
 		}
 		if g.Paid() || result.Unpaid[g.TenantID] {
 			g.PaymentPending = false

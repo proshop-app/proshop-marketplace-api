@@ -116,10 +116,10 @@ func (s *Service) resumePurchase(ctx context.Context, state checkout.State) erro
 		}
 		return s.enqueueCancellations(ctx, tx, c)
 	}
-	_, err := s.updateSelection(ctx, state.BuyerID, state.ID, enqueue, func(c *checkout.Checkout, now time.Time) error {
-		return nil
-	})
-	if err != nil {
+	// Покупку выбрали по сроку работы в хранилище. Если созревшей работы у групп нет, срок устарел
+	// (его записала прежняя версия) — сохранение пересчитает его, иначе покупка выбиралась бы каждый круг.
+	settle := func(c *checkout.Checkout, now time.Time) error { return c.SettleWork(now) }
+	if _, err := s.updateSelection(ctx, state.BuyerID, state.ID, enqueue, settle); err != nil {
 		return err
 	}
 	return s.ReturnCancelled(ctx, state.BuyerID, state.ID)

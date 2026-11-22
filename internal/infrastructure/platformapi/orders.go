@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -25,6 +24,17 @@ type sellerOrderJSON struct {
 	Total           *int64               `json:"total"`
 	Status          checkout.GroupStatus `json:"status"`
 	Reason          string               `json:"reason"`
+	Revision        int64                `json:"revision"`
+}
+
+type orderStatusesJSON struct {
+	Items []orderStatusJSON `json:"items"`
+}
+
+type orderStatusJSON struct {
+	OrderID  string               `json:"orderId"`
+	Status   checkout.GroupStatus `json:"status"`
+	Revision int64                `json:"revision"`
 }
 
 // CreateOrder создаёт заказ магазина без открытия кассы по ключу покупки и группы.
@@ -63,24 +73,45 @@ func (c *Client) GetOrder(ctx context.Context, tenant ids.TenantID, id string) (
 	return order, err
 }
 
+// OrderStatuses читает статусы заказов магазина одним запросом; неизвестного магазину заказа в ответе нет.
+func (c *Client) OrderStatuses(
+	ctx context.Context,
+	tenant ids.TenantID,
+	orderIDs []string,
+) ([]checkout.OrderStatus, error) {
+	var answer orderStatusesJSON
+	body := map[string][]string{"orderIds": orderIDs}
+	if err := c.call(ctx, http.MethodPost, tenant, "/orders/statuses", body, &answer); err != nil {
+		return nil, err
+	}
+	statuses := make([]checkout.OrderStatus, 0, len(answer.Items))
+	for _, item := range answer.Items {
+		if item.OrderID == "" || item.Revision < 0 {
+			return nil, ErrInvalidResponse
+		}
+		// Заказ со статусом вне словаря остаётся для сверки неизвестным: остальные заказы магазина сверяются.
+		if !checkout.ShopOrderStatus(item.Status) {
+			slog.Warn(
+				"неизвестный статус заказа магазина",
+				slog.String("tenantId", string(tenant)),
+				slog.String("status", string(item.Status)),
+			)
+			continue
+		}
+		statuses = append(statuses, checkout.OrderStatus(item))
+	}
+	return statuses, nil
+}
+
 func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
-	switch a.Status {
-	case checkout.GroupAwaitingPayment, checkout.GroupPaid, checkout.GroupCancelled,
-		checkout.GroupShipped, checkout.GroupDelivered, checkout.GroupReturned:
-	default:
+	if !checkout.ShopOrderStatus(a.Status) {
 		return checkout.SellerOrder{}, ports.ErrInvalidOrderStatus
 	}
-	if a.OrderID == "" || (a.Status == checkout.GroupCancelled && a.Reason == "") {
+	if a.OrderID == "" || a.Revision < 0 || (a.Status == checkout.GroupCancelled && a.Reason == "") {
 		return checkout.SellerOrder{}, ErrInvalidResponse
 	}
 	if creating && (a.Total == nil || *a.Total < 0 || a.ExpiresAt.IsZero()) {
 		return checkout.SellerOrder{}, ErrInvalidResponse
-	}
-	if a.Tracking != nil && (strings.TrimSpace(a.Tracking.Carrier) == "" || !checkout.ValidURL(a.Tracking.URL)) {
-		a.Tracking = nil
-	}
-	if a.Tracking != nil && a.Tracking.Number != nil && strings.TrimSpace(*a.Tracking.Number) == "" {
-		a.Tracking.Number = nil
 	}
 	order := checkout.SellerOrder{
 		Carrier:         delivery.Carrier(a.Carrier),
@@ -89,6 +120,7 @@ func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
 		ExpiresAt:       a.ExpiresAt,
 		Status:          a.Status,
 		Reason:          a.Reason,
+		Revision:        a.Revision,
 		Tracking:        a.Tracking.domain(),
 	}
 	if a.Total != nil {

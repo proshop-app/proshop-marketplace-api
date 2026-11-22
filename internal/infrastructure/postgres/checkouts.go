@@ -57,8 +57,8 @@ const (
   ORDER BY tenant_id`
 
 	insertCheckoutGroup = `
-		INSERT INTO checkout_groups (checkout_id, ` + groupColumns + `, next_work_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
+		INSERT INTO checkout_groups (checkout_id, ` + groupColumns + `, next_work_at, reconcile_until)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
 
 	updateCheckoutGroup = `
 		UPDATE checkout_groups
@@ -73,7 +73,8 @@ const (
 			quote_expires_at = $11,
 			order_progress = $12,
 			tracking = $13,
-			next_work_at = $14
+			next_work_at = $14,
+			reconcile_until = $15
 		WHERE checkout_id = $1 AND tenant_id = $2`
 )
 
@@ -489,7 +490,13 @@ func groupArgs(group checkout.Group) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(args, encodeOrderProgress(group), jsonArg([]byte(tracking)), nextCheckoutWork(group)), nil
+	return append(
+		args,
+		encodeOrderProgress(group),
+		jsonArg([]byte(tracking)),
+		nextCheckoutWork(group),
+		nullTime(group.ReconcileUntil()),
+	), nil
 }
 
 // quoteArgs — поля расчёта доставки; суммы и сроки есть только у доступного расчёта.

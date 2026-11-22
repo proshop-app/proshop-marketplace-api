@@ -35,8 +35,12 @@ const (
 	GroupPaid GroupStatus = "paid"
 	// GroupCancelled — магазин подтвердил отмену неоплаченного заказа.
 	GroupCancelled GroupStatus = "cancelled"
+	// GroupAssembled — заказ собран и ждёт передачи перевозчику.
+	GroupAssembled GroupStatus = "assembled"
 	// GroupShipped — заказ отправлен.
 	GroupShipped GroupStatus = "shipped"
+	// GroupAwaitingPickup — посылка ждёт покупателя в пункте выдачи.
+	GroupAwaitingPickup GroupStatus = "awaiting_pickup"
 	// GroupDelivered — заказ получен.
 	GroupDelivered GroupStatus = "delivered"
 	// GroupReturned — возврат оформлен магазином.
@@ -72,6 +76,15 @@ type SellerOrder struct {
 	Total           money.Money
 	Status          GroupStatus
 	Reason          string
+	// Revision — номер перехода статуса у магазина; ноль в ответе создания.
+	Revision int64
+}
+
+// OrderStatus — строка суточной сверки: статус заказа магазина и номер перехода.
+type OrderStatus struct {
+	OrderID  string
+	Status   GroupStatus
+	Revision int64
 }
 
 // Tracking — номер и ссылка перевозчика из заказа сервера.
@@ -172,10 +185,14 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 
 // Observe принимает только допустимые переходы. Истечение окна запрещает оплату,
 // но отмену подтверждает магазин: он мог получить оплату перед границей окна.
+// Состояние с меньшим номером перехода — опоздавшее: оно не меняет группу.
 func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Time, now time.Time) (bool, error) {
 	g := c.group(tenant)
 	if g == nil {
 		return false, ErrNotFound
+	}
+	if order.Revision < g.OrderRevision {
+		return false, nil
 	}
 	from := g.Status
 	if g.Abandoned || from == GroupSellerUnreachable {
@@ -188,7 +205,8 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	if order.Status == GroupCancelled && order.Reason == "" {
 		return false, ErrInvalidOrder
 	}
-	if g.Status == order.Status && g.Reason == order.Reason && g.NextPollAt.Equal(next) {
+	if g.Status == order.Status && g.Reason == order.Reason && g.NextPollAt.Equal(next) &&
+		g.OrderRevision == order.Revision {
 		return false, nil
 	}
 	if !g.Abandoned {
@@ -197,7 +215,10 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, next time.Tim
 	g.NextPollAt = next
 	g.PollFailures = 0
 	g.LastErrorCode = ""
-	g.LastOrderStatus = order.Status
+	if g.LastOrderStatus != order.Status {
+		g.OrderStatusAt = now
+	}
+	g.LastOrderStatus, g.OrderRevision = order.Status, order.Revision
 	if g.Paid() || order.Status == GroupCancelled {
 		g.PaymentPending = false
 		if c.state.PaymentAttempt == "" {
@@ -273,23 +294,62 @@ func (c *Checkout) rollup() {
 	}
 }
 
+// allowed — порядок исполнения заказа. Пропуск шагов допустим; назад заказ идёт
+// только из собранного в работу: до передачи перевозчику магазин вправе вернуть его на сборку.
 func allowed(from, to GroupStatus) bool {
+	if from == to {
+		return orderStage(from) > 0
+	}
 	switch from {
 	case GroupAwaitingPayment:
-		return to == GroupAwaitingPayment || to == GroupCancelled || to == GroupPaid ||
-			to == GroupShipped || to == GroupDelivered || to == GroupReturned
-	case GroupPaid:
-		return to == GroupPaid || to == GroupShipped || to == GroupDelivered || to == GroupReturned
-	case GroupShipped:
-		return to == GroupShipped || to == GroupDelivered || to == GroupReturned
-	case GroupDelivered:
-		return to == GroupDelivered || to == GroupReturned
-	case GroupReturned:
-		return to == GroupReturned
-	case GroupCancelled:
-		return to == GroupCancelled
+		return orderStage(to) > 0
+	case GroupAssembled:
+		return to == GroupPaid || fulfilment(from, to)
+	case GroupPaid, GroupShipped, GroupAwaitingPickup, GroupDelivered:
+		return fulfilment(from, to)
 	}
 	return false
+}
+
+// ShopOrderStatus отличает словарь статусов заказа магазина от локальных статусов группы.
+func ShopOrderStatus(status GroupStatus) bool { return orderStage(status) > 0 }
+
+// fulfilment — движение оплаченного заказа вперёд; отмена неоплаченного сюда не входит.
+func fulfilment(from, to GroupStatus) bool {
+	return to != GroupCancelled && orderStage(to) > orderStage(from)
+}
+
+// orderStage — место статуса заказа магазина на его пути; ноль — локальный статус группы.
+func orderStage(status GroupStatus) int {
+	switch status {
+	case GroupAwaitingPayment:
+		return 1
+	case GroupPaid:
+		return 2
+	case GroupAssembled:
+		return 3
+	case GroupShipped:
+		return 4
+	case GroupAwaitingPickup:
+		return 5
+	case GroupDelivered:
+		return 6
+	case GroupReturned, GroupCancelled:
+		return 7
+	}
+	return 0
+}
+
+// NewTracking принимает отслеживание магазина только с перевозчиком и безопасной ссылкой;
+// пустой номер — отсутствие номера. Непригодное отслеживание — nil, статус заказа от него не зависит.
+func NewTracking(carrier string, number *string, link string) *Tracking {
+	if strings.TrimSpace(carrier) == "" || !ValidURL(link) {
+		return nil
+	}
+	if number != nil && strings.TrimSpace(*number) == "" {
+		number = nil
+	}
+	return &Tracking{Carrier: carrier, Number: number, URL: link}
 }
 
 // ValidURL допускает абсолютные ссылки HTTP(S) без учётных данных.

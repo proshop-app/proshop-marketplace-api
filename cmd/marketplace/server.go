@@ -282,7 +282,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 	projector := appcatalog.NewProjector(uow, now, moderation)
 	registry := appparticipant.NewRegistry(uow, now, identities)
-	replay := kafka.NewReplay(kafka.NewRouter(projector, registry), cfg.Kafka.TopicPrefix)
+	replay := kafka.NewReplay(kafka.NewRouter(projector, registry).WithOrders(checkouts), cfg.Kafka.TopicPrefix)
 	events := messaging.NewEvents(uow, now, replay)
 	var operatorTokens ports.IdentityTokens
 	if cfg.Operator.Email != "" {
@@ -520,6 +520,7 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
 		jobs.NewCreationRunner(s.app.creation, s.logger, outbox.RecordOutcome).Run,
 		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
+		s.orderReconciliation,
 		jobs.NewOutboxRetryStatsRunner(
 			s.app.dispatcher,
 			clock.System{},
@@ -536,6 +537,13 @@ func (s *server) jobs() []func(context.Context) error {
 		jobs.NewModelKeyStatsRunner(postgres.NewModelKeyStats(s.store.pool), s.logger, s.metrics).
 			WithSchedule(postgres.NewScheduledWork(s.store.pool, "model-key-stats", jobs.ModelKeyStatsInterval)).Run,
 	}...)
+}
+
+// orderReconciliation — суточная сверка статусов заказов в фоновой доле базы.
+func (s *server) orderReconciliation(ctx context.Context) error {
+	schedule := postgres.NewScheduledWork(s.store.pool, "order-reconcile", jobs.OrderReconcileInterval)
+	runner := jobs.NewOrderReconcileRunner(s.app.checkouts, schedule, s.logger, s.metrics)
+	return runner.Run(ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(s.cfg.Database.Background)))
 }
 
 // httpServer — HTTP с маршрутами маркетплейса и проверками зависимостей.

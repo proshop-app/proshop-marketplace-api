@@ -152,8 +152,44 @@ func (p *Platform) SetOrderStatus(id string, status checkout.GroupStatus, reason
 			continue
 		}
 		order.Status, order.Reason = status, reason
+		order.Revision++
 		p.orders[key] = order
 	}
+}
+
+// OrderStatuses отдаёт статусы известных магазину заказов и считает запросы сверки.
+func (p *Platform) OrderStatuses(
+	ctx context.Context,
+	tenant ids.TenantID,
+	orderIDs []string,
+) ([]checkout.OrderStatus, error) {
+	if err := p.platformCall(ctx, "order_statuses"); err != nil {
+		return nil, err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.statusCalls[tenant] = append(p.statusCalls[tenant], len(orderIDs))
+	if err := p.failing[tenant]; err != nil {
+		return nil, err
+	}
+	var statuses []checkout.OrderStatus
+	for _, order := range p.orders {
+		if p.orderTenants[order.OrderID] == tenant && slices.Contains(orderIDs, order.OrderID) {
+			statuses = append(statuses, checkout.OrderStatus{
+				OrderID:  order.OrderID,
+				Status:   order.Status,
+				Revision: order.Revision,
+			})
+		}
+	}
+	return statuses, nil
+}
+
+// StatusCalls — размеры пачек сверки по магазину, в порядке запросов.
+func (p *Platform) StatusCalls(tenant ids.TenantID) []int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]int(nil), p.statusCalls[tenant]...)
 }
 
 // OrderCount считает созданные заказы для проверки идемпотентности.

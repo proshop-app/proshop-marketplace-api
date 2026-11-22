@@ -8418,7 +8418,9 @@ components:
           - awaiting_payment
           - paid
           - cancelled
+          - assembled
           - shipped
+          - awaiting_pickup
           - delivered
           - returned
           - seller_unreachable
@@ -9249,7 +9251,9 @@ components:
           - awaiting_payment
           - paid
           - cancelled
+          - assembled
           - shipped
+          - awaiting_pickup
           - delivered
           - returned
           - seller_unreachable
