@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -16,6 +17,7 @@ const (
 	orderKey        = `["t1","o1"]`
 	orderBody       = `{"version":1,"tenantId":"t1","externalCheckoutId":"` + orderCheckoutID + `:t1",
 	"orderId":"o1","status":"awaiting_pickup","revision":9,"number":"22112026-0003",
+	"paymentHeldUntil":"2026-11-22T08:44:00Z",
 	"steps":[{"status":"paid","at":"2026-11-22T08:39:00.000Z"}],
 	"tracking":{"carrier":"carrier","number":"TRACK1","url":"https://example.test/TRACK1"},"unknownField":1}`
 )
@@ -47,6 +49,9 @@ func TestOrderStatusChanged(t *testing.T) {
 		t.Fatalf("адрес покупки: %+v", event)
 	}
 	order := event.Order
+	if !order.PaymentHeldUntil.Equal(time.Date(2026, 11, 22, 8, 44, 0, 0, time.UTC)) {
+		t.Fatal("срок удержания не дошёл до приложения", order)
+	}
 	if order.OrderID != "o1" || order.Status != checkout.GroupAwaitingPickup || order.Revision != 9 {
 		t.Fatalf("состояние заказа: %+v", order)
 	}

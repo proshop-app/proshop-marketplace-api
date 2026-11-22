@@ -68,7 +68,14 @@ func (s *Service) Pay(ctx context.Context, buyerID, id ids.UUID) (checkout.State
 	if _, err := checkout.Restore(state).PaymentAmount(); err != nil {
 		return state, err
 	}
-	return state, nil
+	state, err = s.holdPayment(ctx, state)
+	if err != nil {
+		return state, err
+	}
+	if !checkout.Restore(state).PaymentComplete() {
+		_, err = checkout.Restore(state).PaymentAmount()
+	}
+	return state, err
 }
 
 // ConfirmPayment отправляет только доступные группы; исходы сохраняются даже при частичном отказе.

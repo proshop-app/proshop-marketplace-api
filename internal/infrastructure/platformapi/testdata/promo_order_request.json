@@ -21,5 +21,6 @@
     "name": "Покупатель"
   },
   "deliveryPrice": 15000,
-  "promoCode": "SAVE"
+  "promoCode": "SAVE",
+  "paymentDueAt": "2026-10-24T11:00:00Z"
 }

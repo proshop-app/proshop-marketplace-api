@@ -15,6 +15,7 @@ import (
 
 func orderRequest() ports.CreateOrderRequest {
 	return ports.CreateOrderRequest{
+		PaymentDueAt:       time.Date(2026, 10, 24, 11, 0, 0, 0, time.UTC),
 		ExternalCheckoutID: "checkout1:t1",
 		GroupID:            "t1",
 		Items:              []ports.OrderItem{{ProductID: "p1", Quantity: 2, Price: money.FromKopecks(199000)}},

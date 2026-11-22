@@ -108,7 +108,7 @@ func (c *Checkout) PaymentComplete() bool {
 // CheckPaymentWindow проверяет все ожидающие заказы до первого внешнего платежа.
 func (c *Checkout) CheckPaymentWindow(now time.Time) error {
 	for _, g := range c.state.Groups {
-		if g.ReadyForPayment() && !now.Before(g.ExpiresAt) {
+		if g.ReadyForPayment() && !now.Before(g.PaymentDeadline()) {
 			return ErrPaymentExpired
 		}
 	}

@@ -16,18 +16,19 @@ import (
 )
 
 type sellerOrderJSON struct {
-	Carrier         string                  `json:"carrier"`
-	PickupPointCode string                  `json:"pickupPointCode"`
-	Tracking        *trackingJSON           `json:"tracking"`
-	OrderID         string                  `json:"orderId"`
-	ExpiresAt       time.Time               `json:"expiresAt"`
-	Total           *int64                  `json:"total"`
-	Status          checkout.GroupStatus    `json:"status"`
-	Reason          string                  `json:"reason"`
-	Revision        int64                   `json:"revision"`
-	Number          string                  `json:"number"`
-	Steps           []checkout.OrderStep    `json:"steps"`
-	ReturnRequest   *checkout.ReturnRequest `json:"returnRequest"`
+	PaymentHeldUntil time.Time               `json:"paymentHeldUntil"`
+	Carrier          string                  `json:"carrier"`
+	PickupPointCode  string                  `json:"pickupPointCode"`
+	Tracking         *trackingJSON           `json:"tracking"`
+	OrderID          string                  `json:"orderId"`
+	ExpiresAt        time.Time               `json:"expiresAt"`
+	Total            *int64                  `json:"total"`
+	Status           checkout.GroupStatus    `json:"status"`
+	Reason           string                  `json:"reason"`
+	Revision         int64                   `json:"revision"`
+	Number           string                  `json:"number"`
+	Steps            []checkout.OrderStep    `json:"steps"`
+	ReturnRequest    *checkout.ReturnRequest `json:"returnRequest"`
 }
 
 type orderStatusesJSON struct {
@@ -35,12 +36,13 @@ type orderStatusesJSON struct {
 }
 
 type orderStatusJSON struct {
-	OrderID       string                  `json:"orderId"`
-	Number        string                  `json:"number"`
-	Steps         []checkout.OrderStep    `json:"steps"`
-	ReturnRequest *checkout.ReturnRequest `json:"returnRequest"`
-	Status        checkout.GroupStatus    `json:"status"`
-	Revision      int64                   `json:"revision"`
+	PaymentHeldUntil time.Time               `json:"paymentHeldUntil"`
+	OrderID          string                  `json:"orderId"`
+	Number           string                  `json:"number"`
+	Steps            []checkout.OrderStep    `json:"steps"`
+	ReturnRequest    *checkout.ReturnRequest `json:"returnRequest"`
+	Status           checkout.GroupStatus    `json:"status"`
+	Revision         int64                   `json:"revision"`
 }
 
 // CreateOrder создаёт заказ магазина без открытия кассы по ключу покупки и группы.
@@ -120,17 +122,18 @@ func (a sellerOrderJSON) order(creating bool) (checkout.SellerOrder, error) {
 		return checkout.SellerOrder{}, ErrInvalidResponse
 	}
 	order := checkout.SellerOrder{
-		Carrier:         delivery.Carrier(a.Carrier),
-		PickupPointCode: a.PickupPointCode,
-		OrderID:         a.OrderID,
-		ExpiresAt:       a.ExpiresAt,
-		Status:          a.Status,
-		Reason:          a.Reason,
-		Revision:        a.Revision,
-		Number:          a.Number,
-		Steps:           a.Steps,
-		ReturnRequest:   a.ReturnRequest,
-		Tracking:        a.Tracking.domain(),
+		Carrier:          delivery.Carrier(a.Carrier),
+		PickupPointCode:  a.PickupPointCode,
+		OrderID:          a.OrderID,
+		ExpiresAt:        a.ExpiresAt,
+		PaymentHeldUntil: a.PaymentHeldUntil,
+		Status:           a.Status,
+		Reason:           a.Reason,
+		Revision:         a.Revision,
+		Number:           a.Number,
+		Steps:            a.Steps,
+		ReturnRequest:    a.ReturnRequest,
+		Tracking:         a.Tracking.domain(),
 	}
 	if a.Total != nil {
 		order.Total = money.FromKopecks(*a.Total)

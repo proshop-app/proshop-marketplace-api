@@ -74,14 +74,15 @@ type PriceChange struct {
 
 // SellerOrder — подтверждённый сервером снимок; возврат с кассы его не заменяет.
 type SellerOrder struct {
-	Carrier         delivery.Carrier
-	PickupPointCode string
-	Tracking        *Tracking
-	OrderID         string
-	ExpiresAt       time.Time
-	Total           money.Money
-	Status          GroupStatus
-	Reason          string
+	Carrier          delivery.Carrier
+	PickupPointCode  string
+	Tracking         *Tracking
+	OrderID          string
+	ExpiresAt        time.Time
+	PaymentHeldUntil time.Time
+	Total            money.Money
+	Status           GroupStatus
+	Reason           string
 	// Revision — номер перехода статуса у магазина; ноль в ответе создания.
 	Revision int64
 	// Number — номер заказа магазина для покупателя.
@@ -100,12 +101,13 @@ type OrderStep struct {
 
 // OrderStatus — строка суточной сверки: статус заказа магазина и номер перехода.
 type OrderStatus struct {
-	OrderID       string
-	Number        string
-	Steps         []OrderStep
-	ReturnRequest *ReturnRequest
-	Status        GroupStatus
-	Revision      int64
+	PaymentHeldUntil time.Time
+	OrderID          string
+	Number           string
+	Steps            []OrderStep
+	ReturnRequest    *ReturnRequest
+	Status           GroupStatus
+	Revision         int64
 }
 
 // Tracking — номер и ссылка перевозчика из заказа сервера.
@@ -132,6 +134,13 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 	if c.state.CartConsumed && c.state.Contact != contact {
 		return false, ErrSnapshotChanged
 	}
+	due := now.Add(PaymentWindow)
+	for _, group := range c.state.Groups {
+		if !group.ExpiresAt.IsZero() {
+			due = group.ExpiresAt
+			break
+		}
+	}
 	c.state.Contact = contact
 	c.state.Status = StatusCreatingOrders
 	for i := range c.state.Groups {
@@ -156,6 +165,9 @@ func (c *Checkout) BeginOrders(contact Contact, now time.Time) (bool, error) {
 				return false, ErrSellerUnavailable
 			}
 			g.Status = GroupCreating
+			if g.ExpiresAt.IsZero() {
+				g.ExpiresAt = due
+			}
 		}
 	}
 	c.rollup()
@@ -182,7 +194,8 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	if err != nil {
 		return false, err
 	}
-	if order.OrderID == "" || order.ExpiresAt.IsZero() || total.Cmp(order.Total) != 0 {
+	if order.OrderID == "" || order.ExpiresAt.IsZero() ||
+		!order.ExpiresAt.Equal(g.ExpiresAt) || total.Cmp(order.Total) != 0 {
 		return false, ErrInvalidOrder
 	}
 	if c.state.Delivery == nil || order.Carrier != c.state.Delivery.Carrier ||
@@ -190,7 +203,8 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 		return c.rejectOrderPickup(g, order, now)
 	}
 	g.OrderID, g.ExpiresAt = order.OrderID, order.ExpiresAt
-	g.NextPollAt = order.ExpiresAt.Add(PaymentExpiryGrace)
+	g.PaymentHeldUntil = order.PaymentHeldUntil
+	g.NextPollAt = g.PaymentDeadline().Add(PaymentExpiryGrace)
 	if !g.CancellationConfirmed {
 		g.LastOrderStatus = GroupAwaitingPayment
 	}
@@ -227,7 +241,8 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, now time.Time
 		return false, ErrInvalidOrder
 	}
 	if g.Status == order.Status && g.Reason == order.Reason &&
-		g.OrderRevision == order.Revision && g.PollFailures == 0 && g.LastErrorCode == "" {
+		g.OrderRevision == order.Revision && g.PollFailures == 0 && g.LastErrorCode == "" &&
+		(order.PaymentHeldUntil.IsZero() || g.PaymentHeldUntil.Equal(order.PaymentHeldUntil)) {
 		return false, nil
 	}
 	if !g.Abandoned {
@@ -240,6 +255,12 @@ func (c *Checkout) Observe(tenant ids.TenantID, order SellerOrder, now time.Time
 	}
 	g.LastOrderStatus, g.OrderRevision = order.Status, order.Revision
 	g.recordProgress(order)
+	if !order.PaymentHeldUntil.IsZero() {
+		g.PaymentHeldUntil = order.PaymentHeldUntil
+		if !g.PaymentPending {
+			g.NextPollAt = g.PaymentDeadline().Add(PaymentExpiryGrace)
+		}
+	}
 	if g.Paid() || order.Status == GroupCancelled {
 		g.PaymentPending = false
 		if c.state.PaymentAttempt == "" {

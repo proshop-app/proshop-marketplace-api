@@ -41,6 +41,7 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 	ctx := context.Background()
 	clock := fake.NewClock(time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC))
 	store, platform := fake.NewStore(), fake.NewPlatform()
+	platform.OrderClock = clock
 	for _, tenant := range []ids.TenantID{"t1", "t2"} {
 		seedReadyPaymentSeller(store, tenant)
 	}
@@ -48,6 +49,7 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 		ctx,
 		"t1",
 		ports.CreateOrderRequest{
+			PaymentDueAt:       clock.Now().Add(checkout.PaymentWindow),
 			ExternalCheckoutID: string(paymentTestID),
 			GroupID:            "t1",
 			Items:              []ports.OrderItem{{ProductID: "p1", Quantity: 1, Price: money.FromKopecks(12345)}},
@@ -77,7 +79,7 @@ func newPaymentTest(t *testing.T, enabled bool) paymentTestEnv {
 					},
 				},
 				Quote:         &delivery.Quote{Status: delivery.QuoteAvailable},
-				ExpiresAt:     clock.Now().Add(time.Hour),
+				ExpiresAt:     order.ExpiresAt,
 				OrderID:       order.OrderID,
 				Status:        checkout.GroupAwaitingPayment,
 				Goods:         money.FromKopecks(12345),

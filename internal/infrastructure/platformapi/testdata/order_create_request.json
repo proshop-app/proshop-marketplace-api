@@ -15,5 +15,6 @@
     "phone": "79251234567",
     "name": "Покупатель"
   },
-  "deliveryPrice": 15000
+  "deliveryPrice": 15000,
+  "paymentDueAt": "2026-10-24T11:00:00Z"
 }

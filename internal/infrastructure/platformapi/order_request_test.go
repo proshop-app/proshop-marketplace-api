@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
@@ -18,6 +19,7 @@ func TestOrderRequestFixtures(t *testing.T) {
 	for _, fixture := range []string{"order_create_request.json", "promo_order_request.json"} {
 		t.Run(fixture, func(t *testing.T) {
 			request := ports.CreateOrderRequest{
+				PaymentDueAt:       time.Date(2026, 10, 24, 11, 0, 0, 0, time.UTC),
 				ExternalCheckoutID: "checkout1:t1",
 				GroupID:            "t1",
 				Items:              []ports.OrderItem{{ProductID: "p1", Quantity: 2, Price: money.FromKopecks(199000)}},

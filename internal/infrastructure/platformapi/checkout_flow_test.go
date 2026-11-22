@@ -89,6 +89,17 @@ func (s *pickupCheckoutServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 				"orderId": cancelled.OrderID,
 			}
 		}
+	case strings.HasSuffix(r.URL.Path, "/payment-hold"):
+		id := strings.TrimSuffix(r.URL.Path, "/payment-hold")
+		id = id[strings.LastIndex(id, "/")+1:]
+		var order checkout.SellerOrder
+		order, err = s.platform.PaymentHold(ctx, tenant, id)
+		result = map[string]any{
+			"orderId":          order.OrderID,
+			"status":           order.Status,
+			"revision":         order.Revision,
+			"paymentHeldUntil": order.PaymentHeldUntil,
+		}
 	case strings.HasSuffix(r.URL.Path, "/stub-payment"):
 		var body struct{ Amount money.Money }
 		err = json.NewDecoder(r.Body).Decode(&body)

@@ -46,6 +46,9 @@ func paymentRefusal(tenant ids.TenantID, err error, attempt *paymentAttempt) err
 	var refusal *ports.OrderRefusal
 	if errors.As(err, &refusal) {
 		switch refusal.Code {
+		case "ORDER_PAYMENT_EXPIRED":
+			attempt.result.Unpaid[tenant] = true
+			return checkout.ErrPaymentExpired.Wrap(err)
 		case "MARKETPLACE_STUB_PAYMENT_AMOUNT", "ORDER_NOT_FOUND":
 			if !attempt.previous[tenant] {
 				attempt.result.Unpaid[tenant] = true

@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -59,6 +60,7 @@ type OrderItem struct {
 
 // CreateOrderRequest — сохранённая команда магазина с ключом группы.
 type CreateOrderRequest struct {
+	PaymentDueAt       time.Time        `json:"paymentDueAt"`
 	PromoCode          string           `json:"promoCode,omitempty"`
 	ExternalCheckoutID string           `json:"externalCheckoutId"`
 	GroupID            ids.TenantID     `json:"groupId"`
@@ -90,6 +92,7 @@ type OrderNotCancellable struct {
 
 // SellerOrders — команды и сверка заказов через тот же доверенный канал.
 type SellerOrders interface {
+	PaymentHold(context.Context, ids.TenantID, string) (checkout.SellerOrder, error)
 	CancelOrder(context.Context, ids.TenantID, CancelOrderRequest) (CancelOrderResult, error)
 	// StubPayment идемпотентно подтверждает заказ болванкой; amount — сумма в копейках.
 	StubPayment(ctx context.Context, tenantID ids.TenantID, orderID string, amount money.Money) error
@@ -132,7 +135,8 @@ func (e *OrderRefusal) Unwrap() error {
 		return ErrOrderNotFound
 	case "MARKETPLACE_TEMPORARY_FAILURE":
 		return ErrTemporaryOrderRefusal
-	case "DELIVERY_UNAVAILABLE", "DELIVERY_CHANGED", "OUT_OF_STOCK", "IDEMPOTENCY_CONFLICT",
+	case "ORDER_PAYMENT_EXPIRED", "ORDER_NOT_AWAITING_PAYMENT", "MARKETPLACE_PAYMENT_DUE_INVALID",
+		"DELIVERY_UNAVAILABLE", "DELIVERY_CHANGED", "OUT_OF_STOCK", "IDEMPOTENCY_CONFLICT",
 		"ORDER_CHECKOUT_CANCELLED", "MARKETPLACE_STUB_PAYMENT_AMOUNT", "MARKETPLACE_STUB_PAYMENT_STATE":
 		return ErrOrderRefusal
 	default:

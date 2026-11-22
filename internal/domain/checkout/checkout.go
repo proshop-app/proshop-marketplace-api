@@ -79,24 +79,25 @@ type Group struct {
 	Lines              []Line
 	Goods              money.Money
 	// Quote — расчёт доставки до выбранного пункта; нет — нужно посчитать.
-	Quote           *delivery.Quote
-	Status          GroupStatus
-	OrderID         string
-	ExpiresAt       time.Time
-	DeliveryPrice   money.Money
-	Reason          string
-	NextPollAt      time.Time
-	AwaitingSince   time.Time
-	CartReturned    bool
-	CurrentPrices   []PriceChange
-	LastErrorCode   string
-	CreateFailures  int
-	CreateExhausted bool
-	NextCreateAt    time.Time
-	CreateToken     string
-	PollFailures    int
-	PollToken       string
-	LastOrderStatus GroupStatus
+	Quote            *delivery.Quote
+	Status           GroupStatus
+	OrderID          string
+	ExpiresAt        time.Time
+	PaymentHeldUntil time.Time
+	DeliveryPrice    money.Money
+	Reason           string
+	NextPollAt       time.Time
+	AwaitingSince    time.Time
+	CartReturned     bool
+	CurrentPrices    []PriceChange
+	LastErrorCode    string
+	CreateFailures   int
+	CreateExhausted  bool
+	NextCreateAt     time.Time
+	CreateToken      string
+	PollFailures     int
+	PollToken        string
+	LastOrderStatus  GroupStatus
 	// OrderRevision — номер перехода статуса у магазина: опоздавшее состояние не применяется.
 	OrderRevision int64
 	// OrderStatusAt — когда площадка узнала текущий статус заказа; от него считается срок сверки.

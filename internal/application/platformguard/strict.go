@@ -202,3 +202,12 @@ func (c *Client) CancelOrder(
 	}
 	return call(ctx, c, checkoutClass, "cancel_order", c.cfg.StrictTimeout, cancelOrder)
 }
+
+// PaymentHold — команда оформления без кэша и скрытых повторов.
+func (c *Client) PaymentHold(ctx context.Context, tenant ids.TenantID, order string) (checkout.SellerOrder, error) {
+	ctx = context.WithValue(ctx, tenantContextKey{}, tenant)
+	hold := func(ctx context.Context) (checkout.SellerOrder, error) {
+		return c.upstream.PaymentHold(ctx, tenant, order)
+	}
+	return call(ctx, c, checkoutClass, "payment_hold", c.cfg.StrictTimeout, hold)
+}

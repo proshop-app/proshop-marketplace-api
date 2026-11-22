@@ -151,7 +151,7 @@ func (c *Checkout) ClaimPayment(token string, orders map[ids.TenantID]string, no
 		if g == nil || g.Paid() || g.Excluded() || g.OrderID != orderID || g.EffectiveStatus() != GroupAwaitingPayment {
 			return ErrTransition
 		}
-		if !now.Before(g.ExpiresAt) {
+		if !now.Before(g.PaymentDeadline()) {
 			return ErrPaymentExpired
 		}
 	}
@@ -183,7 +183,7 @@ func (c *Checkout) FinishPayment(token string, result PaymentResult, now time.Ti
 		if g.Paid() || result.Unpaid[g.TenantID] {
 			g.PaymentPending = false
 			if !g.Paid() {
-				g.NextPollAt = g.ExpiresAt.Add(PaymentExpiryGrace)
+				g.NextPollAt = g.PaymentDeadline().Add(PaymentExpiryGrace)
 			}
 		}
 	}

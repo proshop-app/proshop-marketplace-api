@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -13,6 +14,7 @@ import (
 func TestOrderIdempotencyComparesRequestBody(t *testing.T) {
 	platform := fake.NewPlatform()
 	request := ports.CreateOrderRequest{
+		PaymentDueAt:       platform.OrderNow.Add(10 * time.Minute),
 		ExternalCheckoutID: "checkout:t1",
 		GroupID:            "t1",
 		Items:              []ports.OrderItem{{ProductID: "p1", Quantity: 1, Price: money.FromKopecks(100)}},
@@ -43,5 +45,33 @@ func TestOrderIdempotencyComparesRequestBody(t *testing.T) {
 	}
 	if platform.OrderCount() != 1 {
 		t.Fatal("повторы не должны создавать новые заказы")
+	}
+}
+
+func TestPaymentDueValidationAndIdempotentReplay(t *testing.T) {
+	platform := fake.NewPlatform()
+	ctx := context.Background()
+	request := ports.CreateOrderRequest{
+		ExternalCheckoutID: "checkout:t1",
+		GroupID:            "t1",
+		PaymentDueAt:       platform.OrderNow.Add(10 * time.Minute),
+	}
+	for _, due := range []time.Time{platform.OrderNow, platform.OrderNow.Add(11*time.Minute + time.Nanosecond)} {
+		invalid := request
+		invalid.PaymentDueAt = due
+		_, err := platform.CreateOrder(ctx, "t1", invalid)
+		var refusal *ports.OrderRefusal
+		if !errors.As(err, &refusal) || refusal.Code != "MARKETPLACE_PAYMENT_DUE_INVALID" {
+			t.Fatal(err)
+		}
+	}
+	order, err := platform.CreateOrder(ctx, "t1", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.PaymentDueAt = time.Time{}
+	repeated, err := platform.CreateOrder(ctx, "t1", request)
+	if err != nil || repeated.OrderID != order.OrderID || !repeated.ExpiresAt.Equal(order.ExpiresAt) {
+		t.Fatal("повтор не проверяет новый срок", repeated, err)
 	}
 }

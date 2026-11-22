@@ -362,7 +362,7 @@ func TestRemovingExpiredUnreachableCreationPreservesHealthyOrder(t *testing.T) {
 		if err := executeTasks(ctx, e); err != nil {
 			t.Fatal(err)
 		}
-		e.clock.Advance(10 * time.Minute)
+		e.clock.Advance(time.Minute)
 	}
 	_, quoteErr := e.service.Quote(ctx, buyerID, purchase.ID, "cdek", "MSK1", "Город")
 	final, _ := e.service.Get(ctx, buyerID, purchase.ID)

@@ -407,8 +407,8 @@ func checkoutGroupResponse(group checkout.Group) (checkoutGroupJSON, error) {
 		deadline := group.CreationDeadline
 		g.CreationDeadline = &deadline
 	}
-	if !group.ExpiresAt.IsZero() {
-		expires := group.ExpiresAt
+	if !group.PaymentDeadline().IsZero() {
+		expires := group.PaymentDeadline()
 		g.ExpiresAt = &expires
 	}
 	lines, base, err := checkoutLinesResponse(group.Lines)

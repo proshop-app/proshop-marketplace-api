@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"strings"
+	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
 
@@ -23,6 +24,7 @@ type Orders interface {
 }
 
 type orderStatusEvent struct {
+	PaymentHeldUntil   time.Time               `json:"paymentHeldUntil"`
 	Version            int                     `json:"version"`
 	TenantID           string                  `json:"tenantId"`
 	ExternalCheckoutID string                  `json:"externalCheckoutId"`
@@ -75,14 +77,15 @@ func orderStatusChanged(ctx context.Context, orders Orders, envelope Envelope) e
 		TenantID:   tenant,
 		CheckoutID: checkoutID,
 		Order: checkout.SellerOrder{
-			OrderID:       event.OrderID,
-			Status:        event.Status,
-			Reason:        event.Reason,
-			Revision:      event.Revision,
-			Number:        event.Number,
-			Steps:         event.Steps,
-			ReturnRequest: event.ReturnRequest,
-			Tracking:      event.Tracking.domain(),
+			PaymentHeldUntil: event.PaymentHeldUntil,
+			OrderID:          event.OrderID,
+			Status:           event.Status,
+			Reason:           event.Reason,
+			Revision:         event.Revision,
+			Number:           event.Number,
+			Steps:            event.Steps,
+			ReturnRequest:    event.ReturnRequest,
+			Tracking:         event.Tracking.domain(),
 		},
 	})
 }

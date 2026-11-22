@@ -80,6 +80,7 @@ type Platform struct {
 	actionCalls      map[ids.TenantID]int
 	BeforeSettings   func(ids.TenantID)
 	OrderNow         time.Time
+	OrderClock       ports.Clock
 	AfterCreate      func()
 	AfterStubPayment func()
 	stubPaid         map[string]bool

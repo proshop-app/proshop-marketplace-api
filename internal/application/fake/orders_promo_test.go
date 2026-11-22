@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -30,6 +31,7 @@ func TestOrderChecksCurrentDiscounts(t *testing.T) {
 				item.Discounts = actual
 			}
 			result, err := platform.CreateOrder(context.Background(), "t1", ports.CreateOrderRequest{
+				PaymentDueAt:       platform.OrderNow.Add(10 * time.Minute),
 				ExternalCheckoutID: "checkout1",
 				GroupID:            "t1",
 				Items:              []ports.OrderItem{item},

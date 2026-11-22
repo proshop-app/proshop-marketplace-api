@@ -40,7 +40,7 @@ func attach(t *testing.T, c *checkout.Checkout, index int) checkout.SellerOrder 
 		Carrier:         c.Delivery().Carrier,
 		PickupPointCode: c.Delivery().PickupPointCode,
 		OrderID:         string(g.TenantID) + "-order",
-		ExpiresAt:       t0.Add(time.Hour),
+		ExpiresAt:       t0.Add(checkout.PaymentWindow),
 		Total:           total,
 		Status:          checkout.GroupAwaitingPayment,
 	}

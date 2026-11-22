@@ -99,8 +99,8 @@ func (g Group) pollAt() (time.Time, bool) {
 		return time.Time{}, false
 	}
 	at := g.NextPollAt
-	if !g.PaymentPending && at.Before(g.ExpiresAt.Add(PaymentExpiryGrace)) {
-		at = g.ExpiresAt.Add(PaymentExpiryGrace)
+	if !g.PaymentPending && at.Before(g.PaymentDeadline().Add(PaymentExpiryGrace)) {
+		at = g.PaymentDeadline().Add(PaymentExpiryGrace)
 	}
 	return at, true
 }
@@ -287,7 +287,7 @@ func (g *Group) schedulePollResult(now time.Time) {
 		return
 	}
 	// Долгая просрочка требует более редкой сверки, но успешное ожидание оплаты не является отказом.
-	delay := min(max(now.Sub(g.ExpiresAt.Add(PaymentExpiryGrace)), OrderRetryBase), OrderSlowPoll)
+	delay := min(max(now.Sub(g.PaymentDeadline().Add(PaymentExpiryGrace)), OrderRetryBase), OrderSlowPoll)
 	g.NextPollAt = now.Add(delay)
 }
 

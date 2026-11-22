@@ -223,6 +223,7 @@ func creationRequest(
 	fallback *checkout.Selection, contact checkout.Contact,
 ) ports.CreateOrderRequest {
 	request := ports.CreateOrderRequest{
+		PaymentDueAt:       group.ExpiresAt,
 		PromoCode:          group.PromoCode,
 		ExternalCheckoutID: group.ExternalCheckoutID,
 		GroupID:            tenant,

@@ -60,6 +60,7 @@ func orderBody(r ports.CreateOrderRequest) map[string]any {
 		items = append(items, line)
 	}
 	body := map[string]any{
+		"paymentDueAt":       r.PaymentDueAt,
 		"externalCheckoutId": r.ExternalCheckoutID,
 		"groupId":            r.GroupID,
 		"items":              items,
