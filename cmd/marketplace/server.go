@@ -34,6 +34,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/operator"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/identitycache"
 	infrakafka "github.com/proshop-app/proshop-marketplace/internal/infrastructure/kafka"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/localgeoip"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/password"
@@ -152,17 +153,18 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 
 // services собирает сценарии приложения поверх хранилищ и внешних адаптеров.
 func (s *server) services(ctx context.Context) (services, error) {
+	cfg := s.cfg
+	now := clock.System{}
 	tokens, err := s.identityTokens(
-		s.cfg.Identity.ClientID,
-		s.cfg.Identity.Secret,
-		"marketplace",
-		s.cfg.Login.SessionTTL,
+		cfg.Identity.ClientID,
+		cfg.Identity.Secret,
+		buyerRealm,
+		cfg.Login.SessionTTL,
+		identitycache.NewMappings(s.identityMappings(buyerRealm, cfg.Identity.ClientID), now),
 	)
 	if err != nil {
 		return services{}, err
 	}
-	cfg := s.cfg
-	now := clock.System{}
 	identities := random.IDs{}
 	uow := storecache.NewUnitOfWork(
 		postgres.NewUnitOfWork(s.store.pool),
@@ -306,8 +308,9 @@ func (s *server) services(ctx context.Context) (services, error) {
 		operatorTokens, err = s.identityTokens(
 			cfg.Identity.OperatorClientID,
 			cfg.Identity.OperatorSecret,
-			"platform",
+			operatorRealm,
 			cfg.Operator.SessionTTL,
+			s.identityMappings(operatorRealm, cfg.Identity.OperatorClientID),
 		)
 		if err != nil {
 			return services{}, err

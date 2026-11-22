@@ -151,6 +151,9 @@ domain ← application ← interfaces, infrastructure        сборка гра
 - Вход — звонок на номер sms.ru; в разработке — песочница
   (`SMSRU_MODE=sandbox`), она подтверждает любой номер сама.
 - Access — JWT identity-hub в `__Host-mp_access`; обычная проверка без Redis/userinfo.
+  Подпись и срок проверяются при каждом обращении. Привязки покупателей к subject
+  кэшируются в памяти процесса в области issuer/client на 5 минут, до 16 384 записей.
+  Псевдоним поиска и клика использует эту привязку без чтения карточки покупателя.
   В Redis только зашифрованный refresh, браузерный указатель — `__Host-mp_key`.
   Оператор использует отдельный client realm platform. Полный контракт —
   `docs/identity-jwt-cookies.md`. Старые opaque-токены не принимаются.

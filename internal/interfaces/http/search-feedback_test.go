@@ -17,9 +17,11 @@ import (
 	appbuyer "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	appidentity "github.com/proshop-app/proshop-marketplace/internal/application/identity"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/application/searchfeedback"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/identitycache"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -52,6 +54,23 @@ type feedbackSink struct {
 	err    error
 }
 
+type feedbackUnitOfWork struct {
+	ports.UnitOfWork
+	calls int
+}
+
+type feedbackMappings struct {
+	ports.IdentityMappings
+	finds int
+}
+
+type feedbackClaims struct {
+	ports.IdentityHub
+	clock     ports.Clock
+	expiresAt time.Time
+	calls     int
+}
+
 func (a *feedbackTokens) Authenticate(ctx context.Context, token string) (ports.IdentityAccess, error) {
 	a.calls++
 	if a.stall {
@@ -69,6 +88,33 @@ func (s *feedbackSink) Feedback(_ context.Context, event ports.SearchFeedback) (
 	return s.err == nil, s.err
 }
 
+func (s *feedbackUnitOfWork) Do(ctx context.Context, run func(context.Context, ports.Tx) error) error {
+	s.calls++
+	return s.UnitOfWork.Do(ctx, run)
+}
+
+func (s *feedbackMappings) Find(_ context.Context, subject string) (string, error) {
+	s.finds++
+	if subject != "buyer-subject" {
+		return "", buyer.ErrSessionNotFound
+	}
+	return string(feedbackBuyer), nil
+}
+
+func (h *feedbackClaims) Claims(_ context.Context, token string, allowExpired bool) (ports.HubClaims, error) {
+	h.calls++
+	if token != "valid-access" {
+		return ports.HubClaims{}, buyer.ErrSessionNotFound
+	}
+	if !allowExpired && !h.clock.Now().Before(h.expiresAt) {
+		return ports.HubClaims{}, buyer.ErrAccessExpired
+	}
+	return ports.HubClaims{
+		Subject:   "buyer-subject",
+		ExpiresAt: h.expiresAt,
+	}, nil
+}
+
 func newFeedbackHTTP(t *testing.T, enabled bool) feedbackHTTPEnv {
 	t.Helper()
 	ctx := context.Background()
@@ -84,6 +130,21 @@ func newFeedbackHTTP(t *testing.T, enabled bool) feedbackHTTPEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
+	auth := appbuyer.NewAuth(store, nil, tokens, nil, nil, clock, appbuyer.AuthConfig{})
+	env := newFeedbackHTTPWithAuth(t, enabled, store, auth, clock)
+	env.tokens = tokens
+	env.token = access.Token
+	return env
+}
+
+func newFeedbackHTTPWithAuth(
+	t *testing.T,
+	enabled bool,
+	store ports.UnitOfWork,
+	auth *appbuyer.Auth,
+	clock ports.Clock,
+) feedbackHTTPEnv {
+	t.Helper()
 	document := ports.OfferDocument{ID: "seller-a~p42", TenantID: "seller-a", ProductID: "p42", Visible: true}
 	index := &fake.PromotionIndex{
 		Index: fake.NewIndex(),
@@ -93,7 +154,7 @@ func newFeedbackHTTP(t *testing.T, enabled bool) feedbackHTTPEnv {
 			Total:   1,
 		},
 	}
-	if err := index.Put(ctx, []ports.OfferDocument{document}); err != nil {
+	if err := index.Put(context.Background(), []ports.OfferDocument{document}); err != nil {
 		t.Fatal(err)
 	}
 	keys := searchfeedback.NewBuyerKeys(strings.Repeat("k", 32))
@@ -108,7 +169,7 @@ func newFeedbackHTTP(t *testing.T, enabled bool) feedbackHTTPEnv {
 	handler := NewHandler(Deps{
 		RequestTimeout:         time.Second,
 		ReferenceImportTimeout: time.Second,
-		Auth:                   appbuyer.NewAuth(store, nil, tokens, nil, nil, clock, appbuyer.AuthConfig{}),
+		Auth:                   auth,
 		Catalog:                appcatalog.NewQueries(store, index, nil, nil, nil, clock),
 		SearchFeedback:         service,
 		SearchBuyerKeys:        keys,
@@ -120,10 +181,8 @@ func newFeedbackHTTP(t *testing.T, enabled bool) feedbackHTTPEnv {
 		handler: handler,
 		index:   index,
 		limiter: limiter,
-		tokens:  tokens,
 		sink:    sink,
 		key:     buyerKey,
-		token:   access.Token,
 	}
 }
 
@@ -140,6 +199,43 @@ func (e feedbackHTTPEnv) send(method, path, body, cookie, bearer, ip string) *ht
 	response := httptest.NewRecorder()
 	e.handler.ServeHTTP(response, request)
 	return response
+}
+
+func TestSearchAndClickUseWarmBuyerMapping(t *testing.T) {
+	const (
+		search = "/api/v1/catalog/offers?q=товар&observe=1"
+		click  = "/api/v1/search/feedback"
+		token  = "valid-access"
+	)
+	clock := fake.NewClock(time.Now())
+	hub := &feedbackClaims{
+		clock:     clock,
+		expiresAt: clock.Now().Add(time.Second),
+	}
+	source := &feedbackMappings{}
+	store := &feedbackUnitOfWork{UnitOfWork: fake.NewStore()}
+	tokens := appidentity.NewTokens(hub, identitycache.NewMappings(source, clock), nil, nil, nil, clock, time.Minute)
+	auth := appbuyer.NewAuth(store, nil, tokens, nil, nil, clock, appbuyer.AuthConfig{})
+	e := newFeedbackHTTPWithAuth(t, true, store, auth, clock)
+	assertObservation(t, e.send(http.MethodGet, search, "", token, "", ""), feedbackReceipt, "private, no-store")
+	if e.index.Query.BuyerKey != e.key || source.finds != 1 || store.calls != 0 {
+		t.Fatalf("прогрев: псевдоним %q, Find %d, транзакций %d", e.index.Query.BuyerKey, source.finds, store.calls)
+	}
+	source.finds = 0
+	assertObservation(t, e.send(http.MethodGet, search, "", token, "", ""), feedbackReceipt, "private, no-store")
+	assertFeedback(t, e.send(http.MethodPost, click, feedbackClick, token, "", ""), true)
+	if e.index.Query.BuyerKey != e.key || e.sink.events[0].BuyerKey != e.key {
+		t.Fatalf("поиск и клик должны получить один псевдоним: %+v, %+v", e.index.Query, e.sink.events)
+	}
+	assertFeedback(t, e.send(http.MethodPost, click, feedbackClick, "forged-access", "", ""), true)
+	clock.Advance(time.Second)
+	assertObservation(t, e.send(http.MethodGet, search, "", token, "", ""), feedbackReceipt, "private, no-store")
+	if e.index.Query.BuyerKey != "" || e.sink.events[1].BuyerKey != "" {
+		t.Fatal("недействительный или истёкший access получил псевдоним")
+	}
+	if source.finds != 0 || store.calls != 0 || hub.calls != 5 {
+		t.Fatalf("после прогрева: Find %d, транзакций %d, проверок JWT %d", source.finds, store.calls, hub.calls)
+	}
 }
 
 func TestCatalogSearchObservation(t *testing.T) {
