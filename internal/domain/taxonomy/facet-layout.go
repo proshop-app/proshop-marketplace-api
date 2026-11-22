@@ -162,7 +162,8 @@ func (node *Category) compileFilters(schemas map[string]Schema, requireLayout bo
 	if len(layout.Primary) < 5 || len(layout.Primary) > 8 || layout.Additional == nil || len(layout.Additional) != 0 {
 		return facetScope{}, ErrInvalid.WithMessage("facetLayout ветки требует от 5 до 8 приоритетов: " + node.ID)
 	}
-	node.PriorityFilters, err = layout.resolve(node.ID, scope.common, true)
+	// Фильтр ветки показывает значения товаров выдачи: характеристики хватает части листьев.
+	node.PriorityFilters, err = layout.resolve(node.ID, scope.union, true)
 	return scope, err
 }
 
