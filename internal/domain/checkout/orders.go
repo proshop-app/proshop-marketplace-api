@@ -88,6 +88,8 @@ type SellerOrder struct {
 	Number string
 	// Steps — путь заказа до текущего статуса; пусто — магазин его не прислал.
 	Steps []OrderStep
+	// ReturnRequest — заявка на возврат; nil — заявки нет.
+	ReturnRequest *ReturnRequest
 }
 
 // OrderStep — шаг заказа в ленте покупателя: статус и когда заказ в него пришёл.
@@ -98,11 +100,12 @@ type OrderStep struct {
 
 // OrderStatus — строка суточной сверки: статус заказа магазина и номер перехода.
 type OrderStatus struct {
-	OrderID  string
-	Number   string
-	Steps    []OrderStep
-	Status   GroupStatus
-	Revision int64
+	OrderID       string
+	Number        string
+	Steps         []OrderStep
+	ReturnRequest *ReturnRequest
+	Status        GroupStatus
+	Revision      int64
 }
 
 // Tracking — номер и ссылка перевозчика из заказа сервера.
@@ -381,6 +384,9 @@ func (g *Group) recordProgress(order SellerOrder) {
 	if steps := knownSteps(order.Steps); len(steps) > 0 {
 		g.Steps = steps
 	}
+	if request := knownReturnRequest(order.ReturnRequest); request != nil {
+		g.ReturnRequest = request
+	}
 }
 
 // knownSteps оставляет шаги из словаря договора с настоящим временем.
@@ -417,6 +423,7 @@ func cloneState(state State) State {
 		g.Regions = append([]string(nil), g.Regions...)
 		g.Tracking = cloneTracking(g.Tracking)
 		g.Steps = append([]OrderStep(nil), g.Steps...)
+		g.ReturnRequest = cloneReturnRequest(g.ReturnRequest)
 		g.CurrentPrices = append([]PriceChange(nil), g.CurrentPrices...)
 		g.ReturnRemaining = append([]Line(nil), g.ReturnRemaining...)
 		for j := range g.ReturnRemaining {

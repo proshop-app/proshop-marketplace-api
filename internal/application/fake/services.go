@@ -77,6 +77,7 @@ type Platform struct {
 	pollErrors       map[ids.TenantID]error
 	pollCalls        map[ids.TenantID]int
 	statusCalls      map[ids.TenantID][]int
+	actionCalls      map[ids.TenantID]int
 	BeforeSettings   func(ids.TenantID)
 	OrderNow         time.Time
 	AfterCreate      func()
@@ -260,6 +261,7 @@ func NewPlatform() *Platform {
 		pollErrors:      map[ids.TenantID]error{},
 		pollCalls:       map[ids.TenantID]int{},
 		statusCalls:     map[ids.TenantID][]int{},
+		actionCalls:     map[ids.TenantID]int{},
 		quotes:          map[ids.TenantID]delivery.Offered{},
 		settings:        map[ids.TenantID]ports.ShopSettings{},
 		failing:         map[ids.TenantID]error{},

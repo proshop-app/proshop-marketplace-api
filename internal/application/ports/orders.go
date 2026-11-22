@@ -95,6 +95,15 @@ type SellerOrders interface {
 	StubPayment(ctx context.Context, tenantID ids.TenantID, orderID string, amount money.Money) error
 	CreateOrder(context.Context, ids.TenantID, CreateOrderRequest) (checkout.SellerOrder, error)
 	GetOrder(context.Context, ids.TenantID, string) (checkout.SellerOrder, error)
+	// CancelPaidOrder — отмена оплаченного заказа покупателем; идемпотентна у магазина.
+	CancelPaidOrder(ctx context.Context, tenantID ids.TenantID, orderID string) (checkout.SellerOrder, error)
+	// RequestReturn — заявка покупателя на возврат; повтор открытой заявки отвечает ею же.
+	RequestReturn(
+		ctx context.Context,
+		tenantID ids.TenantID,
+		orderID string,
+		reason checkout.ReturnReason,
+	) (checkout.SellerOrder, error)
 	// OrderStatuses — сверка пачкой: один запрос на страницу заказов магазина, без треков.
 	OrderStatuses(ctx context.Context, tenantID ids.TenantID, orderIDs []string) ([]checkout.OrderStatus, error)
 }

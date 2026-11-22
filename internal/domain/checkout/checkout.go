@@ -104,6 +104,7 @@ type Group struct {
 	// OrderNumber и Steps — номер и путь заказа из состояния магазина.
 	OrderNumber     string
 	Steps           []OrderStep
+	ReturnRequest   *ReturnRequest
 	ReturnFailed    bool
 	ReturnReason    string
 	ReturnRemaining []Line

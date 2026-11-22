@@ -140,6 +140,11 @@ func TestBuyerOrdersAndReturnOnlyTrustPolling(t *testing.T) {
 	if cabinet.status != http.StatusOK || len(items) != 1 {
 		t.Fatalf("кабинет: %+v", cabinet)
 	}
+	groupURL := path + "/groups/" + string(state.Groups[0].TenantID)
+	if r := e.session(t, http.MethodPost, groupURL+"/return-request", `{"reason":"not_fit"}`, cookie); r.status !=
+		http.StatusConflict {
+		t.Fatalf("заявка только по полученному заказу: %+v", r)
+	}
 	if r := e.session(t, http.MethodPost, paidURL, "", cookie); r.status != http.StatusConflict {
 		t.Fatalf("оплаченная группа не требует доплаты: %+v", r)
 	}
@@ -154,6 +159,8 @@ func TestPurchaseEndpointsRequireOwner(t *testing.T) {
 	path := "/api/v1/checkout/" + string(id)
 	for _, request := range []struct{ method, suffix, body string }{
 		{http.MethodGet, "", ""},
+		{http.MethodPost, "/groups/t1/cancel-order", ""},
+		{http.MethodPost, "/groups/t1/return-request", `{"reason":"not_fit"}`},
 		{http.MethodGet, "/return?status=paid", ""},
 		{http.MethodPost, "/orders", `{"contact":{"phone":"79251234567","name":"Покупатель"}}`},
 		{http.MethodPost, "/pay", ""},

@@ -140,11 +140,12 @@ func (s *Service) resolveMismatch(
 	status checkout.OrderStatus,
 ) string {
 	order := checkout.SellerOrder{
-		OrderID:  status.OrderID,
-		Number:   status.Number,
-		Steps:    status.Steps,
-		Status:   status.Status,
-		Revision: status.Revision,
+		OrderID:       status.OrderID,
+		Number:        status.Number,
+		Steps:         status.Steps,
+		ReturnRequest: status.ReturnRequest,
+		Status:        status.Status,
+		Revision:      status.Revision,
 	}
 	var err error
 	if status.Status != entry.Status && statusNeedsDetails(status.Status) {

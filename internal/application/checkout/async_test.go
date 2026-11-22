@@ -231,6 +231,16 @@ func announceOrder(ctx context.Context, e *env, tenant ids.TenantID, id ids.UUID
 	})
 }
 
+// applyEvent доставляет произвольное состояние заказа как событие магазина.
+func applyEvent(ctx context.Context, e *env, tenant ids.TenantID, id ids.UUID, order checkout.SellerOrder) error {
+	return e.service.ApplyOrderEvent(ctx, appcheckout.OrderEvent{
+		EventID:    fmt.Sprintf("state:%s:%d", order.OrderID, order.Revision),
+		TenantID:   tenant,
+		CheckoutID: id,
+		Order:      order,
+	})
+}
+
 func refreshOrders(ctx context.Context, e *env, buyer, id ids.UUID) (checkout.State, error) {
 	if _, err := e.service.Get(ctx, buyer, id); err != nil {
 		return checkout.State{}, err

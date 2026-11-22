@@ -3217,6 +3217,65 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/groups/{tenantId}/cancel-order:
+    post:
+      tags: [checkout]
+      summary: Отменить оплаченный заказ одного магазина
+      description: >-
+        Владелец покупки, до передачи перевозчику (paid, assembled). Заказы других магазинов продолжаются,
+        деньги возвращает магазин. Итог — returned с reason cancelled_before_shipment; повтор безопасен.
+        Уехавший заказ — 409 checkout.order_not_cancellable.
+      operationId: cancelCheckoutGroupOrder
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
+        - $ref: "#/components/parameters/CheckoutId"
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Checkout" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/{checkoutId}/groups/{tenantId}/return-request:
+    post:
+      tags: [checkout]
+      summary: Подать заявку на возврат заказа магазина
+      description: >-
+        Владелец покупки, одна заявка на полученный заказ. Решает магазин: согласие — статус returned,
+        отказ — returnRequest.status rejected с comment. Повтор открытой заявки безопасен;
+        иначе 409 checkout.return_unavailable.
+      operationId: requestCheckoutGroupReturn
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MoneyUnit" }
+        - $ref: "#/components/parameters/CheckoutId"
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  enum: [not_fit, defective, not_as_described, changed_mind]
+      responses:
+        "200": { $ref: "#/components/responses/Checkout" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/checkout/{checkoutId}/pay:
     post:
       tags: [checkout]
@@ -8448,6 +8507,27 @@ components:
               at:
                 type: string
                 format: date-time
+        returnRequest:
+          type: [object, 'null']
+          description: Заявка покупателя на возврат; согласие магазина — статус returned.
+          required: [status, reason, requestedAt]
+          properties:
+            status:
+              type: string
+              enum: [requested, rejected]
+            reason:
+              type: string
+              enum: [not_fit, defective, not_as_described, changed_mind]
+            requestedAt:
+              type: string
+              format: date-time
+            resolvedAt:
+              type: string
+              format: date-time
+            comment:
+              type: string
+              maxLength: 500
+              description: Объяснение отказа магазина.
         expiresAt:
           type: string
           format: date-time
@@ -9310,6 +9390,27 @@ components:
               at:
                 type: string
                 format: date-time
+        returnRequest:
+          type: [object, 'null']
+          description: Заявка покупателя на возврат; согласие магазина — статус returned.
+          required: [status, reason, requestedAt]
+          properties:
+            status:
+              type: string
+              enum: [requested, rejected]
+            reason:
+              type: string
+              enum: [not_fit, defective, not_as_described, changed_mind]
+            requestedAt:
+              type: string
+              format: date-time
+            resolvedAt:
+              type: string
+              format: date-time
+            comment:
+              type: string
+              maxLength: 500
+              description: Объяснение отказа магазина.
         expiresAt:
           type: string
           format: date-time

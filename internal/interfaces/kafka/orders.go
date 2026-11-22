@@ -23,16 +23,17 @@ type Orders interface {
 }
 
 type orderStatusEvent struct {
-	Version            int                  `json:"version"`
-	TenantID           string               `json:"tenantId"`
-	ExternalCheckoutID string               `json:"externalCheckoutId"`
-	OrderID            string               `json:"orderId"`
-	Status             checkout.GroupStatus `json:"status"`
-	Revision           int64                `json:"revision"`
-	Reason             string               `json:"reason"`
-	Number             string               `json:"number"`
-	Steps              []checkout.OrderStep `json:"steps"`
-	Tracking           *orderTracking       `json:"tracking"`
+	Version            int                     `json:"version"`
+	TenantID           string                  `json:"tenantId"`
+	ExternalCheckoutID string                  `json:"externalCheckoutId"`
+	OrderID            string                  `json:"orderId"`
+	Status             checkout.GroupStatus    `json:"status"`
+	Revision           int64                   `json:"revision"`
+	Reason             string                  `json:"reason"`
+	Number             string                  `json:"number"`
+	Steps              []checkout.OrderStep    `json:"steps"`
+	ReturnRequest      *checkout.ReturnRequest `json:"returnRequest"`
+	Tracking           *orderTracking          `json:"tracking"`
 }
 
 type orderTracking struct {
@@ -74,13 +75,14 @@ func orderStatusChanged(ctx context.Context, orders Orders, envelope Envelope) e
 		TenantID:   tenant,
 		CheckoutID: checkoutID,
 		Order: checkout.SellerOrder{
-			OrderID:  event.OrderID,
-			Status:   event.Status,
-			Reason:   event.Reason,
-			Revision: event.Revision,
-			Number:   event.Number,
-			Steps:    event.Steps,
-			Tracking: event.Tracking.domain(),
+			OrderID:       event.OrderID,
+			Status:        event.Status,
+			Reason:        event.Reason,
+			Revision:      event.Revision,
+			Number:        event.Number,
+			Steps:         event.Steps,
+			ReturnRequest: event.ReturnRequest,
+			Tracking:      event.Tracking.domain(),
 		},
 	})
 }
