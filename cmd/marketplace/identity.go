@@ -27,7 +27,7 @@ func (s *server) identityIssuer(realm string) string {
 }
 
 func (s *server) identityMappings(realm, clientID string) ports.IdentityMappings {
-	return postgres.NewIdentityMappings(s.store.pool, s.identityIssuer(realm), clientID)
+	return postgres.NewIdentityMappings(s.store.pool(ports.DatabaseRead), s.identityIssuer(realm), clientID)
 }
 
 func (s *server) identityTokens(

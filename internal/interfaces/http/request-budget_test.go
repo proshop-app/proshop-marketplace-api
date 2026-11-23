@@ -14,30 +14,24 @@ func TestEveryRouteHasExplicitBudgetAndUniformTimeoutStatus(t *testing.T) {
 	deps := Deps{
 		RequestTimeout:         time.Millisecond,
 		ReferenceImportTimeout: 2 * time.Millisecond,
-		DatabaseBudgets: ports.DatabaseBudgets{
-			Read:       ports.DatabaseBudget{Statement: time.Second, Transaction: 5 * time.Second},
-			Checkout:   ports.DatabaseBudget{Statement: 2 * time.Second, Transaction: 5 * time.Second},
-			Ingestion:  ports.DatabaseBudget{Statement: 3 * time.Second, Transaction: 5 * time.Second},
-			Background: ports.DatabaseBudget{Statement: 4 * time.Second, Transaction: 5 * time.Second},
-		},
 	}
-	budgets := map[requestClass]ports.DatabaseBudget{
-		readRequest:       deps.DatabaseBudgets.Read,
-		checkoutRequest:   deps.DatabaseBudgets.Checkout,
-		ingestionRequest:  deps.DatabaseBudgets.Ingestion,
-		backgroundRequest: deps.DatabaseBudgets.Background,
-		importRequest:     deps.DatabaseBudgets.Background,
+	classes := map[requestClass]ports.DatabaseClass{
+		readRequest:       ports.DatabaseRead,
+		checkoutRequest:   ports.DatabaseCheckout,
+		writeRequest:      ports.DatabaseCheckout,
+		backgroundRequest: ports.DatabaseBackground,
+		importRequest:     ports.DatabaseBackground,
 	}
 	for _, route := range routes(deps) {
 		t.Run(route.method+" "+route.path, func(t *testing.T) {
-			budget, ok := budgets[route.class]
+			class, ok := classes[route.class]
 			if !ok {
 				t.Fatal("не задан класс маршрута")
 			}
 			for _, lateSuccess := range []bool{false, true} {
 				next := func(w http.ResponseWriter, r *http.Request) {
-					if got := ports.DatabaseBudgetFrom(r.Context(), ports.DatabaseBudget{}); got != budget {
-						t.Fatal(got, budget)
+					if got := ports.DatabaseClassFrom(r.Context()); got != class {
+						t.Fatal(got, class)
 					}
 					<-r.Context().Done()
 					if lateSuccess {

@@ -162,8 +162,9 @@ func (s *server) services(ctx context.Context) (services, error) {
 		return services{}, err
 	}
 	identities := random.IDs{}
+	background := s.store.pool(ports.DatabaseBackground)
 	uow := storecache.NewUnitOfWork(
-		postgres.NewUnitOfWork(s.store.pool),
+		postgres.NewUnitOfWorkByClass(s.store.pools),
 		redis.NewStoreCardCache(s.cache, keyPrefix),
 	)
 	upstream := platformapi.New(platformapi.Config{
@@ -235,7 +236,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		s.store.index,
 		now,
 		indexBatch,
-		postgres.NewIndexRebuildLock(s.store.pool),
+		postgres.NewIndexRebuildLock(background),
 		models,
 		cfg.Settings.StoreCardRefreshDelay,
 	)
@@ -266,7 +267,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	if cfg.Search.FeedbackEnabled() {
 		searchBuyerKeys = searchfeedback.NewBuyerKeys(cfg.Search.AnalyticsKey)
 		feedback = searchfeedback.NewFeedback(s.store.index, redis.NewLimiter(s.cache, keyPrefix), searchBuyerKeys)
-		purchases = searchPurchaseDispatcher(postgres.NewTaskQueue(s.store.pool), now, s.store.index)
+		purchases = searchPurchaseDispatcher(postgres.NewTaskQueue(background), now, s.store.index)
 	} else {
 		s.logger.Warn(
 			"обратная связь поиска выключена: нужны SEARCH_ANALYTICS_KEY и SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN",
@@ -333,7 +334,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	checkouts.SetActionLimiter(redis.NewLimiter(s.cache, keyPrefix))
 	checkouts.SetObserver(jobs.NewCheckoutMetrics(s.logger, s.metrics))
 	dispatcher := messaging.NewDispatcher(
-		postgres.NewTaskQueue(s.store.pool),
+		postgres.NewTaskQueue(background),
 		now,
 		messaging.DispatcherConfig{
 			MaxAttempts: cfg.Outbox.MaxAttempts,
@@ -372,7 +373,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	indexer.SetBatchObserver(telemetry.NewOfferBatches(s.metrics))
 	dispatcher.RegisterBatch(appcatalog.TaskSyncOffer, indexer.HandleOfferBatch)
 	dispatcher.RegisterBatch(moderationstatus.TaskOffer, statuses.HandleOfferBatch)
-	janitor := messaging.NewJanitor(postgres.NewRetention(s.store.pool), now, messaging.RetentionPolicy{
+	janitor := messaging.NewJanitor(postgres.NewRetention(background), now, messaging.RetentionPolicy{
 		ProcessedEvents: cfg.Retention.ProcessedEvents,
 		OutboxDone:      cfg.Retention.OutboxDone,
 		ParkedEvents:    cfg.Retention.ParkedEvents,
@@ -380,7 +381,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		Batch:           retentionBatch,
 	})
 
-	features := postgres.NewCatalogFeatures(s.store.pool)
+	features := postgres.NewCatalogFeatures(s.store.pool(ports.DatabaseRead))
 	queries := appcatalog.NewQueries(uow, s.store.index, resyncing, features, features, now)
 	location, err := time.LoadLocation(cfg.Promotion.Timezone)
 	if err != nil {
@@ -430,7 +431,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		searchPurchases:   purchases,
 		dispatcher:        dispatcher,
 		creation: appcheckout.NewExecutor(
-			postgres.NewTaskQueue(s.store.pool),
+			postgres.NewTaskQueue(background),
 			now,
 			checkouts,
 			cfg.Outbox.MaxAttempts,
@@ -499,7 +500,7 @@ func (s *server) jobs() []jobs.Loop {
 		}},
 		{Name: "promotion", Run: jobs.NewPromotionRunner(
 			s.app.promotion,
-			postgres.NewPromotionLock(s.store.pool),
+			postgres.NewPromotionLock(s.store.pool(ports.DatabaseBackground)),
 			s.logger,
 			cfg.Promotion.TickInterval,
 		).Run},
@@ -547,7 +548,7 @@ func (s *server) scheduledJobs() []jobs.Loop {
 			s.metrics,
 		).WithSchedule(s.schedule("reference-stats", referenceStatsInterval)).Run},
 		{Name: "model-key-stats", Run: jobs.NewModelKeyStatsRunner(
-			postgres.NewModelKeyStats(s.store.pool),
+			postgres.NewModelKeyStats(s.store.pool(ports.DatabaseBackground)),
 			s.logger,
 			s.metrics,
 		).WithSchedule(s.schedule("model-key-stats", jobs.ModelKeyStatsInterval)).Run},
@@ -563,23 +564,20 @@ func (s *server) scheduledJobs() []jobs.Loop {
 	if interval := cfg.Synonyms.Interval; interval > 0 {
 		schedule := s.schedule("reference-search-synonyms", interval)
 		runner := jobs.NewReferenceSynonymsRunner(s.app.synonyms, schedule, interval, s.logger, s.metrics)
-		loops = append(loops, jobs.Loop{Name: "reference-search-synonyms", Run: func(ctx context.Context) error {
-			return runner.Run(ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(cfg.Database.Background)))
-		}})
+		loops = append(loops, jobs.Loop{Name: "reference-search-synonyms", Run: runner.Run})
 	}
 	return loops
 }
 
 // schedule — общий владелец интервала: работу выполняет одна реплика.
 func (s *server) schedule(name string, interval time.Duration) *postgres.ScheduledWork {
-	return postgres.NewScheduledWork(s.store.pool, name, interval)
+	return postgres.NewScheduledWork(s.store.pool(ports.DatabaseBackground), name, interval)
 }
 
-// orderReconciliation — суточная сверка статусов заказов в фоновой доле базы.
+// orderReconciliation — суточная сверка статусов заказов; работа без класса идёт в фоновый пул.
 func (s *server) orderReconciliation(ctx context.Context) error {
 	schedule := s.schedule("order-reconcile", jobs.OrderReconcileInterval)
-	runner := jobs.NewOrderReconcileRunner(s.app.checkouts, schedule, s.logger, s.metrics)
-	return runner.Run(ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(s.cfg.Database.Background)))
+	return jobs.NewOrderReconcileRunner(s.app.checkouts, schedule, s.logger, s.metrics).Run(ctx)
 }
 
 // httpServer — HTTP с маршрутами маркетплейса и проверками зависимостей.
@@ -588,7 +586,7 @@ func (s *server) httpServer() *http.Server {
 	// Готовность требует только PostgreSQL: без поиска корзина, оформление, заказы и
 	// приём событий работают, а выдача отвечает unavailable.
 	checks := []transport.Check{
-		{Name: "postgres", Probe: s.store.pool.Ping},
+		{Name: "postgres", Probe: s.store.pools.Ping},
 		{Name: "search", Optional: true, Probe: s.store.index.Ping},
 		{Name: "redis", Optional: true, Probe: func(ctx context.Context) error { return s.cache.Ping(ctx).Err() }},
 		{
@@ -598,12 +596,6 @@ func (s *server) httpServer() *http.Server {
 		},
 	}
 	handler := transport.NewHandler(transport.Deps{
-		DatabaseBudgets: ports.DatabaseBudgets{
-			Read:       ports.DatabaseBudget(cfg.Database.Read),
-			Checkout:   ports.DatabaseBudget(cfg.Database.Checkout),
-			Ingestion:  ports.DatabaseBudget(cfg.Database.Ingestion),
-			Background: ports.DatabaseBudget(cfg.Database.Background),
-		},
 		RequestTimeout:         cfg.HTTP.RequestTimeout,
 		ReferenceImportTimeout: cfg.HTTP.ReferenceImportTimeout,
 		Statuses:               s.app.statuses,
@@ -617,7 +609,7 @@ func (s *server) httpServer() *http.Server {
 		Catalog:         s.app.queries,
 		SearchFeedback:  s.app.searchFeedback,
 		SearchBuyerKeys: s.app.searchBuyerKeys,
-		SellersCounts:   postgres.NewSellersCounts(s.store.pool),
+		SellersCounts:   postgres.NewSellersCounts(s.store.pool(ports.DatabaseRead)),
 		Participants:    s.app.participants,
 		Auth:            s.app.auth,
 		Carts:           s.app.carts,

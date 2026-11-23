@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
@@ -26,12 +25,7 @@ func modelKeysReport(ctx context.Context, cfg config.Config, _ *slog.Logger) err
 	if *path == "" || flags.NArg() != 0 {
 		return fmt.Errorf("требуется --out <файл>")
 	}
-	pool, err := postgres.Open(
-		ctx,
-		cfg.Database.URL,
-		cfg.Database.MaxConns,
-		ports.DatabaseBudget(cfg.Database.Maintenance),
-	)
+	pool, err := openCommandPool(ctx, cfg.Database)
 	if err != nil {
 		return err
 	}

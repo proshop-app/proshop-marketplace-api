@@ -1,36 +1,36 @@
 package ports
 
-import (
-	"context"
-	"time"
+import "context"
+
+// DatabaseClass — класс нагрузки на базу. У каждого класса свой пул соединений и свои
+// сроки SQL: волна приёма событий и фоновая работа не занимают соединения запросов
+// покупателей. Приложение выбирает класс, не зная о драйвере и пулах.
+type DatabaseClass int
+
+// Классы нагрузки. Работа без явного класса относится к фону.
+const (
+	// DatabaseBackground — outbox, исполнитель оформления, фоновые циклы, операторские маршруты.
+	DatabaseBackground DatabaseClass = iota + 1
+	// DatabaseRead — чтение покупателя по HTTP.
+	DatabaseRead
+	// DatabaseCheckout — запись по HTTP: корзина, оформление, вход, избранное, API сервера.
+	DatabaseCheckout
+	// DatabaseIngestion — приём событий Kafka.
+	DatabaseIngestion
 )
 
-// DatabaseBudget — срок SQL и всей операции хранения, включая ожидание соединения.
-type DatabaseBudget struct {
-	Statement   time.Duration
-	Transaction time.Duration
+type databaseClassKey struct{}
+
+// WithDatabaseClass задаёт класс работы, сохраняя отмену и срок вызывающего.
+func WithDatabaseClass(ctx context.Context, class DatabaseClass) context.Context {
+	return context.WithValue(ctx, databaseClassKey{}, class)
 }
 
-// DatabaseBudgets — классы нагрузки без привязки приложения к драйверу.
-type DatabaseBudgets struct {
-	Read       DatabaseBudget
-	Checkout   DatabaseBudget
-	Ingestion  DatabaseBudget
-	Background DatabaseBudget
-}
-
-type databaseBudgetKey struct{}
-
-// WithDatabaseBudget задаёт класс работы, сохраняя отмену и срок вызывающего.
-func WithDatabaseBudget(ctx context.Context, budget DatabaseBudget) context.Context {
-	return context.WithValue(ctx, databaseBudgetKey{}, budget)
-}
-
-// DatabaseBudgetFrom возвращает явно выбранный класс либо бюджет хранилища по умолчанию.
-func DatabaseBudgetFrom(ctx context.Context, fallback DatabaseBudget) DatabaseBudget {
-	budget, ok := ctx.Value(databaseBudgetKey{}).(DatabaseBudget)
-	if !ok || budget.Statement <= 0 || budget.Transaction <= 0 {
-		return fallback
+// DatabaseClassFrom возвращает явно выбранный класс либо фон.
+func DatabaseClassFrom(ctx context.Context) DatabaseClass {
+	class, ok := ctx.Value(databaseClassKey{}).(DatabaseClass)
+	if ok && class >= DatabaseBackground && class <= DatabaseIngestion {
+		return class
 	}
-	return budget
+	return DatabaseBackground
 }

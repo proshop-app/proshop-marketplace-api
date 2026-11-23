@@ -15,7 +15,7 @@ import (
 const (
 	// minOperatorTokenLength — служебный токен оператора не короче 32 символов.
 	minOperatorTokenLength = 32
-	// maxConnections — потолок пула соединений с базой.
+	// maxConnections — потолок одного пула соединений с базой.
 	maxConnections = 1000
 )
 
@@ -151,15 +151,23 @@ type DatabaseBudget struct {
 	Transaction time.Duration
 }
 
-// Database — PostgreSQL.
+// DatabasePool — пул класса нагрузки: размер зависит от развёртывания, сроки — от класса.
+type DatabasePool struct {
+	Budget   DatabaseBudget
+	MaxConns int32
+}
+
+// Database — PostgreSQL. У каждого класса нагрузки свой пул; Maintenance — сроки
+// служебных команд, у которых один небольшой пул.
 type Database struct {
 	Maintenance DatabaseBudget
-	Read        DatabaseBudget
-	Checkout    DatabaseBudget
-	Ingestion   DatabaseBudget
-	Background  DatabaseBudget
-	URL         string
-	MaxConns    int32
+	Read        DatabasePool
+	Checkout    DatabasePool
+	// Ingestion.MaxConns ноль — по числу воркеров приёма; его и сумму пулов проверяет
+	// сборка процесса: она знает размер полосы статусов заказов.
+	Ingestion  DatabasePool
+	Background DatabasePool
+	URL        string
 }
 
 // Search — общий движок каталога площадки.
@@ -179,7 +187,8 @@ type Kafka struct {
 	TopicPrefix string
 	GroupID     string
 	MaxAttempts int
-	Workers     int // общий предел для обеих групп после ограничения пулом
+	// Workers — воркеры основной и массовой групп вместе; полоса статусов заказов — отдельно.
+	Workers     int
 	BulkWorkers int
 	// ReferenceTopic — имя топика catalog.reference.changed без префикса; топик заводит сервер установки.
 	ReferenceTopic         string
@@ -334,7 +343,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
 	}
 
-	r.kafkaCapacity(&cfg)
+	r.kafkaCapacity(cfg.Kafka)
 
 	if token := cfg.Operator.Token; token != "" && len(token) < minOperatorTokenLength {
 		r.fail("OPERATOR_TOKEN", fmt.Sprintf("не короче %d символов", minOperatorTokenLength))
@@ -441,12 +450,19 @@ func (r *reader) database() Database {
 
 	return Database{
 		URL:         raw,
-		MaxConns:    r.connections("DATABASE_MAX_CONNS", 10),
-		Read:        r.databaseBudget("READ", 750*time.Millisecond, 2*time.Second),
-		Checkout:    r.databaseBudget("CHECKOUT", 2*time.Second, 5*time.Second),
-		Ingestion:   r.databaseBudget("INGESTION", 2*time.Second, 5*time.Second),
-		Background:  r.databaseBudget("BACKGROUND", 10*time.Second, 30*time.Second),
+		Read:        r.databasePool("READ", 8, 750*time.Millisecond, 2*time.Second),
+		Checkout:    r.databasePool("CHECKOUT", 6, 2*time.Second, 5*time.Second),
+		Ingestion:   r.databasePool("INGESTION", 0, 2*time.Second, 5*time.Second),
+		Background:  r.databasePool("BACKGROUND", 10, 10*time.Second, 30*time.Second),
 		Maintenance: r.databaseBudget("MAINTENANCE", 5*time.Minute, 10*time.Minute),
+	}
+}
+
+// databasePool — пул класса: DATABASE_<КЛАСС>_MAX_CONNS и сроки класса.
+func (r *reader) databasePool(class string, size int32, statement, transaction time.Duration) DatabasePool {
+	return DatabasePool{
+		MaxConns: r.connections("DATABASE_"+class+"_MAX_CONNS", size),
+		Budget:   r.databaseBudget(class, statement, transaction),
 	}
 }
 
@@ -538,7 +554,7 @@ func (r *reader) positive(name string, fallback int) int {
 	return value
 }
 
-// connections — размер пула: от 1 до maxConnections.
+// connections — размер пула: от 1 до maxConnections; без переменной — fallback.
 func (r *reader) connections(name string, fallback int32) int32 {
 	raw, ok := r.lookup(name)
 	if !ok {

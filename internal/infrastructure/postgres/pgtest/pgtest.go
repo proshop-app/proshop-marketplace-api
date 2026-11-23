@@ -50,7 +50,11 @@ func Pool(t *testing.T) *pgxpool.Pool {
 	}
 	parsed.Path = "/" + name
 
-	pool, err := postgres.Open(ctx, parsed.String(), 8)
+	// Сроки фонового класса процесса: тестам репозиториев не нужны сроки покупателя.
+	pool, err := postgres.Open(ctx, parsed.String(), 8, postgres.Budget{
+		Statement:   10 * time.Second,
+		Transaction: 30 * time.Second,
+	})
 	if err != nil {
 		t.Fatalf("подключение: %v", err)
 	}

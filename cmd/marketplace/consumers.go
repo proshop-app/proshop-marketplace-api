@@ -18,7 +18,7 @@ func (s *server) runConsumers(ctx context.Context, group *errgroup.Group) {
 	router := kafka.NewRouter(s.app.projector, s.app.registry).WithOrders(s.app.checkouts)
 	regular, bulk := kafka.SubscriptionTopics(cfg.TopicPrefix, router)
 	metrics := kafka.NewConsumerMetrics(s.metrics)
-	ctx = ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(s.cfg.Database.Ingestion))
+	ctx = ports.WithDatabaseClass(ctx, ports.DatabaseIngestion)
 
 	group.Go(func() error {
 		return s.consume(ctx, router, metrics, cfg.GroupID, regular, cfg.Workers-cfg.BulkWorkers)
@@ -59,7 +59,7 @@ func (s *server) consume(
 		TopicPrefix: cfg.TopicPrefix,
 		MaxAttempts: cfg.MaxAttempts,
 		Backoff:     messaging.Backoff,
-		Ready:       s.store.pool.Ping,
+		Ready:       s.store.pools.Ping,
 		Now:         clock.System{}.Now,
 	}
 	return kafka.NewConsumer(reader, router, s.app.parker, consumerConfig, logger, metrics).Run(ctx)
