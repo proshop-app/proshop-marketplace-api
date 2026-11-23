@@ -30,9 +30,11 @@ type Returns struct {
 }
 
 // Profile — профиль принадлежит серверу, маркетплейс хранит его снимок.
+// Logo — широкий логотип шапки, Mark — квадратный знак плитки; постмодерация CardLogo скрывает оба.
 type Profile struct {
 	Name string  `json:"name"`
 	Logo *string `json:"logo"`
+	Mark *string `json:"mark"`
 }
 
 // CardReadiness — серверный чеклист без повторного вычисления на площадке.
@@ -58,10 +60,8 @@ type StoreCard struct {
 
 // Clone отделяет изменяемые списки от снимка агрегата.
 func (c StoreCard) Clone() StoreCard {
-	if c.Profile.Logo != nil {
-		logo := *c.Profile.Logo
-		c.Profile.Logo = &logo
-	}
+	c.Profile.Logo = cloneString(c.Profile.Logo)
+	c.Profile.Mark = cloneString(c.Profile.Mark)
 	c.Readiness.Missing = slices.Clone(c.Readiness.Missing)
 	if c.Returns != nil {
 		value := *c.Returns
@@ -92,7 +92,7 @@ func (p *Participant) ApplyStoreCard(
 	}
 	next = next.Clone()
 	next.Hidden = slices.DeleteFunc(next.Hidden, func(h CardHidden) bool {
-		return h.Key == CardLogo && !reflect.DeepEqual(profile.Logo, p.state.StoreCard.Profile.Logo)
+		return h.Key == CardLogo && !p.state.StoreCard.Profile.sameImages(profile)
 	})
 	changed := !reflect.DeepEqual(next, p.state.StoreCard)
 	renamed, err := p.Rename(profile.Name, now)
@@ -156,7 +156,7 @@ func (p *Participant) PublicProfile() Profile {
 	profile := p.state.StoreCard.Clone().Profile
 	for _, h := range p.state.StoreCard.Hidden {
 		if h.Key == CardLogo {
-			profile.Logo = nil
+			profile.Logo, profile.Mark = nil, nil
 		}
 	}
 	return profile
@@ -168,4 +168,17 @@ func (p Profile) FieldValue(key string) string {
 		return *p.Logo
 	}
 	return ""
+}
+
+// sameImages — скрытие логотипа снимается, только когда магазин заменил логотип или знак.
+func (p Profile) sameImages(next Profile) bool {
+	return reflect.DeepEqual(p.Logo, next.Logo) && reflect.DeepEqual(p.Mark, next.Mark)
+}
+
+func cloneString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	copied := *value
+	return &copied
 }

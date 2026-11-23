@@ -65,6 +65,7 @@ type ShopCard struct {
 	Slug           string            `json:"slug"`
 	Name           string            `json:"name"`
 	Logo           *string           `json:"logo"`
+	Mark           *string           `json:"mark"`
 	Category       *ShopCategory     `json:"category"`
 	MoreCategories int               `json:"moreCategories"`
 	Offers         int               `json:"offers"`

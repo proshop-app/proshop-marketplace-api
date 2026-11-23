@@ -287,8 +287,8 @@ func TestModerationUpdatesPublicSnapshotImmediately(t *testing.T) {
 	if !ok {
 		t.Fatal("участник не найден")
 	}
-	logo := "logo"
-	state.StoreCard.Profile.Logo = &logo
+	logo, mark := "logo", "mark"
+	state.StoreCard.Profile.Logo, state.StoreCard.Profile.Mark = &logo, &mark
 	store.SeedParticipant(state)
 	refreshStore(t, service)
 	ctx := context.Background()
@@ -306,7 +306,7 @@ func TestModerationUpdatesPublicSnapshotImmediately(t *testing.T) {
 			t.Fatal(page, err)
 		}
 		card := page.Items[0]
-		if (header.Logo == nil) != hide || (card.Logo == nil) != hide {
+		if (header.Logo == nil) != hide || (card.Logo == nil) != hide || (card.Mark == nil) != hide {
 			t.Fatal(header, card)
 		}
 		summary, err := service.StoreSummary(ctx, "t1")

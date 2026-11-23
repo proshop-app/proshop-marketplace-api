@@ -5914,6 +5914,7 @@ components:
       - slug
       - name
       - logo
+      - mark
       - products
       - offers
       - isNew
@@ -5937,6 +5938,12 @@ components:
           type:
           - string
           - 'null'
+          description: Широкий логотип шапки магазина.
+        mark:
+          type:
+          - string
+          - 'null'
+          description: Квадратный знак 192 px для плитки и поиска; null — знака нет, показывается logo.
         offers:
           type: integer
           minimum: 0
@@ -8912,12 +8919,18 @@ components:
           type: object
           required:
           - logo
+          - mark
           - hidden
           properties:
             logo:
               type:
               - string
               - 'null'
+            mark:
+              type:
+              - string
+              - 'null'
+              description: Квадратный знак; скрытие logo скрывает и его.
             hidden:
               type: array
               items:

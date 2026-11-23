@@ -99,6 +99,7 @@ type errorJSON struct {
 type settingsProfileJSON struct {
 	Name string  `json:"name"`
 	Logo *string `json:"logo"`
+	Mark *string `json:"mark"`
 }
 
 type settingsJSON struct {
@@ -176,7 +177,7 @@ func (c *Client) MarketplaceSettings(ctx context.Context, tenantID ids.TenantID)
 		return ports.ShopSettings{}, ports.ErrInvalidSettings
 	}
 	settings := ports.ShopSettings{
-		Profile: participant.Profile{Name: answer.Profile.Name, Logo: answer.Profile.Logo},
+		Profile: participant.Profile{Name: answer.Profile.Name, Logo: answer.Profile.Logo, Mark: answer.Profile.Mark},
 		Card:    *answer.Card,
 		Returns: answer.Returns,
 	}
