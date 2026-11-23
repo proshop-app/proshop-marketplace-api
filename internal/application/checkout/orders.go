@@ -15,6 +15,9 @@ import (
 
 const orderBatch = 100
 
+// pickupHistoryLimit — сколько прошлых пунктов выдачи подсказывать покупателю при выборе.
+const pickupHistoryLimit = 5
+
 // CreateOrders фиксирует намерение и контакт до вызова магазина. Повтор использует тот же снимок.
 func (s *Service) CreateOrders(
 	ctx context.Context,
@@ -60,6 +63,17 @@ func (s *Service) Purchases(ctx context.Context, buyerID ids.UUID, after ids.UUI
 		result = append(result, order.Snapshot(state))
 	}
 	return result, err
+}
+
+// PickupHistory — пункты выдачи прошлых заказов покупателя для подсказки при выборе: одно чтение без снимков покупок.
+func (s *Service) PickupHistory(ctx context.Context, buyerID ids.UUID) ([]checkout.Selection, error) {
+	var points []checkout.Selection
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		points, err = tx.Checkouts().PickupHistory(ctx, buyerID, pickupHistoryLimit)
+		return err
+	})
+	return points, err
 }
 
 // OperatorList показывает незавершённую отмену сразу, ожидание оплаты — после 15 минут.

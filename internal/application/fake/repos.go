@@ -220,6 +220,27 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 	return found, nil
 }
 
+func (r checkouts) PickupHistory(_ context.Context, buyerID ids.UUID, limit int) ([]checkout.Selection, error) {
+	var states []checkout.State
+	for _, state := range r.d.checkouts {
+		if state.BuyerID == buyerID && state.Delivery != nil && checkout.Restore(state).HasOrders() {
+			states = append(states, state)
+		}
+	}
+	sort.SliceStable(states, func(i, j int) bool { return states[i].CreatedAt.After(states[j].CreatedAt) })
+	seen := map[string]bool{}
+	var found []checkout.Selection
+	for _, state := range states {
+		key := string(state.Delivery.Carrier) + ":" + state.Delivery.PickupPointCode
+		if seen[key] || len(found) == limit {
+			continue
+		}
+		seen[key] = true
+		found = append(found, *state.Delivery)
+	}
+	return found, nil
+}
+
 func (r checkouts) ReconcileDue(
 	_ context.Context,
 	after checkout.ReconcileCursor,

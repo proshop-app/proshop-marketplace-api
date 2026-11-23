@@ -133,6 +133,16 @@ type returnLineJSON struct {
 	Quantity int    `json:"quantity"`
 }
 
+func toSelectionJSON(d checkout.Selection) selectionJSON {
+	return selectionJSON{
+		Carrier:         string(d.Carrier),
+		PickupPointCode: d.PickupPointCode,
+		RegionCode:      d.RegionCode,
+		City:            d.City,
+		Address:         d.Address,
+	}
+}
+
 func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 	payable, err := appcheckout.PaymentAmount(state)
 	if err != nil &&
@@ -167,13 +177,8 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 	}
 
 	if d := state.Delivery; d != nil {
-		out.Delivery = &selectionJSON{
-			Carrier:         string(d.Carrier),
-			PickupPointCode: d.PickupPointCode,
-			RegionCode:      d.RegionCode,
-			City:            d.City,
-			Address:         d.Address,
-		}
+		selection := toSelectionJSON(*d)
+		out.Delivery = &selection
 	}
 
 	for _, group := range state.Groups {
