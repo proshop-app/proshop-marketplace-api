@@ -301,8 +301,8 @@ func TestCartDeliveryCheckout(t *testing.T) {
 	}
 	id := created.body["id"].(string)
 	again := e.session(t, http.MethodPost, "/api/v1/checkout", "", token, "Idempotency-Key", "checkout-key-0001")
-	if again.body["id"] != id {
-		t.Fatalf("тот же ключ — та же покупка: %+v", again)
+	if again.body["id"] != id || created.body["number"] != "1" || again.body["number"] != "1" {
+		t.Fatalf("тот же ключ — та же покупка с тем же номером: %+v", again)
 	}
 	quoted := e.session(
 		t,

@@ -8757,6 +8757,7 @@ components:
       - confirmationRequired
       - creationComplete
       - id
+      - number
       - status
       - groups
       - delivery
@@ -8788,6 +8789,13 @@ components:
         id:
           type: string
           format: uuid
+        number:
+          type: string
+          pattern: ^[1-9][0-9]*$
+          example: "10482391"
+          description: >-
+            Номер покупки для покупателя. Выдаётся базой при создании, не меняется и не повторяется.
+            Строка — обозначение, а не величина. Адреса страниц и вызовы API по-прежнему используют id.
         status:
           type: string
           enum:

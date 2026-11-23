@@ -10,7 +10,7 @@ import (
 
 const (
 	listCheckouts = `
- SELECT ` + checkoutColumns + `
+ SELECT ` + checkoutReadColumns + `
  FROM checkouts c
  WHERE `
 

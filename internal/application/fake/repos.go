@@ -160,7 +160,9 @@ func (r checkouts) Add(_ context.Context, c *checkout.Checkout) error {
 		}
 	}
 
-	r.d.checkouts[state.ID] = copyCheckout(state)
+	r.d.nextCheckoutNumber++
+	c.AssignNumber(r.d.nextCheckoutNumber)
+	r.d.checkouts[state.ID] = copyCheckout(c.State())
 	c.MarkSaved()
 
 	return nil

@@ -20,15 +20,19 @@ const (
 		id, buyer_id, idempotency_key, status, carrier, pickup_point_id, delivery, goods_total, delivery_total,
 		total, version, created_at, updated_at, confirmed_at, order_context`
 
+	// checkoutReadColumns — колонки чтения: номер выдаёт база при вставке, в запись он не входит.
+	checkoutReadColumns = checkoutColumns + `, number`
+
 	// selectCheckout дополняется условием отбора.
 	selectCheckout = `
-		SELECT ` + checkoutColumns + `
+		SELECT ` + checkoutReadColumns + `
 		FROM checkouts
 		WHERE `
 
 	insertCheckout = `
 		INSERT INTO checkouts (` + checkoutColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		RETURNING number`
 
 	updateCheckout = `
 		UPDATE checkouts
@@ -143,7 +147,9 @@ func (r *Checkouts) Add(ctx context.Context, c *checkout.Checkout) error {
 		return err
 	}
 
-	_, err = execSQL(
+	var number int64
+
+	err = rawSQL(
 		ctx,
 		r.db,
 		insertCheckout,
@@ -162,7 +168,7 @@ func (r *Checkouts) Add(ctx context.Context, c *checkout.Checkout) error {
 		s.UpdatedAt,
 		nullTime(s.ConfirmedAt),
 		encodeOrderContext(s),
-	)
+	).Row().Scan(&number)
 	if isUnique(err, "checkouts_buyer_key_key") {
 		return checkout.ErrDuplicateKey
 	}
@@ -174,6 +180,7 @@ func (r *Checkouts) Add(ctx context.Context, c *checkout.Checkout) error {
 		return err
 	}
 
+	c.AssignNumber(number)
 	c.MarkSaved()
 
 	return nil
@@ -315,6 +322,7 @@ func (r *checkoutRow) targets() []any {
 		&r.state.UpdatedAt,
 		&r.confirmedAt,
 		&r.orderContext,
+		&r.state.Number,
 	}
 }
 

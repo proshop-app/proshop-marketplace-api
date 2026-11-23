@@ -65,6 +65,7 @@ type data struct {
 	outbox               []OutboxRow
 	nextTaskID           int64
 	nextParkedID         int64
+	nextCheckoutNumber   int64
 	processed            map[string]time.Time
 	parked               map[parkedKey]ports.ParkedEvent
 	buyers               map[ids.UUID]buyer.Buyer
@@ -109,6 +110,7 @@ func (d *data) clone() *data {
 		outbox:               append([]OutboxRow(nil), d.outbox...),
 		nextTaskID:           d.nextTaskID,
 		nextParkedID:         d.nextParkedID,
+		nextCheckoutNumber:   d.nextCheckoutNumber,
 		processed:            maps.Clone(d.processed),
 		parked:               maps.Clone(d.parked),
 		buyers:               maps.Clone(d.buyers),
