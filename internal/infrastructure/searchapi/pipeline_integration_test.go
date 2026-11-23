@@ -100,7 +100,7 @@ func TestProjectionToIndex(t *testing.T) {
 	)
 
 	dispatcher.RegisterBatch(appcatalog.TaskSyncOffer, indexer.HandleOfferBatch)
-	if built, err := indexer.EnsureIndex(ctx); err != nil || !built {
+	if built, err := indexer.Maintain(ctx); err != nil || !built {
 		t.Fatalf("первый запуск собирает индекс: %v, %v", built, err)
 	}
 	drain := func() {

@@ -141,10 +141,6 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	defer func() { _ = s.app.writer.Close() }()
 
-	if err := s.prepareIndexes(ctx); err != nil {
-		return err
-	}
-
 	if err := s.app.queries.RefreshTaxonomyDisplay(ctx); err != nil {
 		return fmt.Errorf("снимок отображения таксономии: %w", err)
 	}
@@ -448,19 +444,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 	}, nil
 }
 
-// prepareIndexes заводит индексы, которых нет: первый запуск или потеря кластера.
-func (s *server) prepareIndexes(ctx context.Context) error {
-	built, err := s.app.indexer.EnsureIndex(ctx)
-	if err != nil {
-		return fmt.Errorf("индекс предложений: %w", err)
-	}
-	if built {
-		s.logger.Info("индекс предложений собран из проекции")
-	}
-
-	return nil
-}
-
 // run запускает HTTP, консьюмеры и фоновые циклы; первый сбой останавливает остальных.
 func (s *server) run(ctx context.Context) error {
 	cfg := s.cfg
@@ -602,12 +585,11 @@ func (s *server) orderReconciliation(ctx context.Context) error {
 // httpServer — HTTP с маршрутами маркетплейса и проверками зависимостей.
 func (s *server) httpServer() *http.Server {
 	cfg := s.cfg
+	// Готовность требует только PostgreSQL: без поиска корзина, оформление, заказы и
+	// приём событий работают, а выдача отвечает unavailable.
 	checks := []transport.Check{
 		{Name: "postgres", Probe: s.store.pool.Ping},
-		{
-			Name:  "search",
-			Probe: s.store.index.Ping,
-		},
+		{Name: "search", Optional: true, Probe: s.store.index.Ping},
 		{Name: "redis", Optional: true, Probe: func(ctx context.Context) error { return s.cache.Ping(ctx).Err() }},
 		{
 			Name:     "kafka",

@@ -11,12 +11,13 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
-// IndexMaintainer проверяет ёмкость и выполняет необходимую пересборку.
+// IndexMaintainer собирает отсутствующий индекс и выполняет необходимую пересборку.
 type IndexMaintainer interface {
 	Maintain(context.Context) (bool, error)
 }
 
-// IndexMaintenanceRunner переносит выросший каталог с сохранением рабочей выдачи.
+// IndexMaintenanceRunner собирает отсутствующий индекс и переносит выросший каталог
+// с сохранением рабочей выдачи; старт процесса этой работы не ждёт.
 type IndexMaintenanceRunner struct {
 	maintainer IndexMaintainer
 	interval   time.Duration
@@ -34,7 +35,7 @@ func NewIndexMaintenanceRunner(
 	runs := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "marketplace_index_maintenance_total",
-			Help: "Проверки ёмкости: unchanged, rebuilt, busy, failed.",
+			Help: "Фоновые проверки индекса: unchanged, rebuilt, busy, failed.",
 		},
 		[]string{"result"},
 	)
@@ -48,7 +49,7 @@ func NewIndexMaintenanceRunner(
 	}
 }
 
-// Run проверяет сразу и повторяет после паузы; отказ не останавливает выдачу/outbox.
+// Run проверяет сразу и повторяет после паузы; отказ не останавливает выдачу и outbox.
 func (r *IndexMaintenanceRunner) Run(ctx context.Context) error {
 	for {
 		rebuilt, err := r.maintainer.Maintain(ctx)
