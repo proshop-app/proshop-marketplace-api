@@ -117,7 +117,8 @@ func TestMarketplaceSettings(t *testing.T) {
 
 	settings, err := client.MarketplaceSettings(context.Background(), "t1")
 	if err != nil || settings.Delivery.Validate() != nil || settings.Profile.Name != "Магазин" ||
-		!settings.Card.Ready || settings.Returns == nil {
+		!settings.Card.Ready || settings.Returns == nil || settings.Profile.Mark == nil ||
+		*settings.Profile.Mark != "shop/settings/logo-favicon|2@icon-192.png" {
 		t.Fatalf("настройки: %+v %v", settings, err)
 	}
 }

@@ -55,7 +55,8 @@ const (
 		ELSE EXCLUDED.header END,
 		card = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
 		THEN EXCLUDED.card || jsonb_build_object(
-		 'logo', store_cards.card->'logo')
+		 'logo', store_cards.card->'logo',
+		 'mark', store_cards.card->'mark')
 		ELSE EXCLUDED.card END,
 		profile_version = GREATEST(store_cards.profile_version, EXCLUDED.profile_version)`
 	deleteStoreCategories = `DELETE FROM store_card_categories WHERE tenant_id = $1`
@@ -88,10 +89,10 @@ const (
 		COALESCE((SELECT total FROM filtered LIMIT 1), 0)`
 	updateStoreProfile = `
 		INSERT INTO store_cards (tenant_id, slug, name, offers, public, summary, header, card, profile_version)
-		VALUES ($1, $5, $6, 0, false, $7, $2, $2, $4)
+		VALUES ($1, $5, $6, 0, false, $7, $2, $8, $4)
 		ON CONFLICT (tenant_id) DO UPDATE
 		SET header = store_cards.header || $2::jsonb,
-		card = store_cards.card || $2::jsonb,
+		card = store_cards.card || $8::jsonb,
 		summary = jsonb_set(store_cards.summary, '{hidden}', $3::jsonb),
 		profile_version = $4
 		WHERE store_cards.profile_version <= $4`
@@ -239,7 +240,11 @@ func (r *StoreCards) List(ctx context.Context, category string, limit, offset in
 // оператора от уже начавшегося пересчёта со старым снимком участника.
 func (r *StoreCards) UpdateProfile(ctx context.Context, p *participant.Participant) error {
 	profile := p.PublicProfile()
-	patch, err := json.Marshal(map[string]any{"logo": profile.Logo})
+	header, err := json.Marshal(map[string]any{"logo": profile.Logo})
+	if err != nil {
+		return err
+	}
+	card, err := json.Marshal(map[string]any{"logo": profile.Logo, "mark": profile.Mark})
 	if err != nil {
 		return err
 	}
@@ -260,12 +265,13 @@ func (r *StoreCards) UpdateProfile(ctx context.Context, p *participant.Participa
 		r.db,
 		updateStoreProfile,
 		string(p.TenantID()),
-		string(patch),
+		string(header),
 		string(hidden),
 		p.Version(),
 		p.Slug(),
 		p.Name(),
 		string(empty),
+		string(card),
 	)
 	return err
 }

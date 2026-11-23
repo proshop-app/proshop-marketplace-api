@@ -74,6 +74,38 @@ func TestCardReadinessAndModeration(t *testing.T) {
 	}
 }
 
+func TestCardMarkFollowsLogoModeration(t *testing.T) {
+	p := newParticipant(t)
+	logo, mark := "logo", "logo-favicon|1@icon-192.png"
+	profile := participant.Profile{Name: "Имя", Logo: &logo, Mark: &mark}
+	ready := participant.CardReadiness{Ready: true}
+	if _, err := p.ApplyStoreCard(profile, ready, nil, t0); err != nil {
+		t.Fatal(err)
+	}
+	if public := p.PublicProfile(); public.Mark == nil || *public.Mark != mark {
+		t.Fatal(public)
+	}
+	if _, err := p.HideCard(participant.CardLogo, "Причина", t0); err != nil {
+		t.Fatal(err)
+	}
+	if public := p.PublicProfile(); public.Logo != nil || public.Mark != nil {
+		t.Fatal("скрытие логотипа оставило знак", public)
+	}
+	snapshot := p.State()
+	*snapshot.StoreCard.Profile.Mark = "Другой"
+	if *p.State().StoreCard.Profile.Mark != mark {
+		t.Fatal("снимок изменил знак агрегата")
+	}
+	next := "logo-favicon|2@icon-192.png"
+	profile.Mark = &next
+	if _, err := p.ApplyStoreCard(profile, ready, nil, t1); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.State().StoreCard.Hidden) != 0 {
+		t.Fatal("смена знака не сняла скрытие")
+	}
+}
+
 func TestCardModerationRejectsUnknownKeys(t *testing.T) {
 	p := newParticipant(t)
 	for _, key := range []string{"", "name", "unknown"} {

@@ -19,7 +19,7 @@ func seedStoredCard(t *testing.T, uow *postgres.UnitOfWork) ports.StoreRecord {
 	t.Helper()
 	ctx := context.Background()
 	seedTenant(t, uow, "t1", "shop", participant.TenantActive)
-	logo := "logo"
+	logo, mark := "logo", "mark"
 	record := ports.StoreRecord{
 		ProfileVersion: 1,
 		Summary: ports.StoreSummary{
@@ -28,7 +28,7 @@ func seedStoredCard(t *testing.T, uow *postgres.UnitOfWork) ports.StoreRecord {
 			Hidden:     []participant.CardHidden{},
 		},
 		Header:     ports.ShopHeader{TenantID: "t1", Slug: "shop", Name: "Магазин", Logo: &logo, Offers: 1},
-		Card:       ports.ShopCard{TenantID: "t1", Slug: "shop", Name: "Магазин", Logo: &logo, Offers: 1},
+		Card:       ports.ShopCard{TenantID: "t1", Slug: "shop", Name: "Магазин", Logo: &logo, Mark: &mark, Offers: 1},
 		Public:     true,
 		PagePublic: true,
 	}
@@ -42,7 +42,7 @@ func seedStoredCard(t *testing.T, uow *postgres.UnitOfWork) ports.StoreRecord {
 			return err
 		}
 		if _, err := p.ApplyStoreCard(
-			participant.Profile{Name: "Магазин", Logo: &logo},
+			participant.Profile{Name: "Магазин", Logo: &logo, Mark: &mark},
 			participant.CardReadiness{Ready: true},
 			nil,
 			at(0),
@@ -115,11 +115,16 @@ func TestStoreRefreshLockDoesNotBlockModeration(t *testing.T) {
 	if err != nil || len(summary.Hidden) != 1 {
 		t.Fatal(summary, err)
 	}
+	page, err := service.Shops(ctx, "", 20, 0)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Mark != nil {
+		t.Fatalf("старый пересчёт вернул знак: %+v %v", page, err)
+	}
 	if _, err := service.ModerateCard(ctx, "t1", participant.CardLogo, false, participant.Decision{}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := service.Shops(ctx, "", 20, 0)
-	if err != nil || len(page.Items) != 1 || page.Items[0].Logo == nil || *page.Items[0].Logo != "logo" {
+	page, err = service.Shops(ctx, "", 20, 0)
+	card := page.Items[0]
+	if err != nil || card.Logo == nil || *card.Logo != "logo" || card.Mark == nil || *card.Mark != "mark" {
 		t.Fatal(page, err)
 	}
 }

@@ -113,8 +113,7 @@ func storeProduct(item storeOffer) ports.ShopCardProduct {
 	}
 }
 
-func shopHeader(p *participant.Participant, summary StoreSummary) ShopHeader {
-	profile := p.PublicProfile()
+func shopHeader(p *participant.Participant, profile participant.Profile, summary StoreSummary) ShopHeader {
 	return ShopHeader{
 		Rating:     summary.Rating,
 		TenantID:   p.TenantID(),
@@ -151,7 +150,8 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 		if err != nil {
 			return err
 		}
-		h := shopHeader(p, summary)
+		profile := p.PublicProfile()
+		h := shopHeader(p, profile, summary)
 		card := ShopCard{
 			Products:       summary.Products,
 			Rating:         h.Rating,
@@ -159,6 +159,7 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 			Slug:           h.Slug,
 			Name:           h.Name,
 			Logo:           h.Logo,
+			Mark:           profile.Mark,
 			Offers:         h.Offers,
 			FromPrice:      summary.FromPrice,
 			MoreCategories: max(len(h.Categories)-1, 0),

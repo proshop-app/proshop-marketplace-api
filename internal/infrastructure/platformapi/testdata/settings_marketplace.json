@@ -10,7 +10,8 @@
   },
   "profile": {
     "name": "Магазин",
-    "logo": null
+    "logo": "shop/settings/logo-onLight|1.png",
+    "mark": "shop/settings/logo-favicon|2@icon-192.png"
   },
   "card": {
     "ready": true,
