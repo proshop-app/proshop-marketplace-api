@@ -13,7 +13,6 @@ func TestOutboxBatchBounds(t *testing.T) {
 		"OUTBOX_BATCH":         "201",
 		"OUTBOX_PER_TENANT":    "201",
 		"OUTBOX_POLL_INTERVAL": "61s",
-		"OUTBOX_LEASE":         "35s",
 	} {
 		t.Run(key, func(t *testing.T) {
 			env := validEnv()

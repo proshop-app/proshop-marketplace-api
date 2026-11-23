@@ -12,6 +12,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
 func TestAdapterBatchesAndPreservesIntegerPrice(t *testing.T) {
@@ -49,9 +50,8 @@ func TestAdapterBatchesAndPreservesIntegerPrice(t *testing.T) {
 	}))
 	defer server.Close()
 	client, err := searchapi.New(searchapi.Config{
-		URL:     server.URL,
-		Token:   token,
-		Timeout: time.Second,
+		URL:   server.URL,
+		Token: token,
 	})
 
 	if err != nil {
@@ -93,9 +93,8 @@ func TestAdapterDoesNotFollowRedirectOrAcceptUnconfirmedWrite(t *testing.T) {
 			}))
 			defer server.Close()
 			client, err := searchapi.New(searchapi.Config{
-				URL:     server.URL,
-				Token:   strings.Repeat("m", 32),
-				Timeout: time.Second,
+				URL:   server.URL,
+				Token: strings.Repeat("m", 32),
 			})
 
 			if err != nil {
@@ -109,5 +108,30 @@ func TestAdapterDoesNotFollowRedirectOrAcceptUnconfirmedWrite(t *testing.T) {
 				t.Fatalf("небезопасный повтор или успех: calls=%d err=%v", calls, err)
 			}
 		})
+	}
+}
+
+func TestBuyerReadHasOwnDeadlineAndOutageIsUnavailable(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
+	defer server.Close()
+	defer close(release)
+	client, err := searchapi.New(searchapi.Config{URL: server.URL, Token: strings.Repeat("m", 32)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	started := time.Now()
+	_, err = client.Search(context.Background(), ports.OfferQuery{Limit: 1})
+	if !errors.Is(err, searchapi.ErrUnavailable) || time.Since(started) >= searchapi.ServiceTimeout/2 {
+		t.Fatalf("выдача покупателю не ждёт служебного потолка: %v за %s", err, time.Since(started))
+	}
+
+	refused, err := searchapi.New(searchapi.Config{URL: "http://127.0.0.1:1", Token: strings.Repeat("m", 32)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := refused.Get(context.Background(), "t1~p1"); errs.CodeOf(err) != errs.Unavailable {
+		t.Fatalf("недоступный поиск — класс unavailable: %v", err)
 	}
 }

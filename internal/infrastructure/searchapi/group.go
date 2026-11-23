@@ -2,7 +2,6 @@ package searchapi
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
@@ -20,9 +19,8 @@ type groupPage struct {
 // Group возвращает видимые позиции группы одного продавца.
 func (x *Index) Group(ctx context.Context, tenantID, groupID string) (ports.OfferGroup, error) {
 	var result groupPage
-	_, err := x.request(
+	_, err := x.read(
 		ctx,
-		http.MethodPost,
 		"/group",
 		groupQuery{
 			TenantID: tenantID,

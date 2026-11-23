@@ -118,6 +118,15 @@ func ingestionConnections(cfg config.Config) (int32, error) {
 	return configured, nil
 }
 
+// checkOutboxLease — аренда задачи переживает самый долгий служебный вызов поиска:
+// иначе пачку, которую ещё пишет эта реплика, взял бы сосед.
+func checkOutboxLease(outbox config.Outbox) error {
+	if outbox.Lease <= searchapi.ServiceTimeout {
+		return fmt.Errorf("OUTBOX_LEASE: больше %s — потолка служебного вызова поиска", searchapi.ServiceTimeout)
+	}
+	return nil
+}
+
 // openCommandPool — небольшой пул служебной команды со сроками обслуживания.
 func openCommandPool(ctx context.Context, database config.Database) (*pgxpool.Pool, error) {
 	return postgres.Open(ctx, database.URL, commandConnections, postgres.Budget(database.Maintenance))
@@ -128,7 +137,6 @@ func openSearch(cfg config.Config) (*searchapi.Index, error) {
 		URL:           cfg.Search.URL,
 		Token:         cfg.Search.Token,
 		PurchaseToken: cfg.Search.PurchaseToken,
-		Timeout:       cfg.Search.Timeout,
 	})
 }
 

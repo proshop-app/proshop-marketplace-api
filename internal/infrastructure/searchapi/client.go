@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/httpclient"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -22,6 +23,19 @@ const (
 	batchLimit              = 200
 	requestLimit            = 4 << 20
 	responseLimit           = 16 << 20
+	minTokenLength          = 32
+
+	// ServiceTimeout — потолок служебного вызова: пачки outbox, поколения и пересборка,
+	// проверки и справочные чтения. Пачка до 4 МиБ ждёт refresh поколения в поиске.
+	ServiceTimeout = 35 * time.Second
+	// buyerTimeout — срок выдачи, карточки и группы для покупателя. Движок сам режет
+	// запрос в индекс на 1,5 с (searchTimeout в proshop-search); сверху — сеть и разбор
+	// ответа. Зависший поиск не держит HTTP-запросы покупателей до их общего срока.
+	buyerTimeout = 3 * time.Second
+	// searchConns — соединения реплики к поиску: восемь групп outbox, четыре полосы
+	// покупок и выдача покупателям. Больше — реплика перегружена: вызов ждёт соединение
+	// в пределах своего срока, а не открывает сокеты без предела.
+	searchConns = 64
 )
 
 var (
@@ -36,7 +50,6 @@ type Config struct {
 	URL           string
 	Token         string
 	PurchaseToken string
-	Timeout       time.Duration
 }
 
 // Index реализует порт индекса предложений через proshop-search.
@@ -48,16 +61,16 @@ type Index struct {
 	referenceBearer string
 }
 
-// New создаёт клиент с таймаутом и запретом переноса токена через redirect.
+// New создаёт клиент со своим транспортом и запретом переноса токена через redirect.
 func New(cfg Config) (*Index, error) {
 	parsed, err := url.Parse(cfg.URL)
 
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
 		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
-		(parsed.Path != "" && parsed.Path != "/") || len(cfg.Token) < 32 || cfg.Timeout <= 0 {
+		(parsed.Path != "" && parsed.Path != "/") || len(cfg.Token) < minTokenLength {
 		return nil, fmt.Errorf("некорректные настройки поискового сервиса")
 	}
-	if cfg.PurchaseToken != "" && (len(cfg.PurchaseToken) < 32 || cfg.PurchaseToken == cfg.Token) {
+	if cfg.PurchaseToken != "" && (len(cfg.PurchaseToken) < minTokenLength || cfg.PurchaseToken == cfg.Token) {
 		return nil, fmt.Errorf("нужен отдельный токен подтверждения покупок")
 	}
 
@@ -65,12 +78,7 @@ func New(cfg Config) (*Index, error) {
 		base:          strings.TrimRight(cfg.URL, "/") + apiPath,
 		token:         cfg.Token,
 		purchaseToken: cfg.PurchaseToken,
-		client: &http.Client{
-			Timeout: cfg.Timeout,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		},
+		client:        httpclient.New(httpclient.Config{Conns: searchConns, Timeout: ServiceTimeout}),
 	}, nil
 }
 
@@ -159,9 +167,8 @@ func (x *Index) Get(ctx context.Context, id string) (ports.OfferDocument, bool, 
 		return ports.OfferDocument{}, false, ErrInvalid.Wrap(err)
 	}
 	var result offerDocument
-	status, err := x.request(
+	status, err := x.read(
 		ctx,
-		http.MethodPost,
 		"/offer",
 		offerIdentity{
 			TenantID:  string(identity.Tenant),
@@ -210,12 +217,12 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 		Limit:       query.Limit,
 	}
 	var result offerPage
-	status, err := x.request(ctx, http.MethodPost, "/search", payload, &result)
+	status, err := x.read(ctx, "/search", payload, &result)
 	if status == http.StatusBadRequest && payload.Observe {
 		slog.WarnContext(ctx, "поиск отклонил наблюдение: повтор запроса без observe")
 		payload.Observe = false
 		payload.BuyerKey = ""
-		status, err = x.request(ctx, http.MethodPost, "/search", payload, &result)
+		status, err = x.read(ctx, "/search", payload, &result)
 	}
 
 	if status == http.StatusBadRequest {

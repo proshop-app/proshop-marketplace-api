@@ -73,7 +73,7 @@ func server(t *testing.T, routes map[string][2]string, status int) *platformapi.
 	}))
 	t.Cleanup(srv.Close)
 
-	return platformapi.New(platformapi.Config{BaseURL: srv.URL, Token: "service-token", Timeout: time.Second})
+	return platformapi.New(platformapi.Config{BaseURL: srv.URL, Token: "service-token", Timeout: time.Second, Conns: 4})
 }
 
 func TestQuoteDelivery(t *testing.T) {
@@ -146,6 +146,7 @@ func TestErrors(t *testing.T) {
 		BaseURL: "http://127.0.0.1:1",
 		Token:   "x",
 		Timeout: 100 * time.Millisecond,
+		Conns:   4,
 	})
 	if _, err := wrongToken.PriceGroup(context.Background(), "t1", ports.GroupPricingRequest{
 		Items: nil,

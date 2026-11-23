@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
@@ -28,7 +29,7 @@ func TestGatewayAndApplicationFailures(t *testing.T) {
 		{status: 503, body: `{"code":"UNEXPECTED_TENANT_FAILURE"}`},
 		{status: 500, body: `{"code":"TENANT_FAILURE"}`},
 	} {
-		client := New(Config{BaseURL: "http://platform.test"})
+		client := New(Config{BaseURL: "http://platform.test", Timeout: time.Second, Conns: 4})
 		client.http.Transport = reviewTransport(func(*http.Request) (*http.Response, error) {
 			reply := httptest.NewRecorder()
 			reply.WriteHeader(test.status)

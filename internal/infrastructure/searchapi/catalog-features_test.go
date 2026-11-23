@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
@@ -47,9 +46,8 @@ func TestPriceBucketsAndRatingContract(t *testing.T) {
 				return w.Result(), nil
 			})
 			client, err := New(Config{
-				URL:     "http://search.test",
-				Token:   strings.Repeat("m", 32),
-				Timeout: time.Second,
+				URL:   "http://search.test",
+				Token: strings.Repeat("m", 32),
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -98,9 +96,8 @@ func TestDocumentCatalogFeaturesContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	client, err := New(Config{
-		URL:     "http://search.test",
-		Token:   strings.Repeat("m", 32),
-		Timeout: time.Second,
+		URL:   "http://search.test",
+		Token: strings.Repeat("m", 32),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -168,9 +165,8 @@ func TestDocumentNormalizesRating(t *testing.T) {
 
 func TestStatusVersionFourRejected(t *testing.T) {
 	client, err := New(Config{
-		URL:     "http://search.test",
-		Token:   strings.Repeat("m", 32),
-		Timeout: time.Second,
+		URL:   "http://search.test",
+		Token: strings.Repeat("m", 32),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -202,9 +198,8 @@ func TestEmptyAssetsAreArray(t *testing.T) {
 func TestTrackQueryContract(t *testing.T) {
 	for _, track := range []bool{false, true} {
 		client, err := New(Config{
-			URL:     "http://search.test",
-			Token:   strings.Repeat("m", 32),
-			Timeout: time.Second,
+			URL:   "http://search.test",
+			Token: strings.Repeat("m", 32),
 		})
 		if err != nil {
 			t.Fatal(err)

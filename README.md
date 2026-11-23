@@ -72,7 +72,7 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `SEARCH_MARKETPLACE_TOKEN` | да | — | отдельный служебный токен поиска, ≥ 32 символов |
 | `SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN` | | — | отдельный токен для поисковых покупок, ≥ 32 байт. Нужен вместе с ключом аналитики |
 | `SEARCH_ANALYTICS_KEY` | | — | общий ключ HMAC покупателей и сетей, ≥ 32 байт. Нужен вместе с токеном поисковых покупок |
-| `SEARCH_TIMEOUT`, `SEARCH_MAINTENANCE_INTERVAL` | | `35s`, `1m` | срок HTTP-запроса и период проверки пересборки |
+| `SEARCH_MAINTENANCE_INTERVAL` | | `1m` | период фоновой проверки индекса: сборка отсутствующего, перенос выросшего |
 | `MARKETPLACE_PUBLIC_URL` | да | — | адрес витрины для возврата с кассы-заглушки |
 | `PAYMENT_STUB` | | `false` | тестовая оплата; без неё создание заказов и оплата недоступны (503) |
 | `ORDERS_SYNC_INTERVAL` | | `30s` | постановка сверки и повтор возврата товаров |
@@ -107,7 +107,7 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `PLATFORM_READ_TIMEOUT` | | `300ms` | бюджет необязательных витринных блоков |
 | `PLATFORM_CACHE_TTL` / `PLATFORM_STALE_TTL` | | `30s` / `5m` | свежесть и окно stale |
 | `PLATFORM_CACHE_SIZE` | | `33000` | предел записей кэша отзывов |
-| `PLATFORM_MAX_CONCURRENT` | | `128` | общий предел исходящих вызовов процесса |
+| `PLATFORM_MAX_CONCURRENT` | | `128` | общий предел исходящих вызовов процесса; столько же соединений держит транспорт к серверу |
 | `PLATFORM_CHECKOUT_MAX_CONCURRENT` / `PLATFORM_READ_MAX_CONCURRENT` | | `64` / `64` | независимые пулы; сумма равна общему пределу |
 | `PLATFORM_TENANT_MAX_CONCURRENT` | | `8` | доля магазина, разделённая между пулами (6/2) |
 | `PLATFORM_QUEUE_SIZE` / `PLATFORM_TENANT_QUEUE_SIZE` | | `1024` / `32` | очередь каждого класса и доля магазина в ней |

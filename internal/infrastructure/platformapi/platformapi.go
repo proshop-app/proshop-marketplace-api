@@ -18,6 +18,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/httpclient"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -46,11 +47,14 @@ var (
 	)
 )
 
-// Config — адрес сервера, токен маркетплейса и срок ожидания.
+// Config — адрес сервера, токен маркетплейса, потолок вызова и одновременность.
 type Config struct {
 	BaseURL string
 	Token   string
 	Timeout time.Duration
+	// Conns — соединения к серверу: столько вызовов одновременно пропускает защита
+	// platformguard, подсказки городов идут в том же пределе.
+	Conns int
 }
 
 // Client — внутренний API сервера.
@@ -109,17 +113,12 @@ type settingsJSON struct {
 	Delivery *participant.DeliverySettings `json:"delivery"`
 }
 
-// New — клиент API сервера.
+// New — клиент API сервера со своим транспортом под одновременность вызовов.
 func New(cfg Config) *Client {
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = 5 * time.Second
-	}
-
 	return &Client{
 		baseURL: strings.TrimRight(cfg.BaseURL, "/"),
 		token:   cfg.Token,
-		http:    &http.Client{Timeout: timeout, CheckRedirect: refuseRedirect},
+		http:    httpclient.New(httpclient.Config{Conns: cfg.Conns, Timeout: cfg.Timeout}),
 	}
 }
 
@@ -331,5 +330,3 @@ func itemsJSON(items []ports.ItemRequest) []itemJSON {
 
 	return out
 }
-
-func refuseRedirect(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }

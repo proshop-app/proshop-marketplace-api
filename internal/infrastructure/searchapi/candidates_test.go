@@ -8,7 +8,6 @@ import (
 	"os"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
@@ -33,10 +32,7 @@ func TestCandidatesContract(t *testing.T) {
 		_, _ = w.Write(fixture)
 	}))
 	defer server.Close()
-	client, err := NewCandidates(Config{URL: server.URL, Token: token, Timeout: time.Second})
-	if err != nil {
-		t.Fatal(err)
-	}
+	client := candidatesClient(t, server.URL, token)
 	page, err := client.AttributeValues(context.Background(), ports.AttributeValuesQuery{
 		Attribute:         "b1",
 		Size:              500,
@@ -57,14 +53,7 @@ func TestCandidatesErrors(t *testing.T) {
 				w.WriteHeader(status)
 			}))
 			defer server.Close()
-			client, err := NewCandidates(Config{
-				URL:     server.URL,
-				Token:   "candidates-token-0123456789abcdef012345",
-				Timeout: time.Second,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			client := candidatesClient(t, server.URL, "candidates-token-0123456789abcdef012345")
 			query := ports.AttributeValuesQuery{Attribute: "b1", Size: 500}
 			if _, err := client.AttributeValues(context.Background(), query); err == nil {
 				t.Fatal("ошибка поиска потеряна")
@@ -99,4 +88,17 @@ func TestCandidateQueryValuesWithoutSockets(t *testing.T) {
 	if global.Has("categoryId") || global.Has("excludeCategoryId") {
 		t.Fatal("пустые фильтры должны отсутствовать", global)
 	}
+}
+
+func candidatesClient(t *testing.T, url, token string) *Candidates {
+	t.Helper()
+	index, err := New(Config{URL: url, Token: "marketplace-token-0123456789abcdef0123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := index.Candidates(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return client
 }

@@ -5,7 +5,6 @@ package searchapi_test
 import (
 	"os"
 	"testing"
-	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 )
@@ -23,9 +22,8 @@ func testSearchIndex(t *testing.T) *searchapi.Index {
 		t.Fatal("тест контракта требует изолированный loopback-контур")
 	}
 	client, err := searchapi.New(searchapi.Config{
-		URL:     address,
-		Token:   "uno-marketplace-integration-token-0001",
-		Timeout: 35 * time.Second,
+		URL:   address,
+		Token: "uno-marketplace-integration-token-0001",
 	})
 
 	if err != nil {

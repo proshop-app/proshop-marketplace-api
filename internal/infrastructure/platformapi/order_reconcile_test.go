@@ -97,6 +97,7 @@ func TestReconcileTwoHundredMismatchesUsesOneHTTPCall(t *testing.T) {
 		BaseURL: "https://shop.example.test",
 		Token:   "service-token",
 		Timeout: time.Second,
+		Conns:   4,
 	})
 	client.http.Transport = handlerTransport(handler)
 	service := appcheckout.NewService(store, client, nil, nil, identities, fake.NewClock(now), appcheckout.Config{})

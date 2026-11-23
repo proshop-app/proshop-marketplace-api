@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 type pickupTransport struct {
@@ -40,7 +41,7 @@ func TestPickupPointsContract(t *testing.T) {
 		if !available {
 			fixture = "pickups_unavailable.json"
 		}
-		client := New(Config{BaseURL: "http://server.test", Token: "service-token"})
+		client := New(Config{BaseURL: "http://server.test", Token: "service-token", Timeout: time.Second, Conns: 4})
 		client.http.Transport = pickupTransport{t: t, fixture: fixture}
 		answer, err := client.PickupPoints(context.Background(), "t1", "cdek", "Город & район")
 		if err != nil || answer.Available != available {

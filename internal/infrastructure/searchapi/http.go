@@ -20,6 +20,14 @@ func (x *Index) request(ctx context.Context, method, path string, payload, out a
 	return x.requestWithCapacity(ctx, method, path, payload, out, nil)
 }
 
+// read — запрос покупателя: свой короткий срок вместо служебного потолка ServiceTimeout.
+func (x *Index) read(ctx context.Context, path string, payload, out any) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, buyerTimeout)
+	defer cancel()
+
+	return x.request(ctx, http.MethodPost, path, payload, out)
+}
+
 func (x *Index) requestWithCapacity(
 	ctx context.Context,
 	method string,

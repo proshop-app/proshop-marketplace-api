@@ -17,6 +17,10 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
+// RequestTimeout — срок ответа внешней модели на пачку понятий: генерация идёт десятки
+// секунд, а фоновая сверка синонимов не держит покупателей и может подождать.
+const RequestTimeout = 35 * time.Second
+
 const (
 	requestLimit  = 16 << 10
 	responseLimit = 32 << 10

@@ -43,7 +43,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/storecache"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/synonymmodel"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
@@ -118,6 +117,9 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return err
 		}
 	}
+	if err := checkOutboxLease(cfg.Outbox); err != nil {
+		return err
+	}
 	store, err := openStorage(ctx, cfg)
 	if err != nil {
 		return err
@@ -171,6 +173,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		BaseURL: cfg.Platform.URL,
 		Token:   cfg.Platform.Token,
 		Timeout: cfg.Platform.Timeout,
+		Conns:   cfg.Platform.MaxConcurrent,
 	})
 	platform := platformguard.New(
 		upstream,
@@ -204,11 +207,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	settings := appparticipant.NewSettings(uow, platform, now, identities)
 	var candidates ports.ReferenceCandidates
 	if cfg.Reference.CandidatesInterval > 0 && cfg.Search.CandidatesToken != "" {
-		candidates, err = searchapi.NewCandidates(searchapi.Config{
-			URL:     cfg.Search.URL,
-			Token:   cfg.Search.CandidatesToken,
-			Timeout: cfg.Search.Timeout,
-		})
+		candidates, err = s.store.index.Candidates(cfg.Search.CandidatesToken)
 		if err != nil {
 			return services{}, err
 		}
@@ -661,7 +660,7 @@ func (s *server) searchSynonyms(uow ports.UnitOfWork, now ports.Clock, writer po
 		cfg.Synonyms.ModelURL,
 		cfg.Synonyms.ModelToken,
 		cfg.Synonyms.ModelName,
-		cfg.Search.Timeout,
+		synonymmodel.RequestTimeout,
 	)
 	if err != nil {
 		s.logger.Error("поисковые синонимы: модель отключена", slog.Any("error", err))

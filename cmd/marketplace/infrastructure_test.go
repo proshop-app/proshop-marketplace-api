@@ -48,3 +48,13 @@ func TestProcessPoolsHaveCeiling(t *testing.T) {
 		t.Fatalf("сумма пулов ограничена: %v", err)
 	}
 }
+
+func TestOutboxLeaseOutlivesSearchServiceCall(t *testing.T) {
+	if err := checkOutboxLease(config.Outbox{Lease: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	err := checkOutboxLease(config.Outbox{Lease: 35 * time.Second})
+	if err == nil || !strings.Contains(err.Error(), "OUTBOX_LEASE") {
+		t.Fatalf("аренда короче служебного вызова поиска — отказ старта: %v", err)
+	}
+}

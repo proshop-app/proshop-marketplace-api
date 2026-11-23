@@ -54,7 +54,7 @@ func TestOfficialPickupRegionsSurviveHTTPAndRespectShopArea(t *testing.T) {
 					Carriers: []string{"cdek", "yandex"},
 				},
 			})
-			client := New(Config{BaseURL: server.URL})
+			client := New(Config{BaseURL: server.URL, Timeout: time.Second, Conns: 4})
 			service := appdelivery.NewService(store, client, fake.NewPickupCache(), appdelivery.Config{
 				Attempts:     1,
 				QuoteTimeout: time.Second,
@@ -97,7 +97,7 @@ func TestUnmappedPickupRegionIsSourceFailureAndNeverAnEmptySuccess(t *testing.T)
 		_, _ = w.Write([]byte(`{"code":"MARKETPLACE_PICKUP_REGION_UNMAPPED","message":"region unmapped"}`))
 	}))
 	defer server.Close()
-	client := New(Config{BaseURL: server.URL})
+	client := New(Config{BaseURL: server.URL, Timeout: time.Second, Conns: 4})
 	_, err := client.PickupPoints(context.Background(), "t1", "cdek", "Москва")
 	var failure *ports.PickupCatalogFailure
 	if !errors.As(err, &failure) {

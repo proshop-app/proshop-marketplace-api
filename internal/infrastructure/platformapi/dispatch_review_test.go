@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -43,7 +44,7 @@ func TestDispatchReviewRequiresGenerationAndSendsItOnlyWithRecalculation(t *test
 				_, _ = w.Write(fixture(t, "delivery_quote_available.json"))
 			}))
 			defer srv.Close()
-			client := platformapi.New(platformapi.Config{BaseURL: srv.URL})
+			client := platformapi.New(platformapi.Config{BaseURL: srv.URL, Timeout: time.Second, Conns: 4})
 			_, err := client.CreateOrder(context.Background(), "t1", orderRequest())
 			var refusal *ports.OrderRefusal
 			if !tc.valid {

@@ -2,6 +2,7 @@ package searchapi
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -10,17 +11,21 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
+const candidatesPath = "/api/v1/internal/catalog"
+
 // Candidates использует отдельный токен чтения атрибутов каталога.
 type Candidates struct{ index *Index }
 
-// NewCandidates проверяет настройки и сохраняет общий защищённый HTTP-транспорт.
-func NewCandidates(cfg Config) (*Candidates, error) {
-	index, err := New(cfg)
-	if err != nil {
-		return nil, err
+// Candidates — чтение атрибутов каталога своим токеном через транспорт индекса:
+// второй пул соединений к тому же поиску не нужен.
+func (x *Index) Candidates(token string) (*Candidates, error) {
+	if len(token) < minTokenLength {
+		return nil, fmt.Errorf("некорректный токен чтения кандидатов поиска")
 	}
-	index.base = strings.TrimRight(cfg.URL, "/") + "/api/v1/internal/catalog"
-	return &Candidates{index: index}, nil
+	endpoint := *x
+	endpoint.base = strings.TrimSuffix(x.base, apiPath) + candidatesPath
+	endpoint.token = token
+	return &Candidates{index: &endpoint}, nil
 }
 
 // AttributeValues читает страницу; сбои не повторяются до следующего обхода.

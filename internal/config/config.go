@@ -178,7 +178,6 @@ type Search struct {
 	MaintenanceInterval time.Duration
 	URL                 string
 	Token               string
-	Timeout             time.Duration
 }
 
 // Kafka — брокеры установки и параметры групп приёма.
@@ -262,7 +261,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			MaintenanceInterval: r.duration("SEARCH_MAINTENANCE_INTERVAL", time.Minute),
 			URL:                 r.httpURL("SEARCH_URL"),
 			Token:               r.required("SEARCH_MARKETPLACE_TOKEN"),
-			Timeout:             r.duration("SEARCH_TIMEOUT", 35*time.Second),
 		},
 		Kafka: Kafka{
 			Brokers:                r.list("KAFKA_BROKERS"),
@@ -376,9 +374,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	}
 	if cfg.Outbox.PollInterval > time.Minute {
 		r.fail("OUTBOX_POLL_INTERVAL", "не больше минуты")
-	}
-	if cfg.Outbox.Lease <= cfg.Search.Timeout {
-		r.fail("OUTBOX_LEASE", "должна превышать SEARCH_TIMEOUT")
 	}
 	if cfg.SmsRu.Mode == SmsRuLive && cfg.SmsRu.APIID == "" {
 		r.fail("SMSRU_API_ID", "обязательна при SMSRU_MODE=live")

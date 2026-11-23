@@ -17,7 +17,7 @@ func TestSettingsIgnoreRemovedShowcase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := New(Config{BaseURL: "http://platform.test", Token: "service-token", Timeout: time.Second})
+	client := New(Config{BaseURL: "http://platform.test", Token: "service-token", Timeout: time.Second, Conns: 4})
 	client.http.Transport = reviewTransport(func(_ *http.Request) (*http.Response, error) {
 		response := httptest.NewRecorder()
 		_, _ = response.Write(raw)

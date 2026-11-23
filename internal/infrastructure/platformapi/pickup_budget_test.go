@@ -45,7 +45,7 @@ func TestColdPickupCatalogueCarriesDeadlineAcrossBothProviderStagesAndWarmsCache
 		_, _ = w.Write(fixture)
 	}))
 	defer server.Close()
-	client := New(Config{BaseURL: server.URL, Timeout: 5 * time.Second})
+	client := New(Config{BaseURL: server.URL, Timeout: 5 * time.Second, Conns: 4})
 	store := fake.NewStore()
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Status: participant.TenantActive})
 	store.SeedParticipant(participant.State{
