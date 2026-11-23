@@ -24,6 +24,9 @@ type Mappings struct {
 	next     int
 }
 
+// NewMappings оборачивает хранилище привязок одного issuer и клиента кэшем в памяти процесса: проверка access
+// на каждом обращении иначе читала бы привязку subject → покупатель из базы. Ёмкость кэша выделяется сразу,
+// чтобы вытеснение по кругу не перераспределяло память под нагрузкой.
 func NewMappings(source ports.IdentityMappings, clock ports.Clock) *Mappings {
 	return &Mappings{
 		source:   source,
@@ -33,10 +36,14 @@ func NewMappings(source ports.IdentityMappings, clock ports.Clock) *Mappings {
 	}
 }
 
+// Bind записывает привязку прямо в хранилище и не кладёт её в кэш: привязка создаётся один раз при входе,
+// а в кэш попадает первым же Find, уже подтверждённой хранилищем.
 func (m *Mappings) Bind(ctx context.Context, subject, id string) error {
 	return m.source.Bind(ctx, subject, id)
 }
 
+// Find отдаёт покупателя по subject из кэша, пока запись не старше mappingTTL, после чего перечитывает хранилище.
+// Привязка не меняется, поэтому запись кэш не сбрасывает. Ошибка и пустой ответ не кэшируются.
 func (m *Mappings) Find(ctx context.Context, subject string) (string, error) {
 	m.mu.RLock()
 	entry, ok := m.entries[subject]

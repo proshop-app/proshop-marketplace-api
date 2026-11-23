@@ -108,7 +108,12 @@ func TestDocumentCatalogFeaturesContract(t *testing.T) {
 	client.client.Transport = featureTransport(func(r *http.Request) (*http.Response, error) {
 		w := httptest.NewRecorder()
 		if strings.HasSuffix(r.URL.Path, "/status") {
-			_ = json.NewEncoder(w).Encode(map[string]any{"contractVersion": contractVersion, "generationSchemaVersion": generationSchemaVersion, "ready": true})
+			status := map[string]any{
+				"contractVersion":         contractVersion,
+				"generationSchemaVersion": generationSchemaVersion,
+				"ready":                   true,
+			}
+			_ = json.NewEncoder(w).Encode(status)
 			return w.Result(), nil
 		}
 		var body struct {
