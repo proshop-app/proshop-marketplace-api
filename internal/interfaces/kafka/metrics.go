@@ -7,6 +7,7 @@ type ConsumerMetrics struct {
 	messages *prometheus.CounterVec
 	parked   *prometheus.CounterVec
 	failures *prometheus.CounterVec
+	panics   *prometheus.CounterVec
 }
 
 // NewConsumerMetrics регистрирует общие счётчики один раз.
@@ -33,8 +34,15 @@ func NewConsumerMetrics(registerer prometheus.Registerer) *ConsumerMetrics {
 			},
 			[]string{"topic"},
 		),
+		panics: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_kafka_handler_panics_total",
+				Help: "Паники обработчиков; сообщение повторяется и после исчерпания попыток уходит в отравленные.",
+			},
+			[]string{"topic"},
+		),
 	}
-	registerer.MustRegister(m.messages, m.parked, m.failures)
+	registerer.MustRegister(m.messages, m.parked, m.failures, m.panics)
 
 	return m
 }

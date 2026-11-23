@@ -2,13 +2,23 @@ package checkout_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
+
+// panickingOrderPlatform падает паникой на создании заказа магазина.
+type panickingOrderPlatform struct {
+	ports.PlatformAPI
+}
 
 func TestExecutorQuarantinesMalformedTasks(t *testing.T) {
 	e := setup(t)
@@ -24,7 +34,7 @@ func TestExecutorQuarantinesMalformedTasks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	executor := appcheckout.NewExecutor(e.store, e.clock, e.service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, messaging.DefaultMaxAttempts)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -89,6 +99,51 @@ func TestExecutorShutdownLeavesInFlightTaskForNextProcess(t *testing.T) {
 	for _, row := range e.store.OutboxRows() {
 		if row.ID == inFlight && (row.DoneAt == nil || row.FailedAt != nil) {
 			t.Fatal("следующий процесс не восстановил задачу", row)
+		}
+	}
+}
+
+func (panickingOrderPlatform) CreateOrder(
+	context.Context,
+	ids.TenantID,
+	ports.CreateOrderRequest,
+) (checkout.SellerOrder, error) {
+	panic("сбой разбора ответа магазина")
+}
+
+func TestExecutorQuarantinesPanickingTask(t *testing.T) {
+	e := setup(t)
+	c := confirmedPurchase(t, e)
+	ctx := context.Background()
+	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+		t.Fatal(err)
+	}
+	service := appcheckout.NewService(
+		e.store,
+		panickingOrderPlatform{PlatformAPI: e.platform},
+		nil,
+		nil,
+		&fake.IDs{},
+		e.clock,
+		appcheckout.Config{},
+	)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service, 1)
+	if err := executor.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var result appcheckout.TaskResult
+	select {
+	case result = <-executor.Results():
+	case <-time.After(time.Second):
+		t.Fatal("паника исполнителя не дала итога задачи")
+	}
+	executor.Wait()
+	if !errors.Is(result.Err, errs.ErrPanic) || result.FailureReason != "attempts_exhausted" {
+		t.Fatalf("паника — неизвестный сбой с исчерпанием попыток: %+v", result)
+	}
+	for _, row := range e.store.OutboxRows() {
+		if row.ID == result.Task.ID && row.FailedAt == nil {
+			t.Fatal("задача с паникой не ушла в карантин", row)
 		}
 	}
 }

@@ -120,7 +120,7 @@ func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		err := c.router.Handle(ctx, envelope)
+		err := c.handle(ctx, envelope)
 		if err == nil {
 			c.metrics.messages.WithLabelValues(envelope.Topic, "processed").Inc()
 
@@ -131,35 +131,67 @@ func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
 		}
 		if log == nil {
 			tenantID = TenantHint(message)
-			log = c.logger.With(
-				slog.String("topic", envelope.Topic),
-				slog.Int("partition", message.Partition),
-				slog.Int64("offset", message.Offset),
-				slog.String("tenantId", tenantID),
-			)
+			log = c.messageLogger(envelope, tenantID)
 		}
-		retry := errs.RetryKindOf(err)
-		if retry == errs.RetryUnknown {
+		c.notePanic(log, envelope.Topic, err)
+		if errs.RetryKindOf(err) == errs.RetryUnknown {
 			unknownFailures++
 		}
-
-		switch {
-		case retry == errs.RetryPermanent:
-			if c.park(ctx, log, envelope, tenantID, reasonOf(err), err, attempt) {
-				return ctx.Err()
-			}
-		case retry == errs.RetryUnknown && unknownFailures >= c.config.MaxAttempts && c.config.Ready(ctx) == nil:
-			if c.park(ctx, log, envelope, tenantID, ReasonExhausted, err, attempt) {
-				return ctx.Err()
-			}
-		default:
-			c.metrics.failures.WithLabelValues(envelope.Topic).Inc()
-			log.Warn("kafka: обработка не удалась, повтор", slog.Int("attempt", attempt), slog.Any("error", err))
+		if c.settle(ctx, log, envelope, tenantID, err, attempt, unknownFailures) {
+			return ctx.Err()
 		}
-
 		if !sleep(ctx, c.config.Backoff(attempt)) {
 			return ctx.Err()
 		}
+	}
+}
+
+// handle — единственное место перехвата паники приёма: паника на одном кривом
+// сообщении становится ошибкой internal и идёт путём повторов и отравленных, а не
+// роняет процесс, который после перезапуска упал бы на том же сообщении снова.
+func (c *Consumer) handle(ctx context.Context, envelope Envelope) error {
+	return errs.Guard(func() error { return c.router.Handle(ctx, envelope) })
+}
+
+func (c *Consumer) messageLogger(envelope Envelope, tenantID string) *slog.Logger {
+	return c.logger.With(
+		slog.String("topic", envelope.Topic),
+		slog.Int("partition", envelope.Message.Partition),
+		slog.Int64("offset", envelope.Message.Offset),
+		slog.String("tenantId", tenantID),
+	)
+}
+
+// notePanic пишет стек один раз на попытку: в отравленные уходит только текст ошибки.
+func (c *Consumer) notePanic(log *slog.Logger, topic string, err error) {
+	stack, ok := errs.PanicStack(err)
+	if !ok {
+		return
+	}
+	c.metrics.panics.WithLabelValues(topic).Inc()
+	log.Error("kafka: паника обработчика", slog.Any("error", err), slog.String("stack", string(stack)))
+}
+
+// settle откладывает сообщение в отравленные, если повтор не поможет; true — итог записан.
+func (c *Consumer) settle(
+	ctx context.Context,
+	log *slog.Logger,
+	envelope Envelope,
+	tenantID string,
+	err error,
+	attempt, unknownFailures int,
+) bool {
+	retry := errs.RetryKindOf(err)
+	switch {
+	case retry == errs.RetryPermanent:
+		return c.park(ctx, log, envelope, tenantID, reasonOf(err), err, attempt)
+	case retry == errs.RetryUnknown && unknownFailures >= c.config.MaxAttempts && c.config.Ready(ctx) == nil:
+		return c.park(ctx, log, envelope, tenantID, ReasonExhausted, err, attempt)
+	default:
+		c.metrics.failures.WithLabelValues(envelope.Topic).Inc()
+		log.Warn("kafka: обработка не удалась, повтор", slog.Int("attempt", attempt), slog.Any("error", err))
+
+		return false
 	}
 }
 

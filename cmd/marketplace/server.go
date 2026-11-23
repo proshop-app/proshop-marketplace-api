@@ -490,8 +490,9 @@ func (s *server) run(ctx context.Context) error {
 	})
 	s.runConsumers(groupCtx, group)
 
-	for _, job := range s.jobs() {
-		group.Go(func() error { return job(groupCtx) })
+	supervisor := jobs.NewSupervisor(s.logger, s.metrics)
+	for _, loop := range s.jobs() {
+		group.Go(func() error { return supervisor.Run(groupCtx, loop) })
 	}
 
 	s.logger.Info("маркетплейс запущен")
@@ -499,77 +500,101 @@ func (s *server) run(ctx context.Context) error {
 	return group.Wait()
 }
 
-// jobs — фоновые циклы процесса.
-func (s *server) jobs() []func(context.Context) error {
+// jobs — фоновые циклы процесса; каждый работает под присмотром jobs.Supervisor.
+func (s *server) jobs() []jobs.Loop {
 	cfg := s.cfg
-
-	runners := []func(context.Context) error{
-		s.cityDetector.Run,
-		s.refreshTaxonomyDisplay,
-		s.refreshTaxonomySelection,
-		func(ctx context.Context) error {
-			return s.app.moderationMetrics.Run(ctx, s.app.moderation, cfg.Moderation.MetricsInterval, s.logger)
-		},
-	}
-	if s.app.candidates != nil {
-		runners = append(runners, jobs.NewReferenceCandidatesRunner(
-			s.app.reference,
-			s.app.candidates,
-			cfg.Reference.CandidatesInterval,
-			s.logger,
-			s.metrics,
-		).WithSchedule(postgres.NewScheduledWork(
-			s.store.pool,
-			"reference-candidates",
-			cfg.Reference.CandidatesInterval,
-		)).Run)
-	}
-	if interval := cfg.Synonyms.Interval; interval > 0 {
-		schedule := postgres.NewScheduledWork(s.store.pool, "reference-search-synonyms", interval)
-		runner := jobs.NewReferenceSynonymsRunner(s.app.synonyms, schedule, interval, s.logger, s.metrics)
-		runners = append(runners, func(ctx context.Context) error {
-			return runner.Run(ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(cfg.Database.Background)))
-		})
-	}
 	outbox := jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics)
-	if s.app.searchPurchases != nil {
-		runners = append(runners, func(ctx context.Context) error { return outbox.RunLane(ctx, s.app.searchPurchases) })
-	}
-	return append(runners, []func(context.Context) error{
-		func(ctx context.Context) error {
+	loops := []jobs.Loop{
+		{Name: "city-detector", Run: s.cityDetector.Run},
+		{Name: "taxonomy-display", Run: s.refreshTaxonomyDisplay},
+		{Name: "taxonomy-selection", Run: s.refreshTaxonomySelection},
+		{Name: "moderation-metrics", Run: func(ctx context.Context) error {
+			return s.app.moderationMetrics.Run(ctx, s.app.moderation, cfg.Moderation.MetricsInterval, s.logger)
+		}},
+		{Name: "taxonomy-revalidation", Run: func(ctx context.Context) error {
 			return jobs.RunTaxonomyRevalidation(ctx, s.app.taxonomy, s.logger)
-		},
-		jobs.NewPromotionRunner(
+		}},
+		{Name: "promotion", Run: jobs.NewPromotionRunner(
 			s.app.promotion,
 			postgres.NewPromotionLock(s.store.pool),
 			s.logger,
-			s.cfg.Promotion.TickInterval,
-		).Run,
-		jobs.NewIndexMaintenanceRunner(s.app.indexer, cfg.Search.MaintenanceInterval, s.logger, s.metrics).Run,
-		jobs.NewCreationRunner(s.app.creation, s.logger, outbox.RecordOutcome).Run,
-		jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run,
-		s.orderReconciliation,
-		jobs.NewOutboxRetryStatsRunner(
+			cfg.Promotion.TickInterval,
+		).Run},
+		{Name: "index-maintenance", Run: jobs.NewIndexMaintenanceRunner(
+			s.app.indexer,
+			cfg.Search.MaintenanceInterval,
+			s.logger,
+			s.metrics,
+		).Run},
+		{Name: "checkout-creation", Run: jobs.NewCreationRunner(s.app.creation, s.logger, outbox.RecordOutcome).Run},
+		{Name: "orders", Run: jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run},
+		{Name: "order-reconcile", Run: s.orderReconciliation},
+		{Name: "outbox-retry-stats", Run: jobs.NewOutboxRetryStatsRunner(
 			s.app.dispatcher,
 			clock.System{},
 			cfg.Outbox.RetryMetricsInterval,
 			s.logger,
 			s.metrics,
-		).Run,
-		outbox.Run,
-		jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run,
-		jobs.NewSettingsSyncRunner(s.app.settings, cfg.Settings.SyncInterval, s.logger, s.metrics).
-			WithSchedule(postgres.NewScheduledWork(s.store.pool, "settings-sync", cfg.Settings.SyncInterval)).Run,
-		jobs.NewReferenceStatsRunner(s.app.reference, referenceStatsInterval, s.logger, s.metrics).
-			WithSchedule(postgres.NewScheduledWork(s.store.pool, "reference-stats", referenceStatsInterval)).Run,
-		jobs.NewModelKeyStatsRunner(postgres.NewModelKeyStats(s.store.pool), s.logger, s.metrics).
-			WithSchedule(postgres.NewScheduledWork(s.store.pool, "model-key-stats", jobs.ModelKeyStatsInterval)).Run,
-	}...)
+		).Run},
+		{Name: "outbox", Run: outbox.Run},
+		{Name: "retention", Run: jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run},
+	}
+	if s.app.searchPurchases != nil {
+		loops = append(loops, jobs.Loop{Name: "search-purchases", Run: func(ctx context.Context) error {
+			return outbox.RunLane(ctx, s.app.searchPurchases)
+		}})
+	}
+	return append(loops, s.scheduledJobs()...)
+}
+
+// scheduledJobs — циклы с общим владельцем интервала на все реплики.
+func (s *server) scheduledJobs() []jobs.Loop {
+	cfg := s.cfg
+	loops := []jobs.Loop{
+		{Name: "settings-sync", Run: jobs.NewSettingsSyncRunner(
+			s.app.settings,
+			cfg.Settings.SyncInterval,
+			s.logger,
+			s.metrics,
+		).WithSchedule(s.schedule("settings-sync", cfg.Settings.SyncInterval)).Run},
+		{Name: "reference-stats", Run: jobs.NewReferenceStatsRunner(
+			s.app.reference,
+			referenceStatsInterval,
+			s.logger,
+			s.metrics,
+		).WithSchedule(s.schedule("reference-stats", referenceStatsInterval)).Run},
+		{Name: "model-key-stats", Run: jobs.NewModelKeyStatsRunner(
+			postgres.NewModelKeyStats(s.store.pool),
+			s.logger,
+			s.metrics,
+		).WithSchedule(s.schedule("model-key-stats", jobs.ModelKeyStatsInterval)).Run},
+	}
+	if s.app.candidates != nil {
+		interval := cfg.Reference.CandidatesInterval
+		runner := jobs.NewReferenceCandidatesRunner(s.app.reference, s.app.candidates, interval, s.logger, s.metrics)
+		loops = append(loops, jobs.Loop{
+			Name: "reference-candidates",
+			Run:  runner.WithSchedule(s.schedule("reference-candidates", interval)).Run,
+		})
+	}
+	if interval := cfg.Synonyms.Interval; interval > 0 {
+		schedule := s.schedule("reference-search-synonyms", interval)
+		runner := jobs.NewReferenceSynonymsRunner(s.app.synonyms, schedule, interval, s.logger, s.metrics)
+		loops = append(loops, jobs.Loop{Name: "reference-search-synonyms", Run: func(ctx context.Context) error {
+			return runner.Run(ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(cfg.Database.Background)))
+		}})
+	}
+	return loops
+}
+
+// schedule — общий владелец интервала: работу выполняет одна реплика.
+func (s *server) schedule(name string, interval time.Duration) *postgres.ScheduledWork {
+	return postgres.NewScheduledWork(s.store.pool, name, interval)
 }
 
 // orderReconciliation — суточная сверка статусов заказов в фоновой доле базы.
 func (s *server) orderReconciliation(ctx context.Context) error {
-	schedule := postgres.NewScheduledWork(s.store.pool, "order-reconcile", jobs.OrderReconcileInterval)
+	schedule := s.schedule("order-reconcile", jobs.OrderReconcileInterval)
 	runner := jobs.NewOrderReconcileRunner(s.app.checkouts, schedule, s.logger, s.metrics)
 	return runner.Run(ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(s.cfg.Database.Background)))
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -49,12 +50,8 @@ type Executor struct {
 	wg          sync.WaitGroup
 }
 
-// NewExecutor собирает отдельный пул поверх существующей очереди.
-func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service, attempts ...int) *Executor {
-	maxAttempts := messaging.DefaultMaxAttempts
-	if len(attempts) > 0 && attempts[0] > 0 {
-		maxAttempts = attempts[0]
-	}
+// NewExecutor собирает отдельный пул поверх существующей очереди; maxAttempts — предел неизвестных сбоев.
+func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service, maxAttempts int) *Executor {
 	return &Executor{
 		maxAttempts: maxAttempts,
 		queue:       queue,
@@ -121,7 +118,9 @@ func (e *Executor) Dispatch(ctx context.Context) error {
 
 func (e *Executor) execute(ctx context.Context, task ports.Task) {
 	defer e.wg.Done()
-	err := e.service.HandleOrderTask(ctx, task)
+	// Единственное место перехвата паники исполнителя: задача уходит в повтор или
+	// карантин обычным путём, а слот магазина освобождается.
+	err := errs.Guard(func() error { return e.service.HandleOrderTask(ctx, task) })
 	resolution := messaging.Resolution(task, err, e.clock.Now(), e.maxAttempts)
 	if CreationPending(err) {
 		resolution.FailureReason = ""

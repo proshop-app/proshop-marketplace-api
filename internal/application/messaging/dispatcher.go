@@ -242,12 +242,7 @@ func (d *Dispatcher) executeGroup(
 ) ([]Outcome, []ports.TaskResolution, error) {
 	handling, cancel := context.WithTimeout(ctx, d.config.HandlerTimeout)
 	defer cancel()
-	var failures []error
-	if handler, ok := d.batches[group[0].Kind]; ok {
-		failures = handler(handling, group)
-	} else {
-		failures = []error{d.run(handling, group[0])}
-	}
+	failures := d.handle(handling, group)
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -299,6 +294,24 @@ func takeKind(tasks []ports.Task, kind string) ([]ports.Task, []ports.Task) {
 		}
 	}
 	return group, rest
+}
+
+// handle — единственное место перехвата паники обработчиков outbox: паника
+// становится ошибкой internal каждой задачи группы и идёт обычным путём повтора
+// и карантина, а соседние группы прохода и процесс продолжают работу.
+func (d *Dispatcher) handle(ctx context.Context, group []ports.Task) []error {
+	batch, ok := d.batches[group[0].Kind]
+	if !ok {
+		return []error{errs.Guard(func() error { return d.run(ctx, group[0]) })}
+	}
+	var failures []error
+	if err := errs.Guard(func() error {
+		failures = batch(ctx, group)
+		return nil
+	}); err != nil {
+		return slices.Repeat([]error{err}, len(group))
+	}
+	return failures
 }
 
 func (d *Dispatcher) run(ctx context.Context, task ports.Task) error {

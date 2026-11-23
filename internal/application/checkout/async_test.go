@@ -9,6 +9,7 @@ import (
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
@@ -420,7 +421,7 @@ func TestExecutorRetriesRespectDeadline(t *testing.T) {
 	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
-	executor := appcheckout.NewExecutor(e.store, e.clock, e.service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, messaging.DefaultMaxAttempts)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
