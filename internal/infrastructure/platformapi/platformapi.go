@@ -233,93 +233,110 @@ func refusal(method, path string, tenant ids.TenantID, reply *http.Response) err
 	if err != nil || len(raw) > 4<<20 {
 		return ErrInvalidResponse
 	}
+	message := refusalMessage(method, path, reply.StatusCode, raw)
+	var body errorJSON
+	if json.Unmarshal(raw, &body) != nil {
+		// Тело не по словарю — отказ без кода: недоступность с текстом ответа.
+		body = errorJSON{}
+	}
+	if failure := statusRefusal(reply.StatusCode, path, body, message); failure != nil {
+		return failure
+	}
+	if body.Code == "" {
+		return ErrUnavailable.WithMessage(message)
+	}
+	return codedRefusal(reply.StatusCode, path, tenant, body)
+}
+
+func refusalMessage(method, path string, status int, raw []byte) string {
 	detail := raw
 	if len(detail) > 512 {
 		detail = detail[:512]
 	}
-	message := fmt.Sprintf("%s %s: HTTP %d %s", method, path, reply.StatusCode, strings.TrimSpace(string(detail)))
+	return fmt.Sprintf("%s %s: HTTP %d %s", method, path, status, strings.TrimSpace(string(detail)))
+}
 
-	var body errorJSON
-	if reply.StatusCode == http.StatusConflict && json.Unmarshal(raw, &body) == nil &&
-		body.Code == codePromoInvalid {
+// statusRefusal — отказы, у которых смысл кода зависит от статуса и маршрута.
+func statusRefusal(status int, path string, body errorJSON, message string) error {
+	switch {
+	case status == http.StatusConflict && body.Code == codePromoInvalid:
 		if body.Data != nil && body.Data.PromoCode != nil && body.Data.PromoCode.Message != nil {
 			return checkout.ErrPromoInvalid.WithMessage(*body.Data.PromoCode.Message)
 		}
 		return checkout.ErrPromoInvalid
+	case status == http.StatusConflict && body.Code == "PRICE_CHANGED":
+		return priceChanged(body)
+	case status == http.StatusForbidden && body.Code == codeMarketplaceDisabled:
+		return ports.ErrMarketplaceDisabled.WithMessage(message)
+	case status == http.StatusNotFound && strings.HasSuffix(path, "/stub-payment") && body.Code != "ORDER_NOT_FOUND":
+		return ErrUnavailable.WithMessage(message)
 	}
-	if reply.StatusCode == http.StatusConflict && json.Unmarshal(raw, &body) == nil && body.Code == "PRICE_CHANGED" {
-		changed := &ports.PriceChanged{}
-		for _, item := range body.Items {
-			_, err := ids.ParseProductID(string(item.ProductID))
-			if err != nil || item.Price == nil || *item.Price < 0 {
-				return ErrInvalidResponse
-			}
-			changed.Items = append(changed.Items, checkout.PriceChange{
-				ProductID: item.ProductID,
-				Price:     money.FromKopecks(*item.Price),
-			})
-		}
-		if len(changed.Items) == 0 {
+	return nil
+}
+
+func priceChanged(body errorJSON) error {
+	changed := &ports.PriceChanged{}
+	for _, item := range body.Items {
+		_, err := ids.ParseProductID(string(item.ProductID))
+		if err != nil || item.Price == nil || *item.Price < 0 {
 			return ErrInvalidResponse
 		}
-		return changed
+		changed.Items = append(changed.Items, checkout.PriceChange{
+			ProductID: item.ProductID,
+			Price:     money.FromKopecks(*item.Price),
+		})
 	}
-	if reply.StatusCode == http.StatusForbidden && json.Unmarshal(raw, &body) == nil {
-		if body.Code == codeMarketplaceDisabled {
-			return ports.ErrMarketplaceDisabled.WithMessage(message)
-		}
+	if len(changed.Items) == 0 {
+		return ErrInvalidResponse
 	}
+	return changed
+}
 
-	if reply.StatusCode == http.StatusNotFound && strings.HasSuffix(path, "/stub-payment") {
-		if json.Unmarshal(raw, &body) != nil || body.Code != "ORDER_NOT_FOUND" {
-			return ErrUnavailable.WithMessage(message)
+// codedRefusal — отказ с кодом словаря заказа; неизвестный код помечается Unexpected.
+func codedRefusal(status int, path string, tenant ids.TenantID, body errorJSON) error {
+	switch {
+	case status == http.StatusBadRequest && body.Code == "MARKETPLACE_PAYMENT_DUE_INVALID":
+		return &ports.OrderRefusal{Code: body.Code}
+	case status == http.StatusConflict &&
+		(body.Code == "ORDER_PAYMENT_EXPIRED" || body.Code == "ORDER_NOT_AWAITING_PAYMENT"):
+		return &ports.OrderRefusal{Code: body.Code}
+	case status == http.StatusServiceUnavailable && body.Code == "MARKETPLACE_TEMPORARY_FAILURE":
+		return ErrUnavailable.Wrap(&ports.OrderRefusal{Code: body.Code})
+	case status == http.StatusConflict && strings.HasSuffix(path, "/stub-payment") &&
+		(body.Code == "MARKETPLACE_STUB_PAYMENT_AMOUNT" || body.Code == "MARKETPLACE_STUB_PAYMENT_STATE"):
+		return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
+	case status == http.StatusConflict && body.Code == "MARKETPLACE_PICKUP_CATALOG_CHANGED":
+		return &ports.PickupCatalogFailure{Cause: &ports.OrderRefusal{Code: body.Code}}
+	case status == http.StatusConflict && body.Code == checkout.DispatchOriginChanged:
+		if body.Data == nil || body.Data.DispatchReviewRevision <= 0 {
+			return ErrInvalidResponse
 		}
+		return &ports.OrderRefusal{Code: body.Code, DispatchReviewRevision: body.Data.DispatchReviewRevision}
+	case status == http.StatusConflict && (body.Code == "DELIVERY_UNAVAILABLE" ||
+		body.Code == "DELIVERY_CHANGED" ||
+		body.Code == "OUT_OF_STOCK" ||
+		body.Code == "IDEMPOTENCY_CONFLICT" || body.Code == "ORDER_CHECKOUT_CANCELLED"):
+		return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
+	case status == http.StatusNotFound && body.Code == "ORDER_NOT_FOUND":
+		return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
 	}
-	if json.Unmarshal(raw, &body) == nil && body.Code != "" {
-		switch {
-		case reply.StatusCode == http.StatusBadRequest && body.Code == "MARKETPLACE_PAYMENT_DUE_INVALID":
-			return &ports.OrderRefusal{Code: body.Code}
-		case reply.StatusCode == http.StatusConflict &&
-			(body.Code == "ORDER_PAYMENT_EXPIRED" || body.Code == "ORDER_NOT_AWAITING_PAYMENT"):
-			return &ports.OrderRefusal{Code: body.Code}
-		case reply.StatusCode == http.StatusServiceUnavailable && body.Code == "MARKETPLACE_TEMPORARY_FAILURE":
-			return ErrUnavailable.Wrap(&ports.OrderRefusal{Code: body.Code})
-		case reply.StatusCode == http.StatusConflict && strings.HasSuffix(path, "/stub-payment") &&
-			(body.Code == "MARKETPLACE_STUB_PAYMENT_AMOUNT" || body.Code == "MARKETPLACE_STUB_PAYMENT_STATE"):
-			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
-		case reply.StatusCode == http.StatusConflict && body.Code == "MARKETPLACE_PICKUP_CATALOG_CHANGED":
-			return &ports.PickupCatalogFailure{Cause: &ports.OrderRefusal{Code: body.Code}}
-		case reply.StatusCode == http.StatusConflict && body.Code == checkout.DispatchOriginChanged:
-			if body.Data == nil || body.Data.DispatchReviewRevision <= 0 {
-				return ErrInvalidResponse
-			}
-			return &ports.OrderRefusal{
-				Code:                   body.Code,
-				DispatchReviewRevision: body.Data.DispatchReviewRevision,
-			}
-		case reply.StatusCode == http.StatusConflict && (body.Code == "DELIVERY_UNAVAILABLE" ||
-			body.Code == "DELIVERY_CHANGED" ||
-			body.Code == "OUT_OF_STOCK" ||
-			body.Code == "IDEMPOTENCY_CONFLICT" || body.Code == "ORDER_CHECKOUT_CANCELLED"):
-			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
-		case reply.StatusCode == http.StatusNotFound && body.Code == "ORDER_NOT_FOUND":
-			return &ports.OrderRefusal{Code: body.Code, Reason: body.Reason}
-		}
-		if tenant != "" {
-			slog.Warn(
-				"неизвестный отказ сервера магазина",
-				slog.String("tenantId", string(tenant)),
-				slog.String("code", body.Code),
-				slog.Int("status", reply.StatusCode),
-			)
-		}
-		failure := &ports.OrderRefusal{Code: body.Code, Reason: body.Reason, Unexpected: true}
-		if reply.StatusCode >= http.StatusInternalServerError {
-			return ErrUnavailable.Wrap(failure)
-		}
-		return failure
+	return unexpectedRefusal(status, tenant, body)
+}
+
+func unexpectedRefusal(status int, tenant ids.TenantID, body errorJSON) error {
+	if tenant != "" {
+		slog.Warn(
+			"неизвестный отказ сервера магазина",
+			slog.String("tenantId", string(tenant)),
+			slog.String("code", body.Code),
+			slog.Int("status", status),
+		)
 	}
-	return ErrUnavailable.WithMessage(message)
+	failure := &ports.OrderRefusal{Code: body.Code, Reason: body.Reason, Unexpected: true}
+	if status >= http.StatusInternalServerError {
+		return ErrUnavailable.Wrap(failure)
+	}
+	return failure
 }
 
 func itemsJSON(items []ports.ItemRequest) []itemJSON {
