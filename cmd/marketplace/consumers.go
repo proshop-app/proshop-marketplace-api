@@ -46,6 +46,7 @@ func (s *server) consume(
 		GroupID: groupID,
 		Topics:  topics,
 		Logger:  s.logger,
+		Lag:     metrics.Lag(cfg.TopicPrefix),
 	})
 	logger := s.logger.With(slog.String("group", groupID))
 	defer func() {

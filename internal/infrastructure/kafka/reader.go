@@ -28,6 +28,8 @@ type Config struct {
 	// RefreshInterval — период проверки недостающих топиков; ноль — DefaultRefreshInterval.
 	RefreshInterval time.Duration
 	Logger          *slog.Logger
+	// Lag — получатель отставания по партициям; nil — отставание не считается.
+	Lag LagObserver
 }
 
 // Reader читает группой с ручным коммитом. Новая группа начинает с самого
