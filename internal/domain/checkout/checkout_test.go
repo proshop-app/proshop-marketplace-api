@@ -195,3 +195,19 @@ func TestReprice(t *testing.T) {
 		t.Fatalf("нехватка и снятые с продажи: %v", err)
 	}
 }
+
+// Номер выдаёт хранилище при первой записи: сохранённая покупка его не меняет.
+func TestAssignNumberOnlyBeforeFirstSave(t *testing.T) {
+	lines := []checkout.Line{line("t1", "p1", 1, 100)}
+	c, err := checkout.New(id, "7a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b", "key-00000001", lines, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.AssignNumber(0) || !c.AssignNumber(10000000) || !c.AssignNumber(10000001) || c.AssignNumber(10000001) {
+		t.Fatalf("номер новой покупки: %d", c.State().Number)
+	}
+	c.MarkSaved()
+	if c.AssignNumber(10000002) || c.State().Number != 10000001 {
+		t.Fatalf("номер сохранённой покупки изменился: %d", c.State().Number)
+	}
+}

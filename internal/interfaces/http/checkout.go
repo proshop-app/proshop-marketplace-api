@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
@@ -92,7 +93,7 @@ type selectionJSON struct {
 	Address         string `json:"address"`
 }
 
-// checkoutJSON — покупка; суммы — рубли из согласованного снимка.
+// checkoutJSON — покупка; суммы — рубли из согласованного снимка, номер — строкой: это обозначение, не величина.
 type checkoutJSON struct {
 	Recipient            *checkout.Contact   `json:"recipient,omitempty"`
 	Carriers             []string            `json:"carriers"`
@@ -100,6 +101,7 @@ type checkoutJSON struct {
 	PaymentStarted       bool                `json:"paymentStarted"`
 	CreationComplete     bool                `json:"creationComplete"`
 	ID                   string              `json:"id"`
+	Number               string              `json:"number"`
 	Status               string              `json:"status"`
 	Groups               []checkoutGroupJSON `json:"groups"`
 	Delivery             *selectionJSON      `json:"delivery"`
@@ -146,6 +148,7 @@ func toCheckoutJSON(state checkout.State) (checkoutJSON, error) {
 		PaymentStarted:       state.PaymentStarted,
 		ConfirmationRequired: purchase.NeedsConfirmation(),
 		ID:                   string(state.ID),
+		Number:               strconv.FormatInt(state.Number, 10),
 		CreationComplete:     purchase.CreationComplete(),
 		Status:               string(state.Status),
 		Groups:               make([]checkoutGroupJSON, 0, len(state.Groups)),

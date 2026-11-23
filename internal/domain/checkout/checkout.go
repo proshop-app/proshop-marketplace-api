@@ -136,6 +136,8 @@ type State struct {
 	// PaymentStarted запрещает отмену, пока неизвестен результат уже отправленной оплаты.
 	PaymentStarted bool
 	ID             ids.UUID
+	// Number — номер покупки для покупателя; выдаёт хранилище при первой записи, дальше не меняется.
+	Number         int64
 	BuyerID        ids.UUID
 	IdempotencyKey string
 	Status         Status
@@ -241,6 +243,17 @@ func (c *Checkout) MarkSaved() { c.origin.status, c.origin.version = c.state.Sta
 
 // ID — покупка.
 func (c *Checkout) ID() ids.UUID { return c.state.ID }
+
+// AssignNumber принимает номер, выданный хранилищем при первой записи. Номер получает только
+// ещё не сохранённая покупка: у сохранённой он неизменен, повтор транзакции заменяет невыданный.
+func (c *Checkout) AssignNumber(number int64) bool {
+	if c.origin.version != 0 || number <= 0 || c.state.Number == number {
+		return false
+	}
+	c.state.Number = number
+
+	return true
+}
 
 // BuyerID — покупатель.
 func (c *Checkout) BuyerID() ids.UUID { return c.state.BuyerID }
