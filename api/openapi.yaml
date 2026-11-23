@@ -3506,6 +3506,30 @@ paths:
               schema: { $ref: "#/components/schemas/PurchaseList" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+  /api/v1/buyer/pickup-history:
+    get:
+      tags: [checkout]
+      summary: Пункты выдачи прошлых заказов покупателя для подсказки на оформлении
+      description: >-
+        Пункты покупок, по которым создан хотя бы один заказ магазина: без повторов
+        (служба и код пункта), свежие первыми, не больше 5. Без снимков покупок и товаров.
+      operationId: listBuyerPickupHistory
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      responses:
+        "200":
+          description: Ответ; Cache-Control private, no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 5
+                    items: { $ref: "#/components/schemas/Selection" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/operator/checkouts:
     get:
       tags: [operator]

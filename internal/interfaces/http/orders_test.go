@@ -150,6 +150,19 @@ func TestBuyerOrdersAndReturnTrustShopEvent(t *testing.T) {
 	if cabinet.status != http.StatusOK || len(items) != 1 {
 		t.Fatalf("кабинет: %+v", cabinet)
 	}
+	history := e.session(t, http.MethodGet, "/api/v1/buyer/pickup-history", "", cookie)
+	points, _ := history.body["items"].([]any)
+	if history.status != http.StatusOK || len(points) != 1 ||
+		history.header.Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("история пунктов: %+v", history)
+	}
+	if point, _ := points[0].(map[string]any); point["pickupPointCode"] != "P1" || point["address"] != "Адрес" {
+		t.Fatalf("пункт прошлого заказа: %+v", point)
+	}
+	if anonymous := e.session(t, http.MethodGet, "/api/v1/buyer/pickup-history", "", ""); anonymous.status !=
+		http.StatusUnauthorized {
+		t.Fatalf("история пунктов только после входа: %+v", anonymous)
+	}
 	groupURL := path + "/groups/" + string(state.Groups[0].TenantID)
 	if r := e.session(t, http.MethodPost, groupURL+"/return-request", `{"reason":"not_fit"}`, cookie); r.status !=
 		http.StatusConflict {

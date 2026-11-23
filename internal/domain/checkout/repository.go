@@ -39,6 +39,8 @@ type ReconcileCursor struct {
 // Repository — покупки.
 type Repository interface {
 	List(context.Context, Filter) ([]*Checkout, error)
+	// PickupHistory — пункты выдачи, куда покупателю создавались заказы: без повторов, свежие первыми.
+	PickupHistory(ctx context.Context, buyerID ids.UUID, limit int) ([]Selection, error)
 	// Get — покупка; нет — ErrNotFound.
 	Get(ctx context.Context, id ids.UUID) (*Checkout, error)
 	// ByKey — покупка покупателя по ключу идемпотентности; нет — ErrNotFound.

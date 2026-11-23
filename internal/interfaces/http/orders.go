@@ -62,6 +62,20 @@ func (h *checkoutHandlers) orders(w http.ResponseWriter, r *http.Request) {
 	h.respondList(w, r, states)
 }
 
+// pickupHistory — пункты выдачи прошлых заказов для подсказки на оформлении, без снимков покупок.
+func (h *checkoutHandlers) pickupHistory(w http.ResponseWriter, r *http.Request) {
+	points, err := h.checkouts.PickupHistory(r.Context(), BuyerID(r.Context()))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	items := make([]selectionJSON, 0, len(points))
+	for _, point := range points {
+		items = append(items, toSelectionJSON(point))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
 func (h *checkoutHandlers) operatorList(w http.ResponseWriter, r *http.Request) {
 	after, err := orderCursor(r)
 	if err != nil {

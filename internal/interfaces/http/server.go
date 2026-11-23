@@ -705,6 +705,12 @@ func routes(deps Deps) []route {
 			signedIn(checkouts.paymentReturn),
 		},
 		{readRequest, http.MethodGet, "/api/v1/orders", signedIn(checkouts.orders)},
+		{
+			readRequest,
+			http.MethodGet,
+			"/api/v1/buyer/pickup-history",
+			privateBuyer(signedIn(checkouts.pickupHistory)),
+		},
 		{backgroundRequest, http.MethodGet, "/api/v1/operator/checkouts", operator(checkouts.operatorList)},
 
 		{backgroundRequest, http.MethodGet, synonymSnapshotPath, reader(synonyms.snapshot)},
