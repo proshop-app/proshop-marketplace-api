@@ -148,8 +148,12 @@ pgx по умолчанию работает в `QueryExecModeCacheStatement`: �
 
 Скрипт — [`deploy/postgres/class-roles.sql`](../deploy/postgres/class-roles.sql), выполняет
 администратор базы, не сервис. Группа `marketplace_app` (без входа) получает только права
-на данные: `SELECT, INSERT, UPDATE, DELETE` таблиц, `USAGE, SELECT, UPDATE` последовательностей
-и те же права по умолчанию на объекты, которые создадут миграции владельца `marketplace`.
+на данные во всех схемах приложения (`public`, `reference` и любая следующая — скрипт обходит
+схемы базы, а не перечисляет их): `USAGE` схемы, `SELECT, INSERT, UPDATE, DELETE` таблиц,
+`USAGE, SELECT, UPDATE` последовательностей. Те же права выданы по умолчанию — без привязки
+к схеме — на таблицы, последовательности и схемы, которые создадут миграции владельца
+`marketplace`: новой миграции повторный запуск скрипта не нужен. Сторож —
+`TestClassRolesReachEverySchema`: применяет скрипт к базе с миграциями и проверяет каждую схему.
 Роли классов `marketplace_read`, `marketplace_checkout`, `marketplace_ingestion`,
 `marketplace_background`, `marketplace_orders` — с входом, члены группы, со сроками класса.
 Пароли — CloudNativePG managed roles (`spec.managed.roles`, `passwordSecret` типа
