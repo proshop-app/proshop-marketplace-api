@@ -18,9 +18,10 @@ const pricingConcurrency = 8
 // SetPromo сохраняет код группы или удаляет его при пустом значении.
 func (s *Service) SetPromo(ctx context.Context, buyer ids.UUID, tenant ids.TenantID, code string) (cart.State, error) {
 	removing := strings.TrimSpace(code) == ""
-	return s.change(ctx, buyer, tenant, ids.OfferID{}, removing, nil, func(c *cart.Cart, now time.Time) (bool, error) {
+	promo := func(c *cart.Cart, now time.Time) (bool, error) {
 		return c.SetPromo(tenant, code, now, s.ttl)
-	})
+	}
+	return s.change(ctx, cartChange{buyer: buyer, tenant: tenant, removing: removing, mutate: promo})
 }
 
 // PriceGroups получает единый снимок цены и скидок вне транзакции.

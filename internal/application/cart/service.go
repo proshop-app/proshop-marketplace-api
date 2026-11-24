@@ -20,6 +20,17 @@ const allTenants ids.TenantID = ""
 // ErrSellerUnreachable — магазин не ответил на перепроверку.
 var ErrSellerUnreachable = errs.New(errs.Unavailable, "cart.seller_unreachable", "магазин не ответил, попробуйте позже")
 
+// cartChange — одно изменение корзины: чья, какой магазин перепроверить, какое предложение принято,
+// удаление ли это, что прочитать в транзакции корзины и как изменить агрегат.
+type cartChange struct {
+	buyer    ids.UUID
+	tenant   ids.TenantID
+	accepted ids.OfferID
+	removing bool
+	read     func(context.Context, ports.Tx) error
+	mutate   func(*cart.Cart, time.Time) (bool, error)
+}
+
 // Service — корзина: изменения сверяются с проекцией каталога в PostgreSQL, перед
 // оформлением цены и наличие перепроверяются у магазинов. Поиск корзине не нужен.
 type Service struct {
@@ -86,7 +97,7 @@ func (s *Service) Add(ctx context.Context, buyerID ids.UUID, offerID ids.OfferID
 		return true, c.Add(offer, quantity, now, s.ttl)
 	}
 
-	return s.change(ctx, buyerID, offerID.Tenant, offerID, false, read, add)
+	return s.change(ctx, cartChange{buyer: buyerID, tenant: offerID.Tenant, accepted: offerID, read: read, mutate: add})
 }
 
 // SetQuantity задаёт количество; ноль убирает строку.
@@ -114,7 +125,7 @@ func (s *Service) SetQuantity(
 		return true, c.SetQuantity(offer, quantity, now, s.ttl)
 	}
 
-	return s.change(ctx, buyerID, offerID.Tenant, offerID, false, read, set)
+	return s.change(ctx, cartChange{buyer: buyerID, tenant: offerID.Tenant, accepted: offerID, read: read, mutate: set})
 }
 
 // Remove убирает строку.
@@ -123,84 +134,97 @@ func (s *Service) Remove(ctx context.Context, buyerID ids.UUID, offerID ids.Offe
 		return c.Remove(offerID, now, s.ttl), nil
 	}
 
-	return s.change(ctx, buyerID, offerID.Tenant, ids.OfferID{}, true, nil, remove)
+	return s.change(ctx, cartChange{buyer: buyerID, tenant: offerID.Tenant, removing: true, mutate: remove})
 }
 
 // Verify перепрашивает у каждого магазина цену и наличие позиций и помечает строки.
 func (s *Service) Verify(ctx context.Context, buyerID ids.UUID) (cart.State, error) {
 	verify := func(*cart.Cart, time.Time) (bool, error) { return false, nil }
 
-	return s.change(ctx, buyerID, allTenants, ids.OfferID{}, false, nil, verify)
+	return s.change(ctx, cartChange{buyer: buyerID, tenant: allTenants, mutate: verify})
 }
 
-func (s *Service) change(
-	ctx context.Context,
-	buyerID ids.UUID,
-	tenant ids.TenantID,
-	accepted ids.OfferID,
-	removing bool,
-	read func(context.Context, ports.Tx) error,
-	mutate func(*cart.Cart, time.Time) (bool, error),
-) (cart.State, error) {
-	var c *cart.Cart
+// change проводит изменение корзины: чтение корзины и предложения, изменение агрегата, цены
+// магазинов, сверка принятого предложения и сохранение.
+func (s *Service) change(ctx context.Context, request cartChange) (cart.State, error) {
 	now := s.clock.Now()
-	// Предложение читается в той же транзакции, что и корзина: одним запросом к проекции.
-	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		if read != nil {
-			if err := read(ctx, tx); err != nil {
-				return err
-			}
-		}
-		var err error
-		c, err = tx.Carts().ByBuyer(ctx, buyerID)
-		if errors.Is(err, cart.ErrNotFound) {
-			c, err = cart.New(s.ids.NewUUID(), buyerID, now, s.ttl), nil
-		}
-		return err
-	})
+	c, err := s.load(ctx, request, now)
 	if err != nil {
 		return cart.State{}, err
 	}
 	reset := c.ResetIfExpired(now, s.ttl)
-	changed, err := mutate(c, now)
+	changed, err := request.mutate(c, now)
 	if err != nil {
 		return cart.State{}, err
 	}
 	// Повтор удаления не меняет корзину и не требует доступности магазина.
-	if removing && !changed && !reset {
+	if request.removing && !changed && !reset {
 		return c.State(), nil
 	}
-	var groups []cart.Group
-	for _, group := range c.Groups() {
-		if tenant == allTenants || group.TenantID == tenant {
-			groups = append(groups, group)
-		}
-	}
-	results, err := PriceGroups(ctx, s.platform, groups)
+	results, err := PriceGroups(ctx, s.platform, groupsOf(c, request.tenant))
 	// Удаление должно работать и при отказе магазина; оставшиеся скидки уже сброшены агрегатом.
-	if err != nil && !removing {
+	if err != nil && !request.removing {
 		return cart.State{}, err
 	}
+	if err := s.acceptOffer(c, request.accepted, results, now); err != nil {
+		return cart.State{}, err
+	}
+	// Цены и скидки магазинов меняют агрегат при сохранении: состояние читается после него.
+	err = s.save(ctx, c, results, changed, reset, now)
+	return c.State(), err
+}
+
+// load читает корзину покупателя и, если нужно, предложение — в одной транзакции.
+func (s *Service) load(ctx context.Context, request cartChange, now time.Time) (*cart.Cart, error) {
+	var c *cart.Cart
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		if request.read != nil {
+			if err := request.read(ctx, tx); err != nil {
+				return err
+			}
+		}
+		var err error
+		c, err = tx.Carts().ByBuyer(ctx, request.buyer)
+		if errors.Is(err, cart.ErrNotFound) {
+			c, err = cart.New(s.ids.NewUUID(), request.buyer, now, s.ttl), nil
+		}
+		return err
+	})
+	return c, err
+}
+
+// acceptOffer сверяет только что принятое предложение с ответом магазина: цена и остаток — его.
+func (s *Service) acceptOffer(
+	c *cart.Cart,
+	accepted ids.OfferID,
+	results map[ids.TenantID]ports.GroupPricing,
+	now time.Time,
+) error {
 	for _, line := range c.Lines() {
 		if line.Offer != accepted {
 			continue
 		}
-		item, found := ports.ItemCheck{}, false
-		for _, check := range results[accepted.Tenant].Items {
-			if check.ProductID == accepted.Product {
-				item, found = check, true
-				break
-			}
-		}
+		item, found := itemCheck(results[accepted.Tenant], accepted.Product)
 		if !found || !item.Exists {
-			return cart.State{}, cart.ErrOfferUnavailable
+			return cart.ErrOfferUnavailable
 		}
 		offer := cart.Offer{ID: accepted, Name: line.Name, Price: item.Price, Available: item.Available, Visible: true}
 		if err := c.SetQuantity(offer, line.Quantity, now, s.ttl); err != nil {
-			return cart.State{}, err
+			return err
 		}
 	}
-	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	return nil
+}
+
+// save применяет цены и скидки магазинов и сохраняет корзину, если она изменилась.
+func (s *Service) save(
+	ctx context.Context,
+	c *cart.Cart,
+	results map[ids.TenantID]ports.GroupPricing,
+	changed, reset bool,
+	now time.Time,
+) error {
+	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		for tenant, result := range results {
 			pricesChanged := c.Apply(pricingChecks(tenant, result), now, s.ttl)
 			promo := cart.PromoCode{}
@@ -216,7 +240,26 @@ func (s *Service) change(
 		}
 		return nil
 	})
-	return c.State(), err
+}
+
+// groupsOf — группы магазина изменения или все группы при перепроверке корзины.
+func groupsOf(c *cart.Cart, tenant ids.TenantID) []cart.Group {
+	var groups []cart.Group
+	for _, group := range c.Groups() {
+		if tenant == allTenants || group.TenantID == tenant {
+			groups = append(groups, group)
+		}
+	}
+	return groups
+}
+
+func itemCheck(result ports.GroupPricing, product ids.ProductID) (ports.ItemCheck, bool) {
+	for _, check := range result.Items {
+		if check.ProductID == product {
+			return check, true
+		}
+	}
+	return ports.ItemCheck{}, false
 }
 
 // offer — предложение из проекции каталога, как его видит покупатель сейчас: видимость и цена

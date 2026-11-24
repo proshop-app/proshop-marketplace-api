@@ -196,3 +196,29 @@ func TestApplyStockAndPrice(t *testing.T) {
 		t.Fatalf("ожидалось ErrInvalidSignal, получено %v", err)
 	}
 }
+
+// Два остатка одной позиции с одним временем публикации и разными значениями: повторная доставка
+// хвоста перезаписывает остаток первым значением, затем вторым — лишняя запись и задача, но итог
+// сходится к последнему событию, а невзятая задача синхронизации склеивается.
+func TestStockRedeliveryWithEqualTimeConverges(t *testing.T) {
+	store := fake.NewStore()
+	projector := appcatalog.NewProjector(store, fake.NewClock(t1), nil)
+	ctx := context.Background()
+	first := appcatalog.StockEvent{TenantID: "t1", ProductID: "p1", Stock: catalog.StockSignal{Available: 1, At: t1}}
+	second := first
+	second.Stock.Available = 2
+	for range 2 {
+		for _, event := range []appcatalog.StockEvent{first, second} {
+			if err := projector.ApplyStock(ctx, event); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	signals, _ := store.Signals("t1", "p1")
+	if signals.Available != 2 || signals.Version != 4 {
+		t.Fatalf("итог остатка: %+v", signals)
+	}
+	if rows := store.OutboxRows(); len(rows) != 1 {
+		t.Fatal("невзятая задача синхронизации склеивается", rows)
+	}
+}
