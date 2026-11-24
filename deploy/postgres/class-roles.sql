@@ -41,10 +41,32 @@ ALTER ROLE marketplace_orders SET idle_in_transaction_session_timeout = '5s';
 
 -- Только данные: схему меняют миграции под владельцем marketplace по прямому адресу.
 GRANT CONNECT ON DATABASE marketplace TO marketplace_app;
-GRANT USAGE ON SCHEMA public TO marketplace_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO marketplace_app;
-GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO marketplace_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE marketplace IN SCHEMA public
+
+-- Права на всё, что уже создано, — по каждой схеме приложения (public, reference и любая следующая):
+-- список схем здесь не перечисляется, чтобы новая схема миграции не осталась без прав.
+DO $$
+DECLARE
+    app_schema text;
+BEGIN
+    FOR app_schema IN
+        SELECT nspname FROM pg_namespace
+        WHERE nspname NOT LIKE 'pg\_%' AND nspname <> 'information_schema'
+    LOOP
+        EXECUTE format('GRANT USAGE ON SCHEMA %I TO marketplace_app', app_schema);
+        EXECUTE format(
+            'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO marketplace_app',
+            app_schema
+        );
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA %I TO marketplace_app', app_schema);
+    END LOOP;
+END
+$$;
+
+-- Права на то, что миграции создадут позже, — без привязки к схеме: новая таблица, последовательность
+-- или схема владельца marketplace доступна ролям классов сразу, без повторного запуска скрипта.
+ALTER DEFAULT PRIVILEGES FOR ROLE marketplace
+    GRANT USAGE ON SCHEMAS TO marketplace_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE marketplace
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO marketplace_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE marketplace IN SCHEMA public
+ALTER DEFAULT PRIVILEGES FOR ROLE marketplace
     GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO marketplace_app;
