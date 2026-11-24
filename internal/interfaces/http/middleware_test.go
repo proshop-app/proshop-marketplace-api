@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -44,10 +45,12 @@ func TestUnavailableMapsTo503(t *testing.T) {
 	}
 }
 
-func TestObserveRecoversPanic(t *testing.T) {
+func TestObserveRecoversPanicWithStackAndMetric(t *testing.T) {
+	var logs bytes.Buffer
+	registry := prometheus.NewRegistry()
 	handler := observe(
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
-		newHTTPMetrics(prometheus.NewRegistry()),
+		slog.New(slog.NewJSONHandler(&logs, nil)),
+		newHTTPMetrics(registry),
 		http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("сбой") }),
 	)
 
@@ -57,6 +60,53 @@ func TestObserveRecoversPanic(t *testing.T) {
 	if recorder.Code != http.StatusInternalServerError || recorder.Header().Get(headerRequestID) == "" {
 		t.Fatalf("паника — 500 с идентификатором запроса: %d", recorder.Code)
 	}
+	journal := logs.String()
+	if !strings.Contains(journal, `"stack":"goroutine`) || !strings.Contains(journal, `"requestId":`) {
+		t.Fatalf("стек паники в журнале с requestId: %s", journal)
+	}
+	if got := panicMetric(t, registry); got != 1 {
+		t.Fatalf("метрика паник HTTP: %v", got)
+	}
+}
+
+func TestObserveAbortsResponseOnAbortHandlerAndLateWrite(t *testing.T) {
+	cases := map[string]http.HandlerFunc{
+		"abort": func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) },
+		"late": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			panic("сбой после начала ответа")
+		},
+	}
+	for name, next := range cases {
+		t.Run(name, func(t *testing.T) {
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			handler := observe(logger, newHTTPMetrics(prometheus.NewRegistry()), next)
+			defer func() {
+				recovered, _ := recover().(error)
+				if !errors.Is(recovered, http.ErrAbortHandler) {
+					t.Fatalf("ответ обрывается штатно для net/http: %v", recovered)
+				}
+			}()
+			handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+		})
+	}
+}
+
+func panicMetric(t *testing.T, registry *prometheus.Registry) float64 {
+	t.Helper()
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := 0.0
+	for _, family := range families {
+		if family.GetName() == "marketplace_http_panics_total" {
+			for _, metric := range family.GetMetric() {
+				total += metric.GetCounter().GetValue()
+			}
+		}
+	}
+	return total
 }
 
 func TestObserveLogsBuyer(t *testing.T) {
