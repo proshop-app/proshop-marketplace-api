@@ -237,7 +237,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		s.store.index,
 		now,
 		indexBatch,
-		postgres.NewIndexRebuildLock(background),
+		postgres.NewIndexRebuildLock(s.store.sessions),
 		models,
 		cfg.Settings.StoreCardRefreshDelay,
 	)
@@ -502,7 +502,9 @@ func (s *server) jobs() []jobs.Loop {
 		}},
 		{Name: "promotion", Run: jobs.NewPromotionRunner(
 			s.app.promotion,
-			postgres.NewPromotionLock(s.store.pool(ports.DatabaseBackground)),
+			// Одно имя с прежней блокировкой продвижения: при выкате старые и новые реплики
+			// не пройдут тик одновременно.
+			s.schedule("uno:marketplace:promotion", cfg.Promotion.TickInterval),
 			s.logger,
 			cfg.Promotion.TickInterval,
 		).Run},
@@ -573,7 +575,7 @@ func (s *server) scheduledJobs() []jobs.Loop {
 
 // schedule — общий владелец интервала: работу выполняет одна реплика.
 func (s *server) schedule(name string, interval time.Duration) *postgres.ScheduledWork {
-	return postgres.NewScheduledWork(s.store.pool(ports.DatabaseBackground), name, interval)
+	return postgres.NewScheduledWork(s.store.pool(ports.DatabaseBackground), s.store.sessions, name, interval)
 }
 
 // orderReconciliation — суточная сверка статусов заказов; работа без класса идёт в фоновый пул.

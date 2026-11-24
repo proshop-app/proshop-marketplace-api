@@ -37,7 +37,7 @@ func enqueue(t *testing.T, uow *postgres.UnitOfWork, tenant ids.TenantID, key st
 func TestOutboxDedupClaimLease(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	ctx := context.Background()
 
 	enqueue(t, uow, "t1", "k1", 0)
@@ -84,7 +84,7 @@ func TestOutboxDedupClaimLease(t *testing.T) {
 func TestOutboxClaimIsFairAcrossTenants(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	ctx := context.Background()
 
 	for i := range 10 {
@@ -109,7 +109,7 @@ func TestOutboxClaimIsFairAcrossTenants(t *testing.T) {
 func TestOutboxConcurrentClaimsDoNotOverlap(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	ctx := context.Background()
 
 	for i := range 40 {
@@ -166,7 +166,7 @@ func TestOutboxConcurrentClaimsDoNotOverlap(t *testing.T) {
 func TestInboxParkedRetention(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	ctx := context.Background()
 
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -218,7 +218,7 @@ func TestInboxParkedRetention(t *testing.T) {
 	}
 	enqueue(t, uow, "t1", "b", 0)
 
-	result, err := postgres.NewRetention(pool).Purge(ctx, ports.PurgeRequest{
+	result, err := postgres.NewRetention(postgres.Single(pool)).Purge(ctx, ports.PurgeRequest{
 		ProcessedBefore:  at(10),
 		OutboxDoneBefore: at(10),
 		ParkedBefore:     at(10),

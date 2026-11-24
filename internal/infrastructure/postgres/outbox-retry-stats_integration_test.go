@@ -36,7 +36,7 @@ func TestRetryStatsExcludeFirstLeasesCompletedAndQuarantine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stats, err := postgres.NewTaskQueue(pool).RetryStats(ctx)
+	stats, err := postgres.NewTaskQueue(postgres.Single(pool)).RetryStats(ctx)
 	if err != nil || len(stats) != 2 {
 		t.Fatal(stats, err)
 	}

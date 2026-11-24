@@ -1,0 +1,31 @@
+# PgBouncer площадки перед кластером marketplace-pg (CloudNativePG 1.28, PgBouncer 1.25.1).
+# Обоснование значений — docs/postgres-connections.md, раздел «Пулер».
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: marketplace-pg-pooler-rw
+  namespace: data
+spec:
+  cluster:
+    name: marketplace-pg
+  # Два экземпляра — выкат и потеря узла не останавливают площадку: CNPG останавливает под
+  # SIGINT (SHUTDOWN WAIT_FOR_SERVERS), клиенты переподключаются ко второму. Пул серверных
+  # соединений у каждого экземпляра свой: на класс — 2 × default_pool_size.
+  instances: 2
+  type: rw
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      # Клиенты — pgxpool реплик API: до 65 соединений на реплику; при трёх репликах — 195,
+      # и все могут прийти в один экземпляр, пока второй перезапускается. 1000 — до 15 реплик.
+      max_client_conn: "1000"
+      # Пул на пару роль/база: у каждого класса нагрузки своя роль, значит свой пул.
+      # 6 серверных соединений на класс на реплику пулера — 12 на класс всего.
+      default_pool_size: "6"
+      # Потолок базы на реплику пулера = 5 классов × default_pool_size. Ниже суммы он
+      # отнимал бы соединения одного класса у другого: простаивающее серверное соединение
+      # класса держит место до server_idle_timeout.
+      max_db_connections: "30"
+      # Не меньше кэша описаний pgx (StatementCacheCapacity 512): подготовленные запросы
+      # протокола не вытесняются на серверном соединении и не готовятся заново.
+      max_prepared_statements: "512"

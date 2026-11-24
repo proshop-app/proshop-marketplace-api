@@ -24,8 +24,8 @@ const (
 	retentionBatch = 1000
 	// keyPrefix — префикс ключей маркетплейса в Redis.
 	keyPrefix = "marketplace:"
-	// maxProcessConnections — потолок суммы пулов процесса: столько соединений
-	// реплика может держать в PostgreSQL одновременно, не считая advisory lock.
+	// maxProcessConnections — потолок суммы пулов процесса: столько клиентских соединений
+	// реплика может держать к базе или пулеру одновременно, не считая сеансов блокировок.
 	maxProcessConnections = 1000
 	// outboxHandlerTimeout — срок обработчика задачи outbox. Самый долгий вызов внутри —
 	// служебная запись в поиск (searchapi.ServiceTimeout), запас — на чтение и запись
@@ -33,10 +33,11 @@ const (
 	outboxHandlerTimeout = searchapi.ServiceTimeout + 5*time.Second
 )
 
-// storage — пулы базы по классам нагрузки и API поиска.
+// storage — пулы базы по классам нагрузки, прямые сеансы под блокировки и API поиска.
 type storage struct {
-	pools *postgres.Pools
-	index *searchapi.Index
+	pools    *postgres.Pools
+	sessions *postgres.DirectSessions
+	index    *searchapi.Index
 }
 
 // openStorage подключает пулы PostgreSQL по классам нагрузки и API поиска. Поиск
@@ -46,7 +47,13 @@ func openStorage(ctx context.Context, cfg config.Config) (*storage, error) {
 	if err != nil {
 		return nil, err
 	}
-	pools, err := postgres.OpenPools(ctx, cfg.Database.URL, classes)
+	// Сеанс блокировки исполняет только взятие и проверку владельца: сроки фонового класса.
+	sessions, err := postgres.NewDirectSessions(cfg.Database.Direct(), postgres.Budget(cfg.Database.Background.Budget))
+	if err != nil {
+		return nil, err
+	}
+	target := postgres.Target{URL: cfg.Database.URL, Pooled: cfg.Database.Pooled()}
+	pools, err := postgres.OpenPools(ctx, target, classes)
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +65,9 @@ func openStorage(ctx context.Context, cfg config.Config) (*storage, error) {
 	}
 
 	return &storage{
-		pools: pools,
-		index: index,
+		pools:    pools,
+		sessions: sessions,
+		index:    index,
 	}, nil
 }
 
@@ -69,8 +77,8 @@ func (s *storage) close() {
 }
 
 // pool — пул класса для хранилищ, которыми пользуется один класс нагрузки.
-func (s *storage) pool(class ports.DatabaseClass) *pgxpool.Pool {
-	return s.pools.Pool(class)
+func (s *storage) pool(class ports.DatabaseClass) *postgres.ClassPool {
+	return s.pools.Class(class)
 }
 
 // databasePools — пул на класс нагрузки; сумма пулов ограничена потолком процесса.
@@ -110,7 +118,12 @@ func databasePools(cfg config.Config) (map[ports.DatabaseClass]postgres.PoolConf
 	var total int32
 	for class, pool := range classes {
 		total += pool.MaxConns
-		pools[class] = postgres.PoolConfig{MaxConns: pool.MaxConns, Budget: postgres.Budget(pool.Budget)}
+		pools[class] = postgres.PoolConfig{
+			MaxConns: pool.MaxConns,
+			Budget:   postgres.Budget(pool.Budget),
+			User:     pool.User,
+			Password: pool.Password,
+		}
 	}
 	if total > maxProcessConnections {
 		return nil, fmt.Errorf("DATABASE_*_MAX_CONNS: сумма пулов %d больше %d", total, maxProcessConnections)
@@ -144,9 +157,10 @@ func checkOutboxLease(outbox config.Outbox) error {
 	return nil
 }
 
-// openCommandPool — небольшой пул служебной команды со сроками обслуживания.
+// openCommandPool — небольшой пул служебной команды со сроками обслуживания, по прямому
+// адресу: команды держат сеансовые блокировки.
 func openCommandPool(ctx context.Context, database config.Database) (*pgxpool.Pool, error) {
-	return postgres.OpenCommand(ctx, database.URL, postgres.Budget(database.Maintenance))
+	return postgres.OpenCommand(ctx, database.Direct(), postgres.Budget(database.Maintenance))
 }
 
 func openSearch(cfg config.Config) (*searchapi.Index, error) {

@@ -26,7 +26,7 @@ func TestIdentityMappingsWithSingleConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	mapping := postgres.NewIdentityMappings(pool, "issuer-a", "client-a")
+	mapping := postgres.NewIdentityMappings(postgres.Single(pool), "issuer-a", "client-a")
 
 	if _, err := mapping.Find(ctx, "subject"); !errors.Is(err, buyer.ErrSessionNotFound) {
 		t.Fatalf("неизвестный subject: %v", err)
@@ -56,7 +56,7 @@ func TestIdentityMappingsWithSingleConnection(t *testing.T) {
 			client: "client-b",
 		},
 	} {
-		other := postgres.NewIdentityMappings(pool, scope.issuer, scope.client)
+		other := postgres.NewIdentityMappings(postgres.Single(pool), scope.issuer, scope.client)
 		if _, err := other.Find(ctx, "subject"); !errors.Is(err, buyer.ErrSessionNotFound) {
 			t.Fatalf("scope %s/%s изолирован: %v", scope.issuer, scope.client, err)
 		}

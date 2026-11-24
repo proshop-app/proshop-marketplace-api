@@ -39,7 +39,7 @@ type scope struct {
 // NewUnitOfWork — UnitOfWork поверх одного пула с общими снимками всех его транзакций:
 // CLI и тесты, где классы нагрузки не разделяются.
 func NewUnitOfWork(pool *pgxpool.Pool) *UnitOfWork {
-	return &UnitOfWork{source: newConnectionSource(pool)}
+	return &UnitOfWork{source: newConnectionSource(Single(pool))}
 }
 
 // NewUnitOfWorkByClass — UnitOfWork процесса: транзакция берёт соединение и сроки
@@ -83,7 +83,7 @@ func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx por
 
 	scope := newScope(shared.orm, &u.snapshots)
 	if err = fn(ctx, scope); err != nil {
-		return err
+		return shared.failure(err)
 	}
 
 	if err = ctx.Err(); err != nil {

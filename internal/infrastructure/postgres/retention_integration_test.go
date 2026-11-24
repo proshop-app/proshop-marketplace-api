@@ -26,7 +26,7 @@ func TestRetentionKeepsUnresolvedEventsAndRecentDecisions(t *testing.T) {
 	if _, err := pool.Exec(ctx, seed, at(0), at(50)); err != nil {
 		t.Fatal(err)
 	}
-	result, err := postgres.NewRetention(pool).Purge(ctx, ports.PurgeRequest{
+	result, err := postgres.NewRetention(postgres.Single(pool)).Purge(ctx, ports.PurgeRequest{
 		ParkedBefore: at(10),
 		Batch:        2,
 	})

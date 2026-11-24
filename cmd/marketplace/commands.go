@@ -48,7 +48,7 @@ func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 		index,
 		clock.System{},
 		indexBatch,
-		postgres.NewIndexRebuildLock(pool),
+		postgres.NewIndexRebuildLock(postgres.DirectSessionsOf(pool)),
 		models,
 		cfg.Settings.StoreCardRefreshDelay,
 	)
@@ -159,7 +159,7 @@ func moderationReevaluate(ctx context.Context, cfg config.Config, _ *slog.Logger
 			RequireImage:    cfg.Moderation.RequireImage,
 		},
 	)
-	return postgres.NewIndexRebuildLock(pool).WithLock(ctx, service.EnqueueAll)
+	return postgres.NewIndexRebuildLock(postgres.DirectSessionsOf(pool)).WithLock(ctx, service.EnqueueAll)
 }
 
 func referenceDirectory(args []string) (string, error) {

@@ -59,7 +59,8 @@ func TestSearchSynonymsFromSeedToSnapshotAndDisable(t *testing.T) {
 	publisher := &fake.Publisher{}
 	service := app.New(uow, now, search.SynonymValidator(synonymReadToken), publisher, app.EventTopic)
 	handler := synonymHTTP(service)
-	schedule := postgres.NewScheduledWork(pool, "test-reference-synonyms", time.Minute)
+	sessions := postgres.DirectSessionsOf(pool)
+	schedule := postgres.NewScheduledWork(postgres.Single(pool), sessions, "test-reference-synonyms", time.Minute)
 
 	get := synonymRequest{method: http.MethodGet, path: snapshotURL, token: synonymReadToken}
 	empty := requestSynonyms(t, handler, get, http.StatusOK)
@@ -173,7 +174,7 @@ func assertSynonymEvents(
 ) {
 	t.Helper()
 	dispatcher := messaging.NewDispatcher(
-		postgres.NewTaskQueue(pool),
+		postgres.NewTaskQueue(postgres.Single(pool)),
 		now,
 		messaging.DispatcherConfig{
 			Batch:        10,

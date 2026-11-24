@@ -124,7 +124,7 @@ func run(args []string, output, diagnostics io.Writer) int {
 	defer stop()
 	ctx, cancel := context.WithTimeout(signalCtx, commandTimeout)
 	defer cancel()
-	pool, err := postgres.OpenCommand(ctx, database.URL, postgres.Budget(database.Maintenance))
+	pool, err := postgres.OpenCommand(ctx, database.Direct(), postgres.Budget(database.Maintenance))
 	if err != nil {
 		return failure(diagnostics, "не удалось подключиться к PostgreSQL", 1)
 	}

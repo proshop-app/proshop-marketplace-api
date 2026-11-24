@@ -72,7 +72,8 @@ func TestProjectionToIndex(t *testing.T) {
 	}
 	moderationService := appmoderation.NewService(uow, now, &fake.IDs{}, appmoderation.Config{ProbationOffers: 50})
 	projector := appcatalog.NewProjector(uow, now, moderationService)
-	indexer := appcatalog.NewIndexer(uow, index, now, 100, postgres.NewIndexRebuildLock(pool), nil, 30*time.Second)
+	lock := postgres.NewIndexRebuildLock(postgres.DirectSessionsOf(pool))
+	indexer := appcatalog.NewIndexer(uow, index, now, 100, lock, nil, 30*time.Second)
 	identities := &fake.IDs{}
 	registry := appparticipant.NewRegistry(uow, now, identities)
 	participants := appparticipant.NewService(uow, now, identities)
@@ -81,7 +82,7 @@ func TestProjectionToIndex(t *testing.T) {
 	queries := appcatalog.NewQueries(uow, index, platform, nil, nil, fake.NewClock(time.Time{}))
 	statuses := moderationstatus.NewService(uow, now, &fake.Publisher{}, "offer", "participant")
 	dispatcher := messaging.NewDispatcher(
-		postgres.NewTaskQueue(pool),
+		postgres.NewTaskQueue(postgres.Single(pool)),
 		now,
 		messaging.DispatcherConfig{
 			Batch:     50,

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
@@ -32,7 +31,7 @@ type IdentityMappings struct {
 }
 
 // NewIdentityMappings отделяет mapping по issuer и backend-клиенту.
-func NewIdentityMappings(pool *pgxpool.Pool, issuer, client string) *IdentityMappings {
+func NewIdentityMappings(pool *ClassPool, issuer, client string) *IdentityMappings {
 	return &IdentityMappings{
 		source: newConnectionSource(pool),
 		issuer: issuer,

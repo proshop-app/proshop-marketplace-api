@@ -39,7 +39,8 @@ func TestPoolsApplyClassBudgetsAndQuotas(t *testing.T) {
 	ctx := context.Background()
 	fast := postgres.Budget{Statement: 75 * time.Millisecond, Transaction: 300 * time.Millisecond}
 	slow := postgres.Budget{Statement: 10 * time.Second, Transaction: 30 * time.Second}
-	pools, err := postgres.OpenPools(ctx, database.Config().ConnString(), map[ports.DatabaseClass]postgres.PoolConfig{
+	target := postgres.Target{URL: database.Config().ConnString()}
+	pools, err := postgres.OpenPools(ctx, target, map[ports.DatabaseClass]postgres.PoolConfig{
 		ports.DatabaseRead:       {MaxConns: 1, Budget: fast},
 		ports.DatabaseCheckout:   {MaxConns: 1, Budget: slow},
 		ports.DatabaseIngestion:  {MaxConns: 1, Budget: slow},

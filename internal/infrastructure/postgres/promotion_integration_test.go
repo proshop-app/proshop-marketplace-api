@@ -342,7 +342,7 @@ func TestPromotionMigrationAndQueries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	retention := postgres.NewRetention(pool)
+	retention := postgres.NewRetention(postgres.Single(pool))
 	result, err := retention.Purge(ctx, ports.PurgeRequest{
 		PromotionBefore: time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC),
 		Batch:           100,

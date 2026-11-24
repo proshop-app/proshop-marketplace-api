@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -70,7 +69,7 @@ type ModelKeyStats struct {
 }
 
 // NewModelKeyStats создаёт источник статистики ключей модели.
-func NewModelKeyStats(pool *pgxpool.Pool) *ModelKeyStats {
+func NewModelKeyStats(pool *ClassPool) *ModelKeyStats {
 	return &ModelKeyStats{
 		source: newConnectionSource(pool),
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -51,7 +50,7 @@ type Retention struct {
 }
 
 // NewRetention — чистка поверх пула.
-func NewRetention(pool *pgxpool.Pool) *Retention {
+func NewRetention(pool *ClassPool) *Retention {
 	return &Retention{source: newConnectionSource(pool)}
 }
 

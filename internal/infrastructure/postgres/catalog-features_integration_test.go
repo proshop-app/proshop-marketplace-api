@@ -113,7 +113,7 @@ func TestCatalogRecommendationsProjection(t *testing.T) {
 	ctx := context.Background()
 	seedRecommendationTenant(t, uow, "t1")
 	seedRecommendationTenant(t, uow, "t2")
-	repository := postgres.NewCatalogFeatures(pool)
+	repository := postgres.NewCatalogFeatures(postgres.Single(pool))
 	low, high := int64(6000), int64(14000)
 	filter := ports.RecommendationFilter{
 		Categories:  []string{"c1"},
@@ -277,7 +277,7 @@ func TestRecommendationsCollapseGroupsAndGeneratedColumns(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	repository := postgres.NewCatalogFeatures(pool)
+	repository := postgres.NewCatalogFeatures(postgres.Single(pool))
 	states, err := repository.Recommend(ctx, ports.RecommendationFilter{Categories: []string{"c2"}, Limit: 20})
 	if err != nil || len(states) != 1 || states[0].Product.State().Card.VariantsID != "v1" ||
 		states[0].Product.State().ProductID != "p2" {
@@ -305,7 +305,7 @@ func TestInterestsIncludeUnpaidOrders(t *testing.T) {
 	if _, err := pool.Exec(ctx, seedInterestOrder, string(buyerA)); err != nil {
 		t.Fatal(err)
 	}
-	repository := postgres.NewCatalogFeatures(pool)
+	repository := postgres.NewCatalogFeatures(postgres.Single(pool))
 	for _, status := range []string{"awaiting_payment", "creating_order"} {
 		if _, err := pool.Exec(ctx, updateInterestStatus, string(buyerA), status); err != nil {
 			t.Fatal(err)
@@ -330,7 +330,7 @@ func TestFavoriteCategoryProducesPersonalRecommendations(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	repository := postgres.NewCatalogFeatures(pool)
+	repository := postgres.NewCatalogFeatures(postgres.Single(pool))
 	interests, err := repository.Interests(ctx, buyerA)
 	if err != nil || len(interests.Categories) != 1 || interests.Categories[0] != "c1" ||
 		len(interests.Purchased) != 0 {
@@ -371,7 +371,7 @@ func TestRecommendationTenantDiversity(t *testing.T) {
 			if _, err := pool.Exec(ctx, dominantRecommendationSales); err != nil {
 				t.Fatal(err)
 			}
-			repository := postgres.NewCatalogFeatures(pool)
+			repository := postgres.NewCatalogFeatures(postgres.Single(pool))
 			for _, categories := range [][]string{nil, {"c1"}} {
 				states, err := repository.Recommend(ctx, ports.RecommendationFilter{Categories: categories, Limit: 20})
 				if err != nil || len(states) != 20 {
@@ -411,7 +411,7 @@ func TestViewedCategoriesAndGuestRecommendations(t *testing.T) {
 	ctx := context.Background()
 	seedRecommendationTenant(t, uow, "t1")
 	seedRecommendationTenant(t, uow, "t2")
-	repository := postgres.NewCatalogFeatures(pool)
+	repository := postgres.NewCatalogFeatures(postgres.Single(pool))
 	viewed := []ids.OfferID{
 		{Tenant: "t1", Product: "p1"},
 		{Tenant: "missing", Product: "p1"},
@@ -457,7 +457,7 @@ func TestRecommendationStableTieOrder(t *testing.T) {
 	if _, err := pool.Exec(ctx, equalRecommendationSignals); err != nil {
 		t.Fatal(err)
 	}
-	repository := postgres.NewCatalogFeatures(pool)
+	repository := postgres.NewCatalogFeatures(postgres.Single(pool))
 	for i := 0; i < 2; i++ {
 		states, err := repository.Recommend(ctx, ports.RecommendationFilter{Limit: 1})
 		if err != nil || len(states) != 1 {
@@ -474,7 +474,7 @@ func TestRecommendationLimitsCandidatesBeforeVariantCollapse(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
 	seedRecommendationProducts(t, uow, "t1", 240)
-	repository := postgres.NewCatalogFeatures(pool)
+	repository := postgres.NewCatalogFeatures(postgres.Single(pool))
 	for _, categories := range [][]string{nil, {"c1"}} {
 		states, err := repository.Recommend(context.Background(), ports.RecommendationFilter{
 			Categories: categories,

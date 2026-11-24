@@ -14,7 +14,7 @@ import (
 
 func TestOutboxBatchResolvesAtomicallyAndCountsReady(t *testing.T) {
 	pool := testPool(t)
-	uow, queue := postgres.NewUnitOfWork(pool), postgres.NewTaskQueue(pool)
+	uow, queue := postgres.NewUnitOfWork(pool), postgres.NewTaskQueue(postgres.Single(pool))
 	ctx := context.Background()
 	for n := range 3 {
 		enqueue(t, uow, "t1", fmt.Sprintf("k%d", n), 0)
@@ -66,7 +66,7 @@ func TestOutboxBatchResolvesAtomicallyAndCountsReady(t *testing.T) {
 
 func TestOutboxBatchInterleavesBeforeLimit(t *testing.T) {
 	pool := testPool(t)
-	uow, queue := postgres.NewUnitOfWork(pool), postgres.NewTaskQueue(pool)
+	uow, queue := postgres.NewUnitOfWork(pool), postgres.NewTaskQueue(postgres.Single(pool))
 	for n := range 10 {
 		enqueue(t, uow, "t1", fmt.Sprintf("n%d", n), 0)
 	}

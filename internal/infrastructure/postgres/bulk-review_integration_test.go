@@ -37,7 +37,7 @@ func TestBulkBacklogDoesNotOccupyDispatcherPass(t *testing.T) {
 	var waiting time.Time
 	var quietDelay time.Duration
 	d := messaging.NewDispatcher(
-		postgres.NewTaskQueue(pool),
+		postgres.NewTaskQueue(postgres.Single(pool)),
 		clock.System{},
 		messaging.DispatcherConfig{
 			Batch:     200,
@@ -107,7 +107,7 @@ func TestBulkIdempotencyRetentionRemovesOldResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	future := time.Now().AddDate(1, 0, 0)
-	if _, err := postgres.NewRetention(pool).Purge(ctx, ports.PurgeRequest{
+	if _, err := postgres.NewRetention(postgres.Single(pool)).Purge(ctx, ports.PurgeRequest{
 		BulkBefore:       future,
 		ProcessedBefore:  future,
 		OutboxDoneBefore: future,
@@ -187,7 +187,7 @@ func TestBulkExpiredSelectorCannotExecuteAfterRetention(t *testing.T) {
 		t.Fatal(first, err)
 	}
 	now.Advance(31 * 24 * time.Hour)
-	purged, err := postgres.NewRetention(pool).Purge(context.Background(), ports.PurgeRequest{
+	purged, err := postgres.NewRetention(postgres.Single(pool)).Purge(context.Background(), ports.PurgeRequest{
 		BulkBefore: now.Now(),
 		Batch:      1,
 	})
@@ -215,7 +215,7 @@ func TestOutboxTenantCursorRotatesPastBusyStores(t *testing.T) {
         SELECT 'fair', 't' || (n % 8), '{}', now(), now() FROM generate_series(0, 23) n`); err != nil {
 		t.Fatal(err)
 	}
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	request := ports.ClaimRequest{
 		Now:        time.Now().Add(time.Minute),
 		Limit:      8,

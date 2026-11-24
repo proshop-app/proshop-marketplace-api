@@ -85,7 +85,7 @@ func TestModelKeyReportPlan(t *testing.T) {
 	}
 	defer reader.Close()
 	started := time.Now()
-	report, err := postgres.NewModelKeyStats(reader).Report(ctx, false)
+	report, err := postgres.NewModelKeyStats(postgres.Single(reader)).Report(ctx, false)
 	if err != nil {
 		t.Fatal(err)
 	}

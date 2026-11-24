@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -109,7 +108,7 @@ type CatalogFeatures struct {
 }
 
 // NewCatalogFeatures подключает чтение без дополнительных вызовов на каждый товар.
-func NewCatalogFeatures(pool *pgxpool.Pool) *CatalogFeatures {
+func NewCatalogFeatures(pool *ClassPool) *CatalogFeatures {
 	return &CatalogFeatures{source: newConnectionSource(pool)}
 }
 

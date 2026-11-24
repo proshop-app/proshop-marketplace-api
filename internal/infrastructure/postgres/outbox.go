@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -128,7 +127,7 @@ func (o *Outbox) Enqueue(ctx context.Context, task ports.NewTask) error {
 }
 
 // NewTaskQueue — очередь задач поверх пула.
-func NewTaskQueue(pool *pgxpool.Pool) *TaskQueue {
+func NewTaskQueue(pool *ClassPool) *TaskQueue {
 	return &TaskQueue{source: newConnectionSource(pool)}
 }
 

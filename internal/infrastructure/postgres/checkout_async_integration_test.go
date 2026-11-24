@@ -43,7 +43,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
 	seedRecommendationProducts(t, uow, "t1", 1)
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	seedBuyer(t, uow, buyerA, "79251234567")
 	ctx := context.Background()
 	clock, platform := fake.NewClock(at(0)), fake.NewPlatform()

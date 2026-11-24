@@ -68,7 +68,7 @@ func TestTaxonomyFailureQueryAndRetentionSQL(t *testing.T) {
 		t.Fatal("неактуальная ошибка попала в ответ", items, err)
 	}
 	trace.reset()
-	result, err := postgres.NewRetention(traced).Purge(ctx, ports.PurgeRequest{Batch: 2})
+	result, err := postgres.NewRetention(postgres.Single(traced)).Purge(ctx, ports.PurgeRequest{Batch: 2})
 	if err != nil || result.RevalidationFailures != 3 || len(trace.snapshot()) != 11 {
 		t.Fatal("7 штатных SQL (включая bulk retention) и 4 страницы отказов", result, err, trace.snapshot())
 	}
@@ -134,7 +134,7 @@ func TestTaxonomySuccessfulRetryRetiresFailure(t *testing.T) {
 	if err := pool.QueryRow(ctx, countRevalidationFailures).Scan(&count); err != nil || count != 1 {
 		t.Fatal("физическое удаление должно выполняться retention", count, err)
 	}
-	result, err := postgres.NewRetention(pool).Purge(ctx, ports.PurgeRequest{Batch: 1000})
+	result, err := postgres.NewRetention(postgres.Single(pool)).Purge(ctx, ports.PurgeRequest{Batch: 1000})
 	if err != nil || result.RevalidationFailures != 1 {
 		t.Fatal("retention не удалила исправленную запись", result, err)
 	}

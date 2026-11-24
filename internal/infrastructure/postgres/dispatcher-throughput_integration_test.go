@@ -41,7 +41,7 @@ func TestDispatcherPostgresThroughput(t *testing.T) {
 	if _, err := pool.Exec(ctx, throughputSeed); err != nil {
 		t.Fatal(err)
 	}
-	q := &countingClaimQueue{TaskQueue: postgres.NewTaskQueue(pool)}
+	q := &countingClaimQueue{TaskQueue: postgres.NewTaskQueue(postgres.Single(pool))}
 	var handled atomic.Int64
 	d := messaging.NewDispatcher(
 		q,
@@ -101,7 +101,7 @@ func TestDispatcherPostgresFairness(t *testing.T) {
 	var waiting time.Time
 	var quietDelay time.Duration
 	d := messaging.NewDispatcher(
-		postgres.NewTaskQueue(pool),
+		postgres.NewTaskQueue(postgres.Single(pool)),
 		clock.System{},
 		messaging.DispatcherConfig{Batch: 200, PerTenant: 200},
 		map[string]messaging.Handler{
