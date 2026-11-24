@@ -7,3 +7,6 @@
 /.scratch/
 
 /internal/infrastructure/taxonomydata/taxonomy-bundle.json
+
+# Граф знаний graphify: пересобирается локально, в репозитории не нужен
+graphify-out/
