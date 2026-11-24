@@ -83,7 +83,7 @@ func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx por
 
 	scope := newScope(shared.orm, &u.snapshots)
 	if err = fn(ctx, scope); err != nil {
-		return err
+		return shared.failure(err)
 	}
 
 	if err = ctx.Err(); err != nil {

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -10,6 +11,8 @@ import (
 	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
 const batchConnectionKey = "postgres.batch_connection"
@@ -105,7 +108,7 @@ func (s *connectionSource) withConnection(ctx context.Context, run func(context.
 	}
 	defer connection.close()
 
-	return run(ctx, connection.orm)
+	return connection.failure(run(ctx, connection.orm))
 }
 
 func (s *connectionSource) session(ctx context.Context, connection *sql.Conn) (*gorm.DB, error) {
@@ -138,6 +141,32 @@ func (s *connectionSource) session(ctx context.Context, connection *sql.Conn) (*
 	orm.Statement.ConnPool = connection
 
 	return orm, nil
+}
+
+// failure — ошибка операции на соединении. Обрыв соединения (перезапуск пулера или
+// базы, сеть) без своего класса — ErrUnavailable: вызывающие повторяют временный сбой
+// (errs.RetryKindOf), а не считают его внутренней ошибкой. Ошибка со своим классом
+// остаётся как есть, как и истёкший срок операции: pgx закрывает соединение и при отмене.
+func (connection *gormConnection) failure(err error) error {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	if _, classified := errs.As(err); classified || !connection.lost() {
+		return err
+	}
+	return ErrUnavailable.Wrap(err)
+}
+
+// lost — соединение закрыто драйвером: pgx закрывает его при потере связи и FATAL
+// сервера. database/sql, не отдающий соединение, тоже значит, что оно потеряно.
+func (connection *gormConnection) lost() bool {
+	lost := true
+	_ = connection.connection.Raw(func(driverConn any) error {
+		conn, ok := driverConn.(*stdlib.Conn)
+		lost = !ok || conn.Conn().IsClosed()
+		return nil
+	})
+	return lost
 }
 
 // close возвращает соединение пулу.
