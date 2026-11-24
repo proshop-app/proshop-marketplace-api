@@ -20,7 +20,7 @@ const projectionBatch = 50
 type lane struct {
 	idle      chan struct{}
 	jobs      chan []*delivery
-	completed chan []*delivery
+	completed chan handled
 }
 
 func (c *Consumer) runGeneration(parent context.Context) error {
@@ -33,7 +33,7 @@ func (c *Consumer) runGeneration(parent context.Context) error {
 		idle: make(chan struct{}),
 		// Раздатчик кладёт пачку только после готовности воркера, поэтому отправка не ждёт.
 		jobs:      make(chan []*delivery, c.config.Workers),
-		completed: make(chan []*delivery, c.config.Workers),
+		completed: make(chan handled, c.config.Workers),
 	}
 	c.startWorkers(ctx, cancel, &running, work)
 	running.Add(1)
@@ -61,15 +61,18 @@ func (c *Consumer) dispatch(ctx context.Context, incoming <-chan kafkago.Message
 	queue := newKeyQueue()
 	ticker := time.NewTicker(commitInterval)
 	defer ticker.Stop()
-	idle := 0
+	// idle — воркеры, ждущие задание; busy — выданные задания. Ожидающие делятся на все незанятые
+	// воркеры: пачка не забирает соседей у воркеров, которые ещё не успели объявить готовность.
+	idle, busy := 0, 0
 
 	for ctx.Err() == nil {
 		for ; idle > 0; idle-- {
-			batch := queue.take(projectionBatch, idle, c.batchable)
+			batch := queue.take(projectionBatch, max(1, c.config.Workers-busy), c.batchable)
 			if len(batch) == 0 {
 				break
 			}
 			work.jobs <- batch
+			busy++
 		}
 		select {
 		case <-ctx.Done():
@@ -82,11 +85,16 @@ func (c *Consumer) dispatch(ctx context.Context, incoming <-chan kafkago.Message
 			})
 		case <-work.idle:
 			idle++
-		case batch := <-work.completed:
-			for _, item := range batch {
+		case result := <-work.completed:
+			busy--
+			for _, item := range result.done {
 				queue.finished(item)
 				item.offset.complete()
 				c.source.Release(ctx, item.message)
+			}
+			// Неуспешное после отката — отдельным заданием, ключ остаётся за ним.
+			for _, item := range result.retry {
+				queue.retry(item)
 			}
 			commits.flush(ctx, false)
 		case <-ticker.C:
@@ -95,9 +103,10 @@ func (c *Consumer) dispatch(ctx context.Context, incoming <-chan kafkago.Message
 	}
 }
 
-// batchable — сообщение идёт в пачку снимков товаров; остальные виды разбираются по одному.
+// batchable — сообщение идёт в пачку снимков товаров; остальные виды и повтор после отката
+// пачки разбираются по одному.
 func (c *Consumer) batchable(item *delivery) bool {
-	return c.router.Batchable(strings.TrimPrefix(item.message.Topic, prefixOf(c.config.TopicPrefix)))
+	return !item.alone && c.router.Batchable(strings.TrimPrefix(item.message.Topic, prefixOf(c.config.TopicPrefix)))
 }
 
 func (c *Consumer) fetchMessages(ctx context.Context, incoming chan<- kafkago.Message) {
@@ -151,11 +160,12 @@ func (c *Consumer) work(ctx context.Context, work lane) {
 		case <-ctx.Done():
 			return
 		}
-		if c.processBatch(ctx, batch) != nil {
+		result, err := c.processBatch(ctx, batch)
+		if err != nil {
 			return
 		}
 		select {
-		case work.completed <- batch:
+		case work.completed <- result:
 		case <-ctx.Done():
 			return
 		}

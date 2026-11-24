@@ -79,8 +79,8 @@ func TestFinalCommitOnlyWhileGenerationLivesAndWithOwnDeadline(t *testing.T) {
 		progress.add(offsetMessage(0, 0)).complete()
 		progress.add(offsetMessage(0, 1)) // Незавершённая транзакция не должна быть перекрыта.
 		tail := progress.add(offsetMessage(0, 2))
-		completed := make(chan []*delivery, 1)
-		completed <- []*delivery{{offset: tail}}
+		completed := make(chan handled, 1)
+		completed <- handled{done: []*delivery{{offset: tail}}}
 		calls := 0
 		commits := &offsetCommitter{
 			progress: progress,

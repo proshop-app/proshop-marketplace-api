@@ -2,6 +2,8 @@ package kafka_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"slices"
@@ -196,5 +198,71 @@ func TestConsumerRetriesRolledBackBatchOneByOne(t *testing.T) {
 	if !slices.Equal(applied, []string{"p0", "p1", "p3"}) || len(parked) != 1 || parked[0].Offset != 2 ||
 		parked[0].Reason != invalid.Key() {
 		t.Fatal("откатившаяся пачка повторена по одному", applied, parked)
+	}
+}
+
+// Пачка из 50 откатилась из-за сообщения с вечной временной ошибкой: остальные 49 применяются
+// и фиксируются сразу, повторяется только сбойное — отдельным заданием.
+func TestRolledBackBatchReleasesAppliedMessages(t *testing.T) {
+	stuck := errors.New("временный сбой магазина")
+	projection := &batchProjection{gate: make(chan struct{})}
+	projection.fail = func(events []appcatalog.ProductEvent) error {
+		for _, event := range events {
+			if event.Snapshot.ProductID == "p13" {
+				return stuck
+			}
+		}
+		return nil
+	}
+	messages := []kafkago.Message{productMessage("p0", 1, 0)}
+	for n := 1; n <= 50; n++ {
+		message := productMessage(fmt.Sprintf("p%d", n), 1, int64(n))
+		if n == 13 {
+			// Сбойное сообщение в своей партиции: префикс остальных фиксируется без него.
+			message.Partition, message.Offset = 3, 0
+		}
+		messages = append(messages, message)
+	}
+	source := bufferedSource(messages...)
+	cfg := kafka.ConsumerConfig{
+		TopicPrefix: "shop",
+		Workers:     2,
+		MaxAttempts: 3,
+		Backoff:     func(int) time.Duration { return 50 * time.Millisecond },
+		// Хранилище «недоступно»: сбойное сообщение не паркуется и повторяется вечно.
+		Ready: func(context.Context) error { return stuck },
+		Now:   func() time.Time { return published },
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	metrics := kafka.NewConsumerMetrics(prometheus.NewRegistry())
+	park := &syncParker{}
+	consumer := kafka.NewConsumer(source, kafka.NewRouter(projection, &recorder{}), park, cfg, logger, metrics)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- consumer.Run(ctx) }()
+	time.Sleep(50 * time.Millisecond)
+	close(projection.gate)
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case committed := <-source.commits:
+			tail := func(m kafkago.Message) bool { return m.Partition == 2 && m.Offset == 50 }
+			if !slices.ContainsFunc(committed, tail) {
+				continue
+			}
+			_, applied := projection.snapshot()
+			if len(applied) != 50 || slices.Contains(applied, "p13") || len(park.parked()) != 0 {
+				t.Fatal("применены не все соседи сбойного сообщения", applied, park.parked())
+			}
+			cancel()
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+			return
+		case <-deadline:
+			batches, applied := projection.snapshot()
+			t.Fatalf("соседи сбойного сообщения не зафиксированы: применено %d, пачек %d", len(applied), len(batches))
+		}
 	}
 }

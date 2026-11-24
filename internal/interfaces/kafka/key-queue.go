@@ -35,6 +35,8 @@ type delivery struct {
 	message kafkago.Message
 	key     orderingKey
 	offset  *offsetSlot
+	// alone — повтор после отката пачки: разбирается отдельным заданием.
+	alone bool
 }
 
 func newKeyQueue() *keyQueue {
@@ -148,6 +150,16 @@ func (q *keyQueue) started() {
 	}
 	tenant.active++
 	q.schedule(tenant)
+}
+
+// retry возвращает выданное сообщение в голову его ключа отдельным заданием: следующие сообщения
+// ключа по-прежнему ждут его итога.
+func (q *keyQueue) retry(item *delivery) {
+	key := q.keys[item.key]
+	key.tenant.active--
+	item.alone = true
+	q.waiting++
+	q.enqueue(key)
 }
 
 func (q *keyQueue) finished(item *delivery) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"slices"
 	"strings"
 	"time"
 
@@ -104,57 +103,6 @@ func (c *Consumer) next(ctx context.Context) (kafkago.Message, bool) {
 			return kafkago.Message{}, false
 		}
 	}
-}
-
-// processBatch доводит до записанного итога пачку снимков разных товаров одной транзакцией.
-// Неразобранные сообщения пачки и вся пачка после отката идут обычным путём по одному:
-// повтор с паузой или отравленные, как без пачки. Ошибка — только отмена контекста.
-func (c *Consumer) processBatch(ctx context.Context, batch []*delivery) error {
-	if len(batch) == 1 {
-		return c.Process(ctx, batch[0].message)
-	}
-	envelopes := make([]Envelope, 0, len(batch))
-	for _, item := range batch {
-		envelopes = append(envelopes, c.envelope(item.message))
-	}
-	var rejected []int
-	err := errs.Guard(func() error {
-		var err error
-		rejected, err = c.router.HandleProducts(ctx, envelopes)
-		return err
-	})
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	if err != nil {
-		c.metrics.batchFallbacks.WithLabelValues(envelopes[0].Topic).Inc()
-		c.logger.Warn(
-			"kafka: пачка снимков откатилась, сообщения по одному",
-			slog.Int("messages", len(batch)),
-			slog.Any("error", err),
-		)
-		return c.processEach(ctx, batch)
-	}
-	c.metrics.batchSize.WithLabelValues(envelopes[0].Topic).Observe(float64(len(batch) - len(rejected)))
-	failed := make([]*delivery, 0, len(rejected))
-	for n, item := range batch {
-		if slices.Contains(rejected, n) {
-			failed = append(failed, item)
-			continue
-		}
-		c.metrics.messages.WithLabelValues(envelopes[n].Topic, "processed").Inc()
-	}
-	return c.processEach(ctx, failed)
-}
-
-// processEach ведёт сообщения по одному обычным путём повторов и отравленных.
-func (c *Consumer) processEach(ctx context.Context, batch []*delivery) error {
-	for _, item := range batch {
-		if err := c.Process(ctx, item.message); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (c *Consumer) envelope(message kafkago.Message) Envelope {
