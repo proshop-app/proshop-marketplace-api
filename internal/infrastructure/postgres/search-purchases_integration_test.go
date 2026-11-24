@@ -107,8 +107,8 @@ func TestSearchPurchaseQuarantineUsesOutboxRetention(t *testing.T) {
 		}
 	}
 	retention := postgres.NewRetention(postgres.Single(pool))
-	result, err := retention.Purge(ctx, ports.PurgeRequest{OutboxDoneBefore: at(10), Batch: 1})
-	if err != nil || result.OutboxDone != 1 {
+	result, err := retention.Purge(ctx, ports.PurgeRequest{PurchaseQuarantineBefore: at(10), Batch: 1})
+	if err != nil || result.PurchaseQuarantine != 1 {
 		t.Fatal("истёкшая покупка должна быть удалена", result, err)
 	}
 	failures, err := queue.Failures(ctx, 0, 10)
@@ -148,8 +148,8 @@ func TestSearchPurchasesBatchRollbackAndTwoClaimers(t *testing.T) {
 	}); !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	if counts, err := first.ReadyCounts(ctx, at(1)); err != nil || len(counts) != 0 {
-		t.Fatal(counts, err)
+	if lanes, err := first.ReadyLanes(ctx, at(1)); err != nil || len(lanes) != 0 {
+		t.Fatal(lanes, err)
 	}
 	for range 2 {
 		if err := uow.Do(ctx, save); err != nil {

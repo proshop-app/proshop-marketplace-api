@@ -109,23 +109,27 @@ func (d *Dispatcher) RegisterBatch(kind string, handler BatchHandler) {
 	d.batches[kind] = handler
 }
 
-// ReadyCounts возвращает глубину готовой очереди по видам задач.
-func (d *Dispatcher) ReadyCounts(ctx context.Context) (map[string]int64, error) {
-	counts, err := d.queue.ReadyCounts(ctx, d.clock.Now())
+// ReadyLanes возвращает созревшую работу по видам; вид с обработчиком без работы — нулевая полоса,
+// чтобы метрика сбрасывалась.
+func (d *Dispatcher) ReadyLanes(ctx context.Context) ([]ports.ReadyLane, error) {
+	now := d.clock.Now()
+	lanes, err := d.queue.ReadyLanes(ctx, now)
 	if err != nil {
 		return nil, err
 	}
-	for kind := range d.handlers {
-		if _, ok := counts[kind]; !ok {
-			counts[kind] = 0
+	seen := map[string]bool{}
+	for _, lane := range lanes {
+		seen[lane.Kind] = true
+	}
+	for _, kinds := range []map[string]bool{handlerKinds(d.handlers), handlerKinds(d.batches)} {
+		for kind := range kinds {
+			if !seen[kind] {
+				seen[kind] = true
+				lanes = append(lanes, ports.ReadyLane{Kind: kind, Oldest: now})
+			}
 		}
 	}
-	for kind := range d.batches {
-		if _, ok := counts[kind]; !ok {
-			counts[kind] = 0
-		}
-	}
-	return counts, nil
+	return lanes, nil
 }
 
 // RunOnce разбирает одну справедливо выбранную пачку.
@@ -290,6 +294,14 @@ func (d *Dispatcher) resolve(ctx context.Context, results []ports.TaskResolution
 		return d.queue.Retry(ctx, result.ID, result.Attempts, *result.NextAt, result.Error)
 	}
 	return d.queue.Complete(ctx, result.ID, result.Attempts, result.At)
+}
+
+func handlerKinds[H any](handlers map[string]H) map[string]bool {
+	kinds := make(map[string]bool, len(handlers))
+	for kind := range handlers {
+		kinds[kind] = true
+	}
+	return kinds
 }
 
 func takeKind(tasks []ports.Task, kind string) ([]ports.Task, []ports.Task) {

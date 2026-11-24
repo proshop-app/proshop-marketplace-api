@@ -9,16 +9,16 @@ import (
 
 // RetentionPolicy — сроки хранения служебных записей.
 type RetentionPolicy struct {
-	ProcessedEvents time.Duration
-	OutboxDone      time.Duration
-	ParkedEvents    time.Duration
+	ProcessedEvents    time.Duration
+	PurchaseQuarantine time.Duration
+	ParkedEvents       time.Duration
 	// Challenges — сколько хранить проверки входа после их срока.
 	Challenges time.Duration
 	Batch      int
 }
 
-// Janitor чистит записи по сроку: отметки обработанных событий, выполненные
-// задачи outbox, разобранные отравленные сообщения, отжившие проверки входа и
+// Janitor чистит записи по сроку: отметки обработанных событий, карантин покупок
+// поиска в outbox, разобранные отравленные сообщения, отжившие проверки входа и
 // просроченные корзины, дедуп маячков и больше не актуальные отказы перепроверки.
 type Janitor struct {
 	retention ports.Retention
@@ -36,13 +36,13 @@ func (j *Janitor) Purge(ctx context.Context) (ports.PurgeResult, error) {
 	now := j.clock.Now()
 
 	return j.retention.Purge(ctx, ports.PurgeRequest{
-		BulkBefore:       now,
-		ProcessedBefore:  now.Add(-j.policy.ProcessedEvents),
-		OutboxDoneBefore: now.Add(-j.policy.OutboxDone),
-		ParkedBefore:     now.Add(-j.policy.ParkedEvents),
-		ChallengesBefore: now.Add(-j.policy.Challenges),
-		CartsBefore:      now,
-		PromotionBefore:  now.AddDate(0, 0, -30),
-		Batch:            j.policy.Batch,
+		BulkBefore:               now,
+		ProcessedBefore:          now.Add(-j.policy.ProcessedEvents),
+		PurchaseQuarantineBefore: now.Add(-j.policy.PurchaseQuarantine),
+		ParkedBefore:             now.Add(-j.policy.ParkedEvents),
+		ChallengesBefore:         now.Add(-j.policy.Challenges),
+		CartsBefore:              now,
+		PromotionBefore:          now.AddDate(0, 0, -30),
+		Batch:                    j.policy.Batch,
 	})
 }

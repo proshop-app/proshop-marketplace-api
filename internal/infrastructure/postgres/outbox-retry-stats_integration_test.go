@@ -10,7 +10,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
 
-func TestRetryStatsExcludeFirstLeasesCompletedAndQuarantine(t *testing.T) {
+func TestRetryStatsExcludeFirstLeasesAndQuarantine(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Microsecond)
@@ -18,19 +18,17 @@ func TestRetryStatsExcludeFirstLeasesCompletedAndQuarantine(t *testing.T) {
 		ctx,
 		`INSERT INTO outbox (
         kind, tenant_id, payload, attempts, next_at, created_at,
-        last_error, unknown_failures, done_at, failed_at, failure_reason
+        last_error, unknown_failures, failed_at, failure_reason
     ) VALUES
         ('index', 't1', '{}', 3, $1::timestamptz + interval '1 day', $1::timestamptz - interval '2 hours',
-            'network', NULL, NULL, NULL, NULL),
-        ('index', 't2', '{}', 2, $1::timestamptz, $1::timestamptz - interval '1 hour', NULL, 1, NULL, NULL, NULL),
+            'network', NULL, NULL, NULL),
+        ('index', 't2', '{}', 2, $1::timestamptz, $1::timestamptz - interval '1 hour', NULL, 1, NULL, NULL),
         ('status', 't1', '{}', 9, $1::timestamptz, $1::timestamptz - interval '30 minutes',
-            'network', NULL, NULL, NULL, NULL),
-        ('index', 't1', '{}', 0, $1::timestamptz, $1::timestamptz - interval '5 hours', NULL, NULL, NULL, NULL, NULL),
-        ('index', 't1', '{}', 1, $1::timestamptz, $1::timestamptz - interval '6 hours', NULL, NULL, NULL, NULL, NULL),
-        ('index', 't1', '{}', 2, $1::timestamptz, $1::timestamptz - interval '7 hours',
-            'old', NULL, $1::timestamptz, NULL, NULL),
+            'network', NULL, NULL, NULL),
+        ('index', 't1', '{}', 0, $1::timestamptz, $1::timestamptz - interval '5 hours', NULL, NULL, NULL, NULL),
+        ('index', 't1', '{}', 1, $1::timestamptz, $1::timestamptz - interval '6 hours', NULL, NULL, NULL, NULL),
         ('index', 't1', '{}', 2, $1::timestamptz, $1::timestamptz - interval '8 hours',
-            'old', NULL, NULL, $1::timestamptz, 'invalid')`,
+            'old', NULL, $1::timestamptz, 'invalid')`,
 		now,
 	)
 	if err != nil {

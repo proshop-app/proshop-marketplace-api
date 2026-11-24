@@ -77,7 +77,7 @@ func TestOrderSettingsMigrationDisablesLegacyParticipation(t *testing.T) {
 	task := `
   SELECT count(*), bool_and(next_at <= now())
   FROM outbox
-  WHERE kind = 'catalog.tenant.sync' AND tenant_id = 't1' AND done_at IS NULL`
+  WHERE kind = 'catalog.tenant.sync' AND tenant_id = 't1'`
 	if err := pool.QueryRow(ctx, task).Scan(&tasks, &ready); err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -16,12 +17,13 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
-const selectOutboxClaimState = `SELECT attempts, next_at, done_at, last_error FROM outbox WHERE id = $1`
+const selectOutboxClaimState = `SELECT attempts, next_at, last_error FROM outbox WHERE id = $1`
 
+// outboxClaimState — состояние задачи; выполненная задача удалена, removed отмечает это.
 type outboxClaimState struct {
+	removed   bool
 	attempts  int
 	nextAt    time.Time
-	doneAt    *time.Time
 	lastError *string
 }
 
@@ -32,9 +34,11 @@ func readOutboxClaimState(t *testing.T, pool *pgxpool.Pool, id int64) outboxClai
 	err := pool.QueryRow(context.Background(), selectOutboxClaimState, id).Scan(
 		&state.attempts,
 		&state.nextAt,
-		&state.doneAt,
 		&state.lastError,
 	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return outboxClaimState{removed: true}
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,8 +92,8 @@ func TestOutboxOnlyCurrentClaimCanUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	completed := readOutboxClaimState(t, pool, third[0].ID)
-	if completed.doneAt == nil || !completed.doneAt.Equal(at(6)) || completed.lastError != nil {
-		t.Fatalf("текущий владелец завершает задачу и очищает ошибку: %+v", completed)
+	if !completed.removed {
+		t.Fatalf("текущий владелец завершает задачу, выполненная удаляется: %+v", completed)
 	}
 	if err := queue.Complete(ctx, third[0].ID, third[0].Attempts, at(8)); !errors.Is(err, ports.ErrTaskClaimConflict) {
 		t.Fatalf("повторное завершение должно вернуть конфликт: %v", err)
@@ -124,7 +128,7 @@ func TestOutboxRejectsMissingAndUnclaimedTask(t *testing.T) {
 		t.Fatalf("невзятую задачу нельзя отложить: %v", err)
 	}
 	state := readOutboxClaimState(t, pool, 1)
-	if state.attempts != 0 || state.doneAt != nil || state.lastError != nil || !state.nextAt.Equal(at(0)) {
+	if state.attempts != 0 || state.removed || state.lastError != nil || !state.nextAt.Equal(at(0)) {
 		t.Fatalf("невзятая задача изменилась: %+v", state)
 	}
 }

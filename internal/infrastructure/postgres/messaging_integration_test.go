@@ -217,22 +217,27 @@ func TestInboxParkedRetention(t *testing.T) {
 		t.Fatal(err)
 	}
 	enqueue(t, uow, "t1", "b", 0)
+	quarantined := `INSERT INTO outbox (kind, tenant_id, payload, attempts, next_at, created_at, failed_at,
+        failure_reason) VALUES ('search.purchase', 't1', '{}', 1, $1, $1, $1, 'test.invalid')`
+	if _, err := pool.Exec(ctx, quarantined, at(1)); err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := postgres.NewRetention(postgres.Single(pool)).Purge(ctx, ports.PurgeRequest{
-		ProcessedBefore:  at(10),
-		OutboxDoneBefore: at(10),
-		ParkedBefore:     at(10),
-		ChallengesBefore: at(10),
-		CartsBefore:      at(10),
-		Batch:            1,
+		ProcessedBefore:          at(10),
+		PurchaseQuarantineBefore: at(10),
+		ParkedBefore:             at(10),
+		ChallengesBefore:         at(10),
+		CartsBefore:              at(10),
+		Batch:                    1,
 	})
-	if err != nil || result.Processed != 1 || result.OutboxDone != 1 || result.Parked != 0 {
+	if err != nil || result.Processed != 1 || result.PurchaseQuarantine != 1 || result.Parked != 0 {
 		t.Fatalf("чистка пачками: %+v, %v", result, err)
 	}
 
+	// Выполненная задача удалена при завершении, невыполненная остаётся.
 	var pending int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE done_at IS NULL`).Scan(&pending); err != nil ||
-		pending != 1 {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM outbox`).Scan(&pending); err != nil || pending != 1 {
 		t.Fatalf("невыполненные задачи не чистятся: %d, %v", pending, err)
 	}
 }

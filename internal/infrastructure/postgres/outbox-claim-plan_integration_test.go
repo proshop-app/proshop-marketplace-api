@@ -25,7 +25,7 @@ func (trace *claimPlanTrace) TraceQueryStart(
 	_ *pgx.Conn,
 	data pgx.TraceQueryStartData,
 ) context.Context {
-	if strings.Contains(data.SQL, "WITH ordered_heads AS") && !strings.HasPrefix(data.SQL, "EXPLAIN") {
+	if strings.Contains(data.SQL, "WITH RECURSIVE queued_kinds") && !strings.HasPrefix(data.SQL, "EXPLAIN") {
 		trace.sql, trace.args = data.SQL, append([]any{}, data.Args...)
 	}
 	return ctx

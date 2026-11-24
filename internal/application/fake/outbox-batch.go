@@ -46,18 +46,44 @@ func (s *Store) Resolve(_ context.Context, results []ports.TaskResolution) error
 	return nil
 }
 
-// ReadyCounts считает только готовые задачи.
-func (s *Store) ReadyCounts(_ context.Context, now time.Time) (map[string]int64, error) {
+// ReadyLanes считает магазины с созревшей задачей и срок старейшей по видам.
+func (s *Store) ReadyLanes(_ context.Context, now time.Time) ([]ports.ReadyLane, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	counts := map[string]int64{}
+	tenants := map[string]map[string]bool{}
+	oldest := map[string]time.Time{}
+	for _, row := range s.data.outbox {
+		if row.DoneAt != nil || row.FailedAt != nil || row.NextAt.After(now) {
+			continue
+		}
+		if tenants[row.Kind] == nil {
+			tenants[row.Kind] = map[string]bool{}
+		}
+		tenants[row.Kind][string(row.TenantID)] = true
+		if current, ok := oldest[row.Kind]; !ok || row.NextAt.Before(current) {
+			oldest[row.Kind] = row.NextAt
+		}
+	}
+	lanes := []ports.ReadyLane{}
+	for kind, set := range tenants {
+		lanes = append(lanes, ports.ReadyLane{Kind: kind, Tenants: int64(len(set)), Oldest: oldest[kind]})
+	}
+	return lanes, nil
+}
+
+// ReadyTasks — созревшие задачи по видам для проверок тестов; порт отдаёт только полосы.
+func (s *Store) ReadyTasks(now time.Time) map[string]int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	counts := map[string]int{}
 	for _, row := range s.data.outbox {
 		if row.DoneAt == nil && row.FailedAt == nil && !row.NextAt.After(now) {
 			counts[row.Kind]++
 		}
 	}
-	return counts, nil
+	return counts
 }
 
 // Failures читает сохранённые отказы по id.

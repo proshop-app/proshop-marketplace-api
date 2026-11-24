@@ -61,10 +61,18 @@ var retryableMigrationIndexes = map[int64][]string{
 		"outbox_quarantine_kind_id_idx",
 	},
 	57: {"outbox_retry_kind_created_idx"},
+	70: {"outbox_lane_due_idx", "outbox_untaken_dedup_idx", "outbox_retry_created_idx"},
 }
 
 var rollbackMigrationIndexes = map[int64][]string{
 	56: {"outbox_due_idx", "outbox_tenant_due_idx"},
+	70: {
+		"outbox_pending_dedup_idx",
+		"outbox_pending_due_idx",
+		"outbox_pending_tenant_due_idx",
+		"outbox_kind_due",
+		"outbox_retry_kind_created_idx",
+	},
 }
 
 type repairingMigrationLocker struct {

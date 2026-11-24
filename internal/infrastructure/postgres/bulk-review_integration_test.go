@@ -108,11 +108,11 @@ func TestBulkIdempotencyRetentionRemovesOldResults(t *testing.T) {
 	}
 	future := time.Now().AddDate(1, 0, 0)
 	if _, err := postgres.NewRetention(postgres.Single(pool)).Purge(ctx, ports.PurgeRequest{
-		BulkBefore:       future,
-		ProcessedBefore:  future,
-		OutboxDoneBefore: future,
-		ParkedBefore:     future,
-		Batch:            2,
+		BulkBefore:               future,
+		ProcessedBefore:          future,
+		PurchaseQuarantineBefore: future,
+		ParkedBefore:             future,
+		Batch:                    2,
 	}); err != nil {
 		t.Fatal(err)
 	}

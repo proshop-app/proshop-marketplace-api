@@ -11,7 +11,7 @@ import (
 // selectOutboxRetryStats читает только покрывающий индекс повторов, включая их аренды.
 const selectOutboxRetryStats = `SELECT kind, count(*), min(created_at)
     FROM outbox
-    WHERE done_at IS NULL AND failed_at IS NULL
+    WHERE failed_at IS NULL
         AND (last_error IS NOT NULL OR unknown_failures IS NOT NULL)
     GROUP BY kind`
 

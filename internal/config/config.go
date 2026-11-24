@@ -182,11 +182,11 @@ type Outbox struct {
 
 // Retention — сроки хранения служебных записей.
 type Retention struct {
-	ProcessedEvents time.Duration
-	OutboxDone      time.Duration
-	ParkedEvents    time.Duration
-	Challenges      time.Duration
-	Interval        time.Duration
+	ProcessedEvents    time.Duration
+	PurchaseQuarantine time.Duration
+	ParkedEvents       time.Duration
+	Challenges         time.Duration
+	Interval           time.Duration
 }
 
 // Reference — доступ потребителей к чтению реестра справочных сущностей.
@@ -257,11 +257,11 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			Lease:                r.duration("OUTBOX_LEASE", 90*time.Second),
 		},
 		Retention: Retention{
-			ProcessedEvents: r.duration("RETENTION_PROCESSED_EVENTS", 14*24*time.Hour),
-			OutboxDone:      r.duration("RETENTION_OUTBOX_DONE", 3*24*time.Hour),
-			ParkedEvents:    r.duration("RETENTION_PARKED_EVENTS", 30*24*time.Hour),
-			Challenges:      r.duration("RETENTION_CHALLENGES", 24*time.Hour),
-			Interval:        r.duration("RETENTION_INTERVAL", time.Hour),
+			ProcessedEvents:    r.duration("RETENTION_PROCESSED_EVENTS", 14*24*time.Hour),
+			PurchaseQuarantine: r.duration("RETENTION_SEARCH_PURCHASE_QUARANTINE", 3*24*time.Hour),
+			ParkedEvents:       r.duration("RETENTION_PARKED_EVENTS", 30*24*time.Hour),
+			Challenges:         r.duration("RETENTION_CHALLENGES", 24*time.Hour),
+			Interval:           r.duration("RETENTION_INTERVAL", time.Hour),
 		},
 		Operator: Operator{
 			Token:        r.required("OPERATOR_TOKEN"),

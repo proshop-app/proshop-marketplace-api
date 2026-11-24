@@ -76,6 +76,13 @@ type TaskResolution struct {
 	Error           string
 }
 
+// ReadyLane — созревшая работа одного вида: сколько магазинов её ждут и с какого срока ждёт старейшая.
+type ReadyLane struct {
+	Kind    string
+	Tenants int64
+	Oldest  time.Time
+}
+
 // TaskRequeue возвращает одну задачу либо ограниченную страницу одного вида.
 type TaskRequeue struct {
 	ID    int64
@@ -115,8 +122,9 @@ type TaskQueue interface {
 	Retry(ctx context.Context, id int64, attempts int, nextAt time.Time, reason string) error
 	// Resolve сохраняет результаты пачки атомарно, проверяя владельца каждой задачи.
 	Resolve(context.Context, []TaskResolution) error
-	// ReadyCounts считает только созревшие задачи, без завершённых и арендованных.
-	ReadyCounts(context.Context, time.Time) (map[string]int64, error)
+	// ReadyLanes — созревшая работа по видам без аренд и отложенных повторов. Стоимость — по числу
+	// полос «вид × магазин», а не задач: метрика не обходит очередь.
+	ReadyLanes(context.Context, time.Time) ([]ReadyLane, error)
 	RetryStats(context.Context) ([]TaskRetryStats, error)
 	Failures(context.Context, int64, int) ([]TaskFailure, error)
 	Requeue(context.Context, TaskRequeue) ([]int64, error)
@@ -177,10 +185,10 @@ type EventFilter struct {
 
 // PurgeRequest — границы чистки служебных записей.
 type PurgeRequest struct {
-	BulkBefore       time.Time
-	ProcessedBefore  time.Time
-	OutboxDoneBefore time.Time
-	ParkedBefore     time.Time
+	BulkBefore               time.Time
+	ProcessedBefore          time.Time
+	PurchaseQuarantineBefore time.Time
+	ParkedBefore             time.Time
 	// ChallengesBefore — проверки входа, истёкшие раньше этого времени.
 	ChallengesBefore time.Time
 	// CartsBefore — корзины, просроченные раньше этого времени.
@@ -194,7 +202,7 @@ type PurgeResult struct {
 	BulkApprovals        int64
 	RevalidationFailures int64
 	Processed            int64
-	OutboxDone           int64
+	PurchaseQuarantine   int64
 	Parked               int64
 	Challenges           int64
 	Carts                int64

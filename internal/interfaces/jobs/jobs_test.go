@@ -54,8 +54,8 @@ func (d *dispatcher) RunOnce(context.Context) ([]messaging.Outcome, error) {
 	return round, nil
 }
 
-func (d *dispatcher) ReadyCounts(context.Context) (map[string]int64, error) {
-	return map[string]int64{"a": 3}, nil
+func (d *dispatcher) ReadyLanes(context.Context) ([]ports.ReadyLane, error) {
+	return []ports.ReadyLane{{Kind: "a", Tenants: 3, Oldest: time.Now().Add(-time.Minute)}}, nil
 }
 
 func outcome(kind string, err error) messaging.Outcome {
@@ -104,8 +104,13 @@ func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
 	}
 
 	totals := map[string]float64{}
+	ready := map[string]float64{}
 	families, _ := registry.Gather()
 	for _, family := range families {
+		if name := family.GetName(); name == "marketplace_outbox_ready_tenants" ||
+			name == "marketplace_outbox_ready_age_seconds" {
+			ready[name] = family.GetMetric()[0].GetGauge().GetValue()
+		}
 		if family.GetName() != "marketplace_outbox_tasks_total" {
 			continue
 		}
@@ -120,6 +125,9 @@ func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
 
 	if totals["done"] != 2 || totals["retry"] != 1 {
 		t.Fatalf("метрики задач: %+v", totals)
+	}
+	if ready["marketplace_outbox_ready_tenants"] != 3 || ready["marketplace_outbox_ready_age_seconds"] < 60 {
+		t.Fatalf("готовая работа: %+v", ready)
 	}
 }
 

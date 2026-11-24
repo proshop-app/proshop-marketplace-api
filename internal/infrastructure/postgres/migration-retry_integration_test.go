@@ -175,14 +175,20 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 		t.Fatal(err)
 	}
 	index := test.name
-	if test.version == 59 {
+	switch test.version {
+	case 59:
 		// Единый перечень служб заменяет оба прежних индекса одним индексом видимости.
 		index = "participants_pickup_visible"
+	case 56:
+		// Полосы 00070 заменяют индексы готовой очереди 00056.
+		index = "outbox_lane_due_idx"
+	case 57:
+		index = "outbox_retry_created_idx"
 	}
 	assertValidIndex(t, pool, index)
 	for _, index := range []string{
-		"outbox_pending_due_idx",
-		"outbox_pending_tenant_due_idx",
+		"outbox_lane_due_idx",
+		"outbox_untaken_dedup_idx",
 		"outbox_quarantine_id_idx",
 		"outbox_quarantine_kind_id_idx",
 	} {

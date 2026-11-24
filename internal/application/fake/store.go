@@ -425,8 +425,9 @@ func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.Purg
 
 	kept := s.data.outbox[:0]
 	for _, row := range s.data.outbox {
-		if row.DoneAt != nil && row.DoneAt.Before(request.OutboxDoneBefore) {
-			result.OutboxDone++
+		expired := row.FailedAt != nil && row.FailedAt.Before(request.PurchaseQuarantineBefore)
+		if row.Kind == "search.purchase" && expired {
+			result.PurchaseQuarantine++
 
 			continue
 		}

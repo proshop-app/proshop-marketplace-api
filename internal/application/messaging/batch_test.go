@@ -84,7 +84,7 @@ func TestBatchResolutionRollsBackOnStaleOwner(t *testing.T) {
 	}
 }
 
-func TestReadyCountsExcludesLeaseDelayAndCompleted(t *testing.T) {
+func TestReadyLanesExcludeLeaseDelayAndCompleted(t *testing.T) {
 	store := fake.NewStore()
 	for n, kind := range []string{"a", "a", "b"} {
 		enqueue(t, store, kind, "t1", fmt.Sprintf("k%d", n), t0)
@@ -102,17 +102,17 @@ func TestReadyCountsExcludesLeaseDelayAndCompleted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	counts, err := store.ReadyCounts(ctx, t0)
-	if err != nil || len(counts) != 1 || counts["b"] != 1 {
-		t.Fatal(counts, err)
+	lanes, err := store.ReadyLanes(ctx, t0)
+	if err != nil || len(lanes) != 1 || lanes[0].Kind != "b" || lanes[0].Tenants != 1 || !lanes[0].Oldest.Equal(t0) {
+		t.Fatal(lanes, err)
 	}
 	_, err = store.Claim(ctx, ports.ClaimRequest{Now: t0, Limit: 1, PerTenant: 1, LeaseUntil: t0.Add(time.Minute)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	counts, err = store.ReadyCounts(ctx, t0)
-	if err != nil || len(counts) != 0 {
-		t.Fatalf("аренда не считается готовой задачей: %+v, %v", counts, err)
+	lanes, err = store.ReadyLanes(ctx, t0)
+	if err != nil || len(lanes) != 0 {
+		t.Fatalf("аренда не считается готовой задачей: %+v, %v", lanes, err)
 	}
 }
 

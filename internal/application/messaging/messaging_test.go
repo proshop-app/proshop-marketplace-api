@@ -189,13 +189,14 @@ func TestJanitorPurgesByPolicy(t *testing.T) {
 		return tx.Parked().Park(ctx, ports.ParkedEvent{Topic: "x", Offset: 1, ParkedAt: t0.Add(-31 * 24 * time.Hour)})
 	})
 
-	enqueue(t, store, "ok", "t1", "a", t0.Add(-4*24*time.Hour))
+	// Выполненная задача удаляется при завершении; по сроку уходит только карантин покупок поиска.
+	enqueue(t, store, "search.purchase", "t1", "a", t0.Add(-4*24*time.Hour))
 	dispatcher := messaging.NewDispatcher(
 		store,
 		fake.NewClock(t0.Add(-4*24*time.Hour)),
 		config(),
 		map[string]messaging.Handler{
-			"ok": func(context.Context, ports.Task) error { return nil },
+			"search.purchase": func(context.Context, ports.Task) error { return messaging.ErrInvalidTask },
 		},
 	)
 	if _, err := dispatcher.RunOnce(ctx); err != nil {
@@ -203,14 +204,14 @@ func TestJanitorPurgesByPolicy(t *testing.T) {
 	}
 
 	janitor := messaging.NewJanitor(store, clock, messaging.RetentionPolicy{
-		ProcessedEvents: 14 * 24 * time.Hour,
-		OutboxDone:      3 * 24 * time.Hour,
-		ParkedEvents:    30 * 24 * time.Hour,
-		Batch:           100,
+		ProcessedEvents:    14 * 24 * time.Hour,
+		PurchaseQuarantine: 3 * 24 * time.Hour,
+		ParkedEvents:       30 * 24 * time.Hour,
+		Batch:              100,
 	})
 
 	result, err := janitor.Purge(ctx)
-	if err != nil || result.Processed != 1 || result.OutboxDone != 1 || result.Parked != 0 {
+	if err != nil || result.Processed != 1 || result.PurchaseQuarantine != 1 || result.Parked != 0 {
 		t.Fatalf("чистка: %+v, %v", result, err)
 	}
 	if !store.Processed("new") {

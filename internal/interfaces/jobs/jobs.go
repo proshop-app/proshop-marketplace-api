@@ -15,10 +15,14 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
+// readyInterval — как часто снимать готовую работу outbox: полосы меняются медленнее разбора,
+// а запрос идёт с каждой реплики.
+const readyInterval = 15 * time.Second
+
 // Dispatcher — разбор одной пачки outbox.
 type Dispatcher interface {
 	RunOnce(ctx context.Context) ([]messaging.Outcome, error)
-	ReadyCounts(context.Context) (map[string]int64, error)
+	ReadyLanes(context.Context) ([]ports.ReadyLane, error)
 }
 
 // Purger — чистка по сроку.
@@ -35,8 +39,9 @@ type OutboxRunner struct {
 	lag        *prometheus.HistogramVec
 	errors     prometheus.Counter
 	panics     *prometheus.CounterVec
-	ready      *prometheus.GaugeVec
-	depthAt    time.Time
+	tenants    *prometheus.GaugeVec
+	age        *prometheus.GaugeVec
+	readyAt    time.Time
 	readyKinds map[string]bool
 }
 
@@ -85,15 +90,22 @@ func NewOutboxRunner(
 			},
 			[]string{"kind"},
 		),
-		ready: prometheus.NewGaugeVec(
+		tenants: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "marketplace_outbox_ready_tasks",
-				Help: "Готовые задачи outbox по виду, без действующих аренд и отложенных повторов.",
+				Name: "marketplace_outbox_ready_tenants",
+				Help: "Магазины с созревшей задачей outbox по виду, без действующих аренд и отложенных повторов.",
+			},
+			[]string{"kind"},
+		),
+		age: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "marketplace_outbox_ready_age_seconds",
+				Help: "Сколько ждёт старейшая созревшая задача outbox по виду.",
 			},
 			[]string{"kind"},
 		),
 	}
-	registerer.MustRegister(r.tasks, r.lag, r.errors, r.panics, r.ready)
+	registerer.MustRegister(r.tasks, r.lag, r.errors, r.panics, r.tenants, r.age)
 
 	return r
 }
@@ -108,11 +120,11 @@ func (r *OutboxRunner) RunLane(ctx context.Context, dispatcher Dispatcher) error
 	return r.run(ctx, dispatcher, false)
 }
 
-func (r *OutboxRunner) run(ctx context.Context, dispatcher Dispatcher, countDepth bool) error {
+func (r *OutboxRunner) run(ctx context.Context, dispatcher Dispatcher, countReady bool) error {
 	for {
-		if countDepth && time.Now().After(r.depthAt) {
-			r.recordDepth(ctx)
-			r.depthAt = time.Now().Add(r.interval)
+		if countReady && time.Now().After(r.readyAt) {
+			r.recordReady(ctx)
+			r.readyAt = time.Now().Add(readyInterval)
 		}
 		outcomes, err := dispatcher.RunOnce(ctx)
 		r.record(outcomes)
@@ -132,21 +144,26 @@ func (r *OutboxRunner) run(ctx context.Context, dispatcher Dispatcher, countDept
 	}
 }
 
-func (r *OutboxRunner) recordDepth(ctx context.Context) {
-	counts, err := r.dispatcher.ReadyCounts(ctx)
+func (r *OutboxRunner) recordReady(ctx context.Context) {
+	lanes, err := r.dispatcher.ReadyLanes(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
 			r.errors.Inc()
-			r.logger.Error("outbox: подсчёт готовых задач не удался", slog.Any("error", err))
+			r.logger.Error("outbox: снимок готовой работы не удался", slog.Any("error", err))
 		}
 		return
 	}
+	now := time.Now()
 	for kind := range r.readyKinds {
-		r.ready.WithLabelValues(kind).Set(0)
+		r.tenants.WithLabelValues(kind).Set(0)
+		r.age.WithLabelValues(kind).Set(0)
 	}
-	for kind, count := range counts {
-		r.readyKinds[kind] = true
-		r.ready.WithLabelValues(kind).Set(float64(count))
+	for _, lane := range lanes {
+		r.readyKinds[lane.Kind] = true
+		r.tenants.WithLabelValues(lane.Kind).Set(float64(lane.Tenants))
+		if lane.Tenants > 0 {
+			r.age.WithLabelValues(lane.Kind).Set(max(0, now.Sub(lane.Oldest).Seconds()))
+		}
 	}
 }
 
@@ -207,7 +224,7 @@ func (r *RetentionRunner) Run(ctx context.Context) error {
 				"чистка: готово",
 				slog.Int64("bulkApprovals", result.BulkApprovals),
 				slog.Int64("processedEvents", result.Processed),
-				slog.Int64("outboxDone", result.OutboxDone),
+				slog.Int64("purchaseQuarantine", result.PurchaseQuarantine),
 				slog.Int64("parkedEvents", result.Parked),
 				slog.Int64("revalidationFailures", result.RevalidationFailures),
 			)

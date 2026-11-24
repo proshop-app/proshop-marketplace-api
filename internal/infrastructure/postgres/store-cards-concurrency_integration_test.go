@@ -164,7 +164,7 @@ func TestStoreCardMigrationBackfillsAndRemovesPendingTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	query := `SELECT count(*) FROM outbox WHERE kind = 'participant.store-card.refresh' AND done_at IS NULL`
+	query := `SELECT count(*) FROM outbox WHERE kind = 'participant.store-card.refresh'`
 	if err := pool.QueryRow(ctx, query).Scan(&count); err != nil {
 		t.Fatal(err)
 	}

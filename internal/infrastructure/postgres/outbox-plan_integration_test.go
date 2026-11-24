@@ -62,8 +62,24 @@ func TestOutboxMillionTaskPlans(t *testing.T) {
 		{
 			file:     "outbox.go",
 			constant: "claimTasks",
-			args:     []any{time.Now(), 200, 2, time.Now().Add(time.Minute), []string{}, []string{}, "null"},
-			indexes:  []string{"outbox_pending_due_idx", "outbox_pending_tenant_due_idx"},
+			args: []any{
+				time.Now(),
+				200,
+				2,
+				time.Now().Add(time.Minute),
+				[]string{},
+				[]string{},
+				"null",
+				"t5",
+				[]string{"index"},
+			},
+			indexes: []string{"outbox_lane_due_idx"},
+		},
+		{
+			file:     "outbox-batch.go",
+			constant: "selectReadyLanes",
+			args:     []any{time.Now()},
+			indexes:  []string{"outbox_lane_due_idx"},
 		},
 		{
 			file:     "outbox-failures.go",
@@ -80,7 +96,7 @@ func TestOutboxMillionTaskPlans(t *testing.T) {
 		{
 			file:     "outbox-retry-stats.go",
 			constant: "selectOutboxRetryStats",
-			indexes:  []string{"outbox_retry_kind_created_idx"},
+			indexes:  []string{"outbox_retry_created_idx"},
 		},
 	}
 	for _, test := range tests {

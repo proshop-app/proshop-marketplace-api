@@ -39,7 +39,7 @@ func TestOutboxQuarantineIsFencedDurableAndExcluded(t *testing.T) {
 		t.Fatal("карантин нельзя превратить в выполненную задачу", err)
 	}
 	retention := postgres.NewRetention(postgres.Single(pool))
-	_, err = retention.Purge(ctx, ports.PurgeRequest{OutboxDoneBefore: at(50), Batch: 10})
+	_, err = retention.Purge(ctx, ports.PurgeRequest{PurchaseQuarantineBefore: at(50), Batch: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -376,11 +376,11 @@ func (s *server) services(ctx context.Context) (services, error) {
 	dispatcher.RegisterBatch(appcatalog.TaskSyncOffer, indexer.HandleOfferBatch)
 	dispatcher.RegisterBatch(moderationstatus.TaskOffer, statuses.HandleOfferBatch)
 	janitor := messaging.NewJanitor(postgres.NewRetention(background), now, messaging.RetentionPolicy{
-		ProcessedEvents: cfg.Retention.ProcessedEvents,
-		OutboxDone:      cfg.Retention.OutboxDone,
-		ParkedEvents:    cfg.Retention.ParkedEvents,
-		Challenges:      cfg.Retention.Challenges,
-		Batch:           retentionBatch,
+		ProcessedEvents:    cfg.Retention.ProcessedEvents,
+		PurchaseQuarantine: cfg.Retention.PurchaseQuarantine,
+		ParkedEvents:       cfg.Retention.ParkedEvents,
+		Challenges:         cfg.Retention.Challenges,
+		Batch:              retentionBatch,
 	})
 
 	features := postgres.NewCatalogFeatures(s.store.pool(ports.DatabaseRead))

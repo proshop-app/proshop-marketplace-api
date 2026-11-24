@@ -133,7 +133,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	if _, err := failed.CreateOrders(ctx, buyerA, c.ID(), contact); !errors.Is(err, failure) {
 		t.Fatal(err)
 	}
-	counts, err := queue.ReadyCounts(ctx, clock.Now().Add(time.Hour))
+	counts, err := readyTenants(ctx, queue, clock.Now().Add(time.Hour))
 	if err != nil || counts[appcheckout.TaskCreateOrder] != 0 || counts[appcheckout.TaskExpireCreation] != 0 {
 		t.Fatal(counts, err)
 	}
@@ -193,7 +193,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	if err := service.Resume(ctx); err != nil {
 		t.Fatal(err)
 	}
-	counts, err = queue.ReadyCounts(ctx, clock.Now())
+	counts, err = readyTenants(ctx, queue, clock.Now())
 	if err != nil || counts[appcheckout.TaskPollOrder] != 0 {
 		t.Fatal("до срока опрос не нужен", counts, err)
 	}
@@ -205,7 +205,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	if err := service.Resume(ctx); err != nil {
 		t.Fatal(err)
 	}
-	counts, err = queue.ReadyCounts(ctx, clock.Now())
+	counts, err = readyTenants(ctx, queue, clock.Now())
 	if err != nil || counts[appcheckout.TaskPollOrder] != 1 {
 		t.Fatal("индексируемая сверка", counts, err)
 	}
@@ -266,4 +266,14 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 		t.Fatal(stuck, err)
 	}
 
+}
+
+// readyTenants — магазины с созревшей задачей по видам.
+func readyTenants(ctx context.Context, queue *postgres.TaskQueue, now time.Time) (map[string]int64, error) {
+	lanes, err := queue.ReadyLanes(ctx, now)
+	counts := map[string]int64{}
+	for _, lane := range lanes {
+		counts[lane.Kind] = lane.Tenants
+	}
+	return counts, err
 }
