@@ -57,13 +57,13 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 
 	// Повтор команды должен вернуть сохранённый заказ, даже если код уже истёк.
 	// Сервер сравнивает снимок discounts внутри транзакции создания.
-	callCtx, cancel := context.WithTimeout(ctx, min(s.orderCallBudget(), group.CreationDeadline.Sub(s.clock.Now())))
 	var answer checkout.SellerOrder
-	failed := s.ready(callCtx, []checkout.Group{group})
+	failed := s.ready(ctx, []checkout.Group{group})
 	if failed == nil {
+		// После срока создания заказ закроет задача срока: позже вызывать сервер незачем.
+		callCtx := ports.WithPlatformCallDeadline(s.orderCallContext(ctx), group.CreationDeadline)
 		answer, failed = s.platform.CreateOrder(callCtx, tenant, request)
 	}
-	cancel()
 	var refusal *ports.OrderRefusal
 	if errors.As(failed, &refusal) && refusal.Code == checkout.DispatchOriginChanged {
 		return s.reviewDispatch(
@@ -89,16 +89,32 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 	}
 	for _, g := range state.Groups {
 		if g.TenantID == tenant && g.OrderID == "" && !g.CreateExhausted && !g.Abandoned {
-			return errCreationPending
+			return creationRetry(failed, g)
 		}
 	}
 	return nil
 }
 
+// creationRetry откладывает повтор, отклонённый размыкателем, до момента допуска: раньше каждая
+// попытка заведомо получила бы тот же отказ. Допуск после срока создания — повторять незачем,
+// группу закроет задача срока.
+func creationRetry(failed error, group checkout.Group) error {
+	var rejected *ports.PlatformRejected
+	if !errors.As(failed, &rejected) {
+		return errCreationPending
+	}
+	if !rejected.NotBefore.Before(group.CreationDeadline) {
+		return nil
+	}
+	return &creationPendingUntil{at: rejected.NotBefore}
+}
+
+// creationLease покрывает ожидание места в ограждении и сам вызов (каждое — не дольше бюджета),
+// но не дальше срока создания: после него ограждение сервер не вызывает и вызов не продолжает.
 func (s *Service) creationLease(c *checkout.Checkout, tenant ids.TenantID, now time.Time) time.Time {
 	for _, g := range c.Groups() {
 		if g.TenantID == tenant {
-			return now.Add(min(s.orderCallBudget(), g.CreationDeadline.Sub(now)) + creationLeaseSlack)
+			return now.Add(min(2*s.orderCallBudget(), g.CreationDeadline.Sub(now)) + creationLeaseSlack)
 		}
 	}
 	return now
@@ -185,9 +201,7 @@ func (s *Service) pollGroup(ctx context.Context, buyerID, id ids.UUID, tenant id
 			orderID = g.OrderID
 		}
 	}
-	callCtx, cancel := context.WithTimeout(ctx, s.orderCallBudget())
-	answer, failed := s.platform.GetOrder(callCtx, tenant, orderID)
-	cancel()
+	answer, failed := s.platform.GetOrder(s.orderCallContext(ctx), tenant, orderID)
 	_, err = s.update(ctx, buyerID, id, func(c *checkout.Checkout, now time.Time) error {
 		if failed == nil {
 			_, observeErr := c.CompletePoll(tenant, token, answer, now)
@@ -209,6 +223,12 @@ func (s *Service) pollGroup(ctx context.Context, buyerID, id ids.UUID, tenant id
 		return err
 	})
 	return err
+}
+
+// orderCallContext передаёт бюджет вызова магазина данными: срок ставит ограждение платформы,
+// и зависший магазин засчитывается его размыкателю, а не выглядит отменой вызывающего.
+func (s *Service) orderCallContext(ctx context.Context) context.Context {
+	return ports.WithPlatformCallBudget(ctx, s.orderCallBudget())
 }
 
 func (s *Service) orderCallBudget() time.Duration {

@@ -23,11 +23,13 @@ const (
 	DeadlineWorkers     = 4
 	CreationCallTimeout = 5 * time.Second
 	creationLeaseSlack  = 100 * time.Millisecond
-	taskLeaseSlack      = 5 * time.Second
-	PollWorkers         = 4
-	PollPerTenant       = 1
-	CancelWorkers       = 4
-	CancelPerTenant     = 1
+	// taskStoreBudget — записи обработчика вне вызова магазина под его сроком: захват группы,
+	// итог, возврат в корзину, повторы конфликта версии.
+	taskStoreBudget = 5 * time.Second
+	PollWorkers     = 4
+	PollPerTenant   = 1
+	CancelWorkers   = 4
+	CancelPerTenant = 1
 	// ExecutorSlots — все места полос; каждое держит не больше одного соединения
 	// базы за раз: транзакции короткие, вызов магазина идёт вне транзакции.
 	ExecutorSlots = CreationWorkers + DeadlineWorkers + PollWorkers + CancelWorkers
@@ -113,7 +115,7 @@ func (e *Executor) Dispatch(ctx context.Context) error {
 			Kinds:       []string{kind},
 			TenantSlots: slots,
 			After:       e.after[kind],
-			LeaseUntil:  now.Add(e.service.orderCallBudget() + taskLeaseSlack),
+			LeaseUntil:  now.Add(e.lease()),
 		})
 		if err != nil {
 			return err
@@ -139,7 +141,7 @@ func (e *Executor) execute(ctx context.Context, task ports.Task) {
 		}
 	}()
 	// Паника обработчика — обычная ошибка задачи: повтор или карантин.
-	err := errs.Guard(func() error { return e.service.HandleOrderTask(ctx, task) })
+	err := errs.Guard(func() error { return e.handle(ctx, task) })
 	resolution := e.resolution(task, err)
 	saved := e.save(ctx, resolution)
 	reason := resolution.FailureReason
@@ -158,6 +160,25 @@ func (e *Executor) execute(ctx context.Context, task ports.Task) {
 	}:
 	case <-ctx.Done():
 	}
+}
+
+// handle ограничивает обработчик сроком, из которого считается аренда: без срока записи итога
+// с повторами могли пережить аренду, и задачу взял бы второй исполнитель с повторным вызовом магазина.
+func (e *Executor) handle(ctx context.Context, task ports.Task) error {
+	handling, cancel := context.WithTimeout(ctx, e.handlerTimeout())
+	defer cancel()
+	return e.service.HandleOrderTask(handling, task)
+}
+
+// handlerTimeout — ожидание места в ограждении и вызов магазина (по бюджету каждое) плюс записи.
+func (e *Executor) handlerTimeout() time.Duration {
+	return 2*e.service.orderCallBudget() + taskStoreBudget
+}
+
+// lease — как у messaging.Dispatcher: обработчик укладывается в половину аренды, вторая половина
+// покрывает запись итога без отмены (completionTimeout) и отметку задачи.
+func (e *Executor) lease() time.Duration {
+	return 2 * e.handlerTimeout()
 }
 
 func (e *Executor) release(task ports.Task) {
@@ -180,6 +201,11 @@ func (e *Executor) resolution(task ports.Task, err error) ports.TaskResolution {
 			next = pending.at
 		}
 		resolution.NextAt = &next
+	}
+	// Отказ размыкателя: до его допуска повтор получит тот же отказ — откладываем, а не крутим.
+	var rejected *ports.PlatformRejected
+	if errors.As(err, &rejected) && resolution.NextAt != nil && resolution.NextAt.Before(rejected.NotBefore) {
+		resolution.NextAt = &rejected.NotBefore
 	}
 	return resolution
 }

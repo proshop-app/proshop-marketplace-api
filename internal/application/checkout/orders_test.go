@@ -46,7 +46,7 @@ func TestCreationTaskRecoversAfterExecutorStopsBeforeCommit(t *testing.T) {
 		t.Fatal("заказ успел появиться у магазина")
 	}
 	e.platform.AfterCreate, e.store.FailCommit = nil, nil
-	e.clock.Advance(5*time.Second + 100*time.Millisecond)
+	e.clock.Advance(2*5*time.Second + 100*time.Millisecond)
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestInvalidSellerTotalDoesNotBlockOtherSeller(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.AfterCreate, e.store.FailCommit = nil, nil
-	e.clock.Advance(5*time.Second + 100*time.Millisecond)
+	e.clock.Advance(2*5*time.Second + 100*time.Millisecond)
 	e.platform.SetOrderTotal("order-1", money.FromKopecks(1))
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)

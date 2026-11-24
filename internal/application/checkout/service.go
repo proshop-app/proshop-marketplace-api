@@ -492,8 +492,8 @@ func (s *Service) quoteGroup(
 		}
 	}
 
-	callCtx, cancel := context.WithTimeout(ctx, s.config.QuoteTimeout)
-	defer cancel()
+	// Бюджет — данными: срок расчёту ставит ограждение и засчитывает зависание магазину.
+	callCtx := ports.WithPlatformCallBudget(ctx, s.config.QuoteTimeout)
 	items := make([]ports.ItemRequest, 0, len(group.Lines))
 	for _, line := range group.Lines {
 		items = append(items, ports.ItemRequest{ProductID: line.Offer.Product, Quantity: line.Quantity})

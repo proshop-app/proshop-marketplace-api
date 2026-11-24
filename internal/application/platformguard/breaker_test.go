@@ -61,8 +61,8 @@ func TestLateSuccessCannotCloseNewBreakerGeneration(t *testing.T) {
 	now := time.Now()
 	var b breaker
 	failed, late := b.start(), b.start()
-	b.finish(failed, true, false, cfg, now)
-	b.finish(late, false, false, cfg, now)
+	b.finish(failed, verdictFailure, cfg, now)
+	b.finish(late, verdictSuccess, cfg, now)
 	if b.available(now) {
 		t.Fatal("поздний успех закрыл размыкатель")
 	}
@@ -74,12 +74,12 @@ func TestLateSuccessCannotCloseNewBreakerGeneration(t *testing.T) {
 	if b.available(now) {
 		t.Fatal("вторая проба разрешена")
 	}
-	b.finish(probe, false, true, cfg, now)
+	b.finish(probe, verdictNeutral, cfg, now)
 	if !b.available(now) {
 		t.Fatal("отмена заблокировала пробу")
 	}
 	probe = b.start()
-	b.finish(probe, false, false, cfg, now)
+	b.finish(probe, verdictSuccess, cfg, now)
 	if !b.openUntil.IsZero() || b.failures != 0 {
 		t.Fatal("успешная проба не закрыла размыкатель")
 	}

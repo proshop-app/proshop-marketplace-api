@@ -46,10 +46,14 @@ func TestRareFailuresAndSmallSampleDoNotOpenBreaker(t *testing.T) {
 	now := time.Now()
 	var rare, small breaker
 	for i := 0; i < 1000; i++ {
-		rare.finish(rare.start(), i%100 == 0, false, cfg, now)
+		v := verdictSuccess
+		if i%100 == 0 {
+			v = verdictFailure
+		}
+		rare.finish(rare.start(), v, cfg, now)
 	}
 	for i := 0; i < cfg.FailureMinCalls-1; i++ {
-		small.finish(small.start(), true, false, cfg, now)
+		small.finish(small.start(), verdictFailure, cfg, now)
 	}
 	if !rare.available(now) || !small.available(now) {
 		t.Fatal("редкий отказ или малая выборка открыли размыкатель")
@@ -64,21 +68,21 @@ func TestWindowExpiresBucketsAndLongIdlePeriod(t *testing.T) {
 	now := time.Unix(1000, 0)
 	var b breaker
 	for i := 0; i < 4; i++ {
-		b.finish(b.start(), true, false, cfg, now)
+		b.finish(b.start(), verdictFailure, cfg, now)
 	}
 	now = now.Add(31 * time.Second)
 	for i := 0; i < 4; i++ {
-		b.finish(b.start(), false, false, cfg, now)
+		b.finish(b.start(), verdictSuccess, cfg, now)
 	}
 	now = now.Add(time.Second)
 	for i := 0; i < 10; i++ {
-		b.finish(b.start(), false, false, cfg, now)
+		b.finish(b.start(), verdictSuccess, cfg, now)
 	}
 	if !b.available(now) || b.window.failures != 0 || b.window.calls != 14 {
 		t.Fatal("старая корзина не забыта", b.window.calls, b.window.failures)
 	}
 	now = now.Add(cfg.FailureWindow)
-	b.finish(b.start(), false, false, cfg, now)
+	b.finish(b.start(), verdictSuccess, cfg, now)
 	if b.window.calls != 1 || b.window.failures != 0 {
 		t.Fatal("простой не очистил окно")
 	}
@@ -89,14 +93,14 @@ func TestNeutralResultsAndProbeDoNotPolluteWindow(t *testing.T) {
 	now := time.Now()
 	var b breaker
 	for i := 0; i < 100; i++ {
-		b.finish(b.start(), true, true, cfg, now)
+		b.finish(b.start(), verdictNeutral, cfg, now)
 	}
 	if b.window.calls != 0 || b.failures != 0 {
 		t.Fatal("нейтральные исходы попали в долю")
 	}
 	b.open(cfg.OpenInterval, now)
 	now = now.Add(cfg.OpenInterval)
-	b.finish(b.start(), false, false, cfg, now)
+	b.finish(b.start(), verdictSuccess, cfg, now)
 	if !b.available(now) || b.window.calls != 0 {
 		t.Fatal("проба не начала новое окно")
 	}

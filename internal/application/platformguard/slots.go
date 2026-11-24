@@ -2,9 +2,8 @@ package platformguard
 
 import (
 	"context"
-	"errors"
+	"time"
 
-	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -80,16 +79,10 @@ func (c *Client) release(p permit, err error) {
 }
 
 func (c *Client) finishBreakers(p permit, err error) {
-	var serverFailure *ports.PlatformServerFailure
-	shared := errors.As(err, &serverFailure)
-	var catalogFailure *ports.PickupCatalogFailure
-	catalog := errors.As(err, &catalogFailure)
-	canceled := errors.Is(err, context.Canceled)
 	now := c.clock.Now()
-	serverNeutral := canceled || (!shared && errors.Is(err, context.DeadlineExceeded))
-	c.server.finish(p.server, shared, serverNeutral, c.cfg, now)
+	c.server.finish(p.server, serverVerdict(p, err), c.cfg, now)
 	if p.tenant.id != "" {
-		p.tenant.breaker.finish(p.shop, tenantFailure(err), shared || canceled || catalog, c.cfg, now)
+		p.tenant.breaker.finish(p.shop, tenantVerdict(err), c.cfg, now)
 	}
 }
 
@@ -102,4 +95,24 @@ func (c *Client) breakerReason(state *tenantState) string {
 		return "tenant_breaker"
 	}
 	return ""
+}
+
+// reopensAt — когда размыкатель, давший отказ, снова допустит вызов. Пока идёт единственная проба,
+// её итог известен не позже строгого срока: до него повтор получит тот же отказ.
+func (c *Client) reopensAt(ctx context.Context, reason string) time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := c.clock.Now()
+	b := &c.server
+	tenant, _ := ctx.Value(tenantContextKey{}).(ids.TenantID)
+	if state := c.tenants[tenant]; reason == "tenant_breaker" && state != nil {
+		b = &state.breaker
+	}
+	if b.openUntil.IsZero() {
+		return now
+	}
+	if b.openUntil.After(now) {
+		return b.openUntil
+	}
+	return now.Add(c.cfg.StrictTimeout)
 }

@@ -9,6 +9,7 @@ import (
 
 	app "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	"github.com/proshop-app/proshop-marketplace/internal/application/platformguard"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -42,12 +43,38 @@ func setup(t *testing.T, attempts int) (*app.Service, *fake.Platform, *fake.Stor
 			Delivery: participant.DeliverySettings{Regions: []string{"RU-AD"}, Carriers: []string{"cdek", "yandex"}},
 		})
 	}
-	service := app.NewService(store, platform, fake.NewPickupCache(), app.Config{
+	service := app.NewService(store, guarded(platform, 20*time.Millisecond), fake.NewPickupCache(), app.Config{
 		Attempts:     attempts,
 		TTL:          time.Hour,
 		QuoteTimeout: 20 * time.Millisecond,
 	})
 	return service, platform, store
+}
+
+// guarded повторяет сборку процесса: срок вызова магазина ставит только ограждение.
+func guarded(platform *fake.Platform, timeout time.Duration) *platformguard.Client {
+	return platformguard.New(
+		platform,
+		platformguard.Config{
+			StrictTimeout:         timeout,
+			MaxConcurrent:         128,
+			CheckoutMaxConcurrent: 64,
+			ReadMaxConcurrent:     64,
+			TenantMaxConcurrent:   8,
+			QueueSize:             1024,
+			TenantQueueSize:       32,
+			TenantStateSize:       10000,
+			TenantIdleTTL:         10 * time.Minute,
+			FailureThreshold:      5,
+			FailureWindow:         30 * time.Second,
+			FailureMinCalls:       20,
+			FailurePercent:        50,
+			OpenInterval:          5 * time.Second,
+		},
+		fake.NewClock(time.Now()),
+		nil,
+		nil,
+	)
 }
 
 func answer() ports.PickupPoints {

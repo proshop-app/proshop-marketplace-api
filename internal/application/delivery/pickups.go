@@ -361,12 +361,12 @@ func (s *Service) fetch(
 			break
 		}
 		seen[tenant] = true
-		callCtx, cancel := context.WithTimeout(ctx, ports.PickupCatalogBudget(s.config.QuoteTimeout))
+		// Бюджет — данными: срок вызову ставит только ограждение платформы.
+		callCtx := ports.WithPlatformCallBudget(ctx, ports.PickupCatalogBudget(s.config.QuoteTimeout))
 		if ports.PlatformClassFromContext(ctx) != ports.PlatformCheckout {
 			callCtx = ports.WithPlatformCallClass(callCtx, ports.PlatformCatalog)
 		}
 		answer, err := s.platform.PickupPoints(callCtx, tenant, carrier, city)
-		cancel()
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}

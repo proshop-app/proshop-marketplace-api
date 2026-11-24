@@ -134,9 +134,7 @@ func (s *Service) chargePaymentGroups(ctx context.Context, state checkout.State,
 		if err != nil {
 			return err
 		}
-		callCtx, cancel := context.WithTimeout(ctx, s.orderCallBudget())
-		err = s.platform.StubPayment(callCtx, g.TenantID, g.OrderID, amount)
-		cancel()
+		err = s.platform.StubPayment(s.orderCallContext(ctx), g.TenantID, g.OrderID, amount)
 		if err != nil {
 			slog.Warn("отказ оплаты заказа", "tenantId", g.TenantID, "orderId", g.OrderID, "error", err)
 			return paymentRefusal(g.TenantID, err, attempt)

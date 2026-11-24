@@ -55,13 +55,11 @@ func (s *Service) cancelGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 	if err != nil || !started {
 		return err
 	}
-	callCtx, stop := context.WithTimeout(ctx, s.orderCallBudget())
-	result, failed := s.platform.CancelOrder(callCtx, tenant, ports.CancelOrderRequest{
+	result, failed := s.platform.CancelOrder(s.orderCallContext(ctx), tenant, ports.CancelOrderRequest{
 		ExternalCheckoutID: group.ExternalCheckoutID,
 		GroupID:            tenant,
 		Reason:             reason,
 	})
-	stop()
 	// Ответ команды монотонен: позднее создание не должно снять подтверждённый запрет.
 	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), completionTimeout)
 	defer cancel()

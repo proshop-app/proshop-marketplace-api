@@ -16,7 +16,7 @@ import (
 func TestCatalogueFailureAndDisconnectedSourceNeverBecomeEmptySuccess(t *testing.T) {
 	_, platform, store := setup(t, 3)
 	cache := fake.NewPickupCache()
-	service := app.NewService(store, platform, cache, app.Config{
+	service := app.NewService(store, guarded(platform, 20*time.Millisecond), cache, app.Config{
 		Attempts:     3,
 		TTL:          time.Hour,
 		QuoteTimeout: 20 * time.Millisecond,
@@ -53,7 +53,7 @@ func TestCatalogueFailureAndDisconnectedSourceNeverBecomeEmptySuccess(t *testing
 	// Следующий источник отвечает: свежая реплика после короткого отказа загружает реальные пункты.
 	platform.BeforePickup = nil
 	platform.SetPickupPoints("t2", answer())
-	service = app.NewService(store, platform, fake.NewPickupCache(), app.Config{
+	service = app.NewService(store, guarded(platform, 20*time.Millisecond), fake.NewPickupCache(), app.Config{
 		Attempts:     3,
 		TTL:          time.Hour,
 		QuoteTimeout: 20 * time.Millisecond,
