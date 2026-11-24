@@ -26,7 +26,7 @@ func TestClientReusesConnectionsWithinLimit(t *testing.T) {
 	}
 	server.Start()
 	defer server.Close()
-	client := httpclient.New(httpclient.Config{Conns: conns, Timeout: time.Second})
+	client := httpclient.Internal(httpclient.Config{Conns: conns, Timeout: time.Second})
 
 	for range 3 {
 		var wave sync.WaitGroup
@@ -61,7 +61,7 @@ func TestClientRefusesRedirectAndCutsHungServer(t *testing.T) {
 	}))
 	defer server.Close()
 	defer close(release)
-	client := httpclient.New(httpclient.Config{Conns: 2, Timeout: 50 * time.Millisecond})
+	client := httpclient.Internal(httpclient.Config{Conns: 2, Timeout: 50 * time.Millisecond})
 
 	reply, err := client.Get(server.URL + "/redirect")
 	if err != nil || reply.StatusCode != http.StatusFound {
@@ -76,5 +76,27 @@ func TestClientRefusesRedirectAndCutsHungServer(t *testing.T) {
 	}
 	if err == nil || time.Since(started) > time.Second {
 		t.Fatalf("зависший сервер отрезается сроком вызова: %v за %s", err, time.Since(started))
+	}
+}
+
+func TestExternalHeaderTimeoutCutsSilentSourceBeforeCallCeiling(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
+	defer server.Close()
+	defer close(release)
+	client := httpclient.External(httpclient.Config{
+		Conns:         1,
+		Timeout:       time.Minute,
+		HeaderTimeout: 50 * time.Millisecond,
+		DirectOnly:    true,
+	})
+
+	started := time.Now()
+	reply, err := client.Get(server.URL)
+	if err == nil {
+		_ = reply.Body.Close()
+	}
+	if err == nil || time.Since(started) > time.Second {
+		t.Fatalf("молчащий источник отрезается сроком заголовков: %v за %s", err, time.Since(started))
 	}
 }

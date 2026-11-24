@@ -100,6 +100,11 @@ domain ← application ← interfaces, infrastructure        сборка гра
 - Любой вызов наружу (база, индекс, брокер, сервер, sms.ru,
   перевозчики) — за портом в `application/ports`, реализация — в
   `infrastructure`. Учётные данные внешних сервисов — только из окружения.
+- HTTP-клиент собирает только `infrastructure/httpclient` (`Internal` — сервисы
+  кластера, `External` — интернет): предел соединений, сроки установки и вызова,
+  без redirect. Ручной `http.Client`/`http.Transport` и стандартные клиенты —
+  красный `internal/architecture/httpclients_test.go`. Пул служебной команды —
+  `postgres.OpenCommand`.
 - Контракт с внутренним API сервера — `docs/server-contract.md`; клиент
   `infrastructure/platformapi` меняется только вместе с ним.
 - Тесты приложения и транспорта — на `application/fake`.

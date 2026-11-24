@@ -49,7 +49,7 @@ func run() int {
 	ctx, cancel := context.WithTimeout(ctx, db.Maintenance.Transaction)
 	defer cancel()
 
-	pool, err := postgres.Open(ctx, db.URL, 2, postgres.Budget(db.Maintenance))
+	pool, err := postgres.OpenCommand(ctx, db.URL, postgres.Budget(db.Maintenance))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 

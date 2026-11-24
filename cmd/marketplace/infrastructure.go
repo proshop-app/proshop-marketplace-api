@@ -24,8 +24,6 @@ const (
 	retentionBatch = 1000
 	// keyPrefix — префикс ключей маркетплейса в Redis.
 	keyPrefix = "marketplace:"
-	// commandConnections — пул служебной команды: она работает последовательно.
-	commandConnections = 2
 	// maxProcessConnections — потолок суммы пулов процесса: столько соединений
 	// реплика может держать в PostgreSQL одновременно, не считая advisory lock.
 	maxProcessConnections = 1000
@@ -148,7 +146,7 @@ func checkOutboxLease(outbox config.Outbox) error {
 
 // openCommandPool — небольшой пул служебной команды со сроками обслуживания.
 func openCommandPool(ctx context.Context, database config.Database) (*pgxpool.Pool, error) {
-	return postgres.Open(ctx, database.URL, commandConnections, postgres.Budget(database.Maintenance))
+	return postgres.OpenCommand(ctx, database.URL, postgres.Budget(database.Maintenance))
 }
 
 func openSearch(cfg config.Config) (*searchapi.Index, error) {

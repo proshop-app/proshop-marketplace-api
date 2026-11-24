@@ -9,6 +9,10 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
+// commandConnections — пул служебной команды (миграции, таксономия, реестр, отчёты):
+// она работает последовательно, второе соединение — под блокировку миграций goose.
+const commandConnections = 2
+
 // databaseClasses — классы нагрузки, для каждого из которых процесс держит свой пул.
 var databaseClasses = []ports.DatabaseClass{
 	ports.DatabaseRead,
@@ -48,6 +52,11 @@ func OpenPools(ctx context.Context, url string, configs map[ports.DatabaseClass]
 		pools.classes[class] = newClassPool(pool, config.Budget)
 	}
 	return pools, nil
+}
+
+// OpenCommand — пул служебной команды со сроками обслуживания budget.
+func OpenCommand(ctx context.Context, url string, budget Budget) (*pgxpool.Pool, error) {
+	return Open(ctx, url, commandConnections, budget)
 }
 
 // Pool — пул класса для хранилищ одного класса нагрузки.

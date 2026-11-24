@@ -118,7 +118,7 @@ func New(cfg Config) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(cfg.BaseURL, "/"),
 		token:   cfg.Token,
-		http:    httpclient.New(httpclient.Config{Conns: cfg.Conns, Timeout: cfg.Timeout}),
+		http:    httpclient.Internal(httpclient.Config{Conns: cfg.Conns, Timeout: cfg.Timeout}),
 	}
 }
 

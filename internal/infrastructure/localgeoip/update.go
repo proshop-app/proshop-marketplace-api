@@ -13,12 +13,18 @@ import (
 	"time"
 
 	"github.com/oschwald/maxminddb-golang"
+
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/httpclient"
 )
 
 const (
 	// Ноябрь 2026: 121 МиБ. 512 МиБ дают запас роста и ограничивают распаковку.
 	maxDatabaseBytes = 512 << 20
 	downloadHost     = "download.db-ip.com"
+	// downloadTimeout — сжатая база в десятки мегабайт скачивается раз в месяц вне
+	// пути покупателя; заголовки же должны прийти быстро, иначе источник недоступен.
+	downloadTimeout       = 10 * time.Minute
+	downloadHeaderTimeout = 30 * time.Second
 )
 
 // Updater загружает только опубликованную DB-IP, вне пути HTTP-запроса покупателя.
@@ -31,17 +37,13 @@ type Updater struct {
 func NewUpdater() *Updater {
 	return &Updater{
 		source: "https://" + downloadHost + "/free/dbip-city-lite-",
-		client: &http.Client{
-			Timeout: 10 * time.Minute,
-			Transport: &http.Transport{
-				DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
-				TLSHandshakeTimeout:   15 * time.Second,
-				ResponseHeaderTimeout: 30 * time.Second,
-			},
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return fmt.Errorf("перенаправление загрузки DB-IP запрещено")
-			},
-		},
+		// Перенаправление не выполняется: ответ 3xx — отказ загрузки по статусу.
+		client: httpclient.External(httpclient.Config{
+			Conns:         1,
+			Timeout:       downloadTimeout,
+			HeaderTimeout: downloadHeaderTimeout,
+			DirectOnly:    true,
+		}),
 	}
 }
 

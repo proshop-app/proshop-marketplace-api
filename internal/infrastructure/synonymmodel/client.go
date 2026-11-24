@@ -14,12 +14,16 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/application/synonyms"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/httpclient"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
 // RequestTimeout — срок ответа внешней модели на пачку понятий: генерация идёт десятки
 // секунд, а фоновая сверка синонимов не держит покупателей и может подождать.
 const RequestTimeout = 35 * time.Second
+
+// modelConns — сверку синонимов ведёт один фоновый цикл одной реплики.
+const modelConns = 2
 
 const (
 	requestLimit  = 16 << 10
@@ -62,12 +66,7 @@ func New(endpoint, token, model string, timeout time.Duration) (*Client, error) 
 		url:   endpoint,
 		token: token,
 		model: model,
-		http: &http.Client{
-			Timeout: timeout,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		},
+		http:  httpclient.External(httpclient.Config{Conns: modelConns, Timeout: timeout}),
 	}, nil
 }
 

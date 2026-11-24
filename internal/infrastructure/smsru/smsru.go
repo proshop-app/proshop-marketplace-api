@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/httpclient"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
@@ -24,6 +25,13 @@ const (
 
 	codeAccepted     = 100
 	codeInvalidPhone = 202
+
+	// requestTimeout — ответ шлюза на заведение или проверку звонка: покупатель ждёт
+	// его на экране входа, дольше десяти секунд шлюз считается недоступным.
+	requestTimeout = 10 * time.Second
+	// gatewayConns — одновременные вызовы шлюза с реплики: вход ограничен лимитами
+	// на номер и адрес, проверка состояния идёт раз в несколько секунд.
+	gatewayConns = 16
 )
 
 // ErrRejected — шлюз отказал: нет денег на счёте, неверный ключ, сбой.
@@ -40,7 +48,6 @@ var statuses = map[string]buyer.CallStatus{
 type Config struct {
 	BaseURL string
 	APIID   string
-	Timeout time.Duration
 }
 
 // Client — живой шлюз sms.ru.
@@ -67,12 +74,11 @@ func New(cfg Config) *Client {
 		base = DefaultBaseURL
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = 10 * time.Second
+	return &Client{
+		baseURL: base,
+		apiID:   cfg.APIID,
+		http:    httpclient.External(httpclient.Config{Conns: gatewayConns, Timeout: requestTimeout}),
 	}
-
-	return &Client{baseURL: base, apiID: cfg.APIID, http: &http.Client{Timeout: timeout}}
 }
 
 // Start заводит проверку. Частный и локальный адрес покупателя шлюзу не

@@ -78,7 +78,7 @@ func New(cfg Config) (*Index, error) {
 		base:          strings.TrimRight(cfg.URL, "/") + apiPath,
 		token:         cfg.Token,
 		purchaseToken: cfg.PurchaseToken,
-		client:        httpclient.New(httpclient.Config{Conns: searchConns, Timeout: ServiceTimeout}),
+		client:        httpclient.Internal(httpclient.Config{Conns: searchConns, Timeout: ServiceTimeout}),
 	}, nil
 }
 
