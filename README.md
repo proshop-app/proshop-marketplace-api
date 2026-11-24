@@ -66,8 +66,9 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | Переменная | Обязательна | По умолчанию | Назначение |
 |---|---|---|---|
 | `DATABASE_URL` | да | — | PostgreSQL `postgres://…` |
-| `DATABASE_READ_MAX_CONNS`, `DATABASE_CHECKOUT_MAX_CONNS`, `DATABASE_BACKGROUND_MAX_CONNS` | | `8`, `6`, `10` | пулы чтения покупателя, HTTP-записи (корзина, оформление, вход, избранное, API сервера) и фона (outbox, оформление заказов, циклы, оператор), 1–1000; сумма всех пулов не больше 1000 |
+| `DATABASE_READ_MAX_CONNS`, `DATABASE_CHECKOUT_MAX_CONNS`, `DATABASE_BACKGROUND_MAX_CONNS` | | `8`, `6`, `10` | пулы чтения покупателя, HTTP-записи (корзина, оформление, вход, избранное, API сервера) и фона (outbox, циклы, оператор), 1–1000; сумма всех пулов не больше 1000 |
 | `DATABASE_INGESTION_MAX_CONNS` | | `KAFKA_WORKERS` + 4 | пул приёма Kafka; меньше воркеров обеих групп и полосы статусов заказов — отказ старта |
+| `DATABASE_ORDERS_MAX_CONNS` | | `29` | пул исполнителя оформления: 28 мест полос и взятие задач; меньше — отказ старта. Индексация и циклы его не занимают |
 | `SEARCH_URL` | да | — | адрес общего `proshop-search` без `/api` |
 | `SEARCH_MARKETPLACE_TOKEN` | да | — | отдельный служебный токен поиска, ≥ 32 символов |
 | `SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN` | | — | отдельный токен для поисковых покупок, ≥ 32 байт. Нужен вместе с ключом аналитики |

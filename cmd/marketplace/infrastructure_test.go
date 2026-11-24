@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
@@ -19,6 +20,7 @@ func poolConfig(ingestion int32) config.Config {
 			Checkout:   config.DatabasePool{MaxConns: 6, Budget: budget},
 			Ingestion:  config.DatabasePool{MaxConns: ingestion, Budget: budget},
 			Background: config.DatabasePool{MaxConns: 10, Budget: budget},
+			Orders:     config.DatabasePool{Budget: budget},
 		},
 	}
 }
@@ -31,6 +33,9 @@ func TestIngestionPoolFitsAllKafkaWorkers(t *testing.T) {
 	if got := pools[ports.DatabaseIngestion].MaxConns; got != int32(8+kafka.OrderWorkers) {
 		t.Fatalf("пул приёма по умолчанию вмещает обе группы и полосу статусов заказов: %d", got)
 	}
+	if got := pools[ports.DatabaseOrders].MaxConns; got != int32(appcheckout.ExecutorSlots+1) {
+		t.Fatalf("пул оформления вмещает все места исполнителя и взятие задач: %d", got)
+	}
 	if pools[ports.DatabaseRead].MaxConns != 8 || pools[ports.DatabaseBackground].Budget.Transaction != 2*time.Second {
 		t.Fatalf("пулы классов переносят размер и сроки: %+v", pools)
 	}
@@ -38,6 +43,11 @@ func TestIngestionPoolFitsAllKafkaWorkers(t *testing.T) {
 	_, err = databasePools(poolConfig(int32(8 + kafka.OrderWorkers - 1)))
 	if err == nil || !strings.Contains(err.Error(), "DATABASE_INGESTION_MAX_CONNS") {
 		t.Fatalf("пул приёма меньше воркеров — отказ старта: %v", err)
+	}
+	small := poolConfig(0)
+	small.Database.Orders.MaxConns = int32(appcheckout.ExecutorSlots)
+	if _, err := databasePools(small); err == nil || !strings.Contains(err.Error(), "DATABASE_ORDERS_MAX_CONNS") {
+		t.Fatalf("пул оформления меньше мест исполнителя — отказ старта: %v", err)
 	}
 }
 

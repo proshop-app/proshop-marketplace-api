@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
@@ -72,16 +73,35 @@ func (s *storage) pool(class ports.DatabaseClass) *pgxpool.Pool {
 // databasePools — пул на класс нагрузки; сумма пулов ограничена потолком процесса.
 func databasePools(cfg config.Config) (map[ports.DatabaseClass]postgres.PoolConfig, error) {
 	db := cfg.Database
-	ingestion, err := ingestionConnections(cfg)
+	var err error
+	// Воркер приёма держит соединение всю транзакцию проекции: меньший пул превратил бы
+	// воркеры в очередь за соединением.
+	db.Ingestion.MaxConns, err = fitConnections(
+		"DATABASE_INGESTION_MAX_CONNS",
+		db.Ingestion.MaxConns,
+		cfg.Kafka.Workers+kafka.OrderWorkers,
+		"KAFKA_WORKERS и воркеров статусов заказов",
+	)
 	if err != nil {
 		return nil, err
 	}
-	db.Ingestion.MaxConns = ingestion
+	// Каждое место исполнителя держит не больше одного соединения, ещё одно — взятие задач:
+	// при таком пуле ни одно место не ждёт соединения за другим.
+	db.Orders.MaxConns, err = fitConnections(
+		"DATABASE_ORDERS_MAX_CONNS",
+		db.Orders.MaxConns,
+		appcheckout.ExecutorSlots+1,
+		"мест исполнителя оформления и взятия задач",
+	)
+	if err != nil {
+		return nil, err
+	}
 	classes := map[ports.DatabaseClass]config.DatabasePool{
 		ports.DatabaseRead:       db.Read,
 		ports.DatabaseCheckout:   db.Checkout,
 		ports.DatabaseIngestion:  db.Ingestion,
 		ports.DatabaseBackground: db.Background,
+		ports.DatabaseOrders:     db.Orders,
 	}
 	pools := make(map[ports.DatabaseClass]postgres.PoolConfig, len(classes))
 	var total int32
@@ -96,24 +116,17 @@ func databasePools(cfg config.Config) (map[ports.DatabaseClass]postgres.PoolConf
 	return pools, nil
 }
 
-// ingestionConnections — пул приёма вмещает все воркеры Kafka вместе с полосой статусов
-// заказов: воркер держит соединение всю транзакцию проекции, и меньший пул превратил бы
-// воркеры в очередь за соединением. Без DATABASE_INGESTION_MAX_CONNS пул равен их числу.
-func ingestionConnections(cfg config.Config) (int32, error) {
-	workers := cfg.Kafka.Workers + kafka.OrderWorkers
-	if workers > maxProcessConnections {
-		return 0, fmt.Errorf("KAFKA_WORKERS: воркеров приёма больше %d соединений процесса", maxProcessConnections)
+// fitConnections — пул под одновременных держателей соединений: без переменной он равен
+// их числу, меньше — отказ старта.
+func fitConnections(name string, configured int32, holders int, who string) (int32, error) {
+	if holders > maxProcessConnections {
+		return 0, fmt.Errorf("%s: %d держателей соединений больше %d", name, holders, maxProcessConnections)
 	}
-	configured := cfg.Database.Ingestion.MaxConns
 	if configured == 0 {
-		return int32(workers), nil //nolint:gosec // не больше maxProcessConnections
+		return int32(holders), nil //nolint:gosec // не больше maxProcessConnections
 	}
-	if int(configured) < workers {
-		return 0, fmt.Errorf(
-			"DATABASE_INGESTION_MAX_CONNS: не меньше %d — KAFKA_WORKERS и %d воркеров статусов заказов",
-			workers,
-			kafka.OrderWorkers,
-		)
+	if int(configured) < holders {
+		return 0, fmt.Errorf("%s: не меньше %d — %s", name, holders, who)
 	}
 	return configured, nil
 }

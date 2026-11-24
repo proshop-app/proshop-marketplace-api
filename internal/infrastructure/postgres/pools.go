@@ -15,6 +15,7 @@ var databaseClasses = []ports.DatabaseClass{
 	ports.DatabaseCheckout,
 	ports.DatabaseIngestion,
 	ports.DatabaseBackground,
+	ports.DatabaseOrders,
 }
 
 // PoolConfig — размер и сроки пула одного класса нагрузки.

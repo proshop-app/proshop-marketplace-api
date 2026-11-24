@@ -28,6 +28,9 @@ const (
 	PollPerTenant       = 1
 	CancelWorkers       = 4
 	CancelPerTenant     = 1
+	// ExecutorSlots — все места полос; каждое держит не больше одного соединения
+	// базы за раз: транзакции короткие, вызов магазина идёт вне транзакции.
+	ExecutorSlots = CreationWorkers + DeadlineWorkers + PollWorkers + CancelWorkers
 )
 
 // TaskResult публикуется после отметки задачи; позволяет циклу сразу заполнить свободное место.
@@ -76,6 +79,9 @@ func (e *Executor) Wait() { e.wg.Wait() }
 
 // Dispatch не ждёт HTTP: каждый освободившийся слот доступен следующему Claim.
 func (e *Executor) Dispatch(ctx context.Context) error {
+	// Создание заказа ждёт покупатель (CreationTimeout): полоса берёт соединения своего
+	// пула, их не займут индексация outbox и фоновые циклы.
+	ctx = ports.WithDatabaseClass(ctx, ports.DatabaseOrders)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, kind := range []string{TaskExpireCreation, TaskCreateOrder, TaskCancelOrder, TaskPollOrder} {

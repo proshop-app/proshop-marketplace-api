@@ -44,6 +44,7 @@ func TestPoolsApplyClassBudgetsAndQuotas(t *testing.T) {
 		ports.DatabaseCheckout:   {MaxConns: 1, Budget: slow},
 		ports.DatabaseIngestion:  {MaxConns: 1, Budget: slow},
 		ports.DatabaseBackground: {MaxConns: 1, Budget: slow},
+		ports.DatabaseOrders:     {MaxConns: 1, Budget: slow},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -70,6 +71,16 @@ func TestPoolsApplyClassBudgetsAndQuotas(t *testing.T) {
 	defer ingestion.Release()
 	if err := uow.Do(read, func(context.Context, ports.Tx) error { return nil }); err != nil {
 		t.Fatal("приём не занимает соединения покупателей", err)
+	}
+	// Фон (outbox индексации, циклы) занят целиком — исполнитель оформления не ждёт.
+	background, err := pools.Pool(ports.DatabaseBackground).Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer background.Release()
+	orders := ports.WithDatabaseClass(ctx, ports.DatabaseOrders)
+	if err := uow.Do(orders, func(context.Context, ports.Tx) error { return nil }); err != nil {
+		t.Fatal("фон не занимает соединения исполнителя оформления", err)
 	}
 
 	blocker, err := database.Acquire(ctx)

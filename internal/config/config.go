@@ -163,10 +163,12 @@ type Database struct {
 	Maintenance DatabaseBudget
 	Read        DatabasePool
 	Checkout    DatabasePool
-	// Ingestion.MaxConns ноль — по числу воркеров приёма; его и сумму пулов проверяет
-	// сборка процесса: она знает размер полосы статусов заказов.
+	// Ingestion.MaxConns и Orders.MaxConns ноль — по числу воркеров приёма и мест
+	// исполнителя оформления; их и сумму пулов проверяет сборка процесса: она знает
+	// размеры полос.
 	Ingestion  DatabasePool
 	Background DatabasePool
+	Orders     DatabasePool
 	URL        string
 }
 
@@ -449,6 +451,7 @@ func (r *reader) database() Database {
 		Checkout:    r.databasePool("CHECKOUT", 6, 2*time.Second, 5*time.Second),
 		Ingestion:   r.databasePool("INGESTION", 0, 2*time.Second, 5*time.Second),
 		Background:  r.databasePool("BACKGROUND", 10, 10*time.Second, 30*time.Second),
+		Orders:      r.databasePool("ORDERS", 0, 2*time.Second, 5*time.Second),
 		Maintenance: r.databaseBudget("MAINTENANCE", 5*time.Minute, 10*time.Minute),
 	}
 }

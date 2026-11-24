@@ -3,6 +3,7 @@ package checkout_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,13 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
+
+// classQueue запоминает класс базы, с которым исполнитель обращается к очереди.
+type classQueue struct {
+	ports.TaskQueue
+	mu      sync.Mutex
+	classes []ports.DatabaseClass
+}
 
 // panickingOrderPlatform падает паникой на создании заказа магазина.
 type panickingOrderPlatform struct {
@@ -103,6 +111,22 @@ func TestExecutorShutdownLeavesInFlightTaskForNextProcess(t *testing.T) {
 	}
 }
 
+func (q *classQueue) Claim(ctx context.Context, request ports.ClaimRequest) ([]ports.Task, error) {
+	q.remember(ctx)
+	return q.TaskQueue.Claim(ctx, request)
+}
+
+func (q *classQueue) Resolve(ctx context.Context, results []ports.TaskResolution) error {
+	q.remember(ctx)
+	return q.TaskQueue.Resolve(ctx, results)
+}
+
+func (q *classQueue) remember(ctx context.Context) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.classes = append(q.classes, ports.DatabaseClassFrom(ctx))
+}
+
 func (panickingOrderPlatform) CreateOrder(
 	context.Context,
 	ids.TenantID,
@@ -144,6 +168,36 @@ func TestExecutorQuarantinesPanickingTask(t *testing.T) {
 	for _, row := range e.store.OutboxRows() {
 		if row.ID == result.Task.ID && row.FailedAt == nil {
 			t.Fatal("задача с паникой не ушла в карантин", row)
+		}
+	}
+}
+
+func TestExecutorUsesOrdersDatabaseClass(t *testing.T) {
+	e := setup(t)
+	c := confirmedPurchase(t, e)
+	ctx := context.Background()
+	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+		t.Fatal(err)
+	}
+	queue := &classQueue{TaskQueue: e.store}
+	executor := appcheckout.NewExecutor(queue, e.clock, e.service, messaging.DefaultMaxAttempts)
+	if err := executor.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-executor.Results():
+	case <-time.After(time.Second):
+		t.Fatal("задача создания не разобрана")
+	}
+	executor.Wait()
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	if len(queue.classes) < 2 {
+		t.Fatal("взятие и отметка задач не дошли до очереди", queue.classes)
+	}
+	for _, class := range queue.classes {
+		if class != ports.DatabaseOrders {
+			t.Fatal("исполнитель оформления работает в своём пуле, а не в пуле фона", queue.classes)
 		}
 	}
 }

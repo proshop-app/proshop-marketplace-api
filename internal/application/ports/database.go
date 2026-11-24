@@ -9,7 +9,7 @@ type DatabaseClass int
 
 // Классы нагрузки. Работа без явного класса относится к фону.
 const (
-	// DatabaseBackground — outbox, исполнитель оформления, фоновые циклы, операторские маршруты.
+	// DatabaseBackground — outbox, фоновые циклы, операторские маршруты.
 	DatabaseBackground DatabaseClass = iota + 1
 	// DatabaseRead — чтение покупателя по HTTP.
 	DatabaseRead
@@ -17,6 +17,8 @@ const (
 	DatabaseCheckout
 	// DatabaseIngestion — приём событий Kafka.
 	DatabaseIngestion
+	// DatabaseOrders — исполнитель оформления: создание, срок, сверка и отмена заказов магазинов.
+	DatabaseOrders
 )
 
 type databaseClassKey struct{}
@@ -29,7 +31,7 @@ func WithDatabaseClass(ctx context.Context, class DatabaseClass) context.Context
 // DatabaseClassFrom возвращает явно выбранный класс либо фон.
 func DatabaseClassFrom(ctx context.Context) DatabaseClass {
 	class, ok := ctx.Value(databaseClassKey{}).(DatabaseClass)
-	if ok && class >= DatabaseBackground && class <= DatabaseIngestion {
+	if ok && class >= DatabaseBackground && class <= DatabaseOrders {
 		return class
 	}
 	return DatabaseBackground

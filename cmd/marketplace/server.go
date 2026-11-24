@@ -432,7 +432,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		searchPurchases:   purchases,
 		dispatcher:        dispatcher,
 		creation: appcheckout.NewExecutor(
-			postgres.NewTaskQueue(background),
+			postgres.NewTaskQueue(s.store.pool(ports.DatabaseOrders)),
 			now,
 			checkouts,
 			cfg.Outbox.MaxAttempts,
