@@ -60,8 +60,9 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 	var answer checkout.SellerOrder
 	failed := s.ready(ctx, []checkout.Group{group})
 	if failed == nil {
-		budget := min(s.orderCallBudget(), group.CreationDeadline.Sub(s.clock.Now()))
-		answer, failed = s.platform.CreateOrder(ports.WithPlatformCallBudget(ctx, budget), tenant, request)
+		// После срока создания заказ закроет задача срока: позже вызывать сервер незачем.
+		callCtx := ports.WithPlatformCallDeadline(s.orderCallContext(ctx), group.CreationDeadline)
+		answer, failed = s.platform.CreateOrder(callCtx, tenant, request)
 	}
 	var refusal *ports.OrderRefusal
 	if errors.As(failed, &refusal) && refusal.Code == checkout.DispatchOriginChanged {
@@ -108,11 +109,12 @@ func creationRetry(failed error, group checkout.Group) error {
 	return &creationPendingUntil{at: rejected.NotBefore}
 }
 
-// creationLease покрывает ожидание места в ограждении и сам вызов: каждое — не дольше бюджета.
+// creationLease покрывает ожидание места в ограждении и сам вызов (каждое — не дольше бюджета),
+// но не дальше срока создания: после него ограждение сервер не вызывает и вызов не продолжает.
 func (s *Service) creationLease(c *checkout.Checkout, tenant ids.TenantID, now time.Time) time.Time {
 	for _, g := range c.Groups() {
 		if g.TenantID == tenant {
-			return now.Add(2*min(s.orderCallBudget(), g.CreationDeadline.Sub(now)) + creationLeaseSlack)
+			return now.Add(min(2*s.orderCallBudget(), g.CreationDeadline.Sub(now)) + creationLeaseSlack)
 		}
 	}
 	return now

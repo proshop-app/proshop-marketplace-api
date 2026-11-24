@@ -28,6 +28,12 @@ type hungShopOrders struct {
 	tenant ids.TenantID
 }
 
+// enteringOrders сообщает, что обработчик дошёл до вызова создания заказа через ограждение.
+type enteringOrders struct {
+	ports.PlatformAPI
+	entered chan struct{}
+}
+
 // leaseQueue запоминает аренду, которую исполнитель просит у очереди.
 type leaseQueue struct {
 	ports.TaskQueue
@@ -215,6 +221,84 @@ func TestOpenBreakerDefersCancellationUntilReopen(t *testing.T) {
 	}
 }
 
+// Создание, дождавшееся места к сроку создания, не вызывает сервер: заказ всё равно закроет
+// задача срока, а заголовок срока обещал бы серверу время, которого у площадки нет.
+func TestCreationAdmittedAtDeadlineSkipsServer(t *testing.T) {
+	e := setup(t)
+	c := confirmedPurchase(t, e)
+	ctx := context.Background()
+	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+		t.Fatal(err)
+	}
+	task := firstCreationTask(t, e)
+	occupied, release := make(chan struct{}), make(chan struct{})
+	var created sync.WaitGroup
+	e.platform.CallHook = func(ctx context.Context, operation string) error {
+		switch operation {
+		case "quote":
+			close(occupied)
+			<-release
+		case "create_order":
+			t.Error("сервер вызван после срока создания")
+		}
+		return ctx.Err()
+	}
+	metrics := &fake.PlatformMetrics{}
+	guard := platformguard.New(
+		e.platform,
+		platformguard.Config{
+			StrictTimeout:         time.Second,
+			MaxConcurrent:         2,
+			CheckoutMaxConcurrent: 1,
+			ReadMaxConcurrent:     1,
+			TenantMaxConcurrent:   2,
+			QueueSize:             8,
+			TenantQueueSize:       4,
+			TenantStateSize:       100,
+			TenantIdleTTL:         time.Minute,
+			FailureThreshold:      1,
+			FailureWindow:         30 * time.Second,
+			FailureMinCalls:       1,
+			FailurePercent:        1,
+			OpenInterval:          5 * time.Second,
+		},
+		e.clock,
+		metrics,
+		nil,
+	)
+	upstream := &enteringOrders{PlatformAPI: guard, entered: make(chan struct{}, 1)}
+	svc := appcheckout.NewService(e.store, upstream, e.pickups, e.verifier, &fake.IDs{}, e.clock, guardedConfig())
+	checkoutCtx := ports.WithPlatformCallClass(ctx, ports.PlatformCheckout)
+	created.Add(1)
+	go func() {
+		defer created.Done()
+		_, _ = guard.QuoteDelivery(checkoutCtx, "t9", ports.QuoteRequest{Carrier: "cdek", City: "Город"})
+	}()
+	<-occupied
+	handled := make(chan error, 1)
+	go func() { handled <- svc.HandleOrderTask(ctx, task) }()
+	// Задача захватила группу и ждёт место; время доходит до срока создания, место освобождается.
+	<-upstream.entered
+	e.clock.Advance(appcheckout.CreationTimeout)
+	close(release)
+	err := <-handled
+	created.Wait()
+	// Срок мог наступить до постановки в очередь или после получения места — сервер не вызван в обоих.
+	if metrics.Count("create_order", "deadline_passed")+metrics.Count("create_order", "queue_timeout") != 1 {
+		t.Fatal("создание после срока не отклонено без вызова сервера", err)
+	}
+	requireBreakersClosed(t, guard, task.TenantID)
+}
+
+func (p *enteringOrders) CreateOrder(
+	ctx context.Context,
+	tenant ids.TenantID,
+	request ports.CreateOrderRequest,
+) (checkout.SellerOrder, error) {
+	p.entered <- struct{}{}
+	return p.PlatformAPI.CreateOrder(ctx, tenant, request)
+}
+
 func (p *hungShopOrders) CreateOrder(
 	ctx context.Context,
 	tenant ids.TenantID,
@@ -323,6 +407,13 @@ func requireRejectedAtOnce(t *testing.T, guard *platformguard.Client, tenant ids
 	_, err := guard.MarketplaceSettings(context.Background(), tenant)
 	if !errors.Is(err, platformguard.ErrUnavailable) || time.Since(started) >= hungCallBudget/2 {
 		t.Fatal("размыкатель магазина не открылся после зависания", tenant, err, time.Since(started))
+	}
+}
+
+func requireBreakersClosed(t *testing.T, guard *platformguard.Client, tenant ids.TenantID) {
+	t.Helper()
+	if _, err := guard.MarketplaceSettings(context.Background(), tenant); err != nil {
+		t.Fatal("отказ без вызова сервера засчитан магазину или серверу", err)
 	}
 }
 

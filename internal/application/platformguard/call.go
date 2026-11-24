@@ -19,7 +19,7 @@ func call[T any](
 ) (T, error) {
 	started := time.Now()
 	budget := callBudget(ctx, timeout)
-	p, reason, rejected := c.admit(ctx, class, budget)
+	p, limit, reason, rejected := c.admit(ctx, class, budget)
 	if reason != "" {
 		c.observe(ctx, class, operation, reason, started)
 		var zero T
@@ -28,7 +28,7 @@ func call[T any](
 	p.strict = timeout >= c.cfg.StrictTimeout
 	// Срок, по которому судят магазин, отсчитывается от начала его вызова: ожидание места
 	// занято чужой нагрузкой и магазину не засчитывается. Заголовок срока несёт этот остаток.
-	callCtx, cancel := context.WithTimeout(ctx, budget)
+	callCtx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	value, err := execute(ctx, callCtx, c, p, load)
 	outcome := callOutcome(err)
@@ -50,22 +50,51 @@ func callBudget(ctx context.Context, timeout time.Duration) time.Duration {
 	return timeout
 }
 
-// admit ждёт место не дольше бюджета вызова; конец ожидания и отказ без вызова сервера нейтральны
-// для размыкателей. Отказ размыкателя несёт момент, раньше которого повтор отклонят так же.
-func (c *Client) admit(ctx context.Context, class operationClass, budget time.Duration) (permit, string, error) {
-	waitCtx, cancel := context.WithTimeout(ctx, budget)
+// admit ждёт место не дольше бюджета вызова и не позже крайнего момента вызывающего; конец ожидания
+// и отказ без вызова сервера нейтральны для размыкателей. Отказ размыкателя несёт момент, раньше
+// которого повтор отклонят так же. Срок вызова — бюджет, но не дальше крайнего момента.
+func (c *Client) admit(
+	ctx context.Context,
+	class operationClass,
+	budget time.Duration,
+) (permit, time.Duration, string, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, c.untilDeadline(ctx, budget))
 	defer cancel()
 	p, reason := c.acquire(waitCtx, class)
 	switch {
 	case reason == "":
-		return p, "", nil
+		return c.withinDeadline(ctx, p, budget)
 	case waitCtx.Err() != nil:
-		return p, reason, callError(waitCtx.Err())
+		return p, 0, reason, callError(waitCtx.Err())
 	case reason == "server_breaker" || reason == "tenant_breaker":
-		return p, reason, &ports.PlatformRejected{NotBefore: c.reopensAt(ctx, reason), Cause: ErrUnavailable}
+		rejected := &ports.PlatformRejected{NotBefore: c.reopensAt(ctx, reason), Cause: ErrUnavailable}
+		return p, 0, reason, rejected
 	default:
-		return p, reason, ErrUnavailable
+		return p, 0, reason, ErrUnavailable
 	}
+}
+
+// withinDeadline не вызывает сервер, если место получено к крайнему моменту: работа сервера
+// заведомо пропала бы, магазин не виноват — место возвращается нейтрально.
+func (c *Client) withinDeadline(
+	ctx context.Context,
+	p permit,
+	budget time.Duration,
+) (permit, time.Duration, string, error) {
+	limit := c.untilDeadline(ctx, budget)
+	if limit > 0 {
+		return p, limit, "", nil
+	}
+	c.release(p, context.Canceled)
+	return p, 0, "deadline_passed", ErrTimeout.Wrap(context.DeadlineExceeded)
+}
+
+// untilDeadline — бюджет, урезанный остатком до крайнего момента вызывающего (часы площадки).
+func (c *Client) untilDeadline(ctx context.Context, budget time.Duration) time.Duration {
+	if deadline, ok := ports.PlatformCallDeadline(ctx); ok {
+		return min(budget, deadline.Sub(c.clock.Now()))
+	}
+	return budget
 }
 
 func execute[T any](

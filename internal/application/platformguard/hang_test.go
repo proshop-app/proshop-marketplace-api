@@ -184,6 +184,26 @@ func TestRejectionCarriesReopenTimeAndProbeIsSingle(t *testing.T) {
 	}
 }
 
+// Срок вызова, а с ним заголовок x-marketplace-deadline-ms, не дальше крайнего момента вызывающего.
+func TestCallDeadlineLimitsGrantedTime(t *testing.T) {
+	cfg := testConfig()
+	clock := fake.NewClock(time.Now())
+	upstream := &slowShops{
+		PlatformAPI: fake.NewPlatform(),
+		delays:      map[ids.TenantID]time.Duration{},
+		entered:     make(chan ids.TenantID, 1),
+		granted:     map[ids.TenantID][]time.Duration{},
+	}
+	c := New(upstream, cfg, clock, nil, nil)
+	ctx := ports.WithPlatformCallDeadline(context.Background(), clock.Now().Add(cfg.StrictTimeout/4))
+	if _, err := c.MarketplaceSettings(ctx, "t1"); err != nil {
+		t.Fatal(err)
+	}
+	if granted := upstream.granted["t1"][0]; granted > cfg.StrictTimeout/4 {
+		t.Fatal("срок вызова дальше крайнего момента вызывающего", granted)
+	}
+}
+
 func (c *Client) probing(tenant ids.TenantID) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
