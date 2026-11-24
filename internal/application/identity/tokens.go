@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/identity"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 // ErrRefreshBusy — другой экземпляр уже меняет refresh; прежний секрет не повторяется.
@@ -154,9 +155,10 @@ func (s *Tokens) refresh(ctx context.Context, key string, expected string) (port
 	}
 
 	// Ожидаемый аккаунт входит в ключ: чужой bootstrap не присоединяется к обмену.
-	result := s.flights.DoChan(identity.HashToken(key)+":"+expected, func() (any, error) {
+	flight := identity.HashToken(key) + ":" + expected
+	result := s.flights.DoChan(flight, safego.GuardValue("identity.refresh", func() (any, error) {
 		return s.exchange(ctx, key, expected)
-	})
+	}))
 
 	select {
 	case <-ctx.Done():

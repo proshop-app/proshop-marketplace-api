@@ -8,6 +8,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 const offersConcurrency = 5
@@ -20,7 +21,7 @@ func (q *Queries) Offers(ctx context.Context, offerIDs []ids.OfferID) ([]OfferCa
 	group, readCtx := errgroup.WithContext(ctx)
 	group.SetLimit(offersConcurrency)
 	for i, id := range offerIDs {
-		group.Go(func() error {
+		group.Go(safego.Guard("catalog.offers", func() error {
 			doc, found, err := q.index.Get(readCtx, id.String())
 			if err != nil {
 				return errOffersUnavailable.Wrap(err)
@@ -29,7 +30,7 @@ func (q *Queries) Offers(ctx context.Context, offerIDs []ids.OfferID) ([]OfferCa
 				docs[i] = doc
 			}
 			return nil
-		})
+		}))
 	}
 	if err := group.Wait(); err != nil {
 		return nil, err

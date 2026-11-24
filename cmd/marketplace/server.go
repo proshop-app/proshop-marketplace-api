@@ -49,6 +49,7 @@ import (
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 // referenceStatsInterval — как часто обновлять метрики ревизии и очереди кандидатов реестра.
@@ -132,6 +133,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	defer func() { _ = cache.Close() }()
 	s := &server{cfg: cfg, logger: logger, store: store, cache: cache, metrics: telemetry.NewRegistry()}
+	safego.SetReporter(telemetry.NewGoroutinePanics(s.metrics, logger))
 	s.cityDetector, err = localgeoip.New(cfg.City.Path, cfg.City.DevClientIP, logger, s.metrics)
 	if err != nil {
 		return err
@@ -450,7 +452,7 @@ func (s *server) run(ctx context.Context) error {
 	httpServer := s.httpServer()
 	group, groupCtx := errgroup.WithContext(ctx)
 
-	group.Go(func() error {
+	group.Go(safego.Guard("http.serve", func() error {
 		s.logger.Info(
 			"HTTP слушает",
 			slog.String("addr", cfg.HTTP.Addr),
@@ -462,20 +464,20 @@ func (s *server) run(ctx context.Context) error {
 		}
 
 		return nil
-	})
-	group.Go(func() error {
+	}))
+	group.Go(safego.Guard("http.shutdown", func() error {
 		<-groupCtx.Done()
 
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(groupCtx), cfg.HTTP.ShutdownTimeout)
 		defer cancel()
 
 		return httpServer.Shutdown(shutdownCtx)
-	})
+	}))
 	s.runConsumers(groupCtx, group)
 
 	supervisor := jobs.NewSupervisor(s.logger, s.metrics)
 	for _, loop := range s.jobs() {
-		group.Go(func() error { return supervisor.Run(groupCtx, loop) })
+		group.Go(safego.Guard("job."+loop.Name, func() error { return supervisor.Run(groupCtx, loop) }))
 	}
 
 	s.logger.Info("маркетплейс запущен")

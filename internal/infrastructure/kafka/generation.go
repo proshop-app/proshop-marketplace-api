@@ -8,6 +8,8 @@ import (
 	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 const (
@@ -92,18 +94,29 @@ func (r *Reader) consumeGeneration(
 			session.windows[topic][partition.ID] = window
 			session.positions[topic][partition.ID] = position
 			readers.Add(1)
-			go func() {
-				defer readers.Done()
-				r.readPartition(ctx, topic, partition, session.messages, window, position)
-			}()
+			// Паника чтения партиции останавливает поколение: иначе партиция стояла бы молча.
+			safego.Run(
+				"kafka.read-partition",
+				func() error {
+					defer readers.Done()
+					r.readPartition(ctx, topic, partition, session.messages, window, position)
+					return nil
+				},
+				func(err error) {
+					if err != nil {
+						cancel()
+					}
+				},
+			)
 		}
 	}
 	if r.config.Lag != nil {
 		readers.Add(1)
-		go func() {
+		// Паника подсчёта отставания теряет только метрику до следующего поколения.
+		safego.Go("kafka.lag", func() {
 			defer readers.Done()
 			r.reportLag(ctx, session)
-		}()
+		})
 	}
 	err := consume(ctx)
 	cancel()

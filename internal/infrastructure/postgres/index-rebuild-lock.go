@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 const (
@@ -59,27 +60,36 @@ func (l *IndexRebuildLock) WithLock(ctx context.Context, run func(context.Contex
 		cancel()
 		<-stopped
 	}()
-	go func() {
-		defer close(stopped)
-		ticker := time.NewTicker(indexRebuildProbeInterval)
-		defer ticker.Stop()
+	// Паника проверки владельца снимает работу: без проверки блокировку держать нельзя.
+	safego.Run(
+		"postgres.lock-probe",
+		func() error {
+			defer close(stopped)
+			ticker := time.NewTicker(indexRebuildProbeInterval)
+			defer ticker.Stop()
 
-		for {
-			select {
-			case <-work.Done():
-				return
-			case <-ticker.C:
-				probe, stop := context.WithTimeout(work, indexRebuildProbeInterval)
-				err := connection.connection.PingContext(probe)
-				stop()
+			for {
+				select {
+				case <-work.Done():
+					return nil
+				case <-ticker.C:
+					probe, stop := context.WithTimeout(work, indexRebuildProbeInterval)
+					err := connection.connection.PingContext(probe)
+					stop()
 
-				if err != nil {
-					cancel()
-					return
+					if err != nil {
+						cancel()
+						return nil
+					}
 				}
 			}
-		}
-	}()
+		},
+		func(err error) {
+			if err != nil {
+				cancel()
+			}
+		},
+	)
 
 	if err := run(work); err != nil {
 		return err

@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 // Размеры суточной сверки: потолок пачки задан договором с сервером магазина.
@@ -86,14 +87,14 @@ func (s *Service) reconcilePage(ctx context.Context, entries []checkout.Reconcil
 	var group errgroup.Group
 	group.SetLimit(reconcileWorkers)
 	for _, shop := range reconcileShops(entries) {
-		group.Go(func() error {
+		group.Go(safego.Guard("checkout.reconcile", func() error {
 			for _, batch := range shop {
 				if run.failed(batch.tenant) || !s.reconcileBatch(ctx, batch, run) {
 					return nil
 				}
 			}
 			return nil
-		})
+		}))
 	}
 	_ = group.Wait()
 }

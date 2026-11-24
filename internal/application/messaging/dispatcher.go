@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 // ErrInvalidTask — сохранённое намерение нельзя исполнить с теми же данными.
@@ -214,10 +215,19 @@ func (d *Dispatcher) executePass(ctx context.Context, tasks []ports.Task) ([]Out
 	var workers sync.WaitGroup
 	for n, group := range groups {
 		workers.Add(1)
-		go func() {
-			defer workers.Done()
-			results[n], resolutions[n], failures[n] = d.executeGroup(ctx, group)
-		}()
+		safego.Run(
+			"outbox.group",
+			func() error {
+				var err error
+				results[n], resolutions[n], err = d.executeGroup(ctx, group)
+				return err
+			},
+			func(err error) {
+				// Паника вне обработчика срывает проход: задачи дождутся аренды и повтора.
+				failures[n] = err
+				workers.Done()
+			},
+		)
 	}
 	workers.Wait()
 	outcomes := []Outcome{}

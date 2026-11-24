@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	infrakafka "github.com/proshop-app/proshop-marketplace/internal/infrastructure/kafka"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 func (s *server) runConsumers(ctx context.Context, group *errgroup.Group) {
@@ -20,16 +21,16 @@ func (s *server) runConsumers(ctx context.Context, group *errgroup.Group) {
 	metrics := kafka.NewConsumerMetrics(s.metrics)
 	ctx = ports.WithDatabaseClass(ctx, ports.DatabaseIngestion)
 
-	group.Go(func() error {
+	group.Go(safego.Guard("kafka.consumer", func() error {
 		return s.consume(ctx, router, metrics, cfg.GroupID, regular, cfg.Workers-cfg.BulkWorkers)
-	})
-	group.Go(func() error {
+	}))
+	group.Go(safego.Guard("kafka.consumer-bulk", func() error {
 		return s.consume(ctx, router, metrics, cfg.GroupID+"-bulk", []string{bulk}, cfg.BulkWorkers)
-	})
-	group.Go(func() error {
+	}))
+	group.Go(safego.Guard("kafka.consumer-orders", func() error {
 		orders := []string{kafka.OrderStatusTopic(cfg.TopicPrefix)}
 		return s.consume(ctx, router, metrics, cfg.GroupID+"-orders", orders, kafka.OrderWorkers)
-	})
+	}))
 }
 
 func (s *server) consume(

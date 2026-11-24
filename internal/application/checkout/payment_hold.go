@@ -8,6 +8,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 type holdResult struct {
@@ -53,9 +54,21 @@ func (s *Service) requestPaymentHolds(
 			continue
 		}
 		pending++
-		go func() {
-			results <- s.holdPaymentGroup(ctx, group)
-		}()
+		var result holdResult
+		safego.Run(
+			"checkout.payment-hold",
+			func() error {
+				result = s.holdPaymentGroup(ctx, group)
+				return nil
+			},
+			func(err error) {
+				// Ожидающий читает ровно pending итогов: паника тоже даёт итог, иначе оплата зависла бы.
+				if err != nil {
+					result = holdResult{tenant: group.TenantID, err: checkout.ErrPaymentUnavailable.Wrap(err)}
+				}
+				results <- result
+			},
+		)
 	}
 	held := make(map[ids.TenantID]checkout.SellerOrder)
 	var failed error

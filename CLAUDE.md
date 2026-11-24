@@ -128,7 +128,11 @@ domain ← application ← interfaces, infrastructure        сборка гра
   одно место на вид исполнителя: `kafka.Consumer.handle` (повторы, затем
   отравленные), `messaging.Dispatcher.handle` и `checkout.Executor.execute`
   (повтор, затем карантин задачи), `jobs.Supervisor` (фоновый цикл продолжает
-  после паузы). Горутина, запущенная обработчиком, перехватывает панику сама.
+  после паузы). Горутина — только через `pkg/safego`: `Go` без ожидающих, `Run`
+  с итогом (finish закрывает канал или рейс и при панике); тела errgroup и
+  `singleflight.DoChan` — `safego.Guard`/`GuardValue`. Паника горутины — журнал со
+  стеком и `marketplace_goroutine_panics_total`. Голый `go` в `internal` и `cmd` —
+  красный `internal/architecture/goroutines_test.go`.
 
 ## События и индекс
 

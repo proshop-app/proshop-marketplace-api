@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/regions"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 const (
@@ -189,7 +190,17 @@ func (q *Queries) recommendCandidates(
 			q.recommendationLoads = make(map[string]*recommendationLoad)
 		}
 		q.recommendationLoads[key] = pending
-		go q.loadRecommendationCandidates(loadCtx, key, filter, pending)
+		safego.Run(
+			"catalog.recommendations",
+			func() error {
+				var err error
+				pending.states, err = q.recommendations.Recommend(loadCtx, filter)
+				return err
+			},
+			func(err error) {
+				q.finishRecommendations(loadCtx, key, pending, err)
+			},
+		)
 	}
 	pending.waiters++
 	q.recommendationMu.Unlock()
@@ -212,14 +223,16 @@ func (q *Queries) recommendCandidates(
 	}
 }
 
-func (q *Queries) loadRecommendationCandidates(
+// finishRecommendations закрывает общую загрузку при любом итоге, в том числе при
+// панике отбора: ожидающие получают ошибку сразу, а не по сроку своего запроса.
+func (q *Queries) finishRecommendations(
 	ctx context.Context,
 	key string,
-	filter ports.RecommendationFilter,
 	pending *recommendationLoad,
+	err error,
 ) {
 	defer pending.cancel()
-	pending.states, pending.err = q.recommendations.Recommend(ctx, filter)
+	pending.err = err
 	if pending.err == nil {
 		pending.err = ctx.Err()
 	}
