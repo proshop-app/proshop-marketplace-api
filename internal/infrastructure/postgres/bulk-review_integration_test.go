@@ -226,7 +226,7 @@ func TestOutboxTenantCursorRotatesPastBusyStores(t *testing.T) {
 	if err != nil || len(first) != 8 {
 		t.Fatal(first, err)
 	}
-	request.AfterTenant = first[len(first)-1].TenantID
+	request.After = ports.ClaimAfter(first[len(first)-1].TenantID)
 	if _, err := pool.Exec(ctx, bulkFairQuiet); err != nil {
 		t.Fatal(err)
 	}

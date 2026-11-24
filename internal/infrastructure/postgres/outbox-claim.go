@@ -29,7 +29,7 @@ import (
 //	$5  kinds      — виды запроса; пусто — все виды очереди;
 //	$6  exclude    — виды, которые не брать;
 //	$7  slots      — jsonb «магазин → свободные места» (TenantSlots);
-//	$8  after      — курсор круга магазинов; пусто — начало круга;
+//	$8  after      — курсор круга магазинов; NULL — круг не начат (пустая строка — пустой магазин);
 //	$9  ordered    — упорядоченные виды запроса (подмножество OrderedTaskKinds);
 //	$10 visits     — потолок посещённых полос одного вида.
 const (
@@ -96,7 +96,7 @@ const (
 	// по возвращении к курсору.
 	claimLanes = `
 		claim_lanes(kind, position, wrapped, visited, ready, yields, head_next_at, head_id) AS (
-			SELECT kind, NULLIF($8::text, ''), false, 0, 0, false, NULL::timestamptz, NULL::bigint
+			SELECT kind, $8::text, false, 0, 0, false, NULL::timestamptz, NULL::bigint
 			FROM claim_kinds
 			WHERE NOT (kind = ANY($6::text[]))
 			UNION ALL
@@ -110,7 +110,7 @@ const (
 			CROSS JOIN LATERAL (
 				SELECT head.next_at <= $1 AND COALESCE(($7::jsonb ->> n.tenant_id)::integer, $3) > 0 AS ok
 			) yield
-			WHERE l.visited < $10 AND l.ready < $2 AND NOT (n.wrapped AND (n.tenant_id > $8 OR $8 = ''))
+			WHERE l.visited < $10 AND l.ready < $2 AND NOT (n.wrapped AND ($8::text IS NULL OR n.tenant_id > $8))
 		)`
 
 	// claimOldest — старейшая созревшая задача каждого вида по outbox_kind_next_idx: один спуск
@@ -151,7 +151,7 @@ const (
 				FROM claim_lanes
 				WHERE visited > 0 AND yields
 				UNION ALL
-				SELECT kind, tenant_id, $8 <> '' AND tenant_id <= $8, head_next_at, head_id, 0
+				SELECT kind, tenant_id, $8::text IS NOT NULL AND tenant_id <= $8, head_next_at, head_id, 0
 				FROM claim_oldest
 			) lane
 			CROSS JOIN LATERAL (SELECT lane.kind = ANY($9::text[]) AS ordered) o
@@ -277,7 +277,7 @@ var OrderedTaskKinds = []string{
 }
 
 type claimedRow struct {
-	next            string
+	next            *string
 	id              *int64
 	kind, tenant    *string
 	payload         []byte
@@ -320,7 +320,7 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 		append([]string{}, request.Kinds...),
 		append([]string{}, request.ExcludeKinds...),
 		string(slots),
-		string(request.AfterTenant),
+		claimAfter(request.After),
 		append([]string{}, request.OrderedKinds...),
 		ports.ClaimLaneVisits,
 	).Rows()
@@ -330,7 +330,7 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 	defer func() {
 		_ = rows.Close()
 	}()
-	result := ports.ClaimResult{Next: request.AfterTenant}
+	result := ports.ClaimResult{Next: request.After}
 	for rows.Next() {
 		var row claimedRow
 		err := rows.Scan(
@@ -346,7 +346,7 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 		if err != nil {
 			return ports.ClaimResult{}, fmt.Errorf("взятие задач: %w", err)
 		}
-		result.Next = ids.TenantID(row.next)
+		result.Next = row.cursor()
 		if row.id != nil {
 			result.Tasks = append(result.Tasks, row.task())
 		}
@@ -355,6 +355,21 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 		return ports.ClaimResult{}, fmt.Errorf("взятие задач: %w", err)
 	}
 	return result, nil
+}
+
+// claimAfter — параметр курсора: NULL, пока круг не начат.
+func claimAfter(cursor ports.ClaimCursor) any {
+	if !cursor.Started {
+		return nil
+	}
+	return string(cursor.Tenant)
+}
+
+func (r claimedRow) cursor() ports.ClaimCursor {
+	if r.next == nil {
+		return ports.ClaimCursor{}
+	}
+	return ports.ClaimAfter(ids.TenantID(*r.next))
 }
 
 func (r claimedRow) task() ports.Task {

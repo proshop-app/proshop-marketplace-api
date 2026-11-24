@@ -49,10 +49,19 @@ type Outbox interface {
 	EnqueueBatch(context.Context, []NewTask) error
 }
 
+// ClaimCursor — место на круге магазинов. Нулевое значение — круг не начат. Начатый курсор может
+// стоять и на пустом магазине: общие задачи площадки (справочники, синонимы) идут с пустым
+// TenantID, поэтому «круг не начат» пустой строкой не кодируется — иначе круг, дошедший до
+// общей задачи, каждый раз начинался бы заново и не уходил дальше первых полос.
+type ClaimCursor struct {
+	Tenant  ids.TenantID
+	Started bool
+}
+
 // ClaimRequest — сколько задач взять и до какого времени их держать.
 type ClaimRequest struct {
-	// AfterTenant — курсор круга магазинов из ClaimResult.Next прошлого взятия; пусто — начало круга.
-	AfterTenant  ids.TenantID
+	// After — курсор круга магазинов из ClaimResult.Next прошлого взятия.
+	After        ClaimCursor
 	Kinds        []string
 	ExcludeKinds []string
 	// OrderedKinds берёт только старейшую незавершённую задачу вида на магазин, включая аренды и повторы.
@@ -73,7 +82,7 @@ const ClaimLaneVisits = 128
 // и при пустом взятии: обход полос ограничен, следующий продолжит с последнего посещённого.
 type ClaimResult struct {
 	Tasks []Task
-	Next  ids.TenantID
+	Next  ClaimCursor
 }
 
 // TaskResolution — результат с токеном аренды; NextAt задан только при повторе.
@@ -124,7 +133,7 @@ type TaskFailure struct {
 // TaskQueue — разбор outbox. Взятая задача держится арендой: упавший
 // обработчик не теряет её, после аренды её возьмёт другой.
 type TaskQueue interface {
-	// Claim чередует созревшие задачи магазинов по кругу от AfterTenant до общего Limit, не больше
+	// Claim чередует созревшие задачи магазинов по кругу от After до общего Limit, не больше
 	// PerTenant на магазин; за одно взятие посещается ограниченное число магазинов.
 	Claim(ctx context.Context, request ClaimRequest) (ClaimResult, error)
 	// Complete отмечает задачу выполненной, только если attempts соответствует текущему Claim.
@@ -224,4 +233,9 @@ type PurgeResult struct {
 // Retention — чистка служебных записей по сроку.
 type Retention interface {
 	Purge(ctx context.Context, request PurgeRequest) (PurgeResult, error)
+}
+
+// ClaimAfter — курсор круга сразу за магазином tenant.
+func ClaimAfter(tenant ids.TenantID) ClaimCursor {
+	return ClaimCursor{Tenant: tenant, Started: true}
 }

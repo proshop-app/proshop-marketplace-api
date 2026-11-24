@@ -51,7 +51,7 @@ type Executor struct {
 	mu          sync.Mutex
 	active      map[string]map[ids.TenantID]int
 	// after — курсор круга магазинов по виду: каждое взятие продолжает с прошлого.
-	after   map[string]ids.TenantID
+	after   map[string]ports.ClaimCursor
 	results chan TaskResult
 	wg      sync.WaitGroup
 }
@@ -69,7 +69,7 @@ func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service, max
 			TaskPollOrder:      {},
 			TaskCancelOrder:    {},
 		},
-		after:   map[string]ids.TenantID{},
+		after:   map[string]ports.ClaimCursor{},
 		results: make(chan TaskResult, CreationWorkers+DeadlineWorkers+PollWorkers+CancelWorkers),
 	}
 }
@@ -112,7 +112,7 @@ func (e *Executor) Dispatch(ctx context.Context) error {
 			PerTenant:   perTenant,
 			Kinds:       []string{kind},
 			TenantSlots: slots,
-			AfterTenant: e.after[kind],
+			After:       e.after[kind],
 			LeaseUntil:  now.Add(e.service.orderCallBudget() + taskLeaseSlack),
 		})
 		if err != nil {

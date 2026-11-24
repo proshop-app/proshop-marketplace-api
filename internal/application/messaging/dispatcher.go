@@ -10,7 +10,6 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
-	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
@@ -59,8 +58,8 @@ type DispatcherConfig struct {
 // отмечает итог. Задача не теряется: упавший процесс оставляет её до конца аренды.
 type Dispatcher struct {
 	claimMu        sync.Mutex
-	singleAfter    ids.TenantID
-	batchAfter     ids.TenantID
+	singleAfter    ports.ClaimCursor
+	batchAfter     ports.ClaimCursor
 	batchKindAfter int
 	queue          ports.TaskQueue
 	clock          ports.Clock
@@ -169,7 +168,7 @@ func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
 	tasks := []ports.Task{}
 	if len(kinds) > 0 {
 		request.Kinds = kinds
-		request.AfterTenant = d.batchAfter
+		request.After = d.batchAfter
 		claimed, err := d.queue.Claim(ctx, request)
 		if err != nil {
 			return nil, err
@@ -182,7 +181,7 @@ func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
 		batchKinds[task.Kind] = true
 	}
 	request.Kinds = d.config.Kinds
-	request.AfterTenant = d.singleAfter
+	request.After = d.singleAfter
 	request.ExcludeKinds = append(request.ExcludeKinds, allBatchKinds...)
 	request.OrderedKinds = d.config.OrderedKinds
 	request.PerTenant = min(d.config.PerTenant, d.config.Concurrency)

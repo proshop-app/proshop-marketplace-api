@@ -73,15 +73,15 @@ func (w *claimWalk) circle(kind string) []claimPoint {
 		}
 	}
 	slices.Sort(tenants)
-	after := w.request.AfterTenant
+	after := w.request.After
 	points := []claimPoint{}
 	for _, tenant := range tenants {
-		if after == "" || tenant > after {
+		if !after.Started || tenant > after.Tenant {
 			points = append(points, claimPoint{tenant: tenant})
 		}
 	}
 	for _, tenant := range tenants {
-		if after != "" && tenant <= after {
+		if after.Started && tenant <= after.Tenant {
 			points = append(points, claimPoint{tenant: tenant, wrapped: true})
 		}
 	}
@@ -106,8 +106,8 @@ func (w *claimWalk) probeOldest(kind string) {
 	if head.NextAt.After(w.request.Now) || w.slot(oldest.TenantID) <= 0 {
 		return
 	}
-	after := w.request.AfterTenant
-	point := claimPoint{tenant: oldest.TenantID, wrapped: after != "" && oldest.TenantID <= after}
+	after := w.request.After
+	point := claimPoint{tenant: oldest.TenantID, wrapped: after.Started && oldest.TenantID <= after.Tenant}
 	w.ready = append(w.ready, claimLane{kind: kind, point: point, ordered: ordered, head: head, oldest: true})
 }
 
@@ -256,16 +256,16 @@ func (w *claimWalk) tenantTasks(point claimPoint, quota int) []claimCandidate {
 
 // next — курсор: самая ранняя по кругу из последних посещённых полос видов и, при полной
 // пачке, последний выбранный магазин.
-func (w *claimWalk) next() ids.TenantID {
+func (w *claimWalk) next() ports.ClaimCursor {
 	edges := slices.Clone(w.last)
 	if w.chosenFull {
 		edges = append(edges, w.lastChosen)
 	}
 	if len(edges) == 0 {
-		return w.request.AfterTenant
+		return w.request.After
 	}
 	sortPoints(edges)
-	return edges[0].tenant
+	return ports.ClaimAfter(edges[0].tenant)
 }
 
 func sortPoints(points []claimPoint) {

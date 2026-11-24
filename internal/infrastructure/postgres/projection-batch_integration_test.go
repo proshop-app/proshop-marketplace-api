@@ -107,7 +107,10 @@ func assertBatchProducts(t *testing.T, pool *pgxpool.Pool, want [5]int64) {
 	}
 }
 
-// Вердикты без причин пишутся пачкой без отката: та же запись строки, что и одиночное сохранение.
+// Вердикты с пустым списком причин пишутся пачкой без отката: та же запись строки, что и
+// одиночное сохранение. Отсутствующие причины (nil) домен в сохраняемом вердикте не порождает
+// (Evaluate и Decide всегда задают список); их запись как jsonb null, а не SQL NULL, проверяет
+// TestVerdictWriteKeepsNullJSON на строке записи.
 func TestVerdictBatchKeepsEmptyReasons(t *testing.T) {
 	ctx := context.Background()
 	pool := testPool(t)
@@ -115,7 +118,7 @@ func TestVerdictBatchKeepsEmptyReasons(t *testing.T) {
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		verdicts := []*moderation.Verdict{moderation.NewVerdict("t2", "v2"), moderation.NewVerdict("t1", "v1")}
 		for _, verdict := range verdicts {
-			// Пустые правила допускают товар без причин: Reasons остаётся nil.
+			// Пустые правила допускают товар с пустым списком причин.
 			verdict.Evaluate(1, 1, moderation.Rules{}, moderation.Input{}, at(0))
 		}
 		return tx.ModerationVerdicts().SaveMany(ctx, verdicts)
