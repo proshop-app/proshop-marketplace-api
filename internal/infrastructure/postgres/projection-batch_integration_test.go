@@ -13,6 +13,7 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -103,5 +104,28 @@ func assertBatchProducts(t *testing.T, pool *pgxpool.Pool, want [5]int64) {
 	row := pool.QueryRow(context.Background(), batchProductsState)
 	if err := row.Scan(&got[0], &got[1], &got[2], &got[3], &got[4]); err != nil || got != want {
 		t.Fatal("товары пачки", got, want)
+	}
+}
+
+// Вердикты без причин пишутся пачкой без отката: та же запись строки, что и одиночное сохранение.
+func TestVerdictBatchKeepsEmptyReasons(t *testing.T) {
+	ctx := context.Background()
+	pool := testPool(t)
+	uow := postgres.NewUnitOfWork(pool)
+	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		verdicts := []*moderation.Verdict{moderation.NewVerdict("t2", "v2"), moderation.NewVerdict("t1", "v1")}
+		for _, verdict := range verdicts {
+			// Пустые правила допускают товар без причин: Reasons остаётся nil.
+			verdict.Evaluate(1, 1, moderation.Rules{}, moderation.Input{}, at(0))
+		}
+		return tx.ModerationVerdicts().SaveMany(ctx, verdicts)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count, empty int
+	query := `SELECT count(*), count(*) FILTER (WHERE reasons = '[]'::jsonb) FROM moderation_verdicts`
+	if err := pool.QueryRow(ctx, query).Scan(&count, &empty); err != nil || count != 2 || empty != 2 {
+		t.Fatal("вердикты без причин", count, empty, err)
 	}
 }

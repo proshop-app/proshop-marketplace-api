@@ -86,10 +86,16 @@ func TestProjectionIntakeAtScale(t *testing.T) {
 	uow := postgres.NewUnitOfWork(pool)
 	projector := seedProjectionIntake(ctx, t, uow, pool, catalogSize)
 	for _, batch := range []int{1, intakeScaleBatch} {
+		// published-price — правка только цены опубликованного товара: ветка повторного допуска.
 		for _, pass := range []struct {
 			name     string
 			revision int64
-		}{{name: "new", revision: 1}, {name: "update", revision: 2}, {name: "repeat", revision: 2}} {
+		}{
+			{name: "new", revision: 1},
+			{name: "update", revision: 2},
+			{name: "published-price", revision: 3},
+			{name: "repeat", revision: 3},
+		} {
 			counter.statements.Store(0)
 			if os.Getenv("INTAKE_SCALE_TRACE") == "1" {
 				counter.print.Store(20)
@@ -186,7 +192,8 @@ func seedProjectionIntake(
 func intakeScaleEvent(n int, revision int64, prefix string) appcatalog.ProductEvent {
 	tenant := ids.TenantID(fmt.Sprintf("t%d", n%intakeScaleTenants))
 	product := ids.ProductID(fmt.Sprintf("%sp%d", prefix, n))
-	price := money.FromKopecks(10000)
+	// Ревизия 3 меняет только цену: карточка та же, что у ревизии 2.
+	content, price := min(revision, 2), money.FromKopecks(10000*revision)
 	return appcatalog.ProductEvent{
 		Snapshot: catalog.Snapshot{
 			TenantID:  tenant,
@@ -197,7 +204,7 @@ func intakeScaleEvent(n int, revision int64, prefix string) appcatalog.ProductEv
 			BasePrice: price,
 			Available: 5,
 			Card: catalog.Card{
-				Name:    fmt.Sprintf("Товар %d", revision),
+				Name:    fmt.Sprintf("Товар %d", content),
 				Visible: true,
 				Marketplace: &taxonomy.Card{
 					CategoryID: "c1",

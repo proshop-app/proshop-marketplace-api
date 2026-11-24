@@ -36,41 +36,6 @@ const (
 		FROM catalog_products p
 		WHERE p.tenant_id = $1 AND p.product_id = $2`
 	selectProductForUpdate = selectProduct + ` FOR UPDATE`
-
-	insertProduct = `
-		INSERT INTO catalog_products (
-			tenant_id,
-			product_id,
-			revision,
-			deleted,
-			card,
-			price,
-			base_price,
-			available,
-			projected_at,
-			version,
-			updated_at,
-			sales_count,
-			average_rating,
-			ratings_count
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
-
-	updateProduct = `
-		UPDATE catalog_products
-		SET revision = $3,
-			deleted = $4,
-			card = $5,
-			price = $6,
-			base_price = $7,
-			available = $8,
-			projected_at = $9,
-			version = $10,
-			updated_at = $11,
-			sales_count = $12,
-			average_rating = $13,
-			ratings_count = $14
-		WHERE tenant_id = $1 AND product_id = $2 AND version = $15`
 )
 
 // Products — проекция товаров в PostgreSQL.
@@ -150,55 +115,6 @@ func (r *Products) get(
 	}
 
 	return row.product()
-}
-
-// Save заводит товар или обновляет его условно по версии.
-func (r *Products) Save(ctx context.Context, product *catalog.Product) error {
-	s := product.State()
-
-	var card, price, base any
-
-	if !s.Deleted {
-		encoded, err := encodeCard(s.Card)
-		if err != nil {
-			return fmt.Errorf("карточка %s/%s: %w", s.TenantID, s.ProductID, err)
-		}
-
-		card = string(encoded)
-		if s.HasPrice {
-			price = s.Price.Kopecks()
-			base = s.BasePrice.Kopecks()
-		}
-	}
-
-	args := []any{
-		string(s.TenantID),
-		string(s.ProductID),
-		s.Revision,
-		s.Deleted,
-		card,
-		price,
-		base,
-		s.Available,
-		s.ProjectedAt,
-		s.Version,
-		s.UpdatedAt,
-		s.SalesCount,
-		s.AverageRating,
-		s.RatingsCount,
-	}
-
-	if product.OriginVersion() == 0 {
-		_, err := execSQL(ctx, r.db, insertProduct, args...)
-		conflict := isUnique(err, "catalog_products_pkey")
-
-		return saved(err, conflict, product.MarkSaved, "товар", s.TenantID, s.ProductID)
-	}
-
-	affected, err := execSQL(ctx, r.db, updateProduct, append(args, product.OriginVersion())...)
-	conflict := err == nil && affected == 0
-
-	return saved(err, conflict, product.MarkSaved, "товар", s.TenantID, s.ProductID)
 }
 
 func (r *productRow) targets() []any {

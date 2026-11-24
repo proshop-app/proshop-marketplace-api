@@ -34,3 +34,18 @@ func (r projectionValidation) Current(
 	}
 	return sources, nil
 }
+
+func (r projectionValidation) CurrentMany(
+	ctx context.Context,
+	keys []ids.OfferID,
+) (map[ids.OfferID]ports.ValidationSources, error) {
+	found := make(map[ids.OfferID]ports.ValidationSources, len(keys))
+	for _, key := range keys {
+		sources, err := r.Current(ctx, key.Tenant, key.Product)
+		if err != nil {
+			return nil, err
+		}
+		found[key] = sources
+	}
+	return found, nil
+}
