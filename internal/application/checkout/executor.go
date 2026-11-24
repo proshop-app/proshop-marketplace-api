@@ -170,8 +170,9 @@ func (e *Executor) handle(ctx context.Context, task ports.Task) error {
 	return e.service.HandleOrderTask(handling, task)
 }
 
+// handlerTimeout — ожидание места в ограждении и вызов магазина (по бюджету каждое) плюс записи.
 func (e *Executor) handlerTimeout() time.Duration {
-	return e.service.orderCallBudget() + taskStoreBudget
+	return 2*e.service.orderCallBudget() + taskStoreBudget
 }
 
 // lease — как у messaging.Dispatcher: обработчик укладывается в половину аренды, вторая половина
@@ -200,6 +201,11 @@ func (e *Executor) resolution(task ports.Task, err error) ports.TaskResolution {
 			next = pending.at
 		}
 		resolution.NextAt = &next
+	}
+	// Отказ размыкателя: до его допуска повтор получит тот же отказ — откладываем, а не крутим.
+	var rejected *ports.PlatformRejected
+	if errors.As(err, &rejected) && resolution.NextAt != nil && resolution.NextAt.Before(rejected.NotBefore) {
+		resolution.NextAt = &rejected.NotBefore
 	}
 	return resolution
 }

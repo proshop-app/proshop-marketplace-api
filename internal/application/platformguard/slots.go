@@ -2,6 +2,7 @@ package platformguard
 
 import (
 	"context"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -94,4 +95,24 @@ func (c *Client) breakerReason(state *tenantState) string {
 		return "tenant_breaker"
 	}
 	return ""
+}
+
+// reopensAt — когда размыкатель, давший отказ, снова допустит вызов. Пока идёт единственная проба,
+// её итог известен не позже строгого срока: до него повтор получит тот же отказ.
+func (c *Client) reopensAt(ctx context.Context, reason string) time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := c.clock.Now()
+	b := &c.server
+	tenant, _ := ctx.Value(tenantContextKey{}).(ids.TenantID)
+	if state := c.tenants[tenant]; reason == "tenant_breaker" && state != nil {
+		b = &state.breaker
+	}
+	if b.openUntil.IsZero() {
+		return now
+	}
+	if b.openUntil.After(now) {
+		return b.openUntil
+	}
+	return now.Add(c.cfg.StrictTimeout)
 }

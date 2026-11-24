@@ -31,8 +31,9 @@ type hungShopOrders struct {
 // leaseQueue запоминает аренду, которую исполнитель просит у очереди.
 type leaseQueue struct {
 	ports.TaskQueue
-	mu     sync.Mutex
-	leases []time.Duration
+	mu      sync.Mutex
+	leases  []time.Duration
+	claimed int
 }
 
 // deadlineUOW запоминает срок контекста каждой транзакции обработчика.
@@ -141,6 +142,79 @@ func TestExecutorLeaseCoversHandlerDeadline(t *testing.T) {
 	}
 }
 
+// При открытом размыкателе задачи создания ждут его допуска: за интервал — ни одного взятия
+// и транзакции вместо повтора каждую секунду. Допуск после срока создания — задача завершается,
+// группу закроет задача срока.
+func TestOpenBreakerDefersCreationUntilReopen(t *testing.T) {
+	for _, open := range []time.Duration{5 * time.Second, 20 * time.Second} {
+		t.Run(open.String(), func(t *testing.T) {
+			e := setup(t)
+			c := confirmedPurchase(t, e)
+			ctx := context.Background()
+			if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
+				t.Fatal(err)
+			}
+			guard, _ := hungGuardOpen(e, open)
+			hang(e, "create_order")
+			queue := &leaseQueue{TaskQueue: e.store}
+			uow := &deadlineUOW{UnitOfWork: e.store}
+			svc := appcheckout.NewService(uow, guard, e.pickups, e.verifier, &fake.IDs{}, e.clock, guardedConfig())
+			executor := appcheckout.NewExecutor(queue, e.clock, svc, messaging.DefaultMaxAttempts)
+			if taken := dispatchDue(ctx, t, executor, queue); taken != len(c.Groups) {
+				t.Fatal("первый проход не взял задачи создания", taken)
+			}
+			// Штатный повтор через 1 с после зависания узнаёт «не раньше»; дальше задачи ждут допуска.
+			transactions, taken := uow.transactions(), 0
+			waited := min(open, appcheckout.CreationTimeout) - time.Second
+			for step := time.Duration(0); step < waited; step += time.Second / 2 {
+				e.clock.Advance(time.Second / 2)
+				taken += dispatchDue(ctx, t, executor, queue)
+			}
+			spent := uow.transactions() - transactions
+			t.Log("взятий за интервал:", taken, "транзакций:", spent)
+			if taken > len(c.Groups) || spent > 4*len(c.Groups) {
+				t.Fatal("задачи создания крутятся при открытом размыкателе", taken, spent)
+			}
+			afterDeadline := open > appcheckout.CreationTimeout
+			for _, row := range e.store.OutboxRows() {
+				if row.Kind == appcheckout.TaskCreateOrder && (row.DoneAt != nil) != afterDeadline {
+					t.Fatal("задача создания: допуск после срока завершает её, до срока — откладывает", row)
+				}
+			}
+		})
+	}
+}
+
+// Отмена при открытом размыкателе тоже ждёт допуска, а не нарастающей паузы с первых секунд.
+func TestOpenBreakerDefersCancellationUntilReopen(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	c := confirmedPurchase(t, e)
+	if _, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.service.Cancel(ctx, buyerID, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	guard, _ := hungGuard(e)
+	hang(e, "cancel_order")
+	queue := &leaseQueue{TaskQueue: e.store}
+	svc := guardedService(e, guard)
+	executor := appcheckout.NewExecutor(queue, e.clock, svc, messaging.DefaultMaxAttempts)
+	if taken := dispatchDue(ctx, t, executor, queue); taken != len(c.Groups) {
+		t.Fatal("первый проход не взял задачи отмены", taken)
+	}
+	taken := 0
+	for step := time.Duration(0); step < 4*time.Second; step += time.Second / 2 {
+		e.clock.Advance(time.Second / 2)
+		taken += dispatchDue(ctx, t, executor, queue)
+	}
+	t.Log("взятий отмены за интервал:", taken)
+	if taken > len(c.Groups) {
+		t.Fatal("задачи отмены крутятся при открытом размыкателе", taken)
+	}
+}
+
 func (p *hungShopOrders) CreateOrder(
 	ctx context.Context,
 	tenant ids.TenantID,
@@ -153,10 +227,24 @@ func (p *hungShopOrders) CreateOrder(
 }
 
 func (q *leaseQueue) Claim(ctx context.Context, request ports.ClaimRequest) (ports.ClaimResult, error) {
+	result, err := q.TaskQueue.Claim(ctx, request)
 	q.mu.Lock()
 	q.leases = append(q.leases, request.LeaseUntil.Sub(request.Now))
+	q.claimed += len(result.Tasks)
 	q.mu.Unlock()
-	return q.TaskQueue.Claim(ctx, request)
+	return result, err
+}
+
+func (q *leaseQueue) taken() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.claimed
+}
+
+func (u *deadlineUOW) transactions() int {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return len(u.bounded)
 }
 
 func (u *deadlineUOW) Do(ctx context.Context, fn func(context.Context, ports.Tx) error) error {
@@ -171,6 +259,10 @@ func (u *deadlineUOW) Do(ctx context.Context, fn func(context.Context, ports.Tx)
 // hungGuard — ограждение процесса над фейком; все обращения не отвечают до конца срока.
 // Порог 1: одно засчитанное зависание открывает размыкатель магазина.
 func hungGuard(e *env) (*platformguard.Client, *fake.PlatformMetrics) {
+	return hungGuardOpen(e, 5*time.Second)
+}
+
+func hungGuardOpen(e *env, open time.Duration) (*platformguard.Client, *fake.PlatformMetrics) {
 	metrics := &fake.PlatformMetrics{}
 	guard := platformguard.New(
 		e.platform,
@@ -188,7 +280,7 @@ func hungGuard(e *env) (*platformguard.Client, *fake.PlatformMetrics) {
 			FailureWindow:         30 * time.Second,
 			FailureMinCalls:       20,
 			FailurePercent:        50,
-			OpenInterval:          5 * time.Second,
+			OpenInterval:          open,
 		},
 		e.clock,
 		metrics,
@@ -309,6 +401,24 @@ func hungQuote(t *testing.T, e *env, svc *appcheckout.Service) ids.TenantID {
 		t.Log("расчёт при зависшем магазине:", err)
 	}
 	return state.Groups[0].TenantID
+}
+
+// dispatchDue делает один проход исполнителя и ждёт итогов всех взятых задач.
+func dispatchDue(ctx context.Context, t *testing.T, executor *appcheckout.Executor, queue *leaseQueue) int {
+	t.Helper()
+	before := queue.taken()
+	if err := executor.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	taken := queue.taken() - before
+	for range taken {
+		select {
+		case <-executor.Results():
+		case <-time.After(10 * hungCallBudget):
+			t.Fatal("задача не завершилась")
+		}
+	}
+	return taken
 }
 
 // dispatchCreation запускает один проход полосы создания и возвращает время каждой задачи по магазинам.

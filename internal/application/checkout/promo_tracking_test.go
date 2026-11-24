@@ -143,7 +143,7 @@ func TestPromoOrderRetryAfterCodeExpired(t *testing.T) {
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{
 		PromoCode: &cart.PromoCode{Code: "SAVE", Message: expiredPromoMessage()},
 	})
-	e.clock.Advance(5*time.Second + 100*time.Millisecond)
+	e.clock.Advance(2*5*time.Second + 100*time.Millisecond)
 	state, err := beginAndExecute(ctx, e, buyerID, c.ID, orderContact)
 	if err != nil || state.Groups[0].Status != checkout.GroupAwaitingPayment {
 		t.Fatal(state, err)

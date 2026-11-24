@@ -18,18 +18,18 @@ func call[T any](
 	load func(context.Context) (T, error),
 ) (T, error) {
 	started := time.Now()
-	callCtx, cancel := context.WithTimeout(ctx, callBudget(ctx, timeout))
-	defer cancel()
-	p, reason := c.acquire(callCtx, class)
-	p.strict = timeout >= c.cfg.StrictTimeout
+	budget := callBudget(ctx, timeout)
+	p, reason, rejected := c.admit(ctx, class, budget)
 	if reason != "" {
 		c.observe(ctx, class, operation, reason, started)
 		var zero T
-		if callCtx.Err() != nil {
-			return zero, callError(callCtx.Err())
-		}
-		return zero, ErrUnavailable
+		return zero, rejected
 	}
+	p.strict = timeout >= c.cfg.StrictTimeout
+	// Срок, по которому судят магазин, отсчитывается от начала его вызова: ожидание места
+	// занято чужой нагрузкой и магазину не засчитывается. Заголовок срока несёт этот остаток.
+	callCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
 	value, err := execute(ctx, callCtx, c, p, load)
 	outcome := callOutcome(err)
 	if err != nil && ctx.Err() != nil {
@@ -48,6 +48,24 @@ func callBudget(ctx context.Context, timeout time.Duration) time.Duration {
 		return min(budget, timeout)
 	}
 	return timeout
+}
+
+// admit ждёт место не дольше бюджета вызова; конец ожидания и отказ без вызова сервера нейтральны
+// для размыкателей. Отказ размыкателя несёт момент, раньше которого повтор отклонят так же.
+func (c *Client) admit(ctx context.Context, class operationClass, budget time.Duration) (permit, string, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	p, reason := c.acquire(waitCtx, class)
+	switch {
+	case reason == "":
+		return p, "", nil
+	case waitCtx.Err() != nil:
+		return p, reason, callError(waitCtx.Err())
+	case reason == "server_breaker" || reason == "tenant_breaker":
+		return p, reason, &ports.PlatformRejected{NotBefore: c.reopensAt(ctx, reason), Cause: ErrUnavailable}
+	default:
+		return p, reason, ErrUnavailable
+	}
 }
 
 func execute[T any](

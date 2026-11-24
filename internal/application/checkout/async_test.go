@@ -527,7 +527,7 @@ func TestCreationLeaseRespectsShorterTransportTimeout(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, g := range state.Groups {
-			if g.CreateToken != "" && g.NextCreateAt.Sub(e.clock.Now()) != time.Second+100*time.Millisecond {
+			if g.CreateToken != "" && g.NextCreateAt.Sub(e.clock.Now()) != 2*time.Second+100*time.Millisecond {
 				t.Fatal("аренда должна учитывать бюджет адаптера", g.NextCreateAt)
 			}
 		}

@@ -88,16 +88,31 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 	}
 	for _, g := range state.Groups {
 		if g.TenantID == tenant && g.OrderID == "" && !g.CreateExhausted && !g.Abandoned {
-			return errCreationPending
+			return creationRetry(failed, g)
 		}
 	}
 	return nil
 }
 
+// creationRetry откладывает повтор, отклонённый размыкателем, до момента допуска: раньше каждая
+// попытка заведомо получила бы тот же отказ. Допуск после срока создания — повторять незачем,
+// группу закроет задача срока.
+func creationRetry(failed error, group checkout.Group) error {
+	var rejected *ports.PlatformRejected
+	if !errors.As(failed, &rejected) {
+		return errCreationPending
+	}
+	if !rejected.NotBefore.Before(group.CreationDeadline) {
+		return nil
+	}
+	return &creationPendingUntil{at: rejected.NotBefore}
+}
+
+// creationLease покрывает ожидание места в ограждении и сам вызов: каждое — не дольше бюджета.
 func (s *Service) creationLease(c *checkout.Checkout, tenant ids.TenantID, now time.Time) time.Time {
 	for _, g := range c.Groups() {
 		if g.TenantID == tenant {
-			return now.Add(min(s.orderCallBudget(), g.CreationDeadline.Sub(now)) + creationLeaseSlack)
+			return now.Add(2*min(s.orderCallBudget(), g.CreationDeadline.Sub(now)) + creationLeaseSlack)
 		}
 	}
 	return now
