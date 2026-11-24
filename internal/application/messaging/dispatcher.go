@@ -93,10 +93,9 @@ func NewDispatcher(
 	}
 	// Один слот всегда остаётся для точечных задач рядом с пакетным обработчиком.
 	config.Concurrency = max(2, config.Concurrency)
-	if config.HandlerTimeout <= 0 {
-		config.HandlerTimeout = 30 * time.Second
-	}
-	if config.Lease > 0 && config.HandlerTimeout > config.Lease/2 {
+	// Обработчик укладывается в половину аренды: вторая половина — отметка итога прохода.
+	// Процесс задаёт срок сам и проверяет аренду на старте, урезание здесь не срабатывает.
+	if config.HandlerTimeout <= 0 || config.HandlerTimeout > config.Lease/2 {
 		config.HandlerTimeout = config.Lease / 2
 	}
 	return &Dispatcher{queue: queue, clock: clock, handlers: handlers, config: config}

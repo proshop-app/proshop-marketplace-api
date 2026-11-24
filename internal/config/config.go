@@ -281,7 +281,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			PollInterval:         r.duration("OUTBOX_POLL_INTERVAL", time.Second),
 			Batch:                r.positive("OUTBOX_BATCH", 200),
 			PerTenant:            r.positive("OUTBOX_PER_TENANT", 200),
-			Lease:                r.duration("OUTBOX_LEASE", time.Minute),
+			Lease:                r.duration("OUTBOX_LEASE", 90*time.Second),
 		},
 		Retention: Retention{
 			ProcessedEvents: r.duration("RETENTION_PROCESSED_EVENTS", 14*24*time.Hour),

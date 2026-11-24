@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -28,6 +29,10 @@ const (
 	// maxProcessConnections — потолок суммы пулов процесса: столько соединений
 	// реплика может держать в PostgreSQL одновременно, не считая advisory lock.
 	maxProcessConnections = 1000
+	// outboxHandlerTimeout — срок обработчика задачи outbox. Самый долгий вызов внутри —
+	// служебная запись в поиск (searchapi.ServiceTimeout), запас — на чтение и запись
+	// базы вокруг неё: вызов всегда укладывается в срок обработчика.
+	outboxHandlerTimeout = searchapi.ServiceTimeout + 5*time.Second
 )
 
 // storage — пулы базы по классам нагрузки и API поиска.
@@ -131,11 +136,12 @@ func fitConnections(name string, configured int32, holders int, who string) (int
 	return configured, nil
 }
 
-// checkOutboxLease — аренда задачи переживает самый долгий служебный вызов поиска:
-// иначе пачку, которую ещё пишет эта реплика, взял бы сосед.
+// checkOutboxLease — обработчик укладывается в половину аренды (правило диспетчера):
+// вторая половина — отметка итога прохода и запас; иначе задачу, которую ещё пишет
+// эта реплика, взял бы сосед.
 func checkOutboxLease(outbox config.Outbox) error {
-	if outbox.Lease <= searchapi.ServiceTimeout {
-		return fmt.Errorf("OUTBOX_LEASE: больше %s — потолка служебного вызова поиска", searchapi.ServiceTimeout)
+	if outbox.Lease < 2*outboxHandlerTimeout {
+		return fmt.Errorf("OUTBOX_LEASE: не меньше %s — двух сроков обработчика outbox", 2*outboxHandlerTimeout)
 	}
 	return nil
 }

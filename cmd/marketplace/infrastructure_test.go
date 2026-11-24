@@ -8,6 +8,7 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
 )
 
@@ -59,12 +60,15 @@ func TestProcessPoolsHaveCeiling(t *testing.T) {
 	}
 }
 
-func TestOutboxLeaseOutlivesSearchServiceCall(t *testing.T) {
-	if err := checkOutboxLease(config.Outbox{Lease: time.Minute}); err != nil {
-		t.Fatal(err)
+func TestOutboxDeadlinesNest(t *testing.T) {
+	if outboxHandlerTimeout <= searchapi.ServiceTimeout {
+		t.Fatal("служебный вызов поиска укладывается в срок обработчика outbox")
 	}
-	err := checkOutboxLease(config.Outbox{Lease: 35 * time.Second})
+	if err := checkOutboxLease(config.Outbox{Lease: 90 * time.Second}); err != nil {
+		t.Fatal("аренда по умолчанию вмещает два срока обработчика", err)
+	}
+	err := checkOutboxLease(config.Outbox{Lease: time.Minute})
 	if err == nil || !strings.Contains(err.Error(), "OUTBOX_LEASE") {
-		t.Fatalf("аренда короче служебного вызова поиска — отказ старта: %v", err)
+		t.Fatalf("аренда короче двух сроков обработчика — отказ старта: %v", err)
 	}
 }

@@ -353,9 +353,10 @@ func (s *server) services(ctx context.Context) (services, error) {
 				appcheckout.TaskCancelOrder,
 				searchfeedback.TaskPurchase,
 			},
-			Batch:     cfg.Outbox.Batch,
-			PerTenant: cfg.Outbox.PerTenant,
-			Lease:     cfg.Outbox.Lease,
+			Batch:          cfg.Outbox.Batch,
+			PerTenant:      cfg.Outbox.PerTenant,
+			Lease:          cfg.Outbox.Lease,
+			HandlerTimeout: outboxHandlerTimeout,
 		},
 		map[string]messaging.Handler{
 			appmoderation.TaskReevaluate:     moderation.HandleTask,
