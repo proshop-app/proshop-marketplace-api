@@ -135,7 +135,7 @@ func TestCartReadSQLIncludesAvailabilityWithoutExtraQuery(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	service := appcart.NewService(uow, fake.NewIndex(), fake.NewPlatform(), &fake.IDs{}, clock, time.Hour)
+	service := appcart.NewService(uow, fake.NewPlatform(), &fake.IDs{}, clock, time.Hour)
 	counter.reset()
 	current, err := service.Get(ctx, buyerA)
 	if err != nil {

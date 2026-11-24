@@ -329,6 +329,23 @@ func (i *Indexer) pages(
 	}
 }
 
+// BuyerOffer — предложение, как его видит покупатель: продавец — по участию и записи реестра,
+// цена, наличие и видимость — catalog.ComposeOffer. Документ поиска и корзина считают его одним
+// кодом, поэтому не расходятся. ok=false — магазин не участвует.
+func BuyerOffer(state ports.OfferState) (catalog.Offer, bool) {
+	if state.Product == nil || state.Participant == nil {
+		return catalog.Offer{}, false
+	}
+	visibility := participant.VisibilityOf(state.Participant, state.Tenant)
+	seller := catalog.Seller{
+		Slug:              state.Participant.Slug(),
+		Name:              state.Participant.Name(),
+		Visible:           visibility.Visible,
+		CheckoutAvailable: visibility.CheckoutAvailable,
+	}
+	return catalog.ComposeOffer(state.Product, state.Signals, seller, state.Verdict), true
+}
+
 func documents(states []ports.OfferState) []ports.OfferDocument {
 	docs := make([]ports.OfferDocument, 0, len(states))
 	for _, state := range states {
@@ -348,17 +365,10 @@ func documents(states []ports.OfferState) []ports.OfferDocument {
 // растёт монотонно, снимок читается одним запросом, поэтому более поздний
 // снимок даёт версию не меньше прежней, а равная версия — тот же документ.
 func Document(state ports.OfferState) (ports.OfferDocument, bool) {
-	if state.Product == nil || state.Participant == nil {
+	offer, ok := BuyerOffer(state)
+	if !ok {
 		return ports.OfferDocument{}, false
 	}
-	visibility := participant.VisibilityOf(state.Participant, state.Tenant)
-	seller := catalog.Seller{
-		Slug:              state.Participant.Slug(),
-		Name:              state.Participant.Name(),
-		Visible:           visibility.Visible,
-		CheckoutAvailable: visibility.CheckoutAvailable,
-	}
-	offer := catalog.ComposeOffer(state.Product, state.Signals, seller, state.Verdict)
 	product := state.Product.State()
 	version := state.Product.Version() + state.Participant.Version()
 	updatedAt := product.UpdatedAt

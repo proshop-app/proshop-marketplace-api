@@ -36,7 +36,6 @@ func TestCartPromoHTTP(t *testing.T) {
 	platform.SetItem("t1", ports.ItemCheck{ProductID: "p1", Exists: true, Available: 10, Price: money.FromKopecks(100)})
 	handler := cartHandlers{carts: appcart.NewService(
 		store,
-		fake.NewIndex(),
 		platform,
 		&fake.IDs{},
 		fake.NewClock(now),
@@ -109,7 +108,6 @@ func TestCheckoutTrackingJSON(t *testing.T) {
 func TestPromoValidationHTTP(t *testing.T) {
 	handler := cartHandlers{carts: appcart.NewService(
 		fake.NewStore(),
-		fake.NewIndex(),
 		fake.NewPlatform(),
 		&fake.IDs{},
 		fake.NewClock(time.Now()),
@@ -161,7 +159,6 @@ func TestGetCartSnapshotAndExplicitVerification(t *testing.T) {
 	}
 	handler := cartHandlers{carts: appcart.NewService(
 		store,
-		fake.NewIndex(),
 		platform,
 		&fake.IDs{},
 		fake.NewClock(now),

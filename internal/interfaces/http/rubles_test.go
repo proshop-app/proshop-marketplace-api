@@ -271,16 +271,9 @@ func TestMoneyEncodingFailureNeverSendsPartialSuccess(t *testing.T) {
 }
 
 func TestCartMutationsUseServerPriceAndKeepStoredKopecks(t *testing.T) {
-	store, index, platform := fake.NewStore(), fake.NewIndex(), fake.NewPlatform()
+	store, platform := fake.NewStore(), fake.NewPlatform()
 	now := time.Now()
-	if err := index.Put(context.Background(), []ports.OfferDocument{{
-		ID:      "t1~p1",
-		Visible: true,
-		Price:   90000,
-		Name:    "Товар",
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	store.SeedBuyerOffer(ids.OfferID{Tenant: "t1", Product: "p1"}, "Товар", money.FromKopecks(90000))
 	platform.SetItem("t1", ports.ItemCheck{
 		ProductID: "p1",
 		Exists:    true,
@@ -289,7 +282,6 @@ func TestCartMutationsUseServerPriceAndKeepStoredKopecks(t *testing.T) {
 	})
 	handler := cartHandlers{carts: appcart.NewService(
 		store,
-		index,
 		platform,
 		&fake.IDs{},
 		fake.NewClock(now),

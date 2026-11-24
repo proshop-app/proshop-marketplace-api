@@ -261,7 +261,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			IPLimit:       appbuyer.Limit(cfg.Login.IPLimit),
 		},
 	)
-	carts := appcart.NewService(uow, s.store.index, resyncing, identities, now, cfg.Cart.TTL)
+	carts := appcart.NewService(uow, resyncing, identities, now, cfg.Cart.TTL)
 	var searchBuyerKeys *searchfeedback.BuyerKeys
 	var feedback *searchfeedback.Feedback
 	var purchases *messaging.Dispatcher

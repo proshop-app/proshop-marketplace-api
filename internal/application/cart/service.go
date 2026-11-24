@@ -6,11 +6,12 @@ import (
 	"errors"
 	"time"
 
+	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
 // allTenants выбирает все группы при перепроверке корзины.
@@ -19,11 +20,10 @@ const allTenants ids.TenantID = ""
 // ErrSellerUnreachable — магазин не ответил на перепроверку.
 var ErrSellerUnreachable = errs.New(errs.Unavailable, "cart.seller_unreachable", "магазин не ответил, попробуйте позже")
 
-// Service — корзина: изменения сверяются с проекцией каталога, перед
-// оформлением цены и наличие перепроверяются у магазинов.
+// Service — корзина: изменения сверяются с проекцией каталога в PostgreSQL, перед
+// оформлением цены и наличие перепроверяются у магазинов. Поиск корзине не нужен.
 type Service struct {
 	uow      ports.UnitOfWork
-	index    ports.OfferIndex
 	platform ports.PlatformAPI
 	ids      ports.IDs
 	clock    ports.Clock
@@ -33,13 +33,12 @@ type Service struct {
 // NewService — сценарии корзины; ttl — срок жизни с последнего изменения.
 func NewService(
 	uow ports.UnitOfWork,
-	index ports.OfferIndex,
 	platform ports.PlatformAPI,
 	identities ports.IDs,
 	clock ports.Clock,
 	ttl time.Duration,
 ) *Service {
-	return &Service{uow: uow, index: index, platform: platform, ids: identities, clock: clock, ttl: ttl}
+	return &Service{uow: uow, platform: platform, ids: identities, clock: clock, ttl: ttl}
 }
 
 // Get — корзина покупателя; нет или просрочена — пустая.
@@ -76,14 +75,18 @@ func (s *Service) Add(ctx context.Context, buyerID ids.UUID, offerID ids.OfferID
 		return s.Remove(ctx, buyerID, offerID)
 	}
 
-	offer, err := s.offer(ctx, offerID)
-	if err != nil {
-		return cart.State{}, err
+	var offer cart.Offer
+	read := func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		offer, err = s.offer(ctx, tx, offerID)
+		return err
 	}
 
-	return s.change(ctx, buyerID, offerID.Tenant, offerID, false, func(c *cart.Cart, now time.Time) (bool, error) {
+	add := func(c *cart.Cart, now time.Time) (bool, error) {
 		return true, c.Add(offer, quantity, now, s.ttl)
-	})
+	}
+
+	return s.change(ctx, buyerID, offerID.Tenant, offerID, false, read, add)
 }
 
 // SetQuantity задаёт количество; ноль убирает строку.
@@ -96,28 +99,38 @@ func (s *Service) SetQuantity(
 	if quantity == 0 {
 		return s.Remove(ctx, buyerID, offerID)
 	}
-	offer, err := s.offer(ctx, offerID)
-	if err != nil && !errors.Is(err, cart.ErrOfferUnavailable) {
-		return cart.State{}, err
+	// Недоступное предложение не ошибка: агрегат уменьшит или уберёт строку сам.
+	var offer cart.Offer
+	read := func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		offer, err = s.offer(ctx, tx, offerID)
+		if errors.Is(err, cart.ErrOfferUnavailable) {
+			return nil
+		}
+		return err
 	}
 
-	return s.change(ctx, buyerID, offerID.Tenant, offerID, false, func(c *cart.Cart, now time.Time) (bool, error) {
+	set := func(c *cart.Cart, now time.Time) (bool, error) {
 		return true, c.SetQuantity(offer, quantity, now, s.ttl)
-	})
+	}
+
+	return s.change(ctx, buyerID, offerID.Tenant, offerID, false, read, set)
 }
 
 // Remove убирает строку.
 func (s *Service) Remove(ctx context.Context, buyerID ids.UUID, offerID ids.OfferID) (cart.State, error) {
-	return s.change(ctx, buyerID, offerID.Tenant, ids.OfferID{}, true, func(c *cart.Cart, now time.Time) (bool, error) {
+	remove := func(c *cart.Cart, now time.Time) (bool, error) {
 		return c.Remove(offerID, now, s.ttl), nil
-	})
+	}
+
+	return s.change(ctx, buyerID, offerID.Tenant, ids.OfferID{}, true, nil, remove)
 }
 
 // Verify перепрашивает у каждого магазина цену и наличие позиций и помечает строки.
 func (s *Service) Verify(ctx context.Context, buyerID ids.UUID) (cart.State, error) {
-	return s.change(ctx, buyerID, allTenants, ids.OfferID{}, false, func(c *cart.Cart, now time.Time) (bool, error) {
-		return false, nil
-	})
+	verify := func(*cart.Cart, time.Time) (bool, error) { return false, nil }
+
+	return s.change(ctx, buyerID, allTenants, ids.OfferID{}, false, nil, verify)
 }
 
 func (s *Service) change(
@@ -126,11 +139,18 @@ func (s *Service) change(
 	tenant ids.TenantID,
 	accepted ids.OfferID,
 	removing bool,
+	read func(context.Context, ports.Tx) error,
 	mutate func(*cart.Cart, time.Time) (bool, error),
 ) (cart.State, error) {
 	var c *cart.Cart
 	now := s.clock.Now()
+	// Предложение читается в той же транзакции, что и корзина: одним запросом к проекции.
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		if read != nil {
+			if err := read(ctx, tx); err != nil {
+				return err
+			}
+		}
 		var err error
 		c, err = tx.Carts().ByBuyer(ctx, buyerID)
 		if errors.Is(err, cart.ErrNotFound) {
@@ -199,20 +219,25 @@ func (s *Service) change(
 	return c.State(), err
 }
 
-// offer — предложение из индекса каталога, как его видит покупатель сейчас.
-func (s *Service) offer(ctx context.Context, offerID ids.OfferID) (cart.Offer, error) {
-	doc, found, err := s.index.Get(ctx, offerID.String())
+// offer — предложение из проекции каталога, как его видит покупатель сейчас: видимость и цена
+// считаются тем же appcatalog.BuyerOffer, что и документ поиска.
+func (s *Service) offer(ctx context.Context, tx ports.Tx, offerID ids.OfferID) (cart.Offer, error) {
+	state, err := tx.Offers().Offer(ctx, offerID.Tenant, offerID.Product)
+	if errors.Is(err, catalog.ErrProductNotFound) {
+		return cart.Offer{ID: offerID}, cart.ErrOfferUnavailable
+	}
 	if err != nil {
 		return cart.Offer{}, err
 	}
-	if !found || !doc.Visible {
+	offer, ok := appcatalog.BuyerOffer(state)
+	if !ok || !offer.Visible {
 		return cart.Offer{ID: offerID}, cart.ErrOfferUnavailable
 	}
 
 	return cart.Offer{
 		ID:        offerID,
-		Name:      doc.Name,
-		Price:     money.FromKopecks(doc.Price),
+		Name:      offer.Card.Name,
+		Price:     offer.Price,
 		Available: cart.MaxQuantity,
 		Visible:   true,
 	}, nil

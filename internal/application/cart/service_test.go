@@ -10,6 +10,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
@@ -26,7 +27,6 @@ var (
 
 type env struct {
 	store    *fake.Store
-	index    *fake.Index
 	platform *fake.Platform
 	clock    *fake.Clock
 	service  *appcart.Service
@@ -34,48 +34,12 @@ type env struct {
 
 func setup(t *testing.T) *env {
 	t.Helper()
-	e := &env{store: fake.NewStore(), index: fake.NewIndex(), platform: fake.NewPlatform(), clock: fake.NewClock(t0)}
-	e.service = appcart.NewService(e.store, e.index, e.platform, &fake.IDs{}, e.clock, 30*24*time.Hour)
-	err := e.index.Put(context.Background(), []ports.OfferDocument{
-		{
-			ID:        p1.String(),
-			TenantID:  "t1",
-			ProductID: "p1",
-			Name:      "Чайник",
-
-			Available: 3,
-			Visible:   true,
-			Listed:    true,
-			Version:   1,
-			Price:     money.FromKopecks(199000).Kopecks(),
-			BasePrice: money.FromKopecks(199000).Kopecks(),
-		},
-		{
-			ID:        p2.String(),
-			TenantID:  "t2",
-			ProductID: "p1",
-			Name:      "Кружка",
-
-			Available: 10,
-			Visible:   true,
-			Listed:    true,
-			Version:   1,
-			Price:     money.FromKopecks(35000).Kopecks(),
-			BasePrice: money.FromKopecks(35000).Kopecks(),
-		},
-		{
-			ID:        "t3~p1",
-			TenantID:  "t3",
-			ProductID: "p1",
-			Visible:   false,
-			Version:   1,
-			Price:     money.FromKopecks(0).Kopecks(),
-			BasePrice: money.FromKopecks(0).Kopecks(),
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	e := &env{store: fake.NewStore(), platform: fake.NewPlatform(), clock: fake.NewClock(t0)}
+	e.service = appcart.NewService(e.store, e.platform, &fake.IDs{}, e.clock, 30*24*time.Hour)
+	// Корзина читает предложение из проекции каталога; поиск ей не нужен.
+	e.store.SeedBuyerOffer(p1, "Чайник", money.FromKopecks(199000))
+	e.store.SeedBuyerOffer(p2, "Кружка", money.FromKopecks(35000))
+	e.store.SeedProduct(catalog.ProductState{TenantID: "t3", ProductID: "p1"})
 
 	e.platform.SetItem("t1", ports.ItemCheck{
 		ProductID: "p1",
