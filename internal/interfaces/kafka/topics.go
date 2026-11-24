@@ -9,7 +9,6 @@ const (
 	TopicProductProjected     = "catalog.product.projected"
 	TopicProductProjectedBulk = "catalog.product.projected.bulk"
 	TopicStockItemUpdated     = "stock.item.updated"
-	TopicProductPriceUpdated  = "catalog.product.price-updated"
 	TopicOrderStatusChanged   = "orders.order.marketplace-status-changed"
 	TopicTenantCreated        = "platform.tenant.created"
 	TopicTenantUpdated        = "platform.tenant.updated"

@@ -87,7 +87,7 @@ func (p *parker) Park(_ context.Context, event ports.ParkedEvent) error {
 	return nil
 }
 
-func (f *flaky) ApplyPrice(ctx context.Context, e appcatalog.PriceEvent) error {
+func (f *flaky) ApplyStock(ctx context.Context, e appcatalog.StockEvent) error {
 	if f.failures != 0 {
 		if f.failures > 0 {
 			f.failures--
@@ -99,7 +99,7 @@ func (f *flaky) ApplyPrice(ctx context.Context, e appcatalog.PriceEvent) error {
 		return errors.New("неизвестный сбой")
 	}
 
-	return f.recorder.ApplyPrice(ctx, e)
+	return f.recorder.ApplyStock(ctx, e)
 }
 
 func consumer(
@@ -124,9 +124,11 @@ func consumer(
 	return c, registry
 }
 
-func priceMessage(offset int64, headers ...kafkago.Header) kafkago.Message {
-	msg := message("p1", `{"id":"p1","price":10}`, headers...)
-	msg.Topic = "shop." + kafka.TopicProductPriceUpdated
+// stockMessage — остаток товара p1 на позиции offset; позже опубликованное сообщение новее.
+func stockMessage(offset int64, headers ...kafkago.Header) kafkago.Message {
+	msg := message("p1", `{"productId":"p1","quantity":1}`, headers...)
+	msg.Topic = "shop." + kafka.TopicStockItemUpdated
+	msg.Time = published.Add(time.Duration(offset) * time.Second)
 	msg.Partition = 2
 	msg.Offset = offset
 
@@ -138,12 +140,12 @@ func TestConsumerProcessesWithoutCommitting(t *testing.T) {
 	src := &source{}
 	c, registry := consumer(src, rec, &parker{}, nil)
 
-	if err := c.Process(context.Background(), priceMessage(5, tenantHeader("t1"))); err != nil {
+	if err := c.Process(context.Background(), stockMessage(5, tenantHeader("t1"))); err != nil {
 		t.Fatal(err)
 	}
 
-	if len(rec.prices) != 1 || rec.prices[0].EventID != "shop.catalog.product.price-updated:2:5" {
-		t.Fatalf("идентификатор события — позиция в топике: %+v", rec.prices)
+	if len(rec.stock) != 1 || rec.stock[0].ProductID != "p1" || rec.stock[0].TenantID != "t1" {
+		t.Fatalf("остаток не применён: %+v", rec.stock)
 	}
 	if len(src.commits) != 0 {
 		t.Fatalf("Process не фиксирует отдельные сообщения: %v", src.commits)
@@ -158,7 +160,7 @@ func TestConsumerParksMessageWithoutTenant(t *testing.T) {
 	park := &parker{}
 	c, registry := consumer(src, &recorder{}, park, nil)
 
-	if err := c.Process(context.Background(), priceMessage(6)); err != nil {
+	if err := c.Process(context.Background(), stockMessage(6)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -181,7 +183,7 @@ func TestIntakeTelemetryByTopic(t *testing.T) {
 	}{
 		{kafka.TopicProductProjected, badProjection},
 		{kafka.TopicProductProjectedBulk, badProjection},
-		{kafka.TopicProductPriceUpdated, func(tenant string) kafkago.Message {
+		{kafka.TopicStockItemUpdated, func(tenant string) kafkago.Message {
 			return message("p1", "{", tenantHeader(tenant))
 		}},
 		{kafka.TopicTenantCreated, func(tenant string) kafkago.Message {
@@ -264,12 +266,12 @@ func TestConsumerRetriesTransientFailure(t *testing.T) {
 	projections := &flaky{failures: 2}
 	c, _ := consumer(src, projections, &parker{}, nil)
 
-	if err := c.Process(context.Background(), priceMessage(7, tenantHeader("t1"))); err != nil {
+	if err := c.Process(context.Background(), stockMessage(7, tenantHeader("t1"))); err != nil {
 		t.Fatal(err)
 	}
 
-	if len(projections.prices) != 1 || len(src.commits) != 0 {
-		t.Fatalf("после повторов обработано без отдельного коммита: %+v %v", projections.prices, src.commits)
+	if len(projections.stock) != 1 || len(src.commits) != 0 {
+		t.Fatalf("после повторов обработано без отдельного коммита: %+v %v", projections.stock, src.commits)
 	}
 }
 
@@ -278,7 +280,7 @@ func TestConsumerParksAfterAttemptsWhenStorageReady(t *testing.T) {
 	park := &parker{}
 	c, _ := consumer(src, &flaky{failures: -1}, park, nil)
 
-	if err := c.Process(context.Background(), priceMessage(8, tenantHeader("t1"))); err != nil {
+	if err := c.Process(context.Background(), stockMessage(8, tenantHeader("t1"))); err != nil {
 		t.Fatal(err)
 	}
 
@@ -299,7 +301,7 @@ func TestConsumerWaitsWhileStorageDown(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
 
-	if err := c.Process(ctx, priceMessage(9, tenantHeader("t1"))); !errors.Is(err, context.DeadlineExceeded) {
+	if err := c.Process(ctx, stockMessage(9, tenantHeader("t1"))); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("при недоступной базе сообщение ждёт: %v", err)
 	}
 	if len(park.events) != 0 || len(src.commits) != 0 {
@@ -312,7 +314,7 @@ func TestConsumerRetriesFailedParking(t *testing.T) {
 	park := &parker{failures: 2}
 	c, _ := consumer(src, &recorder{}, park, nil)
 
-	if err := c.Process(context.Background(), priceMessage(10)); err != nil {
+	if err := c.Process(context.Background(), stockMessage(10)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -322,7 +324,7 @@ func TestConsumerRetriesFailedParking(t *testing.T) {
 }
 
 func TestConsumerRunStopsOnCancel(t *testing.T) {
-	src := &source{messages: []kafkago.Message{priceMessage(1, tenantHeader("t1")), priceMessage(2)}}
+	src := &source{messages: []kafkago.Message{stockMessage(1, tenantHeader("t1")), stockMessage(2)}}
 	rec := &recorder{}
 	c, _ := consumer(src, rec, &parker{}, nil)
 
@@ -360,7 +362,7 @@ func TestSubscriptionTopicsUsePrefix(t *testing.T) {
 	topics, bulk := kafka.SubscriptionTopics("shop", router)
 	sort.Strings(topics)
 
-	if len(topics) != 8 || topics[0] != "shop.catalog.product.price-updated" || topics[7] != "shop.stock.item.updated" {
+	if len(topics) != 7 || topics[0] != "shop.catalog.product.projected" || topics[6] != "shop.stock.item.updated" {
 		t.Fatalf("полные имена топиков: %v", topics)
 	}
 
@@ -369,7 +371,7 @@ func TestSubscriptionTopicsUsePrefix(t *testing.T) {
 	}
 
 	bare, bareBulk := kafka.SubscriptionTopics("", router)
-	if len(bare) != 8 || strings.HasPrefix(bare[0], ".") || bareBulk != kafka.TopicProductProjectedBulk {
+	if len(bare) != 7 || strings.HasPrefix(bare[0], ".") || bareBulk != kafka.TopicProductProjectedBulk {
 		t.Fatalf("без префикса установки: %v", bare)
 	}
 }
@@ -399,7 +401,7 @@ func TestConsumerDoesNotParkDependencyOutageAfterAttemptBudget(t *testing.T) {
 	projections := &flaky{failures: 30, failure: errs.New(errs.Unavailable, "test.down", "отказ")}
 	parked := &parker{}
 	c, _ := consumer(&source{}, projections, parked, nil)
-	if err := c.Process(context.Background(), priceMessage(1, tenantHeader("t1"))); err != nil {
+	if err := c.Process(context.Background(), stockMessage(1, tenantHeader("t1"))); err != nil {
 		t.Fatal(err)
 	}
 	if projections.failures != 0 || len(parked.events) != 0 {

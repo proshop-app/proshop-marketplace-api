@@ -72,11 +72,6 @@ type stockItem struct {
 	Price     *json.Number `json:"price"`
 }
 
-type priceChange struct {
-	ID    string       `json:"id"`
-	Price *json.Number `json:"price"`
-}
-
 type tenantRecord struct {
 	Name     string          `json:"name"`
 	TenantID string          `json:"tenantId"`
@@ -247,44 +242,6 @@ func stockItemUpdated(ctx context.Context, projections Projections, envelope Env
 	}
 
 	return projections.ApplyStock(ctx, event)
-}
-
-// priceUpdated — новый прайс товара: магазин только в заголовке.
-func priceUpdated(ctx context.Context, projections Projections, envelope Envelope) error {
-	tenant, err := resolveTenant(tenantHeader(envelope.Message))
-	if err != nil {
-		return err
-	}
-
-	var change priceChange
-	if err := decode(envelope.Message, &change); err != nil {
-		return err
-	}
-
-	product, err := ids.ParseProductID(change.ID)
-	if err != nil {
-		return ErrInvalidPayload.Wrap(err)
-	}
-	if change.Price == nil {
-		return ErrInvalidPayload.WithMessage("в событии нет цены")
-	}
-
-	price, err := rubles(*change.Price)
-	if err != nil {
-		return err
-	}
-
-	at, err := eventTime(envelope.Message)
-	if err != nil {
-		return err
-	}
-
-	return projections.ApplyPrice(ctx, appcatalog.PriceEvent{
-		EventID:   envelope.EventID,
-		TenantID:  tenant,
-		ProductID: product,
-		Price:     catalog.PriceSignal{Price: price, At: at},
-	})
 }
 
 // tenantEvent — событие реестра: магазин в теле, заголовок — если есть.

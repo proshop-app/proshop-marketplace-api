@@ -26,14 +26,6 @@ type StockEvent struct {
 	Price     *catalog.PriceSignal
 }
 
-// PriceEvent — новый прайс из события catalog.product.price-updated.
-type PriceEvent struct {
-	EventID   string
-	TenantID  ids.TenantID
-	ProductID ids.ProductID
-	Price     catalog.PriceSignal
-}
-
 // Projector принимает события магазинов в проекцию. Снимки товаров идут пачкой в одной
 // транзакции; изменение проекции и задачи синхронизации индекса фиксируются вместе.
 type Projector struct {
@@ -115,18 +107,6 @@ func (p *Projector) ApplyStock(ctx context.Context, event StockEvent) error {
 			priceChanged, err := signals.ApplyPrice(*event.Price, p.clock.Now())
 
 			return stockChanged || priceChanged, err
-		},
-	)
-}
-
-// ApplyPrice применяет новый прайс товара.
-func (p *Projector) ApplyPrice(ctx context.Context, event PriceEvent) error {
-	return p.applySignals(
-		ctx,
-		event.TenantID,
-		event.ProductID,
-		func(signals *catalog.Signals) (bool, error) {
-			return signals.ApplyPrice(event.Price, p.clock.Now())
 		},
 	)
 }

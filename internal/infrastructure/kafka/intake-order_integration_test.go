@@ -48,7 +48,7 @@ func TestIntakeSQLCounts(t *testing.T) {
 		}
 		t.Logf("SQL %s: %d (+ BEGIN/COMMIT)", name, want)
 	}
-	check("product", 12, func() error {
+	check("product", 9, func() error {
 		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{Snapshot: snapshot})
 	})
 	snapshot.Revision++
@@ -56,22 +56,14 @@ func TestIntakeSQLCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	check("product/price-only", 6, func() error {
+	check("product/price-only", 5, func() error {
 		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{Snapshot: snapshot})
 	})
 	snapshot.Revision--
-	check("product/stale", 2, func() error {
+	check("product/stale", 1, func() error {
 		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{Snapshot: snapshot})
 	})
-	check("price", 4, func() error {
-		return projector.ApplyPrice(ctx, appcatalog.PriceEvent{
-			EventID:   "price1",
-			TenantID:  snapshot.TenantID,
-			ProductID: snapshot.ProductID,
-			Price:     catalog.PriceSignal{Price: snapshot.Price, At: message.Time},
-		})
-	})
-	check("stock", 4, func() error {
+	check("stock", 3, func() error {
 		return projector.ApplyStock(ctx, appcatalog.StockEvent{
 			TenantID:  snapshot.TenantID,
 			ProductID: snapshot.ProductID,
@@ -97,7 +89,6 @@ func TestIntakeBeforeRegistryPreservesDataAndReevaluates(t *testing.T) {
 	)
 	messages := []kafkago.Message{
 		intakeMessages("product", kafka.TopicProductProjected, 1)[0],
-		intakeMessages("price", kafka.TopicProductPriceUpdated, 1)[0],
 		intakeMessages("stock", kafka.TopicStockItemUpdated, 1)[0],
 	}
 	for i, message := range messages {

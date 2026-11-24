@@ -33,8 +33,8 @@ func messageKey(message kafkago.Message, prefix string) orderingKey {
 	switch topic {
 	case TopicProductProjected, TopicProductProjectedBulk:
 		key = pairedKey(message)
-	case TopicStockItemUpdated, TopicProductPriceUpdated:
-		key = signalKey(message, topic)
+	case TopicStockItemUpdated:
+		key = signalKey(message)
 	case TopicOrderStatusChanged:
 		key = orderKey(message)
 	default:
@@ -61,25 +61,20 @@ func pairedKey(message kafkago.Message) orderingKey {
 	return orderingKey{kind: kind, tenant: tenant, entity: entity}
 }
 
-func signalKey(message kafkago.Message, topic string) orderingKey {
+func signalKey(message kafkago.Message) orderingKey {
 	var value struct {
-		ID        string `json:"id"`
 		ProductID string `json:"productId"`
 	}
 	if json.Unmarshal(message.Value, &value) != nil {
 		return orderingKey{}
 	}
-	product := value.ID
-	if topic == TopicStockItemUpdated {
-		product = value.ProductID
-	}
 	tenant := tenantHeader(message)
 	_, tenantErr := ids.ParseTenantID(tenant)
-	_, productErr := ids.ParseProductID(product)
+	_, productErr := ids.ParseProductID(value.ProductID)
 	if tenantErr != nil || productErr != nil {
 		return orderingKey{}
 	}
-	return orderingKey{kind: orderProduct, tenant: tenant, entity: product}
+	return orderingKey{kind: orderProduct, tenant: tenant, entity: value.ProductID}
 }
 
 func registryKey(message kafkago.Message) orderingKey {

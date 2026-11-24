@@ -448,17 +448,17 @@ func TestConsumerEndToEnd(t *testing.T) {
 			Value:   []byte(`{"id":"s1","productId":"p1","quantity":5,"reserved":1,"price":1990.5}`),
 		},
 		kafkago.Message{
-			Topic:   topic(kafka.TopicProductPriceUpdated),
-			Key:     []byte("p1"),
+			Topic:   topic(kafka.TopicStockItemUpdated),
+			Key:     []byte("s1"),
 			Time:    now.Add(2 * time.Second),
 			Headers: header("t1"),
-			Value:   []byte(`{"id":"p1","price":2100}`),
+			Value:   []byte(`{"id":"s1","productId":"p1","quantity":5,"reserved":1,"price":2100}`),
 		},
 		kafkago.Message{
-			Topic: topic(kafka.TopicProductPriceUpdated),
-			Key:   []byte("p2"),
+			Topic: topic(kafka.TopicStockItemUpdated),
+			Key:   []byte("s3"),
 			Time:  now,
-			Value: []byte(`{"id":"p2","price":100}`),
+			Value: []byte(`{"id":"s3","productId":"p2","quantity":1}`),
 		},
 		kafkago.Message{
 			Topic:   topic(kafka.TopicStockItemUpdated),
@@ -473,7 +473,9 @@ func TestConsumerEndToEnd(t *testing.T) {
 	stop := first.run(t)
 
 	waitFor(t, pool, "отравленные", `SELECT count(*) FROM parked_events`, 2)
-	waitFor(t, pool, "обработанные события", `SELECT count(*) FROM processed_events`, 4)
+	// Отметку пишут только события реестра; снимок и остаток отсекают повтор ревизией и временем.
+	waitFor(t, pool, "обработанные события", `SELECT count(*) FROM processed_events`, 1)
+	waitFor(t, pool, "свежий прайс", `SELECT count(*) FROM offers WHERE price = 210000`, 1)
 	stop()
 
 	parkedWithoutTenant := `
@@ -530,21 +532,23 @@ func TestConsumerEndToEnd(t *testing.T) {
 	}
 }
 
+// Повторная доставка той же позиции не применяется дважды: остаток с тем же временем
+// публикации и значением — не изменение, отметка processed_events не нужна.
 func TestConsumerDeduplicatesRedelivery(t *testing.T) {
 	pool := pgtest.Pool(t)
 	p := newPipeline(t, pool, "shop", unique("dedup-"))
 	defer func() { _ = p.reader.Close() }()
 
 	message := kafkago.Message{
-		Topic:     "shop." + kafka.TopicProductPriceUpdated,
+		Topic:     "shop." + kafka.TopicStockItemUpdated,
 		Partition: 1,
 		Offset:    42,
-		Key:       []byte("p1"),
+		Key:       []byte("s1"),
 		Time:      time.Now(),
 		Headers: []kafkago.Header{
 			{Key: kafka.HeaderTenant, Value: []byte("t1")},
 		},
-		Value: []byte(`{"id":"p1","price":10}`),
+		Value: []byte(`{"productId":"p1","quantity":3}`),
 	}
 
 	for range 2 {
@@ -556,12 +560,10 @@ func TestConsumerDeduplicatesRedelivery(t *testing.T) {
 	if n := count(t, pool, `SELECT version FROM offers WHERE tenant_id = 't1' AND product_id = 'p1'`); n != 1 {
 		t.Fatalf("повторная доставка той же позиции не применяется дважды: версия %d", n)
 	}
-
-	processed := `
-		SELECT count(*)
-		FROM processed_events
-		WHERE id = 'shop.catalog.product.price-updated:1:42'`
-	if n := count(t, pool, processed); n != 1 {
-		t.Fatal("отметка события по позиции в топике")
+	if n := count(t, pool, `SELECT count(*) FROM processed_events`); n != 0 {
+		t.Fatal("остаток не пишет отметку processed_events", n)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM outbox WHERE kind = 'catalog.offer.sync'`); n != 1 {
+		t.Fatal("повтор не ставит вторую задачу синхронизации", n)
 	}
 }

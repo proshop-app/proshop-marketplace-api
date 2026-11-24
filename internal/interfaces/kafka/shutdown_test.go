@@ -14,7 +14,7 @@ import (
 func TestConsumerFinalPrefixOnShutdownAndNoCommitOnRevoke(t *testing.T) {
 	for _, revoke := range []bool{false, true} {
 		t.Run(fmt.Sprint("revoke=", revoke), func(t *testing.T) {
-			source := bufferedSource(keyedPrice("p1", 0), keyedPrice("p2", 1), keyedPrice("p3", 2))
+			source := bufferedSource(keyedStock("p1", 0, 1), keyedStock("p2", 1, 1), keyedStock("p3", 2, 1))
 			generation, cancelGeneration := context.WithCancel(context.Background())
 			defer cancelGeneration()
 			source.generation = generation
@@ -35,7 +35,7 @@ func TestConsumerFinalPrefixOnShutdownAndNoCommitOnRevoke(t *testing.T) {
 				return consume(ctx)
 			}
 			blocked := make(chan struct{}, 1)
-			projection := controlledProjection{price: func(ctx context.Context, event appcatalog.PriceEvent) error {
+			projection := controlledProjection{stock: func(ctx context.Context, event appcatalog.StockEvent) error {
 				if event.ProductID == "p2" {
 					blocked <- struct{}{}
 					<-ctx.Done()

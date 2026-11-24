@@ -60,7 +60,8 @@ func TestProjectionLaneRevisionOrder(t *testing.T) {
 		Backoff:     messaging.Backoff,
 		Now:         time.Now,
 	}
-	metrics := kafka.NewConsumerMetrics(prometheus.NewRegistry())
+	registry := prometheus.NewRegistry()
+	metrics := kafka.NewConsumerMetrics(registry)
 	start := func(id string, topics []string) {
 		reader := infrakafka.NewReader(infrakafka.Config{
 			Brokers: brokers(),
@@ -75,8 +76,8 @@ func TestProjectionLaneRevisionOrder(t *testing.T) {
 	start(group, regular)
 	start(group+"-bulk", []string{bulk})
 
-	const processedQuery = `SELECT count(*) FROM processed_events`
-	processed := count(t, pool, processedQuery)
+	// Снимки не пишут processed_events: готовность — счётчик обработанных сообщений приёма.
+	processed := processedMessages(t, registry)
 	for i, newer := range []string{point, bulk} {
 		older := bulk
 		if newer == bulk {
@@ -89,7 +90,7 @@ func TestProjectionLaneRevisionOrder(t *testing.T) {
 				t.Helper()
 				produce(t, snapshot.message(topic, product))
 				processed++
-				waitFor(t, pool, "обработанные события", processedQuery, processed)
+				waitProcessed(t, registry, processed)
 				return readLaneProduct(t, uow, product)
 			}
 			steps := []struct {
@@ -134,6 +135,39 @@ func TestProjectionLaneRevisionOrder(t *testing.T) {
 	}
 	if parked := count(t, pool, countIntakeParked); parked != 0 {
 		t.Fatalf("корректные проекции попали в парковку: %d", parked)
+	}
+}
+
+func processedMessages(t *testing.T, registry *prometheus.Registry) int {
+	t.Helper()
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := 0.0
+	for _, family := range families {
+		if family.GetName() != "marketplace_kafka_messages_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "result" && label.GetValue() == "processed" {
+					total += metric.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+	return int(total)
+}
+
+func waitProcessed(t *testing.T, registry *prometheus.Registry, want int) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for processedMessages(t, registry) < want {
+		if time.Now().After(deadline) {
+			t.Fatalf("обработано %d сообщений, ожидалось %d", processedMessages(t, registry), want)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 

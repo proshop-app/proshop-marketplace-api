@@ -31,7 +31,6 @@ type parallelSource struct {
 type controlledProjection struct {
 	kafka.Projections
 	product func(context.Context, appcatalog.ProductEvent) error
-	price   func(context.Context, appcatalog.PriceEvent) error
 	stock   func(context.Context, appcatalog.StockEvent) error
 }
 
@@ -109,10 +108,6 @@ func (p controlledProjection) ApplyProducts(ctx context.Context, events []appcat
 	return nil
 }
 
-func (p controlledProjection) ApplyPrice(ctx context.Context, event appcatalog.PriceEvent) error {
-	return p.price(ctx, event)
-}
-
 func (p controlledProjection) ApplyStock(ctx context.Context, event appcatalog.StockEvent) error {
 	return p.stock(ctx, event)
 }
@@ -144,12 +139,6 @@ func productMessage(product string, revision, offset int64) kafkago.Message {
 	}
 }
 
-func keyedPrice(product string, offset int64) kafkago.Message {
-	message := priceMessage(offset, tenantHeader("t1"))
-	message.Value = []byte(fmt.Sprintf(`{"id":%q,"price":10}`, product))
-	return message
-}
-
 // keyedStock — остаток товара; позже опубликованное сообщение новее, поэтому применяется.
 func keyedStock(product string, offset int64, quantity int) kafkago.Message {
 	return kafkago.Message{
@@ -161,6 +150,11 @@ func keyedStock(product string, offset int64, quantity int) kafkago.Message {
 		Headers:   []kafkago.Header{tenantHeader("t1")},
 		Value:     []byte(fmt.Sprintf(`{"productId":%q,"quantity":%d}`, product, quantity)),
 	}
+}
+
+// stockOffset — позиция сообщения keyedStock: время публикации растёт на секунду с позицией.
+func stockOffset(event appcatalog.StockEvent) int64 {
+	return int64(event.Stock.At.Sub(published) / time.Second)
 }
 
 func await[T any](t *testing.T, ch <-chan T) T {
@@ -242,15 +236,20 @@ func TestConsumerOrdersProductKeyWhileOtherProductRuns(t *testing.T) {
 }
 
 func TestConsumerErrorBlocksKeyAndPrefixWhileOtherKeyCompletes(t *testing.T) {
-	source := bufferedSource(keyedPrice("p0", 0), keyedPrice("p1", 1), keyedPrice("p2", 2), keyedPrice("p1", 3))
+	source := bufferedSource(
+		keyedStock("p0", 0, 1),
+		keyedStock("p1", 1, 1),
+		keyedStock("p2", 2, 1),
+		keyedStock("p1", 3, 2),
+	)
 	failed := make(chan struct{}, 1)
 	other := make(chan struct{}, 1)
 	release := make(chan struct{})
 	var attempts atomic.Int32
 	var overtook atomic.Bool
-	projection := controlledProjection{price: func(ctx context.Context, event appcatalog.PriceEvent) error {
-		switch event.EventID {
-		case "shop.catalog.product.price-updated:2:1":
+	projection := controlledProjection{stock: func(ctx context.Context, event appcatalog.StockEvent) error {
+		switch stockOffset(event) {
+		case 1:
 			if attempts.Add(1) == 1 {
 				failed <- struct{}{}
 				return errors.New("временный сбой")
@@ -261,9 +260,9 @@ func TestConsumerErrorBlocksKeyAndPrefixWhileOtherKeyCompletes(t *testing.T) {
 			case <-ctx.Done():
 				return ctx.Err()
 			}
-		case "shop.catalog.product.price-updated:2:2":
+		case 2:
 			other <- struct{}{}
-		case "shop.catalog.product.price-updated:2:3":
+		case 3:
 			select {
 			case <-release:
 			default:
@@ -390,17 +389,17 @@ func testConsumerReplay(t *testing.T, rebalance bool) {
 }
 
 func TestConsumerWaitsForDurableParkingBeforeReleasingKey(t *testing.T) {
-	source := bufferedSource(keyedPrice("p1", 0), keyedPrice("p1", 1), keyedPrice("p2", 2))
+	source := bufferedSource(keyedStock("p1", 0, 1), keyedStock("p1", 1, 2), keyedStock("p2", 2, 1))
 	parking := &waitingParker{entered: make(chan struct{}, 1), release: make(chan struct{})}
 	other := make(chan struct{}, 1)
 	var overtook atomic.Bool
-	projection := controlledProjection{price: func(_ context.Context, event appcatalog.PriceEvent) error {
-		switch event.EventID {
-		case "shop.catalog.product.price-updated:2:0":
+	projection := controlledProjection{stock: func(_ context.Context, event appcatalog.StockEvent) error {
+		switch stockOffset(event) {
+		case 0:
 			return kafka.ErrInvalidPayload
-		case "shop.catalog.product.price-updated:2:1":
+		case 1:
 			overtook.Store(!parking.durable.Load())
-		case "shop.catalog.product.price-updated:2:2":
+		case 2:
 			other <- struct{}{}
 		}
 		return nil

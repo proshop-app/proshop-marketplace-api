@@ -29,7 +29,6 @@ type Projections interface {
 	// ApplyProducts применяет снимки разных товаров одной транзакцией.
 	ApplyProducts(ctx context.Context, events []appcatalog.ProductEvent) error
 	ApplyStock(ctx context.Context, event appcatalog.StockEvent) error
-	ApplyPrice(ctx context.Context, event appcatalog.PriceEvent) error
 }
 
 // Registry — приём событий реестра магазинов.
@@ -52,7 +51,6 @@ func NewRouter(projections Projections, registry Registry) *Router {
 		TopicProductProjected:     projected,
 		TopicProductProjectedBulk: projected,
 		TopicStockItemUpdated:     bind(projections, stockItemUpdated),
-		TopicProductPriceUpdated:  bind(projections, priceUpdated),
 	}}
 
 	for _, topic := range tenantTopics {

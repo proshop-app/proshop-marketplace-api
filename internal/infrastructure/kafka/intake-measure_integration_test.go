@@ -136,10 +136,6 @@ func (p *measuredProjection) ApplyProducts(ctx context.Context, events []appcata
 	return p.appliedMany(time.Now(), len(events), p.Projector.ApplyProducts(ctx, events))
 }
 
-func (p *measuredProjection) ApplyPrice(ctx context.Context, event appcatalog.PriceEvent) error {
-	return p.applied(time.Now(), p.Projector.ApplyPrice(ctx, event))
-}
-
 func (p *measuredProjection) ApplyStock(ctx context.Context, event appcatalog.StockEvent) error {
 	return p.applied(time.Now(), p.Projector.ApplyStock(ctx, event))
 }
@@ -151,7 +147,7 @@ func TestIntakeThroughput(t *testing.T) {
 		t.Skip("замер: INTAKE_MEASURE=1")
 	}
 	for _, workers := range []int{1, 8} {
-		for _, kind := range []string{"product", "price", "stock"} {
+		for _, kind := range []string{"product", "stock"} {
 			t.Run(fmt.Sprintf("%s/workers=%d", kind, workers), func(t *testing.T) {
 				measureIntake(t, kind, workers)
 			})
@@ -264,8 +260,6 @@ func intakeTopic(kind string) string {
 	switch kind {
 	case "product":
 		return kafka.TopicProductProjected
-	case "price":
-		return kafka.TopicProductPriceUpdated
 	default:
 		return kafka.TopicStockItemUpdated
 	}

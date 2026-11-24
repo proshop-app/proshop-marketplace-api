@@ -152,26 +152,29 @@ func TestApplyStockAndPrice(t *testing.T) {
 		t.Fatalf("сигналы: %+v", signals)
 	}
 
-	stale := appcatalog.PriceEvent{
-		EventID:   "e2",
+	// Прайс приходит только в позиции склада: старое событие не применяется.
+	stalePrice := catalog.PriceSignal{Price: money.FromKopecks(1), At: t0}
+	stale := appcatalog.StockEvent{
 		TenantID:  "t1",
 		ProductID: "p1",
-		Price:     catalog.PriceSignal{Price: money.FromKopecks(1), At: t0},
+		Stock:     catalog.StockSignal{Available: 4, At: t0},
+		Price:     &stalePrice,
 	}
-	if err := projector.ApplyPrice(ctx, stale); err != nil {
+	if err := projector.ApplyStock(ctx, stale); err != nil {
 		t.Fatal(err)
 	}
 	if signals, _ := store.Signals("t1", "p1"); signals.Price.Kopecks() != 9900 {
 		t.Fatal("старая цена не применяется")
 	}
 
-	fresh := appcatalog.PriceEvent{
-		EventID:   "e3",
+	freshPrice := catalog.PriceSignal{Price: money.FromKopecks(12000), At: t2}
+	fresh := appcatalog.StockEvent{
 		TenantID:  "t1",
 		ProductID: "p1",
-		Price:     catalog.PriceSignal{Price: money.FromKopecks(12000), At: t2},
+		Stock:     catalog.StockSignal{Available: 4, At: t1},
+		Price:     &freshPrice,
 	}
-	if err := projector.ApplyPrice(ctx, fresh); err != nil {
+	if err := projector.ApplyStock(ctx, fresh); err != nil {
 		t.Fatal(err)
 	}
 	if signals, _ := store.Signals("t1", "p1"); signals.Price.Kopecks() != 12000 || signals.Version != 2 {
@@ -182,13 +185,14 @@ func TestApplyStockAndPrice(t *testing.T) {
 		t.Fatalf("задача синхронизации склеивается: %+v", rows)
 	}
 
-	bad := appcatalog.PriceEvent{
-		EventID:   "e4",
+	badPrice := catalog.PriceSignal{Price: money.FromKopecks(-1), At: t2}
+	bad := appcatalog.StockEvent{
 		TenantID:  "t1",
 		ProductID: "p1",
-		Price:     catalog.PriceSignal{Price: money.FromKopecks(-1), At: t2},
+		Stock:     catalog.StockSignal{Available: 4, At: t1},
+		Price:     &badPrice,
 	}
-	if err := projector.ApplyPrice(ctx, bad); !errors.Is(err, catalog.ErrInvalidSignal) {
+	if err := projector.ApplyStock(ctx, bad); !errors.Is(err, catalog.ErrInvalidSignal) {
 		t.Fatalf("ожидалось ErrInvalidSignal, получено %v", err)
 	}
 }
