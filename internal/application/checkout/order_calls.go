@@ -57,13 +57,12 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 
 	// Повтор команды должен вернуть сохранённый заказ, даже если код уже истёк.
 	// Сервер сравнивает снимок discounts внутри транзакции создания.
-	callCtx, cancel := context.WithTimeout(ctx, min(s.orderCallBudget(), group.CreationDeadline.Sub(s.clock.Now())))
 	var answer checkout.SellerOrder
-	failed := s.ready(callCtx, []checkout.Group{group})
+	failed := s.ready(ctx, []checkout.Group{group})
 	if failed == nil {
-		answer, failed = s.platform.CreateOrder(callCtx, tenant, request)
+		budget := min(s.orderCallBudget(), group.CreationDeadline.Sub(s.clock.Now()))
+		answer, failed = s.platform.CreateOrder(ports.WithPlatformCallBudget(ctx, budget), tenant, request)
 	}
-	cancel()
 	var refusal *ports.OrderRefusal
 	if errors.As(failed, &refusal) && refusal.Code == checkout.DispatchOriginChanged {
 		return s.reviewDispatch(
@@ -185,9 +184,7 @@ func (s *Service) pollGroup(ctx context.Context, buyerID, id ids.UUID, tenant id
 			orderID = g.OrderID
 		}
 	}
-	callCtx, cancel := context.WithTimeout(ctx, s.orderCallBudget())
-	answer, failed := s.platform.GetOrder(callCtx, tenant, orderID)
-	cancel()
+	answer, failed := s.platform.GetOrder(s.orderCallContext(ctx), tenant, orderID)
 	_, err = s.update(ctx, buyerID, id, func(c *checkout.Checkout, now time.Time) error {
 		if failed == nil {
 			_, observeErr := c.CompletePoll(tenant, token, answer, now)
@@ -209,6 +206,12 @@ func (s *Service) pollGroup(ctx context.Context, buyerID, id ids.UUID, tenant id
 		return err
 	})
 	return err
+}
+
+// orderCallContext передаёт бюджет вызова магазина данными: срок ставит ограждение платформы,
+// и зависший магазин засчитывается его размыкателю, а не выглядит отменой вызывающего.
+func (s *Service) orderCallContext(ctx context.Context) context.Context {
+	return ports.WithPlatformCallBudget(ctx, s.orderCallBudget())
 }
 
 func (s *Service) orderCallBudget() time.Duration {

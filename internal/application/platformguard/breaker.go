@@ -1,11 +1,24 @@
 package platformguard
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+)
+
+// verdict — чем завершённый вызов считается для размыкателя.
+type verdict uint8
+
+const (
+	verdictSuccess verdict = iota
+	verdictFailure
+	// verdictSlow — магазин не ответил в срок. Общему серверу это доля окна, но не счёт подряд:
+	// один зависший магазин подряд не размыкает сервер для всех, массовое зависание — размыкает.
+	verdictSlow
+	verdictNeutral
 )
 
 type breaker struct {
@@ -31,20 +44,23 @@ func (b *breaker) start() breakerPermit {
 	return p
 }
 
-func (b *breaker) finish(p breakerPermit, failed, neutral bool, cfg Config, now time.Time) {
+func (b *breaker) finish(p breakerPermit, v verdict, cfg Config, now time.Time) {
 	if p.generation != b.generation {
 		return
 	}
-	if neutral {
+	if v == verdictNeutral {
 		b.probe = false
 		return
 	}
+	failed := v != verdictSuccess
 	if p.probe {
 		b.completeProbe(failed, cfg, now)
 		return
 	}
 	b.window.record(now, cfg.FailureWindow, failed)
-	b.failures++
+	if v != verdictSlow {
+		b.failures++
+	}
 	if !failed {
 		b.failures = 0
 	}
@@ -69,6 +85,41 @@ func (b *breaker) open(interval time.Duration, now time.Time) {
 	b.openUntil = now.Add(interval)
 	b.probe = false
 	b.generation++
+}
+
+// serverVerdict отделяет отказ общего сервера от зависания одного магазина.
+// Проба магазина, чей размыкатель уже открыт, общему серверу ничего не доказывает:
+// иначе один зависший магазин раз в интервал добавлял бы сбой в окно всех магазинов.
+// Короткий бюджет чтения (отзывы, сверка) тоже не доказывает: медленные отзывы под нагрузкой
+// не должны закрывать оформление всем магазинам.
+func serverVerdict(p permit, err error) verdict {
+	var serverFailure *ports.PlatformServerFailure
+	var catalogFailure *ports.PickupCatalogFailure
+	switch {
+	case errors.Is(err, context.Canceled):
+		return verdictNeutral
+	case errors.As(err, &serverFailure):
+		return verdictFailure
+	case !errors.Is(err, context.DeadlineExceeded):
+		return verdictSuccess
+	case errors.As(err, &catalogFailure) || p.shop.probe || !p.strict:
+		return verdictNeutral
+	default:
+		return verdictSlow
+	}
+}
+
+// tenantVerdict засчитывает магазину его отказы и зависание; общий сбой и справочник — нет.
+func tenantVerdict(err error) verdict {
+	var serverFailure *ports.PlatformServerFailure
+	var catalogFailure *ports.PickupCatalogFailure
+	if errors.Is(err, context.Canceled) || errors.As(err, &serverFailure) || errors.As(err, &catalogFailure) {
+		return verdictNeutral
+	}
+	if tenantFailure(err) {
+		return verdictFailure
+	}
+	return verdictSuccess
 }
 
 func tenantFailure(err error) bool {

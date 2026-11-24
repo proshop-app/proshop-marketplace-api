@@ -18,9 +18,10 @@ func call[T any](
 	load func(context.Context) (T, error),
 ) (T, error) {
 	started := time.Now()
-	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	callCtx, cancel := context.WithTimeout(ctx, callBudget(ctx, timeout))
 	defer cancel()
 	p, reason := c.acquire(callCtx, class)
+	p.strict = timeout >= c.cfg.StrictTimeout
 	if reason != "" {
 		c.observe(ctx, class, operation, reason, started)
 		var zero T
@@ -30,8 +31,23 @@ func call[T any](
 		return zero, ErrUnavailable
 	}
 	value, err := execute(ctx, callCtx, c, p, load)
-	c.observe(ctx, class, operation, callOutcome(err), started)
+	outcome := callOutcome(err)
+	if err != nil && ctx.Err() != nil {
+		// Исход «timeout» — только истечение срока ограждения, засчитанное магазину.
+		outcome = "canceled"
+	}
+	c.observe(ctx, class, operation, outcome, started)
 	return value, callError(err)
+}
+
+// callBudget — единственный срок вызова магазина: бюджет ограждения или меньший бюджет,
+// переданный вызывающим данными (ports.WithPlatformCallBudget). Его истечение — зависание
+// магазина, а не решение вызывающего.
+func callBudget(ctx context.Context, timeout time.Duration) time.Duration {
+	if budget, ok := ports.PlatformCallBudget(ctx); ok {
+		return min(budget, timeout)
+	}
+	return timeout
 }
 
 func execute[T any](
@@ -41,17 +57,19 @@ func execute[T any](
 	load func(context.Context) (T, error),
 ) (T, error) {
 	value, err := load(ctx)
+	if parent.Err() != nil {
+		// Вызывающий передумал: отменён запрос покупателя, остановлен процесс, потеряна аренда
+		// или истёк его общий бюджет. Отказ магазина это не доказывает — в счёт размыкателей не идёт.
+		c.release(p, context.Canceled)
+		return value, parent.Err()
+	}
 	var serverFailure *ports.PlatformServerFailure
 	var catalogFailure *ports.PickupCatalogFailure
 	catalog := errors.As(err, &catalogFailure)
 	shared := errors.As(err, &serverFailure)
-	if ctx.Err() != nil && (!shared || errors.Is(ctx.Err(), context.Canceled)) && !catalog {
+	if ctx.Err() != nil && !shared && !catalog {
+		// Истёк срок ограждения: магазин не ответил вовремя, это зависание, а не отмена.
 		err = ctx.Err()
-	}
-	if parent.Err() != nil {
-		// Более короткий бюджет вызывающего кода не доказывает отказ магазина или общего сервера.
-		c.release(p, context.Canceled)
-		return value, parent.Err()
 	}
 	c.release(p, err)
 	return value, err
