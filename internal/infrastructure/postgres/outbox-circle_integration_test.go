@@ -181,3 +181,28 @@ func TestOrderedHeadIndexCoversOrderedKinds(t *testing.T) {
 		t.Fatal(definition)
 	}
 }
+
+// Взятие вида, которого нет в очереди, возвращает курсор как был; курсор на пустом магазине при
+// обычных магазинах — начатый круг: первое взятие берёт их, а не начинает заново.
+func TestClaimKeepsCursorWhenKindIsAbsent(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, seedBlockedCircle, circleKind); err != nil {
+		t.Fatal(err)
+	}
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
+	request := ports.ClaimRequest{Now: time.Now(), Limit: 8, PerTenant: 8, LeaseUntil: time.Now().Add(time.Hour)}
+	for _, after := range []ports.ClaimCursor{{}, ports.ClaimAfter("x"), ports.ClaimAfter("")} {
+		request.After, request.Kinds = after, []string{"checkout.create"}
+		claimed, err := queue.Claim(ctx, request)
+		if err != nil || len(claimed.Tasks) != 0 || claimed.Next != after {
+			t.Fatalf("курсор %+v: %+v %v", after, claimed, err)
+		}
+	}
+	request.After, request.Kinds = ports.ClaimAfter(""), nil
+	request.OrderedKinds = []string{circleKind}
+	claimed, err := queue.Claim(ctx, request)
+	if err != nil || len(claimed.Tasks) != 8 || claimed.Next.Tenant == "" {
+		t.Fatalf("курсор на пустом магазине: %+v %v", claimed, err)
+	}
+}

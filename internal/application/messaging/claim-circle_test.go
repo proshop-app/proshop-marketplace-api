@@ -110,9 +110,27 @@ func TestClaimCirclePassesSharedTaskWithEmptyTenant(t *testing.T) {
 			}
 			served[task.TenantID] = true
 		}
+		if !claimed.Next.Started {
+			t.Fatalf("курсор после взятия не начат: %+v", claimed)
+		}
 		after = claimed.Next
 	}
 	if len(served) != 5 {
 		t.Fatalf("круг обслужил %d магазинов из 5: %v", len(served), served)
+	}
+}
+
+// Взятие вида, которого нет в очереди, возвращает курсор как был: и не начатый, и начатый —
+// исполнитель оформления держит курсор на вид и не должен терять место на круге.
+func TestClaimKeepsCursorWhenKindIsAbsent(t *testing.T) {
+	store := fake.NewStore()
+	enqueue(t, store, circleKind, "t1", "t1", t0.Add(-time.Minute))
+	for _, after := range []ports.ClaimCursor{{}, ports.ClaimAfter("x"), ports.ClaimAfter("")} {
+		request := circleRequest(after, 8, t0.Add(time.Hour))
+		request.Kinds = []string{"checkout.create"}
+		claimed, err := store.Claim(context.Background(), request)
+		if err != nil || len(claimed.Tasks) != 0 || claimed.Next != after {
+			t.Fatalf("курсор %+v: %+v %v", after, claimed, err)
+		}
 	}
 }
