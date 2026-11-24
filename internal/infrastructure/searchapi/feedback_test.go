@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
@@ -196,7 +195,6 @@ func feedbackSearchClient(t *testing.T, handler http.HandlerFunc) *Index {
 		URL:           server.URL,
 		Token:         strings.Repeat("s", 32),
 		PurchaseToken: strings.Repeat("p", 32),
-		Timeout:       time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)

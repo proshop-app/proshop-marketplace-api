@@ -48,7 +48,7 @@ func TestPaymentHoldRecordedContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			client := New(Config{BaseURL: "http://shop.test", Token: "token", Timeout: time.Second})
+			client := New(Config{BaseURL: "http://shop.test", Token: "token", Timeout: time.Second, Conns: 4})
 			client.http.Transport = holdTransport(func(r *http.Request) (*http.Response, error) {
 				path := "/api/v1/internal/marketplace/tenants/t1/orders/o1/payment-hold"
 				if r.Method != http.MethodPost || r.URL.Path != path || r.Header.Get(HeaderToken) != "token" {

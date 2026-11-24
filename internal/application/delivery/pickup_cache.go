@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 func (s *Service) memoryCatalog(key string) *pickupCatalog {
@@ -15,7 +16,7 @@ func (s *Service) memoryCatalog(key string) *pickupCatalog {
 	now := time.Now()
 	if !now.Before(s.nextCleanup) {
 		s.nextCleanup = now.Add(pickupCleanupInterval)
-		go s.cleanupCatalogs(now)
+		safego.Go("delivery.pickup-cleanup", func() { s.cleanupCatalogs(now) })
 	}
 	return s.catalogAt(key, now)
 }
@@ -91,7 +92,7 @@ func (s *Service) cleanupCatalogs(now time.Time) {
 
 // Redis и разбор большого снимка объединяются отдельно от очередей вызовов магазинов.
 func (s *Service) sharedCacheRead(ctx context.Context, key string) *pickupCatalog {
-	result := s.cacheReads.DoChan(key, func() (any, error) {
+	result := s.cacheReads.DoChan(key, safego.GuardValue("delivery.pickup-cache-read", func() (any, error) {
 		if cached := s.memoryCatalog(key); cached != nil {
 			return cached, nil
 		}
@@ -104,7 +105,7 @@ func (s *Service) sharedCacheRead(ctx context.Context, key string) *pickupCatalo
 			s.mu.Unlock()
 		}
 		return catalog, nil
-	})
+	}))
 	select {
 	case <-ctx.Done():
 		return nil

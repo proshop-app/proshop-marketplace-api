@@ -25,7 +25,7 @@ func TestCitySuggestionsUseExistingInternalClientWithoutShop(t *testing.T) {
 		_, _ = w.Write([]byte(`[{"city":"Город","label":"Город, регион","fiasId":"city-id"}]`))
 	}))
 	defer source.Close()
-	client := platformapi.New(platformapi.Config{BaseURL: source.URL, Token: "token", Timeout: time.Second})
+	client := platformapi.New(platformapi.Config{BaseURL: source.URL, Token: "token", Timeout: time.Second, Conns: 4})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	items, err := client.SuggestCities(ctx, "Город")

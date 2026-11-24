@@ -8,6 +8,7 @@ import (
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
@@ -202,7 +203,7 @@ func TestDeadlineTaskWaitsForAttemptLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.clock.Advance(time.Second)
-	executor := appcheckout.NewExecutor(e.store, e.clock, e.service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, messaging.DefaultMaxAttempts)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +321,7 @@ func TestExecutorBacksOffNonPendingFailures(t *testing.T) {
 	unavailable := errs.New(errs.Unavailable, "test.storage", "база недоступна")
 	uow := &resultUOW{UnitOfWork: e.store, failure: unavailable, remaining: 100}
 	service := appcheckout.NewService(uow, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewExecutor(e.store, e.clock, service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service, messaging.DefaultMaxAttempts)
 	for _, delay := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second} {
 		now := e.clock.Now()
 		if err := executor.Dispatch(ctx); err != nil {

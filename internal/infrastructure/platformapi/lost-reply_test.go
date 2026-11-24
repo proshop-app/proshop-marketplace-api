@@ -155,7 +155,7 @@ func TestQueuedCreationLostReplyReturnsSameOrderOnRetry(t *testing.T) {
 	shop := newLostReplyShop(t)
 	server := httptest.NewServer(shop)
 	defer server.Close()
-	upstream := platformapi.New(platformapi.Config{BaseURL: server.URL, Timeout: time.Second})
+	upstream := platformapi.New(platformapi.Config{BaseURL: server.URL, Timeout: time.Second, Conns: 4})
 	clock := &admissionClock{
 		Clock:   fake.NewClock(time.Now()),
 		entered: make(chan struct{}),

@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	infrakafka "github.com/proshop-app/proshop-marketplace/internal/infrastructure/kafka"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 func (s *server) runConsumers(ctx context.Context, group *errgroup.Group) {
@@ -18,18 +19,18 @@ func (s *server) runConsumers(ctx context.Context, group *errgroup.Group) {
 	router := kafka.NewRouter(s.app.projector, s.app.registry).WithOrders(s.app.checkouts)
 	regular, bulk := kafka.SubscriptionTopics(cfg.TopicPrefix, router)
 	metrics := kafka.NewConsumerMetrics(s.metrics)
-	ctx = ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(s.cfg.Database.Ingestion))
+	ctx = ports.WithDatabaseClass(ctx, ports.DatabaseIngestion)
 
-	group.Go(func() error {
+	group.Go(safego.Guard("kafka.consumer", func() error {
 		return s.consume(ctx, router, metrics, cfg.GroupID, regular, cfg.Workers-cfg.BulkWorkers)
-	})
-	group.Go(func() error {
+	}))
+	group.Go(safego.Guard("kafka.consumer-bulk", func() error {
 		return s.consume(ctx, router, metrics, cfg.GroupID+"-bulk", []string{bulk}, cfg.BulkWorkers)
-	})
-	group.Go(func() error {
+	}))
+	group.Go(safego.Guard("kafka.consumer-orders", func() error {
 		orders := []string{kafka.OrderStatusTopic(cfg.TopicPrefix)}
 		return s.consume(ctx, router, metrics, cfg.GroupID+"-orders", orders, kafka.OrderWorkers)
-	})
+	}))
 }
 
 func (s *server) consume(
@@ -46,6 +47,7 @@ func (s *server) consume(
 		GroupID: groupID,
 		Topics:  topics,
 		Logger:  s.logger,
+		Lag:     metrics.Lag(cfg.TopicPrefix),
 	})
 	logger := s.logger.With(slog.String("group", groupID))
 	defer func() {
@@ -59,7 +61,7 @@ func (s *server) consume(
 		TopicPrefix: cfg.TopicPrefix,
 		MaxAttempts: cfg.MaxAttempts,
 		Backoff:     messaging.Backoff,
-		Ready:       s.store.pool.Ping,
+		Ready:       s.store.pools.Ping,
 		Now:         clock.System{}.Now,
 	}
 	return kafka.NewConsumer(reader, router, s.app.parker, consumerConfig, logger, metrics).Run(ctx)

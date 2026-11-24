@@ -18,6 +18,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/identity"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 // Бюджет сериализованных справочников, без обрезания большого города: он остаётся один.
@@ -183,7 +184,17 @@ func (s *Service) catalogue(
 		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
 		f = &flight{done: make(chan struct{}), cancel: cancel}
 		s.flights[flightKey] = f
-		go s.load(loadCtx, key, flightKey, carrier, city, f, pool)
+		safego.Run(
+			"delivery.pickup-load",
+			func() error {
+				var err error
+				f.catalog, err = s.load(loadCtx, key, carrier, city, pool)
+				return err
+			},
+			func(err error) {
+				s.finishLoad(loadCtx, key, flightKey, f, err)
+			},
+		)
 	}
 	if buyerID != "" && s.selectionOwners[buyerID] == nil {
 		s.selectionOwners[buyerID] = f
@@ -199,24 +210,32 @@ func (s *Service) catalogue(
 	}
 }
 
+// load занимает место пула загрузок и собирает каталог города с индексом.
 func (s *Service) load(
 	ctx context.Context,
-	key, flightKey string,
+	key string,
 	carrier delivery.Carrier,
 	city string,
-	f *flight,
 	pool chan struct{},
-) {
-	defer f.cancel()
+) (*pickupCatalog, error) {
 	select {
 	case pool <- struct{}{}:
 		defer func() { <-pool }()
 	case <-ctx.Done():
-		f.err = ctx.Err()
+		return nil, ctx.Err()
 	}
-	if f.err == nil {
-		f.catalog, f.err = s.fetchCatalog(ctx, key, carrier, city)
+	catalog, err := s.fetchCatalog(ctx, key, carrier, city)
+	if err == nil {
+		catalog.index = delivery.NewPickupIndex(catalog.Points)
 	}
+	return catalog, err
+}
+
+// finishLoad закрывает рейс при любом итоге загрузки, в том числе при панике:
+// иначе город навсегда остался бы в рейсе, и все запросы к нему ждали бы до срока.
+func (s *Service) finishLoad(ctx context.Context, key, flightKey string, f *flight, err error) {
+	defer f.cancel()
+	f.err = err
 	if errors.Is(f.err, context.DeadlineExceeded) {
 		f.err = ErrSellerUnreachable.Wrap(f.err)
 	}
@@ -226,9 +245,6 @@ func (s *Service) load(
 			f.catalog.bytes = len(encoded)
 			_ = s.cache.Set(ctx, key, encoded, pickupFailureTTL)
 		}
-	}
-	if f.err == nil {
-		f.catalog.index = delivery.NewPickupIndex(f.catalog.Points)
 	}
 	s.mu.Lock()
 	if f.catalog != nil {

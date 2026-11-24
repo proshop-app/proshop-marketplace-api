@@ -36,9 +36,16 @@ type scope struct {
 	moderation  *ModerationRules
 }
 
-// NewUnitOfWork — UnitOfWork поверх пула с общими снимками всех его транзакций.
+// NewUnitOfWork — UnitOfWork поверх одного пула с общими снимками всех его транзакций:
+// CLI и тесты, где классы нагрузки не разделяются.
 func NewUnitOfWork(pool *pgxpool.Pool) *UnitOfWork {
 	return &UnitOfWork{source: newConnectionSource(pool)}
+}
+
+// NewUnitOfWorkByClass — UnitOfWork процесса: транзакция берёт соединение и сроки
+// пула класса нагрузки из контекста.
+func NewUnitOfWorkByClass(pools *Pools) *UnitOfWork {
+	return &UnitOfWork{source: &connectionSource{pools: pools}}
 }
 
 func newScope(db *gorm.DB, snapshots *snapshots) *scope {
@@ -50,9 +57,10 @@ func newScope(db *gorm.DB, snapshots *snapshots) *scope {
 
 // Do открывает транзакцию, выполняет fn и фиксирует; ошибка или паника fn откатывают.
 func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx ports.Tx) error) (err error) {
-	ctx, cancel := context.WithTimeout(ctx, ports.DatabaseBudgetFrom(ctx, u.source.budget).Transaction)
+	pool := u.source.pools.route(ctx)
+	ctx, cancel := context.WithTimeout(ctx, pool.budget.Transaction)
 	defer cancel()
-	shared, err := u.source.begin(ctx)
+	shared, err := u.source.begin(ctx, pool)
 	if err != nil {
 		return ErrUnavailable.Wrap(err)
 	}

@@ -199,7 +199,7 @@ func TestSettingsServerJSONStableVersion(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := platformapi.New(platformapi.Config{BaseURL: server.URL, Token: "test"})
+	client := platformapi.New(platformapi.Config{BaseURL: server.URL, Token: "test", Timeout: time.Second, Conns: 4})
 	clock := fake.NewClock(at(1))
 	syncer := app.NewSettings(uow, client, clock, &fake.IDs{})
 	if changed, err := syncer.SyncOne(ctx, "t1"); err != nil || !changed {

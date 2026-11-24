@@ -9,7 +9,9 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 // Ограничения пула и сроков независимого исполнителя оформления.
@@ -26,6 +28,9 @@ const (
 	PollPerTenant       = 1
 	CancelWorkers       = 4
 	CancelPerTenant     = 1
+	// ExecutorSlots — все места полос; каждое держит не больше одного соединения
+	// базы за раз: транзакции короткие, вызов магазина идёт вне транзакции.
+	ExecutorSlots = CreationWorkers + DeadlineWorkers + PollWorkers + CancelWorkers
 )
 
 // TaskResult публикуется после отметки задачи; позволяет циклу сразу заполнить свободное место.
@@ -49,12 +54,8 @@ type Executor struct {
 	wg          sync.WaitGroup
 }
 
-// NewExecutor собирает отдельный пул поверх существующей очереди.
-func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service, attempts ...int) *Executor {
-	maxAttempts := messaging.DefaultMaxAttempts
-	if len(attempts) > 0 && attempts[0] > 0 {
-		maxAttempts = attempts[0]
-	}
+// NewExecutor собирает отдельный пул поверх существующей очереди; maxAttempts — предел неизвестных сбоев.
+func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service, maxAttempts int) *Executor {
 	return &Executor{
 		maxAttempts: maxAttempts,
 		queue:       queue,
@@ -78,6 +79,9 @@ func (e *Executor) Wait() { e.wg.Wait() }
 
 // Dispatch не ждёт HTTP: каждый освободившийся слот доступен следующему Claim.
 func (e *Executor) Dispatch(ctx context.Context) error {
+	// Создание заказа ждёт покупатель (CreationTimeout): полоса берёт соединения своего
+	// пула, их не займут индексация outbox и фоновые циклы.
+	ctx = ports.WithDatabaseClass(ctx, ports.DatabaseOrders)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, kind := range []string{TaskExpireCreation, TaskCreateOrder, TaskCancelOrder, TaskPollOrder} {
@@ -113,7 +117,7 @@ func (e *Executor) Dispatch(ctx context.Context) error {
 		for _, task := range tasks {
 			e.active[kind][task.TenantID]++
 			e.wg.Add(1)
-			go e.execute(ctx, task)
+			safego.Go("checkout.executor", func() { e.execute(ctx, task) })
 		}
 	}
 	return nil
@@ -121,31 +125,21 @@ func (e *Executor) Dispatch(ctx context.Context) error {
 
 func (e *Executor) execute(ctx context.Context, task ports.Task) {
 	defer e.wg.Done()
-	err := e.service.HandleOrderTask(ctx, task)
-	resolution := messaging.Resolution(task, err, e.clock.Now(), e.maxAttempts)
-	if CreationPending(err) {
-		resolution.FailureReason = ""
-		next := e.clock.Now().Add(checkout.CreationRetryDelay)
-		var pending *creationPendingUntil
-		if errors.As(err, &pending) {
-			next = pending.at
+	// Слот магазина освобождается и при панике вне обработчика (отметка итога):
+	// иначе магазин навсегда потерял бы место в полосе оформления.
+	released := false
+	defer func() {
+		if !released {
+			e.release(task)
 		}
-		resolution.NextAt = &next
-	}
-	var saved error
-	if ctx.Err() != nil {
-		// Не записываем отказ при SIGTERM: задача остаётся арендованной до повторного Claim.
-		saved = ctx.Err()
-	} else {
-		saved = e.queue.Resolve(ctx, []ports.TaskResolution{resolution})
-	}
+	}()
+	// Паника обработчика — обычная ошибка задачи: повтор или карантин.
+	err := errs.Guard(func() error { return e.service.HandleOrderTask(ctx, task) })
+	resolution := e.resolution(task, err)
+	saved := e.save(ctx, resolution)
 	reason := resolution.FailureReason
-	e.mu.Lock()
-	e.active[task.Kind][task.TenantID]--
-	if e.active[task.Kind][task.TenantID] == 0 {
-		delete(e.active[task.Kind], task.TenantID)
-	}
-	e.mu.Unlock()
+	e.release(task)
+	released = true
 	if saved != nil {
 		err = saved
 		reason = ""
@@ -159,4 +153,36 @@ func (e *Executor) execute(ctx context.Context, task ports.Task) {
 	}:
 	case <-ctx.Done():
 	}
+}
+
+func (e *Executor) release(task ports.Task) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.active[task.Kind][task.TenantID]--
+	if e.active[task.Kind][task.TenantID] == 0 {
+		delete(e.active[task.Kind], task.TenantID)
+	}
+}
+
+// resolution — итог задачи; ожидание подтверждения магазина — отложенный повтор, не сбой.
+func (e *Executor) resolution(task ports.Task, err error) ports.TaskResolution {
+	resolution := messaging.Resolution(task, err, e.clock.Now(), e.maxAttempts)
+	if CreationPending(err) {
+		resolution.FailureReason = ""
+		next := e.clock.Now().Add(checkout.CreationRetryDelay)
+		var pending *creationPendingUntil
+		if errors.As(err, &pending) {
+			next = pending.at
+		}
+		resolution.NextAt = &next
+	}
+	return resolution
+}
+
+// save не записывает отказ при SIGTERM: задача остаётся арендованной до повторного Claim.
+func (e *Executor) save(ctx context.Context, resolution ports.TaskResolution) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return e.queue.Resolve(ctx, []ports.TaskResolution{resolution})
 }

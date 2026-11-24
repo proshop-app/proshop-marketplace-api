@@ -13,7 +13,6 @@ import (
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
-	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	appreference "github.com/proshop-app/proshop-marketplace/internal/application/reference"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
@@ -31,21 +30,25 @@ var errReferenceUsage = errors.New(
 
 // reindex перестраивает индекс предложений из проекции.
 func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	store, err := openStorage(ctx, cfg)
+	pool, err := openCommandPool(ctx, cfg.Database)
 	if err != nil {
 		return err
 	}
-	defer store.close()
+	defer pool.Close()
+	index, err := openSearch(cfg)
+	if err != nil {
+		return err
+	}
 
-	uow := postgres.NewUnitOfWork(store.pool)
+	uow := postgres.NewUnitOfWork(pool)
 	references := appreference.NewService(uow, clock.System{}, random.IDs{}, nil, appreference.Config{})
 	models := appcatalog.NewModelKeys(referencecatalog.New(references), nil, cfg.ModelKeys)
 	indexer := appcatalog.NewIndexer(
 		uow,
-		store.index,
+		index,
 		clock.System{},
 		indexBatch,
-		postgres.NewIndexRebuildLock(store.pool),
+		postgres.NewIndexRebuildLock(pool),
 		models,
 		cfg.Settings.StoreCardRefreshDelay,
 	)
@@ -105,7 +108,7 @@ func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string,
 	if args[0] == "check" {
 		return json.NewEncoder(output).Encode(summary)
 	}
-	pool, err := postgres.Open(ctx, cfg.Database.URL, 2, ports.DatabaseBudget(cfg.Database.Maintenance))
+	pool, err := openCommandPool(ctx, cfg.Database)
 	if err != nil {
 		return errors.New("не удалось подключиться к PostgreSQL")
 	}
@@ -142,13 +145,13 @@ func moderationReevaluate(ctx context.Context, cfg config.Config, _ *slog.Logger
 	if len(os.Args) != 3 || os.Args[2] != "reevaluate" {
 		return errors.New("использование: marketplace moderation reevaluate")
 	}
-	store, err := openStorage(ctx, cfg)
+	pool, err := openCommandPool(ctx, cfg.Database)
 	if err != nil {
 		return err
 	}
-	defer store.close()
+	defer pool.Close()
 	service := appmoderation.NewService(
-		postgres.NewUnitOfWork(store.pool),
+		postgres.NewUnitOfWork(pool),
 		clock.System{},
 		random.IDs{},
 		appmoderation.Config{
@@ -156,7 +159,7 @@ func moderationReevaluate(ctx context.Context, cfg config.Config, _ *slog.Logger
 			RequireImage:    cfg.Moderation.RequireImage,
 		},
 	)
-	return postgres.NewIndexRebuildLock(store.pool).WithLock(ctx, service.EnqueueAll)
+	return postgres.NewIndexRebuildLock(pool).WithLock(ctx, service.EnqueueAll)
 }
 
 func referenceDirectory(args []string) (string, error) {
@@ -184,7 +187,7 @@ func runReferenceImport(ctx context.Context, cfg config.Config, args []string, o
 	if err != nil {
 		return deliveryFailure(err)
 	}
-	pool, err := postgres.Open(ctx, cfg.Database.URL, 2, ports.DatabaseBudget(cfg.Database.Maintenance))
+	pool, err := openCommandPool(ctx, cfg.Database)
 	if err != nil {
 		return errors.New("не удалось подключиться к PostgreSQL")
 	}

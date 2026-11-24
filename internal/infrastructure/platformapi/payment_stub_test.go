@@ -56,7 +56,7 @@ func TestStubPaymentRecordedContract(t *testing.T) {
 			})
 			server := httptest.NewServer(handler)
 			defer server.Close()
-			client := New(Config{BaseURL: server.URL, Token: "service-token", Timeout: time.Second})
+			client := New(Config{BaseURL: server.URL, Token: "service-token", Timeout: time.Second, Conns: 4})
 			for range 2 {
 				err := client.StubPayment(context.Background(), "t1", "o1", money.FromKopecks(413000))
 				if (err == nil) != tc.success {

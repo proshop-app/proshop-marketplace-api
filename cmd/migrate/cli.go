@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
@@ -50,7 +49,7 @@ func run() int {
 	ctx, cancel := context.WithTimeout(ctx, db.Maintenance.Transaction)
 	defer cancel()
 
-	pool, err := postgres.Open(ctx, db.URL, 2, ports.DatabaseBudget(db.Maintenance))
+	pool, err := postgres.OpenCommand(ctx, db.URL, postgres.Budget(db.Maintenance))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 

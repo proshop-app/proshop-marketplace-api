@@ -19,6 +19,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 const updateRetryDelay = 10 * time.Millisecond
@@ -455,13 +456,24 @@ func (s *Service) quoteSelections(
 			continue
 		}
 		wg.Add(1)
-		go func(group checkout.Group, selected checkout.Selection) {
-			defer wg.Done()
-			q := s.quoteGroup(ctx, group, selected)
-			mu.Lock()
-			quotes[group.TenantID] = q
-			mu.Unlock()
-		}(group, *selected)
+		var quote delivery.Quote
+		safego.Run(
+			"checkout.quote",
+			func() error {
+				quote = s.quoteGroup(ctx, group, *selected)
+				return nil
+			},
+			func(err error) {
+				defer wg.Done()
+				// Паника расчёта одного магазина — магазин недоступен, а не зависшая покупка.
+				if err != nil {
+					quote = delivery.Unreachable(s.clock.Now())
+				}
+				mu.Lock()
+				quotes[group.TenantID] = quote
+				mu.Unlock()
+			},
+		)
 	}
 	wg.Wait()
 	return quotes

@@ -12,6 +12,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 // settingsPage — участников за один проход сверки.
@@ -195,7 +196,7 @@ func (s *Settings) syncTenants(ctx context.Context, tenants []ids.TenantID, resu
 	var mu sync.Mutex
 	workers.SetLimit(8)
 	for _, tenant := range tenants {
-		workers.Go(func() error {
+		workers.Go(safego.Guard("participant.settings-sync", func() error {
 			changed, err := s.SyncOne(ctx, tenant)
 			mu.Lock()
 			defer mu.Unlock()
@@ -206,7 +207,7 @@ func (s *Settings) syncTenants(ctx context.Context, tenants []ids.TenantID, resu
 				result.Changed++
 			}
 			return nil
-		})
+		}))
 	}
 	_ = workers.Wait()
 }

@@ -10,10 +10,13 @@ import (
 
 type requestClass int
 
+// Классы маршрутов. Запись покупателя и служебного API сервера (вход, избранное,
+// профиль, обратная связь, заявки магазина) работает в пуле оформления, а не в пуле
+// приёма Kafka: волна событий не задерживает ответ человеку.
 const (
 	readRequest requestClass = iota + 1
 	checkoutRequest
-	ingestionRequest
+	writeRequest
 	backgroundRequest
 	importRequest
 )
@@ -28,26 +31,25 @@ type budgetWriter struct {
 	expired bool
 }
 
-// requestBudget получает класс из регистрации маршрута и отменяет работу вместе с SQL.
+// requestBudget получает класс из регистрации маршрута: класс выбирает пул базы
+// со своими сроками SQL, общий срок запроса отменяет работу вместе с SQL.
 func requestBudget(class requestClass, deps Deps, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		timeout := deps.RequestTimeout
-		budget := deps.DatabaseBudgets.Read
+		database := ports.DatabaseRead
 		switch class {
 		case readRequest:
-		case checkoutRequest:
-			budget = deps.DatabaseBudgets.Checkout
-		case ingestionRequest:
-			budget = deps.DatabaseBudgets.Ingestion
+		case checkoutRequest, writeRequest:
+			database = ports.DatabaseCheckout
 		case backgroundRequest:
-			budget = deps.DatabaseBudgets.Background
+			database = ports.DatabaseBackground
 		case importRequest:
-			budget = deps.DatabaseBudgets.Background
+			database = ports.DatabaseBackground
 			timeout = deps.ReferenceImportTimeout
 		default:
 			panic("маршрут без класса срока запроса")
 		}
-		ctx, cancel := context.WithTimeout(ports.WithDatabaseBudget(r.Context(), budget), timeout)
+		ctx, cancel := context.WithTimeout(ports.WithDatabaseClass(r.Context(), database), timeout)
 		defer cancel()
 		request := r.WithContext(ctx)
 		response := &budgetWriter{ResponseWriter: w, request: request}

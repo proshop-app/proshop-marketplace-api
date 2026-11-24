@@ -61,7 +61,7 @@ func TestLoadDefaults(t *testing.T) {
 	if topic := prefixed.FullTopic("catalog.reference.changed"); topic != "p1.catalog.reference.changed" {
 		t.Fatalf("топик с префиксом: %s", topic)
 	}
-	if cfg.Retention.ProcessedEvents != 14*24*time.Hour || cfg.Outbox.Batch != 200 || cfg.Database.MaxConns != 10 {
+	if cfg.Retention.ProcessedEvents != 14*24*time.Hour || cfg.Outbox.Batch != 200 {
 		t.Fatalf("неожиданные умолчания: %+v", cfg)
 	}
 }

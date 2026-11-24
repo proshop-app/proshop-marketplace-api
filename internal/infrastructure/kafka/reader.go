@@ -12,6 +12,8 @@ import (
 	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 // DefaultRefreshInterval — как часто проверять, не появились ли недостающие топики.
@@ -28,6 +30,8 @@ type Config struct {
 	// RefreshInterval — период проверки недостающих топиков; ноль — DefaultRefreshInterval.
 	RefreshInterval time.Duration
 	Logger          *slog.Logger
+	// Lag — получатель отставания по партициям; nil — отставание не считается.
+	Lag LagObserver
 }
 
 // Reader читает группой с ручным коммитом. Новая группа начинает с самого
@@ -257,10 +261,11 @@ func (r *Reader) watch(ctx context.Context, interrupt func()) func() {
 
 	done := make(chan struct{})
 	finished := make(chan struct{})
-	go func() {
+	// Паника наблюдателя лишь откладывает подхват новых топиков до следующего поколения.
+	safego.Go("kafka.watch-topics", func() {
 		defer close(finished)
 		r.watchTopics(ctx, done, missing, interrupt)
-	}()
+	})
 	return func() {
 		close(done)
 		<-finished

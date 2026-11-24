@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 const checkTimeout = 2 * time.Second
@@ -22,9 +24,16 @@ func health(checks []Check, readiness bool) http.HandlerFunc {
 		defer cancel()
 		results := make(chan checkResult, len(checks))
 		for _, check := range checks {
-			go func() {
-				results <- checkResult{check: check, err: check.Probe(ctx)}
-			}()
+			// Паника проверки — отказ зависимости, а не ожидание общего срока проверки.
+			safego.Run(
+				"http.health-"+check.Name,
+				func() error {
+					return check.Probe(ctx)
+				},
+				func(err error) {
+					results <- checkResult{check: check, err: err}
+				},
+			)
 		}
 		body := healthJSON{Status: "ok", Checks: make(map[string]string, len(checks))}
 		status := http.StatusOK

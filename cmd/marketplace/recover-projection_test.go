@@ -208,7 +208,7 @@ func TestProjectionRecoveryConfigNeedsOnlyDatabaseAndModeration(t *testing.T) {
 			return "false", true
 		case "MODERATION_PROBATION_OFFERS":
 			return "4", true
-		case "DATABASE_MAX_CONNS", "MODERATION_METRICS_INTERVAL":
+		case "MODERATION_METRICS_INTERVAL":
 			return "", false
 		default:
 			t.Fatalf("лишняя переменная: %s", key)

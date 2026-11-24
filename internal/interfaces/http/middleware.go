@@ -5,10 +5,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -49,13 +51,15 @@ type catalogFacetFacts struct {
 
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status  int
+	written bool
 }
 
 type httpMetrics struct {
 	catalogOffers *prometheus.CounterVec
 	requests      *prometheus.CounterVec
 	duration      *prometheus.HistogramVec
+	panics        *prometheus.CounterVec
 }
 
 // RequestID — идентификатор запроса из контекста.
@@ -75,7 +79,13 @@ func loggerFrom(ctx context.Context) *slog.Logger {
 
 func (s *statusRecorder) WriteHeader(status int) {
 	s.status = status
+	s.written = true
 	s.ResponseWriter.WriteHeader(status)
+}
+
+func (s *statusRecorder) Write(body []byte) (int, error) {
+	s.written = true
+	return s.ResponseWriter.Write(body)
 }
 
 // Unwrap сохраняет доступ ResponseController к дедлайнам соединения под наблюдением.
@@ -107,8 +117,15 @@ func newHTTPMetrics(registerer prometheus.Registerer) *httpMetrics {
 			},
 			[]string{"route"},
 		),
+		panics: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_http_panics_total",
+				Help: "Паники обработчиков HTTP по маршруту; клиент получил 500 или оборванный ответ.",
+			},
+			[]string{"route"},
+		),
 	}
-	registerer.MustRegister(m.requests, m.duration, m.catalogOffers)
+	registerer.MustRegister(m.requests, m.duration, m.catalogOffers, m.panics)
 	for _, selector := range []string{"all", "none", "partial"} {
 		m.catalogOffers.WithLabelValues(selector)
 	}
@@ -138,49 +155,89 @@ func observe(logger *slog.Logger, metrics *httpMetrics, next http.Handler) http.
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 
 		defer func() {
-			if recovered := recover(); recovered != nil {
-				requestLogger.Error("http: паника обработчика", slog.Any("panic", recovered))
-				writeJSON(
-					recorder,
-					http.StatusInternalServerError,
-					errorBody{Error: errorDetail{Code: "internal", Message: "внутренняя ошибка"}},
-				)
+			abort := recoverHandler(recover(), recorder, r, requestLogger, metrics)
+			logRequest(r, recorder, facts, time.Since(started), requestLogger, metrics)
+			if abort {
+				// net/http обрывает соединение без своего стека в журнале: стек уже записан здесь.
+				panic(http.ErrAbortHandler)
 			}
-
-			route := r.Pattern
-			if route == "" {
-				route = "unmatched"
-			}
-
-			elapsed := time.Since(started)
-			metrics.requests.WithLabelValues(route, strconv.Itoa(recorder.status)).Inc()
-			metrics.duration.WithLabelValues(route).Observe(elapsed.Seconds())
-			attrs := []any{
-				slog.String("method", r.Method),
-				slog.String("route", route),
-				slog.Int("status", recorder.status),
-				slog.Duration("duration", elapsed),
-			}
-			if facts.buyerID != "" {
-				attrs = append(attrs, slog.String("buyerId", string(facts.buyerID)))
-			}
-			if facts.catalogFacets != nil {
-				if recorder.status == http.StatusOK {
-					metrics.catalogOffers.WithLabelValues(facts.catalogFacets.class).Inc()
-				}
-				attrs = append(
-					attrs,
-					slog.String("catalogFacetSelector", facts.catalogFacets.selector),
-					slog.Int("catalogFacetCount", facts.catalogFacets.total),
-					slog.Int("catalogAttributeFacetCount", facts.catalogFacets.attributes),
-				)
-			}
-
-			requestLogger.Info("http", attrs...)
 		}()
 
 		next.ServeHTTP(recorder, r)
 	})
+}
+
+// recoverHandler превращает панику обработчика в 500 со стеком в журнале и метрикой.
+// true — ответ надо оборвать: обработчик сам прервал его через http.ErrAbortHandler
+// (по смыслу стандартной библиотеки — без стека в журнале) либо паника случилась
+// после начала ответа, и дописать JSON поверх уже отправленного нельзя.
+func recoverHandler(
+	recovered any,
+	recorder *statusRecorder,
+	r *http.Request,
+	logger *slog.Logger,
+	metrics *httpMetrics,
+) bool {
+	if recovered == nil {
+		return false
+	}
+	if err, ok := recovered.(error); ok && errors.Is(err, http.ErrAbortHandler) {
+		return true
+	}
+	metrics.panics.WithLabelValues(routeOf(r)).Inc()
+	logger.Error("http: паника обработчика", slog.Any("panic", recovered), slog.String("stack", string(debug.Stack())))
+	if recorder.written {
+		return true
+	}
+	writeJSON(
+		recorder,
+		http.StatusInternalServerError,
+		errorBody{Error: errorDetail{Code: "internal", Message: "внутренняя ошибка"}},
+	)
+	return false
+}
+
+func routeOf(r *http.Request) string {
+	if r.Pattern == "" {
+		return "unmatched"
+	}
+	return r.Pattern
+}
+
+// logRequest пишет строку журнала и метрики запроса.
+func logRequest(
+	r *http.Request,
+	recorder *statusRecorder,
+	facts *requestFacts,
+	elapsed time.Duration,
+	logger *slog.Logger,
+	metrics *httpMetrics,
+) {
+	route := routeOf(r)
+	metrics.requests.WithLabelValues(route, strconv.Itoa(recorder.status)).Inc()
+	metrics.duration.WithLabelValues(route).Observe(elapsed.Seconds())
+	attrs := []any{
+		slog.String("method", r.Method),
+		slog.String("route", route),
+		slog.Int("status", recorder.status),
+		slog.Duration("duration", elapsed),
+	}
+	if facts.buyerID != "" {
+		attrs = append(attrs, slog.String("buyerId", string(facts.buyerID)))
+	}
+	if facts.catalogFacets != nil {
+		if recorder.status == http.StatusOK {
+			metrics.catalogOffers.WithLabelValues(facts.catalogFacets.class).Inc()
+		}
+		attrs = append(
+			attrs,
+			slog.String("catalogFacetSelector", facts.catalogFacets.selector),
+			slog.Int("catalogFacetCount", facts.catalogFacets.total),
+			slog.Int("catalogAttributeFacetCount", facts.catalogFacets.attributes),
+		)
+	}
+
+	logger.Info("http", attrs...)
 }
 
 func newRequestID() string {

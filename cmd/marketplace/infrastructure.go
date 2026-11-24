@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/config"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/smsru"
+	"github.com/proshop-app/proshop-marketplace/internal/interfaces/kafka"
 )
 
 const (
@@ -20,46 +24,137 @@ const (
 	retentionBatch = 1000
 	// keyPrefix — префикс ключей маркетплейса в Redis.
 	keyPrefix = "marketplace:"
+	// maxProcessConnections — потолок суммы пулов процесса: столько соединений
+	// реплика может держать в PostgreSQL одновременно, не считая advisory lock.
+	maxProcessConnections = 1000
+	// outboxHandlerTimeout — срок обработчика задачи outbox. Самый долгий вызов внутри —
+	// служебная запись в поиск (searchapi.ServiceTimeout), запас — на чтение и запись
+	// базы вокруг неё: вызов всегда укладывается в срок обработчика.
+	outboxHandlerTimeout = searchapi.ServiceTimeout + 5*time.Second
 )
 
-// storage — база и индексы процесса.
+// storage — пулы базы по классам нагрузки и API поиска.
 type storage struct {
-	pool  *pgxpool.Pool
+	pools *postgres.Pools
 	index *searchapi.Index
 }
 
-// openStorage подключает PostgreSQL и API поиска.
+// openStorage подключает пулы PostgreSQL по классам нагрузки и API поиска. Поиск
+// при этом не вызывается: процесс стартует и без него.
 func openStorage(ctx context.Context, cfg config.Config) (*storage, error) {
-	pool, err := postgres.Open(
-		ctx,
-		cfg.Database.URL,
-		cfg.Database.MaxConns,
-		ports.DatabaseBudget(cfg.Database.Background),
-	)
+	classes, err := databasePools(cfg)
+	if err != nil {
+		return nil, err
+	}
+	pools, err := postgres.OpenPools(ctx, cfg.Database.URL, classes)
 	if err != nil {
 		return nil, err
 	}
 
-	index, err := searchapi.New(searchapi.Config{
-		URL:           cfg.Search.URL,
-		Token:         cfg.Search.Token,
-		PurchaseToken: cfg.Search.PurchaseToken,
-		Timeout:       cfg.Search.Timeout,
-	})
+	index, err := openSearch(cfg)
 	if err != nil {
-		pool.Close()
+		pools.Close()
 		return nil, err
 	}
 
 	return &storage{
-		pool:  pool,
+		pools: pools,
 		index: index,
 	}, nil
 }
 
 // close закрывает соединения с базой.
 func (s *storage) close() {
-	s.pool.Close()
+	s.pools.Close()
+}
+
+// pool — пул класса для хранилищ, которыми пользуется один класс нагрузки.
+func (s *storage) pool(class ports.DatabaseClass) *pgxpool.Pool {
+	return s.pools.Pool(class)
+}
+
+// databasePools — пул на класс нагрузки; сумма пулов ограничена потолком процесса.
+func databasePools(cfg config.Config) (map[ports.DatabaseClass]postgres.PoolConfig, error) {
+	db := cfg.Database
+	var err error
+	// Воркер приёма держит соединение всю транзакцию проекции: меньший пул превратил бы
+	// воркеры в очередь за соединением.
+	db.Ingestion.MaxConns, err = fitConnections(
+		"DATABASE_INGESTION_MAX_CONNS",
+		db.Ingestion.MaxConns,
+		cfg.Kafka.Workers+kafka.OrderWorkers,
+		"KAFKA_WORKERS и воркеров статусов заказов",
+	)
+	if err != nil {
+		return nil, err
+	}
+	// Каждое место исполнителя держит не больше одного соединения, ещё одно — взятие задач:
+	// при таком пуле ни одно место не ждёт соединения за другим.
+	db.Orders.MaxConns, err = fitConnections(
+		"DATABASE_ORDERS_MAX_CONNS",
+		db.Orders.MaxConns,
+		appcheckout.ExecutorSlots+1,
+		"мест исполнителя оформления и взятия задач",
+	)
+	if err != nil {
+		return nil, err
+	}
+	classes := map[ports.DatabaseClass]config.DatabasePool{
+		ports.DatabaseRead:       db.Read,
+		ports.DatabaseCheckout:   db.Checkout,
+		ports.DatabaseIngestion:  db.Ingestion,
+		ports.DatabaseBackground: db.Background,
+		ports.DatabaseOrders:     db.Orders,
+	}
+	pools := make(map[ports.DatabaseClass]postgres.PoolConfig, len(classes))
+	var total int32
+	for class, pool := range classes {
+		total += pool.MaxConns
+		pools[class] = postgres.PoolConfig{MaxConns: pool.MaxConns, Budget: postgres.Budget(pool.Budget)}
+	}
+	if total > maxProcessConnections {
+		return nil, fmt.Errorf("DATABASE_*_MAX_CONNS: сумма пулов %d больше %d", total, maxProcessConnections)
+	}
+
+	return pools, nil
+}
+
+// fitConnections — пул под одновременных держателей соединений: без переменной он равен
+// их числу, меньше — отказ старта.
+func fitConnections(name string, configured int32, holders int, who string) (int32, error) {
+	if holders > maxProcessConnections {
+		return 0, fmt.Errorf("%s: %d держателей соединений больше %d", name, holders, maxProcessConnections)
+	}
+	if configured == 0 {
+		return int32(holders), nil //nolint:gosec // не больше maxProcessConnections
+	}
+	if int(configured) < holders {
+		return 0, fmt.Errorf("%s: не меньше %d — %s", name, holders, who)
+	}
+	return configured, nil
+}
+
+// checkOutboxLease — обработчик укладывается в половину аренды (правило диспетчера):
+// вторая половина — отметка итога прохода и запас; иначе задачу, которую ещё пишет
+// эта реплика, взял бы сосед.
+func checkOutboxLease(outbox config.Outbox) error {
+	if outbox.Lease < 2*outboxHandlerTimeout {
+		return fmt.Errorf("OUTBOX_LEASE: не меньше %s — двух сроков обработчика outbox", 2*outboxHandlerTimeout)
+	}
+	return nil
+}
+
+// openCommandPool — небольшой пул служебной команды со сроками обслуживания.
+func openCommandPool(ctx context.Context, database config.Database) (*pgxpool.Pool, error) {
+	return postgres.OpenCommand(ctx, database.URL, postgres.Budget(database.Maintenance))
+}
+
+func openSearch(cfg config.Config) (*searchapi.Index, error) {
+	return searchapi.New(searchapi.Config{
+		URL:           cfg.Search.URL,
+		Token:         cfg.Search.Token,
+		PurchaseToken: cfg.Search.PurchaseToken,
+	})
 }
 
 // callCheck — шлюз проверки звонком: живой sms.ru или песочница для разработки.

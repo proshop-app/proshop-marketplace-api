@@ -24,7 +24,7 @@ func TestPricingRefusalLogsTenantOnSharedPath(t *testing.T) {
 	previous := slog.Default()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
 	t.Cleanup(func() { slog.SetDefault(previous) })
-	client := New(Config{BaseURL: "http://platform.test", Token: "service-token", Timeout: time.Second})
+	client := New(Config{BaseURL: "http://platform.test", Token: "service-token", Timeout: time.Second, Conns: 4})
 	client.http.Transport = reviewTransport(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Path != "/api/v1/internal/marketplace/tenants/t1/items/check" {
 			t.Error(r.URL)
@@ -69,7 +69,7 @@ func TestItemsCheckOmitsBuyerAndEmptyPromo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := New(Config{BaseURL: "http://platform.test", Token: "service-token"})
+	client := New(Config{BaseURL: "http://platform.test", Token: "service-token", Timeout: time.Second, Conns: 4})
 	client.http.Transport = reviewTransport(func(r *http.Request) (*http.Response, error) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/internal/marketplace/tenants/t1/items/check" {
 			t.Fatal(r.Method, r.URL)

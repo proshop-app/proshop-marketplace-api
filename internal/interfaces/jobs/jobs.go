@@ -1,5 +1,5 @@
-// Package jobs — фоновые циклы процесса: разбор outbox и чистка служебных
-// записей по сроку.
+// Package jobs — фоновые циклы процесса: разбор outbox, полосы оформления,
+// сверки, метрики и чистка служебных записей; Supervisor держит их живыми после паники.
 package jobs
 
 import (
@@ -12,6 +12,7 @@ import (
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
 // Dispatcher — разбор одной пачки outbox.
@@ -33,6 +34,7 @@ type OutboxRunner struct {
 	tasks      *prometheus.CounterVec
 	lag        *prometheus.HistogramVec
 	errors     prometheus.Counter
+	panics     *prometheus.CounterVec
 	ready      *prometheus.GaugeVec
 	depthAt    time.Time
 	readyKinds map[string]bool
@@ -76,6 +78,13 @@ func NewOutboxRunner(
 			Name: "marketplace_outbox_cycle_errors_total",
 			Help: "Сбои цикла разбора outbox: взятие или отметка задач.",
 		}),
+		panics: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_outbox_task_panics_total",
+				Help: "Паники обработчиков outbox и оформления; задача идёт путём повтора и карантина.",
+			},
+			[]string{"kind"},
+		),
 		ready: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "marketplace_outbox_ready_tasks",
@@ -84,7 +93,7 @@ func NewOutboxRunner(
 			[]string{"kind"},
 		),
 	}
-	registerer.MustRegister(r.tasks, r.lag, r.errors, r.ready)
+	registerer.MustRegister(r.tasks, r.lag, r.errors, r.panics, r.ready)
 
 	return r
 }
@@ -166,18 +175,18 @@ func (r *OutboxRunner) RecordOutcome(outcome messaging.Outcome) {
 	if appcheckout.CreationPending(outcome.Err) {
 		return
 	}
-	r.logger.Warn(
-		message,
-		slog.String("reason", outcome.FailureReason),
+	log := r.logger.With(
 		slog.String("kind", outcome.Task.Kind),
 		slog.String("tenantId", tenant),
-		slog.Int64(
-			"taskId",
-			outcome.Task.ID,
-		),
+		slog.Int64("taskId", outcome.Task.ID),
 		slog.Int("attempt", outcome.Task.Attempts),
-		slog.Any("error", outcome.Err),
 	)
+	// Стек паники — только в журнал: в базе у задачи остаётся текст ошибки.
+	if stack, ok := errs.PanicStack(outcome.Err); ok {
+		r.panics.WithLabelValues(outcome.Task.Kind).Inc()
+		log.Error("outbox: паника обработчика", slog.Any("error", outcome.Err), slog.String("stack", string(stack)))
+	}
+	log.Warn(message, slog.String("reason", outcome.FailureReason), slog.Any("error", outcome.Err))
 }
 
 // NewRetentionRunner — чистка раз в interval.

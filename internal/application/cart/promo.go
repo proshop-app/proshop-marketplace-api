@@ -9,6 +9,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 // Ограничение защищает сервер от всплеска запросов корзины с множеством магазинов.
@@ -35,41 +36,55 @@ func PriceGroups(
 	limit := make(chan struct{}, pricingConcurrency)
 	for _, group := range groups {
 		wg.Add(1)
-		go func(group cart.Group) {
-			defer wg.Done()
-			message := "магазин " + string(group.TenantID) + " не ответил, попробуйте позже"
-			select {
-			case limit <- struct{}{}:
-			case <-ctx.Done():
+		var result ports.GroupPricing
+		safego.Run(
+			"cart.price-group",
+			func() error {
+				var err error
+				result, err = priceGroup(ctx, platform, group, limit)
+				return err
+			},
+			func(err error) {
+				defer wg.Done()
 				mu.Lock()
-				failed = ErrSellerUnreachable.WithMessage(message).Wrap(ctx.Err())
-				mu.Unlock()
-				return
-			}
-			defer func() { <-limit }()
-			request := ports.GroupPricingRequest{}
-			if group.PromoCode != nil {
-				request.PromoCode = group.PromoCode.Code
-			}
-			for _, line := range group.Lines {
-				request.Items = append(request.Items, ports.ItemRequest{
-					ProductID: line.Offer.Product,
-					Quantity:  line.Quantity,
-				})
-			}
-			callCtx := ports.WithPlatformCallClass(ctx, ports.PlatformCheckout)
-			result, err := platform.PriceGroup(callCtx, group.TenantID, request)
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				failed = ErrSellerUnreachable.WithMessage(message).Wrap(err)
-				return
-			}
-			results[group.TenantID] = result
-		}(group)
+				defer mu.Unlock()
+				if err != nil {
+					message := "магазин " + string(group.TenantID) + " не ответил, попробуйте позже"
+					failed = ErrSellerUnreachable.WithMessage(message).Wrap(err)
+					return
+				}
+				results[group.TenantID] = result
+			},
+		)
 	}
 	wg.Wait()
 	return results, failed
+}
+
+// priceGroup спрашивает цену группы, заняв место из общего предела одновременных вызовов.
+func priceGroup(
+	ctx context.Context,
+	platform ports.PlatformAPI,
+	group cart.Group,
+	limit chan struct{},
+) (ports.GroupPricing, error) {
+	select {
+	case limit <- struct{}{}:
+	case <-ctx.Done():
+		return ports.GroupPricing{}, ctx.Err()
+	}
+	defer func() { <-limit }()
+	request := ports.GroupPricingRequest{}
+	if group.PromoCode != nil {
+		request.PromoCode = group.PromoCode.Code
+	}
+	for _, line := range group.Lines {
+		request.Items = append(request.Items, ports.ItemRequest{
+			ProductID: line.Offer.Product,
+			Quantity:  line.Quantity,
+		})
+	}
+	return platform.PriceGroup(ports.WithPlatformCallClass(ctx, ports.PlatformCheckout), group.TenantID, request)
 }
 
 func pricingChecks(tenant ids.TenantID, result ports.GroupPricing) []cart.Check {

@@ -44,7 +44,7 @@ func TestPickupCatalogLargerThanResponseLimit(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := New(Config{BaseURL: server.URL, Timeout: time.Second})
+	client := New(Config{BaseURL: server.URL, Timeout: time.Second, Conns: 4})
 	answer, err := client.PickupPoints(context.Background(), "t1", "cdek", "Город")
 	if err != nil || len(answer.Items) != total || calls != 40 {
 		t.Fatal(len(answer.Items), calls, err)
@@ -104,7 +104,7 @@ func TestPickupCatalogChangeRestartsFromFirstPage(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := New(Config{BaseURL: server.URL, Timeout: time.Second})
+	client := New(Config{BaseURL: server.URL, Timeout: time.Second, Conns: 4})
 	result, err := client.PickupPoints(context.Background(), "t1", "cdek", "Город")
 	if err != nil || firstPages != 2 || restarts != 1 || len(result.Items) != 2 ||
 		result.Items[0].Code != "new-1" || result.Items[1].Code != "new-2" {

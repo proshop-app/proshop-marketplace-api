@@ -11,6 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 // ErrInvalidTask — сохранённое намерение нельзя исполнить с теми же данными.
@@ -92,10 +93,9 @@ func NewDispatcher(
 	}
 	// Один слот всегда остаётся для точечных задач рядом с пакетным обработчиком.
 	config.Concurrency = max(2, config.Concurrency)
-	if config.HandlerTimeout <= 0 {
-		config.HandlerTimeout = 30 * time.Second
-	}
-	if config.Lease > 0 && config.HandlerTimeout > config.Lease/2 {
+	// Обработчик укладывается в половину аренды: вторая половина — отметка итога прохода.
+	// Процесс задаёт срок сам и проверяет аренду на старте, урезание здесь не срабатывает.
+	if config.HandlerTimeout <= 0 || config.HandlerTimeout > config.Lease/2 {
 		config.HandlerTimeout = config.Lease / 2
 	}
 	return &Dispatcher{queue: queue, clock: clock, handlers: handlers, config: config}
@@ -214,10 +214,19 @@ func (d *Dispatcher) executePass(ctx context.Context, tasks []ports.Task) ([]Out
 	var workers sync.WaitGroup
 	for n, group := range groups {
 		workers.Add(1)
-		go func() {
-			defer workers.Done()
-			results[n], resolutions[n], failures[n] = d.executeGroup(ctx, group)
-		}()
+		safego.Run(
+			"outbox.group",
+			func() error {
+				var err error
+				results[n], resolutions[n], err = d.executeGroup(ctx, group)
+				return err
+			},
+			func(err error) {
+				// Паника вне обработчика срывает проход: задачи дождутся аренды и повтора.
+				failures[n] = err
+				workers.Done()
+			},
+		)
 	}
 	workers.Wait()
 	outcomes := []Outcome{}
@@ -242,12 +251,7 @@ func (d *Dispatcher) executeGroup(
 ) ([]Outcome, []ports.TaskResolution, error) {
 	handling, cancel := context.WithTimeout(ctx, d.config.HandlerTimeout)
 	defer cancel()
-	var failures []error
-	if handler, ok := d.batches[group[0].Kind]; ok {
-		failures = handler(handling, group)
-	} else {
-		failures = []error{d.run(handling, group[0])}
-	}
+	failures := d.handle(handling, group)
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -299,6 +303,24 @@ func takeKind(tasks []ports.Task, kind string) ([]ports.Task, []ports.Task) {
 		}
 	}
 	return group, rest
+}
+
+// handle — единственное место перехвата паники обработчиков outbox: паника
+// становится ошибкой internal каждой задачи группы и идёт обычным путём повтора
+// и карантина, а соседние группы прохода и процесс продолжают работу.
+func (d *Dispatcher) handle(ctx context.Context, group []ports.Task) []error {
+	batch, ok := d.batches[group[0].Kind]
+	if !ok {
+		return []error{errs.Guard(func() error { return d.run(ctx, group[0]) })}
+	}
+	var failures []error
+	if err := errs.Guard(func() error {
+		failures = batch(ctx, group)
+		return nil
+	}); err != nil {
+		return slices.Repeat([]error{err}, len(group))
+	}
+	return failures
 }
 
 func (d *Dispatcher) run(ctx context.Context, task ports.Task) error {

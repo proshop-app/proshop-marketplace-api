@@ -21,7 +21,12 @@ func TestReviewsContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			client := New(Config{BaseURL: "http://platform.test", Token: "service-token", Timeout: time.Second})
+			client := New(Config{
+				BaseURL: "http://platform.test",
+				Token:   "service-token",
+				Timeout: time.Second,
+				Conns:   4,
+			})
 			client.http.Transport = reviewTransport(func(r *http.Request) (*http.Response, error) {
 				path := "/api/v1/internal/marketplace/tenants/t1/products/p1/reviews"
 				if r.Method != http.MethodGet || r.URL.Path != path ||

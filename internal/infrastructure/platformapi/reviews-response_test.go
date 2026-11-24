@@ -17,7 +17,7 @@ func TestReviewsEmptyAuthorAndNull(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			client := New(Config{BaseURL: "http://platform.test"})
+			client := New(Config{BaseURL: "http://platform.test", Timeout: time.Second, Conns: 4})
 			client.http.Transport = reviewTransport(func(*http.Request) (*http.Response, error) {
 				w := httptest.NewRecorder()
 				_, _ = w.Write(raw)
@@ -43,7 +43,7 @@ func TestReviewsRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, status := range []int{400, 401, 403, 404, 409, 429, 500, 503} {
-		client := New(Config{BaseURL: "http://platform.test"})
+		client := New(Config{BaseURL: "http://platform.test", Timeout: time.Second, Conns: 4})
 		client.http.Transport = reviewTransport(func(*http.Request) (*http.Response, error) {
 			w := httptest.NewRecorder()
 			w.WriteHeader(status)
@@ -62,7 +62,7 @@ func TestReviewsRefusals(t *testing.T) {
 }
 
 func TestReviewsPreserveCallerDeadline(t *testing.T) {
-	client := New(Config{BaseURL: "http://platform.test", Timeout: time.Second})
+	client := New(Config{BaseURL: "http://platform.test", Timeout: time.Second, Conns: 4})
 	client.http.Transport = reviewTransport(func(r *http.Request) (*http.Response, error) {
 		<-r.Context().Done()
 		return nil, r.Context().Err()

@@ -39,7 +39,6 @@ type Check struct {
 // Deps — сценарии и служебное, из которых собираются маршруты.
 type Deps struct {
 	Cities                 *appbuyer.Cities
-	DatabaseBudgets        ports.DatabaseBudgets
 	RequestTimeout         time.Duration
 	ReferenceImportTimeout time.Duration
 	Statuses               *moderationstatus.Service
@@ -133,20 +132,20 @@ func routes(deps Deps) []route {
 		{readRequest, "GET", "/api/v1/delivery/cities", cities.suggest},
 		{readRequest, http.MethodGet, "/api/v1/buyer/profile", privateBuyer(signedIn(features.profile))},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPatch,
 			"/api/v1/buyer/profile",
 			privateBuyer(signedIn(features.patchProfile)),
 		},
 		{readRequest, http.MethodGet, "/api/v1/buyer/favorites", privateBuyer(signedIn(features.favorites))},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPut,
 			"/api/v1/buyer/favorites/{offerId}",
 			privateBuyer(signedIn(features.putSaved(ports.Favorites))),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodDelete,
 			"/api/v1/buyer/favorites/{offerId}",
 			privateBuyer(signedIn(features.deleteSaved(ports.Favorites))),
@@ -158,13 +157,13 @@ func routes(deps Deps) []route {
 			privateBuyer(signedIn(features.watches)),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPut,
 			"/api/v1/buyer/price-watches/{offerId}",
 			privateBuyer(signedIn(features.putSaved(ports.PriceWatches))),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodDelete,
 			"/api/v1/buyer/price-watches/{offerId}",
 			privateBuyer(signedIn(features.deleteSaved(ports.PriceWatches))),
@@ -176,13 +175,13 @@ func routes(deps Deps) []route {
 			privateBuyer(signedIn(features.subscriptions)),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPut,
 			"/api/v1/buyer/subscriptions/shops/{tenantId}",
 			privateBuyer(signedIn(features.putSubscription)),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodDelete,
 			"/api/v1/buyer/subscriptions/shops/{tenantId}",
 			privateBuyer(signedIn(features.deleteSubscription)),
@@ -198,7 +197,7 @@ func routes(deps Deps) []route {
 			machine(participants.storeCard),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/settings/sync",
 			machine(participants.syncSettings),
@@ -223,7 +222,7 @@ func routes(deps Deps) []route {
 		},
 		{readRequest, http.MethodGet, "/api/v1/internal/tenants/{tenantId}/status", machine(statuses.get)},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/participation/submit",
 			machine(participants.participation),
@@ -325,7 +324,7 @@ func routes(deps Deps) []route {
 			machine(promotion.list),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns",
 			machine(promotion.create),
@@ -337,31 +336,31 @@ func routes(deps Deps) []route {
 			machine(promotion.campaign),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPatch,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}",
 			machine(promotion.edit),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodDelete,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}",
 			machine(promotion.delete),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/submit",
 			machine(promotion.decide),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/revise",
 			machine(promotion.decide),
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPost,
 			"/api/v1/internal/tenants/{tenantId}/promotion/campaigns/{id}/stop",
 			machine(promotion.decide),
@@ -379,7 +378,7 @@ func routes(deps Deps) []route {
 			promotion.sponsored,
 		},
 		{
-			ingestionRequest,
+			writeRequest,
 			http.MethodPost,
 			"/api/v1/promotion/events",
 			publicBuyer(deps.Auth, promotion.events),
@@ -566,7 +565,7 @@ func routes(deps Deps) []route {
 		},
 		{readRequest, http.MethodGet, "/api/v1/catalog/offers/{offerId}/reviews", catalog.reviews},
 		{readRequest, http.MethodGet, "/api/v1/catalog/offers", catalog.list},
-		{ingestionRequest, http.MethodPost, "/api/v1/search/feedback", search.record},
+		{writeRequest, http.MethodPost, "/api/v1/search/feedback", search.record},
 		{
 			readRequest,
 			http.MethodGet,
@@ -601,11 +600,11 @@ func routes(deps Deps) []route {
 			operator(participants.decision),
 		},
 
-		{ingestionRequest, http.MethodPost, "/api/v1/auth/call", auth.start},
-		{ingestionRequest, http.MethodPost, "/api/v1/auth/call/check", auth.check},
-		{ingestionRequest, http.MethodPost, "/api/v1/auth/logout", auth.logout},
-		{ingestionRequest, http.MethodPost, "/api/v1/auth/refresh", auth.refresh},
-		{ingestionRequest, http.MethodPost, "/api/v1/auth/webhooks/smsru", auth.smsruWebhook},
+		{writeRequest, http.MethodPost, "/api/v1/auth/call", auth.start},
+		{writeRequest, http.MethodPost, "/api/v1/auth/call/check", auth.check},
+		{writeRequest, http.MethodPost, "/api/v1/auth/logout", auth.logout},
+		{writeRequest, http.MethodPost, "/api/v1/auth/refresh", auth.refresh},
+		{writeRequest, http.MethodPost, "/api/v1/auth/webhooks/smsru", auth.smsruWebhook},
 		{readRequest, http.MethodGet, "/api/v1/me", auth.me},
 
 		{checkoutRequest, http.MethodGet, "/api/v1/cart", signedIn(carts.get)},

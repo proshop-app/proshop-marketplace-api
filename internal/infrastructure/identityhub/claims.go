@@ -15,6 +15,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/buyer"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 type publicKey = *ecdsa.PublicKey
@@ -129,7 +130,20 @@ func (c *Client) key(ctx context.Context, kid string) (publicKey, error) {
 		c.refresh = pending
 		c.unknownAt = now.Add(keyRetryDelay)
 		// Общее обновление переживает отмену одного ожидающего запроса, но имеет свой срок.
-		go c.refreshKeys(context.WithoutCancel(ctx), pending)
+		refreshCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.http.Timeout)
+		var keys map[string]publicKey
+		safego.Run(
+			"identityhub.keys",
+			func() error {
+				var err error
+				keys, err = c.loadKeys(refreshCtx)
+				return err
+			},
+			func(err error) {
+				defer cancel()
+				c.finishRefresh(pending, keys, err)
+			},
+		)
 	}
 	unavailable := now.Before(c.retryAt)
 	c.mu.Unlock()
@@ -158,11 +172,9 @@ func (c *Client) key(ctx context.Context, kid string) (publicKey, error) {
 	return nil, buyer.ErrSessionNotFound
 }
 
-func (c *Client) refreshKeys(ctx context.Context, pending *keyRefresh) {
-	ctx, cancel := context.WithTimeout(ctx, c.http.Timeout)
-	defer cancel()
-	keys, err := c.loadKeys(ctx)
-
+// finishRefresh закрывает общее обновление ключей при любом итоге, в том числе при
+// панике разбора: иначе вход всех покупателей ждал бы рейс до своего срока.
+func (c *Client) finishRefresh(pending *keyRefresh, keys map[string]publicKey, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := c.now()

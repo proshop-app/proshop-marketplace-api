@@ -16,6 +16,13 @@ type blockingKeysTransport struct {
 	calls   atomic.Int32
 }
 
+// panickingKeysTransport падает паникой на запросе ключей.
+type panickingKeysTransport struct{}
+
+func (panickingKeysTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	panic("сбой разбора ключей")
+}
+
 func (b *blockingKeysTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if b.calls.Add(1) == 1 {
 		close(b.started)
@@ -105,5 +112,21 @@ func TestRefreshCoalescesRotationAndAllowsWaiterCancellation(t *testing.T) {
 	}
 	if transport.calls.Load() != 1 {
 		t.Fatal("одновременные обновления не объединены", transport.calls.Load())
+	}
+}
+
+func TestPanickingKeyRefreshClosesFlight(t *testing.T) {
+	f := newJWTFixture(t)
+	f.client.http.Transport = panickingKeysTransport{}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	started := time.Now()
+	if _, err := f.client.key(ctx, "new-key"); err == nil || time.Since(started) >= time.Second {
+		t.Fatalf("паника обновления ключей закрывает рейс сразу: %v за %s", err, time.Since(started))
+	}
+	f.client.mu.Lock()
+	defer f.client.mu.Unlock()
+	if f.client.refresh != nil {
+		t.Fatal("после паники новое обновление ключей может начаться")
 	}
 }

@@ -4,13 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"time"
-
-	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
 // Карточки и варианты читают обновляемый снимок без обращения к базе из HTTP.
 func (s *server) refreshTaxonomyDisplay(ctx context.Context) error {
-	ctx = ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(s.cfg.Database.Background))
 	ticker := time.NewTicker(taxonomyDisplayInterval)
 	defer ticker.Stop()
 	for {
@@ -26,7 +23,6 @@ func (s *server) refreshTaxonomyDisplay(ctx context.Context) error {
 }
 
 func (s *server) refreshTaxonomySelection(ctx context.Context) error {
-	ctx = ports.WithDatabaseBudget(ctx, ports.DatabaseBudget(s.cfg.Database.Background))
 	refresh := s.app.taxonomy.NewSelectionRefresh()
 	ticker := time.NewTicker(taxonomySelectionInterval)
 	defer ticker.Stop()

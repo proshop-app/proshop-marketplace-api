@@ -273,18 +273,6 @@ func (i *Indexer) rebuild(ctx context.Context) (RebuildResult, error) {
 	return result, i.index.Activate(ctx, generation)
 }
 
-// EnsureIndex собирает индекс, если рабочего индекса нет: первый запуск или потеря кластера.
-func (i *Indexer) EnsureIndex(ctx context.Context) (bool, error) {
-	exists, err := i.index.Exists(ctx)
-	if err != nil || exists {
-		return false, err
-	}
-
-	_, err = i.Rebuild(ctx)
-
-	return err == nil, err
-}
-
 func (i *Indexer) pages(
 	ctx context.Context,
 	read func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error),
@@ -438,16 +426,19 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	return doc, true
 }
 
-// Maintain возобновляет сборку или перераспределяет выросший каталог.
+// Maintain собирает отсутствующий индекс (первый запуск или потеря кластера),
+// возобновляет сборку или перераспределяет выросший каталог. Сборка идёт в фоне
+// под общей advisory lock: её ведёт одна реплика, старт процесса и выдача
+// остальным путям от поиска не зависят.
 func (i *Indexer) Maintain(ctx context.Context) (bool, error) {
-	needed, err := i.index.NeedsRebuild(ctx)
+	needed, err := i.rebuildNeeded(ctx)
 	if err != nil || !needed {
 		return false, err
 	}
-	// Решение перечитывается под блокировкой: сосед мог уже завершить перенос.
+	// Решение перечитывается под блокировкой: сосед мог уже завершить сборку.
 	rebuilt := false
 	err = i.lock.WithLock(ctx, func(ctx context.Context) error {
-		needed, err := i.index.NeedsRebuild(ctx)
+		needed, err := i.rebuildNeeded(ctx)
 		if err != nil || !needed {
 			return err
 		}
@@ -456,4 +447,13 @@ func (i *Indexer) Maintain(ctx context.Context) (bool, error) {
 		return err
 	})
 	return rebuilt, err
+}
+
+// rebuildNeeded — рабочего поколения нет либо поиск просит перенос.
+func (i *Indexer) rebuildNeeded(ctx context.Context) (bool, error) {
+	exists, err := i.index.Exists(ctx)
+	if err != nil || !exists {
+		return err == nil, err
+	}
+	return i.index.NeedsRebuild(ctx)
 }

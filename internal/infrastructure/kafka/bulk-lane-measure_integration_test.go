@@ -135,8 +135,7 @@ func laneMeasureReader(group string, topics []string) *infrakafka.Reader {
 
 func startLaneMeasure(t *testing.T, reader *infrakafka.Reader, consumer *kafka.Consumer) {
 	t.Helper()
-	budget := ports.DatabaseBudget{Statement: 2 * time.Second, Transaction: 5 * time.Second}
-	ctx, cancel := context.WithCancel(ports.WithDatabaseBudget(context.Background(), budget))
+	ctx, cancel := context.WithCancel(ports.WithDatabaseClass(context.Background(), ports.DatabaseIngestion))
 	done := make(chan error, 1)
 	go func() { done <- consumer.Run(ctx) }()
 	t.Cleanup(func() {

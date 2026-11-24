@@ -274,7 +274,7 @@ func startSynonymValidator(t *testing.T) (*searchapi.Index, *atomic.Int32) {
 		_, _ = w.Write(reply)
 	}))
 	t.Cleanup(server.Close)
-	index, err := searchapi.New(searchapi.Config{URL: server.URL, Token: synonymAdmin, Timeout: time.Second})
+	index, err := searchapi.New(searchapi.Config{URL: server.URL, Token: synonymAdmin})
 	if err != nil {
 		t.Fatal(err)
 	}

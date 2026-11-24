@@ -34,30 +34,55 @@ func TestDatabaseOperationsHaveFiniteBudgets(t *testing.T) {
 	}
 }
 
-func TestDatabaseClassTimeoutAndPoolStateDoNotLeak(t *testing.T) {
+func TestPoolsApplyClassBudgetsAndQuotas(t *testing.T) {
 	database := testPool(t)
 	ctx := context.Background()
-	pool, err := postgres.Open(ctx, database.Config().ConnString(), 1)
+	fast := postgres.Budget{Statement: 75 * time.Millisecond, Transaction: 300 * time.Millisecond}
+	slow := postgres.Budget{Statement: 10 * time.Second, Transaction: 30 * time.Second}
+	pools, err := postgres.OpenPools(ctx, database.Config().ConnString(), map[ports.DatabaseClass]postgres.PoolConfig{
+		ports.DatabaseRead:       {MaxConns: 1, Budget: fast},
+		ports.DatabaseCheckout:   {MaxConns: 1, Budget: slow},
+		ports.DatabaseIngestion:  {MaxConns: 1, Budget: slow},
+		ports.DatabaseBackground: {MaxConns: 1, Budget: slow},
+		ports.DatabaseOrders:     {MaxConns: 1, Budget: slow},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Close()
-	budget := ports.DatabaseBudget{Statement: 75 * time.Millisecond, Transaction: time.Second}
-	limited := ports.WithDatabaseBudget(ctx, budget)
-	for _, attempt := range []struct {
-		ctx      context.Context
-		expected string
-	}{
-		{ctx: limited, expected: "75ms"},
-		{ctx: ctx, expected: "10s"},
-		{ctx: limited, expected: "75ms"},
+	defer pools.Close()
+	for class, expected := range map[ports.DatabaseClass]string{
+		ports.DatabaseRead:       "75ms",
+		ports.DatabaseBackground: "10s",
 	} {
 		var statement string
-		err := pool.QueryRow(attempt.ctx, `SHOW statement_timeout`).Scan(&statement)
-		if err != nil || statement != attempt.expected {
-			t.Fatalf("настройки предыдущего заёмщика не протекают: %s, %v", statement, err)
+		err := pools.Pool(class).QueryRow(ctx, `SHOW statement_timeout`).Scan(&statement)
+		if err != nil || statement != expected {
+			t.Fatalf("сроки класса заданы пулу при соединении: %s, %v", statement, err)
 		}
 	}
+	read := ports.WithDatabaseClass(ctx, ports.DatabaseRead)
+	uow := postgres.NewUnitOfWorkByClass(pools)
+
+	// Квота приёма занята целиком — чтение покупателя получает своё соединение.
+	ingestion, err := pools.Pool(ports.DatabaseIngestion).Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ingestion.Release()
+	if err := uow.Do(read, func(context.Context, ports.Tx) error { return nil }); err != nil {
+		t.Fatal("приём не занимает соединения покупателей", err)
+	}
+	// Фон (outbox индексации, циклы) занят целиком — исполнитель оформления не ждёт.
+	background, err := pools.Pool(ports.DatabaseBackground).Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer background.Release()
+	orders := ports.WithDatabaseClass(ctx, ports.DatabaseOrders)
+	if err := uow.Do(orders, func(context.Context, ports.Tx) error { return nil }); err != nil {
+		t.Fatal("фон не занимает соединения исполнителя оформления", err)
+	}
+
 	blocker, err := database.Acquire(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -70,30 +95,26 @@ func TestDatabaseClassTimeoutAndPoolStateDoNotLeak(t *testing.T) {
 		_, _ = blocker.Exec(ctx, `SELECT pg_advisory_unlock(hashtextextended('blocked', 38))`)
 	}()
 	started := time.Now()
-	err = postgres.NewUnitOfWork(pool).Do(limited, func(ctx context.Context, tx ports.Tx) error {
+	err = uow.Do(read, func(ctx context.Context, tx ports.Tx) error {
 		return tx.StoreCards().Lock(ctx, "blocked")
 	})
 	var failure *pgconn.PgError
 	if !errors.As(err, &failure) || failure.Code != "57014" || time.Since(started) > time.Second {
-		t.Fatal("сервер отменяет зависший SQL по классу операции", err, time.Since(started))
+		t.Fatal("сервер отменяет зависший SQL по сроку класса", err, time.Since(started))
 	}
 	// Ожидание занятого пула входит в общий срок операции, а не начинается после Acquire.
-	held, err := pool.Acquire(ctx)
+	held, err := pools.Pool(ports.DatabaseRead).Acquire(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer held.Release()
-	short := ports.WithDatabaseBudget(ctx, ports.DatabaseBudget{
-		Statement:   50 * time.Millisecond,
-		Transaction: 100 * time.Millisecond,
-	})
 	started = time.Now()
-	err = postgres.NewUnitOfWork(pool).Do(short, func(context.Context, ports.Tx) error {
+	err = uow.Do(read, func(context.Context, ports.Tx) error {
 		t.Error("транзакция не должна получить занятое соединение")
 		return nil
 	})
 	if !errors.Is(err, context.DeadlineExceeded) || time.Since(started) > time.Second {
-		t.Fatal("ожидание пула ограничено", err, time.Since(started))
+		t.Fatal("ожидание пула ограничено сроком класса", err, time.Since(started))
 	}
 }
 

@@ -7,7 +7,10 @@ import (
 	"testing"
 
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
+
+var errSearchDown = errs.New(errs.Unavailable, "search.unavailable", "поиск площадки недоступен")
 
 func TestLivenessDoesNotDependOnReadiness(t *testing.T) {
 	e := newEnv(t)
@@ -26,15 +29,11 @@ func TestReadinessAllowsAuxiliaryFailuresButHealthReportsThem(t *testing.T) {
 			e := newEnv(t, func(deps *transport.Deps) {
 				deps.Checks = append(deps.Checks, transport.Check{
 					Name:     name,
-					Optional: name != "search",
+					Optional: true,
 					Probe:    func(context.Context) error { return errors.New("нет ответа") },
 				})
 			})
-			want := http.StatusOK
-			if name == "search" {
-				want = http.StatusServiceUnavailable
-			}
-			if result := e.call(t, http.MethodGet, "/ready", "", false); result.status != want {
+			if result := e.call(t, http.MethodGet, "/ready", "", false); result.status != http.StatusOK {
 				t.Fatal(result)
 			}
 			result := e.call(t, http.MethodGet, "/health", "", false)
@@ -42,5 +41,24 @@ func TestReadinessAllowsAuxiliaryFailuresButHealthReportsThem(t *testing.T) {
 				t.Fatal(result)
 			}
 		})
+	}
+}
+
+func TestSearchOutageKeepsReadinessAndAnswersUnavailable(t *testing.T) {
+	e := newEnv(t, func(deps *transport.Deps) {
+		deps.Checks = append(deps.Checks, transport.Check{
+			Name:     "search",
+			Optional: true,
+			Probe:    func(context.Context) error { return errSearchDown },
+		})
+	})
+	e.index.BeforeGet = func(context.Context, string) error { return errSearchDown }
+
+	if result := e.call(t, http.MethodGet, "/ready", "", false); result.status != http.StatusOK {
+		t.Fatal("без поиска реплика остаётся в балансировке", result)
+	}
+	result := e.call(t, http.MethodGet, "/api/v1/catalog/offers/t1~p1", "", false)
+	if result.status != http.StatusServiceUnavailable || errorCode(result) != "search.unavailable" {
+		t.Fatal("выдача без поиска отвечает unavailable", result)
 	}
 }

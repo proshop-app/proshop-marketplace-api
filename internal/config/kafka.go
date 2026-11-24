@@ -1,16 +1,12 @@
 package config
 
-// Один обработчик держит одно соединение. Половины пула должно хватать на обе группы.
-func (r *reader) kafkaCapacity(cfg *Config) {
-	if cfg.Database.MaxConns < 4 {
-		r.fail("DATABASE_MAX_CONNS", "не меньше 4 для совместной работы HTTP и двух групп Kafka")
+// kafkaCapacity проверяет раскладку воркеров приёма. Ёмкость пула приёма под
+// воркеры проверяет сборка процесса (cmd): она знает размер полосы статусов заказов.
+func (r *reader) kafkaCapacity(kafka Kafka) {
+	if kafka.Workers < 2 {
+		r.fail("KAFKA_WORKERS", "не меньше 2 для основной и массовой групп Kafka")
 	}
-	if cfg.Kafka.Workers == 1 {
-		r.fail("KAFKA_WORKERS", "не меньше 2 для двух групп Kafka")
-	}
-
-	cfg.Kafka.Workers = min(cfg.Kafka.Workers, int(cfg.Database.MaxConns/2))
-	if cfg.Kafka.Workers >= 2 {
-		cfg.Kafka.BulkWorkers = min(cfg.Kafka.BulkWorkers, cfg.Kafka.Workers-1)
+	if kafka.BulkWorkers >= kafka.Workers {
+		r.fail("KAFKA_BULK_WORKERS", "меньше KAFKA_WORKERS: основной группе нужен хотя бы один воркер")
 	}
 }

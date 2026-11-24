@@ -230,23 +230,46 @@ func TestRebuildCreatesGenerationAndCatchesUp(t *testing.T) {
 	}
 }
 
-func TestEnsureIndex(t *testing.T) {
+func TestMaintainBuildsMissingIndex(t *testing.T) {
 	store, index, clock := fake.NewStore(), fake.NewIndex(), fake.NewClock(t1)
 	seedSeller(store, "t1", participant.TenantActive, true)
 	seedProduct(store, "t1", "p1")
 	ctx := context.Background()
 
-	built, err := indexer(store, index, clock).EnsureIndex(ctx)
+	built, err := indexer(store, index, clock).Maintain(ctx)
 	if err != nil || !built {
-		t.Fatalf("нет индекса — собирается: %v, %v", built, err)
+		t.Fatalf("нет индекса — фоновая проверка собирает его: %v, %v", built, err)
 	}
 	if _, ok := index.Doc("t1~p1"); !ok {
 		t.Fatal("документ после сборки")
 	}
 
-	built, err = indexer(store, index, clock).EnsureIndex(ctx)
+	built, err = indexer(store, index, clock).Maintain(ctx)
 	if err != nil || built {
 		t.Fatalf("есть индекс — не трогается: %v, %v", built, err)
+	}
+}
+
+func TestMaintainLeavesMissingIndexToLockOwner(t *testing.T) {
+	store, index, clock := fake.NewStore(), fake.NewIndex(), fake.NewClock(t1)
+	seedSeller(store, "t1", participant.TenantActive, true)
+	seedProduct(store, "t1", "p1")
+	lock := &fake.IndexRebuildLock{}
+	replica := appcatalog.NewIndexer(store, index, clock, 2, lock, nil, 30*time.Second)
+
+	// Соседняя реплика держит блокировку сборки.
+	err := lock.WithLock(context.Background(), func(ctx context.Context) error {
+		built, err := replica.Maintain(ctx)
+		if built {
+			t.Fatal("реплика без блокировки не строит вторую копию")
+		}
+		return err
+	})
+	if !errors.Is(err, ports.ErrRebuildBusy) {
+		t.Fatalf("сборку ведёт сосед, реплика не ждёт: %v", err)
+	}
+	if exists, _ := index.Exists(context.Background()); exists {
+		t.Fatal("занятая блокировка не начинает сборку")
 	}
 }
 

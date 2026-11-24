@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -80,9 +79,8 @@ func TestContractPreservesPricesAttributesDeliveryAndFacets(t *testing.T) {
 	defer server.Close()
 
 	client, err := searchapi.New(searchapi.Config{
-		URL:     server.URL,
-		Token:   strings.Repeat("m", 32),
-		Timeout: time.Second,
+		URL:   server.URL,
+		Token: strings.Repeat("m", 32),
 	})
 
 	if err != nil {
@@ -152,9 +150,8 @@ func TestOldSearchContractIsRejected(t *testing.T) {
 	defer server.Close()
 
 	client, err := searchapi.New(searchapi.Config{
-		URL:     server.URL,
-		Token:   strings.Repeat("m", 32),
-		Timeout: time.Second,
+		URL:   server.URL,
+		Token: strings.Repeat("m", 32),
 	})
 
 	if err != nil {

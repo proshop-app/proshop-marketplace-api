@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
@@ -43,9 +42,8 @@ func TestSearchExactWireContract(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client, err := New(Config{
-				URL:     "http://search.test",
-				Token:   strings.Repeat("m", 32),
-				Timeout: time.Second,
+				URL:   "http://search.test",
+				Token: strings.Repeat("m", 32),
 			})
 			if err != nil {
 				t.Fatal(err)

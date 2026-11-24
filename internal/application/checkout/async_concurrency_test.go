@@ -67,7 +67,7 @@ func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 	started := make(chan struct{}, 1)
 	platform := delayedOrderPlatform{PlatformAPI: e.platform, release: release, started: started}
 	service := appcheckout.NewService(e.store, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewExecutor(e.store, e.clock, service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service, messaging.DefaultMaxAttempts)
 	otherStarted := make(chan struct{})
 	otherRelease := make(chan struct{})
 	otherDone := make(chan error, 1)
@@ -189,7 +189,7 @@ func TestPollLaneDoesNotBlockCreationOrGeneralOutbox(t *testing.T) {
 	started, release := make(chan struct{}, 2), make(chan struct{})
 	platform := delayedPollPlatform{PlatformAPI: e.platform, release: release, started: started}
 	service := appcheckout.NewService(e.store, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewExecutor(e.store, e.clock, service)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service, messaging.DefaultMaxAttempts)
 	defer func() { close(release); executor.Wait() }()
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)

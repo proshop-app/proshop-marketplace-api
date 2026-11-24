@@ -15,7 +15,7 @@ import (
 const (
 	// minOperatorTokenLength — служебный токен оператора не короче 32 символов.
 	minOperatorTokenLength = 32
-	// maxConnections — потолок пула соединений с базой.
+	// maxConnections — потолок одного пула соединений с базой.
 	maxConnections = 1000
 )
 
@@ -151,15 +151,25 @@ type DatabaseBudget struct {
 	Transaction time.Duration
 }
 
-// Database — PostgreSQL.
+// DatabasePool — пул класса нагрузки: размер зависит от развёртывания, сроки — от класса.
+type DatabasePool struct {
+	Budget   DatabaseBudget
+	MaxConns int32
+}
+
+// Database — PostgreSQL. У каждого класса нагрузки свой пул; Maintenance — сроки
+// служебных команд, у которых один небольшой пул.
 type Database struct {
 	Maintenance DatabaseBudget
-	Read        DatabaseBudget
-	Checkout    DatabaseBudget
-	Ingestion   DatabaseBudget
-	Background  DatabaseBudget
-	URL         string
-	MaxConns    int32
+	Read        DatabasePool
+	Checkout    DatabasePool
+	// Ingestion.MaxConns и Orders.MaxConns ноль — по числу воркеров приёма и мест
+	// исполнителя оформления; их и сумму пулов проверяет сборка процесса: она знает
+	// размеры полос.
+	Ingestion  DatabasePool
+	Background DatabasePool
+	Orders     DatabasePool
+	URL        string
 }
 
 // Search — общий движок каталога площадки.
@@ -170,7 +180,6 @@ type Search struct {
 	MaintenanceInterval time.Duration
 	URL                 string
 	Token               string
-	Timeout             time.Duration
 }
 
 // Kafka — брокеры установки и параметры групп приёма.
@@ -179,7 +188,8 @@ type Kafka struct {
 	TopicPrefix string
 	GroupID     string
 	MaxAttempts int
-	Workers     int // общий предел для обеих групп после ограничения пулом
+	// Workers — воркеры основной и массовой групп вместе; полоса статусов заказов — отдельно.
+	Workers     int
 	BulkWorkers int
 	// ReferenceTopic — имя топика catalog.reference.changed без префикса; топик заводит сервер установки.
 	ReferenceTopic         string
@@ -253,7 +263,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			MaintenanceInterval: r.duration("SEARCH_MAINTENANCE_INTERVAL", time.Minute),
 			URL:                 r.httpURL("SEARCH_URL"),
 			Token:               r.required("SEARCH_MARKETPLACE_TOKEN"),
-			Timeout:             r.duration("SEARCH_TIMEOUT", 35*time.Second),
 		},
 		Kafka: Kafka{
 			Brokers:                r.list("KAFKA_BROKERS"),
@@ -272,7 +281,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 			PollInterval:         r.duration("OUTBOX_POLL_INTERVAL", time.Second),
 			Batch:                r.positive("OUTBOX_BATCH", 200),
 			PerTenant:            r.positive("OUTBOX_PER_TENANT", 200),
-			Lease:                r.duration("OUTBOX_LEASE", time.Minute),
+			Lease:                r.duration("OUTBOX_LEASE", 90*time.Second),
 		},
 		Retention: Retention{
 			ProcessedEvents: r.duration("RETENTION_PROCESSED_EVENTS", 14*24*time.Hour),
@@ -334,7 +343,7 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		LogLevel:  r.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error"),
 	}
 
-	r.kafkaCapacity(&cfg)
+	r.kafkaCapacity(cfg.Kafka)
 
 	if token := cfg.Operator.Token; token != "" && len(token) < minOperatorTokenLength {
 		r.fail("OPERATOR_TOKEN", fmt.Sprintf("не короче %d символов", minOperatorTokenLength))
@@ -367,9 +376,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	}
 	if cfg.Outbox.PollInterval > time.Minute {
 		r.fail("OUTBOX_POLL_INTERVAL", "не больше минуты")
-	}
-	if cfg.Outbox.Lease <= cfg.Search.Timeout {
-		r.fail("OUTBOX_LEASE", "должна превышать SEARCH_TIMEOUT")
 	}
 	if cfg.SmsRu.Mode == SmsRuLive && cfg.SmsRu.APIID == "" {
 		r.fail("SMSRU_API_ID", "обязательна при SMSRU_MODE=live")
@@ -441,12 +447,20 @@ func (r *reader) database() Database {
 
 	return Database{
 		URL:         raw,
-		MaxConns:    r.connections("DATABASE_MAX_CONNS", 10),
-		Read:        r.databaseBudget("READ", 750*time.Millisecond, 2*time.Second),
-		Checkout:    r.databaseBudget("CHECKOUT", 2*time.Second, 5*time.Second),
-		Ingestion:   r.databaseBudget("INGESTION", 2*time.Second, 5*time.Second),
-		Background:  r.databaseBudget("BACKGROUND", 10*time.Second, 30*time.Second),
+		Read:        r.databasePool("READ", 8, 750*time.Millisecond, 2*time.Second),
+		Checkout:    r.databasePool("CHECKOUT", 6, 2*time.Second, 5*time.Second),
+		Ingestion:   r.databasePool("INGESTION", 0, 2*time.Second, 5*time.Second),
+		Background:  r.databasePool("BACKGROUND", 10, 10*time.Second, 30*time.Second),
+		Orders:      r.databasePool("ORDERS", 0, 2*time.Second, 5*time.Second),
 		Maintenance: r.databaseBudget("MAINTENANCE", 5*time.Minute, 10*time.Minute),
+	}
+}
+
+// databasePool — пул класса: DATABASE_<КЛАСС>_MAX_CONNS и сроки класса.
+func (r *reader) databasePool(class string, size int32, statement, transaction time.Duration) DatabasePool {
+	return DatabasePool{
+		MaxConns: r.connections("DATABASE_"+class+"_MAX_CONNS", size),
+		Budget:   r.databaseBudget(class, statement, transaction),
 	}
 }
 
@@ -538,7 +552,7 @@ func (r *reader) positive(name string, fallback int) int {
 	return value
 }
 
-// connections — размер пула: от 1 до maxConnections.
+// connections — размер пула: от 1 до maxConnections; без переменной — fallback.
 func (r *reader) connections(name string, fallback int32) int32 {
 	raw, ok := r.lookup(name)
 	if !ok {

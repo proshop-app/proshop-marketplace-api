@@ -129,3 +129,47 @@ func TestReplayRejectsMalformedIntentBeforeReadingEvent(t *testing.T) {
 		}
 	}
 }
+
+func TestDispatcherQuarantinesPanickingTaskAndKeepsNeighbours(t *testing.T) {
+	for _, batch := range []bool{false, true} {
+		store, clock := fake.NewStore(), fake.NewClock(t0)
+		enqueue(t, store, "panic", "t1", "bad", t0)
+		enqueue(t, store, "ok", "t2", "good", t0)
+		d := messaging.NewDispatcher(
+			store,
+			clock,
+			messaging.DispatcherConfig{Batch: 10, Lease: time.Minute, MaxAttempts: 1},
+			map[string]messaging.Handler{
+				"panic": func(context.Context, ports.Task) error { panic("сбой обработчика") },
+				"ok":    func(context.Context, ports.Task) error { return nil },
+			},
+		)
+		if batch {
+			d.RegisterBatch("panic", func(context.Context, []ports.Task) []error { panic("сбой пачки") })
+		}
+		outcomes, err := d.RunOnce(context.Background())
+		if err != nil || len(outcomes) != 2 {
+			t.Fatalf("паника не прерывает проход: %+v, %v", outcomes, err)
+		}
+		for _, outcome := range outcomes {
+			switch outcome.Task.Kind {
+			case "ok":
+				if outcome.Err != nil {
+					t.Fatalf("соседняя задача выполнена: %v", outcome.Err)
+				}
+			case "panic":
+				if !errors.Is(outcome.Err, errs.ErrPanic) || outcome.FailureReason != "attempts_exhausted" {
+					t.Fatalf("паника — неизвестный сбой, исчерпавший попытки: %+v", outcome)
+				}
+				if _, ok := errs.PanicStack(outcome.Err); !ok {
+					t.Fatal("итог сохраняет стек для журнала")
+				}
+			}
+		}
+		for _, row := range store.OutboxRows() {
+			if row.Kind == "panic" && row.FailedAt == nil {
+				t.Fatalf("задача с паникой в карантине: %+v", row)
+			}
+		}
+	}
+}

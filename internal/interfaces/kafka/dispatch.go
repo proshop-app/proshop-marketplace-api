@@ -6,6 +6,8 @@ import (
 	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
+
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 func (c *Consumer) runGeneration(parent context.Context) error {
@@ -16,12 +18,19 @@ func (c *Consumer) runGeneration(parent context.Context) error {
 	incoming := make(chan kafkago.Message)
 	jobs := make(chan *delivery)
 	completed := make(chan *delivery, c.config.Workers)
-	c.startWorkers(ctx, &running, jobs, completed)
+	c.startWorkers(ctx, cancel, &running, jobs, completed)
 	running.Add(1)
-	go func() {
-		defer running.Done()
-		c.fetchMessages(ctx, incoming)
-	}()
+	// Паника чтения или воркера вне обработчика сообщения останавливает поколение:
+	// незавершённое сообщение не фиксируется и придёт повторно, а не застрянет.
+	safego.Run(
+		"kafka.fetch",
+		func() error {
+			defer running.Done()
+			c.fetchMessages(ctx, incoming)
+			return nil
+		},
+		stopOnPanic(cancel),
+	)
 
 	commits := &offsetCommitter{progress: make(offsetProgress), commit: c.source.Commit, logger: c.logger}
 	c.dispatch(ctx, incoming, jobs, completed, commits)
@@ -85,16 +94,31 @@ func (c *Consumer) fetchMessages(ctx context.Context, incoming chan<- kafkago.Me
 
 func (c *Consumer) startWorkers(
 	ctx context.Context,
+	cancel context.CancelFunc,
 	running *sync.WaitGroup,
 	jobs <-chan *delivery,
 	completed chan<- *delivery,
 ) {
 	for range c.config.Workers {
 		running.Add(1)
-		go func() {
-			defer running.Done()
-			c.work(ctx, jobs, completed)
-		}()
+		safego.Run(
+			"kafka.worker",
+			func() error {
+				defer running.Done()
+				c.work(ctx, jobs, completed)
+				return nil
+			},
+			stopOnPanic(cancel),
+		)
+	}
+}
+
+// stopOnPanic останавливает поколение, если горутина приёма упала паникой.
+func stopOnPanic(cancel context.CancelFunc) func(error) {
+	return func(err error) {
+		if err != nil {
+			cancel()
+		}
 	}
 }
 
