@@ -45,7 +45,7 @@ func readOutboxClaimState(t *testing.T, pool *pgxpool.Pool, id int64) outboxClai
 func TestOutboxOnlyCurrentClaimCanUpdate(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	ctx := context.Background()
 	enqueue(t, uow, "t1", "k1", 0)
 
@@ -106,7 +106,7 @@ func TestOutboxOnlyCurrentClaimCanUpdate(t *testing.T) {
 func TestOutboxRejectsMissingAndUnclaimedTask(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	ctx := context.Background()
 
 	if err := queue.Complete(ctx, 1, 1, at(1)); !errors.Is(err, ports.ErrTaskClaimConflict) {

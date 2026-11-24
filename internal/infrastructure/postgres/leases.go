@@ -30,7 +30,7 @@ type Leases struct {
 
 // NewLeases — аренда поверх пула.
 func NewLeases(pool *pgxpool.Pool) *Leases {
-	return &Leases{source: newConnectionSource(pool)}
+	return &Leases{source: newConnectionSource(Single(pool))}
 }
 
 // Acquire берёт свободную, истёкшую или свою аренду.

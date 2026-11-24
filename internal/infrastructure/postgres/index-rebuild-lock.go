@@ -5,47 +5,39 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 const (
-	promotionLockName         = "uno:marketplace:promotion"
 	indexRebuildLockName      = "uno:marketplace:offer-index-rebuild"
 	acquireIndexRebuildLock   = "SELECT pg_try_advisory_lock(hashtextextended($1, 0))"
 	indexRebuildProbeInterval = time.Second
 )
 
 // IndexRebuildLock — общая именованная advisory lock для CLI и фоновых процессов.
-// Выделенное соединение закрывается, поэтому session lock не остаётся в пуле.
+// Работа под ней идёт многими транзакциями, поэтому блокировка сеансовая и держится
+// отдельным прямым сеансом: он не занимает квоту пулов и закрывается после работы.
 type IndexRebuildLock struct {
-	name   string
-	source *connectionSource
+	name     string
+	sessions *DirectSessions
 }
 
-// NewIndexRebuildLock привязывает владение к выделенному соединению PostgreSQL.
-func NewIndexRebuildLock(pool *pgxpool.Pool) *IndexRebuildLock {
-	return &IndexRebuildLock{
-		source: newConnectionSource(pool),
-		name:   indexRebuildLockName,
-	}
+// NewIndexRebuildLock привязывает владение к отдельному прямому сеансу PostgreSQL.
+func NewIndexRebuildLock(sessions *DirectSessions) *IndexRebuildLock {
+	return &IndexRebuildLock{sessions: sessions, name: indexRebuildLockName}
 }
 
 // WithLock не ждёт занятую блокировку: фоновый цикл повторит попытку позже.
 func (l *IndexRebuildLock) WithLock(ctx context.Context, run func(context.Context) error) error {
-	connection, err := l.source.openDedicated(ctx)
+	session, err := l.sessions.open(ctx)
 	if err != nil {
 		return err
 	}
-	defer connection.close()
+	defer closeSession(ctx, session)
 
 	var acquired bool
-	err = rawSQL(ctx, connection.orm, acquireIndexRebuildLock, l.name).Row().
-		Scan(&acquired)
-
-	if err != nil {
+	if err := session.QueryRow(ctx, acquireIndexRebuildLock, l.name).Scan(&acquired); err != nil {
 		return fmt.Errorf("блокировка пересборки индекса: %w", err)
 	}
 
@@ -74,7 +66,7 @@ func (l *IndexRebuildLock) WithLock(ctx context.Context, run func(context.Contex
 					return nil
 				case <-ticker.C:
 					probe, stop := context.WithTimeout(work, indexRebuildProbeInterval)
-					err := connection.connection.PingContext(probe)
+					err := session.Ping(probe)
 					stop()
 
 					if err != nil {
@@ -96,9 +88,4 @@ func (l *IndexRebuildLock) WithLock(ctx context.Context, run func(context.Contex
 	}
 
 	return work.Err()
-}
-
-// NewPromotionLock отделяет цикл продвижения от долгой пересборки индекса.
-func NewPromotionLock(pool *pgxpool.Pool) *IndexRebuildLock {
-	return &IndexRebuildLock{source: newConnectionSource(pool), name: promotionLockName}
 }

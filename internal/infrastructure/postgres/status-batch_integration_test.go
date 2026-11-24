@@ -122,7 +122,7 @@ func TestOfferStatusBatchSQLAndPartialDelivery(t *testing.T) {
 				"participant-status",
 			)
 			dispatcher := messaging.NewDispatcher(
-				postgres.NewTaskQueue(traced),
+				postgres.NewTaskQueue(postgres.Single(traced)),
 				clock.System{},
 				messaging.DispatcherConfig{Batch: 200, PerTenant: 200},
 				nil,

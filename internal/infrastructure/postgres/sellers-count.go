@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
 
@@ -27,7 +26,7 @@ type SellersCounts struct {
 }
 
 // NewSellersCounts подключает подсчёт вне транзакции основной выдачи.
-func NewSellersCounts(pool *pgxpool.Pool) *SellersCounts {
+func NewSellersCounts(pool *ClassPool) *SellersCounts {
 	return &SellersCounts{source: newConnectionSource(pool)}
 }
 

@@ -73,7 +73,7 @@ func TestSearchPurchaseQuarantineUsesOutboxRetention(t *testing.T) {
 	ctx := context.Background()
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	for _, key := range []string{"old", "recent"} {
 		if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			return tx.Outbox().Enqueue(ctx, ports.NewTask{
@@ -106,7 +106,8 @@ func TestSearchPurchaseQuarantineUsesOutboxRetention(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	result, err := postgres.NewRetention(pool).Purge(ctx, ports.PurgeRequest{OutboxDoneBefore: at(10), Batch: 1})
+	retention := postgres.NewRetention(postgres.Single(pool))
+	result, err := retention.Purge(ctx, ports.PurgeRequest{OutboxDoneBefore: at(10), Batch: 1})
 	if err != nil || result.OutboxDone != 1 {
 		t.Fatal("истёкшая покупка должна быть удалена", result, err)
 	}
@@ -120,7 +121,7 @@ func TestSearchPurchasesBatchRollbackAndTwoClaimers(t *testing.T) {
 	ctx := context.Background()
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
-	first, second := postgres.NewTaskQueue(pool), postgres.NewTaskQueue(pool)
+	first, second := postgres.NewTaskQueue(postgres.Single(pool)), postgres.NewTaskQueue(postgres.Single(pool))
 	tasks := []ports.NewTask{
 		{
 			Kind:     searchfeedback.TaskPurchase,

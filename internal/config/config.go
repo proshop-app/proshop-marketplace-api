@@ -145,33 +145,6 @@ type HTTP struct {
 	TrustedProxies int
 }
 
-// DatabaseBudget задаёт независимые пределы SQL и операции хранения.
-type DatabaseBudget struct {
-	Statement   time.Duration
-	Transaction time.Duration
-}
-
-// DatabasePool — пул класса нагрузки: размер зависит от развёртывания, сроки — от класса.
-type DatabasePool struct {
-	Budget   DatabaseBudget
-	MaxConns int32
-}
-
-// Database — PostgreSQL. У каждого класса нагрузки свой пул; Maintenance — сроки
-// служебных команд, у которых один небольшой пул.
-type Database struct {
-	Maintenance DatabaseBudget
-	Read        DatabasePool
-	Checkout    DatabasePool
-	// Ingestion.MaxConns и Orders.MaxConns ноль — по числу воркеров приёма и мест
-	// исполнителя оформления; их и сумму пулов проверяет сборка процесса: она знает
-	// размеры полос.
-	Ingestion  DatabasePool
-	Background DatabasePool
-	Orders     DatabasePool
-	URL        string
-}
-
 // Search — общий движок каталога площадки.
 type Search struct {
 	CandidatesToken     string
@@ -436,34 +409,6 @@ func (r *reader) required(name string) string {
 	return value
 }
 
-func (r *reader) database() Database {
-	raw := r.required("DATABASE_URL")
-	if raw != "" {
-		parsed, err := url.Parse(raw)
-		if err != nil || (parsed.Scheme != "postgres" && parsed.Scheme != "postgresql") {
-			r.fail("DATABASE_URL", "ожидается адрес postgres://…")
-		}
-	}
-
-	return Database{
-		URL:         raw,
-		Read:        r.databasePool("READ", 8, 750*time.Millisecond, 2*time.Second),
-		Checkout:    r.databasePool("CHECKOUT", 6, 2*time.Second, 5*time.Second),
-		Ingestion:   r.databasePool("INGESTION", 0, 2*time.Second, 5*time.Second),
-		Background:  r.databasePool("BACKGROUND", 10, 10*time.Second, 30*time.Second),
-		Orders:      r.databasePool("ORDERS", 0, 2*time.Second, 5*time.Second),
-		Maintenance: r.databaseBudget("MAINTENANCE", 5*time.Minute, 10*time.Minute),
-	}
-}
-
-// databasePool — пул класса: DATABASE_<КЛАСС>_MAX_CONNS и сроки класса.
-func (r *reader) databasePool(class string, size int32, statement, transaction time.Duration) DatabasePool {
-	return DatabasePool{
-		MaxConns: r.connections("DATABASE_"+class+"_MAX_CONNS", size),
-		Budget:   r.databaseBudget(class, statement, transaction),
-	}
-}
-
 func (r *reader) redisURL() string {
 	raw := r.required("REDIS_URL")
 	if raw != "" {
@@ -654,16 +599,4 @@ func (r *reader) topic(name, fallback string) string {
 		return fallback
 	}
 	return strings.TrimSpace(value)
-}
-
-func (r *reader) databaseBudget(class string, statement, transaction time.Duration) DatabaseBudget {
-	prefix := "DATABASE_" + class
-	budget := DatabaseBudget{
-		Statement:   r.duration(prefix+"_STATEMENT_TIMEOUT", statement),
-		Transaction: r.duration(prefix+"_TRANSACTION_TIMEOUT", transaction),
-	}
-	if budget.Statement > budget.Transaction {
-		r.fail(prefix+"_STATEMENT_TIMEOUT", "не должен превышать срок транзакции")
-	}
-	return budget
 }

@@ -21,37 +21,82 @@ import (
 const selectDeliveryMigrationReport = `SELECT tenant_id, previous_shop_enabled, previous_status
  FROM operator_delivery_migration_report ORDER BY tenant_id`
 
+// connectTimeout — срок установки соединения, если адрес не задал свой.
+const connectTimeout = 5 * time.Second
+
 //go:embed migrations/*.sql
 var migrations embed.FS
 
 // ErrUnavailable — база недоступна: соединение, начало или фиксация транзакции.
 var ErrUnavailable = errs.New(errs.Unavailable, "storage.unavailable", "хранилище недоступно")
 
-// Open — пул соединений с проверкой связи; сроки budget задаются каждому соединению.
+// Open — пул прямых соединений с проверкой связи; сроки budget задаются каждому
+// соединению параметрами запуска.
 func Open(ctx context.Context, url string, maxConns int32, budget Budget) (*pgxpool.Pool, error) {
+	if err := validateBudget(budget); err != nil {
+		return nil, err
+	}
+	cfg, err := poolConfig(url, maxConns)
+	if err != nil {
+		return nil, err
+	}
+	applyBudget(cfg, budget)
+
+	return connect(ctx, cfg, ping)
+}
+
+// openPooled — пул класса через пулер в режиме транзакций под ролью класса. Параметры
+// запуска пулер не передаёт серверу, поэтому сроки задаёт роль (ALTER ROLE … SET), а
+// старт сверяет их с budget: без совпадения гарантия сроков класса не держится.
+func openPooled(ctx context.Context, url string, config PoolConfig) (*pgxpool.Pool, error) {
+	if err := validateBudget(config.Budget); err != nil {
+		return nil, err
+	}
+	cfg, err := poolConfig(url, config.MaxConns)
+	if err != nil {
+		return nil, err
+	}
+	cfg.ConnConfig.User = config.User
+	cfg.ConnConfig.Password = config.Password
+
+	return connect(ctx, cfg, func(ctx context.Context, pool *pgxpool.Pool) error {
+		return verifyRoleBudget(ctx, pool, config.Budget)
+	})
+}
+
+func ping(ctx context.Context, pool *pgxpool.Pool) error {
+	if err := pool.Ping(ctx); err != nil {
+		return ErrUnavailable.Wrap(err)
+	}
+	return nil
+}
+
+func poolConfig(url string, maxConns int32) (*pgxpool.Config, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, fmt.Errorf("адрес базы: %w", err)
 	}
-
 	cfg.MaxConns = maxConns
-	if err := validateBudget(budget); err != nil {
-		return nil, err
-	}
-	applyBudget(cfg, budget)
 	if cfg.ConnConfig.ConnectTimeout <= 0 {
-		cfg.ConnConfig.ConnectTimeout = 5 * time.Second
+		cfg.ConnConfig.ConnectTimeout = connectTimeout
 	}
+	return cfg, nil
+}
 
+// connect открывает пул и проверяет его первым соединением; неудача закрывает пул.
+func connect(
+	ctx context.Context,
+	cfg *pgxpool.Config,
+	check func(context.Context, *pgxpool.Pool) error,
+) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, ErrUnavailable.Wrap(err)
 	}
-
-	if err := pool.Ping(ctx); err != nil {
+	if err := check(ctx, pool); err != nil {
 		pool.Close()
 
-		return nil, ErrUnavailable.Wrap(err)
+		return nil, err
 	}
 
 	return pool, nil
@@ -142,7 +187,7 @@ func runGoose(
 
 // logDeliveryMigrationReport читает сохранённый отчёт после фиксации миграции.
 func logDeliveryMigrationReport(ctx context.Context, pool *pgxpool.Pool) error {
-	return newConnectionSource(pool).withConnection(ctx, readDeliveryMigrationReport)
+	return newConnectionSource(Single(pool)).withConnection(ctx, readDeliveryMigrationReport)
 }
 
 func readDeliveryMigrationReport(ctx context.Context, db *gorm.DB) error {

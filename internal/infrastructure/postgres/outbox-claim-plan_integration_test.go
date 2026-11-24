@@ -48,7 +48,7 @@ func TestOutboxClaimLocksSelectedIDsByPrimaryKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer traced.Close()
-	tasks, err := postgres.NewTaskQueue(traced).Claim(ctx, ports.ClaimRequest{
+	tasks, err := postgres.NewTaskQueue(postgres.Single(traced)).Claim(ctx, ports.ClaimRequest{
 		Now:        time.Now(),
 		Limit:      8,
 		PerTenant:  8,

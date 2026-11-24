@@ -32,7 +32,7 @@ func TestModelKeyReportHasNoWriteTrackingAndRunsReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reader.Close()
-	if _, err := postgres.NewModelKeyStats(reader).Report(ctx, false); err != nil {
+	if _, err := postgres.NewModelKeyStats(postgres.Single(reader)).Report(ctx, false); err != nil {
 		t.Fatal("отчёту понадобилась запись в базу", err)
 	}
 }

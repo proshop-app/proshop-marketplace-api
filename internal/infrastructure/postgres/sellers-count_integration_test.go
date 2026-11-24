@@ -36,7 +36,7 @@ func TestSellersCountsProjection(t *testing.T) {
 	if _, err := pool.Exec(ctx, setSellersModelKeys); err != nil {
 		t.Fatal(err)
 	}
-	repository := postgres.NewSellersCounts(pool)
+	repository := postgres.NewSellersCounts(postgres.Single(pool))
 	counts, err := repository.CountSellers(ctx, []string{"model", "other", "absent", "model"})
 	if err != nil || counts["model"] != 2 || counts["other"] != 2 || counts["absent"] != 0 {
 		t.Fatal(counts, err)
@@ -63,7 +63,8 @@ func TestSellersCountsProjection(t *testing.T) {
 			if _, err := hiddenPool.Exec(ctx, query); err != nil {
 				t.Fatal(err)
 			}
-			counts, err := postgres.NewSellersCounts(hiddenPool).CountSellers(ctx, []string{"model", "other"})
+			sellers := postgres.NewSellersCounts(postgres.Single(hiddenPool))
+			counts, err := sellers.CountSellers(ctx, []string{"model", "other"})
 			if err != nil || counts["model"] != 1 || counts["other"] != 1 {
 				t.Fatal(counts, err)
 			}

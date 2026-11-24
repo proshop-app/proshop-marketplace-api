@@ -60,7 +60,7 @@ func formTokens(
 
 	return appidentity.NewTokens(
 		gateway,
-		postgres.NewIdentityMappings(pool, hubURL+"/realms/"+realm, client),
+		postgres.NewIdentityMappings(postgres.Single(pool), hubURL+"/realms/"+realm, client),
 		cache.NewIdentityRefreshes(redis, "idh05-forms:"+client+":"+string(random.IDs{}.NewUUID())+":"),
 		cipher,
 		random.IDs{},

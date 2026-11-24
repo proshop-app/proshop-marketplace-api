@@ -27,7 +27,7 @@ const (
 
 func TestIndexRebuildHasSingleOwner(t *testing.T) {
 	pool := pgtest.Pool(t)
-	lock := postgres.NewIndexRebuildLock(pool)
+	lock := postgres.NewIndexRebuildLock(postgres.DirectSessionsOf(pool))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	entered := make(chan struct{})
@@ -50,7 +50,7 @@ func TestIndexRebuildHasSingleOwner(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 	invoked := false
-	err := postgres.NewIndexRebuildLock(pool).WithLock(ctx, func(context.Context) error {
+	err := postgres.NewIndexRebuildLock(postgres.DirectSessionsOf(pool)).WithLock(ctx, func(context.Context) error {
 		invoked = true
 
 		return nil
@@ -89,7 +89,7 @@ func TestIndexRebuildSingleConnectionLifecycle(t *testing.T) {
 			}
 			t.Cleanup(pool.Close)
 			uow := postgres.NewUnitOfWork(pool)
-			lock := postgres.NewIndexRebuildLock(pool)
+			lock := postgres.NewIndexRebuildLock(postgres.DirectSessionsOf(pool))
 
 			run := func() error {
 				return lock.WithLock(ctx, func(work context.Context) error {
@@ -167,7 +167,7 @@ func TestIndexRebuildSingleConnectionLifecycle(t *testing.T) {
 
 func TestIndexRebuildCancelsWorkWhenBackendIsLost(t *testing.T) {
 	pool := testPool(t)
-	lock := postgres.NewIndexRebuildLock(pool)
+	lock := postgres.NewIndexRebuildLock(postgres.DirectSessionsOf(pool))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

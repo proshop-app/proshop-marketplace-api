@@ -20,7 +20,7 @@ func TestOrderedTaskCannotOvertakeLeaseOrRetry(t *testing.T) {
 	if _, err := pool.Exec(ctx, orderedSeed); err != nil {
 		t.Fatal(err)
 	}
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	request := ports.ClaimRequest{
 		Now:          time.Now(),
 		Limit:        8,
@@ -33,7 +33,7 @@ func TestOrderedTaskCannotOvertakeLeaseOrRetry(t *testing.T) {
 		t.Fatal(first, err)
 	}
 	// Второй процесс не может обогнать арендованное намерение того же вида и магазина.
-	next, err := postgres.NewTaskQueue(pool).Claim(ctx, request)
+	next, err := postgres.NewTaskQueue(postgres.Single(pool)).Claim(ctx, request)
 	if err != nil || len(next) != 0 {
 		t.Fatal("обгон аренды", next, err)
 	}

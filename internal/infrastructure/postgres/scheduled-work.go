@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -24,10 +23,11 @@ type ScheduledWork struct {
 	interval time.Duration
 }
 
-// NewScheduledWork привязывает общее расписание к часам базы, без ожидания занятого владельца.
-func NewScheduledWork(pool *pgxpool.Pool, name string, interval time.Duration) *ScheduledWork {
+// NewScheduledWork привязывает общее расписание к часам базы, без ожидания занятого
+// владельца: интервал берётся пулом класса, блокировка прохода — прямым сеансом.
+func NewScheduledWork(pool *ClassPool, sessions *DirectSessions, name string, interval time.Duration) *ScheduledWork {
 	return &ScheduledWork{
-		lock:     &IndexRebuildLock{source: newConnectionSource(pool), name: name},
+		lock:     &IndexRebuildLock{sessions: sessions, name: name},
 		source:   newConnectionSource(pool),
 		name:     name,
 		interval: interval,
@@ -36,7 +36,7 @@ func NewScheduledWork(pool *pgxpool.Pool, name string, interval time.Duration) *
 
 // WithLock пропускает уже выполненный интервал, включая старты реплик с разными фазами таймера.
 // Интервал берётся первым обычным запросом пула: реплика, которой интервал не достался,
-// не открывает выделенное соединение под advisory lock. Его открывает только тот, кто
+// не открывает прямой сеанс под advisory lock. Его открывает только тот, кто
 // работает, и только на время прохода; блокировка не даёт следующему интервалу запустить
 // второй долгий проход, пока идёт прежний.
 func (s *ScheduledWork) WithLock(ctx context.Context, run func(context.Context) error) error {

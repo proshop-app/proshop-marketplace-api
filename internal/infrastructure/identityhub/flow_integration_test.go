@@ -53,7 +53,7 @@ func TestRealHubBuyerFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mapping := postgres.NewIdentityMappings(pool, hubURL+"/realms/marketplace", clientID)
+	mapping := postgres.NewIdentityMappings(postgres.Single(pool), hubURL+"/realms/marketplace", clientID)
 	prefix := "idh05:" + string(random.IDs{}.NewUUID()) + ":"
 	refreshes := cache.NewIdentityRefreshes(redis, prefix)
 	tokens := appidentity.NewTokens(gateway, mapping, refreshes, cipher, random.IDs{}, clock.System{}, time.Hour)

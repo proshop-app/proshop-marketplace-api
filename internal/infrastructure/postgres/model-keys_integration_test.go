@@ -94,7 +94,7 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	report, err := postgres.NewModelKeyStats(pool).Report(ctx, true)
+	report, err := postgres.NewModelKeyStats(postgres.Single(pool)).Report(ctx, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestModelKeysStoredAndReportedAcrossSellers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err = postgres.NewModelKeyStats(pool).Report(ctx, true)
+	report, err = postgres.NewModelKeyStats(postgres.Single(pool)).Report(ctx, true)
 	if err != nil || len(report.Samples) != 0 {
 		t.Fatalf("откат ключа: %+v, %v", report, err)
 	}

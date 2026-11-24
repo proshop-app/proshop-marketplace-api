@@ -39,7 +39,7 @@ type scope struct {
 // NewUnitOfWork — UnitOfWork поверх одного пула с общими снимками всех его транзакций:
 // CLI и тесты, где классы нагрузки не разделяются.
 func NewUnitOfWork(pool *pgxpool.Pool) *UnitOfWork {
-	return &UnitOfWork{source: newConnectionSource(pool)}
+	return &UnitOfWork{source: newConnectionSource(Single(pool))}
 }
 
 // NewUnitOfWorkByClass — UnitOfWork процесса: транзакция берёт соединение и сроки

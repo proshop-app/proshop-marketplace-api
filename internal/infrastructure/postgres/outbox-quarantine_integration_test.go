@@ -14,7 +14,7 @@ import (
 func TestOutboxQuarantineIsFencedDurableAndExcluded(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
-	queue := postgres.NewTaskQueue(pool)
+	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	ctx := context.Background()
 	enqueue(t, uow, "t1", "bad", 0)
 	tasks, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(1), Limit: 1, PerTenant: 1, LeaseUntil: at(2)})
@@ -38,11 +38,12 @@ func TestOutboxQuarantineIsFencedDurableAndExcluded(t *testing.T) {
 	if err := queue.Complete(ctx, failure.ID, failure.Attempts, at(2)); !errors.Is(err, ports.ErrTaskClaimConflict) {
 		t.Fatal("карантин нельзя превратить в выполненную задачу", err)
 	}
-	_, err = postgres.NewRetention(pool).Purge(ctx, ports.PurgeRequest{OutboxDoneBefore: at(50), Batch: 10})
+	retention := postgres.NewRetention(postgres.Single(pool))
+	_, err = retention.Purge(ctx, ports.PurgeRequest{OutboxDoneBefore: at(50), Batch: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	failures, err := postgres.NewTaskQueue(pool).Failures(ctx, 0, 10)
+	failures, err := postgres.NewTaskQueue(postgres.Single(pool)).Failures(ctx, 0, 10)
 	if err != nil || len(failures) != 1 || failures[0].Reason != "test.invalid" {
 		t.Fatal(failures, err)
 	}
@@ -61,7 +62,7 @@ func TestOutboxQuarantineIsFencedDurableAndExcluded(t *testing.T) {
 
 func TestQuarantineReturnPreservesIntentAndUnknownBudget(t *testing.T) {
 	pool := testPool(t)
-	uow, queue := postgres.NewUnitOfWork(pool), postgres.NewTaskQueue(pool)
+	uow, queue := postgres.NewUnitOfWork(pool), postgres.NewTaskQueue(postgres.Single(pool))
 	ctx := context.Background()
 	for _, key := range []string{"one", "two", "three"} {
 		enqueue(t, uow, "t1", key, 0)

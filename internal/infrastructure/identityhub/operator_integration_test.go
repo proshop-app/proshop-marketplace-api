@@ -54,7 +54,7 @@ func TestRealOperatorHubIsolation(t *testing.T) {
 	}
 	tokens := appidentity.NewTokens(
 		gateway,
-		postgres.NewIdentityMappings(pool, url+"/realms/platform", clientID),
+		postgres.NewIdentityMappings(postgres.Single(pool), url+"/realms/platform", clientID),
 		cache.NewIdentityRefreshes(redis, "idh05-operator:"+string(random.IDs{}.NewUUID())+":"),
 		cipher,
 		random.IDs{},

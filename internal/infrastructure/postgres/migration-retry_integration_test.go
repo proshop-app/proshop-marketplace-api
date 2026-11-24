@@ -212,7 +212,7 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 		if _, err := pool.Exec(ctx, interruptedOutboxInsert); err != nil {
 			t.Fatal(err)
 		}
-		tasks, err := postgres.NewTaskQueue(pool).Claim(ctx, ports.ClaimRequest{
+		tasks, err := postgres.NewTaskQueue(postgres.Single(pool)).Claim(ctx, ports.ClaimRequest{
 			Now:        time.Now().Add(time.Minute),
 			Limit:      1,
 			PerTenant:  1,

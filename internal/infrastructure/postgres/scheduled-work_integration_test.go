@@ -14,9 +14,10 @@ import (
 
 func TestScheduledWorkSkipsOtherReplicaForWholeInterval(t *testing.T) {
 	pool := testPool(t)
+	classPool, sessions := postgres.Single(pool), postgres.DirectSessionsOf(pool)
 	ctx := context.Background()
-	first := postgres.NewScheduledWork(pool, "read-test", time.Hour)
-	second := postgres.NewScheduledWork(pool, "read-test", time.Hour)
+	first := postgres.NewScheduledWork(classPool, sessions, "read-test", time.Hour)
+	second := postgres.NewScheduledWork(classPool, sessions, "read-test", time.Hour)
 	calls := 0
 	run := func(context.Context) error {
 		calls++
@@ -32,9 +33,10 @@ func TestScheduledWorkSkipsOtherReplicaForWholeInterval(t *testing.T) {
 
 func TestScheduledWorkDoesNotOverlapLongRunAfterInterval(t *testing.T) {
 	pool := testPool(t)
+	classPool, sessions := postgres.Single(pool), postgres.DirectSessionsOf(pool)
 	ctx := context.Background()
-	first := postgres.NewScheduledWork(pool, "long-test", time.Second)
-	second := postgres.NewScheduledWork(pool, "long-test", time.Second)
+	first := postgres.NewScheduledWork(classPool, sessions, "long-test", time.Second)
+	second := postgres.NewScheduledWork(classPool, sessions, "long-test", time.Second)
 	started := make(chan struct{})
 	release := make(chan struct{})
 	done := make(chan error, 1)

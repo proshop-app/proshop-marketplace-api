@@ -16,13 +16,15 @@ const batchConnectionKey = "postgres.batch_connection"
 
 // poolRouter выбирает пул операции: единственный пул или пул класса нагрузки из контекста.
 type poolRouter interface {
-	route(ctx context.Context) *classPool
+	route(ctx context.Context) *ClassPool
 }
 
-// classPool — пул одного класса нагрузки и его сроки. Адаптер database/sql один на
-// весь срок пула: без простаивающих соединений он не удерживает соединения pgxpool,
-// а операция не создаёт свой *sql.DB с горутиной открытия соединений.
-type classPool struct {
+// ClassPool — пул одного класса нагрузки и его сроки. Сроки — свойство пула, а не
+// параметры соединения: через пулер их задаёт роль класса, и восстановить их из
+// параметров нельзя. Адаптер database/sql один на весь срок пула: без простаивающих
+// соединений он не удерживает соединения pgxpool, а операция не создаёт свой *sql.DB
+// с горутиной открытия соединений.
+type ClassPool struct {
 	pool   *pgxpool.Pool
 	db     *sql.DB
 	budget Budget
@@ -39,60 +41,31 @@ type connectionSource struct {
 type gormConnection struct {
 	orm        *gorm.DB
 	connection *sql.Conn
-	// dedicated — собственный *sql.DB выделенного соединения; у соединения пула nil.
-	dedicated *sql.DB
 }
 
-func newConnectionSource(pool *pgxpool.Pool) *connectionSource {
-	return &connectionSource{pools: newClassPool(pool, poolBudget(pool))}
+// Single — пул, открытый напрямую (Open, OpenCommand: CLI и тесты), со сроками из
+// параметров его соединений.
+func Single(pool *pgxpool.Pool) *ClassPool {
+	return newClassPool(pool, poolBudget(pool))
 }
 
-func newClassPool(pool *pgxpool.Pool, budget Budget) *classPool {
-	return &classPool{pool: pool, db: stdlib.OpenDBFromPool(pool), budget: budget}
+func newConnectionSource(pool *ClassPool) *connectionSource {
+	return &connectionSource{pools: pool}
 }
 
-func (p *classPool) route(context.Context) *classPool { return p }
+func newClassPool(pool *pgxpool.Pool, budget Budget) *ClassPool {
+	return &ClassPool{pool: pool, db: stdlib.OpenDBFromPool(pool), budget: budget}
+}
 
-func (s *connectionSource) open(ctx context.Context, pool *classPool) (*gormConnection, error) {
+func (p *ClassPool) route(context.Context) *ClassPool { return p }
+
+func (s *connectionSource) open(ctx context.Context, pool *ClassPool) (*gormConnection, error) {
 	connection, err := pool.db.Conn(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.attach(ctx, connection, nil)
-}
-
-// Session lock не занимает квоту пула: его владелец может обращаться к базе
-// через UnitOfWork даже при MaxConns=1. Закрытие уничтожает выделенное соединение.
-func (s *connectionSource) openDedicated(ctx context.Context) (*gormConnection, error) {
-	config := s.pools.route(ctx).pool.Config()
-	var options []stdlib.OptionOpenDB
-	if config.BeforeConnect != nil {
-		options = append(options, stdlib.OptionBeforeConnect(config.BeforeConnect))
-	}
-	if config.AfterConnect != nil {
-		options = append(options, stdlib.OptionAfterConnect(config.AfterConnect))
-	}
-	db := stdlib.OpenDB(*config.ConnConfig, options...)
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(0)
-
-	connection, err := db.Conn(ctx)
-	if err != nil {
-		_ = db.Close()
-
-		return nil, err
-	}
-
-	return s.attach(ctx, connection, db)
-}
-
-func (s *connectionSource) attach(
-	ctx context.Context,
-	connection *sql.Conn,
-	dedicated *sql.DB,
-) (*gormConnection, error) {
-	result := &gormConnection{connection: connection, dedicated: dedicated}
+	result := &gormConnection{connection: connection}
 	orm, err := s.session(ctx, connection)
 	if err != nil {
 		result.close()
@@ -104,7 +77,7 @@ func (s *connectionSource) attach(
 	return result, nil
 }
 
-func (s *connectionSource) begin(ctx context.Context, pool *classPool) (*gormConnection, error) {
+func (s *connectionSource) begin(ctx context.Context, pool *ClassPool) (*gormConnection, error) {
 	connection, err := s.open(ctx, pool)
 	if err != nil {
 		return nil, err
@@ -167,10 +140,7 @@ func (s *connectionSource) session(ctx context.Context, connection *sql.Conn) (*
 	return orm, nil
 }
 
-// close возвращает соединение пулу; выделенное соединение закрывается вместе со своим *sql.DB.
+// close возвращает соединение пулу.
 func (connection *gormConnection) close() {
 	_ = connection.connection.Close()
-	if connection.dedicated != nil {
-		_ = connection.dedicated.Close()
-	}
 }

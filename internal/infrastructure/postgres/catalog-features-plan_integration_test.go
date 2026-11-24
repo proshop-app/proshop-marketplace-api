@@ -70,7 +70,7 @@ func TestRecommendationPartialIndexPlans(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tracedPool.Close()
-	repository := postgres.NewCatalogFeatures(tracedPool)
+	repository := postgres.NewCatalogFeatures(postgres.Single(tracedPool))
 	for _, tc := range []struct {
 		name       string
 		categories []string

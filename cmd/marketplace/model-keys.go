@@ -30,7 +30,7 @@ func modelKeysReport(ctx context.Context, cfg config.Config, _ *slog.Logger) err
 		return err
 	}
 	defer pool.Close()
-	report, err := postgres.NewModelKeyStats(pool).Report(ctx, true)
+	report, err := postgres.NewModelKeyStats(postgres.Single(pool)).Report(ctx, true)
 	if err != nil {
 		return err
 	}
