@@ -27,6 +27,8 @@ type ProjectionReuse struct {
 // ProjectionValidation согласует номера источников с записью проекции до конца транзакции.
 type ProjectionValidation interface {
 	Current(context.Context, ids.TenantID, ids.ProductID) (ValidationSources, error)
+	// CurrentMany читает источники допуска списка товаров одним запросом.
+	CurrentMany(context.Context, []ids.OfferID) (map[ids.OfferID]ValidationSources, error)
 }
 
 // ProjectionModerator разделяет новую оценку и перенос прежней автоматической оценки.

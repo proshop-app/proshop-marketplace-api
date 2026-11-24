@@ -180,12 +180,12 @@ func TestOfferStatusBatchSQLAndPartialDelivery(t *testing.T) {
 					t.Fatal("перепутаны магазины", event)
 				}
 			}
-			var done int
-			query := "SELECT count(*) FROM outbox WHERE done_at IS NOT NULL"
-			if err := pool.QueryRow(ctx, query).Scan(&done); err != nil {
+			// Выполненные задачи удалены; в очереди остаются только повторы неудачных.
+			var left int
+			if err := pool.QueryRow(ctx, "SELECT count(*) FROM outbox").Scan(&left); err != nil {
 				t.Fatal(err)
 			}
-			if done != 200-wantFailed {
+			if done := 200 - left; done != 200-wantFailed {
 				t.Fatal("повторяются успешные соседи", done)
 			}
 			if sql > 5 || transactions != 2 || publisher.batches.Load() != 1 ||

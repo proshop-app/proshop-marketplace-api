@@ -49,10 +49,19 @@ type Outbox interface {
 	EnqueueBatch(context.Context, []NewTask) error
 }
 
+// ClaimCursor — место на круге магазинов. Нулевое значение — круг не начат. Начатый курсор может
+// стоять и на пустом магазине: общие задачи площадки (справочники, синонимы) идут с пустым
+// TenantID, поэтому «круг не начат» пустой строкой не кодируется — иначе круг, дошедший до
+// общей задачи, каждый раз начинался бы заново и не уходил дальше первых полос.
+type ClaimCursor struct {
+	Tenant  ids.TenantID
+	Started bool
+}
+
 // ClaimRequest — сколько задач взять и до какого времени их держать.
 type ClaimRequest struct {
-	// AfterTenant продолжает круг магазинов; пустое значение сохраняет выбор по возрасту.
-	AfterTenant  ids.TenantID
+	// After — курсор круга магазинов из ClaimResult.Next прошлого взятия.
+	After        ClaimCursor
 	Kinds        []string
 	ExcludeKinds []string
 	// OrderedKinds берёт только старейшую незавершённую задачу вида на магазин, включая аренды и повторы.
@@ -65,6 +74,17 @@ type ClaimRequest struct {
 	LeaseUntil  time.Time
 }
 
+// ClaimLaneVisits — сколько полос «вид × магазин» одного вида посещает взятие: стоимость взятия
+// ограничена при любом числе магазинов, остаток круга обходит следующее взятие от курсора.
+const ClaimLaneVisits = 128
+
+// ClaimResult — взятые задачи и курсор круга магазинов для следующего взятия. Курсор двигается
+// и при пустом взятии: обход полос ограничен, следующий продолжит с последнего посещённого.
+type ClaimResult struct {
+	Tasks []Task
+	Next  ClaimCursor
+}
+
 // TaskResolution — результат с токеном аренды; NextAt задан только при повторе.
 type TaskResolution struct {
 	UnknownFailures int
@@ -74,6 +94,13 @@ type TaskResolution struct {
 	At              time.Time
 	NextAt          *time.Time
 	Error           string
+}
+
+// ReadyLane — созревшая работа одного вида: сколько магазинов её ждут и с какого срока ждёт старейшая.
+type ReadyLane struct {
+	Kind    string
+	Tenants int64
+	Oldest  time.Time
 }
 
 // TaskRequeue возвращает одну задачу либо ограниченную страницу одного вида.
@@ -106,8 +133,9 @@ type TaskFailure struct {
 // TaskQueue — разбор outbox. Взятая задача держится арендой: упавший
 // обработчик не теряет её, после аренды её возьмёт другой.
 type TaskQueue interface {
-	// Claim чередует созревшие задачи магазинов до общего Limit, не больше PerTenant на магазин.
-	Claim(ctx context.Context, request ClaimRequest) ([]Task, error)
+	// Claim чередует созревшие задачи магазинов по кругу от After до общего Limit, не больше
+	// PerTenant на магазин; за одно взятие посещается ограниченное число магазинов.
+	Claim(ctx context.Context, request ClaimRequest) (ClaimResult, error)
 	// Complete отмечает задачу выполненной, только если attempts соответствует текущему Claim.
 	// Отсутствующая, завершённая или взятая другим обработчиком задача — ErrTaskClaimConflict.
 	Complete(ctx context.Context, id int64, attempts int, at time.Time) error
@@ -115,8 +143,9 @@ type TaskQueue interface {
 	Retry(ctx context.Context, id int64, attempts int, nextAt time.Time, reason string) error
 	// Resolve сохраняет результаты пачки атомарно, проверяя владельца каждой задачи.
 	Resolve(context.Context, []TaskResolution) error
-	// ReadyCounts считает только созревшие задачи, без завершённых и арендованных.
-	ReadyCounts(context.Context, time.Time) (map[string]int64, error)
+	// ReadyLanes — созревшая работа по видам без аренд и отложенных повторов. Стоимость — по числу
+	// полос «вид × магазин», а не задач: метрика не обходит очередь.
+	ReadyLanes(context.Context, time.Time) ([]ReadyLane, error)
 	RetryStats(context.Context) ([]TaskRetryStats, error)
 	Failures(context.Context, int64, int) ([]TaskFailure, error)
 	Requeue(context.Context, TaskRequeue) ([]int64, error)
@@ -177,10 +206,10 @@ type EventFilter struct {
 
 // PurgeRequest — границы чистки служебных записей.
 type PurgeRequest struct {
-	BulkBefore       time.Time
-	ProcessedBefore  time.Time
-	OutboxDoneBefore time.Time
-	ParkedBefore     time.Time
+	BulkBefore               time.Time
+	ProcessedBefore          time.Time
+	PurchaseQuarantineBefore time.Time
+	ParkedBefore             time.Time
 	// ChallengesBefore — проверки входа, истёкшие раньше этого времени.
 	ChallengesBefore time.Time
 	// CartsBefore — корзины, просроченные раньше этого времени.
@@ -194,7 +223,7 @@ type PurgeResult struct {
 	BulkApprovals        int64
 	RevalidationFailures int64
 	Processed            int64
-	OutboxDone           int64
+	PurchaseQuarantine   int64
 	Parked               int64
 	Challenges           int64
 	Carts                int64
@@ -204,4 +233,9 @@ type PurgeResult struct {
 // Retention — чистка служебных записей по сроку.
 type Retention interface {
 	Purge(ctx context.Context, request PurgeRequest) (PurgeResult, error)
+}
+
+// ClaimAfter — курсор круга сразу за магазином tenant.
+func ClaimAfter(tenant ids.TenantID) ClaimCursor {
+	return ClaimCursor{Tenant: tenant, Started: true}
 }

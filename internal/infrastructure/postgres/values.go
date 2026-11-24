@@ -80,3 +80,13 @@ func jsonValue(value any, empty string) (string, error) {
 	}
 	return string(raw), nil
 }
+
+func offerKeyColumns(keys []ids.OfferID) ([]string, []string) {
+	tenants := make([]string, 0, len(keys))
+	products := make([]string, 0, len(keys))
+	for _, key := range keys {
+		tenants = append(tenants, string(key.Tenant))
+		products = append(products, string(key.Product))
+	}
+	return tenants, products
+}

@@ -26,7 +26,6 @@ func TestReleaseRequiresSellerEnumAndHidesMissingValue(t *testing.T) {
 	}
 	projector := appcatalog.NewProjector(store, clock, nil)
 	event := appcatalog.ProductEvent{
-		EventID: "e1",
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "p1",
@@ -46,13 +45,13 @@ func TestReleaseRequiresSellerEnumAndHidesMissingValue(t *testing.T) {
 	if !before.Card.Publication.Published {
 		t.Fatal("исходная карточка не опубликована")
 	}
-	initialSync, err := store.Claim(ctx, ports.ClaimRequest{
+	initialSync, err := fake.TasksOf(store.Claim(ctx, ports.ClaimRequest{
 		Kinds:      []string{appcatalog.TaskSyncOffer},
 		Limit:      1,
 		PerTenant:  1,
 		Now:        clock.Now(),
 		LeaseUntil: clock.Now().Add(time.Minute),
-	})
+	}))
 	if err != nil || len(initialSync) != 1 {
 		t.Fatalf("исходная синхронизация: %v, %v", initialSync, err)
 	}
@@ -78,7 +77,6 @@ func TestReleaseRequiresSellerEnumAndHidesMissingValue(t *testing.T) {
 	}) {
 		t.Fatal("перепроверка должна поставить новую задачу синхронизации индекса")
 	}
-	event.EventID = "e2"
 	event.Snapshot.Revision = 2
 	event.Snapshot.Card.Marketplace.Attributes = map[string]json.RawMessage{"a1": json.RawMessage(`"v1"`)}
 	if err := projector.ApplyProduct(ctx, event); err != nil {

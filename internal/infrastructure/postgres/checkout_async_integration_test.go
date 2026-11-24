@@ -133,7 +133,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	if _, err := failed.CreateOrders(ctx, buyerA, c.ID(), contact); !errors.Is(err, failure) {
 		t.Fatal(err)
 	}
-	counts, err := queue.ReadyCounts(ctx, clock.Now().Add(time.Hour))
+	counts, err := readyTenants(ctx, queue, clock.Now().Add(time.Hour))
 	if err != nil || counts[appcheckout.TaskCreateOrder] != 0 || counts[appcheckout.TaskExpireCreation] != 0 {
 		t.Fatal(counts, err)
 	}
@@ -165,18 +165,18 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 		LeaseUntil: clock.Now().Add(time.Second),
 		Kinds:      []string{appcheckout.TaskExpireCreation},
 	}
-	tasks, err := queue.Claim(ctx, request)
+	tasks, err := fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 0 {
 		t.Fatal(tasks, err)
 	}
 	request.Kinds = []string{appcheckout.TaskCreateOrder}
 	request.TenantSlots = map[ids.TenantID]int{"t1": 0}
-	tasks, err = queue.Claim(ctx, request)
+	tasks, err = fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 0 {
 		t.Fatal(tasks, err)
 	}
 	request.TenantSlots = nil
-	tasks, err = queue.Claim(ctx, request)
+	tasks, err = fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 1 {
 		t.Fatal(tasks, err)
 	}
@@ -193,7 +193,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	if err := service.Resume(ctx); err != nil {
 		t.Fatal(err)
 	}
-	counts, err = queue.ReadyCounts(ctx, clock.Now())
+	counts, err = readyTenants(ctx, queue, clock.Now())
 	if err != nil || counts[appcheckout.TaskPollOrder] != 0 {
 		t.Fatal("до срока опрос не нужен", counts, err)
 	}
@@ -205,7 +205,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	if err := service.Resume(ctx); err != nil {
 		t.Fatal(err)
 	}
-	counts, err = queue.ReadyCounts(ctx, clock.Now())
+	counts, err = readyTenants(ctx, queue, clock.Now())
 	if err != nil || counts[appcheckout.TaskPollOrder] != 1 {
 		t.Fatal("индексируемая сверка", counts, err)
 	}
@@ -226,7 +226,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	clock.Advance(15 * time.Second)
 	request.Now, request.LeaseUntil = clock.Now(), clock.Now().Add(time.Second)
 	request.Kinds = []string{appcheckout.TaskExpireCreation}
-	tasks, err = queue.Claim(ctx, request)
+	tasks, err = fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 1 {
 		t.Fatal(tasks, err)
 	}
@@ -235,7 +235,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	}
 	request.Now, request.LeaseUntil = clock.Now(), clock.Now().Add(time.Second)
 	request.Kinds = []string{appcheckout.TaskCancelOrder}
-	tasks, err = queue.Claim(ctx, request)
+	tasks, err = fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 1 {
 		t.Fatal("отмена поставлена вместе с переходом", tasks, err)
 	}
@@ -266,4 +266,14 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 		t.Fatal(stuck, err)
 	}
 
+}
+
+// readyTenants — магазины с созревшей задачей по видам.
+func readyTenants(ctx context.Context, queue *postgres.TaskQueue, now time.Time) (map[string]int64, error) {
+	lanes, err := queue.ReadyLanes(ctx, now)
+	counts := map[string]int64{}
+	for _, lane := range lanes {
+		counts[lane.Kind] = lane.Tenants
+	}
+	return counts, err
 }

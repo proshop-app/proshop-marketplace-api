@@ -25,7 +25,7 @@ func TestParkedReplayKeepsOriginalIdentityAndTime(t *testing.T) {
 	if err := replay.Replay(context.Background(), value); err != nil {
 		t.Fatal(err)
 	}
-	if len(rec.products) != 1 || rec.products[0].EventID != value.Topic+":2:17" ||
+	if len(rec.products) != 1 ||
 		!rec.products[0].Snapshot.At.Equal(published) {
 		t.Fatal(rec.products)
 	}

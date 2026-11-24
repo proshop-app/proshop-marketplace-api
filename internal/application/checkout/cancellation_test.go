@@ -294,9 +294,9 @@ func TestCancellationRetriesAndDoesNotBlockHealthySeller(t *testing.T) {
 	if _, err := e.service.Cancel(ctx, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	counts, err := e.store.ReadyCounts(ctx, e.clock.Now())
-	if err != nil || counts[appcheckout.TaskCancelOrder] != 0 {
-		t.Fatal(counts, err)
+	counts := e.store.ReadyTasks(e.clock.Now())
+	if counts[appcheckout.TaskCancelOrder] != 0 {
+		t.Fatal(counts)
 	}
 	e.platform.FailCancel("t1", nil)
 	e.clock.Advance(time.Second)

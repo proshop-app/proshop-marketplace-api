@@ -260,7 +260,7 @@ func TestPickupChangeIsRefusedWhileClaimedCreationIsInFlight(t *testing.T) {
 	hook.during = func() {
 		_, _ = e.service.Confirm(ctx, buyerID, created.ID)
 		_, _ = e.service.CreateOrders(ctx, buyerID, created.ID, orderContact)
-		tasks, err := e.store.Claim(
+		tasks, err := fake.TasksOf(e.store.Claim(
 			ctx,
 			ports.ClaimRequest{
 				Now:        e.clock.Now(),
@@ -269,7 +269,7 @@ func TestPickupChangeIsRefusedWhileClaimedCreationIsInFlight(t *testing.T) {
 				LeaseUntil: e.clock.Now().Add(6 * time.Second),
 				Kinds:      []string{appcheckout.TaskCreateOrder},
 			},
-		)
+		))
 		if err != nil {
 			t.Error(err)
 		}

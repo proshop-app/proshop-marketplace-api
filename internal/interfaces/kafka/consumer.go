@@ -105,14 +105,18 @@ func (c *Consumer) next(ctx context.Context) (kafkago.Message, bool) {
 	}
 }
 
-// Process доводит одно сообщение до записанного итога. Позиции фиксирует Run пачкой.
-// Возвращает ошибку только при отмене контекста.
-func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
-	envelope := Envelope{
+func (c *Consumer) envelope(message kafkago.Message) Envelope {
+	return Envelope{
 		Topic:   strings.TrimPrefix(message.Topic, prefixOf(c.config.TopicPrefix)),
 		EventID: fmt.Sprintf("%s:%d:%d", message.Topic, message.Partition, message.Offset),
 		Message: message,
 	}
+}
+
+// Process доводит одно сообщение до записанного итога. Позиции фиксирует Run пачкой.
+// Возвращает ошибку только при отмене контекста.
+func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
+	envelope := c.envelope(message)
 	var log *slog.Logger
 	var tenantID string
 	unknownFailures := 0

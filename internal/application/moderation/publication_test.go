@@ -3,7 +3,6 @@ package moderation_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -31,7 +30,6 @@ func (e environment) publish(t *testing.T, revision int64, published bool, categ
 				Marketplace: &taxonomy.Card{CategoryID: category, Published: published},
 			},
 		},
-		EventID: fmt.Sprintf("publication:%d", revision),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -449,7 +449,7 @@ func readPickupFixture(t *testing.T, name string, target any) {
 
 func runPickupTasks(t *testing.T, store *fake.Store, service *appcheckout.Service, now time.Time) {
 	t.Helper()
-	tasks, err := store.Claim(
+	tasks, err := fake.TasksOf(store.Claim(
 		context.Background(),
 		ports.ClaimRequest{
 			Now:        now,
@@ -458,7 +458,7 @@ func runPickupTasks(t *testing.T, store *fake.Store, service *appcheckout.Servic
 			LeaseUntil: now.Add(time.Second),
 			Kinds:      []string{appcheckout.TaskCreateOrder, appcheckout.TaskCancelOrder},
 		},
-	)
+	))
 	if err != nil {
 		t.Fatal(err)
 	}

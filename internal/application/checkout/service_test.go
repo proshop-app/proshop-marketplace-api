@@ -32,7 +32,6 @@ var (
 type env struct {
 	pickups  *appdelivery.Service
 	store    *fake.Store
-	index    *fake.Index
 	platform *fake.Platform
 	clock    *fake.Clock
 	verifier *fake.CartVerifier
@@ -44,7 +43,7 @@ var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}
 
 func setup(t *testing.T) *env {
 	t.Helper()
-	e := &env{store: fake.NewStore(), index: fake.NewIndex(), platform: fake.NewPlatform(), clock: fake.NewClock(t0)}
+	e := &env{store: fake.NewStore(), platform: fake.NewPlatform(), clock: fake.NewClock(t0)}
 	identities := &fake.IDs{}
 	e.pickups = appdelivery.NewService(e.store, e.platform, fake.NewPickupCache(), appdelivery.Config{
 		Attempts:     3,
@@ -52,7 +51,7 @@ func setup(t *testing.T) *env {
 		QuoteTimeout: time.Second,
 	})
 
-	e.carts = appcart.NewService(e.store, e.index, e.platform, identities, e.clock, 30*24*time.Hour)
+	e.carts = appcart.NewService(e.store, e.platform, identities, e.clock, 30*24*time.Hour)
 	e.verifier = &fake.CartVerifier{CartVerifier: e.carts}
 	e.service = appcheckout.NewService(
 		e.store,
@@ -69,41 +68,9 @@ func setup(t *testing.T) *env {
 		},
 	)
 	ctx := context.Background()
-	e.store.SeedReadyOffer(p1, money.FromKopecks(199000))
-	e.store.SeedReadyOffer(p2, money.FromKopecks(35000))
-	err := e.index.Put(ctx, []ports.OfferDocument{
-		{
-			ID:        p1.String(),
-			TenantID:  "t1",
-			ProductID: "p1",
-			Name:      "Чайник",
-
-			Available:         3,
-			Visible:           true,
-			Listed:            true,
-			CheckoutAvailable: true,
-			Version:           1,
-			Price:             money.FromKopecks(199000).Kopecks(),
-			BasePrice:         money.FromKopecks(199000).Kopecks(),
-		},
-		{
-			ID:        p2.String(),
-			TenantID:  "t2",
-			ProductID: "p1",
-			Name:      "Кружка",
-
-			Available:         10,
-			Visible:           true,
-			Listed:            true,
-			CheckoutAvailable: true,
-			Version:           1,
-			Price:             money.FromKopecks(35000).Kopecks(),
-			BasePrice:         money.FromKopecks(35000).Kopecks(),
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Корзина читает предложения из проекции каталога, поиск оформлению не нужен.
+	e.store.SeedBuyerOffer(p1, "Чайник", money.FromKopecks(199000))
+	e.store.SeedBuyerOffer(p2, "Кружка", money.FromKopecks(35000))
 
 	point, err := delivery.NewPickupPoint(
 		"cdek",
@@ -219,23 +186,6 @@ func TestCreateIsIdempotent(t *testing.T) {
 
 func TestCreateSkipsHiddenSeller(t *testing.T) {
 	e := setup(t)
-
-	_ = e.index.Put(context.Background(), []ports.OfferDocument{
-		{
-			ID:        p2.String(),
-			TenantID:  "t2",
-			ProductID: "p1",
-			Name:      "Кружка",
-
-			Available:         10,
-			Visible:           true,
-			Listed:            true,
-			CheckoutAvailable: false,
-			Version:           2,
-			Price:             money.FromKopecks(35000).Kopecks(),
-			BasePrice:         money.FromKopecks(35000).Kopecks(),
-		},
-	})
 
 	p, _ := e.store.Participant("t2")
 	p.Stage = participant.StageDisconnected

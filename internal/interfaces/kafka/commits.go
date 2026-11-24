@@ -40,11 +40,13 @@ func (c *offsetCommitter) flush(ctx context.Context, timed bool) {
 }
 
 // Незавершённые сообщения остаются разрывами. Отозванное поколение не фиксируется.
-func (c *offsetCommitter) finish(ctx context.Context, source Source, completed <-chan *delivery) {
+func (c *offsetCommitter) finish(ctx context.Context, source Source, completed <-chan handled) {
 	for {
 		select {
-		case item := <-completed:
-			item.offset.complete()
+		case result := <-completed:
+			for _, item := range result.done {
+				item.offset.complete()
+			}
 		default:
 			if source.GenerationActive(ctx) {
 				finalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finalCommitTimeout)

@@ -20,27 +20,6 @@ const (
  manual_reject, version, updated_at, operator_id, operator_name, decision`
 	selectModerationVerdict = `SELECT ` + verdictColumns + ` FROM moderation_verdicts
  WHERE tenant_id = $1 AND product_id = $2`
-	insertModerationVerdict = `INSERT INTO moderation_verdicts (
- tenant_id, product_id, revision, rules_revision,
- taxonomy_version, status, reasons, decided_by,
- manual_reject, version, updated_at, operator_id, operator_name, decision
- ) VALUES (
- $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
- ) ON CONFLICT DO NOTHING`
-	updateModerationVerdict = `UPDATE moderation_verdicts SET
- revision = $3,
- rules_revision = $4,
- taxonomy_version = $5,
- status = $6,
- reasons = $7,
- decided_by = $8,
- manual_reject = $9,
- version = $10,
- updated_at = $11,
- operator_id = $12,
- operator_name = $13,
- decision = $14
- WHERE tenant_id = $1 AND product_id = $2 AND version = $15 AND status = $16`
 	countModerationVerdicts = `SELECT count(*) FROM moderation_verdicts
  WHERE ($1 = '' OR status = $1) AND ($2 = '' OR tenant_id = $2) AND ($3 = '' OR decided_by = $3)`
 	listModerationVerdicts = `SELECT ` + verdictColumns + ` FROM moderation_verdicts
@@ -96,52 +75,6 @@ func scanModerationVerdict(row rowScanner) (*moderation.Verdict, error) {
 		}
 	}
 	return moderation.RestoreVerdict(s), nil
-}
-
-// Save не допускает тихой перезаписи конкурентного изменения.
-func (r *ModerationVerdicts) Save(ctx context.Context, value *moderation.Verdict) error {
-	s := value.State()
-	reasons, err := json.Marshal(s.Reasons)
-	if err != nil {
-		return err
-	}
-	decision, err := json.Marshal(s.Decision)
-	if err != nil {
-		return err
-	}
-	args := []any{
-		s.TenantID,
-		s.ProductID,
-		s.Revision,
-		s.RulesRevision,
-		s.TaxonomyVersion,
-		s.Status,
-		reasons,
-		s.DecidedBy,
-		s.ManualReject,
-		s.Version,
-		s.UpdatedAt,
-		s.Operator.ID,
-		s.Operator.Name,
-		decision,
-	}
-	query := insertModerationVerdict
-	if value.Origin().Version > 0 {
-		query = updateModerationVerdict
-		args = append(args, value.Origin().Version, value.Origin().Status)
-	}
-	affected, err := execSQL(ctx, r.db, query, args...)
-	if isUnique(err, "moderation_case_open") {
-		return moderation.ErrConflict
-	}
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return moderation.ErrConflict
-	}
-	value.MarkSaved()
-	return nil
 }
 
 // List ограничивает объём чтения для операторского сценария.

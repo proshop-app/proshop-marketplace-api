@@ -19,7 +19,8 @@ func TestMessageKeysKeepOnlyRequiredOrdering(t *testing.T) {
 		{TopicProductProjected, `["t1","p1"]`, "", product},
 		{TopicProductProjectedBulk, `["t1","p1"]`, "", product},
 		{TopicStockItemUpdated, `"stock-1"`, `{"productId":"p1"}`, product},
-		{TopicProductPriceUpdated, `"p1"`, `{"id":"p1"}`, product},
+		// Цены сервер не публикует: неизвестная тема упорядочивается по партиции.
+		{"catalog.product.price-updated", `"p1"`, `{"id":"p1"}`, orderingKey{}},
 		{TopicTenantCreated, `"t1"`, `{"tenantId":"t1"}`, tenant},
 		{TopicTenantUpdated, `"t1"`, `{"tenantId":"t1"}`, tenant},
 		{TopicTenantSuspended, `"t1"`, `{"tenantId":"t1"}`, tenant},

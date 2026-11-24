@@ -72,7 +72,7 @@ const (
         SELECT kind, tenant, NULLIF(dedup, ''), payload, next_at, at
         FROM jsonb_to_recordset($1::jsonb) AS x(kind text, tenant text, dedup text,
             payload jsonb, next_at timestamptz, at timestamptz)
-        ON CONFLICT (dedup_key) WHERE done_at IS NULL AND attempts = 0 DO UPDATE
+        ON CONFLICT (dedup_key) WHERE attempts = 0 DO UPDATE
         SET next_at = EXCLUDED.next_at WHERE EXCLUDED.next_at < outbox.next_at`
 )
 

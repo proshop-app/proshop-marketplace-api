@@ -223,9 +223,9 @@ func TestPollLaneDoesNotBlockCreationOrGeneralOutbox(t *testing.T) {
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	counts, err := e.store.ReadyCounts(ctx, e.clock.Now())
-	if err != nil || counts[appcheckout.TaskPollOrder] != 1 {
-		t.Fatal("лишняя сверка должна остаться без аренды", counts, err)
+	counts := e.store.ReadyTasks(e.clock.Now())
+	if counts[appcheckout.TaskPollOrder] != 1 {
+		t.Fatal("лишняя сверка должна остаться без аренды", counts)
 	}
 	dispatcher := messaging.NewDispatcher(
 		e.store,

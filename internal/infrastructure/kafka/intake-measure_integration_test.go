@@ -117,8 +117,12 @@ func (q *intakeQueries) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, _ pgx.Tr
 }
 
 func (p *measuredProjection) applied(started time.Time, err error) error {
+	return p.appliedMany(started, 1, err)
+}
+
+func (p *measuredProjection) appliedMany(started time.Time, count int, err error) error {
 	p.duration.Add(time.Since(started).Nanoseconds())
-	if err == nil && p.total.Add(1) == measureMessages {
+	if err == nil && p.total.Add(int64(count)) == measureMessages {
 		close(p.done)
 	}
 	return err
@@ -128,8 +132,8 @@ func (p *measuredProjection) ApplyProduct(ctx context.Context, event appcatalog.
 	return p.applied(time.Now(), p.Projector.ApplyProduct(ctx, event))
 }
 
-func (p *measuredProjection) ApplyPrice(ctx context.Context, event appcatalog.PriceEvent) error {
-	return p.applied(time.Now(), p.Projector.ApplyPrice(ctx, event))
+func (p *measuredProjection) ApplyProducts(ctx context.Context, events []appcatalog.ProductEvent) error {
+	return p.appliedMany(time.Now(), len(events), p.Projector.ApplyProducts(ctx, events))
 }
 
 func (p *measuredProjection) ApplyStock(ctx context.Context, event appcatalog.StockEvent) error {
@@ -143,7 +147,7 @@ func TestIntakeThroughput(t *testing.T) {
 		t.Skip("замер: INTAKE_MEASURE=1")
 	}
 	for _, workers := range []int{1, 8} {
-		for _, kind := range []string{"product", "price", "stock"} {
+		for _, kind := range []string{"product", "stock"} {
 			t.Run(fmt.Sprintf("%s/workers=%d", kind, workers), func(t *testing.T) {
 				measureIntake(t, kind, workers)
 			})
@@ -256,8 +260,6 @@ func intakeTopic(kind string) string {
 	switch kind {
 	case "product":
 		return kafka.TopicProductProjected
-	case "price":
-		return kafka.TopicProductPriceUpdated
 	default:
 		return kafka.TopicStockItemUpdated
 	}

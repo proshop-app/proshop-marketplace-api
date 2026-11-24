@@ -14,6 +14,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	transport "github.com/proshop-app/proshop-marketplace/internal/interfaces/http"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
@@ -344,4 +345,22 @@ func TestCartDeliveryCheckout(t *testing.T) {
 		t.Fatalf("чужой формат идентификатора: %+v", r)
 	}
 
+}
+
+// Корзина читает предложение из проекции каталога в PostgreSQL: недоступный поиск её не останавливает.
+func TestCartAddWorksWhileSearchIsDown(t *testing.T) {
+	e := newEnv(t)
+	token := e.login(t)
+	e.seedCartDelivery()
+	searchDown := errs.New(errs.Unavailable, "search.unavailable", "поиск недоступен")
+	e.index.BeforeGet = func(context.Context, string) error { return searchDown }
+
+	added := e.session(t, http.MethodPost, "/api/v1/cart/lines", `{"offerId":"t1~p1","quantity":2}`, token)
+	if added.status != http.StatusOK || added.body["total"] != float64(3980) {
+		t.Fatalf("добавление без поиска: %+v", added)
+	}
+	changed := e.session(t, http.MethodPut, "/api/v1/cart/lines/t1~p1", `{"quantity":1}`, token)
+	if changed.status != http.StatusOK || changed.body["total"] != float64(1990) {
+		t.Fatalf("изменение количества без поиска: %+v", changed)
+	}
 }

@@ -15,7 +15,7 @@ import (
 
 func TestConsumerCountsUnknownFailuresSeparatelyFromDependencyAndConflict(t *testing.T) {
 	calls := 0
-	projection := controlledProjection{price: func(context.Context, appcatalog.PriceEvent) error {
+	projection := controlledProjection{stock: func(context.Context, appcatalog.StockEvent) error {
 		calls++
 		switch {
 		case calls == 1 || calls == 18 || calls == 35:
@@ -28,7 +28,7 @@ func TestConsumerCountsUnknownFailuresSeparatelyFromDependencyAndConflict(t *tes
 	}}
 	parked := &parker{}
 	consumer, _ := consumer(&source{}, projection, parked, nil)
-	if err := consumer.Process(context.Background(), priceMessage(1, tenantHeader("t1"))); err != nil {
+	if err := consumer.Process(context.Background(), stockMessage(1, tenantHeader("t1"))); err != nil {
 		t.Fatal(err)
 	}
 	if calls != 35 || len(parked.events) != 1 || parked.events[0].Reason != kafka.ReasonExhausted ||
@@ -38,17 +38,17 @@ func TestConsumerCountsUnknownFailuresSeparatelyFromDependencyAndConflict(t *tes
 }
 
 func TestConsumerDependencyRetryKeepsTenantIsolationOrderAndPrefix(t *testing.T) {
-	otherMessage := keyedPrice("p2", 2)
+	otherMessage := keyedStock("p2", 2, 1)
 	otherMessage.Headers = []kafkago.Header{tenantHeader("t2")}
-	source := bufferedSource(keyedPrice("p1", 0), keyedPrice("p1", 1), otherMessage)
+	source := bufferedSource(keyedStock("p1", 0, 1), keyedStock("p1", 1, 1), otherMessage)
 	other := make(chan struct{}, 1)
 	pastBudget := make(chan struct{}, 1)
 	restore := make(chan struct{})
 	var attempts atomic.Int32
 	var recovered, overtook atomic.Bool
-	projection := controlledProjection{price: func(_ context.Context, event appcatalog.PriceEvent) error {
-		switch event.EventID {
-		case "shop.catalog.product.price-updated:2:0":
+	projection := controlledProjection{stock: func(_ context.Context, event appcatalog.StockEvent) error {
+		switch stockOffset(event) {
+		case 0:
 			select {
 			case <-restore:
 				recovered.Store(true)
@@ -59,9 +59,9 @@ func TestConsumerDependencyRetryKeepsTenantIsolationOrderAndPrefix(t *testing.T)
 				}
 				return errs.New(errs.Unavailable, "test.dependency", "зависимость недоступна")
 			}
-		case "shop.catalog.product.price-updated:2:1":
+		case 1:
 			overtook.Store(!recovered.Load())
-		case "shop.catalog.product.price-updated:2:2":
+		case 2:
 			other <- struct{}{}
 		}
 		return nil
@@ -94,7 +94,7 @@ func TestConsumerDoesNotParkCancelledPermanentOrExhaustedWork(t *testing.T) {
 	for _, permanent := range []bool{false, true} {
 		ctx, cancel := context.WithCancel(context.Background())
 		calls := 0
-		projection := controlledProjection{price: func(context.Context, appcatalog.PriceEvent) error {
+		projection := controlledProjection{stock: func(context.Context, appcatalog.StockEvent) error {
 			calls++
 			if permanent {
 				cancel()
@@ -107,7 +107,7 @@ func TestConsumerDoesNotParkCancelledPermanentOrExhaustedWork(t *testing.T) {
 		}}
 		parked := &parker{}
 		consumer, _ := consumer(&source{}, projection, parked, nil)
-		err := consumer.Process(ctx, priceMessage(1, tenantHeader("t1")))
+		err := consumer.Process(ctx, stockMessage(1, tenantHeader("t1")))
 		cancel()
 		if !errors.Is(err, context.Canceled) || len(parked.events) != 0 {
 			t.Fatalf("отмена процесса стала отказом задачи: %v, %+v", err, parked.events)

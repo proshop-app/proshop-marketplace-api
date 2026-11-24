@@ -71,7 +71,6 @@ func TestRevalidationResumesAndUsesLatestVersion(t *testing.T) {
 	state, _ := store.Product("t1", "p000")
 	projector := appcatalog.NewProjector(store, clock, nil)
 	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{
-		EventID: "new-event",
 		Snapshot: catalog.Snapshot{
 			TenantID:  state.TenantID,
 			ProductID: state.ProductID,

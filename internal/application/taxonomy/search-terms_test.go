@@ -27,7 +27,6 @@ func TestSearchTermsOnlyPublicationPreservesFrozenDictionaries(t *testing.T) {
 	service := apptaxonomy.NewService(store, clock, nil)
 	projector := appcatalog.NewProjector(store, clock, nil)
 	err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{
-		EventID: "e1",
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "p1",

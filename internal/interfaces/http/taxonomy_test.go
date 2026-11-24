@@ -169,7 +169,6 @@ func TestTaxonomyHTTP(t *testing.T) {
 		t.Fatal(old.Code)
 	}
 	if err := appcatalog.NewProjector(store, clock, nil).ApplyProduct(context.Background(), appcatalog.ProductEvent{
-		EventID: "e1",
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "p1",

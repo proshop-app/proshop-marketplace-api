@@ -92,6 +92,9 @@ func (*snapshotConnection) Prepare(string) (driver.Stmt, error) {
 
 func (*snapshotConnection) Close() error { return nil }
 
+// CheckNamedValue принимает и массивы ключей пачки: модель запросов не разбирает аргументы.
+func (*snapshotConnection) CheckNamedValue(*driver.NamedValue) error { return nil }
+
 func (c *snapshotConnection) Begin() (driver.Tx, error) {
 	c.database.mu.Lock()
 	defer c.database.mu.Unlock()
@@ -130,7 +133,7 @@ func (c *snapshotConnection) QueryContext(
 	rows := &snapshotRows{columns: []string{"value"}}
 	switch query {
 	case readValidationSources:
-		rows.columns = []string{"version", "revision", "participant", "probation", "verdict"}
+		rows.columns = []string{"tenant_id", "product_id", "version", "revision", "participant", "probation", "verdict"}
 		rows.values = [][]driver.Value{c.state.validation}
 	case readTaxonomyVersion, lockTaxonomy:
 		rows.values = [][]driver.Value{{c.state.version}}

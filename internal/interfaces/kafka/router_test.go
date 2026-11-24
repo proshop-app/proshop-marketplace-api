@@ -22,9 +22,9 @@ import (
 var published = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
 
 type recorder struct {
+	batches  []int
 	products []appcatalog.ProductEvent
 	stock    []appcatalog.StockEvent
-	prices   []appcatalog.PriceEvent
 	registry []appparticipant.RegistryEvent
 	err      error
 }
@@ -43,14 +43,15 @@ func (r *recorder) ApplyProduct(_ context.Context, e appcatalog.ProductEvent) er
 	return r.err
 }
 
-func (r *recorder) ApplyStock(_ context.Context, e appcatalog.StockEvent) error {
-	r.stock = append(r.stock, e)
+func (r *recorder) ApplyProducts(_ context.Context, events []appcatalog.ProductEvent) error {
+	r.batches = append(r.batches, len(events))
+	r.products = append(r.products, events...)
 
 	return r.err
 }
 
-func (r *recorder) ApplyPrice(_ context.Context, e appcatalog.PriceEvent) error {
-	r.prices = append(r.prices, e)
+func (r *recorder) ApplyStock(_ context.Context, e appcatalog.StockEvent) error {
+	r.stock = append(r.stock, e)
 
 	return r.err
 }
@@ -90,7 +91,7 @@ func TestProductProjected(t *testing.T) {
 	if s.SalesCount != 9007199254740993 || s.AverageRating != 4.7 || s.RatingsCount != 12 {
 		t.Fatalf("сигналы: продажи=%d, рейтинг=%v, оценки=%d", s.SalesCount, s.AverageRating, s.RatingsCount)
 	}
-	if got.EventID != "ev" || s.TenantID != "t1" || s.ProductID != "p1" || s.Revision != 7 || s.Deleted {
+	if s.TenantID != "t1" || s.ProductID != "p1" || s.Revision != 7 || s.Deleted {
 		t.Fatalf("конверт: %+v", got)
 	}
 	if s.HasPrice || s.Available != 3 {
@@ -207,20 +208,16 @@ func TestStockItemUpdated(t *testing.T) {
 	}
 }
 
-func TestPriceUpdated(t *testing.T) {
-	rec, err := handle(t, kafka.TopicProductPriceUpdated, message("p1", `{"id":"p1","price":99}`, tenantHeader("t1")))
-	if err != nil || rec.prices[0].Price.Price.Kopecks() != 9900 || rec.prices[0].ProductID != "p1" {
-		t.Fatalf("прайс: %+v, %v", rec.prices, err)
+// Сервер не публикует отдельные цены с перехода на единые цены: прайс едет в снимке товара
+// и в позиции склада. Тема цен не читается.
+func TestPriceTopicIsNotRead(t *testing.T) {
+	router := kafka.NewRouter(&recorder{}, &recorder{})
+	if slices.Contains(router.Topics(), "catalog.product.price-updated") {
+		t.Fatal("тему цен никто не публикует")
 	}
-
-	_, err = handle(t, kafka.TopicProductPriceUpdated, message("p1", `{"id":"p1","price":99}`))
-	if !errors.Is(err, kafka.ErrTenantMissing) {
-		t.Fatalf("без заголовка магазина: %v", err)
-	}
-
-	_, err = handle(t, kafka.TopicProductPriceUpdated, message("p1", `{"id":"p1"}`, tenantHeader("t1")))
-	if !errors.Is(err, kafka.ErrInvalidPayload) {
-		t.Fatalf("без цены: %v", err)
+	_, err := handle(t, "catalog.product.price-updated", message("p1", `{"id":"p1","price":99}`, tenantHeader("t1")))
+	if !errors.Is(err, kafka.ErrUnknownTopic) {
+		t.Fatalf("тема цен без обработчика: %v", err)
 	}
 }
 

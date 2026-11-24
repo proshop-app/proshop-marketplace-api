@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 
@@ -52,6 +53,10 @@ const (
  opened_at ASC, id ASC LIMIT $6 OFFSET $7`
 	openModerationCase = `SELECT ` + caseColumns + ` FROM moderation_cases
  WHERE tenant_id = $1 AND product_id = $2 AND status = 'open'`
+	// selectOpenCaseBatch читает открытые дела списка ключей по индексу единственного открытого дела.
+	selectOpenCaseBatch = `SELECT ` + caseColumns + `
+		FROM moderation_cases
+		WHERE status = 'open' AND (tenant_id, product_id) IN (SELECT * FROM unnest($1::text[], $2::text[]))`
 )
 
 // ModerationCases сохраняет дела условно по исходной версии и статусу.
@@ -246,4 +251,24 @@ func (r *ModerationCases) OpenStats(ctx context.Context) ([]moderation.OpenStat,
 		result = append(result, stat)
 	}
 	return result, rows.Err()
+}
+
+// OpenMany читает открытые дела списка одним запросом по индексу единственного открытого дела.
+func (r *ModerationCases) OpenMany(ctx context.Context, keys []ids.OfferID) (map[ids.OfferID]*moderation.Case, error) {
+	tenants, products := offerKeyColumns(keys)
+	rows, err := rawSQL(ctx, r.db, selectOpenCaseBatch, tenants, products).Rows()
+	if err != nil {
+		return nil, fmt.Errorf("пачка дел: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	found := make(map[ids.OfferID]*moderation.Case, len(keys))
+	for rows.Next() {
+		open, err := scanModerationCase(rows)
+		if err != nil {
+			return nil, fmt.Errorf("пачка дел: %w", err)
+		}
+		state := open.State()
+		found[ids.OfferID{Tenant: state.TenantID, Product: state.ProductID}] = open
+	}
+	return found, rows.Err()
 }

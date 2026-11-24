@@ -45,10 +45,10 @@ func TestConsumerFinalCommitReachesBrokerAfterProcessCancellation(t *testing.T) 
 	pool := pgtest.Pool(t)
 	uow := postgres.NewUnitOfWork(pool)
 	prefix := unique("shutdown-")
-	topic := prefix + "." + kafka.TopicProductPriceUpdated
+	topic := prefix + "." + kafka.TopicStockItemUpdated
 	group := unique("shutdown-group-")
 	createTopics(t, topic)
-	message := intakeMessages("price", topic, 1)[0]
+	message := intakeMessages("stock", topic, 1)[0]
 	produce(t, message)
 	reader := infrakafka.NewReader(infrakafka.Config{
 		Brokers: brokers(),

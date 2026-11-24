@@ -167,7 +167,6 @@ func lostProjectionApproval(t *testing.T) (environment, appmoderation.RecoverPro
 	current := reviewedProjectionSnapshot(e, 2)
 	legacy := appcatalog.NewProjector(e.store, e.clock, revisionOnlyEvaluator{service: e.service})
 	if err := legacy.ApplyProduct(context.Background(), appcatalog.ProductEvent{
-		EventID:  "revision-only-evaluation",
 		Snapshot: current,
 	}); err != nil {
 		t.Fatal(err)

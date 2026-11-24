@@ -13,6 +13,8 @@ type keyQueue struct {
 	ready   list.List
 	last    orderingKey
 	served  bool
+	// waiting — сообщения, ещё не выданные воркерам, включая ждущие свой ключ.
+	waiting int
 }
 
 type tenantKeys struct {
@@ -33,6 +35,8 @@ type delivery struct {
 	message kafkago.Message
 	key     orderingKey
 	offset  *offsetSlot
+	// alone — повтор после отката пачки: разбирается отдельным заданием.
+	alone bool
 }
 
 func newKeyQueue() *keyQueue {
@@ -43,6 +47,7 @@ func newKeyQueue() *keyQueue {
 }
 
 func (q *keyQueue) add(item *delivery) {
+	q.waiting++
 	if key := q.keys[item.key]; key != nil {
 		key.items = append(key.items, item)
 		return
@@ -107,7 +112,34 @@ func (q *keyQueue) next() *delivery {
 	return tenant.ready[0].items[0]
 }
 
+// take выдаёт следующее сообщение очереди, а если оно идёт в пачку — ещё до limit сообщений пачки
+// подряд по тому же кругу магазинов. Ключи выданных различны: следующее сообщение ключа ждёт
+// завершения предыдущего. Ожидающие делятся поровну между свободными воркерами: в тишине каждый
+// берёт по сообщению и ключи идут параллельно, при волне пачка растёт до limit.
+func (q *keyQueue) take(limit, idle int, batchable func(*delivery) bool) []*delivery {
+	limit = min(limit, max(1, (q.waiting+idle-1)/idle))
+	first := q.next()
+	if first == nil {
+		return nil
+	}
+	q.started()
+	batch := []*delivery{first}
+	if !batchable(first) {
+		return batch
+	}
+	for len(batch) < limit {
+		item := q.next()
+		if item == nil || !batchable(item) {
+			break
+		}
+		q.started()
+		batch = append(batch, item)
+	}
+	return batch
+}
+
 func (q *keyQueue) started() {
+	q.waiting--
 	tenant := q.ready.Front().Value.(*tenantKeys)
 	q.last, q.served = tenant.key, true
 	q.ready.Remove(tenant.element)
@@ -118,6 +150,16 @@ func (q *keyQueue) started() {
 	}
 	tenant.active++
 	q.schedule(tenant)
+}
+
+// retry возвращает выданное сообщение в голову его ключа отдельным заданием: следующие сообщения
+// ключа по-прежнему ждут его итога.
+func (q *keyQueue) retry(item *delivery) {
+	key := q.keys[item.key]
+	key.tenant.active--
+	item.alone = true
+	q.waiting++
+	q.enqueue(key)
 }
 
 func (q *keyQueue) finished(item *delivery) {

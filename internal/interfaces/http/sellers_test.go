@@ -59,7 +59,7 @@ func TestSellerResponsesBatchAndNull(t *testing.T) {
 	store.SeedParticipant(participant.State{TenantID: "t2", Slug: "shop-two", Name: "Другой магазин"})
 	uow := &sellerCountingUOW{UnitOfWork: store}
 	clock := fake.NewClock(time.Now())
-	carts := appcart.NewService(uow, fake.NewIndex(), fake.NewPlatform(), &fake.IDs{}, clock, time.Hour)
+	carts := appcart.NewService(uow, fake.NewPlatform(), &fake.IDs{}, clock, time.Hour)
 	checkouts := appcheckout.NewService(
 		uow,
 		fake.NewPlatform(),

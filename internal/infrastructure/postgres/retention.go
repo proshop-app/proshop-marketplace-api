@@ -21,15 +21,15 @@ const (
 		DELETE FROM processed_events
 		WHERE id IN (SELECT id FROM processed_events WHERE processed_at < $1 LIMIT $2)`
 
-	purgeDoneTasks = `
+	// Выполненные задачи удаляются при завершении; по сроку уходит только карантин покупок поиска.
+	purgePurchaseQuarantine = `
 		DELETE FROM outbox
 		WHERE id IN (
-			(SELECT id FROM outbox WHERE kind = 'search.purchase' AND failed_at < $1
-			 ORDER BY failed_at, id LIMIT $2)
-			UNION ALL
-			(SELECT id FROM outbox WHERE done_at < $1 LIMIT $2)
+			SELECT id FROM outbox
+			WHERE kind = 'search.purchase' AND failed_at < $1
+			ORDER BY failed_at, id
 			LIMIT $2
-		) AND (done_at < $1 OR (kind = 'search.purchase' AND failed_at < $1))`
+		)`
 
 	purgeParkedEvents = `
 		DELETE FROM parked_events
@@ -68,7 +68,7 @@ func (r *Retention) Purge(ctx context.Context, request ports.PurgeRequest) (port
 	}{
 		{sql: purgeBulkApprovals, before: request.BulkBefore, count: &result.BulkApprovals},
 		{sql: purgeProcessedEvents, before: request.ProcessedBefore, count: &result.Processed},
-		{sql: purgeDoneTasks, before: request.OutboxDoneBefore, count: &result.OutboxDone},
+		{sql: purgePurchaseQuarantine, before: request.PurchaseQuarantineBefore, count: &result.PurchaseQuarantine},
 		{sql: purgeParkedEvents, before: request.ParkedBefore, count: &result.Parked},
 		{sql: purgeChallenges, before: request.ChallengesBefore, count: &result.Challenges},
 		{sql: purgeCarts, before: request.CartsBefore, count: &result.Carts},

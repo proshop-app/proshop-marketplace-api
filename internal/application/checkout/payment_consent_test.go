@@ -30,28 +30,7 @@ type compositionHook struct {
 func addConsentThirdShop(t *testing.T, e *env) {
 	t.Helper()
 	ctx := context.Background()
-	e.store.SeedReadyOffer(consentThirdOffer, money.FromKopecks(50000))
-	if err := e.index.Put(
-		ctx,
-		[]ports.OfferDocument{
-			{
-				ID:        consentThirdOffer.String(),
-				TenantID:  "t3",
-				ProductID: "p1",
-				Name:      "Товар",
-
-				Available:         5,
-				Visible:           true,
-				Listed:            true,
-				CheckoutAvailable: true,
-				Version:           1,
-				Price:             money.FromKopecks(50000).Kopecks(),
-				BasePrice:         money.FromKopecks(50000).Kopecks(),
-			},
-		},
-	); err != nil {
-		t.Fatal(err)
-	}
+	e.store.SeedBuyerOffer(consentThirdOffer, "Товар", money.FromKopecks(50000))
 	point, err := delivery.NewPickupPoint(
 		"cdek",
 		"MSK1",

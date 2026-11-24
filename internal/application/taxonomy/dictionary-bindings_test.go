@@ -71,7 +71,6 @@ func TestHintImportBindingReviewAndRollbackPreserveFreeStrings(t *testing.T) {
 	projector := appcatalog.NewProjector(store, clock, nil)
 	raw := json.RawMessage(`"  Неизвестная прежняя строка  "`)
 	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{
-		EventID: "e1",
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "p1",

@@ -18,7 +18,6 @@ import (
 // Dispatcher — разбор одной пачки outbox.
 type Dispatcher interface {
 	RunOnce(ctx context.Context) ([]messaging.Outcome, error)
-	ReadyCounts(context.Context) (map[string]int64, error)
 }
 
 // Purger — чистка по сроку.
@@ -35,9 +34,6 @@ type OutboxRunner struct {
 	lag        *prometheus.HistogramVec
 	errors     prometheus.Counter
 	panics     *prometheus.CounterVec
-	ready      *prometheus.GaugeVec
-	depthAt    time.Time
-	readyKinds map[string]bool
 }
 
 // RetentionRunner чистит служебные записи по расписанию.
@@ -58,7 +54,6 @@ func NewOutboxRunner(
 		dispatcher: dispatcher,
 		interval:   interval,
 		logger:     logger,
-		readyKinds: map[string]bool{},
 		tasks: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "marketplace_outbox_tasks_total",
@@ -85,35 +80,24 @@ func NewOutboxRunner(
 			},
 			[]string{"kind"},
 		),
-		ready: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "marketplace_outbox_ready_tasks",
-				Help: "Готовые задачи outbox по виду, без действующих аренд и отложенных повторов.",
-			},
-			[]string{"kind"},
-		),
 	}
-	registerer.MustRegister(r.tasks, r.lag, r.errors, r.panics, r.ready)
+	registerer.MustRegister(r.tasks, r.lag, r.errors, r.panics)
 
 	return r
 }
 
 // Run крутит разбор до отмены контекста.
 func (r *OutboxRunner) Run(ctx context.Context) error {
-	return r.run(ctx, r.dispatcher, true)
+	return r.run(ctx, r.dispatcher)
 }
 
 // RunLane разбирает свои виды задач независимо и пишет в общие метрики outbox.
 func (r *OutboxRunner) RunLane(ctx context.Context, dispatcher Dispatcher) error {
-	return r.run(ctx, dispatcher, false)
+	return r.run(ctx, dispatcher)
 }
 
-func (r *OutboxRunner) run(ctx context.Context, dispatcher Dispatcher, countDepth bool) error {
+func (r *OutboxRunner) run(ctx context.Context, dispatcher Dispatcher) error {
 	for {
-		if countDepth && time.Now().After(r.depthAt) {
-			r.recordDepth(ctx)
-			r.depthAt = time.Now().Add(r.interval)
-		}
 		outcomes, err := dispatcher.RunOnce(ctx)
 		r.record(outcomes)
 
@@ -129,24 +113,6 @@ func (r *OutboxRunner) run(ctx context.Context, dispatcher Dispatcher, countDept
 		if !wait(ctx, r.interval) {
 			return nil
 		}
-	}
-}
-
-func (r *OutboxRunner) recordDepth(ctx context.Context) {
-	counts, err := r.dispatcher.ReadyCounts(ctx)
-	if err != nil {
-		if ctx.Err() == nil {
-			r.errors.Inc()
-			r.logger.Error("outbox: подсчёт готовых задач не удался", slog.Any("error", err))
-		}
-		return
-	}
-	for kind := range r.readyKinds {
-		r.ready.WithLabelValues(kind).Set(0)
-	}
-	for kind, count := range counts {
-		r.readyKinds[kind] = true
-		r.ready.WithLabelValues(kind).Set(float64(count))
 	}
 }
 
@@ -207,7 +173,7 @@ func (r *RetentionRunner) Run(ctx context.Context) error {
 				"чистка: готово",
 				slog.Int64("bulkApprovals", result.BulkApprovals),
 				slog.Int64("processedEvents", result.Processed),
-				slog.Int64("outboxDone", result.OutboxDone),
+				slog.Int64("purchaseQuarantine", result.PurchaseQuarantine),
 				slog.Int64("parkedEvents", result.Parked),
 				slog.Int64("revalidationFailures", result.RevalidationFailures),
 			)

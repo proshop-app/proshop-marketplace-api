@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
@@ -175,14 +176,20 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 		t.Fatal(err)
 	}
 	index := test.name
-	if test.version == 59 {
+	switch test.version {
+	case 59:
 		// Единый перечень служб заменяет оба прежних индекса одним индексом видимости.
 		index = "participants_pickup_visible"
+	case 56:
+		// Полосы 00070 заменяют индексы готовой очереди 00056.
+		index = "outbox_lane_due_idx"
+	case 57:
+		index = "outbox_retry_created_idx"
 	}
 	assertValidIndex(t, pool, index)
 	for _, index := range []string{
-		"outbox_pending_due_idx",
-		"outbox_pending_tenant_due_idx",
+		"outbox_lane_due_idx",
+		"outbox_untaken_dedup_idx",
 		"outbox_quarantine_id_idx",
 		"outbox_quarantine_kind_id_idx",
 	} {
@@ -212,12 +219,12 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 		if _, err := pool.Exec(ctx, interruptedOutboxInsert); err != nil {
 			t.Fatal(err)
 		}
-		tasks, err := postgres.NewTaskQueue(postgres.Single(pool)).Claim(ctx, ports.ClaimRequest{
+		tasks, err := fake.TasksOf(postgres.NewTaskQueue(postgres.Single(pool)).Claim(ctx, ports.ClaimRequest{
 			Now:        time.Now().Add(time.Minute),
 			Limit:      1,
 			PerTenant:  1,
 			LeaseUntil: time.Now().Add(2 * time.Minute),
-		})
+		}))
 		if err != nil || len(tasks) != 1 {
 			t.Fatal("очередь не работает", tasks, err)
 		}

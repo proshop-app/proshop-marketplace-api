@@ -13,24 +13,20 @@ import (
 
 // Старый CREATE INDEX ожидает ShareLock за активной записью, блокируя следующих
 // писателей. CONCURRENTLY ждёт ту же транзакцию без остановки приёма событий.
-func TestQuarantineIndexBuildDoesNotBlockOutboxWrites(t *testing.T) {
+func TestLaneIndexBuildDoesNotBlockOutboxWrites(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	migration, err := os.ReadFile("migrations/00056_outbox_quarantine.sql")
+	migration, err := os.ReadFile("migrations/00070_outbox_lanes.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
 	up := strings.Split(string(migration), "-- +goose Down")[0]
-	pattern := regexp.MustCompile(`(?s)CREATE INDEX[^;]+ON outbox \(next_at, id\)[^;]*;`)
+	pattern := regexp.MustCompile(`(?s)CREATE INDEX[^;]+ON outbox \(kind, tenant_id, next_at, id\)[^;]*;`)
 	statement := pattern.FindString(up)
 	if statement == "" {
 		t.Fatal("не найден индекс готовой очереди")
 	}
-	if _, err := pool.Exec(ctx, "DROP INDEX IF EXISTS outbox_pending_due_idx"); err != nil {
-		t.Fatal(err)
-	}
-	// Имя извлекается из миграции: тест воспроизводит и старый блокирующий DDL.
-	if _, err := pool.Exec(ctx, "DROP INDEX IF EXISTS outbox_due_idx"); err != nil {
+	if _, err := pool.Exec(ctx, "DROP INDEX IF EXISTS outbox_lane_due_idx"); err != nil {
 		t.Fatal(err)
 	}
 	blocker, err := pool.Begin(ctx)

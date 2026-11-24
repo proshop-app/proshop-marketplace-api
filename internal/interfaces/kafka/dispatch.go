@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,15 +11,31 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
+// projectionBatch — сколько снимков разных товаров воркер применяет одной транзакцией. Окно
+// чтения партиции — 64 сообщения, на реплику приходится несколько партиций: пачка набирается
+// и при волне одного магазина, а транзакция остаётся короткой.
+const projectionBatch = 50
+
+// lane — каналы раздачи: воркер объявляет готовность, раздатчик отдаёт ему пачку.
+type lane struct {
+	idle      chan struct{}
+	jobs      chan []*delivery
+	completed chan handled
+}
+
 func (c *Consumer) runGeneration(parent context.Context) error {
 	ctx, cancel := context.WithCancel(parent)
 	var running sync.WaitGroup
 	defer cancel()
 
 	incoming := make(chan kafkago.Message)
-	jobs := make(chan *delivery)
-	completed := make(chan *delivery, c.config.Workers)
-	c.startWorkers(ctx, cancel, &running, jobs, completed)
+	work := lane{
+		idle: make(chan struct{}),
+		// Раздатчик кладёт пачку только после готовности воркера, поэтому отправка не ждёт.
+		jobs:      make(chan []*delivery, c.config.Workers),
+		completed: make(chan handled, c.config.Workers),
+	}
+	c.startWorkers(ctx, cancel, &running, work)
 	running.Add(1)
 	// Паника чтения или воркера вне обработчика сообщения останавливает поколение:
 	// незавершённое сообщение не фиксируется и придёт повторно, а не застрянет.
@@ -33,28 +50,29 @@ func (c *Consumer) runGeneration(parent context.Context) error {
 	)
 
 	commits := &offsetCommitter{progress: make(offsetProgress), commit: c.source.Commit, logger: c.logger}
-	c.dispatch(ctx, incoming, jobs, completed, commits)
+	c.dispatch(ctx, incoming, work, commits)
 	cancel()
 	running.Wait()
-	commits.finish(parent, c.source, completed)
+	commits.finish(parent, c.source, work.completed)
 	return nil
 }
 
-func (c *Consumer) dispatch(
-	ctx context.Context,
-	incoming <-chan kafkago.Message,
-	jobs chan<- *delivery,
-	completed <-chan *delivery,
-	commits *offsetCommitter,
-) {
+func (c *Consumer) dispatch(ctx context.Context, incoming <-chan kafkago.Message, work lane, commits *offsetCommitter) {
 	queue := newKeyQueue()
 	ticker := time.NewTicker(commitInterval)
 	defer ticker.Stop()
+	// idle — воркеры, ждущие задание; busy — выданные задания. Ожидающие делятся на все незанятые
+	// воркеры: пачка не забирает соседей у воркеров, которые ещё не успели объявить готовность.
+	idle, busy := 0, 0
 
 	for ctx.Err() == nil {
-		output, next := jobs, queue.next()
-		if next == nil {
-			output = nil
+		for ; idle > 0; idle-- {
+			batch := queue.take(projectionBatch, max(1, c.config.Workers-busy), c.batchable)
+			if len(batch) == 0 {
+				break
+			}
+			work.jobs <- batch
+			busy++
 		}
 		select {
 		case <-ctx.Done():
@@ -65,17 +83,30 @@ func (c *Consumer) dispatch(
 				key:     messageKey(message, c.config.TopicPrefix),
 				offset:  commits.progress.add(message),
 			})
-		case output <- next:
-			queue.started()
-		case item := <-completed:
-			queue.finished(item)
-			item.offset.complete()
-			c.source.Release(ctx, item.message)
+		case <-work.idle:
+			idle++
+		case result := <-work.completed:
+			busy--
+			for _, item := range result.done {
+				queue.finished(item)
+				item.offset.complete()
+				c.source.Release(ctx, item.message)
+			}
+			// Неуспешное после отката — отдельным заданием, ключ остаётся за ним.
+			for _, item := range result.retry {
+				queue.retry(item)
+			}
 			commits.flush(ctx, false)
 		case <-ticker.C:
 			commits.flush(ctx, true)
 		}
 	}
+}
+
+// batchable — сообщение идёт в пачку снимков товаров; остальные виды и повтор после отката
+// пачки разбираются по одному.
+func (c *Consumer) batchable(item *delivery) bool {
+	return !item.alone && c.router.Batchable(strings.TrimPrefix(item.message.Topic, prefixOf(c.config.TopicPrefix)))
 }
 
 func (c *Consumer) fetchMessages(ctx context.Context, incoming chan<- kafkago.Message) {
@@ -92,20 +123,14 @@ func (c *Consumer) fetchMessages(ctx context.Context, incoming chan<- kafkago.Me
 	}
 }
 
-func (c *Consumer) startWorkers(
-	ctx context.Context,
-	cancel context.CancelFunc,
-	running *sync.WaitGroup,
-	jobs <-chan *delivery,
-	completed chan<- *delivery,
-) {
+func (c *Consumer) startWorkers(ctx context.Context, cancel context.CancelFunc, running *sync.WaitGroup, work lane) {
 	for range c.config.Workers {
 		running.Add(1)
 		safego.Run(
 			"kafka.worker",
 			func() error {
 				defer running.Done()
-				c.work(ctx, jobs, completed)
+				c.work(ctx, work)
 				return nil
 			},
 			stopOnPanic(cancel),
@@ -122,20 +147,27 @@ func stopOnPanic(cancel context.CancelFunc) func(error) {
 	}
 }
 
-func (c *Consumer) work(ctx context.Context, jobs <-chan *delivery, completed chan<- *delivery) {
+func (c *Consumer) work(ctx context.Context, work lane) {
 	for ctx.Err() == nil {
 		select {
+		case work.idle <- struct{}{}:
 		case <-ctx.Done():
 			return
-		case item := <-jobs:
-			if ctx.Err() != nil || c.Process(ctx, item.message) != nil {
-				return
-			}
-			select {
-			case completed <- item:
-			case <-ctx.Done():
-				return
-			}
+		}
+		var batch []*delivery
+		select {
+		case batch = <-work.jobs:
+		case <-ctx.Done():
+			return
+		}
+		result, err := c.processBatch(ctx, batch)
+		if err != nil {
+			return
+		}
+		select {
+		case work.completed <- result:
+		case <-ctx.Done():
+			return
 		}
 	}
 }

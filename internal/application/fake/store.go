@@ -281,89 +281,26 @@ func (s *Store) ParkedEvents() []ports.ParkedEvent {
 	return events
 }
 
-// Claim берёт созревшие задачи с арендой, не больше PerTenant на магазин.
-func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) ([]ports.Task, error) {
+// Claim повторяет обход взятия в PostgreSQL: полосы «вид × магазин» по кругу от курсора, не больше
+// ports.ClaimLaneVisits посещений на вид; полоса готова, только если отдаёт задачу.
+func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) (ports.ClaimResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	due := make([]int, 0)
-	for i, row := range s.data.outbox {
-		if row.DoneAt == nil && row.FailedAt == nil && !row.NextAt.After(request.Now) &&
-			(len(request.Kinds) == 0 || slices.Contains(request.Kinds, row.Kind)) &&
-			!slices.Contains(request.ExcludeKinds, row.Kind) {
-			blocked := false
-			if slices.Contains(request.OrderedKinds, row.Kind) {
-				for _, earlier := range s.data.outbox {
-					if earlier.ID < row.ID && earlier.Kind == row.Kind && earlier.TenantID == row.TenantID &&
-						earlier.DoneAt == nil && earlier.FailedAt == nil {
-						blocked = true
-						break
-					}
-				}
-			}
-			if !blocked {
-				due = append(due, i)
-			}
-		}
+	walk := claimWalk{request: request, rows: s.data.outbox}
+	for _, kind := range walk.kinds() {
+		walk.visit(kind)
 	}
-
-	sort.Slice(due, func(a, b int) bool {
-		left, right := s.data.outbox[due[a]], s.data.outbox[due[b]]
-		if !left.NextAt.Equal(right.NextAt) {
-			return left.NextAt.Before(right.NextAt)
-		}
-
-		return left.ID < right.ID
-	})
-
-	perTenant := map[ids.TenantID]int{}
-	positions := map[int]int{}
-	for _, i := range due {
-		tenant := s.data.outbox[i].TenantID
-		perTenant[tenant]++
-		positions[i] = perTenant[tenant]
-	}
-	sort.SliceStable(due, func(a, b int) bool {
-		if positions[due[a]] != positions[due[b]] {
-			return positions[due[a]] < positions[due[b]]
-		}
-		if request.AfterTenant != "" {
-			left, right := s.data.outbox[due[a]].TenantID, s.data.outbox[due[b]].TenantID
-			if (left > request.AfterTenant) != (right > request.AfterTenant) {
-				return left > request.AfterTenant
-			}
-			return left < right
-		}
-		return false
-	})
-	perTenant = map[ids.TenantID]int{}
-	tasks := make([]ports.Task, 0, request.Limit)
-
-	for _, i := range due {
-		row := &s.data.outbox[i]
-		limit := request.PerTenant
-		if slots, ok := request.TenantSlots[row.TenantID]; ok {
-			limit = slots
-		}
-		if len(tasks) == request.Limit || perTenant[row.TenantID] >= limit {
-			continue
-		}
-
-		perTenant[row.TenantID]++
+	tasks := walk.take()
+	for _, task := range tasks {
+		row := &s.data.outbox[walk.index[task.ID]]
 		row.Attempts++
 		row.NextAt = request.LeaseUntil
-		tasks = append(tasks, ports.Task{
-			ID:              row.ID,
-			Kind:            row.Kind,
-			TenantID:        row.TenantID,
-			Payload:         row.Payload,
-			Attempts:        row.Attempts,
-			UnknownFailures: row.UnknownFailures,
-			CreatedAt:       row.CreatedAt,
-		})
 	}
-
-	return tasks, nil
+	for n := range tasks {
+		tasks[n].Attempts = s.data.outbox[walk.index[tasks[n].ID]].Attempts
+	}
+	return ports.ClaimResult{Tasks: tasks, Next: walk.next()}, nil
 }
 
 // Complete отмечает задачу выполненной.
@@ -425,8 +362,9 @@ func (s *Store) Purge(_ context.Context, request ports.PurgeRequest) (ports.Purg
 
 	kept := s.data.outbox[:0]
 	for _, row := range s.data.outbox {
-		if row.DoneAt != nil && row.DoneAt.Before(request.OutboxDoneBefore) {
-			result.OutboxDone++
+		expired := row.FailedAt != nil && row.FailedAt.Before(request.PurchaseQuarantineBefore)
+		if row.Kind == "search.purchase" && expired {
+			result.PurchaseQuarantine++
 
 			continue
 		}

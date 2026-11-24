@@ -4,7 +4,6 @@ package postgres_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -69,7 +68,6 @@ func applyUnchangedRevalidationEvent(
 ) {
 	t.Helper()
 	err := projector.ApplyProduct(context.Background(), appcatalog.ProductEvent{
-		EventID: fmt.Sprintf("projection:%d", revision),
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "p000",

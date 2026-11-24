@@ -120,13 +120,13 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 				IPLimit: appbuyer.Limit{Count: 10, Window: time.Minute},
 			},
 		),
-		Carts:     appcart.NewService(e.store, e.index, e.platform, identities, e.clock, time.Hour),
+		Carts:     appcart.NewService(e.store, e.platform, identities, e.clock, time.Hour),
 		Directory: directory,
 		Checkouts: appcheckout.NewService(
 			e.store,
 			e.platform,
 			e.pickups,
-			appcart.NewService(e.store, e.index, e.platform, identities, e.clock, time.Hour),
+			appcart.NewService(e.store, e.platform, identities, e.clock, time.Hour),
 			identities,
 			e.clock,
 			appcheckout.Config{

@@ -82,7 +82,6 @@ func (r legacyModerationRules) Current(ctx context.Context) (moderation.Rules, e
 
 func snapshotProductEvent(revision int64) appcatalog.ProductEvent {
 	return appcatalog.ProductEvent{
-		EventID: fmt.Sprintf("e%d", revision),
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "p1",
@@ -168,9 +167,10 @@ func TestApplyProductSnapshotReadVolume(t *testing.T) {
 				database.count(listModerationPhrases),
 				volume,
 			)
+			// Транзакция пачки читает таксономию один раз на проверку карточки и модерацию.
 			wantFull, wantPhrases := 0, 0
 			if legacy {
-				wantFull, wantPhrases = 2, 1
+				wantFull, wantPhrases = 1, 1
 			}
 			if database.count(selectTaxonomy) != wantFull || database.count(listModerationPhrases) != wantPhrases {
 				t.Fatal("повторные загрузки на приёме", database.queries)
@@ -192,8 +192,8 @@ func TestApplyProductSnapshotReadVolume(t *testing.T) {
 			if database.count(selectTaxonomy) != wantFull {
 				t.Fatal("повторные загрузки с индексацией", database.queries)
 			}
-			if !legacy && (reads != 4 || volume != 32) {
-				t.Fatal("ожидались только четыре bigint версии/ревизии", reads, volume)
+			if !legacy && (reads != 3 || volume != 24) {
+				t.Fatal("ожидались только три bigint версии/ревизии", reads, volume)
 			}
 			// Настоящая подготовка фасетов тоже читает общий снимок.
 			queries := appcatalog.NewQueries(uow, nil, nil, nil, nil, fake.NewClock(time.Time{}))

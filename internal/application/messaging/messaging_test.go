@@ -53,8 +53,9 @@ func TestDispatcherCompletesAndRetries(t *testing.T) {
 	if outcomes[0].Lag != 3*time.Second {
 		t.Fatalf("задержка задачи: %s", outcomes[0].Lag)
 	}
-	if !errors.Is(outcomes[2].Err, messaging.ErrUnknownTask) {
-		t.Fatalf("неизвестная задача: %v", outcomes[2].Err)
+	// Взятие идёт по кругу магазинов: t1, t2, t3.
+	if outcomes[1].Task.Kind != "unknown" || !errors.Is(outcomes[1].Err, messaging.ErrUnknownTask) {
+		t.Fatalf("неизвестная задача: %+v", outcomes[1])
 	}
 
 	rows := store.OutboxRows()
@@ -113,12 +114,12 @@ func TestDispatcherRejectsStaleClaim(t *testing.T) {
 			dispatcher := messaging.NewDispatcher(store, clock, config(), map[string]messaging.Handler{
 				"test": func(ctx context.Context, stale ports.Task) error {
 					clock.Advance(2 * time.Minute)
-					tasks, err := store.Claim(ctx, ports.ClaimRequest{
+					tasks, err := fake.TasksOf(store.Claim(ctx, ports.ClaimRequest{
 						Now:        clock.Now(),
 						Limit:      1,
 						PerTenant:  1,
 						LeaseUntil: clock.Now().Add(time.Minute),
-					})
+					}))
 					if err != nil || len(tasks) != 1 || tasks[0].ID != stale.ID ||
 						tasks[0].Attempts != stale.Attempts+1 {
 						t.Fatalf("задачу должен взять другой обработчик: %+v, %v", tasks, err)
@@ -189,13 +190,14 @@ func TestJanitorPurgesByPolicy(t *testing.T) {
 		return tx.Parked().Park(ctx, ports.ParkedEvent{Topic: "x", Offset: 1, ParkedAt: t0.Add(-31 * 24 * time.Hour)})
 	})
 
-	enqueue(t, store, "ok", "t1", "a", t0.Add(-4*24*time.Hour))
+	// Выполненная задача удаляется при завершении; по сроку уходит только карантин покупок поиска.
+	enqueue(t, store, "search.purchase", "t1", "a", t0.Add(-4*24*time.Hour))
 	dispatcher := messaging.NewDispatcher(
 		store,
 		fake.NewClock(t0.Add(-4*24*time.Hour)),
 		config(),
 		map[string]messaging.Handler{
-			"ok": func(context.Context, ports.Task) error { return nil },
+			"search.purchase": func(context.Context, ports.Task) error { return messaging.ErrInvalidTask },
 		},
 	)
 	if _, err := dispatcher.RunOnce(ctx); err != nil {
@@ -203,14 +205,14 @@ func TestJanitorPurgesByPolicy(t *testing.T) {
 	}
 
 	janitor := messaging.NewJanitor(store, clock, messaging.RetentionPolicy{
-		ProcessedEvents: 14 * 24 * time.Hour,
-		OutboxDone:      3 * 24 * time.Hour,
-		ParkedEvents:    30 * 24 * time.Hour,
-		Batch:           100,
+		ProcessedEvents:    14 * 24 * time.Hour,
+		PurchaseQuarantine: 3 * 24 * time.Hour,
+		ParkedEvents:       30 * 24 * time.Hour,
+		Batch:              100,
 	})
 
 	result, err := janitor.Purge(ctx)
-	if err != nil || result.Processed != 1 || result.OutboxDone != 1 || result.Parked != 0 {
+	if err != nil || result.Processed != 1 || result.PurchaseQuarantine != 1 || result.Parked != 0 {
 		t.Fatalf("чистка: %+v, %v", result, err)
 	}
 	if !store.Processed("new") {

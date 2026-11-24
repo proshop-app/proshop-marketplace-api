@@ -72,11 +72,6 @@ type stockItem struct {
 	Price     *json.Number `json:"price"`
 }
 
-type priceChange struct {
-	ID    string       `json:"id"`
-	Price *json.Number `json:"price"`
-}
-
 type tenantRecord struct {
 	Name     string          `json:"name"`
 	TenantID string          `json:"tenantId"`
@@ -90,42 +85,52 @@ type tenantRecord struct {
 
 // productProjected — снимок товара: магазин в ключе и теле, заголовок — если есть.
 func productProjected(ctx context.Context, projections Projections, envelope Envelope) error {
+	event, err := productEvent(envelope)
+	if err != nil {
+		return err
+	}
+	return projections.ApplyProduct(ctx, event)
+}
+
+// productEvent разбирает снимок товара и сверяет магазин ключа, тела и заголовка.
+func productEvent(envelope Envelope) (appcatalog.ProductEvent, error) {
 	var event productProjection
 	if err := decode(envelope.Message, &event); err != nil {
-		return err
+		return appcatalog.ProductEvent{}, err
 	}
 
 	keyTenant, keyProduct, err := projectionKey(envelope.Message)
 	if err != nil {
-		return err
+		return appcatalog.ProductEvent{}, err
 	}
 	if event.TenantID == "" || keyTenant == "" {
-		return ErrTenantMissing
+		return appcatalog.ProductEvent{}, ErrTenantMissing
 	}
 
 	tenant, err := resolveTenant(keyTenant, event.TenantID, tenantHeader(envelope.Message))
 	if err != nil {
-		return err
+		return appcatalog.ProductEvent{}, err
 	}
 	if event.Version != projectionVersion || keyProduct != event.ProductID {
-		return ErrInvalidPayload.WithMessage("версия контракта или товар ключа не совпадают с телом")
+		mismatch := "версия контракта или товар ключа не совпадают с телом"
+		return appcatalog.ProductEvent{}, ErrInvalidPayload.WithMessage(mismatch)
 	}
 
 	product, err := ids.ParseProductID(event.ProductID)
 	if err != nil {
-		return ErrInvalidPayload.Wrap(err)
+		return appcatalog.ProductEvent{}, ErrInvalidPayload.Wrap(err)
 	}
 
 	at, err := eventTime(envelope.Message)
 	if err != nil {
-		return err
+		return appcatalog.ProductEvent{}, err
 	}
 	snapshot, err := projectionSnapshot(event, tenant, product, at)
 	if err != nil {
-		return err
+		return appcatalog.ProductEvent{}, err
 	}
 
-	return projections.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: envelope.EventID, Snapshot: snapshot})
+	return appcatalog.ProductEvent{Snapshot: snapshot}, nil
 }
 
 func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
@@ -222,7 +227,6 @@ func stockItemUpdated(ctx context.Context, projections Projections, envelope Env
 		return err
 	}
 	event := appcatalog.StockEvent{
-		EventID:   envelope.EventID,
 		TenantID:  tenant,
 		ProductID: product,
 		Stock:     catalog.StockSignal{Available: max(physical-reserved, 0), At: at},
@@ -238,44 +242,6 @@ func stockItemUpdated(ctx context.Context, projections Projections, envelope Env
 	}
 
 	return projections.ApplyStock(ctx, event)
-}
-
-// priceUpdated — новый прайс товара: магазин только в заголовке.
-func priceUpdated(ctx context.Context, projections Projections, envelope Envelope) error {
-	tenant, err := resolveTenant(tenantHeader(envelope.Message))
-	if err != nil {
-		return err
-	}
-
-	var change priceChange
-	if err := decode(envelope.Message, &change); err != nil {
-		return err
-	}
-
-	product, err := ids.ParseProductID(change.ID)
-	if err != nil {
-		return ErrInvalidPayload.Wrap(err)
-	}
-	if change.Price == nil {
-		return ErrInvalidPayload.WithMessage("в событии нет цены")
-	}
-
-	price, err := rubles(*change.Price)
-	if err != nil {
-		return err
-	}
-
-	at, err := eventTime(envelope.Message)
-	if err != nil {
-		return err
-	}
-
-	return projections.ApplyPrice(ctx, appcatalog.PriceEvent{
-		EventID:   envelope.EventID,
-		TenantID:  tenant,
-		ProductID: product,
-		Price:     catalog.PriceSignal{Price: price, At: at},
-	})
 }
 
 // tenantEvent — событие реестра: магазин в теле, заголовок — если есть.

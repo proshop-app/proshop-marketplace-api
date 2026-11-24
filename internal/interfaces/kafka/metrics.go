@@ -14,6 +14,9 @@ type ConsumerMetrics struct {
 	failures *prometheus.CounterVec
 	panics   *prometheus.CounterVec
 	lag      *prometheus.GaugeVec
+	// batchSize — снимков в одной транзакции пачки; batchFallbacks — пачки, откатившиеся целиком.
+	batchSize      *prometheus.HistogramVec
+	batchFallbacks *prometheus.CounterVec
 }
 
 // LagMetrics пишет отставание приёма с коротким именем топика, как остальные счётчики приёма.
@@ -60,8 +63,23 @@ func NewConsumerMetrics(registerer prometheus.Registerer) *ConsumerMetrics {
 			},
 			[]string{"topic", "partition"},
 		),
+		batchSize: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "marketplace_kafka_projection_batch_size",
+				Help:    "Снимки товаров, применённые одной транзакцией пачки.",
+				Buckets: []float64{1, 2, 5, 10, 20, 30, 40, 50},
+			},
+			[]string{"topic"},
+		),
+		batchFallbacks: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_kafka_projection_batch_fallbacks_total",
+				Help: "Пачки снимков, откатившиеся целиком; их сообщения повторены по одному.",
+			},
+			[]string{"topic"},
+		),
 	}
-	registerer.MustRegister(m.messages, m.parked, m.failures, m.panics, m.lag)
+	registerer.MustRegister(m.messages, m.parked, m.failures, m.panics, m.lag, m.batchSize, m.batchFallbacks)
 
 	return m
 }

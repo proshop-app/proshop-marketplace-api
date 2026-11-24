@@ -291,10 +291,10 @@ func TestSwallowedQueryErrorIsNotUnavailable(t *testing.T) {
 	ctx := context.Background()
 	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		_, _ = tx.Products().Get(ctx, "t1", "p1")
-		duplicate, _ := catalog.NewProduct(snapshot("t1", "p1", 1, 0), at(0))
-		_ = tx.Products().Save(ctx, duplicate)
-		again, _ := catalog.NewProduct(snapshot("t1", "p1", 1, 0), at(0))
-		_ = tx.Products().Save(ctx, again)
+		// Повреждённый JSON задачи — ошибка базы, которая прерывает транзакцию; её проглатывают.
+		broken := ports.NewTask{Kind: "test", TenantID: "t1", Payload: []byte("{"), At: at(0)}
+		_ = tx.Outbox().Enqueue(ctx, broken)
+		_, _ = tx.Products().Get(ctx, "t1", "p1")
 
 		return nil
 	})

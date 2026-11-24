@@ -26,7 +26,7 @@ type countingClaimQueue struct {
 	claims int
 }
 
-func (q *countingClaimQueue) Claim(ctx context.Context, request ports.ClaimRequest) ([]ports.Task, error) {
+func (q *countingClaimQueue) Claim(ctx context.Context, request ports.ClaimRequest) (ports.ClaimResult, error) {
 	q.claims++
 	return q.TaskQueue.Claim(ctx, request)
 }

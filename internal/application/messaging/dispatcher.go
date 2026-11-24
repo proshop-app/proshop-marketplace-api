@@ -10,7 +10,6 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
-	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
@@ -59,8 +58,8 @@ type DispatcherConfig struct {
 // отмечает итог. Задача не теряется: упавший процесс оставляет её до конца аренды.
 type Dispatcher struct {
 	claimMu        sync.Mutex
-	singleAfter    ids.TenantID
-	batchAfter     ids.TenantID
+	singleAfter    ports.ClaimCursor
+	batchAfter     ports.ClaimCursor
 	batchKindAfter int
 	queue          ports.TaskQueue
 	clock          ports.Clock
@@ -109,23 +108,27 @@ func (d *Dispatcher) RegisterBatch(kind string, handler BatchHandler) {
 	d.batches[kind] = handler
 }
 
-// ReadyCounts возвращает глубину готовой очереди по видам задач.
-func (d *Dispatcher) ReadyCounts(ctx context.Context) (map[string]int64, error) {
-	counts, err := d.queue.ReadyCounts(ctx, d.clock.Now())
+// ReadyLanes возвращает созревшую работу по видам; вид с обработчиком без работы — нулевая полоса,
+// чтобы метрика сбрасывалась.
+func (d *Dispatcher) ReadyLanes(ctx context.Context) ([]ports.ReadyLane, error) {
+	now := d.clock.Now()
+	lanes, err := d.queue.ReadyLanes(ctx, now)
 	if err != nil {
 		return nil, err
 	}
-	for kind := range d.handlers {
-		if _, ok := counts[kind]; !ok {
-			counts[kind] = 0
+	seen := map[string]bool{}
+	for _, lane := range lanes {
+		seen[lane.Kind] = true
+	}
+	for _, kinds := range []map[string]bool{handlerKinds(d.handlers), handlerKinds(d.batches)} {
+		for kind := range kinds {
+			if !seen[kind] {
+				seen[kind] = true
+				lanes = append(lanes, ports.ReadyLane{Kind: kind, Oldest: now})
+			}
 		}
 	}
-	for kind := range d.batches {
-		if _, ok := counts[kind]; !ok {
-			counts[kind] = 0
-		}
-	}
-	return counts, nil
+	return lanes, nil
 }
 
 // RunOnce разбирает одну справедливо выбранную пачку.
@@ -165,22 +168,20 @@ func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
 	tasks := []ports.Task{}
 	if len(kinds) > 0 {
 		request.Kinds = kinds
-		request.AfterTenant = d.batchAfter
-		var err error
-		tasks, err = d.queue.Claim(ctx, request)
+		request.After = d.batchAfter
+		claimed, err := d.queue.Claim(ctx, request)
 		if err != nil {
 			return nil, err
 		}
-		if len(tasks) > 0 {
-			d.batchAfter = tasks[len(tasks)-1].TenantID
-		}
+		// Курсор двигается и после пустого взятия: обход полос ограничен, следующий продолжит дальше.
+		tasks, d.batchAfter = claimed.Tasks, claimed.Next
 	}
 	batchKinds := map[string]bool{}
 	for _, task := range tasks {
 		batchKinds[task.Kind] = true
 	}
 	request.Kinds = d.config.Kinds
-	request.AfterTenant = d.singleAfter
+	request.After = d.singleAfter
 	request.ExcludeKinds = append(request.ExcludeKinds, allBatchKinds...)
 	request.OrderedKinds = d.config.OrderedKinds
 	request.PerTenant = min(d.config.PerTenant, d.config.Concurrency)
@@ -189,10 +190,11 @@ func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
 		return tasks, nil
 	}
 	singles, err := d.queue.Claim(ctx, request)
-	if len(singles) > 0 && err == nil {
-		d.singleAfter = singles[len(singles)-1].TenantID
+	if err != nil {
+		return tasks, err
 	}
-	return append(tasks, singles...), err
+	d.singleAfter = singles.Next
+	return append(tasks, singles.Tasks...), nil
 }
 
 // executePass не держит локальный хвост одного магазина. Все взятые порции
@@ -290,6 +292,14 @@ func (d *Dispatcher) resolve(ctx context.Context, results []ports.TaskResolution
 		return d.queue.Retry(ctx, result.ID, result.Attempts, *result.NextAt, result.Error)
 	}
 	return d.queue.Complete(ctx, result.ID, result.Attempts, result.At)
+}
+
+func handlerKinds[H any](handlers map[string]H) map[string]bool {
+	kinds := make(map[string]bool, len(handlers))
+	for kind := range handlers {
+		kinds[kind] = true
+	}
+	return kinds
 }
 
 func takeKind(tasks []ports.Task, kind string) ([]ports.Task, []ports.Task) {

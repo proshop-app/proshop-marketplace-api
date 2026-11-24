@@ -25,7 +25,7 @@ func TestProjectionValidationReadsMetadataWithoutSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	database.state.validation = []driver.Value{int64(2), int64(3), true, false, raw}
+	database.state.validation = []driver.Value{"t1", "p1", int64(2), int64(3), true, false, raw}
 	err = snapshotTransaction(orm, &snapshots{}, func(s *scope) error {
 		sources, err := s.ProjectionValidation().Current(context.Background(), "t1", "p1")
 		if err != nil {
@@ -48,7 +48,7 @@ func TestProjectionValidationReadsMetadataWithoutSnapshots(t *testing.T) {
 
 func TestProjectionValidationReturnsMissingVerdictAndErrors(t *testing.T) {
 	orm, database := snapshotORM(t, snapshotJSON(t, snapshotDefinition(1)))
-	database.state.validation = []driver.Value{int64(1), int64(1), false, false, nil}
+	database.state.validation = []driver.Value{"t1", "p1", int64(1), int64(1), false, false, nil}
 	if err := snapshotTransaction(orm, &snapshots{}, func(s *scope) error {
 		sources, err := s.ProjectionValidation().Current(context.Background(), "t1", "p1")
 		if err != nil {

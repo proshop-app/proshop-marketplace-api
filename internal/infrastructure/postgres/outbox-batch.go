@@ -17,30 +17,58 @@ const (
 		SELECT kind, tenant_id, NULLIF(dedup_key, ''), payload, next_at, created_at
 		FROM jsonb_to_recordset($1::jsonb)
 		AS t(kind text, tenant_id text, dedup_key text, payload jsonb, next_at timestamptz, created_at timestamptz)
-		ON CONFLICT (dedup_key) WHERE done_at IS NULL AND attempts = 0 DO UPDATE
+		ON CONFLICT (dedup_key) WHERE attempts = 0 DO UPDATE
 		SET next_at = EXCLUDED.next_at
 		WHERE EXCLUDED.next_at < outbox.next_at`
 
+	// resolveTasks удаляет выполненные задачи и сохраняет повторы и карантин одним оператором.
 	resolveTasks = `
 		WITH results AS (
 			SELECT * FROM jsonb_to_recordset($1::jsonb)
 			AS r(id bigint, attempts integer, at timestamptz, next_at timestamptz, error text, failure_reason text,
 				unknown_failures integer)
+		), done AS (
+			DELETE FROM outbox o
+			USING results r
+			WHERE o.id = r.id AND o.attempts = r.attempts AND o.attempts > 0 AND o.failed_at IS NULL
+				AND r.next_at IS NULL AND r.failure_reason = ''
+			RETURNING o.id
+		), kept AS (
+			UPDATE outbox o
+			SET unknown_failures = NULLIF(r.unknown_failures, 0),
+				next_at = COALESCE(r.next_at, o.next_at),
+				failed_at = CASE WHEN r.failure_reason <> '' THEN r.at ELSE NULL END,
+				failure_reason = NULLIF(r.failure_reason, ''),
+				last_error = NULLIF(r.error, '')
+			FROM results r
+			WHERE o.id = r.id AND o.attempts = r.attempts AND o.attempts > 0 AND o.failed_at IS NULL
+				AND (r.next_at IS NOT NULL OR r.failure_reason <> '')
+			RETURNING o.id
 		)
-		UPDATE outbox o
-		SET unknown_failures = NULLIF(r.unknown_failures, 0),
-			done_at = CASE WHEN r.next_at IS NULL AND r.failure_reason = '' THEN r.at ELSE NULL END,
-			next_at = COALESCE(r.next_at, o.next_at),
-			failed_at = CASE WHEN r.failure_reason <> '' THEN r.at ELSE NULL END,
-			failure_reason = NULLIF(r.failure_reason, ''),
-			last_error = NULLIF(r.error, '')
-		FROM results r
-		WHERE o.id = r.id AND o.attempts = r.attempts AND o.attempts > 0 AND o.done_at IS NULL AND o.failed_at IS NULL`
+		SELECT (SELECT count(*) FROM done) + (SELECT count(*) FROM kept)`
 
-	countReadyTasks = `
-		SELECT kind, count(*)
-		FROM outbox
-		WHERE done_at IS NULL AND failed_at IS NULL AND next_at <= $1
+	// selectReadyLanes обходит полосы «вид × магазин» прыжками по outbox_lane_due_idx: число спусков
+	// по индексу равно числу полос, а не задач. Первая запись полосы — её ближайший срок.
+	selectReadyLanes = `
+		WITH RECURSIVE lanes(kind, tenant_id, next_at) AS (
+			(SELECT kind, tenant_id, next_at
+			 FROM outbox
+			 WHERE failed_at IS NULL
+			 ORDER BY kind, tenant_id, next_at, id
+			 LIMIT 1)
+			UNION ALL
+			SELECT head.kind, head.tenant_id, head.next_at
+			FROM lanes l
+			CROSS JOIN LATERAL (
+				SELECT kind, tenant_id, next_at
+				FROM outbox
+				WHERE (kind, tenant_id) > (l.kind, l.tenant_id) AND failed_at IS NULL
+				ORDER BY kind, tenant_id, next_at, id
+				LIMIT 1
+			) head
+		)
+		SELECT kind, count(*) FILTER (WHERE next_at <= $1), COALESCE(min(next_at) FILTER (WHERE next_at <= $1), $1)
+		FROM lanes
 		GROUP BY kind`
 )
 
@@ -111,8 +139,8 @@ func (q *TaskQueue) Resolve(ctx context.Context, results []ports.TaskResolution)
 	}
 	return q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		apply := func(tx *gorm.DB) error {
-			count, err := execSQL(ctx, tx, resolveTasks, string(body))
-			if err != nil {
+			var count int64
+			if err := rawSQL(ctx, tx, resolveTasks, string(body)).Row().Scan(&count); err != nil {
 				return fmt.Errorf("отметка задач: %w", err)
 			}
 			if count != int64(len(results)) {
@@ -127,11 +155,12 @@ func (q *TaskQueue) Resolve(ctx context.Context, results []ports.TaskResolution)
 	})
 }
 
-// ReadyCounts не включает отложенные повторы и действующие аренды.
-func (q *TaskQueue) ReadyCounts(ctx context.Context, now time.Time) (map[string]int64, error) {
-	counts := map[string]int64{}
+// ReadyLanes считает по видам магазины с созревшей задачей и срок старейшей из них; аренды
+// и отложенные повторы не созрели.
+func (q *TaskQueue) ReadyLanes(ctx context.Context, now time.Time) ([]ports.ReadyLane, error) {
+	lanes := []ports.ReadyLane{}
 	err := q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
-		rows, err := rawSQL(ctx, db, countReadyTasks, now).Rows()
+		rows, err := rawSQL(ctx, db, selectReadyLanes, now).Rows()
 		if err != nil {
 			return err
 		}
@@ -139,14 +168,13 @@ func (q *TaskQueue) ReadyCounts(ctx context.Context, now time.Time) (map[string]
 			_ = rows.Close()
 		}()
 		for rows.Next() {
-			var kind string
-			var count int64
-			if err := rows.Scan(&kind, &count); err != nil {
+			var lane ports.ReadyLane
+			if err := rows.Scan(&lane.Kind, &lane.Tenants, &lane.Oldest); err != nil {
 				return err
 			}
-			counts[kind] = count
+			lanes = append(lanes, lane)
 		}
 		return rows.Err()
 	})
-	return counts, err
+	return lanes, err
 }

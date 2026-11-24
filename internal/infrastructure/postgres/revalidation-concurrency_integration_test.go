@@ -77,6 +77,12 @@ func (r signalledProducts) Save(ctx context.Context, product *catalog.Product) e
 	return r.ProductRepository.Save(ctx, product)
 }
 
+// SaveMany — запись товаров транзакцией пачки приёма: тот же момент, что и Save.
+func (r signalledProducts) SaveMany(ctx context.Context, products []*catalog.Product) error {
+	r.owner.once.Do(func() { close(r.owner.saving) })
+	return r.ProductRepository.SaveMany(ctx, products)
+}
+
 func TestTaxonomyPageAndReverseEventOrderDoNotDeadlock(t *testing.T) {
 	pool := pgtest.Pool(t)
 	uow := postgres.NewUnitOfWork(pool)
@@ -140,7 +146,6 @@ func applyReverseTaxonomyEvents(ctx context.Context, projector *appcatalog.Proje
 	// В mp-ingest групповым является Kafka Commit, а ApplyProduct по-прежнему отдельная транзакция.
 	for _, product := range []ids.ProductID{"p049", "p000"} {
 		event := appcatalog.ProductEvent{
-			EventID: "reverse:" + string(product),
 			Snapshot: catalog.Snapshot{
 				TenantID:  "t1",
 				ProductID: product,

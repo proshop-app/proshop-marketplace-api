@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -96,6 +95,13 @@ func (tx projectionCountingTx) Outbox() ports.Outbox {
 	return projectionCountingOutbox{Outbox: tx.Tx.Outbox(), calls: tx.calls}
 }
 
+func (r projectionCountingOutbox) EnqueueBatch(ctx context.Context, tasks []ports.NewTask) error {
+	for _, task := range tasks {
+		r.calls["enqueue:"+task.Kind]++
+	}
+	return r.Outbox.EnqueueBatch(ctx, tasks)
+}
+
 func (r projectionCountingOutbox) Enqueue(ctx context.Context, task ports.NewTask) error {
 	r.calls["enqueue:"+task.Kind]++
 	return r.Outbox.Enqueue(ctx, task)
@@ -149,13 +155,14 @@ func projectionReuseEnvironment(t *testing.T, pending bool) (environment, map[st
 func applyProjectionSnapshot(t *testing.T, projector *appcatalog.Projector, snapshot catalog.Snapshot) {
 	t.Helper()
 	if err := projector.ApplyProduct(context.Background(), appcatalog.ProductEvent{
-		EventID:  fmt.Sprintf("projection:%s:%d", snapshot.ProductID, snapshot.Revision),
 		Snapshot: snapshot,
 	}); err != nil {
 		t.Fatal(err)
 	}
 }
 
+// projectionQueryCount — хранилища, к которым обратился снимок: транзакция пачки берёт каждое один раз
+// и читает его сразу для всех товаров пачки, поэтому счёт не растёт с числом чтений внутри снимка.
 func projectionQueryCount(calls map[string]int) int {
 	queries := 0
 	for _, name := range []string{
@@ -195,12 +202,12 @@ func TestPriceProjectionReusesValidation(t *testing.T) {
 				calls["enqueue:catalog.offer.sync"] != 1 || calls["enqueue:moderation.offer.status"] != 0 {
 				t.Fatal("цена вызвала повторные проверки или статус", calls)
 			}
-			wantQueries := 6
+			wantQueries := 4
 			if pending {
-				wantQueries = 9
+				wantQueries = 6
 			}
 			if got := projectionQueryCount(calls); got != wantQueries {
-				t.Fatal("число SQL-операций", got, wantQueries, calls)
+				t.Fatal("число хранилищ", got, wantQueries, calls)
 			}
 			after := e.view(t, "p1")
 			product, _ := e.store.Product("t1", "p1")
@@ -213,7 +220,7 @@ func TestPriceProjectionReusesValidation(t *testing.T) {
 				after.Case.Card.BasePrice != 200 || after.Case.Card.Price != 180) {
 				t.Fatal("открытое дело осталось на прежней ревизии/цене", after.Case)
 			}
-			t.Logf("SQL-команд ApplyProduct: %d; вызовов Current таксономии/правил: 0", wantQueries)
+			t.Logf("хранилищ ApplyProduct: %d; вызовов Current таксономии/правил: 0", wantQueries)
 			clear(calls)
 			applyProjectionSnapshot(t, projector, reviewedProjectionSnapshot(e, 3))
 			if calls["evaluate"] != 0 || calls["reuse"] != 1 {
@@ -253,10 +260,10 @@ func TestProjectionValidationInputsTriggerEvaluation(t *testing.T) {
 				t.Fatal("изменение карточки не проверено или задачи дублируются", calls)
 			}
 			if test.name == "name" {
-				if got := projectionQueryCount(calls); got != 12 {
-					t.Fatal("ожидалось 12 SQL-команд карточки", got, calls)
+				if got := projectionQueryCount(calls); got != 7 {
+					t.Fatal("ожидалось 7 хранилищ карточки", got, calls)
 				}
-				t.Log("SQL-команд ApplyProduct: 12")
+				t.Log("хранилищ ApplyProduct: 7")
 			}
 		})
 	}
@@ -333,7 +340,6 @@ func TestProjectionReuseRollsBackAtomically(t *testing.T) {
 	snapshot := reviewedProjectionSnapshot(e, 2)
 	snapshot.Price = money.FromKopecks(80)
 	err := projector.ApplyProduct(context.Background(), appcatalog.ProductEvent{
-		EventID:  "rollback",
 		Snapshot: snapshot,
 	})
 	e.store.FailCommit = nil
