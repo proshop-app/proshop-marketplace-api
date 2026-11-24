@@ -51,7 +51,7 @@ type Outbox interface {
 
 // ClaimRequest — сколько задач взять и до какого времени их держать.
 type ClaimRequest struct {
-	// AfterTenant продолжает круг магазинов; пустое значение сохраняет выбор по возрасту.
+	// AfterTenant — курсор круга магазинов из ClaimResult.Next прошлого взятия; пусто — начало круга.
 	AfterTenant  ids.TenantID
 	Kinds        []string
 	ExcludeKinds []string
@@ -63,6 +63,17 @@ type ClaimRequest struct {
 	Limit       int
 	PerTenant   int
 	LeaseUntil  time.Time
+}
+
+// ClaimLaneVisits — сколько полос «вид × магазин» одного вида посещает взятие: стоимость взятия
+// ограничена при любом числе магазинов, остаток круга обходит следующее взятие от курсора.
+const ClaimLaneVisits = 128
+
+// ClaimResult — взятые задачи и курсор круга магазинов для следующего взятия. Курсор двигается
+// и при пустом взятии: обход полос ограничен, следующий продолжит с последнего посещённого.
+type ClaimResult struct {
+	Tasks []Task
+	Next  ids.TenantID
 }
 
 // TaskResolution — результат с токеном аренды; NextAt задан только при повторе.
@@ -113,8 +124,9 @@ type TaskFailure struct {
 // TaskQueue — разбор outbox. Взятая задача держится арендой: упавший
 // обработчик не теряет её, после аренды её возьмёт другой.
 type TaskQueue interface {
-	// Claim чередует созревшие задачи магазинов до общего Limit, не больше PerTenant на магазин.
-	Claim(ctx context.Context, request ClaimRequest) ([]Task, error)
+	// Claim чередует созревшие задачи магазинов по кругу от AfterTenant до общего Limit, не больше
+	// PerTenant на магазин; за одно взятие посещается ограниченное число магазинов.
+	Claim(ctx context.Context, request ClaimRequest) (ClaimResult, error)
 	// Complete отмечает задачу выполненной, только если attempts соответствует текущему Claim.
 	// Отсутствующая, завершённая или взятая другим обработчиком задача — ErrTaskClaimConflict.
 	Complete(ctx context.Context, id int64, attempts int, at time.Time) error

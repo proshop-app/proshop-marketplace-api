@@ -35,12 +35,12 @@ func completeStatusTask(t *testing.T, e environment, task ports.Task) {
 	t.Helper()
 
 	ctx := context.Background()
-	tasks, err := e.store.Claim(ctx, ports.ClaimRequest{
+	tasks, err := fake.TasksOf(e.store.Claim(ctx, ports.ClaimRequest{
 		Now:        e.clock.Now(),
 		Limit:      100,
 		PerTenant:  100,
 		LeaseUntil: e.clock.Now(),
-	})
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}

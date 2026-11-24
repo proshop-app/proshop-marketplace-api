@@ -64,10 +64,10 @@ func TestSettingsSync(t *testing.T) {
 	settings := appparticipant.NewSettings(store, platform, clock, &fake.IDs{})
 
 	// задачи создания участников уже отработаны: иначе новая склеилась бы с невзятой
-	tasks, err := store.Claim(
+	tasks, err := fake.TasksOf(store.Claim(
 		ctx,
 		ports.ClaimRequest{Now: clock.Now(), Limit: 100, PerTenant: 100, LeaseUntil: clock.Now()},
-	)
+	))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,12 +102,12 @@ func TestSettingsSync(t *testing.T) {
 	}
 
 	// Удаляем ожидающие задачи, чтобы дедуп не маскировал лишнюю постановку.
-	tasks, err = store.Claim(ctx, ports.ClaimRequest{
+	tasks, err = fake.TasksOf(store.Claim(ctx, ports.ClaimRequest{
 		Now:        clock.Now(),
 		Limit:      100,
 		PerTenant:  100,
 		LeaseUntil: clock.Now(),
-	})
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -59,6 +59,15 @@ const (
 	taxonomySelectionInterval = 15 * time.Second
 )
 
+// orderedTaskKinds — виды outbox, которые публикуют или применяют снимок без внешней версии: магазин
+// получает их строго по одному. Совпадает с postgres.OrderedTaskKinds (индекс головы полосы).
+var orderedTaskKinds = []string{
+	appparticipant.TaskSyncSettings,
+	moderationstatus.TaskParticipant,
+	appreference.TaskChanged,
+	appsynonyms.TaskChanged,
+}
+
 // services — сценарии приложения процесса.
 type services struct {
 	cities        *appbuyer.Cities
@@ -340,12 +349,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		messaging.DispatcherConfig{
 			MaxAttempts: cfg.Outbox.MaxAttempts,
 			// Эти обработчики публикуют или применяют снимок без внешней версии.
-			OrderedKinds: []string{
-				appparticipant.TaskSyncSettings,
-				moderationstatus.TaskParticipant,
-				appreference.TaskChanged,
-				appsynonyms.TaskChanged,
-			},
+			OrderedKinds: orderedTaskKinds,
 			ExcludeKinds: []string{
 				appcheckout.TaskCreateOrder,
 				appcheckout.TaskExpireCreation,
@@ -525,6 +529,12 @@ func (s *server) jobs() []jobs.Loop {
 			s.metrics,
 		).Run},
 		{Name: "outbox", Run: outbox.Run},
+		{Name: "outbox-ready", Run: jobs.NewOutboxReadyRunner(
+			s.app.dispatcher,
+			s.schedule("outbox-ready", jobs.OutboxReadyInterval),
+			s.logger,
+			s.metrics,
+		).Run},
 		{Name: "retention", Run: jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run},
 	}
 	if s.app.searchPurchases != nil {

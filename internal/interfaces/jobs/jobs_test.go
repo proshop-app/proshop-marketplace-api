@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	appparticipant "github.com/proshop-app/proshop-marketplace/internal/application/participant"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -104,13 +106,8 @@ func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
 	}
 
 	totals := map[string]float64{}
-	ready := map[string]float64{}
 	families, _ := registry.Gather()
 	for _, family := range families {
-		if name := family.GetName(); name == "marketplace_outbox_ready_tenants" ||
-			name == "marketplace_outbox_ready_age_seconds" {
-			ready[name] = family.GetMetric()[0].GetGauge().GetValue()
-		}
 		if family.GetName() != "marketplace_outbox_tasks_total" {
 			continue
 		}
@@ -125,9 +122,6 @@ func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
 
 	if totals["done"] != 2 || totals["retry"] != 1 {
 		t.Fatalf("метрики задач: %+v", totals)
-	}
-	if ready["marketplace_outbox_ready_tenants"] != 3 || ready["marketplace_outbox_ready_age_seconds"] < 60 {
-		t.Fatalf("готовая работа: %+v", ready)
 	}
 }
 
@@ -262,4 +256,43 @@ func TestCheckoutOutboxMetricsAndRoutineWaiting(t *testing.T) {
 	if !strings.Contains(journal.String(), "tenantId=t1") {
 		t.Fatal(journal.String())
 	}
+}
+
+// Готовую работу снимает только владелец интервала; реплика без владения сбрасывает свои значения.
+func TestOutboxReadyRunnerOnlyOwnerReports(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	schedule := &fake.IndexRebuildLock{}
+	runner := jobs.NewOutboxReadyRunner(&dispatcher{}, schedule, quiet, registry)
+	runner.RunOnce(context.Background())
+	if got := readyGauges(t, registry); got["marketplace_outbox_ready_tenants"] != 3 ||
+		got["marketplace_outbox_ready_age_seconds"] < 60 {
+		t.Fatalf("владелец: %+v", got)
+	}
+	// Интервал занят другой репликой: свои значения не отдаём.
+	err := schedule.WithLock(context.Background(), func(ctx context.Context) error {
+		runner.RunOnce(ctx)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readyGauges(t, registry); len(got) != 0 {
+		t.Fatalf("не владелец держит значения: %+v", got)
+	}
+}
+
+func readyGauges(t *testing.T, registry *prometheus.Registry) map[string]float64 {
+	t.Helper()
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready := map[string]float64{}
+	for _, family := range families {
+		gauge := family.GetType() == dto.MetricType_GAUGE
+		if gauge && strings.HasPrefix(family.GetName(), "marketplace_outbox_ready_") {
+			ready[family.GetName()] = family.GetMetric()[0].GetGauge().GetValue()
+		}
+	}
+	return ready
 }

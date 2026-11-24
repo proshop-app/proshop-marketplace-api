@@ -45,13 +45,13 @@ func TestReleaseRequiresSellerEnumAndHidesMissingValue(t *testing.T) {
 	if !before.Card.Publication.Published {
 		t.Fatal("исходная карточка не опубликована")
 	}
-	initialSync, err := store.Claim(ctx, ports.ClaimRequest{
+	initialSync, err := fake.TasksOf(store.Claim(ctx, ports.ClaimRequest{
 		Kinds:      []string{appcatalog.TaskSyncOffer},
 		Limit:      1,
 		PerTenant:  1,
 		Now:        clock.Now(),
 		LeaseUntil: clock.Now().Add(time.Minute),
-	})
+	}))
 	if err != nil || len(initialSync) != 1 {
 		t.Fatalf("исходная синхронизация: %v, %v", initialSync, err)
 	}

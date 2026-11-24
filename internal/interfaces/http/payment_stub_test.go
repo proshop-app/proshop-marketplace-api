@@ -287,13 +287,13 @@ func TestPaymentStubPaidDoesNotPollUnavailableShop(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		tasks, err := e.store.Claim(context.Background(), ports.ClaimRequest{
+		tasks, err := fake.TasksOf(e.store.Claim(context.Background(), ports.ClaimRequest{
 			Now:        e.clock.Now(),
 			Limit:      100,
 			PerTenant:  100,
 			LeaseUntil: e.clock.Now().Add(time.Minute),
 			Kinds:      []string{appcheckout.TaskPollOrder},
-		})
+		}))
 		if err != nil {
 			t.Fatal(err)
 		}

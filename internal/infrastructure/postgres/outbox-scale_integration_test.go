@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -52,6 +53,29 @@ var (
 		"moderation.participant.status",
 		"reference.changed",
 		"search-synonyms.changed",
+	}
+	// tenantScaleShapes — взятия засева scripts/bench/outbox-seed-tenants.sql (10 тысяч магазинов).
+	tenantScaleShapes = []outboxScaleShape{
+		{name: "single-with-cursor", request: func(now time.Time) ports.ClaimRequest {
+			return ports.ClaimRequest{
+				Now:          now,
+				ExcludeKinds: append(slices.Clone(scaleCheckoutKinds), scaleBatchKinds...),
+				OrderedKinds: scaleOrderedKinds,
+				AfterTenant:  "m02500",
+				Limit:        6,
+				PerTenant:    8,
+				LeaseUntil:   now.Add(90 * time.Second),
+			}
+		}},
+		{name: "one-kind-from-start", request: func(now time.Time) ports.ClaimRequest {
+			return ports.ClaimRequest{
+				Now:        now,
+				Kinds:      []string{"catalog.tenant.sync"},
+				Limit:      16,
+				PerTenant:  2,
+				LeaseUntil: now.Add(10 * time.Second),
+			}
+		}},
 	}
 	outboxScaleShapes = []outboxScaleShape{
 		{name: "dispatcher-batch", request: func(now time.Time) ports.ClaimRequest {
@@ -141,7 +165,11 @@ func TestOutboxClaimAtScale(t *testing.T) {
 	}
 	defer pool.Close()
 	queue := postgres.NewTaskQueue(postgres.Single(pool))
-	for _, shape := range outboxScaleShapes {
+	shapes := outboxScaleShapes
+	if os.Getenv("OUTBOX_SCALE_SHAPES") == "tenants" {
+		shapes = tenantScaleShapes
+	}
+	for _, shape := range shapes {
 		t.Run(shape.name, func(t *testing.T) {
 			measureClaim(ctx, t, pool, queue, trace, shape)
 		})
@@ -174,7 +202,7 @@ func measureClaim(
 	for range outboxScaleRuns {
 		trace.reset()
 		started := time.Now()
-		tasks, err := queue.Claim(ctx, shape.request(time.Now()))
+		tasks, err := fake.TasksOf(queue.Claim(ctx, shape.request(time.Now())))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -196,7 +224,7 @@ func measureChurn(ctx context.Context, t *testing.T, queue *postgres.TaskQueue) 
 	done := 0
 	for range outboxChurnPasses {
 		started := time.Now()
-		tasks, err := queue.Claim(ctx, outboxScaleShapes[0].request(time.Now()))
+		tasks, err := fake.TasksOf(queue.Claim(ctx, outboxScaleShapes[0].request(time.Now())))
 		if err != nil {
 			t.Fatal(err)
 		}

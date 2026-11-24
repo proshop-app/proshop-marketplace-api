@@ -222,7 +222,7 @@ func TestOutboxTenantCursorRotatesPastBusyStores(t *testing.T) {
 		PerTenant:  1,
 		LeaseUntil: time.Now().Add(2 * time.Minute),
 	}
-	first, err := queue.Claim(ctx, request)
+	first, err := fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(first) != 8 {
 		t.Fatal(first, err)
 	}
@@ -230,7 +230,7 @@ func TestOutboxTenantCursorRotatesPastBusyStores(t *testing.T) {
 	if _, err := pool.Exec(ctx, bulkFairQuiet); err != nil {
 		t.Fatal(err)
 	}
-	second, err := queue.Claim(ctx, request)
+	second, err := fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil {
 		t.Fatal(err)
 	}

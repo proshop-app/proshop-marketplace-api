@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
@@ -218,12 +219,12 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 		if _, err := pool.Exec(ctx, interruptedOutboxInsert); err != nil {
 			t.Fatal(err)
 		}
-		tasks, err := postgres.NewTaskQueue(postgres.Single(pool)).Claim(ctx, ports.ClaimRequest{
+		tasks, err := fake.TasksOf(postgres.NewTaskQueue(postgres.Single(pool)).Claim(ctx, ports.ClaimRequest{
 			Now:        time.Now().Add(time.Minute),
 			Limit:      1,
 			PerTenant:  1,
 			LeaseUntil: time.Now().Add(2 * time.Minute),
-		})
+		}))
 		if err != nil || len(tasks) != 1 {
 			t.Fatal("очередь не работает", tasks, err)
 		}

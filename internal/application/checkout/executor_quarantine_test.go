@@ -53,12 +53,12 @@ func TestExecutorQuarantinesMalformedTasks(t *testing.T) {
 	}
 	executor.Wait()
 	e.clock.Advance(24 * time.Hour)
-	tasks, err := e.store.Claim(ctx, ports.ClaimRequest{
+	tasks, err := fake.TasksOf(e.store.Claim(ctx, ports.ClaimRequest{
 		Now:        e.clock.Now(),
 		Limit:      1,
 		PerTenant:  1,
 		LeaseUntil: e.clock.Now().Add(time.Minute),
-	})
+	}))
 	if err != nil || len(tasks) != 0 {
 		t.Fatal("полоса оформления повторяет постоянную ошибку", tasks, err)
 	}
@@ -111,7 +111,7 @@ func TestExecutorShutdownLeavesInFlightTaskForNextProcess(t *testing.T) {
 	}
 }
 
-func (q *classQueue) Claim(ctx context.Context, request ports.ClaimRequest) ([]ports.Task, error) {
+func (q *classQueue) Claim(ctx context.Context, request ports.ClaimRequest) (ports.ClaimResult, error) {
 	q.remember(ctx)
 	return q.TaskQueue.Claim(ctx, request)
 }

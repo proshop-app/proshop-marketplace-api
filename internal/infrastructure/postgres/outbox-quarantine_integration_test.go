@@ -7,6 +7,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
@@ -17,7 +18,12 @@ func TestOutboxQuarantineIsFencedDurableAndExcluded(t *testing.T) {
 	queue := postgres.NewTaskQueue(postgres.Single(pool))
 	ctx := context.Background()
 	enqueue(t, uow, "t1", "bad", 0)
-	tasks, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(1), Limit: 1, PerTenant: 1, LeaseUntil: at(2)})
+	tasks, err := fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(1),
+		Limit:      1,
+		PerTenant:  1,
+		LeaseUntil: at(2),
+	}))
 	if err != nil || len(tasks) != 1 {
 		t.Fatal(tasks, err)
 	}
@@ -54,7 +60,12 @@ func TestOutboxQuarantineIsFencedDurableAndExcluded(t *testing.T) {
 		t.Fatal("исходная задача и причина сохраняются", payload, diagnostic, err)
 	}
 	enqueue(t, uow, "t1", "good", 3)
-	tasks, err = queue.Claim(ctx, ports.ClaimRequest{Now: at(5), Limit: 1, PerTenant: 1, LeaseUntil: at(6)})
+	tasks, err = fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(5),
+		Limit:      1,
+		PerTenant:  1,
+		LeaseUntil: at(6),
+	}))
 	if err != nil || len(tasks) != 1 || tasks[0].ID == failure.ID {
 		t.Fatal("карантин не держит квоту магазина", tasks, err)
 	}
@@ -68,7 +79,7 @@ func TestQuarantineReturnPreservesIntentAndUnknownBudget(t *testing.T) {
 		enqueue(t, uow, "t1", key, 0)
 	}
 	request := ports.ClaimRequest{Now: at(1), Limit: 3, PerTenant: 3, LeaseUntil: at(2)}
-	tasks, err := queue.Claim(ctx, request)
+	tasks, err := fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 3 {
 		t.Fatal(tasks, err)
 	}
@@ -101,7 +112,7 @@ func TestQuarantineReturnPreservesIntentAndUnknownBudget(t *testing.T) {
 		t.Fatal(ids, err)
 	}
 	request.Now = at(3)
-	tasks, err = queue.Claim(ctx, request)
+	tasks, err = fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 3 {
 		t.Fatal(tasks, err)
 	}
@@ -121,7 +132,7 @@ func TestQuarantineReturnPreservesIntentAndUnknownBudget(t *testing.T) {
 		}
 	}
 	request.Now = at(4)
-	tasks, err = queue.Claim(ctx, request)
+	tasks, err = fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 3 {
 		t.Fatal(tasks, err)
 	}

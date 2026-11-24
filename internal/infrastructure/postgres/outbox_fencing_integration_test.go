@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
@@ -53,11 +54,21 @@ func TestOutboxOnlyCurrentClaimCanUpdate(t *testing.T) {
 	ctx := context.Background()
 	enqueue(t, uow, "t1", "k1", 0)
 
-	first, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(1), Limit: 1, PerTenant: 1, LeaseUntil: at(2)})
+	first, err := fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(1),
+		Limit:      1,
+		PerTenant:  1,
+		LeaseUntil: at(2),
+	}))
 	if err != nil || len(first) != 1 {
 		t.Fatal(first, err)
 	}
-	second, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(3), Limit: 1, PerTenant: 1, LeaseUntil: at(4)})
+	second, err := fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(3),
+		Limit:      1,
+		PerTenant:  1,
+		LeaseUntil: at(4),
+	}))
 	if err != nil || len(second) != 1 || second[0].Attempts != first[0].Attempts+1 {
 		t.Fatal(second, err)
 	}
@@ -84,7 +95,12 @@ func TestOutboxOnlyCurrentClaimCanUpdate(t *testing.T) {
 	if err := queue.Retry(ctx, second[0].ID, second[0].Attempts, at(6), "повторная ошибка"); err != nil {
 		t.Fatal(err)
 	}
-	third, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(6), Limit: 1, PerTenant: 1, LeaseUntil: at(7)})
+	third, err := fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(6),
+		Limit:      1,
+		PerTenant:  1,
+		LeaseUntil: at(7),
+	}))
 	if err != nil || len(third) != 1 || third[0].Attempts != second[0].Attempts+1 {
 		t.Fatal(third, err)
 	}

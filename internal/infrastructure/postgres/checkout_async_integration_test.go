@@ -165,18 +165,18 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 		LeaseUntil: clock.Now().Add(time.Second),
 		Kinds:      []string{appcheckout.TaskExpireCreation},
 	}
-	tasks, err := queue.Claim(ctx, request)
+	tasks, err := fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 0 {
 		t.Fatal(tasks, err)
 	}
 	request.Kinds = []string{appcheckout.TaskCreateOrder}
 	request.TenantSlots = map[ids.TenantID]int{"t1": 0}
-	tasks, err = queue.Claim(ctx, request)
+	tasks, err = fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 0 {
 		t.Fatal(tasks, err)
 	}
 	request.TenantSlots = nil
-	tasks, err = queue.Claim(ctx, request)
+	tasks, err = fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 1 {
 		t.Fatal(tasks, err)
 	}
@@ -226,7 +226,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	clock.Advance(15 * time.Second)
 	request.Now, request.LeaseUntil = clock.Now(), clock.Now().Add(time.Second)
 	request.Kinds = []string{appcheckout.TaskExpireCreation}
-	tasks, err = queue.Claim(ctx, request)
+	tasks, err = fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 1 {
 		t.Fatal(tasks, err)
 	}
@@ -235,7 +235,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	}
 	request.Now, request.LeaseUntil = clock.Now(), clock.Now().Add(time.Second)
 	request.Kinds = []string{appcheckout.TaskCancelOrder}
-	tasks, err = queue.Claim(ctx, request)
+	tasks, err = fake.TasksOf(queue.Claim(ctx, request))
 	if err != nil || len(tasks) != 1 {
 		t.Fatal("отмена поставлена вместе с переходом", tasks, err)
 	}

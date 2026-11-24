@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -43,14 +44,24 @@ func TestOutboxDedupClaimLease(t *testing.T) {
 	enqueue(t, uow, "t1", "k1", 0)
 	enqueue(t, uow, "t1", "k1", 1)
 
-	tasks, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(5), Limit: 10, PerTenant: 10, LeaseUntil: at(6)})
+	tasks, err := fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(5),
+		Limit:      10,
+		PerTenant:  10,
+		LeaseUntil: at(6),
+	}))
 	if err != nil || len(tasks) != 1 || tasks[0].Attempts != 1 || string(tasks[0].Payload) != `{"tenantId": "t1"}` {
 		t.Fatalf("невзятые задачи с одним ключом склеиваются: %+v, %v", tasks, err)
 	}
 
 	enqueue(t, uow, "t1", "k1", 5)
 
-	again, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(5), Limit: 10, PerTenant: 10, LeaseUntil: at(6)})
+	again, err := fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(5),
+		Limit:      10,
+		PerTenant:  10,
+		LeaseUntil: at(6),
+	}))
 	if err != nil || len(again) != 1 || again[0].ID == tasks[0].ID {
 		t.Fatalf("после взятия новое изменение ставит новую задачу, взятая — в аренде: %+v, %v", again, err)
 	}
@@ -59,7 +70,12 @@ func TestOutboxDedupClaimLease(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expired, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(7), Limit: 10, PerTenant: 10, LeaseUntil: at(8)})
+	expired, err := fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(7),
+		Limit:      10,
+		PerTenant:  10,
+		LeaseUntil: at(8),
+	}))
 	if err != nil || len(expired) != 1 || expired[0].ID != tasks[0].ID || expired[0].Attempts != 2 {
 		t.Fatalf("после аренды задачу берёт другой обработчик: %+v, %v", expired, err)
 	}
@@ -69,7 +85,7 @@ func TestOutboxDedupClaimLease(t *testing.T) {
 	}
 
 	early := ports.ClaimRequest{Now: at(20), Limit: 10, PerTenant: 10, LeaseUntil: at(21)}
-	if none, _ := queue.Claim(ctx, early); len(none) != 0 {
+	if none, _ := queue.Claim(ctx, early); len(none.Tasks) != 0 {
 		t.Fatalf("отложенная задача не созрела: %+v", none)
 	}
 
@@ -92,7 +108,12 @@ func TestOutboxClaimIsFairAcrossTenants(t *testing.T) {
 	}
 	enqueue(t, uow, "quiet", "q", 1)
 
-	tasks, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(5), Limit: 5, PerTenant: 3, LeaseUntil: at(6)})
+	tasks, err := fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(5),
+		Limit:      5,
+		PerTenant:  3,
+		LeaseUntil: at(6),
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,10 +150,10 @@ func TestOutboxConcurrentClaimsDoNotOverlap(t *testing.T) {
 			defer wg.Done()
 
 			for {
-				tasks, err := queue.Claim(
+				tasks, err := fake.TasksOf(queue.Claim(
 					ctx,
 					ports.ClaimRequest{Now: at(5), Limit: 3, PerTenant: 2, LeaseUntil: at(30)},
-				)
+				))
 				if err != nil {
 					t.Error(err)
 
@@ -212,7 +233,12 @@ func TestInboxParkedRetention(t *testing.T) {
 	}
 
 	enqueue(t, uow, "t1", "a", 0)
-	tasks, _ := queue.Claim(ctx, ports.ClaimRequest{Now: at(1), Limit: 1, PerTenant: 1, LeaseUntil: at(2)})
+	tasks, _ := fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(1),
+		Limit:      1,
+		PerTenant:  1,
+		LeaseUntil: at(2),
+	}))
 	if err := queue.Complete(ctx, tasks[0].ID, tasks[0].Attempts, at(1)); err != nil {
 		t.Fatal(err)
 	}

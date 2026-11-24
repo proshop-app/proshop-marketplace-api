@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
@@ -25,7 +26,7 @@ func (trace *claimPlanTrace) TraceQueryStart(
 	_ *pgx.Conn,
 	data pgx.TraceQueryStartData,
 ) context.Context {
-	if strings.Contains(data.SQL, "WITH RECURSIVE queued_kinds") && !strings.HasPrefix(data.SQL, "EXPLAIN") {
+	if strings.Contains(data.SQL, "claim_queued_kinds(kind)") && !strings.HasPrefix(data.SQL, "EXPLAIN") {
 		trace.sql, trace.args = data.SQL, append([]any{}, data.Args...)
 	}
 	return ctx
@@ -48,12 +49,12 @@ func TestOutboxClaimLocksSelectedIDsByPrimaryKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer traced.Close()
-	tasks, err := postgres.NewTaskQueue(postgres.Single(traced)).Claim(ctx, ports.ClaimRequest{
+	tasks, err := fake.TasksOf(postgres.NewTaskQueue(postgres.Single(traced)).Claim(ctx, ports.ClaimRequest{
 		Now:        time.Now(),
 		Limit:      8,
 		PerTenant:  8,
 		LeaseUntil: time.Now().Add(time.Minute),
-	})
+	}))
 	if err != nil || len(tasks) != 8 || trace.sql == "" {
 		t.Fatal(len(tasks), err)
 	}

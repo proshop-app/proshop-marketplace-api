@@ -35,7 +35,7 @@ func (p *rejectAfterLostReply) CreateOrder(
 }
 
 func runTasks(ctx context.Context, e *env, svc *appcheckout.Service) error {
-	tasks, err := e.store.Claim(
+	tasks, err := fake.TasksOf(e.store.Claim(
 		ctx,
 		ports.ClaimRequest{
 			Now:        e.clock.Now(),
@@ -49,7 +49,7 @@ func runTasks(ctx context.Context, e *env, svc *appcheckout.Service) error {
 				appcheckout.TaskCancelOrder,
 			},
 		},
-	)
+	))
 	if err != nil {
 		return err
 	}

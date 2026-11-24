@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
@@ -25,7 +26,12 @@ func TestOutboxBatchResolvesAtomicallyAndReportsReadyLanes(t *testing.T) {
 		!lanes[0].Oldest.Equal(want.Oldest) {
 		t.Fatal(lanes, err)
 	}
-	tasks, err := queue.Claim(ctx, ports.ClaimRequest{Now: at(1), Limit: 3, PerTenant: 3, LeaseUntil: at(2)})
+	tasks, err := fake.TasksOf(queue.Claim(ctx, ports.ClaimRequest{
+		Now:        at(1),
+		Limit:      3,
+		PerTenant:  3,
+		LeaseUntil: at(2),
+	}))
 	if err != nil || len(tasks) != 3 {
 		t.Fatal(tasks, err)
 	}
@@ -78,12 +84,12 @@ func TestOutboxBatchInterleavesBeforeLimit(t *testing.T) {
 	for n := range 2 {
 		enqueue(t, uow, "t2", fmt.Sprintf("q%d", n), 1)
 	}
-	tasks, err := queue.Claim(context.Background(), ports.ClaimRequest{
+	tasks, err := fake.TasksOf(queue.Claim(context.Background(), ports.ClaimRequest{
 		Now:        at(2),
 		Limit:      4,
 		PerTenant:  4,
 		LeaseUntil: at(3),
-	})
+	}))
 	if err != nil || len(tasks) != 4 {
 		t.Fatal(tasks, err)
 	}

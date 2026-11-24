@@ -64,7 +64,7 @@ func (o failingEnqueueOutbox) Enqueue(ctx context.Context, task ports.NewTask) e
 }
 
 func executeTasks(ctx context.Context, e *env) error {
-	tasks, err := e.store.Claim(ctx, ports.ClaimRequest{
+	tasks, err := fake.TasksOf(e.store.Claim(ctx, ports.ClaimRequest{
 		Now:        e.clock.Now(),
 		Limit:      200,
 		PerTenant:  200,
@@ -75,7 +75,7 @@ func executeTasks(ctx context.Context, e *env) error {
 			appcheckout.TaskPollOrder,
 			appcheckout.TaskCancelOrder,
 		},
-	})
+	}))
 	if err != nil {
 		return err
 	}

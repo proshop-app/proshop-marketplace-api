@@ -170,14 +170,12 @@ func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
 	if len(kinds) > 0 {
 		request.Kinds = kinds
 		request.AfterTenant = d.batchAfter
-		var err error
-		tasks, err = d.queue.Claim(ctx, request)
+		claimed, err := d.queue.Claim(ctx, request)
 		if err != nil {
 			return nil, err
 		}
-		if len(tasks) > 0 {
-			d.batchAfter = tasks[len(tasks)-1].TenantID
-		}
+		// Курсор двигается и после пустого взятия: обход полос ограничен, следующий продолжит дальше.
+		tasks, d.batchAfter = claimed.Tasks, claimed.Next
 	}
 	batchKinds := map[string]bool{}
 	for _, task := range tasks {
@@ -193,10 +191,11 @@ func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
 		return tasks, nil
 	}
 	singles, err := d.queue.Claim(ctx, request)
-	if len(singles) > 0 && err == nil {
-		d.singleAfter = singles[len(singles)-1].TenantID
+	if err != nil {
+		return tasks, err
 	}
-	return append(tasks, singles...), err
+	d.singleAfter = singles.Next
+	return append(tasks, singles.Tasks...), nil
 }
 
 // executePass не держит локальный хвост одного магазина. Все взятые порции

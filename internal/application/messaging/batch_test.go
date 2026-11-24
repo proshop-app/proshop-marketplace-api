@@ -38,12 +38,12 @@ func TestClaimInterleavesTenantsBeforeGlobalLimit(t *testing.T) {
 	}
 	enqueue(t, store, "ok", "t2", "q1", t0.Add(time.Second))
 	enqueue(t, store, "ok", "t2", "q2", t0.Add(time.Second))
-	tasks, err := store.Claim(context.Background(), ports.ClaimRequest{
+	tasks, err := fake.TasksOf(store.Claim(context.Background(), ports.ClaimRequest{
 		Now:        t0.Add(time.Minute),
 		Limit:      4,
 		PerTenant:  4,
 		LeaseUntil: t0.Add(2 * time.Minute),
-	})
+	}))
 	if err != nil || len(tasks) != 4 {
 		t.Fatal(tasks, err)
 	}
@@ -62,12 +62,12 @@ func TestBatchResolutionRollsBackOnStaleOwner(t *testing.T) {
 	d := messaging.NewDispatcher(store, clock, config(), nil)
 	d.RegisterBatch("ok", func(ctx context.Context, tasks []ports.Task) []error {
 		clock.Advance(2 * time.Minute)
-		_, err := store.Claim(ctx, ports.ClaimRequest{
+		_, err := fake.TasksOf(store.Claim(ctx, ports.ClaimRequest{
 			Now:        clock.Now(),
 			Limit:      1,
 			PerTenant:  1,
 			LeaseUntil: clock.Now().Add(time.Minute),
-		})
+		}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -90,7 +90,12 @@ func TestReadyLanesExcludeLeaseDelayAndCompleted(t *testing.T) {
 		enqueue(t, store, kind, "t1", fmt.Sprintf("k%d", n), t0)
 	}
 	ctx := context.Background()
-	tasks, err := store.Claim(ctx, ports.ClaimRequest{Now: t0, Limit: 2, PerTenant: 2, LeaseUntil: t0.Add(time.Minute)})
+	tasks, err := fake.TasksOf(store.Claim(ctx, ports.ClaimRequest{
+		Now:        t0,
+		Limit:      2,
+		PerTenant:  2,
+		LeaseUntil: t0.Add(time.Minute),
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +111,12 @@ func TestReadyLanesExcludeLeaseDelayAndCompleted(t *testing.T) {
 	if err != nil || len(lanes) != 1 || lanes[0].Kind != "b" || lanes[0].Tenants != 1 || !lanes[0].Oldest.Equal(t0) {
 		t.Fatal(lanes, err)
 	}
-	_, err = store.Claim(ctx, ports.ClaimRequest{Now: t0, Limit: 1, PerTenant: 1, LeaseUntil: t0.Add(time.Minute)})
+	_, err = fake.TasksOf(store.Claim(ctx, ports.ClaimRequest{
+		Now:        t0,
+		Limit:      1,
+		PerTenant:  1,
+		LeaseUntil: t0.Add(time.Minute),
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}

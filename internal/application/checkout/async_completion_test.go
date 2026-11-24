@@ -55,13 +55,13 @@ func (r brokenCartRepository) Save(context.Context, *cart.Cart) error {
 
 func firstCreationTask(t *testing.T, e *env) ports.Task {
 	t.Helper()
-	tasks, err := e.store.Claim(context.Background(), ports.ClaimRequest{
+	tasks, err := fake.TasksOf(e.store.Claim(context.Background(), ports.ClaimRequest{
 		Now:        e.clock.Now(),
 		Limit:      1,
 		PerTenant:  1,
 		Kinds:      []string{appcheckout.TaskCreateOrder},
 		LeaseUntil: e.clock.Now().Add(10 * time.Second),
-	})
+	}))
 	if err != nil || len(tasks) != 1 {
 		t.Fatal(tasks, err)
 	}
