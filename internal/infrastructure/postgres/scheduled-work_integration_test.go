@@ -29,3 +29,34 @@ func TestScheduledWorkSkipsOtherReplicaForWholeInterval(t *testing.T) {
 		t.Fatalf("calls=%d err=%v", calls, err)
 	}
 }
+
+func TestScheduledWorkDoesNotOverlapLongRunAfterInterval(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	first := postgres.NewScheduledWork(pool, "long-test", time.Second)
+	second := postgres.NewScheduledWork(pool, "long-test", time.Second)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- first.WithLock(ctx, func(context.Context) error {
+			close(started)
+			<-release
+			return nil
+		})
+	}()
+	<-started
+	// Интервал истёк, прежний проход ещё идёт: вторая реплика берёт интервал, но не работу.
+	time.Sleep(1100 * time.Millisecond)
+	err := second.WithLock(ctx, func(context.Context) error {
+		t.Error("второй проход поверх незавершённого")
+		return nil
+	})
+	close(release)
+	if !errors.Is(err, ports.ErrRebuildBusy) {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

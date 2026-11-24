@@ -35,20 +35,27 @@ func NewScheduledWork(pool *pgxpool.Pool, name string, interval time.Duration) *
 }
 
 // WithLock пропускает уже выполненный интервал, включая старты реплик с разными фазами таймера.
+// Интервал берётся первым обычным запросом пула: реплика, которой интервал не достался,
+// не открывает выделенное соединение под advisory lock. Его открывает только тот, кто
+// работает, и только на время прохода; блокировка не даёт следующему интервалу запустить
+// второй долгий проход, пока идёт прежний.
 func (s *ScheduledWork) WithLock(ctx context.Context, run func(context.Context) error) error {
-	return s.lock.WithLock(ctx, func(ctx context.Context) error {
-		var claimed bool
-		err := s.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
-			affected, err := execSQL(ctx, db, claimScheduledWork, s.name, s.interval.Seconds())
-			claimed = affected > 0
-			return err
-		})
-		if err != nil {
-			return err
-		}
-		if !claimed {
-			return ports.ErrRebuildBusy
-		}
-		return run(ctx)
+	claimed, err := s.claim(ctx)
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		return ports.ErrRebuildBusy
+	}
+	return s.lock.WithLock(ctx, run)
+}
+
+func (s *ScheduledWork) claim(ctx context.Context) (bool, error) {
+	var claimed bool
+	err := s.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
+		affected, err := execSQL(ctx, db, claimScheduledWork, s.name, s.interval.Seconds())
+		claimed = affected > 0
+		return err
 	})
+	return claimed, err
 }
