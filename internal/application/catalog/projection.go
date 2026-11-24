@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/moderationstatus"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -10,15 +11,15 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-// ProductEvent — снимок товара из основной или массовой темы проекции.
+// ProductEvent — снимок товара из основной или массовой темы проекции. Повтор и старый снимок
+// отсекает ревизия источника, идентификатор события для дедупа не нужен.
 type ProductEvent struct {
-	EventID  string
 	Snapshot catalog.Snapshot
 }
 
-// StockEvent — позиция склада из события stock.item.updated: остаток и прайс.
+// StockEvent — позиция склада из события stock.item.updated: остаток и прайс. Повтор и старый
+// сигнал отсекает время публикации, идентификатор события для дедупа не нужен.
 type StockEvent struct {
-	EventID   string
 	TenantID  ids.TenantID
 	ProductID ids.ProductID
 	Stock     catalog.StockSignal
@@ -33,9 +34,8 @@ type PriceEvent struct {
 	Price     catalog.PriceSignal
 }
 
-// Projector принимает события магазинов в проекцию. Каждое событие — одна
-// транзакция: отметка в inbox, изменение проекции и задача синхронизации
-// индекса фиксируются вместе.
+// Projector принимает события магазинов в проекцию. Снимки товаров идут пачкой в одной
+// транзакции; изменение проекции и задачи синхронизации индекса фиксируются вместе.
 type Projector struct {
 	evaluator ports.ProjectionModerator
 	uow       ports.UnitOfWork
@@ -51,44 +51,59 @@ func NewProjector(uow ports.UnitOfWork, clock ports.Clock, evaluator ports.Proje
 	}
 }
 
-// ApplyProduct применяет снимок товара.
+// ApplyProduct применяет один снимок товара — пачку из одного.
+func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error {
+	return p.ApplyProducts(ctx, []ProductEvent{event})
+}
+
+// ApplyProducts применяет снимки разных товаров одной транзакцией. Повтор и старый снимок
+// отсекает ревизия источника (Product.Apply не меняет запись с ревизией не новее), поэтому
+// отметка processed_events не нужна. Сбой любого снимка откатывает пачку целиком: приём
+// повторяет её сообщения по одному.
 //
 // Задача синхронизации ставится и для магазина, который ещё не участвует:
 // проверка участия здесь гонялась бы с заведением участника в соседней
 // транзакции, и новый товар мог бы не попасть в индекс. Индексатор сам
 // пропускает товары магазинов без участия, а невзятые задачи по одному
 // товару склеиваются.
-func (p *Projector) ApplyProduct(ctx context.Context, event ProductEvent) error {
+func (p *Projector) ApplyProducts(ctx context.Context, events []ProductEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
 	now := p.clock.Now()
 	return p.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		fresh, err := tx.Inbox().MarkProcessed(ctx, event.EventID, now)
-		if err != nil || !fresh {
-			return err
-		}
-		product, previous, err := projectedProduct(ctx, tx, event.Snapshot, now)
-		if err != nil || product == nil {
-			return err
-		}
-		reused, err := p.validateProjection(ctx, tx, product, previous, now)
-		if err != nil {
-			return err
-		}
-		state := product.State()
-		if !reused {
-			task := moderationstatus.OfferTask(state.TenantID, state.ProductID, now)
-			if err := tx.Outbox().Enqueue(ctx, task); err != nil {
+		batch := newProjectionBatch(tx, events)
+		for _, event := range events {
+			if err := p.applyProduct(ctx, batch, event.Snapshot, now); err != nil {
 				return err
 			}
 		}
-		return tx.Outbox().Enqueue(ctx, SyncOfferTask(state.TenantID, state.ProductID, now))
+		return batch.flush(ctx)
 	})
+}
+
+func (p *Projector) applyProduct(ctx context.Context, tx ports.Tx, snapshot catalog.Snapshot, now time.Time) error {
+	product, previous, err := projectedProduct(ctx, tx, snapshot, now)
+	if err != nil || product == nil {
+		return err
+	}
+	reused, err := p.validateProjection(ctx, tx, product, previous, now)
+	if err != nil {
+		return err
+	}
+	state := product.State()
+	tasks := make([]ports.NewTask, 0, 2)
+	if !reused {
+		tasks = append(tasks, moderationstatus.OfferTask(state.TenantID, state.ProductID, now))
+	}
+	tasks = append(tasks, SyncOfferTask(state.TenantID, state.ProductID, now))
+	return tx.Outbox().EnqueueBatch(ctx, tasks)
 }
 
 // ApplyStock применяет остаток и прайс позиции склада.
 func (p *Projector) ApplyStock(ctx context.Context, event StockEvent) error {
 	return p.applySignals(
 		ctx,
-		event.EventID,
 		event.TenantID,
 		event.ProductID,
 		func(signals *catalog.Signals) (bool, error) {
@@ -108,7 +123,6 @@ func (p *Projector) ApplyStock(ctx context.Context, event StockEvent) error {
 func (p *Projector) ApplyPrice(ctx context.Context, event PriceEvent) error {
 	return p.applySignals(
 		ctx,
-		event.EventID,
 		event.TenantID,
 		event.ProductID,
 		func(signals *catalog.Signals) (bool, error) {
@@ -119,7 +133,6 @@ func (p *Projector) ApplyPrice(ctx context.Context, event PriceEvent) error {
 
 func (p *Projector) applySignals(
 	ctx context.Context,
-	eventID string,
 	tenantID ids.TenantID,
 	productID ids.ProductID,
 	apply func(*catalog.Signals) (bool, error),
@@ -127,11 +140,6 @@ func (p *Projector) applySignals(
 	now := p.clock.Now()
 
 	return p.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		fresh, err := tx.Inbox().MarkProcessed(ctx, eventID, now)
-		if err != nil || !fresh {
-			return err
-		}
-
 		signals, err := tx.Signals().Get(ctx, tenantID, productID)
 		if errors.Is(err, catalog.ErrSignalsNotFound) {
 			signals, err = catalog.NewSignals(tenantID, productID), nil

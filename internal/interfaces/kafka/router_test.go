@@ -22,6 +22,7 @@ import (
 var published = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
 
 type recorder struct {
+	batches  []int
 	products []appcatalog.ProductEvent
 	stock    []appcatalog.StockEvent
 	prices   []appcatalog.PriceEvent
@@ -39,6 +40,13 @@ const productBody = `{"version":1,"tenantId":"t1","productId":"p1","revision":7,
 
 func (r *recorder) ApplyProduct(_ context.Context, e appcatalog.ProductEvent) error {
 	r.products = append(r.products, e)
+
+	return r.err
+}
+
+func (r *recorder) ApplyProducts(_ context.Context, events []appcatalog.ProductEvent) error {
+	r.batches = append(r.batches, len(events))
+	r.products = append(r.products, events...)
 
 	return r.err
 }
@@ -90,7 +98,7 @@ func TestProductProjected(t *testing.T) {
 	if s.SalesCount != 9007199254740993 || s.AverageRating != 4.7 || s.RatingsCount != 12 {
 		t.Fatalf("сигналы: продажи=%d, рейтинг=%v, оценки=%d", s.SalesCount, s.AverageRating, s.RatingsCount)
 	}
-	if got.EventID != "ev" || s.TenantID != "t1" || s.ProductID != "p1" || s.Revision != 7 || s.Deleted {
+	if s.TenantID != "t1" || s.ProductID != "p1" || s.Revision != 7 || s.Deleted {
 		t.Fatalf("конверт: %+v", got)
 	}
 	if s.HasPrice || s.Available != 3 {

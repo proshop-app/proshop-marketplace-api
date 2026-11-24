@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -81,7 +80,6 @@ func TestReviewedProjectionReplayPreservesHistoricalApproval(t *testing.T) {
 		t.Fatal("новая поисковая проекция не сохранена")
 	}
 	err = e.projector.ApplyProduct(context.Background(), appcatalog.ProductEvent{
-		EventID:  "duplicate-transport-delivery",
 		Snapshot: next,
 	})
 	if err != nil || !reflect.DeepEqual(e.view(t, "p1"), after) {
@@ -358,7 +356,6 @@ func TestReviewedProjectionCarryRollsBackAtomically(t *testing.T) {
 	e.store.FailCommit = errors.New("сбой фиксации")
 	e.clock.Advance(time.Hour)
 	err := e.projector.ApplyProduct(context.Background(), appcatalog.ProductEvent{
-		EventID:  "rollback-projection",
 		Snapshot: reviewedProjectionSnapshot(e, 2),
 	})
 	e.store.FailCommit = nil
@@ -401,7 +398,6 @@ func approvedProjectionEnvironment(t *testing.T, requireImage bool, image string
 func applyReviewedProjection(t *testing.T, e environment, snapshot catalog.Snapshot) {
 	t.Helper()
 	err := e.projector.ApplyProduct(context.Background(), appcatalog.ProductEvent{
-		EventID:  fmt.Sprintf("reviewed-source:%d", snapshot.Revision),
 		Snapshot: snapshot,
 	})
 	if err != nil {

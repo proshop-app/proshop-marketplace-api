@@ -47,6 +47,19 @@ func (p *waveProjection) ApplyProduct(ctx context.Context, event appcatalog.Prod
 	return err
 }
 
+func (p *waveProjection) ApplyProducts(ctx context.Context, events []appcatalog.ProductEvent) error {
+	err := p.Projector.ApplyProducts(ctx, events)
+	if err != nil {
+		return err
+	}
+	for _, event := range events {
+		if event.Snapshot.ProductID != laneProbeID && p.applied.Add(1) == laneWaveSize {
+			p.finished <- time.Now()
+		}
+	}
+	return nil
+}
+
 // TestBulkLaneIntake сравнивает раскладки в общем пуле. Точечный снимок
 // измеряется от публикации до чтения новой ревизии в PostgreSQL.
 func TestBulkLaneIntake(t *testing.T) {

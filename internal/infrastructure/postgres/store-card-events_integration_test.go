@@ -109,7 +109,6 @@ func cacheMetadata(t *testing.T, pool *pgxpool.Pool) [3]int64 {
 
 func cacheProductEvent(n int, revision int64) appcatalog.ProductEvent {
 	return appcatalog.ProductEvent{
-		EventID: fmt.Sprintf("cache-product:%d:%d", n, revision),
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: ids.ProductID(fmt.Sprintf("p%03d", n)),

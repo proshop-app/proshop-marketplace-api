@@ -26,7 +26,6 @@ func TestReleaseRequiresSellerEnumAndHidesMissingValue(t *testing.T) {
 	}
 	projector := appcatalog.NewProjector(store, clock, nil)
 	event := appcatalog.ProductEvent{
-		EventID: "e1",
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "p1",
@@ -78,7 +77,6 @@ func TestReleaseRequiresSellerEnumAndHidesMissingValue(t *testing.T) {
 	}) {
 		t.Fatal("перепроверка должна поставить новую задачу синхронизации индекса")
 	}
-	event.EventID = "e2"
 	event.Snapshot.Revision = 2
 	event.Snapshot.Card.Marketplace.Attributes = map[string]json.RawMessage{"a1": json.RawMessage(`"v1"`)}
 	if err := projector.ApplyProduct(ctx, event); err != nil {

@@ -55,7 +55,6 @@ func newModerationEnv(t *testing.T) moderationEnv {
 	service := appmoderation.NewService(store, clock, &fake.IDs{}, appmoderation.Config{ProbationOffers: 50})
 	projector := appcatalog.NewProjector(store, clock, service)
 	err := projector.ApplyProduct(context.Background(), appcatalog.ProductEvent{
-		EventID: "e1",
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "p1",

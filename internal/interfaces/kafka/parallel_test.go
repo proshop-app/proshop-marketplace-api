@@ -32,6 +32,7 @@ type controlledProjection struct {
 	kafka.Projections
 	product func(context.Context, appcatalog.ProductEvent) error
 	price   func(context.Context, appcatalog.PriceEvent) error
+	stock   func(context.Context, appcatalog.StockEvent) error
 }
 
 type waitingParker struct {
@@ -99,8 +100,21 @@ func (p controlledProjection) ApplyProduct(ctx context.Context, event appcatalog
 	return p.product(ctx, event)
 }
 
+func (p controlledProjection) ApplyProducts(ctx context.Context, events []appcatalog.ProductEvent) error {
+	for _, event := range events {
+		if err := p.product(ctx, event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (p controlledProjection) ApplyPrice(ctx context.Context, event appcatalog.PriceEvent) error {
 	return p.price(ctx, event)
+}
+
+func (p controlledProjection) ApplyStock(ctx context.Context, event appcatalog.StockEvent) error {
+	return p.stock(ctx, event)
 }
 
 func bufferedSource(messages ...kafkago.Message) *parallelSource {
@@ -134,6 +148,19 @@ func keyedPrice(product string, offset int64) kafkago.Message {
 	message := priceMessage(offset, tenantHeader("t1"))
 	message.Value = []byte(fmt.Sprintf(`{"id":%q,"price":10}`, product))
 	return message
+}
+
+// keyedStock — остаток товара; позже опубликованное сообщение новее, поэтому применяется.
+func keyedStock(product string, offset int64, quantity int) kafkago.Message {
+	return kafkago.Message{
+		Topic:     "shop." + kafka.TopicStockItemUpdated,
+		Partition: 2,
+		Offset:    offset,
+		Time:      published.Add(time.Duration(offset) * time.Second),
+		Key:       []byte(product),
+		Headers:   []kafkago.Header{tenantHeader("t1")},
+		Value:     []byte(fmt.Sprintf(`{"productId":%q,"quantity":%d}`, product, quantity)),
+	}
 }
 
 func await[T any](t *testing.T, ch <-chan T) T {
@@ -277,7 +304,7 @@ func TestConsumerRevocationAndStopReplayCommittedDatabaseWork(t *testing.T) {
 
 func testConsumerReplay(t *testing.T, rebalance bool) {
 	t.Helper()
-	messages := []kafkago.Message{keyedPrice("p1", 0), keyedPrice("p2", 1), keyedPrice("p1", 2)}
+	messages := []kafkago.Message{keyedStock("p1", 0, 1), keyedStock("p2", 1, 5), keyedStock("p1", 2, 2)}
 	source := bufferedSource(messages...)
 	store := fake.NewStore()
 	projector := appcatalog.NewProjector(store, fake.NewClock(published), nil)
@@ -285,8 +312,8 @@ func testConsumerReplay(t *testing.T, rebalance bool) {
 	firstStopped := make(chan struct{})
 	revoke := make(chan context.CancelFunc, 1)
 	var replay atomic.Bool
-	projection := controlledProjection{price: func(ctx context.Context, event appcatalog.PriceEvent) error {
-		if err := projector.ApplyPrice(ctx, event); err != nil {
+	projection := controlledProjection{stock: func(ctx context.Context, event appcatalog.StockEvent) error {
+		if err := projector.ApplyStock(ctx, event); err != nil {
 			return err
 		}
 		if !replay.Load() {
@@ -318,8 +345,8 @@ func testConsumerReplay(t *testing.T, rebalance bool) {
 	cancel, done := runParallel(t, source, projection)
 	await(t, durable)
 	await(t, durable)
-	if store.Processed("shop.catalog.product.price-updated:2:2") {
-		t.Fatal("очередь ключа обогнала незавершённое сообщение")
+	if signals, _ := store.Signals("t1", "p1"); signals.Available != 1 {
+		t.Fatal("очередь ключа обогнала незавершённое сообщение", signals)
 	}
 	if rebalance {
 		await(t, revoke)()
@@ -349,18 +376,16 @@ func testConsumerReplay(t *testing.T, rebalance bool) {
 	if err := await(t, done); err != nil {
 		t.Fatal(err)
 	}
-	if !store.Processed("shop.catalog.product.price-updated:2:2") || len(store.OutboxRows()) != 2 {
-		t.Fatal("повтор потерял очередь ключа или продублировал outbox")
-	}
-	for _, product := range []string{"p1", "p2"} {
+	// Повтор уже применённых сигналов отсекает время публикации: версии не растут, outbox не дублируется.
+	want := map[string][2]int64{"p1": {2, 2}, "p2": {5, 1}}
+	for product, state := range want {
 		signals, ok := store.Signals("t1", ids.ProductID(product))
-		if !ok || signals.Version != 1 {
-			t.Fatalf("повтор применился дважды: %+v", signals)
+		if !ok || int64(signals.Available) != state[0] || signals.Version != state[1] {
+			t.Fatalf("повтор применился дважды или потерян: %s %+v", product, signals)
 		}
 	}
-	if len(store.OutboxRows()) != 2 || !store.Processed("shop.catalog.product.price-updated:2:0") ||
-		!store.Processed("shop.catalog.product.price-updated:2:1") {
-		t.Fatal("повтор потерял inbox или продублировал outbox")
+	if len(store.OutboxRows()) != 2 {
+		t.Fatal("повтор продублировал outbox", store.OutboxRows())
 	}
 }
 

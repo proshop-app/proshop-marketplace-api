@@ -49,7 +49,7 @@ func TestIntakeSQLCounts(t *testing.T) {
 		t.Logf("SQL %s: %d (+ BEGIN/COMMIT)", name, want)
 	}
 	check("product", 12, func() error {
-		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: "product1", Snapshot: snapshot})
+		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{Snapshot: snapshot})
 	})
 	snapshot.Revision++
 	snapshot.Price, err = snapshot.Price.Add(snapshot.Price)
@@ -57,11 +57,11 @@ func TestIntakeSQLCounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("product/price-only", 6, func() error {
-		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: "product2", Snapshot: snapshot})
+		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{Snapshot: snapshot})
 	})
 	snapshot.Revision--
 	check("product/stale", 2, func() error {
-		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: "product3", Snapshot: snapshot})
+		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{Snapshot: snapshot})
 	})
 	check("price", 4, func() error {
 		return projector.ApplyPrice(ctx, appcatalog.PriceEvent{
@@ -73,7 +73,6 @@ func TestIntakeSQLCounts(t *testing.T) {
 	})
 	check("stock", 4, func() error {
 		return projector.ApplyStock(ctx, appcatalog.StockEvent{
-			EventID:   "stock1",
 			TenantID:  snapshot.TenantID,
 			ProductID: snapshot.ProductID,
 			Stock:     catalog.StockSignal{Available: 5, At: message.Time},
@@ -158,7 +157,6 @@ func TestIntakeBeforeRegistryPreservesDataAndReevaluates(t *testing.T) {
 		}
 		snapshot.Revision = int64(i + 2)
 		if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{
-			EventID:  fmt.Sprint("after-registry", i),
 			Snapshot: snapshot,
 		}); err != nil {
 			t.Fatal("товар после изменения реестра не принят", err)

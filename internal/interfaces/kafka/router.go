@@ -26,6 +26,8 @@ type Envelope struct {
 // Projections — приём проекций каталога.
 type Projections interface {
 	ApplyProduct(ctx context.Context, event appcatalog.ProductEvent) error
+	// ApplyProducts применяет снимки разных товаров одной транзакцией.
+	ApplyProducts(ctx context.Context, events []appcatalog.ProductEvent) error
 	ApplyStock(ctx context.Context, event appcatalog.StockEvent) error
 	ApplyPrice(ctx context.Context, event appcatalog.PriceEvent) error
 }
@@ -39,13 +41,14 @@ type handler func(ctx context.Context, envelope Envelope) error
 
 // Router разбирает сообщение по топику и вызывает сценарий приложения.
 type Router struct {
-	handlers map[string]handler
+	handlers    map[string]handler
+	projections Projections
 }
 
 // NewRouter — обработчики всех топиков маркетплейса.
 func NewRouter(projections Projections, registry Registry) *Router {
 	projected := bind(projections, productProjected)
-	r := &Router{handlers: map[string]handler{
+	r := &Router{projections: projections, handlers: map[string]handler{
 		TopicProductProjected:     projected,
 		TopicProductProjectedBulk: projected,
 		TopicStockItemUpdated:     bind(projections, stockItemUpdated),
@@ -90,6 +93,27 @@ func (r *Router) Handle(ctx context.Context, envelope Envelope) error {
 	}
 
 	return h(ctx, envelope)
+}
+
+// Batchable — снимки товара основной и массовой полос применяются пачкой.
+func (r *Router) Batchable(topic string) bool {
+	return topic == TopicProductProjected || topic == TopicProductProjectedBulk
+}
+
+// HandleProducts разбирает снимки товаров и применяет разобранные одной транзакцией. rejected —
+// номера сообщений, которые не разобрались: их ведёт обычный путь сообщения.
+func (r *Router) HandleProducts(ctx context.Context, envelopes []Envelope) ([]int, error) {
+	var rejected []int
+	events := make([]appcatalog.ProductEvent, 0, len(envelopes))
+	for n, envelope := range envelopes {
+		event, err := productEvent(envelope)
+		if err != nil {
+			rejected = append(rejected, n)
+			continue
+		}
+		events = append(events, event)
+	}
+	return rejected, r.projections.ApplyProducts(ctx, events)
 }
 
 // TenantHint — магазин для диагностики: берёт первый допустимый id из

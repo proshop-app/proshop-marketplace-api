@@ -147,7 +147,6 @@ func TestProjectionToIndex(t *testing.T) {
 		err := projector.ApplyProduct(
 			ctx,
 			appcatalog.ProductEvent{
-				EventID: "product-" + string(product),
 				Snapshot: catalog.Snapshot{
 					TenantID:  "t1",
 					ProductID: product,
@@ -188,7 +187,6 @@ func TestProjectionToIndex(t *testing.T) {
 	}
 
 	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{
-		EventID: "product-invalid",
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "invalid",

@@ -280,7 +280,6 @@ func TestProjectorDoesNotResolveModelInsideTransaction(t *testing.T) {
 	}
 	projector := appcatalog.NewProjector(uow, fake.NewClock(at(1)), nil)
 	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{
-		EventID:  "without-registry",
 		Snapshot: snap,
 	}); err != nil {
 		t.Fatal(err)

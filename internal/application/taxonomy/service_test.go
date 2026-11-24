@@ -65,7 +65,6 @@ func TestLoadAndRevalidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	event := appcatalog.ProductEvent{
-		EventID: "e1",
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "p1",
@@ -120,8 +119,9 @@ func TestLoadAndRevalidate(t *testing.T) {
 	if p.Card.Publication.Published || p.Card.Publication.Issues[0].Code != "taxonomy.enum_value" {
 		t.Fatalf("ошибка должна скрыть карточку: %+v", p)
 	}
-	if len(store.OutboxRows()) != 2 || !store.Processed("e1") {
-		t.Fatal("нет атомарных outbox/inbox")
+	// Снимок товара отсекает повтор ревизией; в processed_events он не пишется.
+	if len(store.OutboxRows()) != 2 || store.Processed("e1") {
+		t.Fatal("нет атомарного outbox снимка")
 	}
 	if err := applyDefinition(ctx, service, schema(1)); !errors.Is(err, taxonomy.ErrReleaseConflict) {
 		t.Fatal(err)
@@ -156,7 +156,6 @@ func TestInvalidCardIsStoredAndNotParked(t *testing.T) {
 	projector := appcatalog.NewProjector(store, clock, nil)
 	for i, card := range []*taxonomy.Card{nil, {CategoryID: "missing", Published: true}} {
 		event := appcatalog.ProductEvent{
-			EventID: string(rune('a' + i)),
 			Snapshot: catalog.Snapshot{
 				TenantID:  "t1",
 				ProductID: "p1",

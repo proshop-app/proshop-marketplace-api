@@ -80,7 +80,6 @@ func (e environment) project(t *testing.T, product ids.ProductID, revision int64
 		BasePrice: money.FromKopecks(100),
 	}
 	err := e.projector.ApplyProduct(context.Background(), appcatalog.ProductEvent{
-		EventID:  fmt.Sprintf("%s:%d", product, revision),
 		Snapshot: snapshot,
 	})
 	if err != nil {
@@ -318,7 +317,6 @@ func TestNoCardAndDeletedAreNotEvaluated(t *testing.T) {
 		e := setup()
 		ctx := context.Background()
 		err := e.projector.ApplyProduct(ctx, appcatalog.ProductEvent{
-			EventID: "event1",
 			Snapshot: catalog.Snapshot{
 				TenantID:  "t1",
 				ProductID: "p1",

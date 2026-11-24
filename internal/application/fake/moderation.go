@@ -79,6 +79,28 @@ func (r moderationVerdicts) Get(_ context.Context, t ids.TenantID, p ids.Product
 	return moderation.RestoreVerdict(state), nil
 }
 
+func (r moderationVerdicts) GetMany(
+	ctx context.Context,
+	keys []ids.OfferID,
+) (map[ids.OfferID]*moderation.Verdict, error) {
+	found := make(map[ids.OfferID]*moderation.Verdict, len(keys))
+	for _, key := range keys {
+		if verdict, err := r.Get(ctx, key.Tenant, key.Product); err == nil {
+			found[key] = verdict
+		}
+	}
+	return found, nil
+}
+
+func (r moderationVerdicts) SaveMany(ctx context.Context, verdicts []*moderation.Verdict) error {
+	for _, verdict := range verdicts {
+		if err := r.Save(ctx, verdict); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r moderationVerdicts) Save(_ context.Context, v *moderation.Verdict) error {
 	state := v.State()
 	key := productKey{state.TenantID, state.ProductID}
@@ -144,6 +166,16 @@ func (r moderationCases) Open(_ context.Context, t ids.TenantID, p ids.ProductID
 		}
 	}
 	return nil, moderation.ErrNotFound
+}
+
+func (r moderationCases) OpenMany(ctx context.Context, keys []ids.OfferID) (map[ids.OfferID]*moderation.Case, error) {
+	found := make(map[ids.OfferID]*moderation.Case, len(keys))
+	for _, key := range keys {
+		if open, err := r.Open(ctx, key.Tenant, key.Product); err == nil {
+			found[key] = open
+		}
+	}
+	return found, nil
 }
 
 func (r moderationCases) Save(_ context.Context, c *moderation.Case) error {

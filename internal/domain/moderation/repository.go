@@ -23,7 +23,11 @@ type Filter struct {
 type VerdictRepository interface {
 	History(context.Context, ids.TenantID, ids.ProductID) ([]VerdictState, error)
 	Get(context.Context, ids.TenantID, ids.ProductID) (*Verdict, error)
+	// GetMany читает вердикты списка одним запросом; отсутствующих в ответе нет.
+	GetMany(context.Context, []ids.OfferID) (map[ids.OfferID]*Verdict, error)
 	Save(context.Context, *Verdict) error
+	// SaveMany — Save для пачки одним запросом; конфликт любого вердикта — ErrConflict.
+	SaveMany(context.Context, []*Verdict) error
 	List(context.Context, Filter) ([]VerdictState, int, error)
 }
 
@@ -33,6 +37,8 @@ type CaseRepository interface {
 	OpenStats(context.Context) ([]OpenStat, error)
 	Get(context.Context, ids.UUID) (*Case, error)
 	Open(context.Context, ids.TenantID, ids.ProductID) (*Case, error)
+	// OpenMany читает открытые дела списка одним запросом; товаров без открытого дела в ответе нет.
+	OpenMany(context.Context, []ids.OfferID) (map[ids.OfferID]*Case, error)
 	Save(context.Context, *Case) error
 	List(context.Context, Filter) ([]CaseState, int, error)
 }

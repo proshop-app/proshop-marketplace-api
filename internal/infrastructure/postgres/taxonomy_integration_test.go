@@ -66,7 +66,6 @@ func TestTaxonomyVersionsAndProjection(t *testing.T) {
 	}
 	projector := appcatalog.NewProjector(uow, now, nil)
 	if err := projector.ApplyProduct(ctx, appcatalog.ProductEvent{
-		EventID: "e1",
 		Snapshot: catalog.Snapshot{
 			TenantID:  "t1",
 			ProductID: "p1",

@@ -2,6 +2,7 @@ package fake
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
 
@@ -178,6 +179,30 @@ func (r products) Get(_ context.Context, tenant ids.TenantID, product ids.Produc
 	}
 
 	return catalog.RestoreProduct(state), nil
+}
+
+func (r products) GetMany(ctx context.Context, keys []ids.OfferID) (map[ids.OfferID]*catalog.Product, error) {
+	found := make(map[ids.OfferID]*catalog.Product, len(keys))
+	for _, key := range keys {
+		product, err := r.Get(ctx, key.Tenant, key.Product)
+		if errors.Is(err, catalog.ErrProductNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		found[key] = product
+	}
+	return found, nil
+}
+
+func (r products) SaveMany(ctx context.Context, products []*catalog.Product) error {
+	for _, product := range products {
+		if err := r.Save(ctx, product); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r products) Save(_ context.Context, product *catalog.Product) error {

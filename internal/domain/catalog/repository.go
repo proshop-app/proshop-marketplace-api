@@ -13,10 +13,14 @@ type ProductRepository interface {
 	Page(ctx context.Context, tenant ids.TenantID, product ids.ProductID, limit int) ([]*Product, error)
 	// Get — запись; нет — ErrProductNotFound.
 	Get(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) (*Product, error)
+	// GetMany читает записи списка одним запросом; отсутствующих в ответе нет.
+	GetMany(context.Context, []ids.OfferID) (map[ids.OfferID]*Product, error)
 	// GetForUpdate удерживает ревизию источника до завершения maintenance CAS.
 	GetForUpdate(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) (*Product, error)
 	// Save заводит или условно по исходной версии обновляет запись; не совпала — ErrConflict.
 	Save(ctx context.Context, product *Product) error
+	// SaveMany — Save для пачки одним запросом; конфликт любой записи — ErrConflict.
+	SaveMany(context.Context, []*Product) error
 }
 
 // SignalsRepository — проекция остатков и цен.

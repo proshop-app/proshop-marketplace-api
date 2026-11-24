@@ -107,6 +107,6 @@ func seedProduct(store *fake.Store, tenant ids.TenantID, product ids.ProductID) 
 	})
 }
 
-func productEvent(eventID string, snapshot catalog.Snapshot) appcatalog.ProductEvent {
-	return appcatalog.ProductEvent{EventID: eventID, Snapshot: snapshot}
+func productEvent(_ string, snapshot catalog.Snapshot) appcatalog.ProductEvent {
+	return appcatalog.ProductEvent{Snapshot: snapshot}
 }

@@ -90,42 +90,52 @@ type tenantRecord struct {
 
 // productProjected — снимок товара: магазин в ключе и теле, заголовок — если есть.
 func productProjected(ctx context.Context, projections Projections, envelope Envelope) error {
+	event, err := productEvent(envelope)
+	if err != nil {
+		return err
+	}
+	return projections.ApplyProduct(ctx, event)
+}
+
+// productEvent разбирает снимок товара и сверяет магазин ключа, тела и заголовка.
+func productEvent(envelope Envelope) (appcatalog.ProductEvent, error) {
 	var event productProjection
 	if err := decode(envelope.Message, &event); err != nil {
-		return err
+		return appcatalog.ProductEvent{}, err
 	}
 
 	keyTenant, keyProduct, err := projectionKey(envelope.Message)
 	if err != nil {
-		return err
+		return appcatalog.ProductEvent{}, err
 	}
 	if event.TenantID == "" || keyTenant == "" {
-		return ErrTenantMissing
+		return appcatalog.ProductEvent{}, ErrTenantMissing
 	}
 
 	tenant, err := resolveTenant(keyTenant, event.TenantID, tenantHeader(envelope.Message))
 	if err != nil {
-		return err
+		return appcatalog.ProductEvent{}, err
 	}
 	if event.Version != projectionVersion || keyProduct != event.ProductID {
-		return ErrInvalidPayload.WithMessage("версия контракта или товар ключа не совпадают с телом")
+		mismatch := "версия контракта или товар ключа не совпадают с телом"
+		return appcatalog.ProductEvent{}, ErrInvalidPayload.WithMessage(mismatch)
 	}
 
 	product, err := ids.ParseProductID(event.ProductID)
 	if err != nil {
-		return ErrInvalidPayload.Wrap(err)
+		return appcatalog.ProductEvent{}, ErrInvalidPayload.Wrap(err)
 	}
 
 	at, err := eventTime(envelope.Message)
 	if err != nil {
-		return err
+		return appcatalog.ProductEvent{}, err
 	}
 	snapshot, err := projectionSnapshot(event, tenant, product, at)
 	if err != nil {
-		return err
+		return appcatalog.ProductEvent{}, err
 	}
 
-	return projections.ApplyProduct(ctx, appcatalog.ProductEvent{EventID: envelope.EventID, Snapshot: snapshot})
+	return appcatalog.ProductEvent{Snapshot: snapshot}, nil
 }
 
 func fillSnapshot(snapshot *catalog.Snapshot, product *productSnapshot) error {
@@ -222,7 +232,6 @@ func stockItemUpdated(ctx context.Context, projections Projections, envelope Env
 		return err
 	}
 	event := appcatalog.StockEvent{
-		EventID:   envelope.EventID,
 		TenantID:  tenant,
 		ProductID: product,
 		Stock:     catalog.StockSignal{Available: max(physical-reserved, 0), At: at},

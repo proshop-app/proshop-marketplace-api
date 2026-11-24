@@ -136,7 +136,6 @@ func TestTaxonomyPendingPagesAllowReadsAndEvents(t *testing.T) {
 		}
 		projector := appcatalog.NewProjector(uow, clock.System{}, nil)
 		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{
-			EventID: "between-pages",
 			Snapshot: catalog.Snapshot{
 				TenantID:  "t1",
 				ProductID: "p054",
