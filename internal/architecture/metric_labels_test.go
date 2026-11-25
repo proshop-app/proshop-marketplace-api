@@ -6,67 +6,74 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 )
 
-const (
-	prometheusImport = "github.com/prometheus/client_golang/prometheus"
-	promautoImport   = "github.com/prometheus/client_golang/prometheus/promauto"
-)
+const prometheusImport = "github.com/prometheus/client_golang/prometheus"
 
-// unboundedLabels — метки, число значений которых растёт с каждым покупателем, заказом или запросом:
-// ряд на каждое значение. Магазин (tenant) — ограниченная и нужная метка: по ней видна нагрузка
-// магазина. Сравнение — без регистра и подчёркиваний.
-var unboundedLabels = map[string]bool{
-	"buyer":        true,
-	"buyerid":      true,
-	"customer":     true,
-	"customerid":   true,
-	"user":         true,
-	"userid":       true,
-	"phone":        true,
-	"email":        true,
-	"order":        true,
-	"orderid":      true,
-	"ordernumber":  true,
-	"checkout":     true,
-	"checkoutid":   true,
-	"purchase":     true,
-	"purchaseid":   true,
-	"path":         true,
-	"url":          true,
-	"uri":          true,
-	"error":        true,
-	"err":          true,
-	"errormessage": true,
-	"message":      true,
+// allowedLabels — имена меток метрик: каждое ограничено словарём проекта или магазином (tenant —
+// нагрузка магазина видна по нему). Новая метка — сознательное решение: имя добавляется сюда,
+// а значение не растёт с покупателями, заказами, запросами и текстами ошибок.
+var allowedLabels = map[string]bool{
+	"action":     true,
+	"class":      true,
+	"code":       true,
+	"decided_by": true,
+	"dictionary": true,
+	"direction":  true,
+	"event":      true,
+	"from":       true,
+	"goroutine":  true,
+	"job":        true,
+	"kind":       true,
+	"operation":  true,
+	"outcome":    true,
+	"partition":  true,
+	"placement":  true,
+	"reason":     true,
+	"result":     true,
+	"route":      true,
+	"schema":     true,
+	"selector":   true,
+	"source":     true,
+	"status":     true,
+	"tenant":     true,
+	"tenantId":   true,
+	"to":         true,
+	"topic":      true,
 }
 
-// metricPackage — объявления пакета, из которых сторож берёт значения меток.
+// vecConstructor — конструкторы векторов метрик под любым получателем: пакет, promauto или фабрика
+// promauto.With(r) в переменной.
+var vecConstructor = regexp.MustCompile(`^New(Counter|Gauge|Histogram|Summary)Vec$`)
+
+// metricPackage — значения объявлений пакета, из которых сторож берёт метки.
 type metricPackage struct {
 	values map[string]ast.Expr
 }
 
-// unboundedMetricLabels — неограниченные метки конструкторов New*Vec пакетов prometheus и promauto
-// в файлах одного пакета: литералом, константой или переменной, при любом имени импорта.
-func unboundedMetricLabels(fset *token.FileSet, files []*ast.File) []string {
+// metricLabelProblems — метки вне белого списка, списки меток, которые сторож не смог разобрать
+// до строк, и значения меток из текста ошибки — в файлах одного пакета.
+func metricLabelProblems(fset *token.FileSet, files []*ast.File) []string {
 	pkg := packageValues(files)
 	var found []string
 	for _, file := range files {
-		imports := metricImports(file)
+		prometheus := prometheusNames(file)
 		ast.Inspect(file, func(node ast.Node) bool {
 			call, ok := node.(*ast.CallExpr)
-			if !ok || !isVecConstructor(call, imports) || len(call.Args) < 2 {
+			if !ok {
 				return true
 			}
-			for _, label := range pkg.labels(call.Args[len(call.Args)-1]) {
-				if unboundedLabels[strings.ReplaceAll(strings.ToLower(label), "_", "")] {
-					found = append(found, fset.Position(call.Pos()).String()+": метка "+label+
-						" неограниченна — значение в журнал, счётчик без неё")
-				}
+			where := fset.Position(call.Pos()).String() + ": "
+			if labels, ok := labelArgument(call, prometheus); ok {
+				found = append(found, pkg.labelProblems(where, labels)...)
+			}
+			if problem := errorTextValue(call); problem != "" {
+				found = append(found, where+problem)
 			}
 			return true
 		})
@@ -75,17 +82,101 @@ func unboundedMetricLabels(fset *token.FileSet, files []*ast.File) []string {
 	return found
 }
 
+// labelArgument — выражение списка меток конструктора вектора или prometheus.NewDesc.
+func labelArgument(call *ast.CallExpr, prometheus map[string]bool) (ast.Expr, bool) {
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return nil, false
+	}
+	if vecConstructor.MatchString(selector.Sel.Name) && len(call.Args) >= 2 {
+		return call.Args[len(call.Args)-1], true
+	}
+	if pkg, ok := selector.X.(*ast.Ident); ok && prometheus[pkg.Name] && selector.Sel.Name == "NewDesc" &&
+		len(call.Args) >= 3 {
+		return call.Args[2], true
+	}
+	return nil, false
+}
+
+func (p metricPackage) labelProblems(where string, expr ast.Expr) []string {
+	labels, resolved := p.labels(expr)
+	if !resolved {
+		return []string{where + "список меток не разобран до строк — метки задаются литералом или константой пакета"}
+	}
+	var problems []string
+	for _, label := range labels {
+		if !allowedLabels[label] {
+			problems = append(problems, where+"метка "+label+" вне белого списка ограниченных меток")
+		}
+	}
+	return problems
+}
+
+// labels — строковые значения выражения; false — выражение не сводится к строкам.
+func (p metricPackage) labels(expr ast.Expr) ([]string, bool) {
+	switch e := expr.(type) {
+	case *ast.CompositeLit:
+		var labels []string
+		for _, element := range e.Elts {
+			values, ok := p.labels(element)
+			if !ok {
+				return nil, false
+			}
+			labels = append(labels, values...)
+		}
+		return labels, true
+	case *ast.BasicLit:
+		value, err := strconv.Unquote(e.Value)
+		return []string{value}, err == nil
+	case *ast.Ident:
+		if value, ok := p.values[e.Name]; ok {
+			return p.labels(value)
+		}
+	case *ast.BinaryExpr:
+		left, okLeft := p.labels(e.X)
+		right, okRight := p.labels(e.Y)
+		if okLeft && okRight && len(left) == 1 && len(right) == 1 {
+			return []string{left[0] + right[0]}, true
+		}
+	}
+	return nil, false
+}
+
+// errorTextValue — значение метки из текста ошибки: каждый текст — новый ряд.
+func errorTextValue(call *ast.CallExpr) string {
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "WithLabelValues" {
+		return ""
+	}
+	for _, arg := range call.Args {
+		inner, ok := arg.(*ast.CallExpr)
+		if !ok {
+			continue
+		}
+		if method, ok := inner.Fun.(*ast.SelectorExpr); ok && method.Sel.Name == "Error" {
+			return "значение метки — текст ошибки: ряд на каждый текст"
+		}
+	}
+	return ""
+}
+
+// packageValues — значения констант, переменных и коротких объявлений пакета по имени.
 func packageValues(files []*ast.File) metricPackage {
 	pkg := metricPackage{values: map[string]ast.Expr{}}
 	for _, file := range files {
 		ast.Inspect(file, func(node ast.Node) bool {
-			spec, ok := node.(*ast.ValueSpec)
-			if !ok {
-				return true
-			}
-			for i, name := range spec.Names {
-				if i < len(spec.Values) {
-					pkg.values[name.Name] = spec.Values[i]
+			switch n := node.(type) {
+			case *ast.ValueSpec:
+				for i, name := range n.Names {
+					if i < len(n.Values) {
+						pkg.values[name.Name] = n.Values[i]
+					}
+				}
+			case *ast.AssignStmt:
+				for i, left := range n.Lhs {
+					if name, ok := left.(*ast.Ident); ok && i < len(n.Rhs) && n.Tok == token.DEFINE {
+						pkg.values[name.Name] = n.Rhs[i]
+					}
 				}
 			}
 			return true
@@ -94,69 +185,20 @@ func packageValues(files []*ast.File) metricPackage {
 	return pkg
 }
 
-// labels — строковые значения выражения списка меток; неизвестное выражение не даёт меток.
-func (p metricPackage) labels(expr ast.Expr) []string {
-	switch e := expr.(type) {
-	case *ast.CompositeLit:
-		var labels []string
-		for _, element := range e.Elts {
-			labels = append(labels, p.labels(element)...)
-		}
-		return labels
-	case *ast.BasicLit:
-		value, err := strconv.Unquote(e.Value)
-		if err != nil {
-			return nil
-		}
-		return []string{value}
-	case *ast.Ident:
-		if value, ok := p.values[e.Name]; ok {
-			return p.labels(value)
-		}
-	case *ast.BinaryExpr:
-		left, right := p.labels(e.X), p.labels(e.Y)
-		if len(left) == 1 && len(right) == 1 {
-			return []string{left[0] + right[0]}
-		}
-	}
-	return nil
-}
-
-// metricImports — имена, под которыми файл импортирует prometheus и promauto.
-func metricImports(file *ast.File) map[string]bool {
+// prometheusNames — имена, под которыми файл импортирует пакет prometheus.
+func prometheusNames(file *ast.File) map[string]bool {
 	names := map[string]bool{}
 	for _, spec := range file.Imports {
-		path, _ := strconv.Unquote(spec.Path.Value)
-		if path != prometheusImport && path != promautoImport {
+		if path, _ := strconv.Unquote(spec.Path.Value); path != prometheusImport {
 			continue
 		}
-		name := filepath.Base(path)
+		name := "prometheus"
 		if spec.Name != nil {
 			name = spec.Name.Name
 		}
 		names[name] = true
 	}
 	return names
-}
-
-// isVecConstructor — pkg.New*Vec(...) или promauto.With(r).New*Vec(...).
-func isVecConstructor(call *ast.CallExpr, imports map[string]bool) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || !strings.HasPrefix(selector.Sel.Name, "New") || !strings.HasSuffix(selector.Sel.Name, "Vec") {
-		return false
-	}
-	switch x := selector.X.(type) {
-	case *ast.Ident:
-		return imports[x.Name]
-	case *ast.CallExpr:
-		inner, ok := x.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return false
-		}
-		pkg, ok := inner.X.(*ast.Ident)
-		return ok && imports[pkg.Name]
-	}
-	return false
 }
 
 func TestMetricLabelsAreBounded(t *testing.T) {
@@ -184,7 +226,7 @@ func TestMetricLabelsAreBounded(t *testing.T) {
 			files = append(files, file)
 			checked++
 		}
-		for _, problem := range unboundedMetricLabels(fset, files) {
+		for _, problem := range metricLabelProblems(fset, files) {
 			t.Error(problem)
 		}
 	}
@@ -194,28 +236,32 @@ func TestMetricLabelsAreBounded(t *testing.T) {
 }
 
 func TestMetricLabelGuardCatchesViolations(t *testing.T) {
-	dir := t.TempDir()
 	const source = `package sample
 
 import (
 	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"other"
 )
 
-const labelBuyer = "buyer" + "Id"
+const labelKind = "ki" + "nd"
 
-var orderLabels = []string{"kind", "order_id"}
+var shared = []string{labelKind, "tenant"}
 
-func f(r prom.Registerer) {
-	prom.NewCounterVec(prom.CounterOpts{}, []string{"kind", "tenant"})
-	prom.NewGaugeVec(prom.GaugeOpts{}, []string{labelBuyer})
-	prom.NewHistogramVec(prom.HistogramOpts{}, orderLabels)
-	promauto.NewCounterVec(prom.CounterOpts{}, []string{"checkoutId"})
-	promauto.With(r).NewSummaryVec(prom.SummaryOpts{}, []string{"path", "error"})
-	prom.NewCounterVec(prom.CounterOpts{}, []string{"topic", "tenantId", "reason"})
+func f(r prom.Registerer, err error, vec *prom.CounterVec) {
+	local := []string{"product_id"}
+	prom.NewCounterVec(prom.CounterOpts{}, local)
+	factory := promauto.With(r)
+	factory.NewGaugeVec(prom.GaugeOpts{}, []string{"request_id", "buyer_phone"})
+	prom.NewDesc("name", "help", []string{"order_no", "raw_path"}, nil)
+	promauto.NewHistogramVec(prom.HistogramOpts{}, []string{"ip", "query", "sku", "session"})
+	prom.NewSummaryVec(prom.SummaryOpts{}, []string{other.Label})
+	prom.NewCounterVec(prom.CounterOpts{}, append(shared, "kind"))
+	prom.NewCounterVec(prom.CounterOpts{}, shared)
+	vec.WithLabelValues(err.Error()).Inc()
 }
 `
-	path := filepath.Join(dir, "sample.go")
+	path := filepath.Join(t.TempDir(), "sample.go")
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -224,15 +270,18 @@ func f(r prom.Registerer) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := strings.Join(unboundedMetricLabels(fset, []*ast.File{file}), "\n")
-	for _, label := range []string{"buyerId", "order_id", "checkoutId", "path", "error"} {
+	got := strings.Join(metricLabelProblems(fset, []*ast.File{file}), "\n")
+	for _, label := range []string{
+		"product_id", "request_id", "buyer_phone", "order_no", "raw_path", "ip", "query", "sku", "session",
+	} {
 		if !strings.Contains(got, "метка "+label+" ") {
-			t.Fatalf("сторож не поймал %s: %s", label, got)
+			t.Fatalf("сторож не поймал %s:\n%s", label, got)
 		}
 	}
-	for _, allowed := range []string{"tenant ", "tenantId", "kind", "topic", "reason"} {
-		if strings.Contains(got, "метка "+allowed) {
-			t.Fatalf("сторож запретил ограниченную метку %s: %s", allowed, got)
-		}
+	if strings.Count(got, "не разобран") != 2 || !strings.Contains(got, "текст ошибки") {
+		t.Fatalf("неразобранные списки и текст ошибки — отдельные нарушения:\n%s", got)
+	}
+	if strings.Contains(got, "метка kind") || strings.Contains(got, "метка tenant") {
+		t.Fatalf("сторож запретил разрешённую метку:\n%s", got)
 	}
 }
