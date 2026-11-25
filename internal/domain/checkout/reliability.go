@@ -299,12 +299,16 @@ func (g Group) pollRetryDelay() time.Duration {
 }
 
 // ApplyOrderState снимает страховочную проверку, когда событие уже принесло итог магазина.
-// Заказ, которого у группы нет, — ErrNotFound: событие относится не к этой покупке.
+// Заказ, которого у группы нет, — ErrNotFound: событие относится не к этой покупке. Если же создание
+// ещё ждёт ответа магазина, — ErrOrderNotAttached: событие обогнало ответ и применится после него.
 // Отмена неоплаченного заказа значима только для группы, ждущей оплату: отмену по команде площадки
 // ведёт её собственный сценарий, и событие магазина не должно подменить его причину и итог.
 // Отслеживание без номера перехода не отзывается: состояние без него прежнее не стирает.
 func (c *Checkout) ApplyOrderState(tenant ids.TenantID, order SellerOrder, now time.Time) (bool, error) {
 	g := c.group(tenant)
+	if g != nil && g.AwaitingOrder(now) {
+		return false, ErrOrderNotAttached
+	}
 	if g == nil || g.OrderID == "" || g.OrderID != order.OrderID {
 		return false, ErrNotFound
 	}

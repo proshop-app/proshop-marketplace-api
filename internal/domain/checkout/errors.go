@@ -28,6 +28,13 @@ var (
 
 	// ErrTransition — команда не подходит текущему состоянию покупки или группы.
 	ErrTransition = errs.New(errs.Conflict, "checkout.transition", "недопустимый переход покупки или группы")
+	// ErrOrderNotAttached — магазин сообщил о заказе раньше, чем площадка сохранила ответ его создания:
+	// состояние применимо, как только ответ сохранён, поэтому сообщение повторяется, а не теряется.
+	ErrOrderNotAttached = errs.New(
+		errs.Conflict,
+		"checkout.order_not_attached",
+		"ответ создания заказа ещё не сохранён",
+	)
 	// ErrInvalidContact — нет корректного контакта или адреса возврата.
 	ErrInvalidContact = errs.New(errs.Invalid, "checkout.invalid_contact", "укажите имя и телефон покупателя")
 	// ErrOrderNotCancellable — магазин уже передал заказ или он не оплачен.

@@ -40,6 +40,13 @@ func (g Group) CreationExpired(now time.Time) bool {
 		!g.Abandoned && !g.CreateExhausted && g.OrderID == "" && g.Status != GroupCreationExpired
 }
 
+// AwaitingOrder — создание ещё может вернуть номер заказа: до срока создания ответ магазина
+// сохраняется повтором. После срока исход узнаёт отмена по ключу оформления, событие её не ждёт.
+func (g Group) AwaitingOrder(now time.Time) bool {
+	return g.OrderID == "" && (g.Status == GroupCreating || g.Status == GroupSellerUnreachable) &&
+		!g.Abandoned && !g.CreateExhausted && now.Before(g.CreationDeadline)
+}
+
 // ExpireCreation отделяет итог для покупателя от незавершённой сверки магазина.
 func (c *Checkout) ExpireCreation(now time.Time) (bool, error) {
 	changed := false
