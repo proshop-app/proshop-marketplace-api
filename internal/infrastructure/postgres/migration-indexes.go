@@ -61,7 +61,6 @@ var retryableMigrationIndexes = map[int64][]string{
 		"outbox_quarantine_kind_id_idx",
 	},
 	57: {"outbox_retry_kind_created_idx"},
-	72: {"checkout_groups_stuck_idx"},
 	70: {
 		"outbox_done_cleanup_idx",
 		"outbox_lane_due_idx",
@@ -70,6 +69,7 @@ var retryableMigrationIndexes = map[int64][]string{
 		"outbox_untaken_dedup_idx",
 		"outbox_retry_created_idx",
 	},
+	72: {"checkout_groups_stuck_idx"},
 }
 
 var rollbackMigrationIndexes = map[int64][]string{

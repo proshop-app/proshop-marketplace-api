@@ -115,7 +115,7 @@ func (r *Checkouts) ByKey(ctx context.Context, buyerID ids.UUID, key string) (*c
 func (r *Checkouts) Add(ctx context.Context, c *checkout.Checkout) error {
 	s := c.State()
 
-	carrier, point, selection, err := selectionArgs(s.Delivery)
+	carrier, point, selection, err := selectionColumns(s.Delivery)
 	if err != nil {
 		return err
 	}
@@ -360,23 +360,4 @@ func (r *groupRow) quote() *delivery.Quote {
 	}
 
 	return &quote
-}
-
-func selectionArgs(selection *checkout.Selection) (carrier, point, encoded any, err error) {
-	if selection == nil {
-		return nil, nil, nil, nil
-	}
-
-	doc := selectionJSON{
-		City:       selection.City,
-		Address:    selection.Address,
-		RegionCode: selection.RegionCode,
-	}
-
-	raw, err := json.Marshal(doc)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("доставка покупки: %w", err)
-	}
-
-	return string(selection.Carrier), selection.PickupPointCode, string(raw), nil
 }
