@@ -28,6 +28,8 @@ const (
 	breakCheckoutRow = `UPDATE checkout_groups SET order_progress = '"сломано"', next_work_at = '2000-01-02'
 		WHERE checkout_id = $1`
 	selectNextWork = `SELECT min(next_work_at) FROM checkout_groups WHERE checkout_id = $1`
+	// settleCheckoutWork — запись соседнего прохода: срок работы пересчитан, созревшей нет.
+	settleCheckoutWork = `UPDATE checkout_groups SET next_work_at = NULL WHERE checkout_id = $1`
 	// workPlanSettings — общий план, как у подготовленного запроса процесса.
 	workPlanSettings = `
 		SET LOCAL enable_seqscan = off;
@@ -42,6 +44,8 @@ type workTrace struct {
 	mu   sync.Mutex
 	sql  string
 	args []any
+	// beforeLock выполняется один раз перед блокировкой покупок страницы.
+	beforeLock func()
 }
 
 // Покупка, которую домен не может сохранить, и строка, которая не разбирается, не останавливают
@@ -148,12 +152,49 @@ func explainWork(t *testing.T, pool *pgxpool.Pool, trace *workTrace) string {
 }
 
 func (w *workTrace) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if strings.Contains(data.SQL, "next_work_at <= $1") {
-		w.mu.Lock()
 		w.sql, w.args = data.SQL, data.Args
-		w.mu.Unlock()
+	}
+	if strings.Contains(data.SQL, "SKIP LOCKED") && w.beforeLock != nil {
+		hook := w.beforeLock
+		w.beforeLock = nil
+		hook()
 	}
 	return ctx
 }
 
 func (*workTrace) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+// Соседний проход сохранил покупку между выборкой кандидатов и блокировкой: страница её не берёт.
+func TestLockWorkDueRechecksWorkAfterCandidates(t *testing.T) {
+	ctx := context.Background()
+	bench := newOrderEventBench(t)
+	settled, _ := bench.paidPurchase(t, 800)
+	if _, err := bench.pool.Exec(ctx, staleCheckoutWork, string(settled)); err != nil {
+		t.Fatal(err)
+	}
+	trace := &workTrace{beforeLock: func() {
+		// Другое соединение, как у соседней реплики: её запись зафиксирована до блокировки.
+		if _, err := bench.pool.Exec(ctx, settleCheckoutWork, string(settled)); err != nil {
+			t.Error(err)
+		}
+	}}
+	config := bench.pool.Config()
+	config.ConnConfig.Tracer = trace
+	traced, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(traced.Close)
+	var page checkout.WorkPage
+	err = do(t, postgres.NewUnitOfWork(traced), func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		page, err = tx.Checkouts().LockWorkDue(ctx, bench.clock.Now(), checkout.WorkCursor{}, 100)
+		return err
+	})
+	if err != nil || len(page.Due) != 0 {
+		t.Fatalf("уже сохранённая покупка взята второй раз: %d %v", len(page.Due), err)
+	}
+}

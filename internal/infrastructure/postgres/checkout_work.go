@@ -20,14 +20,17 @@ const (
 		LIMIT $4`
 
 	// lockWorkCheckouts берёт покупки страницы по ключу. Занятую покупку (её пишет событие,
-	// покупатель или соседний проход) страница пропускает: её возьмёт следующий проход.
+	// покупатель или соседний проход) страница пропускает: её возьмёт следующий проход. Созревшая
+	// работа перепроверяется свежим снимком запроса: покупку, которую соседний проход сохранил
+	// между выборкой кандидатов и блокировкой, страница не берёт второй раз.
 	lockWorkCheckouts = `
 		SELECT ` + checkoutReadColumns + `
-		FROM checkouts
+		FROM checkouts c
 		WHERE id = ANY($1::uuid[])
 			AND (status NOT IN ('draft', 'confirmed') OR order_context->>'CartConsumed' = 'true')
+			AND EXISTS (SELECT 1 FROM checkout_groups g WHERE g.checkout_id = c.id AND g.next_work_at <= $2)
 		ORDER BY id
-		FOR NO KEY UPDATE SKIP LOCKED`
+		FOR NO KEY UPDATE OF c SKIP LOCKED`
 
 	deferCheckoutWork = `
 		UPDATE checkout_groups
@@ -46,7 +49,7 @@ func (r *Checkouts) LockWorkDue(
 	if err != nil || len(candidates) == 0 {
 		return page, err
 	}
-	states, broken, err := r.lockWorkCheckouts(ctx, candidates)
+	states, broken, err := r.lockWorkCheckouts(ctx, candidates, now)
 	if err != nil {
 		return checkout.WorkPage{}, err
 	}
@@ -122,8 +125,9 @@ func (r *Checkouts) workCandidates(
 func (r *Checkouts) lockWorkCheckouts(
 	ctx context.Context,
 	candidates []string,
+	now time.Time,
 ) ([]checkout.State, []checkout.BrokenCheckout, error) {
-	rows, err := rawSQL(ctx, r.db, lockWorkCheckouts, candidates).Rows()
+	rows, err := rawSQL(ctx, r.db, lockWorkCheckouts, candidates, now).Rows()
 	if err != nil {
 		return nil, nil, fmt.Errorf("покупки с созревшей работой: %w", err)
 	}

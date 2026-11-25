@@ -128,6 +128,11 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 			filter: checkout.Filter{StuckBefore: at(35), Limit: 100},
 			want:   allIDs[3:],
 		},
+		{
+			name:   "ожидающие после курсора",
+			filter: checkout.Filter{StuckBefore: at(35), AfterID: allIDs[3], Limit: 100},
+			want:   allIDs[4:],
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			items := checkoutListRead(t, traced, trace, tc.filter)
