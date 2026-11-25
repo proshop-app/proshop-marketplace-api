@@ -20,14 +20,14 @@ func NewPromotion(registerer prometheus.Registerer) *Promotion {
 				Name: "marketplace_promotion_events_total",
 				Help: "Учтённые показы и клики продвижения.",
 			},
-			[]string{"placement", "tenantId", "kind"},
+			[]string{"placement", "kind"},
 		),
 		transitions: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "marketplace_promotion_transitions_total",
 				Help: "Переходы размещений после фиксации.",
 			},
-			[]string{"tenantId", "from", "to"},
+			[]string{"from", "to"},
 		),
 	}
 	registerer.MustRegister(p.events, p.transitions)
@@ -36,12 +36,12 @@ func NewPromotion(registerer prometheus.Registerer) *Promotion {
 
 // PromotionEvent увеличивает метрику только после фиксации маячка.
 func (p *Promotion) PromotionEvent(s promotion.CampaignState, kind string) {
-	p.events.WithLabelValues(s.PlacementCode, string(s.TenantID), kind).Inc()
+	p.events.WithLabelValues(s.PlacementCode, kind).Inc()
 }
 
 // PromotionTransition учитывает изменение статуса после фиксации транзакции.
 func (p *Promotion) PromotionTransition(s promotion.CampaignState, before promotion.Status) {
 	if before != s.Status {
-		p.transitions.WithLabelValues(string(s.TenantID), string(before), string(s.Status)).Inc()
+		p.transitions.WithLabelValues(string(before), string(s.Status)).Inc()
 	}
 }

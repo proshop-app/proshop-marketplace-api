@@ -59,7 +59,7 @@ func NewOutboxRunner(
 				Name: "marketplace_outbox_tasks_total",
 				Help: "Задачи outbox по итогу: done — выполнена, retry — повтор, quarantined — отказ.",
 			},
-			[]string{"kind", "tenant", "result"},
+			[]string{"kind", "result"},
 		),
 		lag: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -127,7 +127,7 @@ func (r *OutboxRunner) RecordOutcome(outcome messaging.Outcome) {
 	tenant := string(outcome.Task.TenantID)
 
 	if outcome.Err == nil {
-		r.tasks.WithLabelValues(outcome.Task.Kind, tenant, "done").Inc()
+		r.tasks.WithLabelValues(outcome.Task.Kind, "done").Inc()
 		r.lag.WithLabelValues(outcome.Task.Kind).Observe(outcome.Lag.Seconds())
 
 		return
@@ -137,7 +137,7 @@ func (r *OutboxRunner) RecordOutcome(outcome messaging.Outcome) {
 	if outcome.FailureReason != "" {
 		result, message = "quarantined", "outbox: задача в карантине"
 	}
-	r.tasks.WithLabelValues(outcome.Task.Kind, tenant, result).Inc()
+	r.tasks.WithLabelValues(outcome.Task.Kind, result).Inc()
 	if appcheckout.CreationPending(outcome.Err) {
 		return
 	}

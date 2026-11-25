@@ -294,7 +294,7 @@ func TestModerationCachedDecisionAndStats(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if len(stats) != 1 || stats[0].TenantID != "t1" || stats[0].Count != 1 {
+		if stats.Count != 1 {
 			return fmt.Errorf("%+v", stats)
 		}
 		if err := tx.ModerationRules().AddReason(ctx, moderation.ReasonCode{Code: "r1", Text: "Причина"}); err != nil {

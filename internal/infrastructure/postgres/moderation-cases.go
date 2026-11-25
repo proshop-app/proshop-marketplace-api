@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -13,9 +14,8 @@ import (
 )
 
 const (
-	moderationOpenStats = `SELECT tenant_id, count(*), min(opened_at)
- FROM moderation_cases WHERE status = 'open' GROUP BY tenant_id`
-	caseColumns = `id, tenant_id, product_id, revision,
+	moderationOpenStats = `SELECT count(*), min(opened_at) FROM moderation_cases WHERE status = 'open'`
+	caseColumns         = `id, tenant_id, product_id, revision,
  source, status, reasons, note,
  opened_at, decided_at, version, card`
 	selectModerationCase  = `SELECT ` + caseColumns + ` FROM moderation_cases WHERE id = $1`
@@ -234,23 +234,16 @@ func (r *ModerationCases) Open(
 }
 
 // OpenStats не загружает сами дела для подсчёта очереди.
-func (r *ModerationCases) OpenStats(ctx context.Context) ([]moderation.OpenStat, error) {
-	rows, err := rawSQL(ctx, r.db, moderationOpenStats).Rows()
-	if err != nil {
-		return nil, err
+func (r *ModerationCases) OpenStats(ctx context.Context) (moderation.OpenStat, error) {
+	var stat moderation.OpenStat
+	var oldest *time.Time
+	if err := rawSQL(ctx, r.db, moderationOpenStats).Row().Scan(&stat.Count, &oldest); err != nil {
+		return moderation.OpenStat{}, fmt.Errorf("очередь модерации: %w", err)
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	result := []moderation.OpenStat{}
-	for rows.Next() {
-		var stat moderation.OpenStat
-		if err := rows.Scan(&stat.TenantID, &stat.Count, &stat.Oldest); err != nil {
-			return nil, err
-		}
-		result = append(result, stat)
+	if oldest != nil {
+		stat.Oldest = *oldest
 	}
-	return result, rows.Err()
+	return stat, nil
 }
 
 // OpenMany читает открытые дела списка одним запросом по индексу единственного открытого дела.

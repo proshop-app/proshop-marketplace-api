@@ -256,8 +256,8 @@ func (s *Service) AddReason(ctx context.Context, reason moderation.ReasonCode) e
 }
 
 // OpenStats читает агрегированную очередь для фоновых метрик.
-func (s *Service) OpenStats(ctx context.Context) ([]moderation.OpenStat, error) {
-	var result []moderation.OpenStat
+func (s *Service) OpenStats(ctx context.Context) (moderation.OpenStat, error) {
+	var result moderation.OpenStat
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
 		result, err = tx.ModerationCases().OpenStats(ctx)

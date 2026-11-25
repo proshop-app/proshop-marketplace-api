@@ -118,7 +118,7 @@ func assertClosedPublication(t *testing.T, e environment, id ids.UUID) {
 	}
 	err = e.store.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 		stats, err := tx.ModerationCases().OpenStats(ctx)
-		if err == nil && len(stats) != 0 {
+		if err == nil && stats.Count != 0 {
 			t.Fatal(stats)
 		}
 		return err
