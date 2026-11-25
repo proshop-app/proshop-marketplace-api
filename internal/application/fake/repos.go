@@ -343,12 +343,3 @@ func (r checkouts) ReconcileDue(
 
 // ExpireReconciliation в памяти не нужен: срок сверки считается из состояния группы.
 func (r checkouts) ExpireReconciliation(context.Context, time.Time) error { return nil }
-
-func checkoutWorkDue(state checkout.State, now time.Time) bool {
-	for _, g := range state.Groups {
-		if g.PollDue(now) || g.ReturnDue(now) {
-			return true
-		}
-	}
-	return false
-}

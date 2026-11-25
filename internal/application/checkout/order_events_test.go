@@ -345,7 +345,8 @@ func TestReconcileSkipsShopWithOpenBreakerWithoutPause(t *testing.T) {
 	ctx := context.Background()
 	state := paidPurchase(t, e)
 	second := state.Groups[1]
-	e.platform.Fail(second.TenantID, &ports.PlatformRejected{NotBefore: e.clock.Now().Add(time.Second), Cause: errBreaker})
+	rejected := &ports.PlatformRejected{NotBefore: e.clock.Now().Add(time.Second), Cause: errBreaker}
+	e.platform.Fail(second.TenantID, rejected)
 	started := e.clock.Now()
 
 	result, err := e.service.ReconcileOrders(ctx)

@@ -62,7 +62,8 @@ func TestResumeSavesSettledPurchasesWithoutConflict(t *testing.T) {
 	for i, id := range purchases {
 		var version int64
 		var due int
-		if err := bench.pool.QueryRow(ctx, selectResumedWork, string(id), bench.clock.Now()).Scan(&version, &due); err != nil {
+		row := bench.pool.QueryRow(ctx, selectResumedWork, string(id), bench.clock.Now())
+		if err := row.Scan(&version, &due); err != nil {
 			t.Fatal(err)
 		}
 		if version != versions[i]+1 || due != 0 {
@@ -138,7 +139,7 @@ func TestOrderEventRewritesOnlyItsGroup(t *testing.T) {
 	for _, tenant := range orderEventShops {
 		changed := before[tenant] != after[tenant]
 		if changed != (tenant == "t1") {
-			t.Fatalf("строка группы %s переписана: %v (до %s, после %s)", tenant, changed, before[tenant], after[tenant])
+			t.Fatalf("строка группы %s переписана: %v (%s → %s)", tenant, changed, before[tenant], after[tenant])
 		}
 	}
 }

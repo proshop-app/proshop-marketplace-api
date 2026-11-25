@@ -10,7 +10,12 @@ import (
 )
 
 // earlyOrderEvent — событие отмены заказа магазином, о котором площадка ещё не знает номера.
-func earlyOrderEvent(id ids.UUID, tenant ids.TenantID, status checkout.GroupStatus, revision int64) appcheckout.OrderEvent {
+func earlyOrderEvent(
+	id ids.UUID,
+	tenant ids.TenantID,
+	status checkout.GroupStatus,
+	revision int64,
+) appcheckout.OrderEvent {
 	return appcheckout.OrderEvent{
 		EventID:    "orders:early:" + string(status),
 		TenantID:   tenant,
