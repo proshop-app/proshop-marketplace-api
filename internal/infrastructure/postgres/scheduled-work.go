@@ -9,10 +9,18 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
-const claimScheduledWork = `INSERT INTO job_leases (name, holder, until)
+const (
+	claimScheduledWork = `INSERT INTO job_leases (name, holder, until)
     VALUES ($1, 'scheduled', now() + make_interval(secs => $2))
     ON CONFLICT (name) DO UPDATE SET until = EXCLUDED.until, holder = EXCLUDED.holder
     WHERE job_leases.until <= now()`
+
+	// intervalTaken — интервал ещё действует: реплика узнаёт это чтением, без пишущей команды.
+	intervalTaken = `SELECT EXISTS (SELECT 1 FROM job_leases WHERE name = $1 AND until > now())`
+
+	// releaseScheduledWork возвращает интервал: следующая попытка любой реплики повторит проход.
+	releaseScheduledWork = `UPDATE job_leases SET until = now() WHERE name = $1`
+)
 
 // ScheduledWork сочетает исключительное владение с общим интервалом между стартами реплик.
 // Advisory lock не даёт истёкшему интервалу запустить второй долгий проход.
@@ -68,22 +76,35 @@ func NewSharedInterval(pool *ClassPool, name string, interval time.Duration) *Sh
 	return &SharedInterval{source: newConnectionSource(pool), name: name, interval: interval}
 }
 
-// WithLock выполняет проход, только если реплика взяла интервал; иначе — ErrRebuildBusy без прохода.
-func (s *SharedInterval) WithLock(ctx context.Context, run func(context.Context) error) error {
+// Run выполняет проход, только если реплика взяла интервал; иначе — ErrIntervalTaken без прохода.
+func (s *SharedInterval) Run(ctx context.Context, pass func(context.Context) error) error {
 	claimed, err := claimInterval(ctx, s.source, s.name, s.interval)
 	if err != nil {
 		return err
 	}
 	if !claimed {
-		return ports.ErrRebuildBusy
+		return ports.ErrIntervalTaken
 	}
-	return run(ctx)
+	return pass(ctx)
 }
 
-// claimInterval — одна команда: интервал берёт первая реплика после его истечения по часам базы.
+// Release возвращает интервал прохода, прерванного не по его вине: следующая попытка повторит его.
+func (s *ScheduledWork) Release(ctx context.Context) error {
+	return s.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
+		_, err := execSQL(ctx, db, releaseScheduledWork, s.name)
+		return err
+	})
+}
+
+// claimInterval — интервал берёт первая реплика после его истечения по часам базы. Действующий
+// интервал реплика узнаёт чтением: холостая попытка не пишет в базу.
 func claimInterval(ctx context.Context, source *connectionSource, name string, interval time.Duration) (bool, error) {
 	var claimed bool
 	err := source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
+		var taken bool
+		if err := rawSQL(ctx, db, intervalTaken, name).Row().Scan(&taken); err != nil || taken {
+			return err
+		}
 		affected, err := execSQL(ctx, db, claimScheduledWork, name, interval.Seconds())
 		claimed = affected > 0
 		return err

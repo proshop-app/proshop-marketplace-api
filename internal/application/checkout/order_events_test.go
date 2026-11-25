@@ -313,8 +313,8 @@ func TestReconcileRetriesShopThatMissedReadDeadline(t *testing.T) {
 	if calls := e.platform.StatusCalls(first.TenantID); len(calls) != 1 {
 		t.Fatalf("ответивший магазин не переспрашивается: %v", calls)
 	}
-	if paused := e.clock.Now().Sub(started); paused != 3*time.Second {
-		t.Fatalf("паузы перед повторами 1 и 2 с: %s", paused)
+	if paused := e.clock.Now().Sub(started); paused != 0 {
+		t.Fatalf("повтор — отдельным кругом, без пауз в строю: %s", paused)
 	}
 }
 
@@ -334,13 +334,14 @@ func TestReconcileGivesUpShopAfterBoundedRetries(t *testing.T) {
 	if calls := e.platform.StatusCalls(second.TenantID); len(calls) != 1+appcheckout.ReconcileRetries {
 		t.Fatalf("попыток магазину: %v", calls)
 	}
-	if paused := e.clock.Now().Sub(started); paused != 7*time.Second {
-		t.Fatalf("паузы перед повторами 1, 2 и 4 с: %s", paused)
+	if paused := e.clock.Now().Sub(started); paused != 0 {
+		t.Fatalf("повторы — кругами, без пауз в строю: %s", paused)
 	}
 }
 
-// Отказ размыкателя магазина мгновенный: проход не повторяет его и не ждёт, магазин пропускается.
-func TestReconcileSkipsShopWithOpenBreakerWithoutPause(t *testing.T) {
+// Отказ размыкателя магазина мгновенный: проход повторяет запрос один раз после срока размыкателя,
+// дождавшись его однажды после остальных магазинов, и пропускает магазин, если отказ остался.
+func TestReconcileRetriesShopOnceAfterItsBreaker(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	state := paidPurchase(t, e)
@@ -353,8 +354,8 @@ func TestReconcileSkipsShopWithOpenBreakerWithoutPause(t *testing.T) {
 	if err != nil || result.Failed[second.TenantID] == nil || result.Checked != 1 {
 		t.Fatalf("магазин с открытым размыкателем пропущен, остальные сверены: %+v %v", result, err)
 	}
-	if calls := e.platform.StatusCalls(second.TenantID); len(calls) != 1 || !e.clock.Now().Equal(started) {
-		t.Fatalf("отказ размыкателя без повторов и пауз: %v, %s", calls, e.clock.Now().Sub(started))
+	if calls := e.platform.StatusCalls(second.TenantID); len(calls) != 2 || e.clock.Now().Sub(started) != time.Second {
+		t.Fatalf("один повтор после срока размыкателя: %v, %s", calls, e.clock.Now().Sub(started))
 	}
 }
 

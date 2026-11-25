@@ -4,14 +4,12 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
-	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
@@ -21,11 +19,14 @@ const (
 	// ReconcileBatch — сколько заказов одного магазина уходит ему одним запросом.
 	ReconcileBatch = 200
 	// ReconcileRetries — сколько раз за проход повторяется запрос магазину, не ответившему в срок
-	// чтения: каждый повтор вдвое меньше и после вдвое большей паузы — 200, 100, 50, 25 заказов.
-	// Другие отказы не повторяются: размыкатель отклоняет мгновенно, пауза его не закроет.
+	// чтения: повтор идёт отдельным кругом после остальных магазинов, без пауз, каждый раз вдвое
+	// меньшей пачкой — 200, 100, 50, 25 заказов.
 	ReconcileRetries = 3
-	// reconcileRetryPause — пауза перед первым повтором: отказ размыкателя магазина длится секунды.
-	reconcileRetryPause = time.Second
+	// reconcileServerTimeouts — столько истёкших сроков подряд без единого ответа в первом круге —
+	// признак недоступного сервера, а не отдельных магазинов: проход прерывается.
+	reconcileServerTimeouts = 2 * reconcileWorkers
+	// reconcileRetryBudget — сколько от начала прохода разрешено тратить на повторные круги.
+	reconcileRetryBudget = 10 * time.Minute
 	// reconcilePage — строк сверки за одно чтение базы.
 	reconcilePage = 1000
 	// reconcileWorkers — сколько магазинов сверяется одновременно.
@@ -48,25 +49,11 @@ type ReconcileResult struct {
 	Failed     map[ids.TenantID]error
 }
 
-type reconcileRun struct {
-	mu     sync.Mutex
-	result ReconcileResult
-	// serverDown — открыт размыкатель общего сервера: остальные магазины получат тот же отказ.
-	serverDown error
-}
-
-// ErrReconcileServerDown — сверка прервана: сервер магазинов недоступен целиком.
-var ErrReconcileServerDown = errs.New(
-	errs.Unavailable,
-	"checkout.reconcile_server_down",
-	"сервер магазинов недоступен, сверка прервана",
-)
-
 // ReconcileOrders — страховка событий: раз в сутки сверяет статусы исполняемых
 // заказов одним запросом на страницу заказов магазина. Расхождение исправляется и считается.
 func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) {
 	now := s.clock.Now()
-	run := &reconcileRun{result: ReconcileResult{Failed: map[ids.TenantID]error{}}}
+	run := newReconcileRun()
 	expire := func(ctx context.Context, tx ports.Tx) error {
 		return tx.Checkouts().ExpireReconciliation(ctx, now)
 	}
@@ -85,11 +72,8 @@ func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) 
 			return run.result, err
 		}
 		s.reconcilePage(ctx, entries, run)
-		if cause := run.stopped(); cause != nil {
-			return run.result, ErrReconcileServerDown.Wrap(cause)
-		}
-		if len(entries) < reconcilePage || ctx.Err() != nil {
-			return run.result, ctx.Err()
+		if run.stopped() != nil || len(entries) < reconcilePage || ctx.Err() != nil {
+			return s.finishReconcile(ctx, run, now)
 		}
 		last := entries[len(entries)-1]
 		cursor = checkout.ReconcileCursor{TenantID: last.TenantID, CheckoutID: last.CheckoutID}
@@ -97,52 +81,36 @@ func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) 
 }
 
 // reconcilePage сверяет магазины страницы параллельно, а пачки одного магазина — по очереди:
-// большой или недоступный магазин занимает одно место и не задерживает остальные.
+// большой или недоступный магазин занимает одно место и не задерживает остальные. Заказы магазина,
+// уже отложенного на повторный круг, к нему и добавляются; пропущенного — не сверяются.
 func (s *Service) reconcilePage(ctx context.Context, entries []checkout.ReconcileEntry, run *reconcileRun) {
 	var group errgroup.Group
 	group.SetLimit(reconcileWorkers)
-	for _, shop := range reconcileShops(entries) {
+	for _, entries := range reconcileShops(entries) {
+		shop := pendingShop{tenant: entries[0].TenantID, entries: entries, size: ReconcileBatch}
+		if run.failed(shop.tenant) || run.joinPostponed(shop) {
+			continue
+		}
 		group.Go(safego.Guard("checkout.reconcile", func() error {
-			s.reconcileShop(ctx, shop, run)
+			s.reconcileShop(ctx, shop, run, true)
 			return nil
 		}))
 	}
 	_ = group.Wait()
 }
 
-// reconcileShop сверяет заказы магазина пачками. Пачку, на которую магазин не ответил в срок
-// чтения, проход повторяет вдвое меньшей после паузы, а не откладывает магазин до следующих суток.
-func (s *Service) reconcileShop(ctx context.Context, entries []checkout.ReconcileEntry, run *reconcileRun) {
-	tenant := entries[0].TenantID
-	size, failures := ReconcileBatch, 0
-	for len(entries) > 0 && !run.failed(tenant) && run.stopped() == nil {
-		batch := entries[:min(size, len(entries))]
-		err := s.reconcileBatch(ctx, tenant, batch, run)
-		if err == nil {
-			entries = entries[len(batch):]
-			continue
-		}
-		failures++
-		if !s.retryReconcile(ctx, err, failures, run) {
-			skipReconcileShop(tenant, len(entries), failures, err, run)
+// reconcileShop сверяет заказы магазина пачками; на отказе остаток магазина откладывается на
+// повторный круг или пропускается — магазин не спит в строю и не занимает место.
+func (s *Service) reconcileShop(ctx context.Context, shop pendingShop, run *reconcileRun, first bool) {
+	for len(shop.entries) > 0 && run.stopped() == nil {
+		batch := shop.entries[:min(shop.size, len(shop.entries))]
+		if err := s.reconcileBatch(ctx, shop.tenant, batch, run); err != nil {
+			run.postpone(shop, err, first)
 			return
 		}
-		size = max(1, size/2)
+		run.answered()
+		shop.entries = shop.entries[len(batch):]
 	}
-}
-
-// retryReconcile решает, повторять ли запрос магазину. Истёк срок чтения — повтор после паузы 1, 2,
-// 4 с; размыкатель магазина или иной отказ — без повтора; размыкатель сервера — прервать проход.
-func (s *Service) retryReconcile(ctx context.Context, err error, failures int, run *reconcileRun) bool {
-	var rejected *ports.PlatformRejected
-	if errors.As(err, &rejected) && rejected.Server {
-		run.stop(err)
-		return false
-	}
-	if !errors.Is(err, ports.ErrPlatformTimeout) || failures > ReconcileRetries {
-		return false
-	}
-	return s.clock.Wait(ctx, reconcileRetryPause<<(failures-1))
 }
 
 // reconcileBatch — один запрос магазину и применение расхождений его ответа.
@@ -182,18 +150,6 @@ func (s *Service) reconcileBatch(
 	}
 	s.enqueueSearchPurchases(ctx, purchases)
 	return nil
-}
-
-// skipReconcileShop отмечает магазин несверенным в этом проходе: его заказы сверит следующий.
-func skipReconcileShop(tenant ids.TenantID, unchecked, attempts int, cause error, run *reconcileRun) {
-	run.fail(tenant, cause)
-	slog.Warn(
-		"сверка заказов: магазин не ответил, заказы сверит следующий проход",
-		slog.String("tenantId", string(tenant)),
-		slog.Int("unchecked", unchecked),
-		slog.Int("attempts", attempts),
-		slog.Any("error", cause),
-	)
 }
 
 // resolveMismatch применяет состояние из ответа пачки. Не применившееся расхождение — сигнал оператору.
@@ -248,46 +204,6 @@ func (s *Service) applyReconciled(
 		err = s.uow.Do(ctx, apply)
 	}
 	return changed, err
-}
-
-func (r *reconcileRun) fail(tenant ids.TenantID, err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.result.Failed[tenant] = err
-}
-
-func (r *reconcileRun) stop(cause error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.serverDown == nil {
-		r.serverDown = cause
-	}
-}
-
-func (r *reconcileRun) stopped() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.serverDown
-}
-
-func (r *reconcileRun) failed(tenant ids.TenantID) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.result.Failed[tenant] != nil
-}
-
-func (r *reconcileRun) count(outcome string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.result.Checked++
-	switch outcome {
-	case eventStatusMismatch:
-		r.result.Mismatched++
-	case eventStatusMissing:
-		r.result.Missing++
-	case eventStatusUnresolved:
-		r.result.Unresolved++
-	}
 }
 
 // reconcileShops делит страницу, упорядоченную по магазину, на заказы отдельных магазинов.

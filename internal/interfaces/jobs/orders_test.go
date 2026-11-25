@@ -54,6 +54,6 @@ func TestOrderRecoverySkipsIntervalOfOtherReplica(t *testing.T) {
 	}
 }
 
-func (busySchedule) WithLock(context.Context, func(context.Context) error) error {
-	return ports.ErrRebuildBusy
+func (busySchedule) Run(context.Context, func(context.Context) error) error {
+	return ports.ErrIntervalTaken
 }

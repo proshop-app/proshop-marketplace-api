@@ -73,13 +73,13 @@ func TestSharedIntervalRunsOnceAcrossReplicasWithoutDirectSession(t *testing.T) 
 		calls++
 		return nil
 	}
-	if err := first.WithLock(ctx, run); err != nil {
+	if err := first.Run(ctx, run); err != nil {
 		t.Fatal(err)
 	}
-	if err := second.WithLock(ctx, run); !errors.Is(err, ports.ErrRebuildBusy) || calls != 1 {
+	if err := second.Run(ctx, run); !errors.Is(err, ports.ErrIntervalTaken) || calls != 1 {
 		t.Fatalf("второй реплике интервал не достаётся: calls=%d err=%v", calls, err)
 	}
-	if err := first.WithLock(ctx, run); !errors.Is(err, ports.ErrRebuildBusy) || calls != 1 {
+	if err := first.Run(ctx, run); !errors.Is(err, ports.ErrIntervalTaken) || calls != 1 {
 		t.Fatalf("до истечения интервала прохода нет и у первой: calls=%d err=%v", calls, err)
 	}
 }

@@ -23,10 +23,17 @@ type OrderReconciler interface {
 	ReconcileOrders(ctx context.Context) (appcheckout.ReconcileResult, error)
 }
 
+// ReconcileSchedule — суточный интервал сверки: проход прерванный недоступностью сервера
+// возвращает его, и следующая часовая попытка любой реплики повторяет сверку.
+type ReconcileSchedule interface {
+	ports.IndexRebuildLock
+	Release(ctx context.Context) error
+}
+
 // OrderReconcileRunner проверяет готовность суточной сверки раз в час.
 type OrderReconcileRunner struct {
 	reconciler OrderReconciler
-	schedule   ports.IndexRebuildLock
+	schedule   ReconcileSchedule
 	logger     *slog.Logger
 	orders     *prometheus.CounterVec
 	failures   *prometheus.CounterVec
@@ -35,7 +42,7 @@ type OrderReconcileRunner struct {
 // NewOrderReconcileRunner — сверка со счётчиком расхождений: ненулевой рост означает пропущенные события.
 func NewOrderReconcileRunner(
 	reconciler OrderReconciler,
-	schedule ports.IndexRebuildLock,
+	schedule ReconcileSchedule,
 	logger *slog.Logger,
 	registerer prometheus.Registerer,
 ) *OrderReconcileRunner {
@@ -82,6 +89,8 @@ func (r *OrderReconcileRunner) run(
 
 		switch {
 		case errors.Is(err, ports.ErrRebuildBusy):
+		case errors.Is(err, appcheckout.ErrReconcileServerDown):
+			r.interrupted(ctx, result, err)
 		case err != nil && ctx.Err() == nil:
 			r.logger.Error("сверка заказов: не удалась", slog.Any("error", err))
 		case err == nil:
@@ -91,6 +100,16 @@ func (r *OrderReconcileRunner) run(
 		if !waitNextAttempt(ctx, orderReconcileAttemptInterval) {
 			return nil
 		}
+	}
+}
+
+// interrupted записывает итог до прерывания и возвращает интервал: сервер магазинов недоступен, и
+// пропущенные магазины не должны ждать следующих суток.
+func (r *OrderReconcileRunner) interrupted(ctx context.Context, result appcheckout.ReconcileResult, cause error) {
+	r.record(result)
+	r.logger.Warn("сверка заказов: прервана, повтор в следующую попытку", slog.Any("error", cause))
+	if err := r.schedule.Release(ctx); err != nil && ctx.Err() == nil {
+		r.logger.Error("сверка заказов: интервал не возвращён", slog.Any("error", err))
 	}
 }
 

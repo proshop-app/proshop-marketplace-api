@@ -14,7 +14,7 @@ type OrderResumer interface{ Resume(context.Context) error }
 
 // OrdersRunner запускает восстановление покупок сразу и по расписанию.
 type OrdersRunner struct {
-	schedule ports.IndexRebuildLock
+	schedule ports.IntervalWork
 	service  OrderResumer
 	interval time.Duration
 	logger   *slog.Logger
@@ -26,7 +26,7 @@ func NewOrdersRunner(service OrderResumer, interval time.Duration, logger *slog.
 }
 
 // WithSchedule назначает общий интервал для всех реплик: проход за интервал делает одна.
-func (r *OrdersRunner) WithSchedule(schedule ports.IndexRebuildLock) *OrdersRunner {
+func (r *OrdersRunner) WithSchedule(schedule ports.IntervalWork) *OrdersRunner {
 	r.schedule = schedule
 	return r
 }
@@ -35,7 +35,7 @@ func (r *OrdersRunner) WithSchedule(schedule ports.IndexRebuildLock) *OrdersRunn
 func (r *OrdersRunner) Run(ctx context.Context) error {
 	for {
 		err := r.resume(ctx)
-		if err != nil && !errors.Is(err, ports.ErrRebuildBusy) && ctx.Err() == nil {
+		if err != nil && !errors.Is(err, ports.ErrIntervalTaken) && ctx.Err() == nil {
 			r.logger.Error("восстановление покупок", slog.Any("error", err))
 		}
 		if !wait(ctx, r.interval) {
@@ -48,5 +48,5 @@ func (r *OrdersRunner) resume(ctx context.Context) error {
 	if r.schedule == nil {
 		return r.service.Resume(ctx)
 	}
-	return r.schedule.WithLock(ctx, r.service.Resume)
+	return r.schedule.Run(ctx, r.service.Resume)
 }
