@@ -272,7 +272,15 @@ func f(r prom.Registerer, err error, vec *prom.CounterVec) {
 	}
 	got := strings.Join(metricLabelProblems(fset, []*ast.File{file}), "\n")
 	for _, label := range []string{
-		"product_id", "request_id", "buyer_phone", "order_no", "raw_path", "ip", "query", "sku", "session",
+		"product_id",
+		"request_id",
+		"buyer_phone",
+		"order_no",
+		"raw_path",
+		"ip",
+		"query",
+		"sku",
+		"session",
 	} {
 		if !strings.Contains(got, "метка "+label+" ") {
 			t.Fatalf("сторож не поймал %s:\n%s", label, got)

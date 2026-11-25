@@ -97,7 +97,7 @@ func TestReconcileHealthyShopsDoNotWaitForHungOnes(t *testing.T) {
 		}
 	}
 	if lastHealthy > firstRetry {
-		t.Fatalf("здоровый магазин ждал повтора зависшего: здоровый на %d, первый повтор на %d", lastHealthy, firstRetry)
+		t.Fatalf("здоровый магазин ждал повтора зависшего: %d после %d", lastHealthy, firstRetry)
 	}
 	for tenant, count := range seen {
 		want := 1

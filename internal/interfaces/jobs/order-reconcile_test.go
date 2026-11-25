@@ -64,7 +64,7 @@ func TestOrderReconcileInterruptedRecordsAndReleases(t *testing.T) {
 	}
 	mismatched := metric.GetCounter().GetValue()
 	if probe.released != 1 || mismatched != 1 {
-		t.Fatalf("итог до прерывания записан, интервал возвращён: возвратов %d, расхождений %v", probe.released, mismatched)
+		t.Fatalf("итог записан, интервал возвращён: возвратов %d, расхождений %v", probe.released, mismatched)
 	}
 }
 

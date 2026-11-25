@@ -119,7 +119,8 @@ func (s *Service) collectResume(
 		previous := c.State()
 		tasks, err := s.resumeWork(c, now)
 		if err != nil {
-			batch.broken = append(batch.broken, rejectedPurchase{id: c.ID(), tenants: groupTenants(previous), cause: err})
+			rejected := rejectedPurchase{id: c.ID(), tenants: groupTenants(previous), cause: err}
+			batch.broken = append(batch.broken, rejected)
 			continue
 		}
 		page.taken = append(page.taken, c.ID())

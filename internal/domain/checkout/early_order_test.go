@@ -123,7 +123,8 @@ func TestBlockedCancellationDropsEarlyOrder(t *testing.T) {
 	if _, err := c.ExpireCreation(t0.Add(15 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.BlockCancellation("t1", "t1-order", checkout.GroupPaid, "оплачен", t0.Add(16*time.Second)); err != nil {
+	blocked := t0.Add(16 * time.Second)
+	if _, err := c.BlockCancellation("t1", "t1-order", checkout.GroupPaid, "оплачен", blocked); err != nil {
 		t.Fatal(err)
 	}
 	if g := c.Groups()[0]; g.EarlyOrders != nil || g.OrderID != "t1-order" {
