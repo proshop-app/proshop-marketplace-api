@@ -125,7 +125,14 @@ func newOrderEventBench(t *testing.T) *orderEventBench {
 		clock,
 		appcheckout.Config{PaymentStub: true},
 	)
-	return &orderEventBench{counter: counter, pool: traced, uow: uow, service: service, platform: platform, clock: clock}
+	return &orderEventBench{
+		counter:  counter,
+		pool:     traced,
+		uow:      uow,
+		service:  service,
+		platform: platform,
+		clock:    clock,
+	}
 }
 
 // paidPurchase — оплаченная покупка всех магазинов стенда; номера заказов по магазину.
