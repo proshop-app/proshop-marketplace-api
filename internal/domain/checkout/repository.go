@@ -80,7 +80,8 @@ type Repository interface {
 	LockWorkDue(ctx context.Context, now time.Time, after WorkCursor, limit int) (WorkPage, error)
 	// DeferWork переносит созревшую работу групп покупок на until: неразбирающаяся покупка не
 	// занимает каждый проход, но и не теряется.
-	DeferWork(ctx context.Context, checkoutIDs []ids.UUID, until time.Time) error
+	// now — момент, с которого работа отложена: признак виден оператору до удачного сохранения.
+	DeferWork(ctx context.Context, checkoutIDs []ids.UUID, until, now time.Time) error
 	// ReconcileDue — страница заказов суточной сверки в порядке магазина и покупки, без снимков покупок.
 	ReconcileDue(ctx context.Context, after ReconcileCursor, now time.Time, limit int) ([]ReconcileEntry, error)
 	// ExpireReconciliation снимает со сверки заказы, срок которой истёк.

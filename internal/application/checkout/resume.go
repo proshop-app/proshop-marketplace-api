@@ -12,14 +12,21 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-// resumeBrokenDelay — на сколько откладывается работа покупки, которую проход не смог разобрать:
-// она не занимает каждый проход и не теряется, ошибка повторяется в журнале раз в этот срок.
-const resumeBrokenDelay = 10 * time.Minute
+const (
+	// resumeBrokenDelay — на сколько откладывается работа покупки, которую проход не смог разобрать:
+	// она не занимает каждый проход и не теряется, ошибка повторяется в журнале раз в этот срок.
+	resumeBrokenDelay = 10 * time.Minute
+	// eventResumeDeferred — событие оформления: работа покупки отложена; покупку находит оператор
+	// фильтром «зависшие».
+	eventResumeDeferred = "resume_deferred"
+)
 
 // resumedPage — итог страницы восстановления.
 type resumedPage struct {
-	// taken — покупки, взятые под блокировку: если страница откатилась, они разбираются по одной.
+	// taken — покупки, взятые под блокировку, и broken — неразобравшиеся: если страница откатилась,
+	// первые разбираются по одной, вторые откладываются заново.
 	taken    []ids.UUID
+	broken   []rejectedPurchase
 	states   []checkout.State
 	failures []error
 	next     checkout.WorkCursor
@@ -27,12 +34,18 @@ type resumedPage struct {
 	more     bool
 }
 
+// rejectedPurchase — покупка, которую проход откладывает, с магазинами её групп и причиной.
+type rejectedPurchase struct {
+	id      ids.UUID
+	tenants []ids.TenantID
+	cause   error
+}
+
 // resumeBatch — работа страницы, собранная до записи.
 type resumeBatch struct {
-	changed  []*checkout.Checkout
-	tasks    []ports.NewTask
-	broken   []ids.UUID
-	failures []error
+	changed []*checkout.Checkout
+	tasks   []ports.NewTask
+	broken  []rejectedPurchase
 }
 
 // Resume работает и при запуске, и по расписанию. Страница созревших покупок разбирается одной
@@ -47,13 +60,11 @@ func (s *Service) Resume(ctx context.Context) error {
 		if err != nil && !page.read {
 			return errors.Join(append(failures, err)...)
 		}
-		failures = append(failures, page.failures...)
 		if err != nil {
-			states, separate := s.resumeEach(ctx, page.taken)
-			page.states = states
+			page.states, page.failures = s.resumeEach(ctx, page)
 			failures = append(failures, err)
-			failures = append(failures, separate...)
 		}
+		failures = append(failures, page.failures...)
 		for _, state := range page.states {
 			if err := s.returnDue(ctx, state); err != nil {
 				failures = append(failures, err)
@@ -79,13 +90,14 @@ func (s *Service) resumePage(ctx context.Context, cursor checkout.WorkCursor) (r
 		}
 		page.read, page.next, page.more = true, work.Next, work.More
 		batch := s.collectResume(ctx, tx, work, now, &page, &purchases)
-		page.failures = batch.failures
+		page.broken = batch.broken
 		return s.saveResume(ctx, tx, batch, now)
 	})
 	if err != nil {
-		page.states, page.failures = nil, nil
+		page.states = nil
 		return page, err
 	}
+	page.failures = rejectionCauses(page.broken)
 	s.enqueueSearchPurchases(ctx, purchases)
 	return page, nil
 }
@@ -101,16 +113,16 @@ func (s *Service) collectResume(
 ) resumeBatch {
 	var batch resumeBatch
 	for _, broken := range work.Broken {
-		batch.reject(broken.ID, "", broken.Err)
+		batch.broken = append(batch.broken, rejectedPurchase{id: broken.ID, cause: broken.Err})
 	}
 	for _, c := range work.Due {
-		page.taken = append(page.taken, c.ID())
 		previous := c.State()
 		tasks, err := s.resumeWork(c, now)
 		if err != nil {
-			batch.reject(c.ID(), groupTenants(previous), err)
+			batch.broken = append(batch.broken, rejectedPurchase{id: c.ID(), tenants: groupTenants(previous), cause: err})
 			continue
 		}
+		page.taken = append(page.taken, c.ID())
 		state := c.State()
 		batch.tasks = append(batch.tasks, tasks...)
 		if state.Version != previous.Version {
@@ -128,7 +140,7 @@ func (s *Service) saveResume(ctx context.Context, tx ports.Tx, batch resumeBatch
 	if err := tx.Checkouts().UpdateMany(ctx, batch.changed); err != nil {
 		return err
 	}
-	if err := tx.Checkouts().DeferWork(ctx, batch.broken, now.Add(resumeBrokenDelay)); err != nil {
+	if err := s.deferPurchases(ctx, tx, batch.broken, now); err != nil {
 		return err
 	}
 	if len(batch.tasks) == 0 {
@@ -138,10 +150,14 @@ func (s *Service) saveResume(ctx context.Context, tx ports.Tx, batch resumeBatch
 }
 
 // resumeEach разбирает покупки откатившейся страницы по одной: сбой одной не задерживает остальные.
-func (s *Service) resumeEach(ctx context.Context, taken []ids.UUID) ([]checkout.State, []error) {
+// Неразобравшиеся строки страницы откладываются заново — их отметка откатилась вместе со страницей.
+func (s *Service) resumeEach(ctx context.Context, page resumedPage) ([]checkout.State, []error) {
 	var states []checkout.State
-	var failures []error
-	for _, id := range taken {
+	failures := rejectionCauses(page.broken)
+	if err := s.deferSeparately(ctx, page.broken); err != nil {
+		failures = append(failures, err)
+	}
+	for _, id := range page.taken {
 		state, err := s.resumeOne(ctx, id)
 		if err != nil {
 			failures = append(failures, err)
@@ -152,24 +168,22 @@ func (s *Service) resumeEach(ctx context.Context, taken []ids.UUID) ([]checkout.
 	return states, failures
 }
 
-// resumeOne — работа одной покупки своей транзакцией; неразобравшаяся откладывается.
+// resumeOne — работа одной покупки своей транзакцией. Покупка, которая не разобралась или не
+// сохранилась, откладывается отдельной транзакцией: иначе она возвращалась бы первой в каждый проход.
 func (s *Service) resumeOne(ctx context.Context, id ids.UUID) (checkout.State, error) {
 	var state checkout.State
-	var rejected error
+	var tenants []ids.TenantID
 	now := s.clock.Now()
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		rejected = nil
 		c, err := tx.Checkouts().GetForUpdate(ctx, id)
 		if err != nil {
 			return err
 		}
 		previous := c.State()
+		tenants = groupTenants(previous)
 		tasks, err := s.resumeWork(c, now)
 		if err != nil {
-			var batch resumeBatch
-			batch.reject(id, groupTenants(previous), err)
-			rejected = batch.failures[0]
-			return tx.Checkouts().DeferWork(ctx, batch.broken, now.Add(resumeBrokenDelay))
+			return err
 		}
 		state = c.State()
 		batch := resumeBatch{tasks: tasks}
@@ -178,10 +192,58 @@ func (s *Service) resumeOne(ctx context.Context, id ids.UUID) (checkout.State, e
 		}
 		return s.saveResume(ctx, tx, batch, now)
 	})
-	if err == nil {
-		err = rejected
+	if err == nil || errors.Is(err, checkout.ErrNotFound) {
+		return state, err
 	}
-	return state, err
+	broken := []rejectedPurchase{{id: id, tenants: tenants, cause: err}}
+	return checkout.State{}, errors.Join(err, s.deferSeparately(ctx, broken))
+}
+
+// deferSeparately откладывает покупки своей транзакцией.
+func (s *Service) deferSeparately(ctx context.Context, broken []rejectedPurchase) error {
+	if len(broken) == 0 {
+		return nil
+	}
+	now := s.clock.Now()
+	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		return s.deferPurchases(ctx, tx, broken, now)
+	})
+}
+
+// deferPurchases откладывает работу покупок одним запросом; после фиксации — журнал с покупкой и
+// магазинами и счётчик отложенных.
+func (s *Service) deferPurchases(ctx context.Context, tx ports.Tx, broken []rejectedPurchase, now time.Time) error {
+	if len(broken) == 0 {
+		return nil
+	}
+	list := make([]ids.UUID, 0, len(broken))
+	for _, purchase := range broken {
+		list = append(list, purchase.id)
+		tx.AfterCommit(func() { s.reportDeferred(purchase) })
+	}
+	return tx.Checkouts().DeferWork(ctx, list, now.Add(resumeBrokenDelay), now)
+}
+
+func (s *Service) reportDeferred(purchase rejectedPurchase) {
+	tenants := make([]string, 0, len(purchase.tenants))
+	for _, tenant := range purchase.tenants {
+		tenants = append(tenants, string(tenant))
+	}
+	slog.Warn(
+		"восстановление покупок: покупка не разобрана, работа отложена",
+		slog.String("checkoutId", string(purchase.id)),
+		slog.String("tenantId", strings.Join(tenants, ",")),
+		slog.Duration("delay", resumeBrokenDelay),
+		slog.Any("error", purchase.cause),
+	)
+	if s.observer == nil {
+		return
+	}
+	if len(purchase.tenants) == 0 {
+		s.observer.RecordCheckoutEvent("", purchase.id, eventResumeDeferred)
+		return
+	}
+	s.observer.RecordCheckoutEvent(purchase.tenants[0], purchase.id, eventResumeDeferred)
 }
 
 // resumeWork — задачи созревшей работы покупки. Если созревшей работы у групп нет, срок устарел
@@ -205,23 +267,18 @@ func (s *Service) resumeWork(c *checkout.Checkout, now time.Time) ([]ports.NewTa
 	return append(tasks, cancellations...), err
 }
 
-// reject откладывает покупку и пишет причину в журнал: магазины группы и покупка.
-func (b *resumeBatch) reject(id ids.UUID, tenants string, cause error) {
-	b.broken = append(b.broken, id)
-	b.failures = append(b.failures, cause)
-	slog.Warn(
-		"восстановление покупок: покупка не разобрана, работа отложена",
-		slog.String("checkoutId", string(id)),
-		slog.String("tenantId", tenants),
-		slog.Duration("delay", resumeBrokenDelay),
-		slog.Any("error", cause),
-	)
+func rejectionCauses(broken []rejectedPurchase) []error {
+	causes := make([]error, 0, len(broken))
+	for _, purchase := range broken {
+		causes = append(causes, purchase.cause)
+	}
+	return causes
 }
 
-func groupTenants(state checkout.State) string {
-	tenants := make([]string, 0, len(state.Groups))
+func groupTenants(state checkout.State) []ids.TenantID {
+	tenants := make([]ids.TenantID, 0, len(state.Groups))
 	for _, g := range state.Groups {
-		tenants = append(tenants, string(g.TenantID))
+		tenants = append(tenants, g.TenantID)
 	}
-	return strings.Join(tenants, ",")
+	return tenants
 }

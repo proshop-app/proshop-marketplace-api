@@ -70,6 +70,7 @@ var retryableMigrationIndexes = map[int64][]string{
 		"outbox_retry_created_idx",
 	},
 	72: {"checkout_groups_stuck_idx"},
+	73: {"checkout_groups_deferred_idx"},
 }
 
 var rollbackMigrationIndexes = map[int64][]string{

@@ -213,7 +213,7 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 			continue
 		}
 		if !f.StuckBefore.IsZero() {
-			stuck := false
+			_, stuck := r.d.deferredWork[state.ID]
 			for _, g := range state.Groups {
 				if g.ReconciliationRequired ||
 					(g.Status == checkout.GroupAwaitingPayment && !g.AwaitingSince.After(f.StuckBefore)) {
@@ -273,7 +273,7 @@ func (r checkouts) LockWorkDue(
 	return page, nil
 }
 
-func (r checkouts) DeferWork(_ context.Context, checkoutIDs []ids.UUID, until time.Time) error {
+func (r checkouts) DeferWork(_ context.Context, checkoutIDs []ids.UUID, until, _ time.Time) error {
 	for _, id := range checkoutIDs {
 		r.d.deferredWork[id] = until
 	}

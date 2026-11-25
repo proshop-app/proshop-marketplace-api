@@ -26,18 +26,22 @@ const (
 	listCheckoutFilters = listCheckoutConditions + `
   AND $4::timestamptz IS NULL` + listCheckoutOrder
 
-	// listStuckCheckouts — «зависшие» оператора. Набор ведёт частичный индекс checkout_groups_stuck_idx
-	// (миграция 00072): он растёт с числом живых ожиданий, а не с историей заказов. Покупка проверяется
+	// listStuckCheckouts — «зависшие» оператора: ждущие оплаты или сверки отмены и покупки с работой,
+	// отложенной проходом восстановления. Набор ведут частичные индексы checkout_groups_stuck_idx
+	// (00072) и checkout_groups_deferred_idx (00073): он растёт с числом живых ожиданий, а не с историей. Покупка проверяется
 	// зависимым подзапросом (OFFSET 0 не даёт поднять его в соединение): иначе планировщик выбирает
 	// слияние с обходом всех покупок по ключу в надежде рано набрать страницу.
 	listStuckCheckouts = `
  SELECT ` + checkoutReadColumns + `
  FROM (
-  SELECT DISTINCT g.checkout_id FROM checkout_groups g
+  SELECT g.checkout_id FROM checkout_groups g
   WHERE (g.order_progress->>'ReconciliationRequired' = 'true'
     OR (g.order_progress->>'Status' = 'awaiting_payment'
      AND (g.order_progress->>'AwaitingSince')::timestamptz <= $4))
    AND ($2::uuid IS NULL OR g.checkout_id > $2)
+  UNION
+  SELECT d.checkout_id FROM checkout_groups d
+  WHERE d.work_deferred_at IS NOT NULL AND ($2::uuid IS NULL OR d.checkout_id > $2)
  ) stuck
  CROSS JOIN LATERAL (
   SELECT ` + checkoutReadColumns + `

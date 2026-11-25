@@ -19,22 +19,22 @@ const (
 		ORDER BY next_work_at, checkout_id
 		LIMIT $4`
 
-	// lockWorkCheckouts берёт покупки страницы по ключу. Занятую покупку (её пишет событие,
-	// покупатель или соседний проход) страница пропускает: её возьмёт следующий проход. Созревшая
-	// работа перепроверяется свежим снимком запроса: покупку, которую соседний проход сохранил
-	// между выборкой кандидатов и блокировкой, страница не берёт второй раз.
+	// lockWorkCheckouts берёт покупки страницы только по ключу. Занятую покупку (её пишет событие,
+	// покупатель или соседний проход) страница пропускает: её возьмёт следующий проход. Созревшую
+	// работу перепроверяют группы, прочитанные после блокировки (loadGroups), а не условие здесь:
+	// условие по группам разворачивало бы запрос от всех созревших групп.
 	lockWorkCheckouts = `
 		SELECT ` + checkoutReadColumns + `
-		FROM checkouts c
+		FROM checkouts
 		WHERE id = ANY($1::uuid[])
 			AND (status NOT IN ('draft', 'confirmed') OR order_context->>'CartConsumed' = 'true')
-			AND EXISTS (SELECT 1 FROM checkout_groups g WHERE g.checkout_id = c.id AND g.next_work_at <= $2)
 		ORDER BY id
-		FOR NO KEY UPDATE OF c SKIP LOCKED`
+		FOR NO KEY UPDATE SKIP LOCKED`
 
 	deferCheckoutWork = `
 		UPDATE checkout_groups
-		SET next_work_at = $2
+		SET next_work_at = $2,
+			work_deferred_at = $3
 		WHERE checkout_id = ANY($1::uuid[]) AND next_work_at < $2`
 )
 
@@ -49,27 +49,30 @@ func (r *Checkouts) LockWorkDue(
 	if err != nil || len(candidates) == 0 {
 		return page, err
 	}
-	states, broken, err := r.lockWorkCheckouts(ctx, candidates, now)
+	states, broken, err := r.lockWorkCheckouts(ctx, candidates)
 	if err != nil {
 		return checkout.WorkPage{}, err
 	}
-	failed, err := r.loadGroups(ctx, states)
+	loaded, err := r.loadGroups(ctx, states)
 	if err != nil {
 		return checkout.WorkPage{}, err
 	}
 	page.Broken = broken
 	for _, state := range states {
-		if cause, found := failed[state.ID]; found {
+		if cause, found := loaded.failed[state.ID]; found {
 			page.Broken = append(page.Broken, checkout.BrokenCheckout{ID: state.ID, Err: cause})
 			continue
 		}
-		page.Due = append(page.Due, checkout.Restore(state))
+		// Соседний проход сохранил покупку между выборкой кандидатов и блокировкой: работы нет.
+		if next, found := loaded.nextWork[state.ID]; found && !next.After(now) {
+			page.Due = append(page.Due, checkout.Restore(state))
+		}
 	}
 	return page, nil
 }
 
-// DeferWork переносит созревшую работу групп покупок на until.
-func (r *Checkouts) DeferWork(ctx context.Context, checkoutIDs []ids.UUID, until time.Time) error {
+// DeferWork переносит созревшую работу групп покупок на until и отмечает её отложенной в now.
+func (r *Checkouts) DeferWork(ctx context.Context, checkoutIDs []ids.UUID, until, now time.Time) error {
 	if len(checkoutIDs) == 0 {
 		return nil
 	}
@@ -77,7 +80,7 @@ func (r *Checkouts) DeferWork(ctx context.Context, checkoutIDs []ids.UUID, until
 	for _, id := range checkoutIDs {
 		list = append(list, string(id))
 	}
-	if _, err := execSQL(ctx, r.db, deferCheckoutWork, list, until); err != nil {
+	if _, err := execSQL(ctx, r.db, deferCheckoutWork, list, until, now); err != nil {
 		return fmt.Errorf("отложить работу покупок: %w", err)
 	}
 	return nil
@@ -125,9 +128,8 @@ func (r *Checkouts) workCandidates(
 func (r *Checkouts) lockWorkCheckouts(
 	ctx context.Context,
 	candidates []string,
-	now time.Time,
 ) ([]checkout.State, []checkout.BrokenCheckout, error) {
-	rows, err := rawSQL(ctx, r.db, lockWorkCheckouts, candidates, now).Rows()
+	rows, err := rawSQL(ctx, r.db, lockWorkCheckouts, candidates).Rows()
 	if err != nil {
 		return nil, nil, fmt.Errorf("покупки с созревшей работой: %w", err)
 	}
