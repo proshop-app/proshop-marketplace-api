@@ -52,7 +52,9 @@ func (s *Service) applyOrderState(
 	order checkout.SellerOrder,
 	purchases *[]ports.NewTask,
 ) (bool, error) {
-	c, err := tx.Checkouts().Get(ctx, checkoutID)
+	// Под блокировкой строки: события разных магазинов одной покупки приходят из разных партиций
+	// и реплик и ждут друг друга, а не уходят в повтор приёма из-за конфликта версии.
+	c, err := tx.Checkouts().GetForUpdate(ctx, checkoutID)
 	if err != nil {
 		return false, orderStateFailure(err, checkoutID, tenant, order)
 	}

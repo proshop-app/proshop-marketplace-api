@@ -142,6 +142,11 @@ func (r checkouts) Get(_ context.Context, id ids.UUID) (*checkout.Checkout, erro
 	return checkout.Restore(copyCheckout(state)), nil
 }
 
+// GetForUpdate — то же чтение: транзакции хранилища в памяти и так идут по одной.
+func (r checkouts) GetForUpdate(ctx context.Context, id ids.UUID) (*checkout.Checkout, error) {
+	return r.Get(ctx, id)
+}
+
 func (r checkouts) ByKey(_ context.Context, buyerID ids.UUID, key string) (*checkout.Checkout, error) {
 	for _, state := range r.d.checkouts {
 		if state.BuyerID == buyerID && state.IdempotencyKey == key {
@@ -179,6 +184,15 @@ func (r checkouts) Update(_ context.Context, c *checkout.Checkout) error {
 	r.d.checkouts[c.ID()] = copyCheckout(c.State())
 	c.MarkSaved()
 
+	return nil
+}
+
+func (r checkouts) UpdateMany(ctx context.Context, cs []*checkout.Checkout) error {
+	for _, c := range cs {
+		if err := r.Update(ctx, c); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
