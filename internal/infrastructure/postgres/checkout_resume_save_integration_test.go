@@ -24,7 +24,9 @@ const (
 		WHERE checkout_id = $1`
 	selectDeferredWork = `SELECT min(next_work_at), bool_or(work_deferred_at IS NOT NULL)
 		FROM checkout_groups WHERE checkout_id = $1`
-	farFutureWork = `UPDATE checkout_groups SET next_work_at = '2100-01-01' WHERE checkout_id = $1`
+	farFutureWork           = `UPDATE checkout_groups SET next_work_at = '2100-01-01' WHERE checkout_id = $1`
+	expireAllReconciliation = `UPDATE checkout_groups SET reconcile_until = '2000-01-01' WHERE checkout_id = $1`
+	lockGroupRows           = `SELECT 1 FROM checkout_groups WHERE checkout_id = $1 FOR NO KEY UPDATE`
 )
 
 // lockTrace запоминает запрос блокировки страницы и его параметры.
@@ -225,4 +227,30 @@ func containsCheckout(states []checkout.State, id ids.UUID) bool {
 		}
 	}
 	return false
+}
+
+// Снятие истёкших сроков сверки не ждёт и не сцепляется с записью покупки: занятую группу пропускает.
+func TestExpireReconciliationSkipsLockedGroups(t *testing.T) {
+	bench := newOrderEventBench(t)
+	ctx := context.Background()
+	id, _ := bench.paidPurchase(t, 950)
+	if _, err := bench.pool.Exec(ctx, expireAllReconciliation, string(id)); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := bench.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, lockGroupRows, string(id)); err != nil {
+		t.Fatal(err)
+	}
+	quick, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	err = do(t, bench.uow, func(_ context.Context, tx ports.Tx) error {
+		return tx.Checkouts().ExpireReconciliation(quick, bench.clock.Now())
+	})
+	if err != nil {
+		t.Fatal("снятие сроков ждёт занятую группу", err)
+	}
 }
