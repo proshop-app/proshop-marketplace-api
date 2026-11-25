@@ -29,7 +29,7 @@ type OrderReconcileRunner struct {
 	schedule   ports.IndexRebuildLock
 	logger     *slog.Logger
 	orders     *prometheus.CounterVec
-	failures   prometheus.Counter
+	failures   *prometheus.CounterVec
 }
 
 // NewOrderReconcileRunner — сверка со счётчиком расхождений: ненулевой рост означает пропущенные события.
@@ -50,10 +50,13 @@ func NewOrderReconcileRunner(
 			},
 			[]string{"outcome"},
 		),
-		failures: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "marketplace_order_reconcile_failures_total",
-			Help: "Магазины, не ответившие на суточную сверку и её повторы; магазин — в журнале сверки.",
-		}),
+		failures: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_order_reconcile_failures_total",
+				Help: "Магазины, не ответившие на суточную сверку статусов заказов.",
+			},
+			[]string{"tenant"},
+		),
 	}
 	registerer.MustRegister(r.orders, r.failures)
 
@@ -97,7 +100,14 @@ func (r *OrderReconcileRunner) record(result appcheckout.ReconcileResult) {
 	r.orders.WithLabelValues("mismatched").Add(float64(result.Mismatched))
 	r.orders.WithLabelValues("missing").Add(float64(result.Missing))
 	r.orders.WithLabelValues("unresolved").Add(float64(result.Unresolved))
-	r.failures.Add(float64(len(result.Failed)))
+	for tenant, cause := range result.Failed {
+		r.failures.WithLabelValues(string(tenant)).Inc()
+		r.logger.Warn(
+			"сверка заказов: магазин не ответил",
+			slog.String("tenantId", string(tenant)),
+			slog.Any("error", cause),
+		)
+	}
 	r.logger.Info(
 		"сверка заказов: завершена",
 		slog.Int("checked", result.Checked),

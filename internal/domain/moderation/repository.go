@@ -34,7 +34,7 @@ type VerdictRepository interface {
 // CaseRepository гарантирует единственность открытого дела и условное обновление.
 type CaseRepository interface {
 	Reasons(context.Context, []ids.UUID) (map[ids.UUID][]Reason, error)
-	OpenStats(context.Context) (OpenStat, error)
+	OpenStats(context.Context) ([]OpenStat, error)
 	Get(context.Context, ids.UUID) (*Case, error)
 	Open(context.Context, ids.TenantID, ids.ProductID) (*Case, error)
 	// OpenMany читает открытые дела списка одним запросом; товаров без открытого дела в ответе нет.
@@ -69,10 +69,11 @@ type CachedDecision struct {
 	ExpiresAt   time.Time
 }
 
-// OpenStat агрегирует очередь всей площадки одним запросом: магазин — не метка метрики.
+// OpenStat агрегирует очередь одним запросом независимо от числа страниц.
 type OpenStat struct {
-	Count  int
-	Oldest time.Time
+	TenantID ids.TenantID
+	Count    int
+	Oldest   time.Time
 }
 
 // ResolveReason фиксирует текст из общего словаря до записи решения.

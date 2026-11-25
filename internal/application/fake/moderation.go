@@ -370,18 +370,25 @@ func (r moderationRules) AddReason(_ context.Context, reason moderation.ReasonCo
 	return nil
 }
 
-func (r moderationCases) OpenStats(_ context.Context) (moderation.OpenStat, error) {
-	var stat moderation.OpenStat
+func (r moderationCases) OpenStats(_ context.Context) ([]moderation.OpenStat, error) {
+	tenants := map[ids.TenantID]moderation.OpenStat{}
 	for _, c := range r.d.cases {
 		if c.Status != moderation.Open {
 			continue
 		}
+		stat := tenants[c.TenantID]
+		stat.TenantID = c.TenantID
 		stat.Count++
 		if stat.Oldest.IsZero() || c.OpenedAt.Before(stat.Oldest) {
 			stat.Oldest = c.OpenedAt
 		}
+		tenants[c.TenantID] = stat
 	}
-	return stat, nil
+	result := make([]moderation.OpenStat, 0, len(tenants))
+	for _, stat := range tenants {
+		result = append(result, stat)
+	}
+	return result, nil
 }
 
 func (r moderationVerdicts) History(

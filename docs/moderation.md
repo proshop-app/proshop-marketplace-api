@@ -444,9 +444,9 @@ Prometheus, регистрация как у outbox:
 
 | Метрика | Вид | Метки |
 |---|---|---|
-| `marketplace_moderation_verdicts_total` | счётчик изменений вердикта | `status`, `decided_by` |
+| `marketplace_moderation_verdicts_total` | счётчик изменений вердикта | `tenant`, `status`, `decided_by` |
 | `marketplace_moderation_decisions_total` | счётчик решений оператора | `action` |
-| `marketplace_moderation_cases_open` | gauge открытых дел площадки (один агрегат, без разбивки по магазину) | — |
+| `marketplace_moderation_cases_open` | gauge открытых дел | `tenant` |
 | `marketplace_moderation_case_oldest_age_seconds` | gauge возраста старейшего открытого дела | — |
 
 Gauge обновляет фоновый цикл раз в `MODERATION_METRICS_INTERVAL`

@@ -25,10 +25,10 @@ type SettingsSyncRunner struct {
 	syncer     SettingsSyncer
 	interval   time.Duration
 	logger     *slog.Logger
-	failures   prometheus.Counter
+	failures   *prometheus.CounterVec
 }
 
-// NewSettingsSyncRunner — сверка настроек с метрикой сбоев.
+// NewSettingsSyncRunner — сверка настроек с метрикой сбоев по магазину.
 func NewSettingsSyncRunner(
 	syncer SettingsSyncer,
 	interval time.Duration,
@@ -47,10 +47,13 @@ func NewSettingsSyncRunner(
 		syncer:   syncer,
 		interval: interval,
 		logger:   logger,
-		failures: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "marketplace_shop_settings_sync_failures_total",
-			Help: "Неудачные сверки настроек магазинов с сервером; магазин — в журнале.",
-		}),
+		failures: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "marketplace_shop_settings_sync_failures_total",
+				Help: "Неудачные сверки настроек магазина с сервером.",
+			},
+			[]string{"tenant"},
+		),
 	}
 	registerer.MustRegister(r.failures, r.candidates, r.queue)
 
@@ -70,7 +73,7 @@ func (r *SettingsSyncRunner) Run(ctx context.Context) error {
 			r.candidates.Set(float64(result.Candidates))
 			r.queue.Set(float64(result.Queue))
 			for tenant, cause := range result.Failed {
-				r.failures.Inc()
+				r.failures.WithLabelValues(string(tenant)).Inc()
 				r.logger.Warn(
 					"настройки магазина: сервер не ответил",
 					slog.String("tenantId", string(tenant)),
