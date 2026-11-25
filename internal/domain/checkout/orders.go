@@ -235,6 +235,7 @@ func (c *Checkout) AttachOrder(tenant ids.TenantID, order SellerOrder, now time.
 	} else {
 		g.Status, g.Reason = GroupAwaitingPayment, ""
 	}
+	c.applyEarlyOrder(g, now)
 	c.rollup()
 	return true, c.touch(now)
 }

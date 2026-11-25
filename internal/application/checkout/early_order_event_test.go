@@ -6,13 +6,27 @@ import (
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
-	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-// Ответ создания потерян, магазин успел отменить заказ: событие отмены приходит раньше, чем
-// площадка узнала номер заказа. Оно должно дождаться ответа повтором, а не пропасть до опроса.
-func TestOrderEventBeforeCreationReplyWaitsForReply(t *testing.T) {
-	e := setup(t)
+// earlyOrderEvent — событие отмены заказа магазином, о котором площадка ещё не знает номера.
+func earlyOrderEvent(id ids.UUID, tenant ids.TenantID, status checkout.GroupStatus, revision int64) appcheckout.OrderEvent {
+	return appcheckout.OrderEvent{
+		EventID:    "orders:early:" + string(status),
+		TenantID:   tenant,
+		CheckoutID: id,
+		Order: checkout.SellerOrder{
+			OrderID:  "order-1",
+			Status:   status,
+			Reason:   "Заказ отменён магазином",
+			Revision: revision,
+		},
+	}
+}
+
+// lostCreation — покупка, чей первый ответ создания потерян: у магазина заказ есть, у площадки нет.
+func lostCreation(t *testing.T, e *env) (checkout.State, func()) {
+	t.Helper()
 	ctx := context.Background()
 	c := confirmedPurchase(t, e)
 	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
@@ -25,35 +39,68 @@ func TestOrderEventBeforeCreationReplyWaitsForReply(t *testing.T) {
 		t.Fatal("потерянный ответ должен оставить фоновый повтор", err)
 	}
 	e.service = service
-	event := appcheckout.OrderEvent{
-		EventID:    "orders:0:7",
-		TenantID:   task.TenantID,
-		CheckoutID: c.ID,
-		Order: checkout.SellerOrder{
-			OrderID:  "order-1",
-			Status:   checkout.GroupCancelled,
-			Reason:   "Заказ отменён магазином",
-			Revision: 2,
-		},
+	retry := func() {
+		t.Helper()
+		e.clock.Advance(checkout.CreationRetryDelay)
+		if err := e.service.HandleOrderTask(ctx, task); err != nil {
+			t.Fatal(err)
+		}
 	}
-	err := e.service.ApplyOrderEvent(ctx, event)
-	if errs.RetryKindOf(err) != errs.RetryTransient {
-		t.Fatal("событие раньше ответа создания повторяется, а не подтверждается молча", err)
+	return c, retry
+}
+
+// Ответ создания потерян, магазин успел отменить заказ: событие подтверждается сразу (приём не ждёт),
+// а отмена применяется той же транзакцией, что сохраняет ответ повторного создания.
+func TestOrderEventBeforeCreationReplyAppliesOnAttach(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	c, retry := lostCreation(t, e)
+	tenant := c.Groups[0].TenantID
+	if err := e.service.ApplyOrderEvent(ctx, earlyOrderEvent(c.ID, tenant, checkout.GroupCancelled, 2)); err != nil {
+		t.Fatal("раннее событие подтверждается сразу, без повтора приёма", err)
 	}
-	e.clock.Advance(checkout.CreationRetryDelay)
-	if err := e.service.HandleOrderTask(ctx, task); err != nil {
-		t.Fatal(err)
+	held, err := e.service.Get(ctx, buyerID, c.ID)
+	if err != nil || held.Groups[0].EarlyOrder == nil || held.Groups[0].OrderID != "" {
+		t.Fatalf("раннее состояние хранится при группе до привязки: %v %+v", err, held.Groups[0])
 	}
-	if err := e.service.ApplyOrderEvent(ctx, event); err != nil {
+	retry()
+	state, err := e.service.Get(ctx, buyerID, c.ID)
+	if err != nil || state.Groups[0].Status != checkout.GroupCancelled || state.Groups[0].EarlyOrder != nil {
+		t.Fatalf("привязка заказа применяет раннюю отмену без нового события: %v %+v", err, state.Groups[0])
+	}
+}
+
+// Старшая ревизия перекрывает младшую и до привязки, и после неё.
+func TestEarlyOrderEventKeepsNewestRevision(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	c, retry := lostCreation(t, e)
+	tenant := c.Groups[0].TenantID
+	for _, event := range []appcheckout.OrderEvent{
+		earlyOrderEvent(c.ID, tenant, checkout.GroupCancelled, 3),
+		earlyOrderEvent(c.ID, tenant, checkout.GroupAwaitingPayment, 2),
+	} {
+		if err := e.service.ApplyOrderEvent(ctx, event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	held, err := e.service.Get(ctx, buyerID, c.ID)
+	if err != nil || held.Groups[0].EarlyOrder == nil || held.Groups[0].EarlyOrder.Revision != 3 {
+		t.Fatalf("младшая ревизия не перекрывает старшую до привязки: %v %+v", err, held.Groups[0].EarlyOrder)
+	}
+	retry()
+	late := earlyOrderEvent(c.ID, tenant, checkout.GroupAwaitingPayment, 2)
+	late.EventID = "orders:late"
+	if err := e.service.ApplyOrderEvent(ctx, late); err != nil {
 		t.Fatal(err)
 	}
 	state, err := e.service.Get(ctx, buyerID, c.ID)
 	if err != nil || state.Groups[0].Status != checkout.GroupCancelled {
-		t.Fatalf("повтор события после ответа создания применяет отмену: %v %+v", err, state.Groups[0])
+		t.Fatalf("младшая ревизия не перекрывает старшую после привязки: %v %+v", err, state.Groups[0])
 	}
 }
 
-// Группа, оставленная без заказа после срока создания, события не ждёт: исход узнаёт отмена по ключу.
+// Группа, оставленная без заказа после срока создания, события не ждёт.
 func TestOrderEventForAbandonedGroupWithoutOrderIsAcknowledged(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
@@ -66,12 +113,7 @@ func TestOrderEventForAbandonedGroupWithoutOrderIsAcknowledged(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.clock.Advance(state.Groups[0].CreationDeadline.Sub(e.clock.Now()))
-	err = e.service.ApplyOrderEvent(ctx, appcheckout.OrderEvent{
-		EventID:    "orders:0:8",
-		TenantID:   state.Groups[0].TenantID,
-		CheckoutID: c.ID,
-		Order:      checkout.SellerOrder{OrderID: "order-1", Status: checkout.GroupCancelled, Revision: 2},
-	})
+	err = e.service.ApplyOrderEvent(ctx, earlyOrderEvent(c.ID, state.Groups[0].TenantID, checkout.GroupCancelled, 2))
 	if err != nil {
 		t.Fatal("после срока создания событие не держит приём", err)
 	}

@@ -299,17 +299,20 @@ func (g Group) pollRetryDelay() time.Duration {
 }
 
 // ApplyOrderState снимает страховочную проверку, когда событие уже принесло итог магазина.
-// Заказ, которого у группы нет, — ErrNotFound: событие относится не к этой покупке. Если же создание
-// ещё ждёт ответа магазина, — ErrOrderNotAttached: событие обогнало ответ и применится после него.
+// Заказ, отличный от заказа группы, — ErrNotFound: событие относится не к этой покупке. Группе, ещё
+// не знающей номера заказа, событие обогнало ответ создания: состояние сохраняется до привязки.
 // Отмена неоплаченного заказа значима только для группы, ждущей оплату: отмену по команде площадки
 // ведёт её собственный сценарий, и событие магазина не должно подменить его причину и итог.
 // Отслеживание без номера перехода не отзывается: состояние без него прежнее не стирает.
 func (c *Checkout) ApplyOrderState(tenant ids.TenantID, order SellerOrder, now time.Time) (bool, error) {
 	g := c.group(tenant)
-	if g != nil && g.AwaitingOrder(now) {
-		return false, ErrOrderNotAttached
+	if g == nil {
+		return false, ErrNotFound
 	}
-	if g == nil || g.OrderID == "" || g.OrderID != order.OrderID {
+	if g.OrderID == "" {
+		return c.holdEarlyOrder(g, order, now)
+	}
+	if g.OrderID != order.OrderID {
 		return false, ErrNotFound
 	}
 	ownCancellation := order.Status == GroupCancelled &&
@@ -326,6 +329,28 @@ func (c *Checkout) ApplyOrderState(tenant ids.TenantID, order SellerOrder, now t
 		g.Tracking = cloneTracking(order.Tracking)
 	}
 	return true, nil
+}
+
+// holdEarlyOrder сохраняет состояние заказа, о котором магазин сообщил раньше ответа создания (ответ
+// потерян и сохранится повтором или поздно): старшая ревизия перекрывает младшую, повтор — не изменение.
+func (c *Checkout) holdEarlyOrder(g *Group, order SellerOrder, now time.Time) (bool, error) {
+	if g.EarlyOrder != nil && g.EarlyOrder.Revision >= order.Revision {
+		return false, nil
+	}
+	early := order
+	early.Tracking = cloneTracking(order.Tracking)
+	g.EarlyOrder = &early
+	return true, c.touch(now)
+}
+
+// applyEarlyOrder применяет при привязке заказа состояние из раннего события. Состояние другого
+// заказа или противоречащее порядку исполнения отбрасывается, как такое же событие после привязки.
+func (c *Checkout) applyEarlyOrder(g *Group, now time.Time) {
+	early := g.EarlyOrder
+	g.EarlyOrder = nil
+	if early != nil && early.OrderID == g.OrderID {
+		_, _ = c.ApplyOrderState(g.TenantID, *early, now)
+	}
 }
 
 // outranUnnumbered — статус группы получен без номера перехода (оплата площадкой, отказ отмены)

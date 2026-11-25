@@ -59,6 +59,9 @@ type Group struct {
 	Regions     []string
 	// CreationDeadline фиксирует обещанный срок и не продлевается повтором команды.
 	CreationDeadline time.Time
+	// EarlyOrder — состояние заказа из события магазина, пришедшего раньше сохранённого ответа
+	// создания; привязка заказа применяет его в той же транзакции.
+	EarlyOrder *SellerOrder `json:",omitempty"`
 	// Abandoned запрещает позднему ответу повторно открыть оплату после отказа покупателя или срока.
 	Abandoned bool
 	// ReconciliationRequired сохраняет работу после локального итога, пока магазин не подтвердил отмену.
