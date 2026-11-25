@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -18,10 +19,14 @@ import (
 )
 
 const (
-	// unsavableCheckout — покупка, чью запись отвергнет база: итог вне ограничения total >= 0.
-	unsavableCheckout = `UPDATE checkout_groups
-		SET lines = '[{"productId": "p1", "name": "Товар", "quantity": 1, "price": -100000}]', next_work_at = '2000-01-01'
-		WHERE checkout_id = $1`
+	// rejectCheckoutWrite — база отвергает запись одной покупки, домен её не отличает от здоровой.
+	rejectCheckoutWrite = `CREATE FUNCTION reject_checkout_write() RETURNS trigger AS $$
+		BEGIN
+			IF NEW.id = '%s' THEN RAISE EXCEPTION 'запись покупки отвергнута'; END IF;
+			RETURN NEW;
+		END $$ LANGUAGE plpgsql;
+		CREATE TRIGGER reject_checkout_write BEFORE UPDATE ON checkouts
+			FOR EACH ROW EXECUTE FUNCTION reject_checkout_write()`
 	selectDeferredWork = `SELECT min(next_work_at), bool_or(work_deferred_at IS NOT NULL)
 		FROM checkout_groups WHERE checkout_id = $1`
 	farFutureWork           = `UPDATE checkout_groups SET next_work_at = '2100-01-01' WHERE checkout_id = $1`
@@ -48,12 +53,13 @@ func TestResumeDefersPurchaseThatCannotBeSaved(t *testing.T) {
 		id, _ := bench.paidPurchase(t, 910+n)
 		healthy = append(healthy, id)
 	}
-	for query, id := range map[string]ids.UUID{unsavableCheckout: bad, breakCheckoutRow: row} {
-		if _, err := bench.pool.Exec(ctx, query, string(id)); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := bench.pool.Exec(ctx, breakCheckoutRow, string(row)); err != nil {
+		t.Fatal(err)
 	}
-	for _, id := range healthy {
+	if _, err := bench.pool.Exec(ctx, fmt.Sprintf(rejectCheckoutWrite, bad)); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range append(healthy, bad) {
 		if _, err := bench.pool.Exec(ctx, staleCheckoutWork, string(id)); err != nil {
 			t.Fatal(err)
 		}
@@ -252,5 +258,36 @@ func TestExpireReconciliationSkipsLockedGroups(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal("снятие сроков ждёт занятую группу", err)
+	}
+}
+
+// Отложенная работа снимается первым удачным сохранением покупки: оператор не видит её зависшей.
+func TestSavedPurchaseClearsDeferredWork(t *testing.T) {
+	bench := newOrderEventBench(t)
+	ctx := context.Background()
+	id, orders := bench.paidPurchase(t, 960)
+	if _, err := bench.pool.Exec(ctx, staleCheckoutWork, string(id)); err != nil {
+		t.Fatal(err)
+	}
+	err := do(t, bench.uow, func(ctx context.Context, tx ports.Tx) error {
+		return tx.Checkouts().DeferWork(ctx, []ids.UUID{id}, bench.clock.Now().Add(time.Hour), bench.clock.Now())
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wasDeferred bool
+	if err := bench.pool.QueryRow(ctx, selectDeferredWork, string(id)).Scan(new(*time.Time), &wasDeferred); err != nil {
+		t.Fatal(err)
+	}
+	if err := bench.service.ApplyOrderEvent(ctx, assembledEvent(id, "t1", orders["t1"], 1)); err != nil {
+		t.Fatal(err)
+	}
+	var next *time.Time
+	var deferred bool
+	if err := bench.pool.QueryRow(ctx, selectDeferredWork, string(id)).Scan(&next, &deferred); err != nil {
+		t.Fatal(err)
+	}
+	if !wasDeferred || deferred {
+		t.Fatal("сохранение покупки не сняло признак отложенной работы")
 	}
 }

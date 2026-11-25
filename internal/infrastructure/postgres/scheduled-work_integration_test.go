@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 )
@@ -81,5 +83,32 @@ func TestSharedIntervalRunsOnceAcrossReplicasWithoutDirectSession(t *testing.T) 
 	}
 	if err := first.Run(ctx, run); !errors.Is(err, ports.ErrIntervalTaken) || calls != 1 {
 		t.Fatalf("до истечения интервала прохода нет и у первой: calls=%d err=%v", calls, err)
+	}
+}
+
+// Холостая попытка реплики, интервал которой уже взят, — только чтение, без пишущей команды.
+func TestSharedIntervalIdleAttemptOnlyReads(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	counter := &checkoutQueryCounter{}
+	counter.reset()
+	config := pool.Config()
+	config.ConnConfig.Tracer = counter
+	traced, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(traced.Close)
+	first := postgres.NewSharedInterval(postgres.Single(traced), "idle-test", time.Hour)
+	second := postgres.NewSharedInterval(postgres.Single(traced), "idle-test", time.Hour)
+	if err := first.Run(ctx, func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	counter.reset()
+	if err := second.Run(ctx, func(context.Context) error { return nil }); !errors.Is(err, ports.ErrIntervalTaken) {
+		t.Fatal(err)
+	}
+	if counter.total() != 1 || counter.counts["SELECT"] != 1 {
+		t.Fatalf("холостая попытка: %v", counter.counts)
 	}
 }

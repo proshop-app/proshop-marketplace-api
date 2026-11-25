@@ -74,7 +74,7 @@ const (
 			work_deferred_at = NULL
 		FROM ` + checkoutGroupValues + `
 		WHERE g.checkout_id = v.checkout_id AND g.tenant_id = v.tenant_id
-			AND (
+			AND ((
 				g.external_checkout_id, g.lines, g.goods, g.quote_status, g.quote_reason, g.delivery_cost,
 				g.min_days, g.max_days, g.quote_expires_at, g.order_progress, g.tracking, g.next_work_at,
 				g.reconcile_until
@@ -82,7 +82,7 @@ const (
 				v.external_checkout_id, v.lines::jsonb, v.goods, v.quote_status, v.quote_reason, v.delivery_cost,
 				v.min_days, v.max_days, v.quote_expires_at, v.order_progress::jsonb, v.tracking::jsonb,
 				v.next_work_at, v.reconcile_until
-			) OR g.work_deferred_at IS NOT NULL`
+			) OR g.work_deferred_at IS NOT NULL)`
 )
 
 // checkoutColumnsBatch — колонки пачки покупок для unnest, в порядке updateCheckouts.
