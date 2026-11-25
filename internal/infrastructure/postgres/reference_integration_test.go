@@ -47,6 +47,14 @@ func (c *referenceClock) Now() time.Time {
 	return c.now
 }
 
+func (c *referenceClock) Wait(ctx context.Context, d time.Duration) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	c.advance(d)
+	return true
+}
+
 func (c *referenceClock) advance(d time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

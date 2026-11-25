@@ -12,11 +12,25 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+// pauseClock считает паузы сценария вместо настоящего ожидания.
+type pauseClock struct {
+	paused time.Duration
+}
+
 // slowStatuses — магазин, не укладывающийся в срок чтения на пачке больше limit заказов.
 type slowStatuses struct {
 	ports.PlatformAPI
 	limit int
 	sizes []int
+}
+
+func (c *pauseClock) Now() time.Time {
+	return time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC).Add(c.paused)
+}
+
+func (c *pauseClock) Wait(_ context.Context, d time.Duration) bool {
+	c.paused += d
+	return true
 }
 
 func (p *slowStatuses) OrderStatuses(
@@ -26,7 +40,7 @@ func (p *slowStatuses) OrderStatuses(
 ) ([]checkout.OrderStatus, error) {
 	p.sizes = append(p.sizes, len(orderIDs))
 	if len(orderIDs) > p.limit {
-		return nil, context.DeadlineExceeded
+		return nil, ports.ErrPlatformTimeout.Wrap(context.DeadlineExceeded)
 	}
 	statuses := make([]checkout.OrderStatus, 0, len(orderIDs))
 	for _, id := range orderIDs {
@@ -55,7 +69,8 @@ func TestReconcileShopsKeepsShopTogether(t *testing.T) {
 // Магазин отвечает в срок только на пачках до 50 заказов: проход уменьшает пачку и сверяет всё.
 func TestReconcileShopShrinksBatchUntilShopAnswers(t *testing.T) {
 	platform := &slowStatuses{limit: 50}
-	service := NewService(nil, platform, nil, nil, nil, nil, Config{ReconcileRetryPause: time.Millisecond})
+	clock := &pauseClock{}
+	service := NewService(nil, platform, nil, nil, nil, clock, Config{})
 	entries := make([]checkout.ReconcileEntry, 0, ReconcileBatch)
 	for i := range ReconcileBatch {
 		entries = append(entries, checkout.ReconcileEntry{
@@ -72,5 +87,8 @@ func TestReconcileShopShrinksBatchUntilShopAnswers(t *testing.T) {
 	}
 	if !slices.Equal(platform.sizes, []int{200, 100, 50, 50, 50, 50}) {
 		t.Fatalf("размеры запросов: %v", platform.sizes)
+	}
+	if clock.paused != 3*time.Second {
+		t.Fatalf("паузы перед повторами 1 и 2 с: %s", clock.paused)
 	}
 }

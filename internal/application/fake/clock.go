@@ -4,6 +4,7 @@
 package fake
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -25,6 +26,15 @@ func (c *Clock) Now() time.Time {
 	defer c.mu.Unlock()
 
 	return c.now
+}
+
+// Wait сдвигает часы на d без настоящего ожидания: тест видит паузу по сдвигу времени.
+func (c *Clock) Wait(ctx context.Context, d time.Duration) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	c.Advance(d)
+	return true
 }
 
 // Advance сдвигает часы.

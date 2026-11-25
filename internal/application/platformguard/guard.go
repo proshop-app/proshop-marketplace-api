@@ -14,7 +14,7 @@ import (
 
 var (
 	// ErrTimeout — строгая операция не завершилась за отведённое время.
-	ErrTimeout = errs.New(errs.Unavailable, "platform.timeout", "магазин не ответил вовремя, попробуйте позже")
+	ErrTimeout = ports.ErrPlatformTimeout
 	// ErrUnavailable — размыкатель открыт или очередь заполнена.
 	ErrUnavailable = errs.New(errs.Unavailable, "platform.unavailable", "магазин временно недоступен, попробуйте позже")
 )

@@ -17,9 +17,12 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
-// Clock — текущее время.
+// Clock — текущее время и ожидание по этим часам: паузы сценариев проверяются тестами без
+// настоящего ожидания.
 type Clock interface {
 	Now() time.Time
+	// Wait ждёт d; false — контекст отменён раньше.
+	Wait(ctx context.Context, d time.Duration) bool
 }
 
 // UnitOfWork — транзакция: всё, что сделано внутри fn, фиксируется вместе или

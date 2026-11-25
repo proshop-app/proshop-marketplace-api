@@ -19,10 +19,15 @@ type PickupCatalogFailure struct {
 
 // PlatformRejected — ограждение отклонило вызов без обращения к серверу: размыкатель открыт.
 // Раньше NotBefore (часы ограждения) повтор получит тот же отказ, поэтому задачу откладывают до него.
+// Server — открыт размыкатель общего сервера, а не одного магазина: отказ ждёт все магазины.
 type PlatformRejected struct {
 	NotBefore time.Time
 	Cause     error
+	Server    bool
 }
+
+// ErrPlatformTimeout — магазин не ответил в срок вызова: ограждение сняло вызов по своему сроку.
+var ErrPlatformTimeout = errs.New(errs.Unavailable, "platform.timeout", "магазин не ответил вовремя, попробуйте позже")
 
 // ErrPickupCatalogUnavailable требует повтора загрузки, не исправления покупки.
 var ErrPickupCatalogUnavailable = errs.New(

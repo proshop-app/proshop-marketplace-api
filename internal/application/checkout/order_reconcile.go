@@ -11,6 +11,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
@@ -21,6 +22,7 @@ const (
 	ReconcileBatch = 200
 	// ReconcileRetries — сколько раз за проход повторяется запрос магазину, не ответившему в срок
 	// чтения: каждый повтор вдвое меньше и после вдвое большей паузы — 200, 100, 50, 25 заказов.
+	// Другие отказы не повторяются: размыкатель отклоняет мгновенно, пауза его не закроет.
 	ReconcileRetries = 3
 	// reconcileRetryPause — пауза перед первым повтором: отказ размыкателя магазина длится секунды.
 	reconcileRetryPause = time.Second
@@ -49,7 +51,16 @@ type ReconcileResult struct {
 type reconcileRun struct {
 	mu     sync.Mutex
 	result ReconcileResult
+	// serverDown — открыт размыкатель общего сервера: остальные магазины получат тот же отказ.
+	serverDown error
 }
+
+// ErrReconcileServerDown — сверка прервана: сервер магазинов недоступен целиком.
+var ErrReconcileServerDown = errs.New(
+	errs.Unavailable,
+	"checkout.reconcile_server_down",
+	"сервер магазинов недоступен, сверка прервана",
+)
 
 // ReconcileOrders — страховка событий: раз в сутки сверяет статусы исполняемых
 // заказов одним запросом на страницу заказов магазина. Расхождение исправляется и считается.
@@ -74,6 +85,9 @@ func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) 
 			return run.result, err
 		}
 		s.reconcilePage(ctx, entries, run)
+		if cause := run.stopped(); cause != nil {
+			return run.result, ErrReconcileServerDown.Wrap(cause)
+		}
 		if len(entries) < reconcilePage || ctx.Err() != nil {
 			return run.result, ctx.Err()
 		}
@@ -97,12 +111,11 @@ func (s *Service) reconcilePage(ctx context.Context, entries []checkout.Reconcil
 }
 
 // reconcileShop сверяет заказы магазина пачками. Пачку, на которую магазин не ответил в срок
-// чтения, проход повторяет вдвое меньшей после паузы, а не откладывает магазин до следующих суток;
-// после ReconcileRetries отказов магазин пропускается до следующей сверки с записью в журнал.
+// чтения, проход повторяет вдвое меньшей после паузы, а не откладывает магазин до следующих суток.
 func (s *Service) reconcileShop(ctx context.Context, entries []checkout.ReconcileEntry, run *reconcileRun) {
 	tenant := entries[0].TenantID
 	size, failures := ReconcileBatch, 0
-	for len(entries) > 0 && !run.failed(tenant) {
+	for len(entries) > 0 && !run.failed(tenant) && run.stopped() == nil {
 		batch := entries[:min(size, len(entries))]
 		err := s.reconcileBatch(ctx, tenant, batch, run)
 		if err == nil {
@@ -110,7 +123,7 @@ func (s *Service) reconcileShop(ctx context.Context, entries []checkout.Reconcil
 			continue
 		}
 		failures++
-		if failures > ReconcileRetries || !s.pauseReconcile(ctx, failures) {
+		if !s.retryReconcile(ctx, err, failures, run) {
 			skipReconcileShop(tenant, len(entries), failures, err, run)
 			return
 		}
@@ -118,20 +131,18 @@ func (s *Service) reconcileShop(ctx context.Context, entries []checkout.Reconcil
 	}
 }
 
-// pauseReconcile ждёт перед повтором запроса магазину; false — проход остановлен.
-func (s *Service) pauseReconcile(ctx context.Context, failures int) bool {
-	pause := s.config.ReconcileRetryPause
-	if pause <= 0 {
-		pause = reconcileRetryPause
-	}
-	timer := time.NewTimer(pause << (failures - 1))
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
+// retryReconcile решает, повторять ли запрос магазину. Истёк срок чтения — повтор после паузы 1, 2,
+// 4 с; размыкатель магазина или иной отказ — без повтора; размыкатель сервера — прервать проход.
+func (s *Service) retryReconcile(ctx context.Context, err error, failures int, run *reconcileRun) bool {
+	var rejected *ports.PlatformRejected
+	if errors.As(err, &rejected) && rejected.Server {
+		run.stop(err)
 		return false
-	case <-timer.C:
-		return true
 	}
+	if !errors.Is(err, ports.ErrPlatformTimeout) || failures > ReconcileRetries {
+		return false
+	}
+	return s.clock.Wait(ctx, reconcileRetryPause<<(failures-1))
 }
 
 // reconcileBatch — один запрос магазину и применение расхождений его ответа.
@@ -218,7 +229,8 @@ func (s *Service) resolveMismatch(
 	return eventStatusUnresolved
 }
 
-// applyReconciled повторяет запись один раз: конфликт версии — параллельное событие или действие покупателя.
+// applyReconciled повторяет запись один раз на конфликт версии: запись покупки идёт под блокировкой
+// строки, и конфликт здесь — только защита от пути записи без блокировки.
 func (s *Service) applyReconciled(
 	ctx context.Context,
 	entry checkout.ReconcileEntry,
@@ -242,6 +254,20 @@ func (r *reconcileRun) fail(tenant ids.TenantID, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.result.Failed[tenant] = err
+}
+
+func (r *reconcileRun) stop(cause error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.serverDown == nil {
+		r.serverDown = cause
+	}
+}
+
+func (r *reconcileRun) stopped() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.serverDown
 }
 
 func (r *reconcileRun) failed(tenant ids.TenantID) bool {

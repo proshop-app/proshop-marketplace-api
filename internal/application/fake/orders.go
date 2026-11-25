@@ -180,7 +180,7 @@ func (p *Platform) OrderStatuses(
 	}
 	if p.statusFailures[tenant] > 0 {
 		p.statusFailures[tenant]--
-		return nil, context.DeadlineExceeded
+		return nil, ports.ErrPlatformTimeout.Wrap(context.DeadlineExceeded)
 	}
 	var statuses []checkout.OrderStatus
 	for _, order := range p.orders {
