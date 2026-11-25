@@ -64,6 +64,7 @@ type Platform struct {
 	quotes           map[ids.TenantID]delivery.Offered
 	settings         map[ids.TenantID]ports.ShopSettings
 	failing          map[ids.TenantID]error
+	statusFailures   map[ids.TenantID]int
 	requests         []ports.QuoteRequest
 	cancelledOrders  map[string]ports.CancelOrderResult
 	cancelRequests   map[ids.TenantID][]ports.CancelOrderRequest
@@ -266,6 +267,7 @@ func NewPlatform() *Platform {
 		quotes:          map[ids.TenantID]delivery.Offered{},
 		settings:        map[ids.TenantID]ports.ShopSettings{},
 		failing:         map[ids.TenantID]error{},
+		statusFailures:  map[ids.TenantID]int{},
 	}
 }
 
@@ -303,6 +305,14 @@ func (p *Platform) Fail(tenant ids.TenantID, err error) {
 	defer p.mu.Unlock()
 
 	p.failing[tenant] = err
+}
+
+// FailNextStatuses — магазин не отвечает на сверку count раз подряд, как не уложившийся в срок чтения.
+func (p *Platform) FailNextStatuses(tenant ids.TenantID, count int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.statusFailures[tenant] = count
 }
 
 // QuoteRequests — запросы расчёта по порядку.

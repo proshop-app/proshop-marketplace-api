@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -18,6 +19,11 @@ import (
 const (
 	// ReconcileBatch — сколько заказов одного магазина уходит ему одним запросом.
 	ReconcileBatch = 200
+	// ReconcileRetries — сколько раз за проход повторяется запрос магазину, не ответившему в срок
+	// чтения: каждый повтор вдвое меньше и после вдвое большей паузы — 200, 100, 50, 25 заказов.
+	ReconcileRetries = 3
+	// reconcileRetryPause — пауза перед первым повтором: отказ размыкателя магазина длится секунды.
+	reconcileRetryPause = time.Second
 	// reconcilePage — строк сверки за одно чтение базы.
 	reconcilePage = 1000
 	// reconcileWorkers — сколько магазинов сверяется одновременно.
@@ -38,11 +44,6 @@ type ReconcileResult struct {
 	Missing    int
 	Unresolved int
 	Failed     map[ids.TenantID]error
-}
-
-type reconcileBatch struct {
-	tenant  ids.TenantID
-	entries []checkout.ReconcileEntry
 }
 
 type reconcileRun struct {
@@ -82,40 +83,78 @@ func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) 
 }
 
 // reconcilePage сверяет магазины страницы параллельно, а пачки одного магазина — по очереди:
-// большой или недоступный магазин занимает одно место и после первого отказа пропускается.
+// большой или недоступный магазин занимает одно место и не задерживает остальные.
 func (s *Service) reconcilePage(ctx context.Context, entries []checkout.ReconcileEntry, run *reconcileRun) {
 	var group errgroup.Group
 	group.SetLimit(reconcileWorkers)
 	for _, shop := range reconcileShops(entries) {
 		group.Go(safego.Guard("checkout.reconcile", func() error {
-			for _, batch := range shop {
-				if run.failed(batch.tenant) || !s.reconcileBatch(ctx, batch, run) {
-					return nil
-				}
-			}
+			s.reconcileShop(ctx, shop, run)
 			return nil
 		}))
 	}
 	_ = group.Wait()
 }
 
-// reconcileBatch — один запрос магазину; false — магазин не ответил.
-func (s *Service) reconcileBatch(ctx context.Context, batch reconcileBatch, run *reconcileRun) bool {
-	orderIDs := make([]string, 0, len(batch.entries))
-	for _, entry := range batch.entries {
+// reconcileShop сверяет заказы магазина пачками. Пачку, на которую магазин не ответил в срок
+// чтения, проход повторяет вдвое меньшей после паузы, а не откладывает магазин до следующих суток;
+// после ReconcileRetries отказов магазин пропускается до следующей сверки с записью в журнал.
+func (s *Service) reconcileShop(ctx context.Context, entries []checkout.ReconcileEntry, run *reconcileRun) {
+	tenant := entries[0].TenantID
+	size, failures := ReconcileBatch, 0
+	for len(entries) > 0 && !run.failed(tenant) {
+		batch := entries[:min(size, len(entries))]
+		err := s.reconcileBatch(ctx, tenant, batch, run)
+		if err == nil {
+			entries = entries[len(batch):]
+			continue
+		}
+		failures++
+		if failures > ReconcileRetries || !s.pauseReconcile(ctx, failures) {
+			skipReconcileShop(tenant, len(entries), failures, err, run)
+			return
+		}
+		size = max(1, size/2)
+	}
+}
+
+// pauseReconcile ждёт перед повтором запроса магазину; false — проход остановлен.
+func (s *Service) pauseReconcile(ctx context.Context, failures int) bool {
+	pause := s.config.ReconcileRetryPause
+	if pause <= 0 {
+		pause = reconcileRetryPause
+	}
+	timer := time.NewTimer(pause << (failures - 1))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+// reconcileBatch — один запрос магазину и применение расхождений его ответа.
+func (s *Service) reconcileBatch(
+	ctx context.Context,
+	tenant ids.TenantID,
+	entries []checkout.ReconcileEntry,
+	run *reconcileRun,
+) error {
+	orderIDs := make([]string, 0, len(entries))
+	for _, entry := range entries {
 		orderIDs = append(orderIDs, entry.OrderID)
 	}
-	statuses, err := s.platform.OrderStatuses(ctx, batch.tenant, orderIDs)
+	statuses, err := s.platform.OrderStatuses(ctx, tenant, orderIDs)
 	if err != nil {
-		run.fail(batch.tenant, err)
-		return false
+		return err
 	}
 	known := make(map[string]checkout.OrderStatus, len(statuses))
 	for _, status := range statuses {
 		known[status.OrderID] = status
 	}
 	var purchases []ports.NewTask
-	for _, entry := range batch.entries {
+	for _, entry := range entries {
 		status, found := known[entry.OrderID]
 		outcome := ""
 		switch {
@@ -131,7 +170,19 @@ func (s *Service) reconcileBatch(ctx context.Context, batch reconcileBatch, run 
 		}
 	}
 	s.enqueueSearchPurchases(ctx, purchases)
-	return true
+	return nil
+}
+
+// skipReconcileShop отмечает магазин несверенным в этом проходе: его заказы сверит следующий.
+func skipReconcileShop(tenant ids.TenantID, unchecked, attempts int, cause error, run *reconcileRun) {
+	run.fail(tenant, cause)
+	slog.Warn(
+		"сверка заказов: магазин не ответил, заказы сверит следующий проход",
+		slog.String("tenantId", string(tenant)),
+		slog.Int("unchecked", unchecked),
+		slog.Int("attempts", attempts),
+		slog.Any("error", cause),
+	)
 }
 
 // resolveMismatch применяет состояние из ответа пачки. Не применившееся расхождение — сигнал оператору.
@@ -213,22 +264,15 @@ func (r *reconcileRun) count(outcome string) {
 	}
 }
 
-// reconcileShops режет страницу, упорядоченную по магазину, на запросы не больше потолка договора
-// и собирает запросы одного магазина вместе.
-func reconcileShops(entries []checkout.ReconcileEntry) [][]reconcileBatch {
-	var shops [][]reconcileBatch
-	for _, entry := range entries {
-		last := len(shops) - 1
-		if last < 0 || shops[last][0].tenant != entry.TenantID {
-			shops = append(shops, []reconcileBatch{{tenant: entry.TenantID}})
-			last++
+// reconcileShops делит страницу, упорядоченную по магазину, на заказы отдельных магазинов.
+func reconcileShops(entries []checkout.ReconcileEntry) [][]checkout.ReconcileEntry {
+	var shops [][]checkout.ReconcileEntry
+	start := 0
+	for i := 1; i <= len(entries); i++ {
+		if i == len(entries) || entries[i].TenantID != entries[start].TenantID {
+			shops = append(shops, entries[start:i])
+			start = i
 		}
-		batch := len(shops[last]) - 1
-		if len(shops[last][batch].entries) == ReconcileBatch {
-			shops[last] = append(shops[last], reconcileBatch{tenant: entry.TenantID})
-			batch++
-		}
-		shops[last][batch].entries = append(shops[last][batch].entries, entry)
 	}
 	return shops
 }

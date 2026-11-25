@@ -284,3 +284,45 @@ func TestDeliveredOrderLeavesReconcileAndReturnComesByEvent(t *testing.T) {
 		t.Fatal("возврат после получения приходит событием магазина")
 	}
 }
+
+// Магазин не уложился в срок чтения на пачке: та же пачка повторяется в этом же проходе после паузы,
+// а не откладывается до следующих суток.
+func TestReconcileRetriesShopThatMissedReadDeadline(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	state := paidPurchase(t, e)
+	first, second := state.Groups[0], state.Groups[1]
+	e.platform.SetOrderStatus(second.OrderID, checkout.GroupShipped, "")
+	e.platform.FailNextStatuses(second.TenantID, 2)
+
+	result, err := e.service.ReconcileOrders(ctx)
+	if err != nil || len(result.Failed) != 0 || result.Checked != 2 || result.Mismatched != 1 {
+		t.Fatalf("магазин сверяется повтором в том же проходе: %+v %v", result, err)
+	}
+	if groupStatuses(t, e, state.ID)[1] != checkout.GroupShipped {
+		t.Fatal("расхождение магазина исправлено в том же проходе")
+	}
+	if calls := e.platform.StatusCalls(second.TenantID); len(calls) != 3 {
+		t.Fatalf("два отказа и успешный повтор: %v", calls)
+	}
+	if calls := e.platform.StatusCalls(first.TenantID); len(calls) != 1 {
+		t.Fatalf("ответивший магазин не переспрашивается: %v", calls)
+	}
+}
+
+// Магазин, не ответивший и на повторы, пропускается после ограниченного числа попыток.
+func TestReconcileGivesUpShopAfterBoundedRetries(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	state := paidPurchase(t, e)
+	second := state.Groups[1]
+	e.platform.FailNextStatuses(second.TenantID, 100)
+
+	result, err := e.service.ReconcileOrders(ctx)
+	if err != nil || result.Failed[second.TenantID] == nil || result.Checked != 1 {
+		t.Fatalf("не ответивший магазин отмечен, остальные сверены: %+v %v", result, err)
+	}
+	if calls := e.platform.StatusCalls(second.TenantID); len(calls) != 1+appcheckout.ReconcileRetries {
+		t.Fatalf("попыток магазину: %v", calls)
+	}
+}

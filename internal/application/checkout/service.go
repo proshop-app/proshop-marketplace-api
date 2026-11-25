@@ -38,6 +38,9 @@ type Config struct {
 	CartTTL       time.Duration
 	// QuoteTimeout — сколько ждать ответа магазина на расчёт.
 	QuoteTimeout time.Duration
+	// ReconcileRetryPause — пауза перед первым повтором запроса сверки; ноль — секунда. Окружением
+	// не задаётся: величина решена, поле нужно тестам.
+	ReconcileRetryPause time.Duration
 }
 
 // Service — покупка покупателя.
