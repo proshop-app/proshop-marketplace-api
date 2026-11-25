@@ -17,6 +17,8 @@ const selectCheckoutListGroups = `
 
 func checkoutListSQL(filter checkout.Filter) string {
 	switch {
+	case !filter.StuckBefore.IsZero():
+		return listStuckCheckouts
 	case filter.BuyerID != "" && filter.AfterID != "":
 		return listBuyerCheckoutsAfter
 	case filter.BuyerID != "":
