@@ -59,9 +59,9 @@ type Group struct {
 	Regions     []string
 	// CreationDeadline фиксирует обещанный срок и не продлевается повтором команды.
 	CreationDeadline time.Time
-	// EarlyOrder — состояние заказа из события магазина, пришедшего раньше сохранённого ответа
-	// создания; привязка заказа применяет его в той же транзакции.
-	EarlyOrder *SellerOrder `json:",omitempty"`
+	// EarlyOrders — состояния заказов из событий магазина, пришедших раньше сохранённого ответа
+	// создания, по одному на номер заказа; привязка применяет состояние своего заказа той же транзакцией.
+	EarlyOrders []SellerOrder `json:",omitempty"`
 	// Abandoned запрещает позднему ответу повторно открыть оплату после отказа покупателя или срока.
 	Abandoned bool
 	// ReconciliationRequired сохраняет работу после локального итога, пока магазин не подтвердил отмену.
@@ -164,6 +164,15 @@ type Checkout struct {
 		status  Status
 		version int64
 	}
+	// rejectedEarly — ранние состояния, отвергнутые привязкой заказа: не хранятся, их забирает сценарий.
+	rejectedEarly []EarlyRejection
+}
+
+// EarlyRejection — раннее состояние заказа, которое при привязке противоречит порядку исполнения.
+type EarlyRejection struct {
+	TenantID ids.TenantID
+	Order    SellerOrder
+	Err      error
 }
 
 // ParseIdempotencyKey проверяет ключ идемпотентности создания.
@@ -243,6 +252,9 @@ func (c *Checkout) Origin() (Status, int64) { return c.origin.status, c.origin.v
 
 // MarkSaved фиксирует сохранённое состояние.
 func (c *Checkout) MarkSaved() { c.origin.status, c.origin.version = c.state.Status, c.state.Version }
+
+// RejectedEarlyOrders — ранние состояния, отвергнутые привязкой заказа после чтения покупки.
+func (c *Checkout) RejectedEarlyOrders() []EarlyRejection { return c.rejectedEarly }
 
 // ID — покупка.
 func (c *Checkout) ID() ids.UUID { return c.state.ID }

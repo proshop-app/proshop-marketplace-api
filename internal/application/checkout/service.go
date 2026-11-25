@@ -688,6 +688,7 @@ func (s *Service) updateSelection(
 		if err := mutate(c, s.clock.Now()); err != nil {
 			return err
 		}
+		s.reportEarlyRejections(tx, c)
 
 		if after != nil {
 			if err := after(ctx, tx, c); err != nil {

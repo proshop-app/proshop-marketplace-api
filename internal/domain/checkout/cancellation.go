@@ -34,7 +34,7 @@ func (c *Checkout) CompleteCancellation(tenant ids.TenantID, orderID string, now
 		g.OrderID = orderID
 	}
 	// Ответ отмены по ключу — нынешнее состояние магазина, оно новее любого раннего события.
-	g.EarlyOrder = nil
+	g.EarlyOrders = nil
 	g.CancellationLastErrorCode = ""
 	g.CancellationConfirmed = true
 	g.CancellationBlocked, g.ReconciliationRequired = false, false
@@ -75,7 +75,7 @@ func (c *Checkout) BlockCancellation(
 		g.AwaitingSince = now
 	}
 	g.OrderID, g.LastOrderStatus = orderID, status
-	g.EarlyOrder = nil
+	g.EarlyOrders = nil
 	if g.Status == GroupCreationExpired {
 		observed := Group{Status: status}
 		if observed.Paid() {

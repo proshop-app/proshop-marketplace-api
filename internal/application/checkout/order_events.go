@@ -19,6 +19,9 @@ type OrderEvent struct {
 	Order      checkout.SellerOrder
 }
 
+// eventEarlyRejected — событие оформления: раннее состояние заказа отвергнуто при привязке.
+const eventEarlyRejected = "early_order_rejected"
+
 // ErrOrderEventRejected — событие противоречит порядку исполнения заказа: повтор его не исправит.
 var ErrOrderEventRejected = errs.New(
 	errs.Invalid,
@@ -85,4 +88,28 @@ func orderStateFailure(err error, checkoutID ids.UUID, tenant ids.TenantID, orde
 		return ErrOrderEventRejected.Wrap(err)
 	}
 	return err
+}
+
+// reportEarlyRejections пишет после фиксации ранние состояния, отвергнутые привязкой заказа: отказ
+// виден так же, как отказ такого же события после привязки — журнал с магазином и заказом и счётчик
+// событий оформления. В отравленные он не кладётся: исходного сообщения при привязке нет, а повтор
+// того же состояния получит тот же отказ.
+func (s *Service) reportEarlyRejections(tx ports.Tx, c *checkout.Checkout) {
+	for _, rejected := range c.RejectedEarlyOrders() {
+		id := c.ID()
+		tx.AfterCommit(func() {
+			slog.Warn(
+				"раннее событие заказа отвергнуто при привязке",
+				slog.String("tenantId", string(rejected.TenantID)),
+				slog.String("checkoutId", string(id)),
+				slog.String("orderId", rejected.Order.OrderID),
+				slog.String("status", string(rejected.Order.Status)),
+				slog.Int64("revision", rejected.Order.Revision),
+				slog.Any("error", rejected.Err),
+			)
+			if s.observer != nil {
+				s.observer.RecordCheckoutEvent(rejected.TenantID, id, eventEarlyRejected)
+			}
+		})
+	}
 }

@@ -9,6 +9,9 @@ import (
 
 // Паузы и ограничения повторов создания и сверки.
 const (
+	// maxEarlyOrders — сколько разных номеров заказа группа держит из ранних событий: у группы один
+	// заказ, остальные номера — ошибка магазина, и их число не должно расти с потоком событий.
+	maxEarlyOrders = 4
 	// MaxOrderFailures — после пяти отказов опрос становится редким.
 	MaxOrderFailures = 5
 	// OrderPollLease ограничивает конкурентные опросы уже созданного заказа.
@@ -332,24 +335,45 @@ func (c *Checkout) ApplyOrderState(tenant ids.TenantID, order SellerOrder, now t
 }
 
 // holdEarlyOrder сохраняет состояние заказа, о котором магазин сообщил раньше ответа создания (ответ
-// потерян и сохранится повтором или поздно): старшая ревизия перекрывает младшую, повтор — не изменение.
+// потерян и сохранится повтором или поздно). Ревизии сравниваются только у одного заказа: чужое
+// событие со старшей ревизией не вытесняет настоящее. Повтор — не изменение. Группа без начатого
+// создания событие не хранит: оно не может относиться к ней.
 func (c *Checkout) holdEarlyOrder(g *Group, order SellerOrder, now time.Time) (bool, error) {
-	if g.EarlyOrder != nil && g.EarlyOrder.Revision >= order.Revision {
-		return false, nil
+	if c.state.Status == StatusDraft || c.state.Status == StatusConfirmed || g.Excluded() {
+		return false, ErrNotFound
 	}
 	early := order
 	early.Tracking = cloneTracking(order.Tracking)
-	g.EarlyOrder = &early
+	for i, held := range g.EarlyOrders {
+		if held.OrderID != order.OrderID {
+			continue
+		}
+		if held.Revision >= order.Revision {
+			return false, nil
+		}
+		g.EarlyOrders[i] = early
+		return true, c.touch(now)
+	}
+	if len(g.EarlyOrders) == maxEarlyOrders {
+		return false, ErrInvalidOrder
+	}
+	g.EarlyOrders = append(g.EarlyOrders, early)
 	return true, c.touch(now)
 }
 
-// applyEarlyOrder применяет при привязке заказа состояние из раннего события. Состояние другого
-// заказа или противоречащее порядку исполнения отбрасывается, как такое же событие после привязки.
+// applyEarlyOrder применяет при привязке заказа раннее состояние его номера; состояния других
+// заказов снимаются. Противоречащее порядку исполнения состояние сценарий получает в
+// RejectedEarlyOrders — как отказ такого же события после привязки, а не молча.
 func (c *Checkout) applyEarlyOrder(g *Group, now time.Time) {
-	early := g.EarlyOrder
-	g.EarlyOrder = nil
-	if early != nil && early.OrderID == g.OrderID {
-		_, _ = c.ApplyOrderState(g.TenantID, *early, now)
+	held := g.EarlyOrders
+	g.EarlyOrders = nil
+	for _, early := range held {
+		if early.OrderID != g.OrderID {
+			continue
+		}
+		if _, err := c.ApplyOrderState(g.TenantID, early, now); err != nil {
+			c.rejectedEarly = append(c.rejectedEarly, EarlyRejection{TenantID: g.TenantID, Order: early, Err: err})
+		}
 	}
 }
 

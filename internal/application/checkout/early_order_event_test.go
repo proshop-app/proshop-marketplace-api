@@ -65,12 +65,12 @@ func TestOrderEventBeforeCreationReplyAppliesOnAttach(t *testing.T) {
 		t.Fatal("раннее событие подтверждается сразу, без повтора приёма", err)
 	}
 	held, err := e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || held.Groups[0].EarlyOrder == nil || held.Groups[0].OrderID != "" {
+	if err != nil || held.Groups[0].EarlyOrders == nil || held.Groups[0].OrderID != "" {
 		t.Fatalf("раннее состояние хранится при группе до привязки: %v %+v", err, held.Groups[0])
 	}
 	retry()
 	state, err := e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || state.Groups[0].Status != checkout.GroupCancelled || state.Groups[0].EarlyOrder != nil {
+	if err != nil || state.Groups[0].Status != checkout.GroupCancelled || state.Groups[0].EarlyOrders != nil {
 		t.Fatalf("привязка заказа применяет раннюю отмену без нового события: %v %+v", err, state.Groups[0])
 	}
 }
@@ -90,8 +90,8 @@ func TestEarlyOrderEventKeepsNewestRevision(t *testing.T) {
 		}
 	}
 	held, err := e.service.Get(ctx, buyerID, c.ID)
-	if err != nil || held.Groups[0].EarlyOrder == nil || held.Groups[0].EarlyOrder.Revision != 3 {
-		t.Fatalf("младшая ревизия не перекрывает старшую до привязки: %v %+v", err, held.Groups[0].EarlyOrder)
+	if err != nil || held.Groups[0].EarlyOrders == nil || held.Groups[0].EarlyOrders[0].Revision != 3 {
+		t.Fatalf("младшая ревизия не перекрывает старшую до привязки: %v %+v", err, held.Groups[0].EarlyOrders)
 	}
 	retry()
 	late := earlyOrderEvent(c.ID, tenant, checkout.GroupAwaitingPayment, 2)
