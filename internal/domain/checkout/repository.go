@@ -35,6 +35,28 @@ type ReconcileCursor struct {
 	CheckoutID ids.UUID
 }
 
+// WorkCursor — место продолжения прохода восстановления: срок работы и покупка последней группы.
+type WorkCursor struct {
+	At         time.Time
+	CheckoutID ids.UUID
+}
+
+// BrokenCheckout — покупка страницы восстановления, которую не удалось разобрать.
+type BrokenCheckout struct {
+	ID  ids.UUID
+	Err error
+}
+
+// WorkPage — страница прохода восстановления. Покупки, занятые другой записью, в неё не входят;
+// неразобравшиеся строки идут в Broken, а не роняют страницу.
+type WorkPage struct {
+	Due    []*Checkout
+	Broken []BrokenCheckout
+	// Next — курсор по последней просмотренной группе; More — страница групп была полной.
+	Next WorkCursor
+	More bool
+}
+
 // Repository — покупки.
 type Repository interface {
 	List(context.Context, Filter) ([]*Checkout, error)
@@ -53,9 +75,12 @@ type Repository interface {
 	Update(ctx context.Context, checkout *Checkout) error
 	// UpdateMany сохраняет пачку покупок, как Update каждую; хоть одна не совпала — ErrConflict.
 	UpdateMany(ctx context.Context, checkouts []*Checkout) error
-	// LockWorkDue — страница покупок с созревшей работой групп после курсора по возрастанию
-	// идентификатора, под блокировкой до конца транзакции; занятые покупки пропускаются.
-	LockWorkDue(ctx context.Context, now time.Time, after ids.UUID, limit int) ([]*Checkout, error)
+	// LockWorkDue — покупки limit групп с созревшей работой после курсора в порядке срока работы,
+	// под блокировкой до конца транзакции; занятые покупки пропускаются.
+	LockWorkDue(ctx context.Context, now time.Time, after WorkCursor, limit int) (WorkPage, error)
+	// DeferWork переносит созревшую работу групп покупок на until: неразбирающаяся покупка не
+	// занимает каждый проход, но и не теряется.
+	DeferWork(ctx context.Context, checkoutIDs []ids.UUID, until time.Time) error
 	// ReconcileDue — страница заказов суточной сверки в порядке магазина и покупки, без снимков покупок.
 	ReconcileDue(ctx context.Context, after ReconcileCursor, now time.Time, limit int) ([]ReconcileEntry, error)
 	// ExpireReconciliation снимает со сверки заказы, срок которой истёк.

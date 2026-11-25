@@ -46,7 +46,7 @@ const (
   ORDER BY tenant_id`
 
 	// lockCheckout — условие чтения покупки под запись: строка заблокирована до конца транзакции.
-	lockCheckout = `id = $1 FOR UPDATE`
+	lockCheckout = `id = $1 FOR NO KEY UPDATE`
 )
 
 // Checkouts — покупки в PostgreSQL.

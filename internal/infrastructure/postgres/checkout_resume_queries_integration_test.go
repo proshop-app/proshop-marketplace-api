@@ -14,8 +14,8 @@ import (
 const (
 	// resumePurchases — созревшие покупки одного прохода восстановления.
 	resumePurchases = 20
-	// resumeStatements — проход одной страницей: BEGIN, взятие покупок, их группы, задачи опроса, COMMIT.
-	resumeStatements = 5
+	// resumeStatements — проход одной страницей: BEGIN, созревшие группы, их покупки, группы покупок, задачи опроса, COMMIT.
+	resumeStatements = 6
 	countPollTasks   = `SELECT count(*), count(DISTINCT dedup_key) FROM outbox WHERE kind = $1`
 )
 

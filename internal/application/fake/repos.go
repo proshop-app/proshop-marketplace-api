@@ -182,6 +182,8 @@ func (r checkouts) Update(_ context.Context, c *checkout.Checkout) error {
 	}
 
 	r.d.checkouts[c.ID()] = copyCheckout(c.State())
+	// Сохранение пересчитывает срок работы, как колонку next_work_at в PostgreSQL.
+	delete(r.d.deferredWork, c.ID())
 	c.MarkSaved()
 
 	return nil
@@ -231,25 +233,55 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 	return found, nil
 }
 
+// LockWorkDue повторяет порядок PostgreSQL: группы по сроку работы и покупке, потом их покупки.
 func (r checkouts) LockWorkDue(
 	_ context.Context,
 	now time.Time,
-	after ids.UUID,
+	after checkout.WorkCursor,
 	limit int,
-) ([]*checkout.Checkout, error) {
-	var found []*checkout.Checkout
-	for _, state := range r.d.checkouts {
-		ordered := state.CartConsumed ||
-			(state.Status != checkout.StatusDraft && state.Status != checkout.StatusConfirmed)
-		if state.ID > after && ordered && checkoutWorkDue(state, now) {
-			found = append(found, checkout.Restore(copyCheckout(state)))
+) (checkout.WorkPage, error) {
+	var due []checkout.WorkCursor
+	for id, state := range r.d.checkouts {
+		for _, g := range state.Groups {
+			at, found := g.NextWorkAt()
+			if deferred, ok := r.d.deferredWork[id]; ok && found && at.Before(deferred) {
+				at = deferred
+			}
+			cursor := checkout.WorkCursor{At: at, CheckoutID: id}
+			if found && !at.After(now) && workAfter(cursor, after) {
+				due = append(due, cursor)
+			}
 		}
 	}
-	sort.Slice(found, func(i, j int) bool { return found[i].ID() < found[j].ID() })
-	if len(found) > limit {
-		found = found[:limit]
+	sort.Slice(due, func(i, j int) bool { return workAfter(due[j], due[i]) })
+	var page checkout.WorkPage
+	if len(due) > limit {
+		due = due[:limit]
 	}
-	return found, nil
+	page.More = len(due) == limit
+	seen := map[ids.UUID]bool{}
+	for _, cursor := range due {
+		page.Next = cursor
+		state := r.d.checkouts[cursor.CheckoutID]
+		ordered := state.CartConsumed ||
+			(state.Status != checkout.StatusDraft && state.Status != checkout.StatusConfirmed)
+		if !seen[cursor.CheckoutID] && ordered {
+			page.Due = append(page.Due, checkout.Restore(copyCheckout(state)))
+		}
+		seen[cursor.CheckoutID] = true
+	}
+	return page, nil
+}
+
+func (r checkouts) DeferWork(_ context.Context, checkoutIDs []ids.UUID, until time.Time) error {
+	for _, id := range checkoutIDs {
+		r.d.deferredWork[id] = until
+	}
+	return nil
+}
+
+func workAfter(a, b checkout.WorkCursor) bool {
+	return a.At.After(b.At) || (a.At.Equal(b.At) && a.CheckoutID > b.CheckoutID)
 }
 
 func (r checkouts) PickupHistory(_ context.Context, buyerID ids.UUID, limit int) ([]checkout.Selection, error) {

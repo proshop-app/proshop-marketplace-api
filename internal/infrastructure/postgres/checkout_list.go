@@ -30,12 +30,28 @@ func checkoutListSQL(filter checkout.Filter) string {
 	}
 }
 
-// listGroups читает группы всей страницы, не смешивая версии покупки и её групп.
+// listGroups читает группы всей страницы, не смешивая версии покупки и её групп; первая
+// неразобравшаяся покупка — ошибка страницы.
 func (r *Checkouts) listGroups(ctx context.Context, states []checkout.State) error {
-	if len(states) == 0 {
-		return nil
+	failed, err := r.loadGroups(ctx, states)
+	if err != nil {
+		return err
 	}
+	for _, state := range states {
+		if cause, found := failed[state.ID]; found {
+			return cause
+		}
+	}
+	return nil
+}
 
+// loadGroups дописывает группы покупкам страницы одним запросом. Покупка, чьи группы не
+// разобрались или не нашлись в её версии, возвращается в failed с причиной.
+func (r *Checkouts) loadGroups(ctx context.Context, states []checkout.State) (map[ids.UUID]error, error) {
+	failed := map[ids.UUID]error{}
+	if len(states) == 0 {
+		return failed, nil
+	}
 	checkoutIDs := make([]string, len(states))
 	versions := make([]int64, len(states))
 	byID := make(map[ids.UUID]int, len(states))
@@ -43,42 +59,36 @@ func (r *Checkouts) listGroups(ctx context.Context, states []checkout.State) err
 		checkoutIDs[i], versions[i] = string(state.ID), state.Version
 		byID[state.ID] = i
 	}
-
 	rows, err := rawSQL(ctx, r.db, selectCheckoutListGroups, checkoutIDs, versions).Rows()
 	if err != nil {
-		return fmt.Errorf("группы списка покупок: %w", err)
+		return nil, fmt.Errorf("группы списка покупок: %w", err)
 	}
 	defer func() {
 		_ = rows.Close()
 	}()
-
 	for rows.Next() {
 		var checkoutID string
 		var row groupRow
 		if err := rows.Scan(append([]any{&checkoutID}, row.targets()...)...); err != nil {
-			return fmt.Errorf("группы списка покупок: %w", err)
+			return nil, fmt.Errorf("группы списка покупок: %w", err)
 		}
-
 		group, err := row.checkoutGroup()
 		if err != nil {
-			return fmt.Errorf("позиции покупки %s: %w", checkoutID, err)
+			failed[ids.UUID(checkoutID)] = fmt.Errorf("позиции покупки %s: %w", checkoutID, err)
+			continue
 		}
-
 		i := byID[ids.UUID(checkoutID)]
 		states[i].Groups = append(states[i].Groups, group)
 	}
-
 	if err := rows.Err(); err != nil {
-		return err
+		return nil, err
 	}
-
 	for _, state := range states {
-		if len(state.Groups) == 0 {
-			return checkout.ErrConflict
+		if _, found := failed[state.ID]; !found && len(state.Groups) == 0 {
+			failed[state.ID] = checkout.ErrConflict
 		}
 	}
-
-	return nil
+	return failed, nil
 }
 
 func checkoutFilterUUID(value ids.UUID) (any, error) {

@@ -158,8 +158,8 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var items []*checkout.Checkout
 			err := do(t, traced, func(ctx context.Context, tx ports.Tx) error {
-				var err error
-				items, err = tx.Checkouts().LockWorkDue(ctx, tc.now, "", 100)
+				page, err := tx.Checkouts().LockWorkDue(ctx, tc.now, checkout.WorkCursor{}, 100)
+				items = page.Due
 				return err
 			})
 			if err != nil {
