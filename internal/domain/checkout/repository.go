@@ -16,7 +16,6 @@ type Filter struct {
 	Limit       int
 	StuckBefore time.Time
 	OrdersOnly  bool
-	WorkDueAt   time.Time
 }
 
 // ReconcileEntry — заказ магазина, статус которого площадка сверяет пачкой.
@@ -54,6 +53,9 @@ type Repository interface {
 	Update(ctx context.Context, checkout *Checkout) error
 	// UpdateMany сохраняет пачку покупок, как Update каждую; хоть одна не совпала — ErrConflict.
 	UpdateMany(ctx context.Context, checkouts []*Checkout) error
+	// LockWorkDue — страница покупок с созревшей работой групп после курсора по возрастанию
+	// идентификатора, под блокировкой до конца транзакции; занятые покупки пропускаются.
+	LockWorkDue(ctx context.Context, now time.Time, after ids.UUID, limit int) ([]*Checkout, error)
 	// ReconcileDue — страница заказов суточной сверки в порядке магазина и покупки, без снимков покупок.
 	ReconcileDue(ctx context.Context, after ReconcileCursor, now time.Time, limit int) ([]ReconcileEntry, error)
 	// ExpireReconciliation снимает со сверки заказы, срок которой истёк.

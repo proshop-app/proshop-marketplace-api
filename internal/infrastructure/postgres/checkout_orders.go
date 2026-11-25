@@ -16,7 +16,7 @@ const (
 
 	listCheckoutFilters = `
   AND (NOT $3 OR status NOT IN ('draft', 'confirmed') OR order_context->>'CartConsumed' = 'true')
- AND (NOT $7 OR EXISTS (SELECT 1 FROM checkout_groups g
+ AND (NOT $6 OR EXISTS (SELECT 1 FROM checkout_groups g
   WHERE g.checkout_id = c.id AND coalesce(g.order_progress->>'OrderID', '') <> ''))
   AND ($4::timestamptz IS NULL OR EXISTS (
    SELECT 1 FROM checkout_groups g
@@ -24,9 +24,6 @@ const (
     OR (g.order_progress->>'Status' = 'awaiting_payment'
      AND (g.order_progress->>'AwaitingSince')::timestamptz <= $4))
   ))
- AND ($6::timestamptz IS NULL OR c.id IN (
- SELECT checkout_id FROM checkout_groups WHERE next_work_at <= $6
- ))
  ORDER BY id
  LIMIT $5`
 
@@ -81,7 +78,6 @@ func (r *Checkouts) List(ctx context.Context, f checkout.Filter) ([]*checkout.Ch
 		f.OrdersOnly,
 		nullTime(f.StuckBefore),
 		f.Limit,
-		nullTime(f.WorkDueAt),
 		f.HasOrders,
 	).Rows()
 	if err != nil {

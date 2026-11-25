@@ -2,15 +2,19 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
+
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
 // OrderResumer — сверка статусов магазинов и повтор возврата товаров.
 type OrderResumer interface{ Resume(context.Context) error }
 
-// OrdersRunner запускает сверку сразу и по расписанию.
+// OrdersRunner запускает восстановление покупок сразу и по расписанию.
 type OrdersRunner struct {
+	schedule ports.IndexRebuildLock
 	service  OrderResumer
 	interval time.Duration
 	logger   *slog.Logger
@@ -21,14 +25,28 @@ func NewOrdersRunner(service OrderResumer, interval time.Duration, logger *slog.
 	return &OrdersRunner{service: service, interval: interval, logger: logger}
 }
 
-// Run ставит сверку в outbox сразу при старте и затем по расписанию.
+// WithSchedule назначает общий интервал для всех реплик: проход за интервал делает одна.
+func (r *OrdersRunner) WithSchedule(schedule ports.IndexRebuildLock) *OrdersRunner {
+	r.schedule = schedule
+	return r
+}
+
+// Run восстанавливает покупки сразу при старте и затем по расписанию.
 func (r *OrdersRunner) Run(ctx context.Context) error {
 	for {
-		if err := r.service.Resume(ctx); err != nil && ctx.Err() == nil {
-			r.logger.Error("сверка заказов магазинов", slog.Any("error", err))
+		err := r.resume(ctx)
+		if err != nil && !errors.Is(err, ports.ErrRebuildBusy) && ctx.Err() == nil {
+			r.logger.Error("восстановление покупок", slog.Any("error", err))
 		}
 		if !wait(ctx, r.interval) {
 			return nil
 		}
 	}
+}
+
+func (r *OrdersRunner) resume(ctx context.Context) error {
+	if r.schedule == nil {
+		return r.service.Resume(ctx)
+	}
+	return r.schedule.WithLock(ctx, r.service.Resume)
 }

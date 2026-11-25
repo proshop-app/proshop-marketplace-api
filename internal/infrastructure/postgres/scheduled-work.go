@@ -23,6 +23,15 @@ type ScheduledWork struct {
 	interval time.Duration
 }
 
+// SharedInterval — общий интервал между стартами реплик без блокировки прохода: для короткого
+// прохода, которому пересечение с соседним не вредит (его строки берутся FOR UPDATE SKIP LOCKED).
+// Работает только реплика, взявшая интервал, и ей не нужен прямой сеанс в обход пулера.
+type SharedInterval struct {
+	source   *connectionSource
+	name     string
+	interval time.Duration
+}
+
 // NewScheduledWork привязывает общее расписание к часам базы, без ожидания занятого
 // владельца: интервал берётся пулом класса, блокировка прохода — прямым сеансом.
 func NewScheduledWork(pool *ClassPool, sessions *DirectSessions, name string, interval time.Duration) *ScheduledWork {
@@ -51,9 +60,31 @@ func (s *ScheduledWork) WithLock(ctx context.Context, run func(context.Context) 
 }
 
 func (s *ScheduledWork) claim(ctx context.Context) (bool, error) {
+	return claimInterval(ctx, s.source, s.name, s.interval)
+}
+
+// NewSharedInterval — общий интервал прохода name на пуле класса.
+func NewSharedInterval(pool *ClassPool, name string, interval time.Duration) *SharedInterval {
+	return &SharedInterval{source: newConnectionSource(pool), name: name, interval: interval}
+}
+
+// WithLock выполняет проход, только если реплика взяла интервал; иначе — ErrRebuildBusy без прохода.
+func (s *SharedInterval) WithLock(ctx context.Context, run func(context.Context) error) error {
+	claimed, err := claimInterval(ctx, s.source, s.name, s.interval)
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		return ports.ErrRebuildBusy
+	}
+	return run(ctx)
+}
+
+// claimInterval — одна команда: интервал берёт первая реплика после его истечения по часам базы.
+func claimInterval(ctx context.Context, source *connectionSource, name string, interval time.Duration) (bool, error) {
 	var claimed bool
-	err := s.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
-		affected, err := execSQL(ctx, db, claimScheduledWork, s.name, s.interval.Seconds())
+	err := source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
+		affected, err := execSQL(ctx, db, claimScheduledWork, name, interval.Seconds())
 		claimed = affected > 0
 		return err
 	})

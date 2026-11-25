@@ -28,7 +28,7 @@ const (
 		SET reconcile_until = NULL
 		WHERE reconcile_until <= $1`
 
-	// firstCheckoutID — начало обхода: меньше любого идентификатора покупки.
+	// firstCheckoutID — начало обхода: меньше любого идентификатора покупки; общий для обходов покупок.
 	firstCheckoutID = "00000000-0000-0000-0000-000000000000"
 )
 

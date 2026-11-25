@@ -62,3 +62,24 @@ func TestScheduledWorkDoesNotOverlapLongRunAfterInterval(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSharedIntervalRunsOnceAcrossReplicasWithoutDirectSession(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	first := postgres.NewSharedInterval(postgres.Single(pool), "shared-test", time.Hour)
+	second := postgres.NewSharedInterval(postgres.Single(pool), "shared-test", time.Hour)
+	calls := 0
+	run := func(context.Context) error {
+		calls++
+		return nil
+	}
+	if err := first.WithLock(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.WithLock(ctx, run); !errors.Is(err, ports.ErrRebuildBusy) || calls != 1 {
+		t.Fatalf("второй реплике интервал не достаётся: calls=%d err=%v", calls, err)
+	}
+	if err := first.WithLock(ctx, run); !errors.Is(err, ports.ErrRebuildBusy) || calls != 1 {
+		t.Fatalf("до истечения интервала прохода нет и у первой: calls=%d err=%v", calls, err)
+	}
+}

@@ -29,6 +29,7 @@ var orderEventShops = []ids.TenantID{"t1", "t2", "t3", "t4"}
 
 type orderEventBench struct {
 	counter  *checkoutQueryCounter
+	pool     *pgxpool.Pool
 	uow      *postgres.UnitOfWork
 	service  *appcheckout.Service
 	platform *fake.Platform
@@ -124,7 +125,7 @@ func newOrderEventBench(t *testing.T) *orderEventBench {
 		clock,
 		appcheckout.Config{PaymentStub: true},
 	)
-	return &orderEventBench{counter: counter, uow: uow, service: service, platform: platform, clock: clock}
+	return &orderEventBench{counter: counter, pool: traced, uow: uow, service: service, platform: platform, clock: clock}
 }
 
 // paidPurchase — оплаченная покупка всех магазинов стенда; номера заказов по магазину.

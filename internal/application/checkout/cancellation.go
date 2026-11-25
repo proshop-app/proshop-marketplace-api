@@ -14,17 +14,36 @@ import (
 )
 
 func (s *Service) enqueueCancellations(ctx context.Context, tx ports.Tx, c *checkout.Checkout) error {
-	for _, g := range c.Groups() {
-		if g.CancellationRequired() && !g.CancellationQueued {
-			if err := c.MarkCancellationQueued(g.TenantID, s.clock.Now()); err != nil {
-				return err
-			}
-			if err := enqueueOrderTask(ctx, tx, TaskCancelOrder, c.State(), g, s.clock.Now()); err != nil {
-				return err
-			}
+	tasks, err := s.queueCancellations(c)
+	if err != nil {
+		return err
+	}
+	for _, task := range tasks {
+		if err := tx.Outbox().Enqueue(ctx, task); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// queueCancellations отмечает группы, которым нужна отмена у магазина, и возвращает их задачи.
+func (s *Service) queueCancellations(c *checkout.Checkout) ([]ports.NewTask, error) {
+	now := s.clock.Now()
+	var tasks []ports.NewTask
+	for _, g := range c.Groups() {
+		if !g.CancellationRequired() || g.CancellationQueued {
+			continue
+		}
+		if err := c.MarkCancellationQueued(g.TenantID, now); err != nil {
+			return nil, err
+		}
+		task, err := newOrderTask(TaskCancelOrder, c.State(), g, now)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
 }
 
 func (s *Service) cancelGroup(ctx context.Context, buyerID, id ids.UUID, tenant ids.TenantID) error {

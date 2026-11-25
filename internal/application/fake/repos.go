@@ -222,14 +222,32 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 				continue
 			}
 		}
-		if !f.WorkDueAt.IsZero() && !checkoutWorkDue(state, f.WorkDueAt) {
-			continue
-		}
 		found = append(found, checkout.Restore(copyCheckout(state)))
 	}
 	sort.Slice(found, func(i, j int) bool { return found[i].ID() < found[j].ID() })
 	if len(found) > f.Limit {
 		found = found[:f.Limit]
+	}
+	return found, nil
+}
+
+func (r checkouts) LockWorkDue(
+	_ context.Context,
+	now time.Time,
+	after ids.UUID,
+	limit int,
+) ([]*checkout.Checkout, error) {
+	var found []*checkout.Checkout
+	for _, state := range r.d.checkouts {
+		ordered := state.CartConsumed ||
+			(state.Status != checkout.StatusDraft && state.Status != checkout.StatusConfirmed)
+		if state.ID > after && ordered && checkoutWorkDue(state, now) {
+			found = append(found, checkout.Restore(copyCheckout(state)))
+		}
+	}
+	sort.Slice(found, func(i, j int) bool { return found[i].ID() < found[j].ID() })
+	if len(found) > limit {
+		found = found[:limit]
 	}
 	return found, nil
 }
