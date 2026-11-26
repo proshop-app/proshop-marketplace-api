@@ -9,6 +9,11 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+// earlyRejections — события оформления «раннее состояние отвергнуто» по магазину.
+type earlyRejections struct {
+	tenants []ids.TenantID
+}
+
 // earlyOrderEvent — событие отмены заказа магазином, о котором площадка ещё не знает номера.
 func earlyOrderEvent(
 	id ids.UUID,
@@ -121,5 +126,31 @@ func TestOrderEventForAbandonedGroupWithoutOrderIsAcknowledged(t *testing.T) {
 	err = e.service.ApplyOrderEvent(ctx, earlyOrderEvent(c.ID, state.Groups[0].TenantID, checkout.GroupCancelled, 2))
 	if err != nil {
 		t.Fatal("после срока создания событие не держит приём", err)
+	}
+}
+
+func (r *earlyRejections) RecordCheckoutEvent(tenant ids.TenantID, _ ids.UUID, event string) {
+	if event == "early_order_rejected" {
+		r.tenants = append(r.tenants, tenant)
+	}
+}
+
+// Отмена без причины противоречит договору и после привязки: отказ раннего состояния доходит до
+// счётчика событий оформления, а не исчезает.
+func TestEarlyOrderRejectedOnAttachIsCounted(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	recorder := &earlyRejections{}
+	e.service.SetObserver(recorder)
+	c, retry := lostCreation(t, e)
+	tenant := c.Groups[0].TenantID
+	event := earlyOrderEvent(c.ID, tenant, checkout.GroupCancelled, 2)
+	event.Order.Reason = ""
+	if err := e.service.ApplyOrderEvent(ctx, event); err != nil {
+		t.Fatal(err)
+	}
+	retry()
+	if len(recorder.tenants) != 1 || recorder.tenants[0] != tenant {
+		t.Fatalf("отказ раннего состояния учтён: %v", recorder.tenants)
 	}
 }

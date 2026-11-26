@@ -29,7 +29,7 @@ const (
 		WHERE checkout_id = $1`
 	selectNextWork = `SELECT min(next_work_at) FROM checkout_groups WHERE checkout_id = $1`
 	// settleCheckoutWork — запись соседнего прохода: срок работы пересчитан, созревшей нет.
-	settleCheckoutWork = `UPDATE checkout_groups SET next_work_at = NULL WHERE checkout_id = $1`
+	settleCheckoutWork = `UPDATE checkout_groups SET next_work_at = '2100-01-01' WHERE checkout_id = $1`
 	// workPlanSettings — общий план, как у подготовленного запроса процесса.
 	workPlanSettings = `
 		SET LOCAL enable_seqscan = off;

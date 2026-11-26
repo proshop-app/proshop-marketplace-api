@@ -156,3 +156,61 @@ func TestPickupRejectedAttachDropsEarlyOrder(t *testing.T) {
 		t.Fatalf("отклонённая привязка снимает раннее состояние: %+v", g)
 	}
 }
+
+// Отказ соседнего магазина вернул покупку в черновик, а создание этой группы идёт своим ходом:
+// раннее событие её заказа хранится, а не теряется.
+func TestEarlyOrderHeldWhenNeighbourReturnsPurchaseToDraft(t *testing.T) {
+	c := creatingWithDeadline(t)
+	if _, err := c.ClaimCreation("t2", "a2", t0.Add(5*time.Second), t0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.FailCreation("t2", "a2", "rejected", "отказ", checkout.GroupRejected, false, nil, t0); err != nil {
+		t.Fatal(err)
+	}
+	if c.Status() != checkout.StatusDraft {
+		t.Fatalf("покупка в черновике после отказа соседа: %s", c.Status())
+	}
+	changed, err := c.ApplyOrderState("t1", earlyState("t1-order", checkout.GroupCancelled, 2), t0)
+	if err != nil || !changed || len(c.Groups()[0].EarlyOrders) != 1 {
+		t.Fatalf("раннее событие группы с идущим созданием сохранено: %v %v", changed, err)
+	}
+}
+
+// Оставленная группа (срок создания истёк) раннее событие не хранит: исход даст отмена по ключу.
+func TestEarlyOrderIgnoredForAbandonedGroup(t *testing.T) {
+	c := creatingWithDeadline(t)
+	if _, err := c.ExpireCreation(t0.Add(15 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	version := c.State().Version
+	_, err := c.ApplyOrderState("t1", earlyState("t1-order", checkout.GroupCancelled, 2), t0.Add(16*time.Second))
+	if !errors.Is(err, checkout.ErrNotFound) || c.State().Version != version {
+		t.Fatalf("оставленная группа не хранит раннее событие: %v", err)
+	}
+}
+
+// Пятый номер заказа вытесняет самый давний, не отвергая новое: свежее состояние настоящего заказа
+// остаётся, держится не больше четырёх номеров.
+func TestEarlyOrderEvictsStalestNumber(t *testing.T) {
+	c := creatingWithDeadline(t)
+	for _, early := range []checkout.SellerOrder{
+		earlyState("t1-order", checkout.GroupCancelled, 2),
+		earlyState("чужой-1", checkout.GroupCancelled, 2),
+		earlyState("чужой-2", checkout.GroupCancelled, 2),
+		earlyState("чужой-3", checkout.GroupCancelled, 2),
+		earlyState("t1-order", checkout.GroupCancelled, 3),
+		earlyState("чужой-4", checkout.GroupCancelled, 2),
+	} {
+		if _, err := c.ApplyOrderState("t1", early, t0); err != nil {
+			t.Fatal("новое раннее состояние не отвергается", err)
+		}
+	}
+	held := c.Groups()[0].EarlyOrders
+	if len(held) != 4 || held[0].OrderID != "чужой-2" {
+		t.Fatalf("вытеснен самый давний номер: %+v", held)
+	}
+	attach(t, c, 0)
+	if g := c.Groups()[0]; g.Status != checkout.GroupCancelled {
+		t.Fatalf("настоящее раннее состояние применено: %+v", g)
+	}
+}

@@ -1,6 +1,7 @@
 package checkout
 
 import (
+	"slices"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
@@ -336,29 +337,34 @@ func (c *Checkout) ApplyOrderState(tenant ids.TenantID, order SellerOrder, now t
 
 // holdEarlyOrder сохраняет состояние заказа, о котором магазин сообщил раньше ответа создания (ответ
 // потерян и сохранится повтором или поздно). Ревизии сравниваются только у одного заказа: чужое
-// событие со старшей ревизией не вытесняет настоящее. Повтор — не изменение. Группа без начатого
-// создания событие не хранит: оно не может относиться к ней.
+// событие со старшей ревизией не вытесняет настоящее. Повтор — не изменение. Хранит только группа,
+// чьё создание заявлено (срок создания задан), не истекло и не оставлено — дальше исход даёт отмена
+// по ключу. Статус всей покупки не в счёт: отказ соседнего магазина возвращает её в черновик, а
+// создание этой группы идёт своим ходом.
 func (c *Checkout) holdEarlyOrder(g *Group, order SellerOrder, now time.Time) (bool, error) {
-	if c.state.Status == StatusDraft || c.state.Status == StatusConfirmed || g.Excluded() {
+	if g.CreationDeadline.IsZero() || g.Status == GroupCreationExpired || g.Excluded() {
 		return false, ErrNotFound
 	}
 	early := order
 	early.Tracking = cloneTracking(order.Tracking)
-	for i, held := range g.EarlyOrders {
-		if held.OrderID != order.OrderID {
-			continue
-		}
-		if held.Revision >= order.Revision {
-			return false, nil
-		}
-		g.EarlyOrders[i] = early
-		return true, c.touch(now)
+	held := slices.IndexFunc(g.EarlyOrders, func(o SellerOrder) bool { return o.OrderID == order.OrderID })
+	if held >= 0 && g.EarlyOrders[held].Revision >= order.Revision {
+		return false, nil
 	}
-	if len(g.EarlyOrders) == maxEarlyOrders {
-		return false, ErrInvalidOrder
-	}
-	g.EarlyOrders = append(g.EarlyOrders, early)
+	g.EarlyOrders = holdNewest(g.EarlyOrders, held, early)
 	return true, c.touch(now)
+}
+
+// holdNewest ставит состояние последним — свежим; при переполнении вытесняет самое давнее. Настоящий
+// заказ шлёт новые ревизии и остаётся свежим, а чужие номера без продолжения уходят первыми.
+func holdNewest(held []SellerOrder, index int, early SellerOrder) []SellerOrder {
+	if index >= 0 {
+		held = slices.Delete(slices.Clone(held), index, index+1)
+	}
+	if len(held) == maxEarlyOrders {
+		held = slices.Clone(held[1:])
+	}
+	return append(held, early)
 }
 
 // applyEarlyOrder применяет при привязке заказа раннее состояние его номера; состояния других

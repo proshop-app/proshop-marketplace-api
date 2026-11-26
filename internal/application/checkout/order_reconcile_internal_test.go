@@ -172,6 +172,20 @@ func TestReconcileRetriesShopAfterItsBreaker(t *testing.T) {
 	}
 }
 
+// Размыкатель магазина откроется позже бюджета повторов: проход его не ждёт, магазин пропускается.
+func TestReconcileDoesNotWaitBreakerBeyondBudget(t *testing.T) {
+	clock := &pauseClock{}
+	service, platform := reconcileService(&stubStatuses{
+		rejected:  shopName(3),
+		notBefore: clock.Now().Add(reconcileRetryBudget + time.Minute),
+		clock:     clock,
+	})
+	run := service.reconcileAll(t, reconcileEntries(10, 1))
+	if len(run.result.Failed) != 1 || platform.clock.paused != 0 || len(platform.log()) != 10 {
+		t.Fatalf("ожидание за пределом бюджета: %+v, пауз %s", run.result, platform.clock.paused)
+	}
+}
+
 func reconcileService(platform *stubStatuses) (*Service, *stubStatuses) {
 	if platform.clock == nil {
 		platform.clock = &pauseClock{}

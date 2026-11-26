@@ -112,3 +112,26 @@ func TestSharedIntervalIdleAttemptOnlyReads(t *testing.T) {
 		t.Fatalf("холостая попытка: %v", counter.counts)
 	}
 }
+
+// Возвращённый интервал берёт следующая попытка любой реплики, не дожидаясь его истечения.
+func TestScheduledWorkReleaseLetsNextAttemptRun(t *testing.T) {
+	pool := testPool(t)
+	classPool, sessions := postgres.Single(pool), postgres.DirectSessionsOf(pool)
+	ctx := context.Background()
+	first := postgres.NewScheduledWork(classPool, sessions, "release-test", 24*time.Hour)
+	second := postgres.NewScheduledWork(classPool, sessions, "release-test", 24*time.Hour)
+	calls := 0
+	run := func(context.Context) error {
+		calls++
+		return nil
+	}
+	if err := first.WithLock(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Release(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.WithLock(ctx, run); err != nil || calls != 2 {
+		t.Fatalf("возвращённый интервал взят следующей попыткой: calls=%d err=%v", calls, err)
+	}
+}

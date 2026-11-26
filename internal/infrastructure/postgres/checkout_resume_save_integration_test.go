@@ -32,6 +32,7 @@ const (
 	farFutureWork           = `UPDATE checkout_groups SET next_work_at = '2100-01-01' WHERE checkout_id = $1`
 	expireAllReconciliation = `UPDATE checkout_groups SET reconcile_until = '2000-01-01' WHERE checkout_id = $1`
 	lockGroupRows           = `SELECT 1 FROM checkout_groups WHERE checkout_id = $1 FOR NO KEY UPDATE`
+	draftCheckout           = `UPDATE checkouts SET status = 'draft', order_context = '{}' WHERE id = $1`
 )
 
 // lockTrace запоминает запрос блокировки страницы и его параметры.
@@ -289,5 +290,26 @@ func TestSavedPurchaseClearsDeferredWork(t *testing.T) {
 	}
 	if !wasDeferred || deferred {
 		t.Fatal("сохранение покупки не сняло признак отложенной работы")
+	}
+}
+
+// Черновик без оформленных заказов страница восстановления не берёт, даже со сроком работы групп.
+func TestLockWorkDueSkipsDrafts(t *testing.T) {
+	bench := newOrderEventBench(t)
+	ctx := context.Background()
+	id, _ := bench.paidPurchase(t, 970)
+	for _, query := range []string{staleCheckoutWork, draftCheckout} {
+		if _, err := bench.pool.Exec(ctx, query, string(id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var page checkout.WorkPage
+	err := do(t, bench.uow, func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		page, err = tx.Checkouts().LockWorkDue(ctx, bench.clock.Now(), checkout.WorkCursor{}, 100)
+		return err
+	})
+	if err != nil || len(page.Due) != 0 {
+		t.Fatalf("черновик взят страницей: %d %v", len(page.Due), err)
 	}
 }
