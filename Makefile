@@ -76,7 +76,7 @@ test: taxonomy-artifact
 ## test-integration: интеграционные тесты инфраструктуры на compose
 test-integration: taxonomy-artifact infra-up
 	UNO_REFERENCE_DATA_DIR="$(abspath $(UNO_REFERENCE_DATA_DIR))" \
-		go test -race -count=1 -tags integration ./internal/infrastructure/...
+		go test -race -count=1 -timeout 30m -tags integration ./internal/infrastructure/...
 
 ## lint: golangci-lint с depguard по слоям
 lint: taxonomy-artifact

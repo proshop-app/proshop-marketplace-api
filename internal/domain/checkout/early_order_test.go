@@ -214,3 +214,22 @@ func TestEarlyOrderEvictsStalestNumber(t *testing.T) {
 		t.Fatalf("настоящее раннее состояние применено: %+v", g)
 	}
 }
+
+// Группа, исключённая из покупки (отказ создания), раннее событие не хранит, хотя срок создания задан.
+func TestEarlyOrderIgnoredForExcludedGroup(t *testing.T) {
+	c := creatingWithDeadline(t)
+	if _, err := c.ClaimCreation("t1", "a1", t0.Add(5*time.Second), t0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.FailCreation("t1", "a1", "rejected", "отказ", checkout.GroupRejected, false, nil, t0); err != nil {
+		t.Fatal(err)
+	}
+	if g := c.Groups()[0]; !g.Excluded() || g.CreationDeadline.IsZero() {
+		t.Fatalf("группа исключена при заданном сроке создания: %+v", g)
+	}
+	version := c.State().Version
+	_, err := c.ApplyOrderState("t1", earlyState("t1-order", checkout.GroupCancelled, 2), t0)
+	if !errors.Is(err, checkout.ErrNotFound) || c.State().Version != version {
+		t.Fatalf("исключённая группа не хранит раннее событие: %v", err)
+	}
+}

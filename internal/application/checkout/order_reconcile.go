@@ -84,6 +84,9 @@ func (s *Service) reconcilePage(ctx context.Context, entries []checkout.Reconcil
 	var group errgroup.Group
 	group.SetLimit(reconcileWorkers)
 	for _, entries := range reconcileShops(entries) {
+		if s.serverDown(&group, run) {
+			break
+		}
 		shop := pendingShop{tenant: entries[0].TenantID, entries: entries, size: ReconcileBatch}
 		if run.failed(shop.tenant) || run.joinPostponed(shop) {
 			continue
@@ -94,6 +97,24 @@ func (s *Service) reconcilePage(ctx context.Context, entries []checkout.Reconcil
 		}))
 	}
 	_ = group.Wait()
+}
+
+// serverDown решает сразу, не дожидаясь конца круга: набралось молчание без единого ответа — проход
+// дожидается уже начатых вызовов и проверяет ещё раз. Ответил хоть один — сервер жив (скопление
+// зависших магазинов подряд), проход идёт дальше; нет — сервер лежит, проход прерывается.
+func (s *Service) serverDown(group *errgroup.Group, run *reconcileRun) bool {
+	if run.stopped() != nil {
+		return true
+	}
+	if !run.serverSilent() {
+		return false
+	}
+	_ = group.Wait()
+	if run.serverSilent() {
+		run.stop(ErrPlatformSilent)
+		return true
+	}
+	return false
 }
 
 // reconcileShop сверяет заказы магазина пачками; на отказе остаток магазина откладывается на

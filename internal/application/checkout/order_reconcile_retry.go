@@ -24,9 +24,9 @@ var ErrReconcileServerDown = errs.New(
 	"сервер магазинов недоступен, сверка прервана",
 )
 
-// reconcileSilentShops — сколько магазинов должно промолчать в первом круге без единого ответа,
-// чтобы считать недоступным сервер, а не отдельные магазины.
-const reconcileSilentShops = 2 * reconcileWorkers
+// reconcileSilentShops — сколько магазинов должно промолчать без единого ответа с начала прохода,
+// чтобы проверить сервер: дождаться начатых вызовов и прервать проход, если ответов так и нет.
+const reconcileSilentShops = 3 * reconcileWorkers
 
 // ErrPlatformSilent — за весь первый круг не ответил ни один магазин, сроки чтения истекали.
 var ErrPlatformSilent = errs.New(errs.Unavailable, "checkout.reconcile_silent", "магазины не отвечают в срок")
@@ -50,9 +50,8 @@ type reconcileRun struct {
 	result    ReconcileResult
 	postponed map[ids.TenantID]*pendingShop
 	// silent — истёкшие сроки чтения; answers — ответы магазинов за первый круг.
-	silent   int
-	answers  int
-	retrying bool
+	silent  int
+	answers int
 	// serverDown — сервер магазинов недоступен: остальные магазины получат тот же отказ.
 	serverDown error
 }
@@ -70,7 +69,6 @@ func (s *Service) finishReconcile(ctx context.Context, run *reconcileRun, starte
 	if run.serverSilent() {
 		run.stop(ErrPlatformSilent)
 	}
-	run.firstRoundDone()
 	if run.stopped() == nil && ctx.Err() == nil {
 		s.retryPostponed(ctx, run, started)
 	}
@@ -141,9 +139,7 @@ func (r *reconcileRun) postpone(shop pendingShop, err error) {
 }
 
 func (r *reconcileRun) timeoutLocked(shop pendingShop) {
-	if !r.retrying {
-		r.silent++
-	}
+	r.silent++
 	shop.timeouts++
 	shop.size = max(1, shop.size/2)
 	if shop.timeouts > ReconcileRetries {
@@ -157,19 +153,10 @@ func (r *reconcileRun) timeoutLocked(shop pendingShop) {
 func (r *reconcileRun) noteAnswer() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if !r.retrying {
-		r.answers++
-	}
+	r.answers++
 }
 
-// firstRoundDone — дальше повторные круги: их молчание признаком сервера не считается.
-func (r *reconcileRun) firstRoundDone() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.retrying = true
-}
-
-// serverSilent — за первый круг истекли сроки у reconcileSilentShops магазинов и не ответил ни один:
+// serverSilent — истекли сроки у reconcileSilentShops магазинов и с начала прохода не ответил ни один:
 // сервер недоступен целиком. Один медленный магазин или скопление зависших среди отвечающих — нет.
 func (r *reconcileRun) serverSilent() bool {
 	r.mu.Lock()
