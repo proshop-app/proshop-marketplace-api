@@ -33,6 +33,7 @@ const (
 	expireAllReconciliation = `UPDATE checkout_groups SET reconcile_until = '2000-01-01' WHERE checkout_id = $1`
 	lockGroupRows           = `SELECT 1 FROM checkout_groups WHERE checkout_id = $1 FOR NO KEY UPDATE`
 	draftCheckout           = `UPDATE checkouts SET status = 'draft', order_context = '{}' WHERE id = $1`
+	markDeferredOnly        = `UPDATE checkout_groups SET work_deferred_at = now() WHERE checkout_id = $1`
 )
 
 // lockTrace запоминает запрос блокировки страницы и его параметры.
@@ -262,22 +263,13 @@ func TestExpireReconciliationSkipsLockedGroups(t *testing.T) {
 	}
 }
 
-// Отложенная работа снимается первым удачным сохранением покупки: оператор не видит её зависшей.
+// Отложенная работа снимается первым удачным сохранением покупки, даже у групп, чьи поля не
+// изменились (срок совпал с пересчитанным): оператор не видит покупку зависшей.
 func TestSavedPurchaseClearsDeferredWork(t *testing.T) {
 	bench := newOrderEventBench(t)
 	ctx := context.Background()
 	id, orders := bench.paidPurchase(t, 960)
-	if _, err := bench.pool.Exec(ctx, staleCheckoutWork, string(id)); err != nil {
-		t.Fatal(err)
-	}
-	err := do(t, bench.uow, func(ctx context.Context, tx ports.Tx) error {
-		return tx.Checkouts().DeferWork(ctx, []ids.UUID{id}, bench.clock.Now().Add(time.Hour), bench.clock.Now())
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var wasDeferred bool
-	if err := bench.pool.QueryRow(ctx, selectDeferredWork, string(id)).Scan(new(*time.Time), &wasDeferred); err != nil {
+	if _, err := bench.pool.Exec(ctx, markDeferredOnly, string(id)); err != nil {
 		t.Fatal(err)
 	}
 	if err := bench.service.ApplyOrderEvent(ctx, assembledEvent(id, "t1", orders["t1"], 1)); err != nil {
@@ -288,7 +280,7 @@ func TestSavedPurchaseClearsDeferredWork(t *testing.T) {
 	if err := bench.pool.QueryRow(ctx, selectDeferredWork, string(id)).Scan(&next, &deferred); err != nil {
 		t.Fatal(err)
 	}
-	if !wasDeferred || deferred {
+	if deferred {
 		t.Fatal("сохранение покупки не сняло признак отложенной работы")
 	}
 }
