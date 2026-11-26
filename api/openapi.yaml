@@ -3006,6 +3006,7 @@ paths:
         "200": { $ref: "#/components/responses/Checkout" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/CheckoutReadError" }
   /api/v1/checkout/{checkoutId}/delivery/quotes:
     post:
       tags: [checkout]
@@ -3482,6 +3483,7 @@ paths:
                   checkoutId: { type: string, format: uuid }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/CheckoutReadError" }
   /api/v1/orders:
     get:
       tags: [checkout]
@@ -3496,11 +3498,12 @@ paths:
         - { $ref: "#/components/parameters/MoneyUnit" }
         - name: after
           in: query
-          schema: { type: string, format: uuid }
+          description: Значение next из предыдущего ответа.
+          schema: { type: string }
       responses:
         "409": { $ref: "#/components/responses/Error" }
         "200":
-          description: До 100 покупок; next — последний ID для следующей страницы
+          description: До 100 покупок. Повреждённые покупки пропускаются, курсор учитывает их.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PurchaseList" }
@@ -3533,21 +3536,27 @@ paths:
   /api/v1/operator/checkouts:
     get:
       tags: [operator]
-      summary: Покупки; stuck=true — незавершённая отмена или ожидание оплаты от 15 минут
+      summary: Покупки оператора
+      description: >-
+        При stuck=true выдаются покупки с незавершённой отменой, отложенной работой
+        или ожиданием оплаты от 15 минут.
+        Список упорядочен по времени зависания, и при изменении состояния покупки между страницами
+        возможен повтор или пропуск, поэтому клиент перечитывает список.
       operationId: listOperatorCheckouts
       security: [{ operatorToken: [] }, { operatorSession: [] }]
       parameters:
         - { $ref: "#/components/parameters/MoneyUnit" }
         - name: after
           in: query
-          schema: { type: string, format: uuid }
+          description: Значение next из предыдущего ответа с тем же параметром stuck.
+          schema: { type: string }
         - name: stuck
           in: query
           schema: { type: boolean }
       responses:
         "409": { $ref: "#/components/responses/Error" }
         "200":
-          description: До 100 покупок; next — последний ID
+          description: До 100 покупок. Ошибки чтения отдельных покупок возвращаются в issues.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PurchaseList" }
@@ -5438,6 +5447,8 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/CheckoutReadError'
         '503':
           $ref: '#/components/responses/Error'
 components:
@@ -5556,6 +5567,15 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    CheckoutReadError:
+      description: Внутренняя ошибка. Код checkout.unreadable означает, что сохранённую покупку не удалось прочитать.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error:
+              code: checkout.unreadable
+              message: не удалось прочитать покупку
     Cart:
       description: Корзина
       content:
@@ -7415,7 +7435,23 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Checkout" }
-        next: { type: string, description: Последний ID; пусто при пустой странице }
+        next:
+          type: string
+          description: >-
+            Курсор последней прочитанной покупки. Передайте его целиком в after, даже если items пуст.
+            Пустая строка означает, что прочитанных строк больше нет.
+        issues:
+          type: array
+          description: Диагностика для оператора по каждой затронутой группе пропущенной покупки.
+          items:
+            type: object
+            required: [checkoutId, tenantId, reason]
+            properties:
+              checkoutId: { type: string, format: uuid }
+              tenantId: { type: string, description: Пустая строка, если магазин определить не удалось. }
+              reason:
+                type: string
+                enum: [checkout.unreadable_header, checkout.unreadable_group, checkout.invalid_stuck_at, checkout.unreadable_response]
     TaxonomyVersion:
       type: object
       required: [version]

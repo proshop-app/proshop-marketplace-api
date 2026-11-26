@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -26,23 +25,13 @@ func (s *Service) Query(ctx context.Context, query PickupQuery) (delivery.Pickup
 // CheckoutPoints проверяет владельца и применяет разрешения групп одним сценарием.
 func (s *Service) CheckoutPoints(
 	ctx context.Context,
+	checkouts ports.CheckoutBuyerReader,
 	buyerID, checkoutID ids.UUID,
 	query PickupQuery,
 ) (delivery.PickupArea, error) {
-	var purchase *checkout.Checkout
-	err := s.uow.Do(
-		ctx,
-		func(ctx context.Context, tx ports.Tx) error {
-			var err error
-			purchase, err = tx.Checkouts().Get(ctx, checkoutID)
-			return err
-		},
-	)
+	purchase, err := checkouts.LoadForBuyer(ctx, buyerID, checkoutID)
 	if err != nil {
 		return delivery.PickupArea{}, err
-	}
-	if purchase.BuyerID() != buyerID {
-		return delivery.PickupArea{}, checkout.ErrNotFound
 	}
 	regions := []string{}
 	for _, group := range purchase.Groups() {

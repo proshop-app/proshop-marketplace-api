@@ -12,6 +12,7 @@ import (
 	"time"
 
 	appbuyer "github.com/proshop-app/proshop-marketplace/internal/application/buyer"
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -212,6 +213,7 @@ func TestCheckoutPickupPaginationAndOwnership(t *testing.T) {
 	platform.SetPickupPoints("t1", ports.PickupPoints{Available: true, Items: append(points, outsideRegion)})
 	handler := &deliveryHandlers{
 		directory: directory,
+		checkouts: appcheckout.NewService(store, nil, nil, nil, nil, nil, appcheckout.Config{}),
 	}
 	store.SeedTenant(participant.TenantState{TenantID: "t2", Status: participant.TenantActive})
 	store.SeedParticipant(participant.State{

@@ -474,7 +474,7 @@ func (r participants) Count(_ context.Context, page participant.Page) (int, erro
 	return count, nil
 }
 
-func (r participants) Sellers(_ context.Context, tenants []ids.TenantID) (map[ids.TenantID]*participant.Seller, error) {
+func (r participants) Sellers(_ context.Context, tenants []ids.TenantID) (participant.SellerBatch, error) {
 	result := make(map[ids.TenantID]*participant.Seller)
 	for _, tenant := range tenants {
 		if p, ok := r.d.participants[tenant]; ok {
@@ -482,7 +482,7 @@ func (r participants) Sellers(_ context.Context, tenants []ids.TenantID) (map[id
 			result[tenant] = participant.SellerOf(participant.Restore(p), record)
 		}
 	}
-	return result, nil
+	return participant.SellerBatch{Items: result}, nil
 }
 
 // Batch — читает состояния предложений одним запросом к проекции.

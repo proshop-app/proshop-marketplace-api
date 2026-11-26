@@ -23,10 +23,10 @@ func TestSellersForResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := participant.Seller{Slug: "shop-one", Name: "Магазин", UnavailableReason: "delivery_unavailable"}
-	if sellers["t1"] == nil || *sellers["t1"] != want {
+	if sellers.Items["t1"] == nil || *sellers.Items["t1"] != want {
 		t.Fatal(sellers)
 	}
-	if sellers["missing"] != nil {
+	if sellers.Items["missing"] != nil {
 		t.Fatal(sellers)
 	}
 

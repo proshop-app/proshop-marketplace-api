@@ -47,7 +47,7 @@ func (tx sellerCountingTx) Participants() participant.Repository {
 func (r sellerCountingRepository) Sellers(
 	ctx context.Context,
 	tenants []ids.TenantID,
-) (map[ids.TenantID]*participant.Seller, error) {
+) (participant.SellerBatch, error) {
 	r.owner.calls++
 	r.owner.tenants = len(tenants)
 	return r.Repository.Sellers(ctx, tenants)
@@ -108,7 +108,7 @@ func TestSellerResponsesBatchAndNull(t *testing.T) {
 			response = httptest.NewRecorder()
 			switch mode {
 			case "orders":
-				h.respondList(response, request, states)
+				h.respondList(response, request, appcheckout.ListPage[checkout.State]{Items: states}, false)
 			case "delivery_changed":
 				h.respond(response, request, http.StatusOK, states[0], checkout.ErrDeliveryChanged)
 			default:

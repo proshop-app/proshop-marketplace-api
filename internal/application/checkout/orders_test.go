@@ -142,7 +142,7 @@ func TestEventsAndCancelledCartReturnAreIdempotent(t *testing.T) {
 		t.Fatalf("отменённая группа возвращена один раз: %+v %v", basket, err)
 	}
 	purchases, err := e.service.Purchases(ctx, buyerID, "")
-	if err != nil || len(purchases) != 1 || purchases[0].State().Groups[0].Status != checkout.GroupPaid {
+	if err != nil || len(purchases.Items) != 1 || purchases.Items[0].State().Groups[0].Status != checkout.GroupPaid {
 		t.Fatalf("кабинет: %+v %v", purchases, err)
 	}
 	other := ids.UUID("11111111-1111-4111-8111-111111111111")
@@ -179,8 +179,8 @@ func TestPaymentExpiryAndStuckFilter(t *testing.T) {
 	if _, err := refreshOrders(ctx, e, buyerID, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	stuck, err := e.service.OperatorList(ctx, "", true)
-	if err != nil || len(stuck) != 1 {
+	stuck, err := e.service.OperatorList(ctx, checkout.ListCursor{}, true)
+	if err != nil || len(stuck.Items) != 1 {
 		t.Fatalf("опрос не сбрасывает время ожидания: %+v %v", stuck, err)
 	}
 	e.clock.Advance(44 * time.Minute)

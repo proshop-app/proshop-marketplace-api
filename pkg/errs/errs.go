@@ -26,6 +26,8 @@ const (
 	TooManyRequests Code = "too_many_requests"
 	// Unavailable — внешняя зависимость недоступна; повтор позже может пройти.
 	Unavailable Code = "unavailable"
+	// CorruptData — сохранённые данные не читаются; клиенту доступно безопасное описание.
+	CorruptData Code = "corrupt_data"
 	// Internal — непредвиденная ошибка.
 	Internal Code = "internal"
 )

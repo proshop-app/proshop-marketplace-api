@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
@@ -109,6 +110,7 @@ func TestPickupResponsesRespectAreaAndPageLimits(t *testing.T) {
 	})
 	scoped := &deliveryHandlers{
 		directory: service,
+		checkouts: appcheckout.NewService(store, nil, nil, nil, nil, nil, appcheckout.Config{}),
 	}
 	for _, query := range []string{
 		"/?carrier=cdek&city=Город&bbox=-90,-180,90,180",

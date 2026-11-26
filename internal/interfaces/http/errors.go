@@ -35,6 +35,7 @@ var statusByCode = map[errs.Code]int{
 	errs.Unauthorized:    http.StatusUnauthorized,
 	errs.TooManyRequests: http.StatusTooManyRequests,
 	errs.Unavailable:     http.StatusServiceUnavailable,
+	errs.CorruptData:     http.StatusInternalServerError,
 	errs.Internal:        http.StatusInternalServerError,
 }
 
@@ -68,7 +69,7 @@ func writeErrorWithState(
 	w http.ResponseWriter,
 	r *http.Request,
 	err error,
-	checkout *checkoutJSON,
+	state *checkoutJSON,
 	event *parkedEventJSON,
 ) {
 	if errors.Is(r.Context().Err(), context.DeadlineExceeded) {
@@ -96,7 +97,7 @@ func writeErrorWithState(
 	case "reference.key_taken":
 		detail.Code = "REFERENCE_KEY_TAKEN"
 	}
-	body := errorBody{Error: detail, Checkout: checkout, Event: event}
+	body := errorBody{Error: detail, Checkout: state, Event: event}
 	var conflict *moderation.CaseConflict
 	if errors.As(err, &conflict) {
 		current := caseJSON(conflict.Current)

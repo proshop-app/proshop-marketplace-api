@@ -126,7 +126,7 @@ domain ← application ← interfaces, infrastructure        сборка гра
 ## Ошибки
 
 - `pkg/errs`: код класса (`invalid`, `not_found`, `conflict`,
-  `unauthorized`, `too_many_requests`, `unavailable`, `internal`) и стабильный ключ
+  `unauthorized`, `too_many_requests`, `unavailable`, `corrupt_data`, `internal`) и стабильный ключ
   `контекст.причина`. Доменные ошибки объявлены в `errors.go` контекста;
   `errors.Is` сравнивает по ключу, `WithMessage`/`Wrap` его сохраняют.
 - HTTP переводит ошибку в ответ одной таблицей

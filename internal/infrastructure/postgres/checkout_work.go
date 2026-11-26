@@ -31,16 +31,34 @@ const (
 		ORDER BY id
 		FOR NO KEY UPDATE SKIP LOCKED`
 
-	// deferCheckoutWork сначала блокирует строки покупок по порядку ключа, как любая запись покупки:
-	// иначе запись групп пары покупок могла бы сцепиться с их сохранением.
+	// lockDeferredCheckouts сериализует перенос с сохранением покупки. Следующий запрос получает свежий
+	// снимок групп после блокировки, включая записи, которые завершились, пока мы ждали.
+	lockDeferredCheckouts = `
+		SELECT id FROM checkouts WHERE id = ANY($1::uuid[]) ORDER BY id FOR NO KEY UPDATE`
+
+	// deferCheckoutWork пишет только группы: отказ записи заголовка не мешает отсрочке.
 	deferCheckoutWork = `
-		WITH locked AS (
-			SELECT id FROM checkouts WHERE id = ANY($1::uuid[]) ORDER BY id FOR NO KEY UPDATE
+		WITH due AS (
+			SELECT DISTINCT checkout_id
+			FROM checkout_groups
+			WHERE checkout_id = ANY($1::uuid[]) AND next_work_at < $2
+		), targets AS MATERIALIZED (
+			SELECT c.id, CASE
+				WHEN c.status NOT IN ('draft', 'confirmed') OR c.order_context->>'CartConsumed' = 'true'
+				THEN (
+					SELECT a.tenant_id FROM checkout_groups a WHERE a.checkout_id = c.id
+					ORDER BY a.tenant_id COLLATE "C" LIMIT 1
+				)
+			END AS anchor
+			FROM due JOIN checkouts c ON c.id = due.checkout_id
 		)
-		UPDATE checkout_groups
-		SET next_work_at = $2,
-			work_deferred_at = $3
-		WHERE checkout_id IN (SELECT id FROM locked) AND next_work_at < $2`
+		UPDATE checkout_groups g
+		SET next_work_at = CASE WHEN g.next_work_at < $2 THEN $2 ELSE g.next_work_at END,
+			work_deferred_at = CASE WHEN g.next_work_at < $2 THEN $3 ELSE g.work_deferred_at END,
+			stuck_at = CASE WHEN g.tenant_id = targets.anchor THEN $4 ELSE g.stuck_at END
+		FROM targets
+		WHERE g.checkout_id = targets.id
+			AND (g.next_work_at < $2 OR (g.tenant_id = targets.anchor AND g.stuck_at IS DISTINCT FROM $4))`
 )
 
 // LockWorkDue — покупки страницы созревших групп после курсора, под блокировкой до конца транзакции.
@@ -64,8 +82,8 @@ func (r *Checkouts) LockWorkDue(
 	}
 	page.Broken = broken
 	for _, state := range states {
-		if cause, found := loaded.failed[state.ID]; found {
-			page.Broken = append(page.Broken, checkout.BrokenCheckout{ID: state.ID, Err: cause})
+		if failures := loaded.failed[state.ID]; len(failures) > 0 {
+			page.Broken = append(page.Broken, checkout.BrokenCheckout{ID: state.ID, Err: failures[0].Cause})
 			continue
 		}
 		// Соседний проход сохранил покупку между выборкой кандидатов и блокировкой: работы нет.
@@ -88,7 +106,10 @@ func (r *Checkouts) DeferWork(ctx context.Context, checkoutIDs []ids.UUID, until
 	for _, id := range checkoutIDs {
 		list = append(list, string(id))
 	}
-	if _, err := execSQL(ctx, r.db, deferCheckoutWork, list, until, now); err != nil {
+	if _, err := execSQL(ctx, r.db, lockDeferredCheckouts, list); err != nil {
+		return fmt.Errorf("заблокировать покупки для отсрочки: %w", err)
+	}
+	if _, err := execSQL(ctx, r.db, deferCheckoutWork, list, until, now, checkout.ImmediateStuckAt()); err != nil {
 		return fmt.Errorf("отложить работу покупок: %w", err)
 	}
 	return nil

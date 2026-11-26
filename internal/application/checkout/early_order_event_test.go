@@ -135,6 +135,9 @@ func (r *earlyRejections) RecordCheckoutEvent(tenant ids.TenantID, _ ids.UUID, e
 	}
 }
 
+func (*earlyRejections) RecordCheckoutReadFailure(context.Context, ids.TenantID, ids.UUID, error, bool) {
+}
+
 // Отмена без причины противоречит договору и после привязки: отказ раннего состояния доходит до
 // счётчика событий оформления, а не исчезает.
 func TestEarlyOrderRejectedOnAttachIsCounted(t *testing.T) {

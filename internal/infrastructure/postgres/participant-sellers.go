@@ -17,14 +17,14 @@ const selectParticipantSellers = `SELECT p.tenant_id, p.slug, p.name, p.stage, p
 func (r *Participants) Sellers(
 	ctx context.Context,
 	tenants []ids.TenantID,
-) (map[ids.TenantID]*participant.Seller, error) {
-	result := make(map[ids.TenantID]*participant.Seller)
+) (participant.SellerBatch, error) {
+	result := participant.SellerBatch{Items: make(map[ids.TenantID]*participant.Seller)}
 	if len(tenants) == 0 {
 		return result, nil
 	}
 	rows, err := rawSQL(ctx, r.db, selectParticipantSellers, tenants).Rows()
 	if err != nil {
-		return nil, fmt.Errorf("продавцы: %w", err)
+		return participant.SellerBatch{}, fmt.Errorf("продавцы: %w", err)
 	}
 	defer func() {
 		_ = rows.Close()
@@ -35,14 +35,24 @@ func (r *Participants) Sellers(
 		var status participant.TenantStatus
 		var settings []byte
 		if err := rows.Scan(&tenant, &state.Slug, &state.Name, &state.Stage, &settings, &status); err != nil {
-			return nil, err
+			return participant.SellerBatch{}, err
 		}
-		if err := json.Unmarshal(settings, &state.Delivery); err != nil {
-			return nil, err
+		var delivery *participant.DeliverySettings
+		err := json.Unmarshal(settings, &delivery)
+		if err == nil && delivery == nil {
+			err = fmt.Errorf("ожидался объект, получен null")
 		}
+		if err != nil {
+			if result.Failures == nil {
+				result.Failures = make(map[ids.TenantID]error)
+			}
+			result.Failures[tenant] = fmt.Errorf("настройки доставки продавца: %w", err)
+			continue
+		}
+		state.Delivery = *delivery
 		state.TenantID = tenant
 		record := participant.RestoreTenant(participant.TenantState{TenantID: tenant, Status: status})
-		result[tenant] = participant.SellerOf(participant.Restore(state), record)
+		result.Items[tenant] = participant.SellerOf(participant.Restore(state), record)
 	}
 	return result, rows.Err()
 }

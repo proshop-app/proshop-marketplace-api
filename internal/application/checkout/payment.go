@@ -28,7 +28,7 @@ func (s *Service) Payment(ctx context.Context, buyerID, id ids.UUID) (checkout.S
 }
 
 func (s *Service) paymentCheckout(ctx context.Context, buyerID, id ids.UUID) (*checkout.Checkout, error) {
-	c, err := s.load(ctx, buyerID, id)
+	c, err := s.LoadForBuyer(ctx, buyerID, id)
 	if err != nil {
 		return nil, err
 	}

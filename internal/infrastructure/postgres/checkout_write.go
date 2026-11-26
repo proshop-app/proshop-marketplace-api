@@ -8,6 +8,7 @@ import (
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 const (
@@ -40,18 +41,18 @@ const (
 		unnest(
 			$1::uuid[], $2::text[], $3::text[], $4::text[], $5::bigint[], $6::text[], $7::text[],
 			$8::bigint[], $9::int[], $10::int[], $11::timestamptz[], $12::text[], $13::text[],
-			$14::timestamptz[], $15::timestamptz[]
+			$14::timestamptz[], $15::timestamptz[], $16::timestamptz[]
 		) AS v (
 			checkout_id, tenant_id, external_checkout_id, lines, goods, quote_status, quote_reason,
 			delivery_cost, min_days, max_days, quote_expires_at, order_progress, tracking,
-			next_work_at, reconcile_until
+			next_work_at, reconcile_until, stuck_at
 		)`
 
 	insertCheckoutGroups = `
-		INSERT INTO checkout_groups (checkout_id, ` + groupColumns + `, next_work_at, reconcile_until)
+		INSERT INTO checkout_groups (checkout_id, ` + groupColumns + `, next_work_at, reconcile_until, stuck_at)
 		SELECT checkout_id, tenant_id, external_checkout_id, lines::jsonb, goods, quote_status, quote_reason,
 			delivery_cost, min_days, max_days, quote_expires_at, order_progress::jsonb, tracking::jsonb,
-			next_work_at, reconcile_until
+			next_work_at, reconcile_until, stuck_at
 		FROM ` + checkoutGroupValues
 
 	// updateCheckoutGroups переписывает только изменившиеся группы: событие одного магазина
@@ -71,17 +72,18 @@ const (
 			tracking = v.tracking::jsonb,
 			next_work_at = v.next_work_at,
 			reconcile_until = v.reconcile_until,
-			work_deferred_at = NULL
+			work_deferred_at = NULL,
+			stuck_at = v.stuck_at
 		FROM ` + checkoutGroupValues + `
 		WHERE g.checkout_id = v.checkout_id AND g.tenant_id = v.tenant_id
 			AND ((
 				g.external_checkout_id, g.lines, g.goods, g.quote_status, g.quote_reason, g.delivery_cost,
 				g.min_days, g.max_days, g.quote_expires_at, g.order_progress, g.tracking, g.next_work_at,
-				g.reconcile_until
+				g.reconcile_until, g.stuck_at
 			) IS DISTINCT FROM (
 				v.external_checkout_id, v.lines::jsonb, v.goods, v.quote_status, v.quote_reason, v.delivery_cost,
 				v.min_days, v.max_days, v.quote_expires_at, v.order_progress::jsonb, v.tracking::jsonb,
-				v.next_work_at, v.reconcile_until
+				v.next_work_at, v.reconcile_until, v.stuck_at
 			) OR g.work_deferred_at IS NOT NULL)`
 )
 
@@ -107,6 +109,7 @@ type groupColumnsBatch struct {
 	progress                               []string
 	tracking                               []*string
 	nextWorkAt, reconcileUntil             []*time.Time
+	stuckAt                                []*time.Time
 }
 
 // UpdateMany сохраняет пачку покупок двумя запросами: покупки и их изменившиеся группы. Хоть одна
@@ -144,8 +147,13 @@ func (r *Checkouts) UpdateMany(ctx context.Context, cs []*checkout.Checkout) err
 func (r *Checkouts) writeGroups(ctx context.Context, sql string, states []checkout.State) error {
 	var batch groupColumnsBatch
 	for _, s := range states {
+		anchor, stuckAt := checkoutStuckKey(s)
 		for _, group := range s.Groups {
-			if err := batch.add(string(s.ID), group); err != nil {
+			var key *time.Time
+			if group.TenantID == anchor {
+				key = stuckAt
+			}
+			if err := batch.add(string(s.ID), group, key); err != nil {
 				return fmt.Errorf("группа покупки %s: %w", s.ID, err)
 			}
 		}
@@ -197,7 +205,7 @@ func (b *checkoutColumnsBatch) args() []any {
 	}
 }
 
-func (b *groupColumnsBatch) add(checkoutID string, group checkout.Group) error {
+func (b *groupColumnsBatch) add(checkoutID string, group checkout.Group, stuckAt *time.Time) error {
 	lines, err := encodeLines(group)
 	if err != nil {
 		return err
@@ -216,6 +224,7 @@ func (b *groupColumnsBatch) add(checkoutID string, group checkout.Group) error {
 	b.tracking = append(b.tracking, textColumn(tracking))
 	b.nextWorkAt = append(b.nextWorkAt, nextCheckoutWork(group))
 	b.reconcileUntil = append(b.reconcileUntil, timeColumn(group.ReconcileUntil()))
+	b.stuckAt = append(b.stuckAt, stuckAt)
 	return nil
 }
 
@@ -257,6 +266,7 @@ func (b *groupColumnsBatch) args() []any {
 		b.tracking,
 		b.nextWorkAt,
 		b.reconcileUntil,
+		b.stuckAt,
 	}
 }
 
@@ -292,6 +302,25 @@ func selectionColumns(selection *checkout.Selection) (carrier, point, encoded *s
 	}
 	name, text := string(selection.Carrier), string(raw)
 	return &name, &selection.PickupPointCode, &text, nil
+}
+
+// checkoutStuckKey хранит одно время на видимую покупку в группе с первым tenant_id (COLLATE "C" в SQL).
+func checkoutStuckKey(state checkout.State) (ids.TenantID, *time.Time) {
+	if (state.Status == checkout.StatusDraft || state.Status == checkout.StatusConfirmed) && !state.CartConsumed {
+		return "", nil
+	}
+
+	var anchor ids.TenantID
+	var earliest *time.Time
+	for _, group := range state.Groups {
+		if anchor == "" || group.TenantID < anchor {
+			anchor = group.TenantID
+		}
+		if at, stuck := group.StuckAt(); stuck && (earliest == nil || at.Before(*earliest)) {
+			earliest = &at
+		}
+	}
+	return anchor, earliest
 }
 
 // Проекция очередного опроса/возврата позволяет не читать JSON всей истории в Resume.

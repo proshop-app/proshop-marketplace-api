@@ -56,7 +56,7 @@ func (s *Service) buyerAction(
 	decide func(checkout.Group) (bool, error),
 	command shopCommand,
 ) (checkout.State, error) {
-	c, err := s.load(ctx, buyerID, id)
+	c, err := s.LoadForBuyer(ctx, buyerID, id)
 	if err != nil {
 		return checkout.State{}, err
 	}

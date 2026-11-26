@@ -2,24 +2,64 @@ package checkout
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-// Filter — курсор по ID, владелец и окно ожидания для панели оператора.
+// Причины ошибок страницы доступны оператору; исходная ошибка остаётся в журнале.
+const (
+	ReadHeader = "checkout.unreadable_header"
+	ReadGroup  = "checkout.unreadable_group"
+	ReadCursor = "checkout.invalid_stuck_at"
+	ReadRender = "checkout.unreadable_response"
+)
+
+// Filter — курсор, владелец и граница времени ожидания для панели оператора.
 type Filter struct {
 	// HasOrders скрывает из кабинета намерения без документов магазина.
-	HasOrders   bool
-	BuyerID     ids.UUID
-	AfterID     ids.UUID
-	Limit       int
-	StuckBefore time.Time
-	OrdersOnly  bool
+	HasOrders    bool
+	BuyerID      ids.UUID
+	AfterID      ids.UUID
+	AfterStuckAt *time.Time
+	Limit        int
+	StuckBefore  time.Time
+	OrdersOnly   bool
+}
+
+// ListCursor продолжает страницу по времени попадания в «зависшие» и ID либо только по ID.
+type ListCursor struct {
+	ID      ids.UUID
+	StuckAt *time.Time
+}
+
+// ListEntry сохраняет позицию даже для покупки, которую не удалось прочитать.
+type ListEntry struct {
+	Cursor   ListCursor
+	Checkout *Checkout
+	Failures []ReadFailure
+}
+
+// ReadFailure несёт причину разбора и принадлежность строки для диагностики и проверки доступа.
+type ReadFailure struct {
+	ID       ids.UUID
+	BuyerID  ids.UUID
+	TenantID ids.TenantID
+	Cause    error
+	Reason   string
+}
+
+// PickupHistoryPage отделяет здоровые пункты от ошибок исходных покупок.
+type PickupHistoryPage struct {
+	Points   []Selection
+	Failures []ReadFailure
 }
 
 // ReconcileEntry — заказ магазина, статус которого площадка сверяет пачкой.
 type ReconcileEntry struct {
+	Failure    error
 	CheckoutID ids.UUID
 	TenantID   ids.TenantID
 	OrderID    string
@@ -62,11 +102,13 @@ type WorkPage struct {
 
 // Repository — покупки.
 type Repository interface {
-	List(context.Context, Filter) ([]*Checkout, error)
+	List(context.Context, Filter) ([]ListEntry, error)
 	// PickupHistory — пункты выдачи, куда покупателю создавались заказы: без повторов, свежие первыми.
-	PickupHistory(ctx context.Context, buyerID ids.UUID, limit int) ([]Selection, error)
+	PickupHistory(ctx context.Context, buyerID ids.UUID, limit int) (PickupHistoryPage, error)
 	// Get — покупка; нет — ErrNotFound.
 	Get(ctx context.Context, id ids.UUID) (*Checkout, error)
+	// GetForBuyer проверяет владельца до чтения агрегата; чужая покупка или её отсутствие — ErrNotFound.
+	GetForBuyer(ctx context.Context, buyerID, id ids.UUID) (*Checkout, error)
 	// GetForUpdate — покупка под запись в транзакции: параллельная запись той же покупки ждёт её конца,
 	// а не проигрывает условное обновление версии; нет — ErrNotFound.
 	GetForUpdate(ctx context.Context, id ids.UUID) (*Checkout, error)
@@ -90,3 +132,46 @@ type Repository interface {
 	// ExpireReconciliation снимает со сверки заказы, срок которой истёк.
 	ExpireReconciliation(ctx context.Context, now time.Time) error
 }
+
+// ValidStuckFilter принимает первую страницу либо полный ключ продолжения.
+func (f Filter) ValidStuckFilter() bool {
+	return (f.AfterID == "" && f.AfterStuckAt == nil) || (f.AfterID != "" && ValidStuckCursor(f.AfterStuckAt))
+}
+
+// ValidStuckCursor проверяет диапазон и точность ключа PostgreSQL.
+func ValidStuckCursor(at *time.Time) bool {
+	return at != nil && at.UTC().Year() >= 1 && at.UTC().Year() <= 9999 && at.Nanosecond()%1000 == 0
+}
+
+// ReadError объединяет причины покупки для одной записи журнала.
+func (e ListEntry) ReadError() *ReadFailure {
+	if len(e.Failures) == 0 {
+		return nil
+	}
+	failure := e.Failures[0]
+	if len(e.Failures) == 1 {
+		return &failure
+	}
+	var causes []error
+	seen := map[string]bool{}
+	for _, item := range e.Failures {
+		switch item.Reason {
+		case ReadHeader, ReadCursor:
+			if seen[item.Reason] {
+				continue
+			}
+			seen[item.Reason] = true
+		case ReadGroup:
+			if item.TenantID != "" {
+				causes = append(causes, fmt.Errorf("магазин %s: %w", item.TenantID, item.Cause))
+				continue
+			}
+		}
+		causes = append(causes, item.Cause)
+	}
+	failure.Cause = errors.Join(causes...)
+	return &failure
+}
+
+func (e *ReadFailure) Error() string { return e.Cause.Error() }
+func (e *ReadFailure) Unwrap() error { return e.Cause }

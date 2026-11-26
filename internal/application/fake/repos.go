@@ -139,7 +139,18 @@ func (r checkouts) Get(_ context.Context, id ids.UUID) (*checkout.Checkout, erro
 		return nil, checkout.ErrNotFound
 	}
 
+	if failure, ok := r.d.checkoutReadFailures[id]; ok {
+		return nil, &failure
+	}
 	return checkout.Restore(copyCheckout(state)), nil
+}
+
+func (r checkouts) GetForBuyer(ctx context.Context, buyerID, id ids.UUID) (*checkout.Checkout, error) {
+	state, ok := r.d.checkouts[id]
+	if !ok || state.BuyerID != buyerID {
+		return nil, checkout.ErrNotFound
+	}
+	return r.Get(ctx, id)
 }
 
 // GetForUpdate — то же чтение: транзакции хранилища в памяти и так идут по одной.
@@ -147,10 +158,10 @@ func (r checkouts) GetForUpdate(ctx context.Context, id ids.UUID) (*checkout.Che
 	return r.Get(ctx, id)
 }
 
-func (r checkouts) ByKey(_ context.Context, buyerID ids.UUID, key string) (*checkout.Checkout, error) {
+func (r checkouts) ByKey(ctx context.Context, buyerID ids.UUID, key string) (*checkout.Checkout, error) {
 	for _, state := range r.d.checkouts {
 		if state.BuyerID == buyerID && state.IdempotencyKey == key {
-			return checkout.Restore(copyCheckout(state)), nil
+			return r.Get(ctx, state.ID)
 		}
 	}
 
@@ -198,39 +209,68 @@ func (r checkouts) UpdateMany(ctx context.Context, cs []*checkout.Checkout) erro
 	return nil
 }
 
-func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Checkout, error) {
-	var found []*checkout.Checkout
+func (r checkouts) List(_ context.Context, f checkout.Filter) ([]checkout.ListEntry, error) {
+	stuck := !f.StuckBefore.IsZero()
+	if stuck && !f.ValidStuckFilter() {
+		return nil, ids.ErrInvalid
+	}
+	after := checkout.ListCursor{ID: f.AfterID, StuckAt: f.AfterStuckAt}
+	var found []checkout.ListEntry
 	for _, state := range r.d.checkouts {
-		if state.ID <= f.AfterID || (f.BuyerID != "" && state.BuyerID != f.BuyerID) {
+		if f.BuyerID != "" && state.BuyerID != f.BuyerID {
 			continue
 		}
-		if f.OrdersOnly && !state.CartConsumed &&
-			(state.Status == checkout.StatusDraft ||
-				state.Status == checkout.StatusConfirmed) {
+		if (f.OrdersOnly || stuck) && !state.CartConsumed &&
+			(state.Status == checkout.StatusDraft || state.Status == checkout.StatusConfirmed) {
 			continue
 		}
 		if f.HasOrders && !checkout.Restore(state).HasOrders() {
 			continue
 		}
-		if !f.StuckBefore.IsZero() {
-			_, stuck := r.d.deferredWork[state.ID]
-			for _, g := range state.Groups {
-				if g.ReconciliationRequired ||
-					(g.Status == checkout.GroupAwaitingPayment && !g.AwaitingSince.After(f.StuckBefore)) {
-					stuck = true
-				}
-			}
-			if !stuck {
+		cursor := checkout.ListCursor{ID: state.ID}
+		if stuck {
+			cursor.StuckAt = r.stuckAt(state)
+			if cursor.StuckAt == nil || cursor.StuckAt.After(f.StuckBefore) {
 				continue
 			}
 		}
-		found = append(found, checkout.Restore(copyCheckout(state)))
+		if after.ID != "" && !checkoutListBefore(after, cursor) {
+			continue
+		}
+		entry := checkout.ListEntry{Cursor: cursor}
+		if failure, ok := r.d.checkoutReadFailures[state.ID]; ok {
+			entry.Failures = []checkout.ReadFailure{failure}
+		} else {
+			entry.Checkout = checkout.Restore(copyCheckout(state))
+		}
+		found = append(found, entry)
 	}
-	sort.Slice(found, func(i, j int) bool { return found[i].ID() < found[j].ID() })
+	sort.Slice(found, func(i, j int) bool { return checkoutListBefore(found[i].Cursor, found[j].Cursor) })
 	if len(found) > f.Limit {
 		found = found[:f.Limit]
 	}
 	return found, nil
+}
+
+func (r checkouts) stuckAt(state checkout.State) *time.Time {
+	var at *time.Time
+	if _, deferred := r.d.deferredWork[state.ID]; deferred {
+		instant := checkout.ImmediateStuckAt()
+		return &instant
+	}
+	for _, g := range state.Groups {
+		if instant, stuck := g.StuckAt(); stuck && (at == nil || instant.Before(*at)) {
+			at = &instant
+		}
+	}
+	return at
+}
+
+func checkoutListBefore(a, b checkout.ListCursor) bool {
+	if a.StuckAt != nil && b.StuckAt != nil && !a.StuckAt.Equal(*b.StuckAt) {
+		return a.StuckAt.Before(*b.StuckAt)
+	}
+	return a.ID < b.ID
 }
 
 // LockWorkDue повторяет порядок PostgreSQL: группы по сроку работы и покупке, потом их покупки.
@@ -287,7 +327,7 @@ func workAfter(a, b checkout.WorkCursor) bool {
 	return a.At.After(b.At) || (a.At.Equal(b.At) && a.CheckoutID > b.CheckoutID)
 }
 
-func (r checkouts) PickupHistory(_ context.Context, buyerID ids.UUID, limit int) ([]checkout.Selection, error) {
+func (r checkouts) PickupHistory(_ context.Context, buyerID ids.UUID, limit int) (checkout.PickupHistoryPage, error) {
 	var states []checkout.State
 	for _, state := range r.d.checkouts {
 		if state.BuyerID == buyerID && state.Delivery != nil && checkout.Restore(state).HasOrders() {
@@ -305,7 +345,7 @@ func (r checkouts) PickupHistory(_ context.Context, buyerID ids.UUID, limit int)
 		seen[key] = true
 		found = append(found, *state.Delivery)
 	}
-	return found, nil
+	return checkout.PickupHistoryPage{Points: found}, nil
 }
 
 func (r checkouts) ReconcileDue(

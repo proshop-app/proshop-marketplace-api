@@ -21,13 +21,13 @@ func TestSellersForResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := participant.Seller{Slug: "shop-one", Name: "Магазин", UnavailableReason: "delivery_unavailable"}
-	if sellers["t1"] == nil || *sellers["t1"] != want {
+	if sellers.Items["t1"] == nil || *sellers.Items["t1"] != want {
 		t.Fatal(sellers)
 	}
-	if sellers["missing"] != nil {
+	if sellers.Items["missing"] != nil {
 		t.Fatal(sellers)
 	}
-	if sellers["t2"] == nil || sellers["t2"].Slug != "shop-two" {
+	if sellers.Items["t2"] == nil || sellers.Items["t2"].Slug != "shop-two" {
 		t.Fatal(sellers)
 	}
 }

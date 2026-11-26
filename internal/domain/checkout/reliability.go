@@ -464,3 +464,16 @@ func (g Group) NextWorkAt() (time.Time, bool) {
 	}
 	return next, found
 }
+
+// StuckAt возвращает время начала ожидания для панели; нулевое время означает показ сразу.
+func (g Group) StuckAt() (time.Time, bool) {
+	if g.ReconciliationRequired {
+		return ImmediateStuckAt(), true
+	}
+	return g.AwaitingSince, g.Status == GroupAwaitingPayment
+}
+
+// ImmediateStuckAt показывает покупку сразу при отложенной работе или незавершённой отмене.
+func ImmediateStuckAt() time.Time {
+	return time.Time{}
+}

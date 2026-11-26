@@ -10,14 +10,14 @@ import (
 )
 
 // Sellers собирает продавцов всего ответа одним запросом, включая список заказов.
-func (s *Service) Sellers(ctx context.Context, states []checkout.State) (map[ids.TenantID]*participant.Seller, error) {
+func (s *Service) Sellers(ctx context.Context, states []checkout.State) (participant.SellerBatch, error) {
 	unique := map[ids.TenantID]bool{}
 	for _, state := range states {
 		for _, group := range state.Groups {
 			unique[group.TenantID] = true
 		}
 	}
-	result := map[ids.TenantID]*participant.Seller{}
+	var result participant.SellerBatch
 	if len(unique) == 0 {
 		return result, nil
 	}
