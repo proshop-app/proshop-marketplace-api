@@ -22,9 +22,6 @@ const (
 	// чтения: повтор идёт отдельным кругом после остальных магазинов, без пауз, каждый раз вдвое
 	// меньшей пачкой — 200, 100, 50, 25 заказов.
 	ReconcileRetries = 3
-	// reconcileServerTimeouts — столько истёкших сроков подряд без единого ответа в первом круге —
-	// признак недоступного сервера, а не отдельных магазинов: проход прерывается.
-	reconcileServerTimeouts = 2 * reconcileWorkers
 	// reconcileRetryBudget — сколько от начала прохода разрешено тратить на повторные круги.
 	reconcileRetryBudget = 10 * time.Minute
 	// reconcilePage — строк сверки за одно чтение базы.
@@ -92,7 +89,7 @@ func (s *Service) reconcilePage(ctx context.Context, entries []checkout.Reconcil
 			continue
 		}
 		group.Go(safego.Guard("checkout.reconcile", func() error {
-			s.reconcileShop(ctx, shop, run, true)
+			s.reconcileShop(ctx, shop, run)
 			return nil
 		}))
 	}
@@ -101,14 +98,14 @@ func (s *Service) reconcilePage(ctx context.Context, entries []checkout.Reconcil
 
 // reconcileShop сверяет заказы магазина пачками; на отказе остаток магазина откладывается на
 // повторный круг или пропускается — магазин не спит в строю и не занимает место.
-func (s *Service) reconcileShop(ctx context.Context, shop pendingShop, run *reconcileRun, first bool) {
+func (s *Service) reconcileShop(ctx context.Context, shop pendingShop, run *reconcileRun) {
 	for len(shop.entries) > 0 && run.stopped() == nil {
 		batch := shop.entries[:min(shop.size, len(shop.entries))]
 		if err := s.reconcileBatch(ctx, shop.tenant, batch, run); err != nil {
-			run.postpone(shop, err, first)
+			run.postpone(shop, err)
 			return
 		}
-		run.answered()
+		run.noteAnswer()
 		shop.entries = shop.entries[len(batch):]
 	}
 }

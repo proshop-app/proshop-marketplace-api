@@ -24,6 +24,13 @@ var ErrReconcileServerDown = errs.New(
 	"сервер магазинов недоступен, сверка прервана",
 )
 
+// reconcileSilentShops — сколько магазинов должно промолчать в первом круге без единого ответа,
+// чтобы считать недоступным сервер, а не отдельные магазины.
+const reconcileSilentShops = 2 * reconcileWorkers
+
+// ErrPlatformSilent — за весь первый круг не ответил ни один магазин, сроки чтения истекали.
+var ErrPlatformSilent = errs.New(errs.Unavailable, "checkout.reconcile_silent", "магазины не отвечают в срок")
+
 // pendingShop — заказы магазина, ждущие сверки, и размер его пачки.
 type pendingShop struct {
 	tenant  ids.TenantID
@@ -42,8 +49,10 @@ type reconcileRun struct {
 	mu        sync.Mutex
 	result    ReconcileResult
 	postponed map[ids.TenantID]*pendingShop
-	// silent — истёкшие сроки подряд без единого ответа в первом круге.
-	silent int
+	// silent — истёкшие сроки чтения; answers — ответы магазинов за первый круг.
+	silent   int
+	answers  int
+	retrying bool
 	// serverDown — сервер магазинов недоступен: остальные магазины получат тот же отказ.
 	serverDown error
 }
@@ -58,6 +67,10 @@ func newReconcileRun() *reconcileRun {
 // finishReconcile проходит повторные круги и возвращает итог; при недоступном сервере — итог до
 // прерывания вместе с ErrReconcileServerDown, чтобы уже найденные расхождения были учтены.
 func (s *Service) finishReconcile(ctx context.Context, run *reconcileRun, started time.Time) (ReconcileResult, error) {
+	if run.serverSilent() {
+		run.stop(ErrPlatformSilent)
+	}
+	run.firstRoundDone()
 	if run.stopped() == nil && ctx.Err() == nil {
 		s.retryPostponed(ctx, run, started)
 	}
@@ -99,7 +112,7 @@ func (s *Service) reconcileReady(ctx context.Context, shops []pendingShop, run *
 	group.SetLimit(reconcileWorkers)
 	for _, shop := range shops {
 		group.Go(safego.Guard("checkout.reconcile-retry", func() error {
-			s.reconcileShop(ctx, shop, run, false)
+			s.reconcileShop(ctx, shop, run)
 			return nil
 		}))
 	}
@@ -107,9 +120,9 @@ func (s *Service) reconcileReady(ctx context.Context, shops []pendingShop, run *
 }
 
 // postpone решает судьбу магазина после отказа. Размыкатель сервера — прервать проход. Истёк срок
-// чтения — повторный круг вдвое меньшей пачкой; серия таких отказов подряд в первом круге —
-// признак сервера. Размыкатель магазина — один повтор после его срока. Остальное — пропуск.
-func (r *reconcileRun) postpone(shop pendingShop, err error, first bool) {
+// чтения — повторный круг вдвое меньшей пачкой. Размыкатель магазина — один повтор после его срока.
+// Остальное — пропуск.
+func (r *reconcileRun) postpone(shop pendingShop, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	shop.cause = err
@@ -121,20 +134,15 @@ func (r *reconcileRun) postpone(shop pendingShop, err error, first bool) {
 		shop.breaker, shop.notBefore = true, rejected.NotBefore
 		r.postponed[shop.tenant] = &shop
 	case errors.Is(err, ports.ErrPlatformTimeout):
-		r.timeoutLocked(shop, first)
+		r.timeoutLocked(shop)
 	default:
 		r.skipLocked(shop)
 	}
 }
 
-func (r *reconcileRun) timeoutLocked(shop pendingShop, first bool) {
-	if first {
+func (r *reconcileRun) timeoutLocked(shop pendingShop) {
+	if !r.retrying {
 		r.silent++
-		if r.silent >= reconcileServerTimeouts {
-			r.serverDownLocked(shop.cause)
-			r.postponed[shop.tenant] = &shop
-			return
-		}
 	}
 	shop.timeouts++
 	shop.size = max(1, shop.size/2)
@@ -145,11 +153,28 @@ func (r *reconcileRun) timeoutLocked(shop pendingShop, first bool) {
 	r.postponed[shop.tenant] = &shop
 }
 
-// answered — магазин ответил: серия молчания прервана.
-func (r *reconcileRun) answered() {
+// noteAnswer — магазин ответил: сервер жив, молчание остальных — их собственное.
+func (r *reconcileRun) noteAnswer() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.silent = 0
+	if !r.retrying {
+		r.answers++
+	}
+}
+
+// firstRoundDone — дальше повторные круги: их молчание признаком сервера не считается.
+func (r *reconcileRun) firstRoundDone() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.retrying = true
+}
+
+// serverSilent — за первый круг истекли сроки у reconcileSilentShops магазинов и не ответил ни один:
+// сервер недоступен целиком. Один медленный магазин или скопление зависших среди отвечающих — нет.
+func (r *reconcileRun) serverSilent() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.silent >= reconcileSilentShops && r.answers == 0
 }
 
 // joinPostponed добавляет заказы следующей страницы к отложенному магазину; false — не отложен.
@@ -203,6 +228,12 @@ func (r *reconcileRun) skipLocked(shop pendingShop) {
 		slog.Int("timeouts", shop.timeouts),
 		slog.Any("error", shop.cause),
 	)
+}
+
+func (r *reconcileRun) stop(cause error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.serverDownLocked(cause)
 }
 
 func (r *reconcileRun) serverDownLocked(cause error) {

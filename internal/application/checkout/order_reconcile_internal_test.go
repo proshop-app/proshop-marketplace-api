@@ -113,9 +113,9 @@ func TestReconcileHealthyShopsDoNotWaitForHungOnes(t *testing.T) {
 	}
 }
 
-// Сервер принимает соединения и молчит: серия истёкших сроков без ответа — признак сервера, проход
-// прерывается после ограниченного числа запросов, а не спрашивает каждый магазин.
-func TestReconcileHungServerStopsPass(t *testing.T) {
+// Сервер принимает соединения и молчит: первый круг спрашивает каждый магазин один раз, как
+// прежде, и без пауз; круг без единого ответа — признак сервера: повторов нет, проход прерван.
+func TestReconcileSilentServerStopsPass(t *testing.T) {
 	for _, shops := range []int{80, 1000} {
 		hung := map[ids.TenantID]bool{}
 		for i := range shops {
@@ -126,9 +126,30 @@ func TestReconcileHungServerStopsPass(t *testing.T) {
 		service.reconcilePage(context.Background(), reconcileEntries(shops, 1), run)
 		_, err := service.finishReconcile(context.Background(), run, platform.clock.Now())
 		calls := len(platform.log())
-		if !errors.Is(err, ErrReconcileServerDown) || calls > reconcileServerTimeouts+reconcileWorkers ||
-			platform.clock.paused != 0 {
+		if !errors.Is(err, ErrReconcileServerDown) || calls != shops || platform.clock.paused != 0 {
 			t.Fatalf("%d магазинов: %v, запросов %d, пауз %s", shops, err, calls, platform.clock.paused)
+		}
+	}
+}
+
+// Скопление зависших магазинов подряд при живом сервере не прерывает проход: все здоровые сверены.
+func TestReconcileRunOfHungShopsDoesNotStopPass(t *testing.T) {
+	for _, run := range []struct {
+		name  string
+		first int
+		count int
+	}{
+		{name: "20 подряд среди 400", first: 150, count: 20},
+		{name: "24 в начале", first: 0, count: 24},
+	} {
+		hung := map[ids.TenantID]bool{}
+		for i := run.first; i < run.first+run.count; i++ {
+			hung[shopName(i)] = true
+		}
+		service, _ := reconcileService(&stubStatuses{hung: hung})
+		result := service.reconcileAll(t, reconcileEntries(400, 1))
+		if result.stopped() != nil || result.result.Checked != 400-run.count || len(result.result.Failed) != run.count {
+			t.Fatalf("%s: %+v %v", run.name, result.result, result.stopped())
 		}
 	}
 }
