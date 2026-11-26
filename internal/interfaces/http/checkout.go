@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -221,27 +222,29 @@ func (h *checkoutHandlers) respond(
 	state checkout.State,
 	err error,
 ) {
-	if err != nil {
-		if state.ID != "" || errors.Is(err, checkout.ErrDeliveryChanged) || errors.Is(err, checkout.ErrPaymentPaused) {
-			body, encodeErr := h.responseBody(r, state)
-			if encodeErr != nil {
-				writeError(w, r, encodeErr)
-				return
-			}
-			writeErrorWithCheckout(w, r, err, &body)
-			return
-		}
+	if err != nil && state.ID == "" && !errors.Is(err, checkout.ErrDeliveryChanged) &&
+		!errors.Is(err, checkout.ErrPaymentPaused) {
 		writeError(w, r, err)
 		return
 	}
-	body, err := h.responseBody(r, state)
-	if err != nil {
-		writeError(w, r, err)
 
+	diagnostics := h.checkouts.ReadDiagnostics()
+	body, encodeErr := h.responseBody(r, state, &diagnostics)
+	if encodeErr != nil {
+		writeError(w, r, encodeErr)
+		return
+	}
+	if err != nil {
+		writeErrorWithCheckout(w, r, err, &body)
 		return
 	}
 
-	writeJSON(w, status, body)
+	raw, err := json.Marshal(body)
+	if err != nil {
+		writeError(w, r, diagnostics.UnreadableResponse(r.Context(), state, err))
+		return
+	}
+	writeJSONBytes(w, status, raw)
 }
 
 // create — покупка из корзины; заголовок Idempotency-Key обязателен.
@@ -316,16 +319,18 @@ func (h *checkoutHandlers) confirm(w http.ResponseWriter, r *http.Request) {
 func (h *checkoutHandlers) responseBody(
 	r *http.Request,
 	state checkout.State,
+	diagnostics *appcheckout.ReadDiagnostics,
 ) (checkoutJSON, error) {
 	body, err := toCheckoutJSON(state)
 	if err != nil {
-		return body, err
+		return body, diagnostics.UnreadableResponse(r.Context(), state, err)
 	}
 	sellers, err := h.checkouts.Sellers(r.Context(), []checkout.State{state})
 	if err != nil {
 		return body, err
 	}
-	setGroupSellers(&body, sellers)
+	logSellerReadFailures(r.Context(), sellers.Failures, diagnostics)
+	setGroupSellers(&body, sellers.Items)
 	// Получатель — персональные данные: виден покупателю этой покупки, оператору не отдаётся.
 	if state.Contact.Phone != "" && BuyerID(r.Context()) == state.BuyerID {
 		recipient := state.Contact

@@ -101,7 +101,7 @@ func TestTrackingPollSnapshotAndOwnership(t *testing.T) {
 		t.Fatal("чтение покупки вызвало сервер")
 	}
 	purchases, err := e.service.Purchases(ctx, buyerID, "")
-	if err != nil || len(purchases) != 1 || *purchases[0].State().Groups[0].Tracking.Number != "123" {
+	if err != nil || len(purchases.Items) != 1 || *purchases.Items[0].State().Groups[0].Tracking.Number != "123" {
 		t.Fatal(purchases, err)
 	}
 	if e.platform.PollCalls("t1") != calls {

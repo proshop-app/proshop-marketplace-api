@@ -72,6 +72,7 @@ type data struct {
 	challenges           map[ids.UUID]buyer.ChallengeState
 	carts                map[ids.UUID]cart.State
 	checkouts            map[ids.UUID]checkout.State
+	checkoutReadFailures map[ids.UUID]checkout.ReadFailure
 	deferredWork         map[ids.UUID]time.Time
 	leases               map[string]lease
 	reference            *referenceData
@@ -118,6 +119,7 @@ func (d *data) clone() *data {
 		challenges:           maps.Clone(d.challenges),
 		carts:                maps.Clone(d.carts),
 		checkouts:            maps.Clone(d.checkouts),
+		checkoutReadFailures: maps.Clone(d.checkoutReadFailures),
 		deferredWork:         maps.Clone(d.deferredWork),
 		leases:               maps.Clone(d.leases),
 		reference:            d.reference.clone(),
@@ -146,6 +148,7 @@ func NewStore() *Store {
 		challenges:           map[ids.UUID]buyer.ChallengeState{},
 		carts:                map[ids.UUID]cart.State{},
 		checkouts:            map[ids.UUID]checkout.State{},
+		checkoutReadFailures: map[ids.UUID]checkout.ReadFailure{},
 		deferredWork:         map[ids.UUID]time.Time{},
 		leases:               map[string]lease{},
 		reference:            newReferenceData(),
@@ -522,4 +525,21 @@ func (s *Store) RemoveProduct(tenant ids.TenantID, product ids.ProductID) {
 // RemoveVerdict моделирует ещё не оценённое предложение.
 func (s *Store) RemoveVerdict(tenant ids.TenantID, product ids.ProductID) {
 	s.read(func(d *data) { delete(d.moderation.verdicts, productKey{tenant, product}) })
+}
+
+// FailCheckoutRead имитирует ошибку разбора сохранённой покупки или группы.
+func (s *Store) FailCheckoutRead(id ids.UUID, tenant ids.TenantID, cause error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	reason := checkout.ReadGroup
+	if tenant == "" {
+		reason = checkout.ReadHeader
+	}
+	s.data.checkoutReadFailures[id] = checkout.ReadFailure{
+		ID:       id,
+		BuyerID:  s.data.checkouts[id].BuyerID,
+		TenantID: tenant,
+		Cause:    cause,
+		Reason:   reason,
+	}
 }

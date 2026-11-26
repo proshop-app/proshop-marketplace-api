@@ -141,7 +141,7 @@ func TestAsyncIntentAndDeadline(t *testing.T) {
 		t.Fatal("оплата до итога", err)
 	}
 	purchases, err := e.service.Purchases(ctx, buyerID, "")
-	if err != nil || len(purchases) != 0 {
+	if err != nil || len(purchases.Items) != 0 {
 		t.Fatal("намерение без заказов не документ", purchases, err)
 	}
 	e.clock.Advance(15 * time.Second)
@@ -189,8 +189,8 @@ func TestAsyncPartialCancelAndCabinet(t *testing.T) {
 		t.Fatal(err)
 	}
 	waiting, err := e.service.Purchases(ctx, buyerID, "")
-	if err != nil || len(waiting) != 1 || waiting[0].State().Status != checkout.StatusAwaitingPayment ||
-		checkout.Restore(waiting[0].State()).CreationComplete() {
+	if err != nil || len(waiting.Items) != 1 || waiting.Items[0].State().Status != checkout.StatusAwaitingPayment ||
+		checkout.Restore(waiting.Items[0].State()).CreationComplete() {
 		t.Fatal("неоплаченный заказ должен быть виден до завершения остальных групп", waiting, err)
 	}
 	e.clock.Advance(15 * time.Second)
@@ -201,7 +201,7 @@ func TestAsyncPartialCancelAndCabinet(t *testing.T) {
 		t.Fatal("неизменённая покупка с временным сбоем не допускает частичной оплаты", err)
 	}
 	purchases, err := e.service.Purchases(ctx, buyerID, "")
-	if err != nil || len(purchases) != 1 || purchases[0].State().Status != checkout.StatusDraft {
+	if err != nil || len(purchases.Items) != 1 || purchases.Items[0].State().Status != checkout.StatusDraft {
 		t.Fatal(purchases, err)
 	}
 	state, err := e.service.Cancel(ctx, buyerID, c.ID)

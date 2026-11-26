@@ -47,7 +47,7 @@ func (s *Service) queueCancellations(c *checkout.Checkout) ([]ports.NewTask, err
 }
 
 func (s *Service) cancelGroup(ctx context.Context, buyerID, id ids.UUID, tenant ids.TenantID) error {
-	current, err := s.load(ctx, buyerID, id)
+	current, err := s.LoadForBuyer(ctx, buyerID, id)
 	if err != nil {
 		return err
 	}

@@ -201,7 +201,7 @@ func (s *Service) Create(ctx context.Context, buyerID ids.UUID, rawKey string) (
 
 // Get — покупка покупателя.
 func (s *Service) Get(ctx context.Context, buyerID, checkoutID ids.UUID) (checkout.State, error) {
-	c, err := s.load(ctx, buyerID, checkoutID)
+	c, err := s.LoadForBuyer(ctx, buyerID, checkoutID)
 	if err != nil {
 		return checkout.State{}, err
 	}
@@ -229,7 +229,7 @@ func (s *Service) selectDelivery(
 	if _, err := delivery.NormalizeCity(city); err != nil {
 		return checkout.State{}, err
 	}
-	c, err := s.load(ctx, buyerID, checkoutID)
+	c, err := s.LoadForBuyer(ctx, buyerID, checkoutID)
 	if err != nil {
 		return checkout.State{}, err
 	}
@@ -267,7 +267,7 @@ func (s *Service) selectDelivery(
 // отдаётся как есть. Изменились цены — покупка обновляется и ждёт
 // подтверждения заново (checkout.ErrChanged).
 func (s *Service) Confirm(ctx context.Context, buyerID, checkoutID ids.UUID) (checkout.State, error) {
-	c, err := s.load(ctx, buyerID, checkoutID)
+	c, err := s.LoadForBuyer(ctx, buyerID, checkoutID)
 	if err != nil {
 		return checkout.State{}, err
 	}
@@ -615,21 +615,21 @@ func (s *Service) check(
 	return checks, nil
 }
 
-func (s *Service) load(ctx context.Context, buyerID, checkoutID ids.UUID) (*checkout.Checkout, error) {
+// LoadForBuyer читает сохранённую покупку владельца и применяет общую политику ошибок чтения.
+func (s *Service) LoadForBuyer(
+	ctx context.Context,
+	buyerID, checkoutID ids.UUID,
+) (*checkout.Checkout, error) {
 	var found *checkout.Checkout
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
-		found, err = tx.Checkouts().Get(ctx, checkoutID)
+		found, err = tx.Checkouts().GetForBuyer(ctx, buyerID, checkoutID)
 
 		return err
 	})
 	if err != nil {
-		return nil, err
+		return nil, buyerReadError(ctx, buyerID, err, s.observer)
 	}
-	if found.BuyerID() != buyerID {
-		return nil, checkout.ErrNotFound
-	}
-
 	return found, nil
 }
 
@@ -646,7 +646,7 @@ func (s *Service) byKey(ctx context.Context, buyerID ids.UUID, key string) (chec
 		return nil
 	})
 
-	return state, err
+	return state, buyerReadError(ctx, buyerID, err, s.observer)
 }
 
 func (s *Service) update(
@@ -709,7 +709,7 @@ func (s *Service) updateSelection(
 		s.enqueueSearchPurchases(ctx, purchases)
 	}
 
-	return state, err
+	return state, buyerReadError(ctx, buyerID, err, s.observer)
 }
 
 func (s *Service) verifyOnPromoError(ctx context.Context, buyerID ids.UUID, cause error) error {
@@ -784,7 +784,7 @@ func waitUpdate(ctx context.Context) error {
 	}
 }
 
-// SetObserver вызывается при сборке до запуска обработчиков.
+// SetObserver подключает журнал и метрики при сборке сервиса.
 func (s *Service) SetObserver(observer ports.CheckoutObserver) { s.observer = observer }
 
 func (s *Service) observeTransitions(tx ports.Tx, before, after checkout.State) {

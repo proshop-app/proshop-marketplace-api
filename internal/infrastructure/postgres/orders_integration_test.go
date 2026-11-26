@@ -107,8 +107,11 @@ func TestSellerOrderSagaPersistenceAndConflict(t *testing.T) {
 			StuckBefore: at(20),
 			Limit:       100,
 		})
-		if err != nil || len(items) != 1 {
-			return fmt.Errorf("фильтр ожидающих: %d %w", len(items), err)
+		if err != nil {
+			return err
+		}
+		if len(items) != 1 || items[0].Checkout == nil || items[0].Checkout.ID() != c.ID() {
+			return fmt.Errorf("фильтр ожидающих: %+v", items)
 		}
 		order.Status = checkout.GroupPaid
 		if _, err := loaded.Observe("t1", order, at(20)); err != nil {

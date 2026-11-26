@@ -20,7 +20,7 @@ func (s *Service) prepareOrders(
 	buyerID, id ids.UUID,
 	contact checkout.Contact,
 ) (checkout.State, error) {
-	c, err := s.load(ctx, buyerID, id)
+	c, err := s.LoadForBuyer(ctx, buyerID, id)
 	if err != nil {
 		return checkout.State{}, err
 	}
@@ -68,7 +68,7 @@ func (s *Service) prepareOrders(
 	}
 	state, err := s.updateSelection(ctx, buyerID, id, s.enqueueCreation, begin)
 	if errors.Is(err, checkout.ErrConflict) || errors.Is(err, cart.ErrConflict) {
-		current, loadErr := s.load(ctx, buyerID, id)
+		current, loadErr := s.LoadForBuyer(ctx, buyerID, id)
 		if loadErr == nil && current.Status() != checkout.StatusConfirmed && current.Status() != checkout.StatusDraft {
 			return current.State(), nil
 		}

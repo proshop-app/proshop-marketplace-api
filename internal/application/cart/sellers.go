@@ -10,12 +10,12 @@ import (
 )
 
 // Sellers собирает продавцов всех строк корзины одним запросом.
-func (s *Service) Sellers(ctx context.Context, state cart.State) (map[ids.TenantID]*participant.Seller, error) {
+func (s *Service) Sellers(ctx context.Context, state cart.State) (participant.SellerBatch, error) {
 	unique := map[ids.TenantID]bool{}
 	for _, line := range state.Lines {
 		unique[line.Offer.Tenant] = true
 	}
-	result := map[ids.TenantID]*participant.Seller{}
+	var result participant.SellerBatch
 	if len(unique) == 0 {
 		return result, nil
 	}

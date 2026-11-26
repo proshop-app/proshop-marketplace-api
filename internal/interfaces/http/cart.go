@@ -5,6 +5,7 @@ import (
 	"time"
 
 	appcart "github.com/proshop-app/proshop-marketplace/internal/application/cart"
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -164,10 +165,12 @@ func (h *cartHandlers) respond(w http.ResponseWriter, r *http.Request, state car
 		writeError(w, r, err)
 		return
 	}
+	logSellerReadFailures(r.Context(), sellers.Failures, &appcheckout.ReadDiagnostics{})
 	for i := range body.Lines {
-		seller := sellers[ids.TenantID(body.Lines[i].TenantID)]
+		tenant := ids.TenantID(body.Lines[i].TenantID)
+		seller := sellers.Items[tenant]
 		body.Lines[i].Seller = seller
-		if seller != nil && seller.UnavailableReason != "" {
+		if sellers.Failures[tenant] != nil || (seller != nil && seller.UnavailableReason != "") {
 			issue := string(cart.IssueUnavailable)
 			body.Lines[i].Issue = &issue
 		}

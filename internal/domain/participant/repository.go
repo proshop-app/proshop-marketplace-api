@@ -22,6 +22,12 @@ type Seller struct {
 	Name              string `json:"name"`
 }
 
+// SellerBatch хранит продавцов и причины пропуска повреждённых записей по магазину.
+type SellerBatch struct {
+	Items    map[ids.TenantID]*Seller
+	Failures map[ids.TenantID]error
+}
+
 // Repository — хранилище участников.
 type Repository interface {
 	// PickupSources возвращает не больше limit готовых источников службы после курсора.
@@ -30,7 +36,7 @@ type Repository interface {
 	SettingsChecked(context.Context, *Participant) error
 	Batch(context.Context, []ids.TenantID) (map[ids.TenantID]*Participant, error)
 	// Sellers читает продавцов одним запросом; отсутствующие участники не включаются.
-	Sellers(context.Context, []ids.TenantID) (map[ids.TenantID]*Seller, error)
+	Sellers(context.Context, []ids.TenantID) (SellerBatch, error)
 	// Count считает участников по фильтрам без загрузки агрегатов.
 	Count(context.Context, Page) (int, error)
 	// Get — участник; нет — ErrNotFound.

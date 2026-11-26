@@ -213,7 +213,7 @@ func (s *Service) deferSeparately(ctx context.Context, broken []rejectedPurchase
 	})
 }
 
-// deferPurchases откладывает работу покупок одним запросом; после фиксации — журнал с покупкой и
+// deferPurchases откладывает работу покупок одной транзакцией; после фиксации — журнал с покупкой и
 // магазинами и счётчик отложенных.
 func (s *Service) deferPurchases(ctx context.Context, tx ports.Tx, broken []rejectedPurchase, now time.Time) error {
 	if len(broken) == 0 {

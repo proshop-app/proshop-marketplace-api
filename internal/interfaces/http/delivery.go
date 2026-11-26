@@ -5,11 +5,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
-	"github.com/proshop-app/proshop-marketplace/pkg/ids"
-
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 type carrierJSON struct {
@@ -35,6 +35,7 @@ type pickupPointJSON struct {
 
 type deliveryHandlers struct {
 	directory *appdelivery.Service
+	checkouts ports.CheckoutBuyerReader
 }
 
 // carriers — подключённые перевозчики для переключателя карты.
@@ -95,6 +96,7 @@ func (h *deliveryHandlers) checkoutPickupPoints(w http.ResponseWriter, r *http.R
 	}
 	result, err := h.directory.CheckoutPoints(
 		r.Context(),
+		h.checkouts,
 		BuyerID(r.Context()),
 		id,
 		query,

@@ -187,7 +187,7 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 		t.Fatal(err)
 	}
 	purchases, err := service.Purchases(ctx, buyerA, "")
-	if err != nil || len(purchases) != 1 {
+	if err != nil || len(purchases.Items) != 1 {
 		t.Fatal(purchases, err)
 	}
 	if err := service.Resume(ctx); err != nil {
@@ -212,8 +212,8 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 	if _, err := service.Cancel(ctx, buyerA, c.ID()); err != nil {
 		t.Fatal(err)
 	}
-	stuck, err := service.OperatorList(ctx, "", true)
-	if err != nil || len(stuck) != 1 || !stuck[0].Groups[0].ReconciliationRequired {
+	stuck, err := service.OperatorList(ctx, checkout.ListCursor{}, true)
+	if err != nil || len(stuck.Items) != 1 || !stuck.Items[0].Groups[0].ReconciliationRequired {
 		t.Fatal(stuck, err)
 	}
 	if _, err := stale.Cancel(clock.Now()); err != nil {
@@ -261,8 +261,8 @@ func TestCheckoutServiceSchedulesDeadlineAndPreservesCAS(t *testing.T) {
 		state.Groups[0].CancellationLastErrorCode != "" {
 		t.Fatal(state, err)
 	}
-	stuck, err = service.OperatorList(ctx, "", true)
-	if err != nil || len(stuck) != 0 {
+	stuck, err = service.OperatorList(ctx, checkout.ListCursor{}, true)
+	if err != nil || len(stuck.Items) != 0 {
 		t.Fatal(stuck, err)
 	}
 

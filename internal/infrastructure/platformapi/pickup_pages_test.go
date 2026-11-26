@@ -17,7 +17,7 @@ import (
 func TestPickupCatalogLargerThanResponseLimit(t *testing.T) {
 	const total = 20000
 	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		offset, _ := strconv.Atoi(r.URL.Query().Get("cursor"))
 		count := min(512, total-offset)
@@ -42,9 +42,9 @@ func TestPickupCatalogLargerThanResponseLimit(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(answer); err != nil {
 			t.Error(err)
 		}
-	}))
-	defer server.Close()
-	client := New(Config{BaseURL: server.URL, Timeout: time.Second, Conns: 4})
+	})
+	client := New(Config{BaseURL: "https://shop.example.test", Timeout: time.Minute, Conns: 4})
+	client.http.Transport = handlerTransport(handler)
 	answer, err := client.PickupPoints(context.Background(), "t1", "cdek", "Город")
 	if err != nil || len(answer.Items) != total || calls != 40 {
 		t.Fatal(len(answer.Items), calls, err)

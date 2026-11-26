@@ -3,6 +3,7 @@ package checkout
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -46,6 +47,12 @@ type ReconcileResult struct {
 	Failed     map[ids.TenantID]error
 }
 
+type reconcileReadFailure struct {
+	tenant ids.TenantID
+	id     ids.UUID
+	causes []error
+}
+
 // ReconcileOrders — страховка событий: раз в сутки сверяет статусы исполняемых
 // заказов одним запросом на страницу заказов магазина. Расхождение исправляется и считается.
 func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) {
@@ -58,6 +65,7 @@ func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) 
 		return run.result, err
 	}
 	var cursor checkout.ReconcileCursor
+	diagnostics := s.ReadDiagnostics()
 	for {
 		var entries []checkout.ReconcileEntry
 		err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -68,13 +76,48 @@ func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) 
 		if err != nil {
 			return run.result, err
 		}
-		s.reconcilePage(ctx, entries, run)
-		if run.stopped() != nil || len(entries) < reconcilePage || ctx.Err() != nil {
+		more := len(entries) == reconcilePage
+		if more {
+			last := entries[len(entries)-1]
+			cursor = checkout.ReconcileCursor{TenantID: last.TenantID, CheckoutID: last.CheckoutID}
+		}
+		s.reconcilePage(ctx, readableReconcileEntries(ctx, entries, &diagnostics), run)
+		if run.stopped() != nil || !more || ctx.Err() != nil {
 			return s.finishReconcile(ctx, run, now)
 		}
-		last := entries[len(entries)-1]
-		cursor = checkout.ReconcileCursor{TenantID: last.TenantID, CheckoutID: last.CheckoutID}
 	}
+}
+
+func readableReconcileEntries(
+	ctx context.Context,
+	entries []checkout.ReconcileEntry,
+	diagnostics *ReadDiagnostics,
+) []checkout.ReconcileEntry {
+	healthy := entries[:0]
+	var failures []reconcileReadFailure
+	byCheckout := map[ids.UUID]int{}
+	for _, entry := range entries {
+		if entry.Failure == nil {
+			healthy = append(healthy, entry)
+			continue
+		}
+		index, found := byCheckout[entry.CheckoutID]
+		if !found {
+			index = len(failures)
+			byCheckout[entry.CheckoutID] = index
+			failures = append(failures, reconcileReadFailure{id: entry.CheckoutID, tenant: entry.TenantID})
+		}
+		failure := &failures[index]
+		failure.causes = append(failure.causes, fmt.Errorf("магазин %s: %w", entry.TenantID, entry.Failure))
+	}
+	for _, failure := range failures {
+		diagnostics.recordFailure(ctx, checkout.ReadFailure{
+			ID:       failure.id,
+			TenantID: failure.tenant,
+			Cause:    errors.Join(failure.causes...),
+		})
+	}
+	return healthy
 }
 
 // reconcilePage сверяет магазины страницы параллельно, а пачки одного магазина — по очереди:

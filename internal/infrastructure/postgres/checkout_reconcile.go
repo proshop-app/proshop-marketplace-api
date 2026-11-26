@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -14,10 +15,10 @@ const (
 	// выходят подряд и уходят ему одним запросом.
 	selectReconcileDue = `
 		SELECT checkout_id, tenant_id,
-			order_progress->>'OrderID',
+			COALESCE(order_progress->>'OrderID', ''),
 			COALESCE(order_progress->>'Status', ''),
 			COALESCE(order_progress->>'LastOrderStatus', ''),
-			COALESCE((order_progress->>'OrderRevision')::bigint, 0)
+			order_progress->'OrderRevision'
 		FROM checkout_groups
 		WHERE reconcile_until > $1 AND (tenant_id, checkout_id) > ($2, $3::uuid)
 		ORDER BY tenant_id, checkout_id
@@ -64,11 +65,16 @@ func (r *Checkouts) ReconcileDue(
 			entry              checkout.ReconcileEntry
 			checkoutID, tenant string
 			last               checkout.GroupStatus
+			revision           []byte
 		)
-		if err := rows.Scan(&checkoutID, &tenant, &entry.OrderID, &entry.Status, &last, &entry.Revision); err != nil {
+		if err := rows.Scan(&checkoutID, &tenant, &entry.OrderID, &entry.Status, &last, &revision); err != nil {
 			return nil, fmt.Errorf("сверка заказов: %w", err)
 		}
 		entry.CheckoutID, entry.TenantID = ids.UUID(checkoutID), ids.TenantID(tenant)
+		entry.Revision, entry.Failure = reconcileRevision(revision)
+		if entry.OrderID == "" && entry.Failure == nil {
+			entry.Failure = fmt.Errorf("заказ для сверки отсутствует")
+		}
 		// Недоступный при прежнем опросе магазин: сверяется последний подтверждённый статус.
 		if entry.Status == checkout.GroupSellerUnreachable {
 			entry.Status, entry.Unreachable = last, true
@@ -76,6 +82,17 @@ func (r *Checkouts) ReconcileDue(
 		entries = append(entries, entry)
 	}
 	return entries, rows.Err()
+}
+
+func reconcileRevision(raw []byte) (int64, error) {
+	var revision *int64
+	if err := json.Unmarshal(raw, &revision); err != nil {
+		return 0, fmt.Errorf("неверный OrderRevision: %w", err)
+	}
+	if revision == nil || *revision < 0 {
+		return 0, fmt.Errorf("неверный OrderRevision")
+	}
+	return *revision, nil
 }
 
 // ExpireReconciliation снимает со сверки заказы, которые не двигаются дольше срока сверки.

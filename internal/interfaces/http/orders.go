@@ -1,14 +1,25 @@
 package http
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
+	"time"
 
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 type createOrdersJSON struct {
 	Contact checkout.Contact `json:"contact"`
+}
+
+type checkoutListJSON struct {
+	Items  []json.RawMessage       `json:"items"`
+	Next   string                  `json:"next"`
+	Issues []appcheckout.ReadIssue `json:"issues,omitempty"`
 }
 
 func (h *checkoutHandlers) createOrders(w http.ResponseWriter, r *http.Request) {
@@ -55,11 +66,16 @@ func (h *checkoutHandlers) orders(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	states := make([]checkout.State, 0, len(purchases))
-	for _, purchase := range purchases {
+	states := make([]checkout.State, 0, len(purchases.Items))
+	for _, purchase := range purchases.Items {
 		states = append(states, purchase.State())
 	}
-	h.respondList(w, r, states)
+	page := appcheckout.ListPage[checkout.State]{
+		ReadDiagnostics: purchases.ReadDiagnostics,
+		Items:           states,
+		Next:            purchases.Next,
+	}
+	h.respondList(w, r, page, false)
 }
 
 // pickupHistory — пункты выдачи прошлых заказов для подсказки на оформлении, без снимков покупок.
@@ -77,22 +93,22 @@ func (h *checkoutHandlers) pickupHistory(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *checkoutHandlers) operatorList(w http.ResponseWriter, r *http.Request) {
-	after, err := orderCursor(r)
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
 	filter := r.URL.Query().Get("stuck")
 	if filter != "" && filter != "true" && filter != "false" {
 		writeError(w, r, ErrInvalidQuery)
 		return
 	}
-	states, err := h.checkouts.OperatorList(r.Context(), after, filter == "true")
+	after, err := operatorOrderCursor(r, filter == "true")
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	h.respondList(w, r, states)
+	page, err := h.checkouts.OperatorList(r.Context(), after, filter == "true")
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	h.respondList(w, r, page, true)
 }
 
 func orderCursor(r *http.Request) (ids.UUID, error) {
@@ -107,25 +123,69 @@ func orderCursor(r *http.Request) (ids.UUID, error) {
 	return id, nil
 }
 
-func (h *checkoutHandlers) respondList(w http.ResponseWriter, r *http.Request, states []checkout.State) {
-	sellers, err := h.checkouts.Sellers(r.Context(), states)
+func operatorOrderCursor(r *http.Request, stuck bool) (checkout.ListCursor, error) {
+	raw := r.URL.Query().Get("after")
+	if !stuck || raw == "" {
+		id, err := orderCursor(r)
+		return checkout.ListCursor{ID: id}, err
+	}
+
+	date, rawID, found := strings.Cut(raw, "/")
+	at, timeErr := time.Parse(time.RFC3339Nano, date)
+	id, idErr := ids.ParseUUID(rawID)
+	if !found || timeErr != nil || idErr != nil || !checkout.ValidStuckCursor(&at) {
+		return checkout.ListCursor{}, ErrInvalidQuery
+	}
+	return checkout.ListCursor{ID: id, StuckAt: &at}, nil
+}
+
+func (h *checkoutHandlers) respondList(
+	w http.ResponseWriter,
+	r *http.Request,
+	page appcheckout.ListPage[checkout.State],
+	operator bool,
+) {
+	sellers, err := h.checkouts.Sellers(r.Context(), page.Items)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	items := make([]checkoutJSON, 0, len(states))
-	next := ""
-	for _, state := range states {
-		item, err := toCheckoutJSON(state)
+
+	response := checkoutListJSON{Items: make([]json.RawMessage, 0, len(page.Items)), Next: listCursorText(page.Next)}
+	for _, state := range page.Items {
+		// Покупка сериализуется один раз: ошибка представления одной не лишает оператора остальных.
+		item, err := renderListItem(state, sellers.Items)
 		if err != nil {
-			writeError(w, r, err)
-			return
+			issues := page.ReportReadRenderingFailure(r.Context(), state, err)
+			if operator {
+				page.Issues = append(page.Issues, issues...)
+			}
+			continue
 		}
-		setGroupSellers(&item, sellers)
-		items = append(items, item)
-		next = string(state.ID)
+		response.Items = append(response.Items, item)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "next": next})
+	logSellerReadFailures(r.Context(), sellers.Failures, &page.ReadDiagnostics)
+	if operator {
+		response.Issues = page.Issues
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func renderListItem(state checkout.State, sellers map[ids.TenantID]*participant.Seller) (json.RawMessage, error) {
+	item, err := toCheckoutJSON(state)
+	if err != nil {
+		return nil, err
+	}
+	setGroupSellers(&item, sellers)
+	return json.Marshal(item)
+}
+
+// listCursorText — ключ продолжения: у «зависших» он несёт и время попадания в список.
+func listCursorText(cursor checkout.ListCursor) string {
+	if cursor.StuckAt == nil {
+		return string(cursor.ID)
+	}
+	return cursor.StuckAt.UTC().Format(time.RFC3339Nano) + "/" + string(cursor.ID)
 }
 
 func (h *checkoutHandlers) cancel(w http.ResponseWriter, r *http.Request) {

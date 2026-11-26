@@ -42,6 +42,9 @@ func (o *cancellationEvents) RecordCheckoutEvent(tenant ids.TenantID, _ ids.UUID
 	}
 }
 
+func (*cancellationEvents) RecordCheckoutReadFailure(context.Context, ids.TenantID, ids.UUID, error, bool) {
+}
+
 func (p delayedCancellation) CancelOrder(
 	ctx context.Context,
 	tenant ids.TenantID,
@@ -218,11 +221,11 @@ func TestPaidOrderCancellationStaysVisibleToOperator(t *testing.T) {
 	if err := resumeAndExecute(ctx, e); err != nil {
 		t.Fatal(err)
 	}
-	stuck, err := e.service.OperatorList(ctx, "", true)
-	if err != nil || len(stuck) != 1 {
+	stuck, err := e.service.OperatorList(ctx, checkout.ListCursor{}, true)
+	if err != nil || len(stuck.Items) != 1 {
 		t.Fatal(stuck, err)
 	}
-	g := stuck[0].Groups[0]
+	g := stuck.Items[0].Groups[0]
 	if !g.ReconciliationRequired || !g.CancellationBlocked || g.CancellationConfirmed ||
 		g.Reason != "order_not_cancellable:paid" || g.Status != checkout.GroupCancellationRequested {
 		t.Fatal(g)
@@ -431,11 +434,11 @@ func TestCancellationInvalidResultStopsRetries(t *testing.T) {
 			if err := executeTasks(ctx, e); err != nil {
 				t.Fatal(err)
 			}
-			states, err := e.service.OperatorList(ctx, "", true)
-			if err != nil || len(states) != 1 {
+			states, err := e.service.OperatorList(ctx, checkout.ListCursor{}, true)
+			if err != nil || len(states.Items) != 1 {
 				t.Fatal(states, err)
 			}
-			g := states[0].Groups[0]
+			g := states.Items[0].Groups[0]
 			if g.CancellationAttempts != 1 || g.CancellationLastErrorCode != tc.code ||
 				!g.ReconciliationRequired || !g.CancellationBlocked || g.OrderID != before.Groups[0].OrderID {
 				t.Fatal(g)
@@ -480,8 +483,8 @@ func TestCancellationRefusalReconciliationEndsAtTerminalOrder(t *testing.T) {
 				g.CancellationLastErrorCode != "ORDER_NOT_CANCELLABLE" || g.CancellationAttempts != 1 {
 				t.Fatal(g)
 			}
-			stuck, err := e.service.OperatorList(ctx, "", true)
-			if err != nil || len(stuck) != 0 {
+			stuck, err := e.service.OperatorList(ctx, checkout.ListCursor{}, true)
+			if err != nil || len(stuck.Items) != 0 {
 				t.Fatal(stuck, err)
 			}
 		})

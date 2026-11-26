@@ -45,11 +45,17 @@ func testMapLeavesPointReserve(t *testing.T, kind string) {
 		go func() {
 			defer attacks.Done()
 			if kind == "checkout" {
-				_, _ = e.pickups.CheckoutPoints(ctx, buyerID, purchase.ID, appdelivery.PickupQuery{
-					Carrier: "cdek",
-					City:    fmt.Sprintf("Атака %d", i),
-					Limit:   100,
-				})
+				_, _ = e.pickups.CheckoutPoints(
+					ctx,
+					e.service,
+					buyerID,
+					purchase.ID,
+					appdelivery.PickupQuery{
+						Carrier: "cdek",
+						City:    fmt.Sprintf("Атака %d", i),
+						Limit:   100,
+					},
+				)
 				return
 			}
 			_, _ = e.pickups.ProfilePoint(ctx, "cdek", "MSK1", fmt.Sprintf("Атака %d", i))

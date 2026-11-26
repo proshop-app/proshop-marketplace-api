@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -29,17 +30,24 @@ const (
 			FOR EACH ROW EXECUTE FUNCTION reject_checkout_write()`
 	selectDeferredWork = `SELECT min(next_work_at), bool_or(work_deferred_at IS NOT NULL)
 		FROM checkout_groups WHERE checkout_id = $1`
-	farFutureWork           = `UPDATE checkout_groups SET next_work_at = '2100-01-01' WHERE checkout_id = $1`
+	farFutureWork       = `UPDATE checkout_groups SET next_work_at = '2100-01-01' WHERE checkout_id = $1`
+	farFutureAnchorWork = `UPDATE checkout_groups SET next_work_at = '2100-01-01'
+		WHERE checkout_id = $1 AND tenant_id = 't1'`
 	expireAllReconciliation = `UPDATE checkout_groups SET reconcile_until = '2000-01-01' WHERE checkout_id = $1`
 	lockGroupRows           = `SELECT 1 FROM checkout_groups WHERE checkout_id = $1 FOR NO KEY UPDATE`
 	draftCheckout           = `UPDATE checkouts SET status = 'draft', order_context = '{}' WHERE id = $1`
-	markDeferredOnly        = `UPDATE checkout_groups SET work_deferred_at = now() WHERE checkout_id = $1`
+	markDeferredOnly        = `UPDATE checkout_groups SET work_deferred_at = $2 WHERE checkout_id = $1`
+	deferWorkWaiting        = `SELECT cardinality(pg_blocking_pids($1)) > 0`
 )
 
 // lockTrace запоминает запрос блокировки страницы и его параметры.
 type lockTrace struct {
 	sql  string
 	args []any
+}
+
+type deferWorkTrace struct {
+	started chan uint32
 }
 
 // Сохранение страницы упало из-за одной покупки: страница разбирается по одной, остальные
@@ -66,6 +74,9 @@ func TestResumeDefersPurchaseThatCannotBeSaved(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err := bench.pool.Exec(ctx, farFutureAnchorWork, string(bad)); err != nil {
+		t.Fatal(err)
+	}
 	versions := bench.checkoutVersions(t, healthy)
 	if err := bench.service.Resume(ctx); err == nil {
 		t.Fatal("отложенные покупки попадают в итог прохода")
@@ -83,14 +94,14 @@ func TestResumeDefersPurchaseThatCannotBeSaved(t *testing.T) {
 			t.Fatalf("покупка %s не отложена: %s %v", id, next, deferred)
 		}
 	}
-	// Неразобравшуюся строку список оператора не читает (как и любое чтение покупки): её находит
-	// запрос по признаку отложенной работы, проверенному выше.
-	if _, err := bench.pool.Exec(ctx, `DELETE FROM checkouts WHERE id = $1`, string(row)); err != nil {
-		t.Fatal(err)
+	stuck, err := bench.service.OperatorList(ctx, checkout.ListCursor{}, true)
+	if err != nil || len(stuck.Items) != 1 || !containsCheckout(stuck.Items, bad) || len(stuck.Issues) != 4 {
+		t.Fatalf("отложенные покупки видны оператору в «зависших»: %+v, %v", stuck, err)
 	}
-	stuck, err := bench.service.OperatorList(ctx, "", true)
-	if err != nil || !containsCheckout(stuck, bad) {
-		t.Fatalf("отложенная покупка видна оператору в «зависших»: %v", err)
+	for _, issue := range stuck.Issues {
+		if issue.CheckoutID != row || issue.TenantID == "" {
+			t.Fatalf("ошибка группы отложенной покупки: %+v", issue)
+		}
 	}
 	if err := bench.service.Resume(ctx); err != nil {
 		t.Fatal("отложенные покупки не возвращаются каждый проход", err)
@@ -154,6 +165,110 @@ func TestDeferWorkKeepsLaterWork(t *testing.T) {
 		t.Fatalf("будущий срок сдвинут назад: %s", next)
 	}
 }
+
+func TestDeferWorkWaitsForPaidCheckoutAndKeepsWorkCleared(t *testing.T) {
+	bench := newOrderEventBench(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	id := bench.orderedPurchase(t, 931).ID()
+	now := bench.clock.Now()
+	if _, err := bench.pool.Exec(ctx, staleCheckoutWork, string(id)); err != nil {
+		t.Fatal(err)
+	}
+	trace := &deferWorkTrace{started: make(chan uint32, 2)}
+	deferrer := checkoutListUnitOfWork(t, bench.pool, trace)
+	finished := make(chan error, 1)
+
+	err := bench.uow.Do(ctx, func(saveCtx context.Context, tx ports.Tx) error {
+		purchase, err := tx.Checkouts().GetForUpdate(saveCtx, id)
+		if err != nil {
+			return err
+		}
+		go func() {
+			finished <- deferrer.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+				return tx.Checkouts().DeferWork(ctx, []ids.UUID{id}, now.Add(time.Hour), now)
+			})
+		}()
+		if err := waitForDeferWorkLock(saveCtx, bench.pool, trace.started, finished); err != nil {
+			return err
+		}
+		changed, err := purchase.Pay(now)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			return errors.New("оплата не изменила покупку")
+		}
+		return tx.Checkouts().Update(saveCtx, purchase)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := <-finished; err != nil {
+		t.Fatal(err)
+	}
+
+	var next *time.Time
+	var deferred bool
+	if err := bench.pool.QueryRow(ctx, selectDeferredWork, string(id)).Scan(&next, &deferred); err != nil {
+		t.Fatal(err)
+	}
+	state, err := bench.service.Get(ctx, buyerA, id)
+	if err != nil || state.Status != checkout.StatusPaid || next != nil || deferred {
+		t.Fatalf(
+			"после оплаты работа появилась снова: статус=%s, срок=%v, флаг=%t, %v",
+			state.Status,
+			next,
+			deferred,
+			err,
+		)
+	}
+}
+
+func waitForDeferWorkLock(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	started <-chan uint32,
+	finished <-chan error,
+) error {
+	var pid uint32
+	select {
+	case pid = <-started:
+	case err := <-finished:
+		return errors.Join(errors.New("отсрочка завершилась без блокировки"), err)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return waitForCheckoutWriteBlock(ctx, pool, pid, finished)
+}
+
+func waitForCheckoutWriteBlock(ctx context.Context, pool *pgxpool.Pool, pid uint32, finished <-chan error) error {
+	for {
+		select {
+		case err := <-finished:
+			return errors.Join(errors.New("запись покупки завершилась без ожидания параллельной записи"), err)
+		default:
+		}
+		var blocked bool
+		err := pool.QueryRow(ctx, deferWorkWaiting, pid).Scan(&blocked)
+		if err != nil || blocked {
+			return err
+		}
+	}
+}
+
+func (trace *deferWorkTrace) TraceQueryStart(
+	ctx context.Context,
+	conn *pgx.Conn,
+	data pgx.TraceQueryStartData,
+) context.Context {
+	if strings.Contains(data.SQL, "checkouts") || strings.Contains(data.SQL, "checkout_groups") {
+		trace.started <- conn.PgConn().PID()
+	}
+	return ctx
+}
+
+func (*deferWorkTrace) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
 
 // Запрос блокировки страницы идёт только по ключу покупок — и в своём, и в общем плане: он не
 // разворачивается от созревших групп при устаревшей статистике.
@@ -269,7 +384,7 @@ func TestSavedPurchaseClearsDeferredWork(t *testing.T) {
 	bench := newOrderEventBench(t)
 	ctx := context.Background()
 	id, orders := bench.paidPurchase(t, 960)
-	if _, err := bench.pool.Exec(ctx, markDeferredOnly, string(id)); err != nil {
+	if _, err := bench.pool.Exec(ctx, markDeferredOnly, string(id), bench.clock.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if err := bench.service.ApplyOrderEvent(ctx, assembledEvent(id, "t1", orders["t1"], 1)); err != nil {

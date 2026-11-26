@@ -29,7 +29,7 @@ const (
 		SET LOCAL enable_sort = off;
 		SET LOCAL plan_cache_mode = force_generic_plan`
 	prepareCheckoutListPlan    = `PREPARE checkout_list_plan AS `
-	explainCheckoutListPlan    = `EXPLAIN (COSTS OFF) EXECUTE checkout_list_plan($1, $2, $3, $4, $5, $6)`
+	explainCheckoutListPlan    = `EXPLAIN (COSTS OFF) EXECUTE checkout_list_plan($1, $2, $3, $4, $5)`
 	deallocateCheckoutListPlan = `DEALLOCATE checkout_list_plan`
 )
 
@@ -50,6 +50,16 @@ func (trace *checkoutListTrace) TraceQueryStart(
 	}
 	if strings.Contains(data.SQL, "FROM checkouts c") {
 		trace.listSQL, trace.listArgs = data.SQL, data.Args
+		// pgx трассирует опции запроса (в том числе добавленные stdlib) перед параметрами SQL.
+	listArgs:
+		for len(trace.listArgs) > 0 {
+			switch trace.listArgs[0].(type) {
+			case pgx.QueryResultFormats, pgx.QueryResultFormatsByOID, pgx.QueryExecMode, pgx.QueryRewriter:
+				trace.listArgs = trace.listArgs[1:]
+			default:
+				break listArgs
+			}
+		}
 	}
 	if strings.Contains(data.SQL, "FROM unnest($1::uuid[], $2::bigint[])") {
 		if trace.beforeGroups != nil {
@@ -93,6 +103,7 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 		t.Fatalf("порядок страниц: %v, ожидалось %v", paged, allIDs)
 	}
 
+	afterStuckAt := at(10)
 	for _, tc := range []struct {
 		name   string
 		filter checkout.Filter
@@ -129,8 +140,13 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 			want:   allIDs[3:],
 		},
 		{
+			name:   "ожидающий заказ конкретного покупателя",
+			filter: checkout.Filter{BuyerID: buyerB, HasOrders: true, StuckBefore: at(35), Limit: 1},
+			want:   allIDs[4:],
+		},
+		{
 			name:   "ожидающие после курсора",
-			filter: checkout.Filter{StuckBefore: at(35), AfterID: allIDs[3], Limit: 100},
+			filter: checkout.Filter{StuckBefore: at(35), AfterID: allIDs[3], AfterStuckAt: &afterStuckAt, Limit: 100},
 			want:   allIDs[4:],
 		},
 	} {
@@ -225,6 +241,39 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 	}
 }
 
+func TestStuckCheckoutBuyerAndOrderFiltersBeforeLimit(t *testing.T) {
+	pool := testPool(t)
+	trace := &checkoutListTrace{}
+	uow := checkoutListUnitOfWork(t, pool, trace)
+	purchases := seedCheckoutList(t, uow)
+	deferred := []ids.UUID{purchases[2].ID()}
+	if _, err := pool.Exec(context.Background(), staleCheckoutWork, string(deferred[0])); err != nil {
+		t.Fatal(err)
+	}
+	if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
+		return tx.Checkouts().DeferWork(ctx, deferred, at(80), at(2))
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	filter := checkout.Filter{BuyerID: buyerA, StuckBefore: at(35), Limit: 1}
+	page := checkoutListRead(t, uow, trace, filter)
+	if len(page) != 1 || page[0].ID() != deferred[0] {
+		t.Fatalf("первой ожидалась отложенная покупка без заказа: %v", page)
+	}
+	filter.HasOrders = true
+	page = checkoutListRead(t, uow, trace, filter)
+	if len(page) != 1 || page[0].ID() != purchases[3].ID() {
+		t.Fatalf("ожидалась покупка владельца с заказом: %v", page)
+	}
+
+	after := at(10)
+	filter.AfterID, filter.AfterStuckAt = page[0].ID(), &after
+	if page := checkoutListRead(t, uow, trace, filter); len(page) != 0 {
+		t.Fatalf("после курсора осталась только чужая покупка: %v", page)
+	}
+}
+
 func TestCheckoutListRejectsChangedVersionBetweenQueries(t *testing.T) {
 	pool := testPool(t)
 	uow := postgres.NewUnitOfWork(pool)
@@ -262,7 +311,7 @@ func TestCheckoutListRejectsChangedVersionBetweenQueries(t *testing.T) {
 	}
 }
 
-func checkoutListUnitOfWork(t *testing.T, pool *pgxpool.Pool, trace *checkoutListTrace) *postgres.UnitOfWork {
+func checkoutListUnitOfWork(t *testing.T, pool *pgxpool.Pool, trace pgx.QueryTracer) *postgres.UnitOfWork {
 	t.Helper()
 	config := pool.Config()
 	config.ConnConfig.Tracer = trace
@@ -284,8 +333,13 @@ func checkoutListRead(
 	trace.queries = 0
 	var items []*checkout.Checkout
 	err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
-		var err error
-		items, err = tx.Checkouts().List(ctx, filter)
+		rows, err := tx.Checkouts().List(ctx, filter)
+		for _, row := range rows {
+			if len(row.Failures) > 0 {
+				t.Fatalf("покупка не разбирается: %v", row.Failures)
+			}
+			items = append(items, row.Checkout)
+		}
 		return err
 	})
 	if err != nil {

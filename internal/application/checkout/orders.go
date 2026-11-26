@@ -13,10 +13,32 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-const orderBatch = 100
+const (
+	orderBatch             = 100
+	pickupHistoryLimit     = 5
+	maxReadFailureLogLines = 10
+)
 
-// pickupHistoryLimit — сколько прошлых пунктов выдачи подсказывать покупателю при выборе.
-const pickupHistoryLimit = 5
+// ListPage продолжает обход после последней прочитанной строки, даже если она не разбирается.
+type ListPage[T any] struct {
+	ReadDiagnostics
+	Items []T
+	Next  checkout.ListCursor
+}
+
+// ReadDiagnostics ограничивает общий журнал чтения покупок и продавцов и преобразования ответа.
+type ReadDiagnostics struct {
+	Issues   []ReadIssue
+	observer ports.CheckoutReadObserver
+	logged   int
+}
+
+// ReadIssue — безопасная диагностика покупки для панели.
+type ReadIssue struct {
+	CheckoutID ids.UUID     `json:"checkoutId"`
+	TenantID   ids.TenantID `json:"tenantId"`
+	Reason     string       `json:"reason"`
+}
 
 // CreateOrders фиксирует намерение и контакт до вызова магазина. Повтор использует тот же снимок.
 func (s *Service) CreateOrders(
@@ -29,7 +51,14 @@ func (s *Service) CreateOrders(
 }
 
 // Purchases читает страницу снимков кабинета только для владельца.
-func (s *Service) Purchases(ctx context.Context, buyerID ids.UUID, after ids.UUID) ([]order.Purchase, error) {
+func (s *Service) Purchases(
+	ctx context.Context,
+	buyerID ids.UUID,
+	after ids.UUID,
+) (ListPage[order.Purchase], error) {
+	if buyerID == "" {
+		return ListPage[order.Purchase]{}, checkout.ErrNotFound
+	}
 	states, err := s.list(ctx, checkout.Filter{
 		BuyerID:    buyerID,
 		AfterID:    after,
@@ -37,46 +66,146 @@ func (s *Service) Purchases(ctx context.Context, buyerID ids.UUID, after ids.UUI
 		OrdersOnly: true,
 		HasOrders:  true,
 	})
-	result := make([]order.Purchase, 0, len(states))
-	for _, state := range states {
-		result = append(result, order.Snapshot(state))
+	states.Issues = nil
+	result := ListPage[order.Purchase]{
+		ReadDiagnostics: states.ReadDiagnostics,
+		Next:            states.Next,
+		Items:           make([]order.Purchase, 0, len(states.Items)),
+	}
+	for _, state := range states.Items {
+		result.Items = append(result.Items, order.Snapshot(state))
 	}
 	return result, err
 }
 
-// PickupHistory — пункты выдачи прошлых заказов покупателя для подсказки при выборе: одно чтение без снимков покупок.
+// PickupHistory — пункты выдачи прошлых заказов покупателя для подсказки при выборе без чтения групп целиком.
 func (s *Service) PickupHistory(ctx context.Context, buyerID ids.UUID) ([]checkout.Selection, error) {
-	var points []checkout.Selection
+	var page checkout.PickupHistoryPage
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
-		points, err = tx.Checkouts().PickupHistory(ctx, buyerID, pickupHistoryLimit)
+		page, err = tx.Checkouts().PickupHistory(ctx, buyerID, pickupHistoryLimit)
 		return err
 	})
-	return points, err
+	if err != nil {
+		return nil, err
+	}
+	diagnostics := s.ReadDiagnostics()
+	for _, failure := range page.Failures {
+		diagnostics.recordFailure(ctx, failure)
+	}
+	return page.Points, nil
 }
 
 // OperatorList показывает незавершённую отмену сразу, ожидание оплаты — после 15 минут.
-func (s *Service) OperatorList(ctx context.Context, after ids.UUID, stuck bool) ([]checkout.State, error) {
-	f := checkout.Filter{AfterID: after, Limit: orderBatch, OrdersOnly: true}
+func (s *Service) OperatorList(
+	ctx context.Context,
+	after checkout.ListCursor,
+	stuck bool,
+) (ListPage[checkout.State], error) {
+	f := checkout.Filter{AfterID: after.ID, AfterStuckAt: after.StuckAt, Limit: orderBatch, OrdersOnly: true}
 	if stuck {
 		f.StuckBefore = s.clock.Now().Add(-15 * time.Minute)
 	}
 	return s.list(ctx, f)
 }
 
-func (s *Service) list(ctx context.Context, f checkout.Filter) ([]checkout.State, error) {
-	var states []checkout.State
+func (s *Service) list(ctx context.Context, f checkout.Filter) (ListPage[checkout.State], error) {
+	var found []checkout.ListEntry
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		found, err := tx.Checkouts().List(ctx, f)
-		if err != nil {
-			return err
-		}
-		for _, c := range found {
-			states = append(states, c.State())
-		}
-		return nil
+		var err error
+		found, err = tx.Checkouts().List(ctx, f)
+		return err
 	})
-	return states, err
+	if err != nil {
+		return ListPage[checkout.State]{}, err
+	}
+
+	page := ListPage[checkout.State]{ReadDiagnostics: s.ReadDiagnostics()}
+	for _, row := range found {
+		page.Next = row.Cursor
+		if len(row.Failures) > 0 {
+			page.recordFailure(ctx, *row.ReadError())
+		}
+		for _, failure := range row.Failures {
+			page.Issues = append(page.Issues, readIssue(failure.ID, failure.TenantID, failure.Reason))
+		}
+		if row.Checkout != nil {
+			page.Items = append(page.Items, row.Checkout.State())
+		}
+	}
+	return page, nil
+}
+
+// ReadDiagnostics начинает диагностику одного запроса или фонового обхода.
+func (s *Service) ReadDiagnostics() ReadDiagnostics {
+	return ReadDiagnostics{observer: s.observer}
+}
+
+// TakeLogSlot резервирует одну строку журнала для причины ошибки.
+func (d *ReadDiagnostics) TakeLogSlot() bool {
+	if d.logged >= maxReadFailureLogLines {
+		return false
+	}
+	d.logged++
+	return true
+}
+
+func (d *ReadDiagnostics) recordFailure(ctx context.Context, failure checkout.ReadFailure) {
+	if d.observer == nil {
+		return
+	}
+	d.observer.RecordCheckoutReadFailure(ctx, failure.TenantID, failure.ID, failure.Cause, d.TakeLogSlot())
+}
+
+// ReportReadRenderingFailure отмечает покупку, которую не удалось представить после чтения.
+func (d *ReadDiagnostics) ReportReadRenderingFailure(
+	ctx context.Context,
+	state checkout.State,
+	cause error,
+) []ReadIssue {
+	d.recordFailure(ctx, renderFailure(state, cause))
+	if len(state.Groups) == 0 {
+		return []ReadIssue{readIssue(state.ID, "", checkout.ReadRender)}
+	}
+
+	issues := make([]ReadIssue, 0, len(state.Groups))
+	for _, group := range state.Groups {
+		issues = append(issues, readIssue(state.ID, group.TenantID, checkout.ReadRender))
+	}
+	return issues
+}
+
+// UnreadableResponse сообщает об ошибке представления сохранённой покупки владельца.
+func (d *ReadDiagnostics) UnreadableResponse(ctx context.Context, state checkout.State, cause error) error {
+	d.recordFailure(ctx, renderFailure(state, cause))
+	return checkout.ErrUnreadable
+}
+
+func renderFailure(state checkout.State, cause error) checkout.ReadFailure {
+	failure := checkout.ReadFailure{ID: state.ID, BuyerID: state.BuyerID, Cause: cause, Reason: checkout.ReadRender}
+	if len(state.Groups) > 0 {
+		failure.TenantID = state.Groups[0].TenantID
+	}
+	return failure
+}
+
+func readIssue(id ids.UUID, tenant ids.TenantID, reason string) ReadIssue {
+	return ReadIssue{CheckoutID: id, TenantID: tenant, Reason: reason}
+}
+
+// buyerReadError оставляет диагностику в журнале и раскрывает ошибку только владельцу.
+func buyerReadError(ctx context.Context, buyerID ids.UUID, err error, observer ports.CheckoutReadObserver) error {
+	var failure *checkout.ReadFailure
+	if !errors.As(err, &failure) {
+		return err
+	}
+	if failure.BuyerID != buyerID {
+		return checkout.ErrNotFound
+	}
+	if observer != nil {
+		observer.RecordCheckoutReadFailure(ctx, failure.TenantID, failure.ID, failure.Cause, true)
+	}
+	return checkout.ErrUnreadable
 }
 
 // consumeCart удаляет только количество из снимка, сохраняя добавленное после оформления.
@@ -110,7 +239,7 @@ func (s *Service) consumeCart(ctx context.Context, tx ports.Tx, c *checkout.Chec
 
 // ReturnCancelled изолирует возврат каждой группы от остальных групп и сверки заказов.
 func (s *Service) ReturnCancelled(ctx context.Context, buyerID, id ids.UUID) error {
-	c, err := s.load(ctx, buyerID, id)
+	c, err := s.LoadForBuyer(ctx, buyerID, id)
 	if err != nil {
 		return err
 	}

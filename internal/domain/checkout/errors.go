@@ -3,6 +3,9 @@ package checkout
 import "github.com/proshop-app/proshop-marketplace/pkg/errs"
 
 var (
+	// ErrUnreadable — сохранённая покупка не разбирается.
+	ErrUnreadable = errs.New(errs.CorruptData, "checkout.unreadable", "не удалось прочитать покупку")
+
 	// ErrPaymentPaused сохраняет состав и заказ до восстановления товара или срока оплаты.
 	ErrPaymentPaused = errs.New(
 		errs.Conflict,

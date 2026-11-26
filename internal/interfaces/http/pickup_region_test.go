@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -60,7 +61,10 @@ func TestCheckoutPickupRegionRefusalIsExplicitHTTPError(t *testing.T) {
 		TTL:          time.Hour,
 		QuoteTimeout: time.Second,
 	})
-	handler := deliveryHandlers{directory: directory}
+	handler := deliveryHandlers{
+		directory: directory,
+		checkouts: appcheckout.NewService(store, nil, nil, nil, nil, nil, appcheckout.Config{}),
+	}
 	request := httptest.NewRequest(http.MethodGet, "/?carrier=cdek&city=Москва", nil)
 	request.SetPathValue("checkoutId", string(checkoutID))
 	response := httptest.NewRecorder()

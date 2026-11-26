@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
+	"github.com/proshop-app/proshop-marketplace/pkg/requestid"
 )
 
 const (
@@ -29,8 +30,7 @@ var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 type contextKey int
 
 const (
-	keyRequestID contextKey = iota
-	keyLogger
+	keyLogger contextKey = iota
 	keyBuyer
 	keyFacts
 )
@@ -64,9 +64,7 @@ type httpMetrics struct {
 
 // RequestID — идентификатор запроса из контекста.
 func RequestID(ctx context.Context) string {
-	id, _ := ctx.Value(keyRequestID).(string)
-
-	return id
+	return requestid.From(ctx)
 }
 
 func loggerFrom(ctx context.Context) *slog.Logger {
@@ -146,7 +144,7 @@ func observe(logger *slog.Logger, metrics *httpMetrics, next http.Handler) http.
 		requestLogger := logger.With(slog.String("requestId", id))
 		facts := &requestFacts{}
 
-		ctx := context.WithValue(r.Context(), keyRequestID, id)
+		ctx := requestid.With(r.Context(), id)
 		ctx = context.WithValue(ctx, keyLogger, requestLogger)
 		ctx = context.WithValue(ctx, keyFacts, facts)
 		r = r.WithContext(ctx)
@@ -256,6 +254,10 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 		status = http.StatusInternalServerError
 		raw = []byte(`{"error":{"code":"internal","message":"внутренняя ошибка"}}`)
 	}
+	writeJSONBytes(w, status, raw)
+}
+
+func writeJSONBytes(w http.ResponseWriter, status int, raw []byte) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = w.Write(append(raw, '\n'))

@@ -25,7 +25,8 @@ const (
 			next_work_at = '2000-01-01'
 		WHERE checkout_id = $1`
 	// breakCheckoutRow — состояние группы, которое не разбирается.
-	breakCheckoutRow = `UPDATE checkout_groups SET order_progress = '"сломано"', next_work_at = '2000-01-02'
+	breakCheckoutRow = `UPDATE checkout_groups SET order_progress = order_progress || '{"AwaitingSince":"сломано"}',
+		next_work_at = '2000-01-02'
 		WHERE checkout_id = $1`
 	selectNextWork = `SELECT min(next_work_at) FROM checkout_groups WHERE checkout_id = $1`
 	// settleCheckoutWork — запись соседнего прохода: срок работы пересчитан, созревшей нет.
