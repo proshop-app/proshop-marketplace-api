@@ -248,13 +248,7 @@ func TestConcurrentBeginOrdersUsesCASAndSingleSetOfRequests(t *testing.T) {
 		}()
 	}
 	for range 2 {
-		select {
-		case <-arrived:
-		case <-time.After(3 * time.Second):
-			close(release)
-			wg.Wait()
-			t.Fatal("оба обработчика должны дойти до расчёта до CAS")
-		}
+		<-arrived
 	}
 	close(release)
 	wg.Wait()

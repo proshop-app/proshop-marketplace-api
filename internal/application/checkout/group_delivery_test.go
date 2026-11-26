@@ -3,7 +3,6 @@ package checkout_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
@@ -96,13 +95,7 @@ func TestSamePickupQuotesShopsInParallel(t *testing.T) {
 		finished <- err
 	}()
 	for range 2 {
-		select {
-		case <-entered:
-		case <-time.After(time.Second):
-			close(release)
-			<-finished
-			t.Fatal("магазины должны начать расчёт параллельно")
-		}
+		<-entered
 	}
 	close(release)
 	if err := <-finished; err != nil {

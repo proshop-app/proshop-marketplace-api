@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // PlatformServerFailure отличает отказ соединения или шлюза от сбоя конкретного магазина.
@@ -24,6 +25,26 @@ type PlatformRejected struct {
 	NotBefore time.Time
 	Cause     error
 	Server    bool
+}
+
+// PlatformServerState — состояние общего размыкателя до взятия работы.
+type PlatformServerState uint8
+
+const (
+	// PlatformServerReady допускает обычное взятие.
+	PlatformServerReady PlatformServerState = iota
+	// PlatformServerBlocked запрещает взятие до окончания паузы или текущей пробы.
+	PlatformServerBlocked
+	// PlatformServerProbe допускает одну пробу после паузы.
+	PlatformServerProbe
+)
+
+// PlatformServerGate позволяет очереди не брать работу, которую ограждение заведомо отклонит.
+type PlatformServerGate interface {
+	ServerState() PlatformServerState
+	// CreationCandidates подсказывает, когда искать работу с другого конца очереди,
+	// и какие магазины пропустить при этом поиске или при пробе сервера.
+	CreationCandidates(probe bool) (preferRecent bool, excluded []ids.TenantID)
 }
 
 // ErrPlatformTimeout — магазин не ответил в срок вызова: ограждение сняло вызов по своему сроку.

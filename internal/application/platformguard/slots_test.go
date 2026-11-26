@@ -14,7 +14,7 @@ func tenantContext(id ids.TenantID) context.Context {
 	return context.WithValue(context.Background(), tenantContextKey{}, id)
 }
 
-func admit(t *testing.T, c *Client, tenant ids.TenantID, class operationClass) permit {
+func admit(t testing.TB, c *Client, tenant ids.TenantID, class operationClass) permit {
 	t.Helper()
 	result, waiting := c.request(tenantContext(tenant), class)
 	if waiting != nil || result.reason != "" {
@@ -33,7 +33,7 @@ func pending(ctx context.Context, t *testing.T, c *Client, class operationClass)
 }
 
 func TestSlowTenantCannotOccupyAllSlots(t *testing.T) {
-	c := New(fake.NewPlatform(), testConfig(), fake.NewClock(time.Now()), nil, nil)
+	c := New(fake.NewPlatform(), testConfig(), guardTestClock(), nil, nil)
 	first := admit(t, c, "t1", checkoutClass)
 	waiting := pending(tenantContext("t1"), t, c, checkoutClass)
 	other := admit(t, c, "t2", checkoutClass)
@@ -51,7 +51,7 @@ func TestSlowTenantCannotOccupyAllSlots(t *testing.T) {
 func TestActiveTenantStateCannotBeEvicted(t *testing.T) {
 	cfg := testConfig()
 	cfg.TenantStateSize = 1
-	c := New(fake.NewPlatform(), cfg, fake.NewClock(time.Now()), nil, nil)
+	c := New(fake.NewPlatform(), cfg, guardTestClock(), nil, nil)
 	first := admit(t, c, "t1", checkoutClass)
 	if result, _ := c.request(tenantContext("t2"), checkoutClass); result.reason != "queue_full" {
 		t.Fatal("активное состояние вытеснено", result.reason)
@@ -62,7 +62,7 @@ func TestActiveTenantStateCannotBeEvicted(t *testing.T) {
 }
 
 func TestCheckoutPassesWhenReadPoolIsFull(t *testing.T) {
-	c := New(fake.NewPlatform(), testConfig(), fake.NewClock(time.Now()), nil, nil)
+	c := New(fake.NewPlatform(), testConfig(), guardTestClock(), nil, nil)
 	first := admit(t, c, "t1", readClass)
 	second := admit(t, c, "t2", readClass)
 	waiting := pending(tenantContext("t3"), t, c, readClass)
@@ -81,7 +81,7 @@ func TestCallerSelectsPoolForSharedOperations(t *testing.T) {
 				operation+"/"+class.String(),
 				func(t *testing.T) {
 					metrics := &fake.PlatformMetrics{}
-					c := New(fake.NewPlatform(), testConfig(), fake.NewClock(time.Now()), metrics, nil)
+					c := New(fake.NewPlatform(), testConfig(), guardTestClock(), metrics, nil)
 					opposite := readClass
 					label := ports.PlatformCheckout
 					if class == readClass {
@@ -134,7 +134,7 @@ func TestSlowPurchaseSettingsLeaveReviewSlots(t *testing.T) {
 	}
 	cfg := testConfig()
 	cfg.StrictTimeout = time.Second
-	c := New(upstream, cfg, fake.NewClock(time.Now()), nil, nil)
+	c := New(upstream, cfg, guardTestClock(), nil, nil)
 	ctx := ports.WithPlatformCallClass(context.Background(), ports.PlatformCheckout)
 	done := make(chan error, 1)
 	go func() {

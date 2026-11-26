@@ -4,8 +4,33 @@ import (
 	"context"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
+
+// ServerState читает размыкатель без занятия места или запуска пробы.
+func (c *Client) ServerState() ports.PlatformServerState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.server.available(c.clock.Now()) {
+		return ports.PlatformServerBlocked
+	}
+	if !c.server.openUntil.IsZero() {
+		return ports.PlatformServerProbe
+	}
+	return ports.PlatformServerReady
+}
+
+// CreationCandidates ищет ответивший магазин с другого конца очереди, когда её голова молчит.
+func (c *Client) CreationCandidates(probe bool) (bool, []ids.TenantID) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := c.clock.Now()
+	if !probe && !now.Before(c.lastShopTimeout.Add(c.cfg.OpenInterval)) {
+		return false, nil
+	}
+	return true, c.creationExcluded(now)
+}
 
 func (c *Client) acquire(ctx context.Context, class operationClass) (permit, string) {
 	if ctx.Err() != nil {
@@ -49,13 +74,16 @@ func (c *Client) hasSlot(state *tenantState, class operationClass) bool {
 }
 
 func (c *Client) start(state *tenantState, class operationClass) permit {
-	p := permit{server: c.server.start(), tenant: state, class: class}
+	p := permit{server: c.server.start(), tenant: state, class: class, answers: c.answers}
 	c.pin(state)
 	state.active[class]++
 	c.pools[class].active++
 	c.running++
 	if state.id != "" {
 		p.shop = state.breaker.start()
+		if p.shop.probe {
+			c.updateCreationExclusion(state, c.clock.Now())
+		}
 	}
 	return p
 }
@@ -80,9 +108,19 @@ func (c *Client) release(p permit, err error) {
 
 func (c *Client) finishBreakers(p permit, err error) {
 	now := c.clock.Now()
-	c.server.finish(p.server, serverVerdict(p, err), c.cfg, now)
+	v := c.serverVerdict(p, err, now)
+	if v == verdictSuccess {
+		c.answers++
+		// Ответ уже начатого вызова подтверждает, что сервер жив, даже если
+		// другой магазин успел открыть общий размыкатель.
+		if !c.server.openUntil.IsZero() {
+			c.server.completeProbe(false, c.cfg, now)
+		}
+	}
+	c.server.finish(p.server, v, c.cfg, now)
 	if p.tenant.id != "" {
 		p.tenant.breaker.finish(p.shop, tenantVerdict(err), c.cfg, now)
+		c.updateCreationExclusion(p.tenant, now)
 	}
 }
 

@@ -44,31 +44,35 @@ type Config struct {
 
 // Client оборачивает порт, поэтому защита проверяется без HTTP и настоящего сервера.
 type Client struct {
-	upstream ports.PlatformAPI
-	cfg      Config
-	clock    ports.Clock
-	metrics  ports.PlatformMetrics
-	logger   *slog.Logger
-	running  int
-	pools    [classCount]slotPool
-	batch    *tenantState
-	mu       sync.Mutex
-	server   breaker
-	tenants  map[ids.TenantID]*tenantState
-	idle     *list.List
-	logs     map[string]time.Time
-	cacheMu  sync.Mutex
-	cache    map[cacheKey]*cacheEntry
-	cacheLRU list.List
+	upstream        ports.PlatformAPI
+	cfg             Config
+	clock           ports.Clock
+	metrics         ports.PlatformMetrics
+	logger          *slog.Logger
+	running         int
+	pools           [classCount]slotPool
+	batch           *tenantState
+	mu              sync.Mutex
+	server          breaker
+	answers         uint64
+	lastShopTimeout time.Time
+	tenants         map[ids.TenantID]*tenantState
+	excluded        creationExclusions
+	idle            *list.List
+	logs            map[string]time.Time
+	cacheMu         sync.Mutex
+	cache           map[cacheKey]*cacheEntry
+	cacheLRU        list.List
 }
 
 type tenantContextKey struct{}
 
 type permit struct {
-	server breakerPermit
-	shop   breakerPermit
-	tenant *tenantState
-	class  operationClass
+	server  breakerPermit
+	shop    breakerPermit
+	tenant  *tenantState
+	class   operationClass
+	answers uint64
 	// strict — вызов шёл со строгим бюджетом или бюджетом вызывающего, а не коротким бюджетом чтения:
 	// только такое истечение срока доказывает зависание общему серверу.
 	strict bool

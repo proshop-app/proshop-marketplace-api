@@ -42,15 +42,11 @@ func TestExecutorQuarantinesMalformedTasks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-executor.Results():
-	case <-time.After(time.Second):
-		t.Fatal("некорректная задача не разобрана")
-	}
+	<-executor.Results()
 	executor.Wait()
 	e.clock.Advance(24 * time.Hour)
 	tasks, err := fake.TasksOf(e.store.Claim(ctx, ports.ClaimRequest{
@@ -75,15 +71,11 @@ func TestExecutorShutdownLeavesInFlightTaskForNextProcess(t *testing.T) {
 	started := make(chan struct{}, 2)
 	platform := delayedOrderPlatform{PlatformAPI: e.platform, release: make(chan struct{}), started: started}
 	service := appcheckout.NewService(e.store, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewExecutor(e.store, e.clock, service, 1)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service, nil, 1)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("вызов магазина не начался")
-	}
+	<-started
 	cancel()
 	executor.Wait()
 	var inFlight int64
@@ -99,7 +91,7 @@ func TestExecutorShutdownLeavesInFlightTaskForNextProcess(t *testing.T) {
 		t.Fatal("не найдена задача в полёте")
 	}
 	e.clock.Advance(time.Minute)
-	resumed := appcheckout.NewExecutor(e.store, e.clock, e.service, 1)
+	resumed := appcheckout.NewExecutor(e.store, e.clock, e.service, nil, 1)
 	if err := resumed.Dispatch(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -151,16 +143,11 @@ func TestExecutorQuarantinesPanickingTask(t *testing.T) {
 		e.clock,
 		appcheckout.Config{},
 	)
-	executor := appcheckout.NewExecutor(e.store, e.clock, service, 1)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service, nil, 1)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	var result appcheckout.TaskResult
-	select {
-	case result = <-executor.Results():
-	case <-time.After(time.Second):
-		t.Fatal("паника исполнителя не дала итога задачи")
-	}
+	result := <-executor.Results()
 	executor.Wait()
 	if !errors.Is(result.Err, errs.ErrPanic) || result.FailureReason != "attempts_exhausted" {
 		t.Fatalf("паника — неизвестный сбой с исчерпанием попыток: %+v", result)
@@ -180,15 +167,11 @@ func TestExecutorUsesOrdersDatabaseClass(t *testing.T) {
 		t.Fatal(err)
 	}
 	queue := &classQueue{TaskQueue: e.store}
-	executor := appcheckout.NewExecutor(queue, e.clock, e.service, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(queue, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-executor.Results():
-	case <-time.After(time.Second):
-		t.Fatal("задача создания не разобрана")
-	}
+	<-executor.Results()
 	executor.Wait()
 	queue.mu.Lock()
 	defer queue.mu.Unlock()

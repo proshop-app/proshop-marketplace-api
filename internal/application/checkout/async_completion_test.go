@@ -20,6 +20,7 @@ type resultUOW struct {
 	ports.UnitOfWork
 	failure   error
 	remaining int
+	clock     ports.Clock
 	attempts  []time.Time
 }
 
@@ -33,7 +34,7 @@ func (u *resultUOW) Do(ctx context.Context, fn func(context.Context, ports.Tx) e
 	}
 	if u.remaining > 0 {
 		u.remaining--
-		u.attempts = append(u.attempts, time.Now())
+		u.attempts = append(u.attempts, u.clock.Now())
 		return u.failure
 	}
 	return u.UnitOfWork.Do(ctx, fn)
@@ -83,7 +84,7 @@ func TestCreationSaveRetriesOnlyTransientFailures(t *testing.T) {
 				t.Fatal(err)
 			}
 			task := firstCreationTask(t, e)
-			uow := &resultUOW{UnitOfWork: e.store, failure: failure}
+			uow := &resultUOW{UnitOfWork: e.store, clock: e.clock, failure: failure}
 			service := appcheckout.NewService(
 				uow,
 				e.platform,
@@ -107,7 +108,7 @@ func TestCreationSaveRetriesOnlyTransientFailures(t *testing.T) {
 			}
 			for i := 1; i < len(uow.attempts); i++ {
 				minimum := time.Duration(1<<(i-1)) * 20 * time.Millisecond
-				if uow.attempts[i].Sub(uow.attempts[i-1]) < minimum {
+				if uow.attempts[i].Sub(uow.attempts[i-1]) != minimum {
 					t.Fatal("повтор без нарастающей паузы")
 				}
 			}
@@ -129,7 +130,7 @@ func TestSuccessfulCreationPersistsAfterShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := firstCreationTask(t, e)
-	uow := &resultUOW{UnitOfWork: e.store}
+	uow := &resultUOW{UnitOfWork: e.store, clock: e.clock}
 	service := appcheckout.NewService(
 		uow,
 		e.platform,
@@ -203,7 +204,7 @@ func TestDeadlineTaskWaitsForAttemptLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.clock.Advance(time.Second)
-	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +278,7 @@ func TestPaymentCompletionSurvivesClientAndClearsOnlyProvenUnpaid(t *testing.T) 
 			}
 			return ctx.Err()
 		}
-		uow := &resultUOW{UnitOfWork: e.store}
+		uow := &resultUOW{UnitOfWork: e.store, clock: e.clock}
 		service := appcheckout.NewService(
 			uow,
 			e.platform,
@@ -319,9 +320,9 @@ func TestExecutorBacksOffNonPendingFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	unavailable := errs.New(errs.Unavailable, "test.storage", "база недоступна")
-	uow := &resultUOW{UnitOfWork: e.store, failure: unavailable, remaining: 100}
+	uow := &resultUOW{UnitOfWork: e.store, clock: e.clock, failure: unavailable, remaining: 100}
 	service := appcheckout.NewService(uow, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewExecutor(e.store, e.clock, service, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service, nil, messaging.DefaultMaxAttempts)
 	for _, delay := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second} {
 		now := e.clock.Now()
 		if err := executor.Dispatch(ctx); err != nil {

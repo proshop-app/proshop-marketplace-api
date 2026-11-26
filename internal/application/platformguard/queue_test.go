@@ -3,6 +3,7 @@ package platformguard
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -17,7 +18,7 @@ func TestWaitingAndCancellationReleaseQueuePlace(t *testing.T) {
 	cfg.QueueSize = 1
 	cfg.TenantQueueSize = 1
 	metrics := &fake.PlatformMetrics{}
-	c := New(fake.NewPlatform(), cfg, fake.NewClock(time.Now()), metrics, nil)
+	c := New(fake.NewPlatform(), cfg, guardTestClock(), metrics, nil)
 	first := admit(t, c, "t1", checkoutClass)
 	second := admit(t, c, "t2", checkoutClass)
 	ctx, cancel := context.WithCancel(tenantContext("t3"))
@@ -48,7 +49,7 @@ func TestWaitingAndCancellationReleaseQueuePlace(t *testing.T) {
 func TestTenantQueueCannotFillPoolOrBlockReadyShop(t *testing.T) {
 	cfg := testConfig()
 	cfg.TenantQueueSize = 1
-	c := New(fake.NewPlatform(), cfg, fake.NewClock(time.Now()), nil, nil)
+	c := New(fake.NewPlatform(), cfg, guardTestClock(), nil, nil)
 	first := admit(t, c, "t1", checkoutClass)
 	second := admit(t, c, "t2", checkoutClass)
 	noisy := pending(tenantContext("t1"), t, c, checkoutClass)
@@ -76,12 +77,20 @@ func TestQueueDeadlineUsesOperationBudgetWithoutCallingServer(t *testing.T) {
 		return nil
 	}
 	metrics := &fake.PlatformMetrics{}
-	c := New(upstream, testConfig(), fake.NewClock(time.Now()), metrics, nil)
+	clock := guardTestClock()
+	c := New(upstream, testConfig(), clock, metrics, nil)
 	first := admit(t, c, "t1", readClass)
 	second := admit(t, c, "t2", readClass)
 	for _, budget := range []time.Duration{time.Millisecond, time.Second} {
-		ctx, cancel := context.WithTimeout(tenantContext("t3"), budget)
-		_, err := c.MarketplaceSettings(ctx, "t3")
+		ctx, cancel := clock.WithTimeout(tenantContext("t3"), budget)
+		done := make(chan error, 1)
+		go func() {
+			_, err := c.MarketplaceSettings(ctx, "t3")
+			done <- err
+		}()
+		awaitQueued(c, readClass)
+		clock.Advance(min(budget, c.cfg.StrictTimeout))
+		err := <-done
 		cancel()
 		if !errors.Is(err, ErrTimeout) || !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatal(err)
@@ -99,7 +108,7 @@ func TestQueueDeadlineUsesOperationBudgetWithoutCallingServer(t *testing.T) {
 }
 
 func TestCancellationRacingWithDispatchDoesNotLeakSlots(t *testing.T) {
-	c := New(fake.NewPlatform(), testConfig(), fake.NewClock(time.Now()), nil, nil)
+	c := New(fake.NewPlatform(), testConfig(), guardTestClock(), nil, nil)
 	for i := 0; i < 100; i++ {
 		first := admit(t, c, "t1", checkoutClass)
 		ctx, cancel := context.WithCancel(tenantContext("t1"))
@@ -128,7 +137,7 @@ func TestCancellationRacingWithDispatchDoesNotLeakSlots(t *testing.T) {
 func TestOpeningTenantBreakerRejectsOnlyItsQueue(t *testing.T) {
 	cfg := testConfig()
 	cfg.FailureThreshold = 1
-	c := New(fake.NewPlatform(), cfg, fake.NewClock(time.Now()), nil, nil)
+	c := New(fake.NewPlatform(), cfg, guardTestClock(), nil, nil)
 	first := admit(t, c, "t1", checkoutClass)
 	second := admit(t, c, "t2", checkoutClass)
 	own := pending(tenantContext("t1"), t, c, checkoutClass)
@@ -148,7 +157,7 @@ func TestOpeningTenantBreakerRejectsOnlyItsQueue(t *testing.T) {
 func TestServerBreakerReleasesQueuesOfBothClasses(t *testing.T) {
 	cfg := testConfig()
 	cfg.FailureThreshold = 1
-	c := New(fake.NewPlatform(), cfg, fake.NewClock(time.Now()), nil, nil)
+	c := New(fake.NewPlatform(), cfg, guardTestClock(), nil, nil)
 	checkout := admit(t, c, "t1", checkoutClass)
 	read := admit(t, c, "t2", readClass)
 	ownCheckout := pending(tenantContext("t1"), t, c, checkoutClass)
@@ -163,5 +172,18 @@ func TestServerBreakerReleasesQueuesOfBothClasses(t *testing.T) {
 	c.release(read, context.Canceled)
 	if c.pools[checkoutClass].queued != 0 || c.pools[readClass].queued != 0 || c.running != 0 {
 		t.Fatal("общий отказ оставил занятые места")
+	}
+}
+
+// awaitQueued синхронизирует сдвиг часов с постановкой запроса в очередь.
+func awaitQueued(c *Client, class operationClass) {
+	for {
+		c.mu.Lock()
+		queued := c.pools[class].queued
+		c.mu.Unlock()
+		if queued != 0 {
+			return
+		}
+		runtime.Gosched()
 	}
 }

@@ -31,7 +31,9 @@ import (
 //	$7  slots      — jsonb «магазин → свободные места» (TenantSlots);
 //	$8  after      — курсор круга магазинов; NULL — круг не начат (пустая строка — пустой магазин);
 //	$9  ordered    — упорядоченные виды запроса (подмножество OrderedTaskKinds);
-//	$10 visits     — потолок посещённых полос одного вида.
+//	$10 visits     — потолок посещённых полос одного вида;
+//	$11 recent     — сначала пробовать магазин из конца очереди;
+//	$12 deprioritized — магазины, которые пропускают, если найден свежий кандидат.
 const (
 	// orderedLaneKinds — упорядоченные виды буквально: так планировщик выбирает частичный индекс
 	// outbox_ordered_head_idx для старейшей задачи полосы. Список совпадает с OrderedTaskKinds
@@ -52,9 +54,15 @@ const (
 		)`
 
 	// claimKinds — виды взятия: из запроса или все виды очереди, без исключённых.
+	// Для одного явно запрошенного вида сразу проверяем по индексу, есть ли созревшие задачи.
 	claimKinds = `
 		claim_kinds AS (
-			SELECT kind FROM unnest($5::text[]) AS kind WHERE cardinality($5::text[]) > 0
+			SELECT kind FROM unnest($5::text[]) AS kind
+			WHERE cardinality($5::text[]) > 1 OR EXISTS (
+				SELECT 1 FROM outbox
+				WHERE cardinality($5::text[]) = 1 AND kind = ($5::text[])[1]
+					AND NOT (kind = ANY($6::text[])) AND failed_at IS NULL AND next_at <= $1
+			)
 			UNION
 			SELECT kind FROM claim_queued_kinds WHERE cardinality($5::text[]) = 0
 		)`
@@ -108,7 +116,10 @@ const (
 			CROSS JOIN LATERAL (` + claimLaneHead + `
 			) head
 			CROSS JOIN LATERAL (
-				SELECT head.next_at <= $1 AND COALESCE(($7::jsonb ->> n.tenant_id)::integer, $3) > 0 AS ok
+				SELECT head.next_at <= $1 AND COALESCE(($7::jsonb ->> n.tenant_id)::integer, $3) > 0
+					AND (NOT (n.tenant_id = ANY($12::text[])) OR NOT EXISTS (
+						SELECT 1 FROM claim_recent r WHERE r.kind = l.kind
+					)) AS ok
 			) yield
 			WHERE l.visited < $10 AND l.ready < $2 AND NOT (n.wrapped AND ($8::text IS NULL OR n.tenant_id > $8))
 		)`
@@ -139,10 +150,36 @@ const (
 			) head
 			WHERE NOT (k.kind = ANY($6::text[])) AND head.next_at <= $1
 				AND COALESCE(($7::jsonb ->> oldest.tenant_id)::integer, $3) > 0
+				AND (NOT (oldest.tenant_id = ANY($12::text[])) OR NOT EXISTS (
+					SELECT 1 FROM claim_recent r WHERE r.kind = k.kind
+				))
 		)`
 
-	// claimChosen — до $2 магазинов с готовой полосой: сначала магазины старейших задач видов,
-	// затем по кругу от курсора.
+	// claimRecent даёт независимого кандидата, когда очередь возглавляют молчащие магазины.
+	// Обратный проход по индексу ограничен; если в выборке нет допуска, остаётся обычный круг.
+	claimRecent = `
+		claim_recent AS MATERIALIZED (
+			SELECT k.kind, recent.tenant_id, recent.next_at, recent.id
+			FROM claim_kinds k
+			CROSS JOIN LATERAL (
+				SELECT candidate.tenant_id, candidate.next_at, candidate.id
+				FROM (
+					SELECT tenant_id, next_at, id
+					FROM outbox
+					WHERE kind = k.kind AND failed_at IS NULL AND next_at <= $1
+					ORDER BY next_at DESC, id DESC
+					LIMIT $10
+				) candidate
+				WHERE COALESCE(($7::jsonb ->> candidate.tenant_id)::integer, $3) > 0
+					AND NOT (candidate.tenant_id = ANY($12::text[]))
+				ORDER BY candidate.next_at DESC, candidate.id DESC
+				LIMIT 1
+			) recent
+			WHERE $11::boolean AND NOT (k.kind = ANY($6::text[]) OR k.kind = ANY($9::text[]))
+		)`
+
+	// claimChosen — до $2 магазинов с готовой полосой: при необходимости один из конца очереди,
+	// затем магазины старейших задач видов и остальные по кругу от курсора.
 	claimChosen = `
 		claim_ready AS MATERIALIZED (
 			SELECT DISTINCT ON (kind, tenant_id) kind, tenant_id, wrapped, head_next_at, head_id, ordered, priority
@@ -153,6 +190,9 @@ const (
 				UNION ALL
 				SELECT kind, tenant_id, $8::text IS NOT NULL AND tenant_id <= $8, head_next_at, head_id, 0
 				FROM claim_oldest
+				UNION ALL
+				SELECT kind, tenant_id, $8::text IS NOT NULL AND tenant_id <= $8, next_at, id, -1
+				FROM claim_recent
 			) lane
 			CROSS JOIN LATERAL (SELECT lane.kind = ANY($9::text[]) AS ordered) o
 			ORDER BY kind, tenant_id, priority
@@ -248,7 +288,8 @@ const (
 			), $8::text) AS next
 		)`
 
-	claimTasks = `WITH RECURSIVE` + claimQueuedKinds + `,` + claimKinds + `,` + claimLanes + `,` + claimOldest +
+	claimTasks = `WITH RECURSIVE` + claimQueuedKinds + `,` +
+		claimKinds + `,` + claimRecent + `,` + claimLanes + `,` + claimOldest +
 		`,` + claimChosen + `,` + claimCandidates + `,` + claimLocked + `,` + claimCursor + `
 		SELECT cur.next, r.id, r.kind, r.tenant_id, r.payload, r.attempts, r.created_at, r.unknown_failures
 		FROM claim_cursor cur
@@ -323,6 +364,8 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 		claimAfter(request.After),
 		append([]string{}, request.OrderedKinds...),
 		ports.ClaimLaneVisits,
+		request.PreferRecent,
+		append([]ids.TenantID{}, request.DeprioritizedTenants...),
 	).Rows()
 	if err != nil {
 		return ports.ClaimResult{}, fmt.Errorf("взятие задач: %w", err)

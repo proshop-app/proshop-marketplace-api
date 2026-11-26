@@ -32,32 +32,48 @@ func NewCreationRunner(
 func (r *CreationRunner) Run(ctx context.Context) error {
 	ticker := time.NewTicker(creationPollInterval)
 	defer ticker.Stop()
+	return r.run(ctx, ticker.C)
+}
+
+func (r *CreationRunner) run(ctx context.Context, ticks <-chan time.Time) error {
 	defer r.executor.Wait()
 	failures := 0
+	kind := ""
 	for {
-		if err := r.executor.Dispatch(ctx); err != nil {
+		var err error
+		if kind == "" {
+			err = r.executor.Dispatch(ctx)
+		} else {
+			err = r.executor.Refill(ctx, kind)
+		}
+		if err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
-			failures++
 			r.logger.Error("создание: очередь недоступна", slog.Any("error", err))
-			if !wait(ctx, messaging.Backoff(failures)) {
-				return nil
+			if kind == "" {
+				failures++
+				if !wait(ctx, messaging.Backoff(failures)) {
+					return nil
+				}
+				continue
 			}
-			continue
+		} else if kind == "" {
+			failures = 0
 		}
-		failures = 0
 		select {
 		case <-ctx.Done():
 			return nil
 		case result := <-r.executor.Results():
+			kind = result.Task.Kind
 			r.record(messaging.Outcome{
 				Task:          result.Task,
 				Err:           result.Err,
 				Lag:           result.Lag,
 				FailureReason: result.FailureReason,
 			})
-		case <-ticker.C:
+		case <-ticks:
+			kind = ""
 		}
 	}
 }

@@ -28,7 +28,7 @@ func call[T any](
 	p.strict = timeout >= c.cfg.StrictTimeout
 	// Срок, по которому судят магазин, отсчитывается от начала его вызова: ожидание места
 	// занято чужой нагрузкой и магазину не засчитывается. Заголовок срока несёт этот остаток.
-	callCtx, cancel := context.WithTimeout(ctx, limit)
+	callCtx, cancel := ports.WithTimeout(ctx, c.clock, limit)
 	defer cancel()
 	value, err := execute(ctx, callCtx, c, p, load)
 	outcome := callOutcome(err)
@@ -58,7 +58,7 @@ func (c *Client) admit(
 	class operationClass,
 	budget time.Duration,
 ) (permit, time.Duration, string, error) {
-	waitCtx, cancel := context.WithTimeout(ctx, c.untilDeadline(ctx, budget))
+	waitCtx, cancel := ports.WithTimeout(ctx, c.clock, c.untilDeadline(ctx, budget))
 	defer cancel()
 	p, reason := c.acquire(waitCtx, class)
 	switch {

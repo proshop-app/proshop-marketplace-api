@@ -18,7 +18,7 @@ func TestOnlyOneProbeAndOtherTenantIsIndependent(t *testing.T) {
 			cfg := testConfig()
 			cfg.FailureThreshold = 1
 			cfg.StrictTimeout = time.Second
-			clock := fake.NewClock(time.Now())
+			clock := fake.NewClock(time.Unix(1000, 0))
 			c := New(upstream, cfg, clock, nil, nil)
 			failure := errors.New("сбой магазина")
 			if shared {
@@ -58,7 +58,7 @@ func TestOnlyOneProbeAndOtherTenantIsIndependent(t *testing.T) {
 func TestLateSuccessCannotCloseNewBreakerGeneration(t *testing.T) {
 	cfg := testConfig()
 	cfg.FailureThreshold = 1
-	now := time.Now()
+	now := time.Unix(1000, 0)
 	var b breaker
 	failed, late := b.start(), b.start()
 	b.finish(failed, verdictFailure, cfg, now)

@@ -146,14 +146,16 @@ func TestConcurrentPickupChangesPreserveOrderDestination(t *testing.T) {
 		}
 		rng.Shuffle(len(ops), func(i, j int) { ops[i], ops[j] = ops[j], ops[i] })
 		var wg sync.WaitGroup
+		start := make(chan struct{})
 		for _, op := range ops {
 			wg.Add(1)
-			go func(op func(), delay time.Duration) {
+			go func() {
 				defer wg.Done()
-				time.Sleep(delay)
+				<-start
 				op()
-			}(op, time.Duration(rng.Intn(300))*time.Microsecond)
+			}()
 		}
+		close(start)
 		wg.Wait()
 		for range 4 {
 			e.clock.Advance(16 * time.Second)

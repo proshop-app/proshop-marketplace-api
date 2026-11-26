@@ -80,7 +80,7 @@ func (s *Service) createGroup(ctx context.Context, buyerID, id ids.UUID, tenant 
 	saveCtx := ctx
 	if failed == nil {
 		var finish context.CancelFunc
-		saveCtx, finish = context.WithTimeout(context.WithoutCancel(ctx), completionTimeout)
+		saveCtx, finish = ports.WithTimeout(context.WithoutCancel(ctx), s.clock, completionTimeout)
 		defer finish()
 	}
 	state, err = s.completeGroupCreation(saveCtx, buyerID, id, group, token, answer, failed)
@@ -137,12 +137,8 @@ func (s *Service) saveOrderResult(
 			return state, err
 		}
 		slog.Warn("заказ: повтор записи итога", "tenantId", tenant, "checkoutId", id, "delay", delay, "error", err)
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
+		if !s.clock.Wait(ctx, delay) {
 			return checkout.State{}, ctx.Err()
-		case <-timer.C:
 		}
 		delay = min(delay*2, creationSaveMaxDelay)
 	}

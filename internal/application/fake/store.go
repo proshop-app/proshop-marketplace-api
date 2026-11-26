@@ -291,19 +291,35 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) (ports.Clai
 	defer s.mu.Unlock()
 
 	walk := claimWalk{request: request, rows: s.data.outbox}
-	for _, kind := range walk.kinds() {
+	kinds := walk.kinds()
+	if len(kinds) == 0 {
+		return ports.ClaimResult{Next: request.After}, nil
+	}
+	for _, kind := range kinds {
 		walk.visit(kind)
 	}
 	tasks := walk.take()
-	for _, task := range tasks {
-		row := &s.data.outbox[walk.index[task.ID]]
-		row.Attempts++
-		row.NextAt = request.LeaseUntil
-	}
+	taken := make(map[int64]int, len(tasks))
 	for n := range tasks {
-		tasks[n].Attempts = s.data.outbox[walk.index[tasks[n].ID]].Attempts
+		taken[tasks[n].ID] = n
 	}
-	return ports.ClaimResult{Tasks: tasks, Next: walk.next()}, nil
+	for n := range s.data.outbox {
+		if len(taken) == 0 {
+			break
+		}
+		row := &s.data.outbox[n]
+		index, claimed := taken[row.ID]
+		if claimed {
+			row.Attempts++
+			row.NextAt = request.LeaseUntil
+			tasks[index].Attempts = row.Attempts
+			delete(taken, row.ID)
+		}
+	}
+	return ports.ClaimResult{
+		Tasks: tasks,
+		Next:  walk.next(),
+	}, nil
 }
 
 // Complete отмечает задачу выполненной.

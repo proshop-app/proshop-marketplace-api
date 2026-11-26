@@ -19,6 +19,10 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
 )
 
+func guardTestClock() *fake.Scheduler {
+	return fake.NewClock(time.Unix(1000, 0)).Scheduler()
+}
+
 func testConfig() Config {
 	return Config{
 		ReadTimeout:           10 * time.Millisecond,
@@ -44,7 +48,7 @@ func testConfig() Config {
 }
 
 func TestBreakerRecoveryAndLogLimit(t *testing.T) {
-	clock := fake.NewClock(time.Now())
+	clock := guardTestClock()
 	upstream := fake.NewPlatform()
 	metrics := &fake.PlatformMetrics{}
 	var logs bytes.Buffer
@@ -102,16 +106,15 @@ func TestStrictTimeoutsAndCodes(t *testing.T) {
 	for _, operation := range operations {
 		t.Run(operation, func(t *testing.T) {
 			upstream := fake.NewPlatform()
+			clock := guardTestClock()
 			upstream.CallHook = func(ctx context.Context, _ string) error {
-				<-ctx.Done()
-				return ctx.Err()
+				return clock.Expire(ctx)
 			}
 			upstream.BeforePickup = func(ctx context.Context, _ ids.TenantID) error {
-				<-ctx.Done()
-				return ctx.Err()
+				return clock.Expire(ctx)
 			}
 			metrics := &fake.PlatformMetrics{}
-			c := New(upstream, testConfig(), fake.NewClock(time.Now()), metrics, nil)
+			c := New(upstream, testConfig(), clock, metrics, nil)
 			err := strictCall(c, operation)
 			if !errors.Is(err, ErrTimeout) || errs.CodeOf(err) != errs.Unavailable {
 				t.Fatal(err)
@@ -161,15 +164,14 @@ func strictCallContext(ctx context.Context, c *Client, operation string) error {
 func TestReviewsStaleAndColdTimeout(t *testing.T) {
 	ctx := context.Background()
 	upstream := fake.NewPlatform()
-	clock := fake.NewClock(time.Now())
+	clock := guardTestClock()
 	metrics := &fake.PlatformMetrics{}
 	upstream.Reviews = []ports.Review{{Author: "Имя", Rating: 5}}
 	c := New(upstream, testConfig(), clock, metrics, nil)
 	page, _ := c.ProductReviews(ctx, "t1", "p1", 20, 0)
 	page.Items[0].Author = "испорчено"
 	upstream.CallHook = func(ctx context.Context, _ string) error {
-		<-ctx.Done()
-		return ctx.Err()
+		return clock.Expire(ctx)
 	}
 	clock.Advance(2 * time.Second)
 	page, err := c.ProductReviews(ctx, "t1", "p1", 20, 0)
@@ -186,7 +188,7 @@ func TestBusinessRefusalsDoNotOpenBreaker(t *testing.T) {
 	upstream := fake.NewPlatform()
 	cfg := testConfig()
 	cfg.FailureThreshold = 1
-	c := New(upstream, cfg, fake.NewClock(time.Now()), nil, nil)
+	c := New(upstream, cfg, guardTestClock(), nil, nil)
 	for _, refusal := range []error{ports.ErrMarketplaceDisabled, &ports.OrderRefusal{Code: "OUT_OF_STOCK"}} {
 		upstream.CallHook = func(context.Context, string) error { return refusal }
 		_, err := c.CreateOrder(context.Background(), "t1", ports.CreateOrderRequest{})
@@ -205,7 +207,7 @@ func TestConcurrentCacheLoadsDoNotWaitAndRemainBounded(t *testing.T) {
 	cfg := testConfig()
 	cfg.ReadTimeout = time.Second
 	metrics := &fake.PlatformMetrics{}
-	c := New(upstream, cfg, fake.NewClock(time.Now()), metrics, nil)
+	c := New(upstream, cfg, guardTestClock(), metrics, nil)
 	started, release := make(chan struct{}), make(chan struct{})
 	var calls atomic.Int32
 	upstream.CallHook = func(ctx context.Context, _ string) error {
@@ -263,7 +265,7 @@ func TestCancelledCallDoesNotOpenBreaker(t *testing.T) {
 	upstream := fake.NewPlatform()
 	cfg := testConfig()
 	cfg.FailureThreshold = 1
-	c := New(upstream, cfg, fake.NewClock(time.Now()), nil, nil)
+	c := New(upstream, cfg, guardTestClock(), nil, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, _ = c.MarketplaceSettings(ctx, "t1")

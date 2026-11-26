@@ -72,6 +72,10 @@ type ClaimRequest struct {
 	Limit       int
 	PerTenant   int
 	LeaseUntil  time.Time
+	// PreferRecent сначала пробует магазин из конца очереди готовых задач.
+	PreferRecent bool
+	// DeprioritizedTenants пропускает эти магазины, пока с конца очереди можно взять другой магазин.
+	DeprioritizedTenants []ids.TenantID
 }
 
 // ClaimLaneVisits — сколько полос «вид × магазин» одного вида посещает взятие: стоимость взятия

@@ -20,6 +20,12 @@ type delayedOrderPlatform struct {
 	started chan<- struct{}
 }
 
+type delayedCreationReply struct {
+	ports.PlatformAPI
+	release <-chan struct{}
+	started chan<- struct{}
+}
+
 type delayedPollPlatform struct {
 	ports.PlatformAPI
 	release <-chan struct{}
@@ -56,6 +62,24 @@ func (p delayedOrderPlatform) CreateOrder(
 	return p.PlatformAPI.CreateOrder(ctx, tenant, request)
 }
 
+func (p delayedCreationReply) CreateOrder(
+	ctx context.Context,
+	tenant ids.TenantID,
+	request ports.CreateOrderRequest,
+) (checkout.SellerOrder, error) {
+	order, err := p.PlatformAPI.CreateOrder(ctx, tenant, request)
+	if tenant != "t1" || err != nil {
+		return order, err
+	}
+	p.started <- struct{}{}
+	select {
+	case <-p.release:
+		return order, nil
+	case <-ctx.Done():
+		return checkout.SellerOrder{}, ctx.Err()
+	}
+}
+
 func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 	e := setup(t)
 	c := confirmedPurchase(t, e)
@@ -65,9 +89,10 @@ func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 	}
 	release := make(chan struct{})
 	started := make(chan struct{}, 1)
-	platform := delayedOrderPlatform{PlatformAPI: e.platform, release: release, started: started}
+	// Магазин уже создал заказ, но ответ ещё в полёте, когда наступит срок покупки.
+	platform := delayedCreationReply{PlatformAPI: e.platform, release: release, started: started}
 	service := appcheckout.NewService(e.store, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewExecutor(e.store, e.clock, service, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service, nil, messaging.DefaultMaxAttempts)
 	otherStarted := make(chan struct{})
 	otherRelease := make(chan struct{})
 	otherDone := make(chan error, 1)
@@ -116,6 +141,9 @@ func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 			t.Error(err)
 		}
 	}()
+	// Общий срок обработчика заканчивается позже срока, в который покупатель ждёт результат.
+	const beforeDispatch = time.Second
+	e.clock.Advance(beforeDispatch)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -134,17 +162,33 @@ func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 	if err != nil || state.Groups[1].OrderID == "" || state.Groups[0].OrderID != "" {
 		t.Fatal("здоровый магазин должен завершиться независимо", state, err)
 	}
+	// После старой 10-секундной аренды другой процесс не может взять работающую задачу.
+	const alreadyRunning = 11 * time.Second
+	e.clock.Advance(alreadyRunning)
+	secondQueue := &leaseQueue{TaskQueue: e.store}
+	second := appcheckout.NewExecutor(secondQueue, e.clock, service, nil, messaging.DefaultMaxAttempts)
+	secondCtx, cancelSecond := context.WithCancel(ctx)
+	defer func() {
+		cancelSecond()
+		second.Wait()
+	}()
+	if err := second.Dispatch(secondCtx); err != nil {
+		t.Fatal(err)
+	}
+	if secondQueue.taken() != 0 {
+		t.Fatal("второй исполнитель взял задачу до завершения первого")
+	}
 	// Закрытие срока не занимает место HTTP и не ждёт заблокированный магазин.
-	e.clock.Advance(appcheckout.CreationTimeout)
+	e.clock.Advance(appcheckout.CreationTimeout - beforeDispatch - alreadyRunning)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	for closed := 0; closed < 2; {
 		result := <-executor.Results()
-		if result.Err != nil {
-			t.Fatal(result)
-		}
 		if result.Task.Kind == appcheckout.TaskExpireCreation {
+			if result.Err != nil {
+				t.Fatal(result)
+			}
 			closed++
 		}
 	}
@@ -189,8 +233,10 @@ func TestPollLaneDoesNotBlockCreationOrGeneralOutbox(t *testing.T) {
 	started, release := make(chan struct{}, 2), make(chan struct{})
 	platform := delayedPollPlatform{PlatformAPI: e.platform, release: release, started: started}
 	service := appcheckout.NewService(e.store, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewExecutor(e.store, e.clock, service, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service, nil, messaging.DefaultMaxAttempts)
 	defer func() { close(release); executor.Wait() }()
+	const beforeDispatch = time.Second
+	e.clock.Advance(beforeDispatch)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +293,7 @@ func TestPollLaneDoesNotBlockCreationOrGeneralOutbox(t *testing.T) {
 	if err != nil || len(outcomes) != 1 || outcomes[0].Err != nil || outcomes[0].Task.Kind != "index" {
 		t.Fatal("сверка задержала общий outbox", outcomes, err)
 	}
-	e.clock.Advance(appcheckout.CreationTimeout)
+	e.clock.Advance(appcheckout.CreationTimeout - beforeDispatch)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}

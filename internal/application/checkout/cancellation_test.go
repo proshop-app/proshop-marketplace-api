@@ -275,7 +275,7 @@ func TestCancellationRetriesAndDoesNotBlockHealthySeller(t *testing.T) {
 	started, release := make(chan struct{}, 1), make(chan struct{})
 	platform := delayedCancellation{PlatformAPI: e.platform, started: started, release: release}
 	service := appcheckout.NewService(e.store, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewExecutor(e.store, e.clock, service, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(e.store, e.clock, service, nil, messaging.DefaultMaxAttempts)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +354,7 @@ func TestCancellationNetworkFailureRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.FailCancel("t1", context.DeadlineExceeded)
-	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}

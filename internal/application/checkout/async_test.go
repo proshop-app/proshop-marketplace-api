@@ -34,7 +34,7 @@ type failingEnqueueOutbox struct {
 // Промежуток между ответом магазина и чтением строки для записи итога.
 type delayedCommitUOW struct {
 	ports.UnitOfWork
-	clock   *fake.Clock
+	clock   *fake.Scheduler
 	advance bool
 }
 
@@ -421,7 +421,7 @@ func TestExecutorRetriesRespectDeadline(t *testing.T) {
 	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
-	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
