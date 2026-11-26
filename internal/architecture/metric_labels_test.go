@@ -51,9 +51,11 @@ var allowedLabels = map[string]bool{
 // promauto.With(r) в переменной.
 var vecConstructor = regexp.MustCompile(`^New(Counter|Gauge|Histogram|Summary)Vec$`)
 
-// metricPackage — значения объявлений пакета, из которых сторож берёт метки.
+// metricPackage — значения объявлений пакета, из которых сторож берёт метки. Имя, объявленное в
+// пакете больше одного раза (одноимённые переменные функций, затенение), сторож не угадывает.
 type metricPackage struct {
-	values map[string]ast.Expr
+	values    map[string]ast.Expr
+	ambiguous map[string]bool
 }
 
 // metricLabelProblems — метки вне белого списка, списки меток, которые сторож не смог разобрать
@@ -69,6 +71,9 @@ func metricLabelProblems(fset *token.FileSet, files []*ast.File) []string {
 				return true
 			}
 			where := fset.Position(call.Pos()).String() + ": "
+			if pkg.indirectConstructor(call) {
+				found = append(found, where+"конструктор метрики вызван не через селектор — метки не разобраны")
+			}
 			if labels, ok := labelArgument(call, prometheus); ok {
 				found = append(found, pkg.labelProblems(where, labels)...)
 			}
@@ -129,7 +134,7 @@ func (p metricPackage) labels(expr ast.Expr) ([]string, bool) {
 		value, err := strconv.Unquote(e.Value)
 		return []string{value}, err == nil
 	case *ast.Ident:
-		if value, ok := p.values[e.Name]; ok {
+		if value, ok := p.values[e.Name]; ok && !p.ambiguous[e.Name] {
 			return p.labels(value)
 		}
 	case *ast.BinaryExpr:
@@ -140,6 +145,17 @@ func (p metricPackage) labels(expr ast.Expr) ([]string, bool) {
 		}
 	}
 	return nil, false
+}
+
+// indirectConstructor — вызов функции-значения, за которой стоит конструктор вектора:
+// f := prometheus.NewCounterVec; f(...).
+func (p metricPackage) indirectConstructor(call *ast.CallExpr) bool {
+	name, ok := call.Fun.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	selector, ok := p.values[name.Name].(*ast.SelectorExpr)
+	return ok && vecConstructor.MatchString(selector.Sel.Name)
 }
 
 // errorTextValue — значение метки из текста ошибки: каждый текст — новый ряд.
@@ -162,20 +178,20 @@ func errorTextValue(call *ast.CallExpr) string {
 
 // packageValues — значения констант, переменных и коротких объявлений пакета по имени.
 func packageValues(files []*ast.File) metricPackage {
-	pkg := metricPackage{values: map[string]ast.Expr{}}
+	pkg := metricPackage{values: map[string]ast.Expr{}, ambiguous: map[string]bool{}}
 	for _, file := range files {
 		ast.Inspect(file, func(node ast.Node) bool {
 			switch n := node.(type) {
 			case *ast.ValueSpec:
 				for i, name := range n.Names {
 					if i < len(n.Values) {
-						pkg.values[name.Name] = n.Values[i]
+						pkg.declare(name.Name, n.Values[i])
 					}
 				}
 			case *ast.AssignStmt:
 				for i, left := range n.Lhs {
 					if name, ok := left.(*ast.Ident); ok && i < len(n.Rhs) && n.Tok == token.DEFINE {
-						pkg.values[name.Name] = n.Rhs[i]
+						pkg.declare(name.Name, n.Rhs[i])
 					}
 				}
 			}
@@ -183,6 +199,14 @@ func packageValues(files []*ast.File) metricPackage {
 		})
 	}
 	return pkg
+}
+
+// declare запоминает значение имени; второе объявление того же имени делает его неоднозначным.
+func (p metricPackage) declare(name string, value ast.Expr) {
+	if _, seen := p.values[name]; seen {
+		p.ambiguous[name] = true
+	}
+	p.values[name] = value
 }
 
 // prometheusNames — имена, под которыми файл импортирует пакет prometheus.
@@ -259,6 +283,17 @@ func f(r prom.Registerer, err error, vec *prom.CounterVec) {
 	prom.NewCounterVec(prom.CounterOpts{}, append(shared, "kind"))
 	prom.NewCounterVec(prom.CounterOpts{}, shared)
 	vec.WithLabelValues(err.Error()).Inc()
+	labels := []string{"kind"}
+	prom.NewCounterVec(prom.CounterOpts{}, labels)
+	newVec := prom.NewCounterVec
+	newVec(prom.CounterOpts{}, []string{"kind"})
+}
+
+func g() {
+	labels := []string{"buyer"}
+	prom.NewCounterVec(prom.CounterOpts{}, labels)
+	shared := []string{"buyer"}
+	prom.NewCounterVec(prom.CounterOpts{}, shared)
 }
 `
 	path := filepath.Join(t.TempDir(), "sample.go")
@@ -286,7 +321,9 @@ func f(r prom.Registerer, err error, vec *prom.CounterVec) {
 			t.Fatalf("сторож не поймал %s:\n%s", label, got)
 		}
 	}
-	if strings.Count(got, "не разобран") != 2 || !strings.Contains(got, "текст ошибки") {
+	// Не разобраны: константа другого пакета, append, по два вызова одноимённых labels и затенённой
+	// shared, конструктор через переменную.
+	if strings.Count(got, "не разобран") != 7 || !strings.Contains(got, "текст ошибки") {
 		t.Fatalf("неразобранные списки и текст ошибки — отдельные нарушения:\n%s", got)
 	}
 	if strings.Contains(got, "метка kind") || strings.Contains(got, "метка tenant") {
