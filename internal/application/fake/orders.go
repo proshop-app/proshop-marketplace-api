@@ -178,6 +178,10 @@ func (p *Platform) OrderStatuses(
 	if err := p.failing[tenant]; err != nil {
 		return nil, err
 	}
+	if p.statusFailures[tenant] > 0 {
+		p.statusFailures[tenant]--
+		return nil, ports.ErrPlatformTimeout.Wrap(context.DeadlineExceeded)
+	}
 	var statuses []checkout.OrderStatus
 	for _, order := range p.orders {
 		if p.orderTenants[order.OrderID] == tenant && slices.Contains(orderIDs, order.OrderID) {

@@ -674,7 +674,7 @@ func (s *Service) updateSelection(
 	var previous, state checkout.State
 	var purchases []ports.NewTask
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		c, err := tx.Checkouts().Get(ctx, checkoutID)
+		c, err := tx.Checkouts().GetForUpdate(ctx, checkoutID)
 		if err != nil {
 			return err
 		}
@@ -685,6 +685,7 @@ func (s *Service) updateSelection(
 		if err := mutate(c, s.clock.Now()); err != nil {
 			return err
 		}
+		s.reportEarlyRejections(tx, c)
 
 		if after != nil {
 			if err := after(ctx, tx, c); err != nil {

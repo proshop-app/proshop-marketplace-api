@@ -25,6 +25,9 @@ import (
 type checkoutQueryCounter struct {
 	mu     sync.Mutex
 	counts map[string]int
+	// keep — запоминать тексты команд для проверки их вида, не только числа.
+	keep bool
+	sqls []string
 }
 
 func (c *checkoutQueryCounter) TraceQueryStart(
@@ -34,6 +37,9 @@ func (c *checkoutQueryCounter) TraceQueryStart(
 	if len(words) > 0 {
 		c.mu.Lock()
 		c.counts[strings.ToUpper(words[0])]++
+		if c.keep {
+			c.sqls = append(c.sqls, data.SQL)
+		}
 		c.mu.Unlock()
 	}
 	return ctx
@@ -45,6 +51,19 @@ func (c *checkoutQueryCounter) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.counts = make(map[string]int)
+	c.sqls = nil
+}
+
+func (c *checkoutQueryCounter) remember(keep bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.keep = keep
+}
+
+func (c *checkoutQueryCounter) statements() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.sqls...)
 }
 
 func (c *checkoutQueryCounter) log(t *testing.T, action string) {

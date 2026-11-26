@@ -142,6 +142,11 @@ func (r checkouts) Get(_ context.Context, id ids.UUID) (*checkout.Checkout, erro
 	return checkout.Restore(copyCheckout(state)), nil
 }
 
+// GetForUpdate — то же чтение: транзакции хранилища в памяти и так идут по одной.
+func (r checkouts) GetForUpdate(ctx context.Context, id ids.UUID) (*checkout.Checkout, error) {
+	return r.Get(ctx, id)
+}
+
 func (r checkouts) ByKey(_ context.Context, buyerID ids.UUID, key string) (*checkout.Checkout, error) {
 	for _, state := range r.d.checkouts {
 		if state.BuyerID == buyerID && state.IdempotencyKey == key {
@@ -177,8 +182,19 @@ func (r checkouts) Update(_ context.Context, c *checkout.Checkout) error {
 	}
 
 	r.d.checkouts[c.ID()] = copyCheckout(c.State())
+	// Сохранение пересчитывает срок работы, как колонку next_work_at в PostgreSQL.
+	delete(r.d.deferredWork, c.ID())
 	c.MarkSaved()
 
+	return nil
+}
+
+func (r checkouts) UpdateMany(ctx context.Context, cs []*checkout.Checkout) error {
+	for _, c := range cs {
+		if err := r.Update(ctx, c); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -197,7 +213,7 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 			continue
 		}
 		if !f.StuckBefore.IsZero() {
-			stuck := false
+			_, stuck := r.d.deferredWork[state.ID]
 			for _, g := range state.Groups {
 				if g.ReconciliationRequired ||
 					(g.Status == checkout.GroupAwaitingPayment && !g.AwaitingSince.After(f.StuckBefore)) {
@@ -208,9 +224,6 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 				continue
 			}
 		}
-		if !f.WorkDueAt.IsZero() && !checkoutWorkDue(state, f.WorkDueAt) {
-			continue
-		}
 		found = append(found, checkout.Restore(copyCheckout(state)))
 	}
 	sort.Slice(found, func(i, j int) bool { return found[i].ID() < found[j].ID() })
@@ -218,6 +231,60 @@ func (r checkouts) List(_ context.Context, f checkout.Filter) ([]*checkout.Check
 		found = found[:f.Limit]
 	}
 	return found, nil
+}
+
+// LockWorkDue повторяет порядок PostgreSQL: группы по сроку работы и покупке, потом их покупки.
+func (r checkouts) LockWorkDue(
+	_ context.Context,
+	now time.Time,
+	after checkout.WorkCursor,
+	limit int,
+) (checkout.WorkPage, error) {
+	var due []checkout.WorkCursor
+	for id, state := range r.d.checkouts {
+		for _, g := range state.Groups {
+			at, found := g.NextWorkAt()
+			if deferred, ok := r.d.deferredWork[id]; ok && found && at.Before(deferred) {
+				at = deferred
+			}
+			cursor := checkout.WorkCursor{At: at, CheckoutID: id}
+			if found && !at.After(now) && workAfter(cursor, after) {
+				due = append(due, cursor)
+			}
+		}
+	}
+	sort.Slice(due, func(i, j int) bool { return workAfter(due[j], due[i]) })
+	var page checkout.WorkPage
+	if len(due) > limit {
+		due = due[:limit]
+	}
+	page.More = len(due) == limit
+	seen := map[ids.UUID]bool{}
+	for _, cursor := range due {
+		page.Next = cursor
+		state := r.d.checkouts[cursor.CheckoutID]
+		ordered := state.CartConsumed ||
+			(state.Status != checkout.StatusDraft && state.Status != checkout.StatusConfirmed)
+		if !seen[cursor.CheckoutID] && ordered {
+			page.Due = append(page.Due, checkout.Restore(copyCheckout(state)))
+			if _, deferred := r.d.deferredWork[cursor.CheckoutID]; deferred {
+				page.Deferred = append(page.Deferred, cursor.CheckoutID)
+			}
+		}
+		seen[cursor.CheckoutID] = true
+	}
+	return page, nil
+}
+
+func (r checkouts) DeferWork(_ context.Context, checkoutIDs []ids.UUID, until, _ time.Time) error {
+	for _, id := range checkoutIDs {
+		r.d.deferredWork[id] = until
+	}
+	return nil
+}
+
+func workAfter(a, b checkout.WorkCursor) bool {
+	return a.At.After(b.At) || (a.At.Equal(b.At) && a.CheckoutID > b.CheckoutID)
 }
 
 func (r checkouts) PickupHistory(_ context.Context, buyerID ids.UUID, limit int) ([]checkout.Selection, error) {
@@ -279,12 +346,3 @@ func (r checkouts) ReconcileDue(
 
 // ExpireReconciliation в памяти не нужен: срок сверки считается из состояния группы.
 func (r checkouts) ExpireReconciliation(context.Context, time.Time) error { return nil }
-
-func checkoutWorkDue(state checkout.State, now time.Time) bool {
-	for _, g := range state.Groups {
-		if g.PollDue(now) || g.ReturnDue(now) {
-			return true
-		}
-	}
-	return false
-}

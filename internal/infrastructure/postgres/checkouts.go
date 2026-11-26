@@ -34,21 +34,6 @@ const (
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING number`
 
-	updateCheckout = `
-		UPDATE checkouts
-		SET status = $4,
-			carrier = $5,
-			pickup_point_id = $6,
-			delivery = $7,
-			goods_total = $8,
-			delivery_total = $9,
-			total = $10,
-			version = $11,
-			updated_at = $12,
-			confirmed_at = $13,
-			order_context = $14
-		WHERE id = $1 AND status = $2 AND version = $3`
-
 	groupColumns = `
 		tenant_id, external_checkout_id, lines, goods, quote_status, quote_reason, delivery_cost,
 		min_days, max_days, quote_expires_at, order_progress, tracking`
@@ -60,26 +45,8 @@ const (
    AND EXISTS (SELECT 1 FROM checkouts WHERE id = $1 AND version = $2)
   ORDER BY tenant_id`
 
-	insertCheckoutGroup = `
-		INSERT INTO checkout_groups (checkout_id, ` + groupColumns + `, next_work_at, reconcile_until)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
-
-	updateCheckoutGroup = `
-		UPDATE checkout_groups
-		SET external_checkout_id = $3,
-			lines = $4,
-			goods = $5,
-			quote_status = $6,
-			quote_reason = $7,
-			delivery_cost = $8,
-			min_days = $9,
-			max_days = $10,
-			quote_expires_at = $11,
-			order_progress = $12,
-			tracking = $13,
-			next_work_at = $14,
-			reconcile_until = $15
-		WHERE checkout_id = $1 AND tenant_id = $2`
+	// lockCheckout — условие чтения покупки под запись: строка заблокирована до конца транзакции.
+	lockCheckout = `id = $1 FOR NO KEY UPDATE`
 )
 
 // Checkouts — покупки в PostgreSQL.
@@ -133,6 +100,12 @@ func (r *Checkouts) Get(ctx context.Context, id ids.UUID) (*checkout.Checkout, e
 	return r.one(ctx, `id = $1`, string(id))
 }
 
+// GetForUpdate — покупка под запись: параллельная запись той же покупки ждёт конца транзакции,
+// а не проигрывает условное обновление версии.
+func (r *Checkouts) GetForUpdate(ctx context.Context, id ids.UUID) (*checkout.Checkout, error) {
+	return r.one(ctx, lockCheckout, string(id))
+}
+
 // ByKey — покупка покупателя по ключу идемпотентности.
 func (r *Checkouts) ByKey(ctx context.Context, buyerID ids.UUID, key string) (*checkout.Checkout, error) {
 	return r.one(ctx, `buyer_id = $1 AND idempotency_key = $2`, string(buyerID), key)
@@ -142,7 +115,7 @@ func (r *Checkouts) ByKey(ctx context.Context, buyerID ids.UUID, key string) (*c
 func (r *Checkouts) Add(ctx context.Context, c *checkout.Checkout) error {
 	s := c.State()
 
-	carrier, point, selection, err := selectionArgs(s.Delivery)
+	carrier, point, selection, err := selectionColumns(s.Delivery)
 	if err != nil {
 		return err
 	}
@@ -176,7 +149,7 @@ func (r *Checkouts) Add(ctx context.Context, c *checkout.Checkout) error {
 		return fmt.Errorf("новая покупка: %w", err)
 	}
 
-	if err := r.writeGroups(ctx, insertCheckoutGroup, s); err != nil {
+	if err := r.writeGroups(ctx, insertCheckoutGroups, []checkout.State{s}); err != nil {
 		return err
 	}
 
@@ -186,49 +159,9 @@ func (r *Checkouts) Add(ctx context.Context, c *checkout.Checkout) error {
 	return nil
 }
 
-// Update сохраняет условно по исходным статусу и версии; группы переписываются.
+// Update сохраняет условно по исходным статусу и версии; переписываются только изменившиеся группы.
 func (r *Checkouts) Update(ctx context.Context, c *checkout.Checkout) error {
-	s := c.State()
-	status, version := c.Origin()
-
-	carrier, point, selection, err := selectionArgs(s.Delivery)
-	if err != nil {
-		return err
-	}
-
-	affected, err := execSQL(
-		ctx,
-		r.db,
-		updateCheckout,
-		string(s.ID),
-		string(status),
-		version,
-		string(s.Status),
-		carrier,
-		point,
-		selection,
-		s.GoodsTotal.Kopecks(),
-		s.DeliveryTotal.Kopecks(),
-		s.Total.Kopecks(),
-		s.Version,
-		s.UpdatedAt,
-		nullTime(s.ConfirmedAt),
-		encodeOrderContext(s),
-	)
-	if err != nil {
-		return fmt.Errorf("покупка %s: %w", s.ID, err)
-	}
-	if affected == 0 {
-		return checkout.ErrConflict
-	}
-
-	if err := r.writeGroups(ctx, updateCheckoutGroup, s); err != nil {
-		return err
-	}
-
-	c.MarkSaved()
-
-	return nil
+	return r.UpdateMany(ctx, []*checkout.Checkout{c})
 }
 
 func (r *Checkouts) one(ctx context.Context, where string, args ...any) (*checkout.Checkout, error) {
@@ -286,23 +219,6 @@ func (r *Checkouts) groups(ctx context.Context, checkoutID string, version int64
 		return nil, checkout.ErrConflict
 	}
 	return groups, nil
-}
-
-// writeGroups пишет группы покупки запросом вставки или обновления: у обоих
-// первые два параметра — покупка и магазин, дальше поля группы.
-func (r *Checkouts) writeGroups(ctx context.Context, sql string, s checkout.State) error {
-	for _, group := range s.Groups {
-		args, err := groupArgs(group)
-		if err != nil {
-			return err
-		}
-
-		if _, err := execSQL(ctx, r.db, sql, append([]any{string(s.ID)}, args...)...); err != nil {
-			return fmt.Errorf("группа покупки %s: %w", s.ID, err)
-		}
-	}
-
-	return nil
 }
 
 func (r *checkoutRow) targets() []any {
@@ -444,99 +360,4 @@ func (r *groupRow) quote() *delivery.Quote {
 	}
 
 	return &quote
-}
-
-func selectionArgs(selection *checkout.Selection) (carrier, point, encoded any, err error) {
-	if selection == nil {
-		return nil, nil, nil, nil
-	}
-
-	doc := selectionJSON{
-		City:       selection.City,
-		Address:    selection.Address,
-		RegionCode: selection.RegionCode,
-	}
-
-	raw, err := json.Marshal(doc)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("доставка покупки: %w", err)
-	}
-
-	return string(selection.Carrier), selection.PickupPointCode, string(raw), nil
-}
-
-// groupArgs — параметры группы после идентификатора покупки, в порядке groupColumns.
-func groupArgs(group checkout.Group) ([]any, error) {
-	docs := make([]lineJSON, 0, len(group.Lines))
-
-	for _, line := range group.Lines {
-		doc := lineJSON{
-			ProductID: string(line.Offer.Product),
-			Name:      line.Name,
-			Quantity:  line.Quantity,
-			Price:     line.Price.Kopecks(),
-			Discounts: line.Discounts,
-		}
-
-		docs = append(docs, doc)
-	}
-
-	lines, err := json.Marshal(docs)
-	if err != nil {
-		return nil, fmt.Errorf("позиции покупки: %w", err)
-	}
-
-	args := []any{
-		string(group.TenantID),
-		group.ExternalCheckoutID,
-		string(lines),
-		group.Goods.Kopecks(),
-	}
-
-	args = append(args, quoteArgs(group.Quote)...)
-	tracking, err := jsonValue(group.Tracking, "")
-	if err != nil {
-		return nil, err
-	}
-	return append(
-		args,
-		encodeOrderProgress(group),
-		jsonArg([]byte(tracking)),
-		nextCheckoutWork(group),
-		nullTime(group.ReconcileUntil()),
-	), nil
-}
-
-// quoteArgs — поля расчёта доставки; суммы и сроки есть только у доступного расчёта.
-func quoteArgs(q *delivery.Quote) []any {
-	if q == nil {
-		return []any{nil, nil, nil, nil, nil, nil}
-	}
-
-	var reason any
-	if q.Reason != "" {
-		reason = q.Reason
-	}
-
-	if q.Status != delivery.QuoteAvailable {
-		return []any{string(q.Status), reason, nil, nil, nil, q.ExpiresAt}
-	}
-
-	return []any{
-		string(q.Status),
-		reason,
-		q.Cost.Kopecks(),
-		q.MinDays,
-		q.MaxDays,
-		q.ExpiresAt,
-	}
-}
-
-// Проекция очередного опроса/возврата позволяет не читать JSON всей истории в Resume.
-func nextCheckoutWork(g checkout.Group) any {
-	next, found := g.NextWorkAt()
-	if !found {
-		return nil
-	}
-	return next
 }

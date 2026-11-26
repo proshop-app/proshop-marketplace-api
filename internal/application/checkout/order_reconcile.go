@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -18,6 +18,12 @@ import (
 const (
 	// ReconcileBatch — сколько заказов одного магазина уходит ему одним запросом.
 	ReconcileBatch = 200
+	// ReconcileRetries — сколько раз за проход повторяется запрос магазину, не ответившему в срок
+	// чтения: повтор идёт отдельным кругом после остальных магазинов, без пауз, каждый раз вдвое
+	// меньшей пачкой — 200, 100, 50, 25 заказов.
+	ReconcileRetries = 3
+	// reconcileRetryBudget — сколько от начала прохода разрешено тратить на повторные круги.
+	reconcileRetryBudget = 10 * time.Minute
 	// reconcilePage — строк сверки за одно чтение базы.
 	reconcilePage = 1000
 	// reconcileWorkers — сколько магазинов сверяется одновременно.
@@ -40,21 +46,11 @@ type ReconcileResult struct {
 	Failed     map[ids.TenantID]error
 }
 
-type reconcileBatch struct {
-	tenant  ids.TenantID
-	entries []checkout.ReconcileEntry
-}
-
-type reconcileRun struct {
-	mu     sync.Mutex
-	result ReconcileResult
-}
-
 // ReconcileOrders — страховка событий: раз в сутки сверяет статусы исполняемых
 // заказов одним запросом на страницу заказов магазина. Расхождение исправляется и считается.
 func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) {
 	now := s.clock.Now()
-	run := &reconcileRun{result: ReconcileResult{Failed: map[ids.TenantID]error{}}}
+	run := newReconcileRun()
 	expire := func(ctx context.Context, tx ports.Tx) error {
 		return tx.Checkouts().ExpireReconciliation(ctx, now)
 	}
@@ -73,8 +69,8 @@ func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) 
 			return run.result, err
 		}
 		s.reconcilePage(ctx, entries, run)
-		if len(entries) < reconcilePage || ctx.Err() != nil {
-			return run.result, ctx.Err()
+		if run.stopped() != nil || len(entries) < reconcilePage || ctx.Err() != nil {
+			return s.finishReconcile(ctx, run, now)
 		}
 		last := entries[len(entries)-1]
 		cursor = checkout.ReconcileCursor{TenantID: last.TenantID, CheckoutID: last.CheckoutID}
@@ -82,40 +78,80 @@ func (s *Service) ReconcileOrders(ctx context.Context) (ReconcileResult, error) 
 }
 
 // reconcilePage сверяет магазины страницы параллельно, а пачки одного магазина — по очереди:
-// большой или недоступный магазин занимает одно место и после первого отказа пропускается.
+// большой или недоступный магазин занимает одно место и не задерживает остальные. Заказы магазина,
+// уже отложенного на повторный круг, к нему и добавляются; пропущенного — не сверяются.
 func (s *Service) reconcilePage(ctx context.Context, entries []checkout.ReconcileEntry, run *reconcileRun) {
 	var group errgroup.Group
 	group.SetLimit(reconcileWorkers)
-	for _, shop := range reconcileShops(entries) {
+	for _, entries := range reconcileShops(entries) {
+		if s.serverDown(&group, run) {
+			break
+		}
+		shop := pendingShop{tenant: entries[0].TenantID, entries: entries, size: ReconcileBatch}
+		if run.failed(shop.tenant) || run.joinPostponed(shop) {
+			continue
+		}
 		group.Go(safego.Guard("checkout.reconcile", func() error {
-			for _, batch := range shop {
-				if run.failed(batch.tenant) || !s.reconcileBatch(ctx, batch, run) {
-					return nil
-				}
-			}
+			s.reconcileShop(ctx, shop, run)
 			return nil
 		}))
 	}
 	_ = group.Wait()
 }
 
-// reconcileBatch — один запрос магазину; false — магазин не ответил.
-func (s *Service) reconcileBatch(ctx context.Context, batch reconcileBatch, run *reconcileRun) bool {
-	orderIDs := make([]string, 0, len(batch.entries))
-	for _, entry := range batch.entries {
+// serverDown решает сразу, не дожидаясь конца круга: набралось молчание без единого ответа — проход
+// дожидается уже начатых вызовов и проверяет ещё раз. Ответил хоть один — сервер жив (скопление
+// зависших магазинов подряд), проход идёт дальше; нет — сервер лежит, проход прерывается.
+func (s *Service) serverDown(group *errgroup.Group, run *reconcileRun) bool {
+	if run.stopped() != nil {
+		return true
+	}
+	if !run.serverSilent() {
+		return false
+	}
+	_ = group.Wait()
+	if run.serverSilent() {
+		run.stop(ErrPlatformSilent)
+		return true
+	}
+	return false
+}
+
+// reconcileShop сверяет заказы магазина пачками; на отказе остаток магазина откладывается на
+// повторный круг или пропускается — магазин не спит в строю и не занимает место.
+func (s *Service) reconcileShop(ctx context.Context, shop pendingShop, run *reconcileRun) {
+	for len(shop.entries) > 0 && run.stopped() == nil {
+		batch := shop.entries[:min(shop.size, len(shop.entries))]
+		if err := s.reconcileBatch(ctx, shop.tenant, batch, run); err != nil {
+			run.postpone(shop, err)
+			return
+		}
+		run.noteAnswer()
+		shop.entries = shop.entries[len(batch):]
+	}
+}
+
+// reconcileBatch — один запрос магазину и применение расхождений его ответа.
+func (s *Service) reconcileBatch(
+	ctx context.Context,
+	tenant ids.TenantID,
+	entries []checkout.ReconcileEntry,
+	run *reconcileRun,
+) error {
+	orderIDs := make([]string, 0, len(entries))
+	for _, entry := range entries {
 		orderIDs = append(orderIDs, entry.OrderID)
 	}
-	statuses, err := s.platform.OrderStatuses(ctx, batch.tenant, orderIDs)
+	statuses, err := s.platform.OrderStatuses(ctx, tenant, orderIDs)
 	if err != nil {
-		run.fail(batch.tenant, err)
-		return false
+		return err
 	}
 	known := make(map[string]checkout.OrderStatus, len(statuses))
 	for _, status := range statuses {
 		known[status.OrderID] = status
 	}
 	var purchases []ports.NewTask
-	for _, entry := range batch.entries {
+	for _, entry := range entries {
 		status, found := known[entry.OrderID]
 		outcome := ""
 		switch {
@@ -131,7 +167,7 @@ func (s *Service) reconcileBatch(ctx context.Context, batch reconcileBatch, run 
 		}
 	}
 	s.enqueueSearchPurchases(ctx, purchases)
-	return true
+	return nil
 }
 
 // resolveMismatch применяет состояние из ответа пачки. Не применившееся расхождение — сигнал оператору.
@@ -167,7 +203,8 @@ func (s *Service) resolveMismatch(
 	return eventStatusUnresolved
 }
 
-// applyReconciled повторяет запись один раз: конфликт версии — параллельное событие или действие покупателя.
+// applyReconciled повторяет запись один раз на конфликт версии: запись покупки идёт под блокировкой
+// строки, и конфликт здесь — только защита от пути записи без блокировки.
 func (s *Service) applyReconciled(
 	ctx context.Context,
 	entry checkout.ReconcileEntry,
@@ -187,48 +224,15 @@ func (s *Service) applyReconciled(
 	return changed, err
 }
 
-func (r *reconcileRun) fail(tenant ids.TenantID, err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.result.Failed[tenant] = err
-}
-
-func (r *reconcileRun) failed(tenant ids.TenantID) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.result.Failed[tenant] != nil
-}
-
-func (r *reconcileRun) count(outcome string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.result.Checked++
-	switch outcome {
-	case eventStatusMismatch:
-		r.result.Mismatched++
-	case eventStatusMissing:
-		r.result.Missing++
-	case eventStatusUnresolved:
-		r.result.Unresolved++
-	}
-}
-
-// reconcileShops режет страницу, упорядоченную по магазину, на запросы не больше потолка договора
-// и собирает запросы одного магазина вместе.
-func reconcileShops(entries []checkout.ReconcileEntry) [][]reconcileBatch {
-	var shops [][]reconcileBatch
-	for _, entry := range entries {
-		last := len(shops) - 1
-		if last < 0 || shops[last][0].tenant != entry.TenantID {
-			shops = append(shops, []reconcileBatch{{tenant: entry.TenantID}})
-			last++
+// reconcileShops делит страницу, упорядоченную по магазину, на заказы отдельных магазинов.
+func reconcileShops(entries []checkout.ReconcileEntry) [][]checkout.ReconcileEntry {
+	var shops [][]checkout.ReconcileEntry
+	start := 0
+	for i := 1; i <= len(entries); i++ {
+		if i == len(entries) || entries[i].TenantID != entries[start].TenantID {
+			shops = append(shops, entries[start:i])
+			start = i
 		}
-		batch := len(shops[last]) - 1
-		if len(shops[last][batch].entries) == ReconcileBatch {
-			shops[last] = append(shops[last], reconcileBatch{tenant: entry.TenantID})
-			batch++
-		}
-		shops[last][batch].entries = append(shops[last][batch].entries, entry)
 	}
 	return shops
 }

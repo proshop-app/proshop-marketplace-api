@@ -7,10 +7,14 @@ import (
 	"time"
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
+
+// errBreaker — отказ ограждения без вызова магазина.
+var errBreaker = errors.New("размыкатель открыт")
 
 // paidPurchase — покупка двух магазинов с оплаченными заказами.
 func paidPurchase(t *testing.T, e *env) checkout.State {
@@ -282,5 +286,97 @@ func TestDeliveredOrderLeavesReconcileAndReturnComesByEvent(t *testing.T) {
 	}
 	if groupStatuses(t, e, state.ID)[0] != checkout.GroupReturned {
 		t.Fatal("возврат после получения приходит событием магазина")
+	}
+}
+
+// Магазин не уложился в срок чтения на пачке: та же пачка повторяется в этом же проходе после паузы,
+// а не откладывается до следующих суток.
+func TestReconcileRetriesShopThatMissedReadDeadline(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	state := paidPurchase(t, e)
+	first, second := state.Groups[0], state.Groups[1]
+	e.platform.SetOrderStatus(second.OrderID, checkout.GroupShipped, "")
+	e.platform.FailNextStatuses(second.TenantID, 2)
+	started := e.clock.Now()
+
+	result, err := e.service.ReconcileOrders(ctx)
+	if err != nil || len(result.Failed) != 0 || result.Checked != 2 || result.Mismatched != 1 {
+		t.Fatalf("магазин сверяется повтором в том же проходе: %+v %v", result, err)
+	}
+	if groupStatuses(t, e, state.ID)[1] != checkout.GroupShipped {
+		t.Fatal("расхождение магазина исправлено в том же проходе")
+	}
+	if calls := e.platform.StatusCalls(second.TenantID); len(calls) != 3 {
+		t.Fatalf("два отказа и успешный повтор: %v", calls)
+	}
+	if calls := e.platform.StatusCalls(first.TenantID); len(calls) != 1 {
+		t.Fatalf("ответивший магазин не переспрашивается: %v", calls)
+	}
+	if paused := e.clock.Now().Sub(started); paused != 0 {
+		t.Fatalf("повтор — отдельным кругом, без пауз в строю: %s", paused)
+	}
+}
+
+// Магазин, не ответивший и на повторы, пропускается после ограниченного числа попыток.
+func TestReconcileGivesUpShopAfterBoundedRetries(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	state := paidPurchase(t, e)
+	second := state.Groups[1]
+	e.platform.FailNextStatuses(second.TenantID, 100)
+	started := e.clock.Now()
+
+	result, err := e.service.ReconcileOrders(ctx)
+	if err != nil || result.Failed[second.TenantID] == nil || result.Checked != 1 {
+		t.Fatalf("не ответивший магазин отмечен, остальные сверены: %+v %v", result, err)
+	}
+	if calls := e.platform.StatusCalls(second.TenantID); len(calls) != 1+appcheckout.ReconcileRetries {
+		t.Fatalf("попыток магазину: %v", calls)
+	}
+	if paused := e.clock.Now().Sub(started); paused != 0 {
+		t.Fatalf("повторы — кругами, без пауз в строю: %s", paused)
+	}
+}
+
+// Отказ размыкателя магазина мгновенный: проход повторяет запрос один раз после срока размыкателя,
+// дождавшись его однажды после остальных магазинов, и пропускает магазин, если отказ остался.
+func TestReconcileRetriesShopOnceAfterItsBreaker(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	state := paidPurchase(t, e)
+	second := state.Groups[1]
+	rejected := &ports.PlatformRejected{NotBefore: e.clock.Now().Add(time.Second), Cause: errBreaker}
+	e.platform.Fail(second.TenantID, rejected)
+	started := e.clock.Now()
+
+	result, err := e.service.ReconcileOrders(ctx)
+	if err != nil || result.Failed[second.TenantID] == nil || result.Checked != 1 {
+		t.Fatalf("магазин с открытым размыкателем пропущен, остальные сверены: %+v %v", result, err)
+	}
+	if calls := e.platform.StatusCalls(second.TenantID); len(calls) != 2 || e.clock.Now().Sub(started) != time.Second {
+		t.Fatalf("один повтор после срока размыкателя: %v, %s", calls, e.clock.Now().Sub(started))
+	}
+}
+
+// Открыт размыкатель общего сервера: каждый магазин получит тот же отказ — проход прерывается.
+func TestReconcileStopsWhenServerBreakerIsOpen(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	state := paidPurchase(t, e)
+	rejected := &ports.PlatformRejected{NotBefore: e.clock.Now().Add(time.Second), Cause: errBreaker, Server: true}
+	for _, g := range state.Groups {
+		e.platform.Fail(g.TenantID, rejected)
+	}
+	started := e.clock.Now()
+
+	_, err := e.service.ReconcileOrders(ctx)
+	if !errors.Is(err, appcheckout.ErrReconcileServerDown) || !e.clock.Now().Equal(started) {
+		t.Fatalf("проход прерван без пауз: %v, %s", err, e.clock.Now().Sub(started))
+	}
+	for _, g := range state.Groups {
+		if calls := e.platform.StatusCalls(g.TenantID); len(calls) > 1 {
+			t.Fatalf("магазину %s повторяли запрос при открытом размыкателе сервера: %v", g.TenantID, calls)
+		}
 	}
 }

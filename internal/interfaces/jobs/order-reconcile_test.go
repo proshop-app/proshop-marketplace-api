@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 
 	appcheckout "github.com/proshop-app/proshop-marketplace/internal/application/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -20,12 +21,51 @@ type reconcileFunc func(context.Context) (appcheckout.ReconcileResult, error)
 
 type reconcileScheduleFunc func(context.Context, func(context.Context) error) error
 
+// releaseProbe — интервал, который сверка может вернуть.
+type releaseProbe struct {
+	released int
+}
+
 func (f reconcileFunc) ReconcileOrders(ctx context.Context) (appcheckout.ReconcileResult, error) {
 	return f(ctx)
 }
 
 func (f reconcileScheduleFunc) WithLock(ctx context.Context, run func(context.Context) error) error {
 	return f(ctx, run)
+}
+
+func (reconcileScheduleFunc) Release(context.Context) error { return nil }
+
+func (p *releaseProbe) WithLock(ctx context.Context, run func(context.Context) error) error {
+	return run(ctx)
+}
+
+func (p *releaseProbe) Release(context.Context) error {
+	p.released++
+	return nil
+}
+
+// Сверка прервана недоступным сервером: найденные расхождения учитываются, интервал возвращается,
+// чтобы следующая часовая попытка повторила проход, а не ждала суток.
+func TestOrderReconcileInterruptedRecordsAndReleases(t *testing.T) {
+	run := reconcileFunc(func(context.Context) (appcheckout.ReconcileResult, error) {
+		return appcheckout.ReconcileResult{Checked: 3, Mismatched: 1}, appcheckout.ErrReconcileServerDown
+	})
+	probe := &releaseProbe{}
+	registry := prometheus.NewRegistry()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runner := NewOrderReconcileRunner(run, probe, logger, registry)
+	if err := runner.run(context.Background(), func(context.Context, time.Duration) bool { return false }); err != nil {
+		t.Fatal(err)
+	}
+	var metric dto.Metric
+	if err := runner.orders.WithLabelValues("mismatched").Write(&metric); err != nil {
+		t.Fatal(err)
+	}
+	mismatched := metric.GetCounter().GetValue()
+	if probe.released != 1 || mismatched != 1 {
+		t.Fatalf("итог записан, интервал возвращён: возвратов %d, расхождений %v", probe.released, mismatched)
+	}
 }
 
 func TestOrderReconcileHourlyAttemptsRespectDailySchedule(t *testing.T) {

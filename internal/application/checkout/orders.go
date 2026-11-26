@@ -28,27 +28,6 @@ func (s *Service) CreateOrders(
 	return s.prepareOrders(ctx, buyerID, checkoutID, contact)
 }
 
-// Resume работает и при запуске, и по расписанию. Отдельная покупка не задерживает остальные.
-func (s *Service) Resume(ctx context.Context) error {
-	var failures []error
-	filter := checkout.Filter{Limit: orderBatch, OrdersOnly: true, WorkDueAt: s.clock.Now()}
-	for {
-		states, err := s.list(ctx, filter)
-		if err != nil {
-			return errors.Join(append(failures, err)...)
-		}
-		for _, state := range states {
-			if err := s.resumePurchase(ctx, state); err != nil {
-				failures = append(failures, err)
-			}
-		}
-		if len(states) < orderBatch {
-			return errors.Join(failures...)
-		}
-		filter.AfterID = states[len(states)-1].ID
-	}
-}
-
 // Purchases читает страницу снимков кабинета только для владельца.
 func (s *Service) Purchases(ctx context.Context, buyerID ids.UUID, after ids.UUID) ([]order.Purchase, error) {
 	states, err := s.list(ctx, checkout.Filter{
@@ -135,8 +114,14 @@ func (s *Service) ReturnCancelled(ctx context.Context, buyerID, id ids.UUID) err
 	if err != nil {
 		return err
 	}
+	return s.returnDue(ctx, c.State())
+}
+
+// returnDue возвращает в корзину созревшие группы покупки, каждую своей транзакцией.
+func (s *Service) returnDue(ctx context.Context, state checkout.State) error {
+	buyerID, id := state.BuyerID, state.ID
 	var failures []error
-	for _, g := range c.Groups() {
+	for _, g := range state.Groups {
 		if !g.ReturnDue(s.clock.Now()) {
 			continue
 		}

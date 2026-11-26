@@ -29,7 +29,7 @@ const (
 		SET LOCAL enable_sort = off;
 		SET LOCAL plan_cache_mode = force_generic_plan`
 	prepareCheckoutListPlan    = `PREPARE checkout_list_plan AS `
-	explainCheckoutListPlan    = `EXPLAIN (COSTS OFF) EXECUTE checkout_list_plan($1, $2, $3, $4, $5, $6, $7)`
+	explainCheckoutListPlan    = `EXPLAIN (COSTS OFF) EXECUTE checkout_list_plan($1, $2, $3, $4, $5, $6)`
 	deallocateCheckoutListPlan = `DEALLOCATE checkout_list_plan`
 )
 
@@ -129,48 +129,47 @@ func TestCheckoutListPaginationFiltersAndBatchLoading(t *testing.T) {
 			want:   allIDs[3:],
 		},
 		{
-			name:   "аренда создания ещё действует",
-			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(0), Limit: 100},
-		},
-		{
-			name:   "истечение создания не работа Resume",
-			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: at(1), Limit: 100},
-		},
-		{
-			name:   "известный заказ ждёт срока",
-			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: paymentDue.Add(-time.Second), Limit: 100},
-		},
-		{
-			name:   "срок прошёл, запас ещё нет",
-			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: workDue.Add(-time.Microsecond), Limit: 100},
-		},
-		{
-			name:   "срок с запасом прошёл",
-			filter: checkout.Filter{OrdersOnly: true, WorkDueAt: workDue, Limit: 100},
-			want:   allIDs[3:],
-		},
-		{
-			name: "ожидающий заказ ещё рано опрашивать",
-			filter: checkout.Filter{
-				OrdersOnly:  true,
-				StuckBefore: at(15),
-				WorkDueAt:   workDue.Add(-time.Microsecond),
-				Limit:       100,
-			},
-		},
-		{
-			name: "ожидающий заказ пора опрашивать",
-			filter: checkout.Filter{
-				OrdersOnly:  true,
-				StuckBefore: at(15),
-				WorkDueAt:   workDue,
-				Limit:       100,
-			},
-			want: []ids.UUID{allIDs[3]},
+			name:   "ожидающие после курсора",
+			filter: checkout.Filter{StuckBefore: at(35), AfterID: allIDs[3], Limit: 100},
+			want:   allIDs[4:],
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			items := checkoutListRead(t, traced, trace, tc.filter)
+			got := make([]ids.UUID, 0, len(items))
+			for _, item := range items {
+				got = append(got, item.ID())
+				index := slices.Index(allIDs, item.ID())
+				assertCheckoutListState(t, item.State(), purchases[index].State())
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("покупки: %v, ожидалось %v", got, tc.want)
+			}
+		})
+	}
+
+	// Срок работы групп — условие страницы восстановления: она берёт только созревшие покупки.
+	for _, tc := range []struct {
+		name string
+		now  time.Time
+		want []ids.UUID
+	}{
+		{name: "аренда создания ещё действует", now: at(0)},
+		{name: "истечение создания не работа Resume", now: at(1)},
+		{name: "известный заказ ждёт срока", now: paymentDue.Add(-time.Second)},
+		{name: "срок прошёл, запас ещё нет", now: workDue.Add(-time.Microsecond)},
+		{name: "срок с запасом прошёл", now: workDue, want: allIDs[3:]},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var items []*checkout.Checkout
+			err := do(t, traced, func(ctx context.Context, tx ports.Tx) error {
+				page, err := tx.Checkouts().LockWorkDue(ctx, tc.now, checkout.WorkCursor{}, 100)
+				items = page.Due
+				return err
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
 			got := make([]ids.UUID, 0, len(items))
 			for _, item := range items {
 				got = append(got, item.ID())

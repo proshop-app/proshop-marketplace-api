@@ -23,12 +23,19 @@ const (
 		ORDER BY tenant_id, checkout_id
 		LIMIT $4`
 
+	// expireReconciliation снимает истёкшие сроки, пропуская строки групп, занятые записью покупки:
+	// многострочное обновление без порядка иначе сцепилось бы с записью страницы восстановления.
+	// Пропущенную группу снимет её же сохранение (срок пересчитывается) или следующая сверка.
 	expireReconciliation = `
 		UPDATE checkout_groups
 		SET reconcile_until = NULL
-		WHERE reconcile_until <= $1`
+		WHERE (checkout_id, tenant_id) IN (
+			SELECT checkout_id, tenant_id FROM checkout_groups
+			WHERE reconcile_until <= $1
+			FOR NO KEY UPDATE SKIP LOCKED
+		)`
 
-	// firstCheckoutID — начало обхода: меньше любого идентификатора покупки.
+	// firstCheckoutID — начало обхода: меньше любого идентификатора покупки; общий для обходов покупок.
 	firstCheckoutID = "00000000-0000-0000-0000-000000000000"
 )
 

@@ -72,6 +72,10 @@ func TestWidespreadHangOpensServerBreaker(t *testing.T) {
 	if metrics.Count("settings", "server_breaker") != 1 {
 		t.Fatal("отказ дан не общим размыкателем")
 	}
+	var rejected *ports.PlatformRejected
+	if !errors.As(err, &rejected) || !rejected.Server {
+		t.Fatal("отказ общего размыкателя не помечен как отказ сервера", err)
+	}
 }
 
 // Один зависший магазин не размыкает сервер для остальных: его зависания до открытия своего

@@ -14,21 +14,41 @@ const (
  FROM checkouts c
  WHERE `
 
-	listCheckoutFilters = `
+	listCheckoutConditions = `
   AND (NOT $3 OR status NOT IN ('draft', 'confirmed') OR order_context->>'CartConsumed' = 'true')
- AND (NOT $7 OR EXISTS (SELECT 1 FROM checkout_groups g
-  WHERE g.checkout_id = c.id AND coalesce(g.order_progress->>'OrderID', '') <> ''))
-  AND ($4::timestamptz IS NULL OR EXISTS (
-   SELECT 1 FROM checkout_groups g
-   WHERE g.checkout_id = c.id AND (g.order_progress->>'ReconciliationRequired' = 'true'
-    OR (g.order_progress->>'Status' = 'awaiting_payment'
-     AND (g.order_progress->>'AwaitingSince')::timestamptz <= $4))
-  ))
- AND ($6::timestamptz IS NULL OR c.id IN (
- SELECT checkout_id FROM checkout_groups WHERE next_work_at <= $6
- ))
+ AND (NOT $6 OR EXISTS (SELECT 1 FROM checkout_groups g
+  WHERE g.checkout_id = c.id AND coalesce(g.order_progress->>'OrderID', '') <> ''))`
+
+	listCheckoutOrder = `
  ORDER BY id
  LIMIT $5`
+
+	listCheckoutFilters = listCheckoutConditions + `
+  AND $4::timestamptz IS NULL` + listCheckoutOrder
+
+	// listStuckCheckouts — «зависшие» оператора: ждущие оплаты или сверки отмены и покупки с работой,
+	// отложенной проходом восстановления. Набор ведут частичные индексы checkout_groups_stuck_idx (00072)
+	// и checkout_groups_deferred_idx (00073): он растёт с числом живых ожиданий, а не с историей.
+	// Покупка проверяется зависимым подзапросом (OFFSET 0 не даёт поднять его в соединение): иначе
+	// планировщик выбирает слияние с обходом всех покупок по ключу в надежде рано набрать страницу.
+	listStuckCheckouts = `
+ SELECT ` + checkoutReadColumns + `
+ FROM (
+  SELECT g.checkout_id FROM checkout_groups g
+  WHERE (g.order_progress->>'ReconciliationRequired' = 'true'
+    OR (g.order_progress->>'Status' = 'awaiting_payment'
+     AND (g.order_progress->>'AwaitingSince')::timestamptz <= $4))
+   AND ($2::uuid IS NULL OR g.checkout_id > $2)
+  UNION
+  SELECT d.checkout_id FROM checkout_groups d
+  WHERE d.work_deferred_at IS NOT NULL AND ($2::uuid IS NULL OR d.checkout_id > $2)
+ ) stuck
+ CROSS JOIN LATERAL (
+  SELECT ` + checkoutReadColumns + `
+  FROM checkouts c
+  WHERE c.id = stuck.checkout_id AND ($1::uuid IS NULL OR buyer_id = $1)` + listCheckoutConditions + `
+  OFFSET 0
+ ) c` + listCheckoutOrder
 
 	// Отдельные формы сохраняют индексные условия и при generic prepared plan.
 	listAllCheckouts        = listCheckouts + `$1::uuid IS NULL AND $2::uuid IS NULL` + listCheckoutFilters
@@ -81,7 +101,6 @@ func (r *Checkouts) List(ctx context.Context, f checkout.Filter) ([]*checkout.Ch
 		f.OrdersOnly,
 		nullTime(f.StuckBefore),
 		f.Limit,
-		nullTime(f.WorkDueAt),
 		f.HasOrders,
 	).Rows()
 	if err != nil {

@@ -1,6 +1,7 @@
 package checkout
 
 import (
+	"slices"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
@@ -9,6 +10,9 @@ import (
 
 // Паузы и ограничения повторов создания и сверки.
 const (
+	// maxEarlyOrders — сколько разных номеров заказа группа держит из ранних событий: у группы один
+	// заказ, остальные номера — ошибка магазина, и их число не должно расти с потоком событий.
+	maxEarlyOrders = 4
 	// MaxOrderFailures — после пяти отказов опрос становится редким.
 	MaxOrderFailures = 5
 	// OrderPollLease ограничивает конкурентные опросы уже созданного заказа.
@@ -299,13 +303,20 @@ func (g Group) pollRetryDelay() time.Duration {
 }
 
 // ApplyOrderState снимает страховочную проверку, когда событие уже принесло итог магазина.
-// Заказ, которого у группы нет, — ErrNotFound: событие относится не к этой покупке.
+// Заказ, отличный от заказа группы, — ErrNotFound: событие относится не к этой покупке. Группе, ещё
+// не знающей номера заказа, событие обогнало ответ создания: состояние сохраняется до привязки.
 // Отмена неоплаченного заказа значима только для группы, ждущей оплату: отмену по команде площадки
 // ведёт её собственный сценарий, и событие магазина не должно подменить его причину и итог.
 // Отслеживание без номера перехода не отзывается: состояние без него прежнее не стирает.
 func (c *Checkout) ApplyOrderState(tenant ids.TenantID, order SellerOrder, now time.Time) (bool, error) {
 	g := c.group(tenant)
-	if g == nil || g.OrderID == "" || g.OrderID != order.OrderID {
+	if g == nil {
+		return false, ErrNotFound
+	}
+	if g.OrderID == "" {
+		return c.holdEarlyOrder(g, order, now)
+	}
+	if g.OrderID != order.OrderID {
 		return false, ErrNotFound
 	}
 	ownCancellation := order.Status == GroupCancelled &&
@@ -322,6 +333,54 @@ func (c *Checkout) ApplyOrderState(tenant ids.TenantID, order SellerOrder, now t
 		g.Tracking = cloneTracking(order.Tracking)
 	}
 	return true, nil
+}
+
+// holdEarlyOrder сохраняет состояние заказа, о котором магазин сообщил раньше ответа создания (ответ
+// потерян и сохранится повтором или поздно). Ревизии сравниваются только у одного заказа: чужое
+// событие со старшей ревизией не вытесняет настоящее. Повтор — не изменение. Хранит только группа,
+// чьё создание заявлено (срок создания задан), не истекло и не оставлено — дальше исход даёт отмена
+// по ключу. Статус всей покупки не в счёт: отказ соседнего магазина возвращает её в черновик, а
+// создание этой группы идёт своим ходом.
+func (c *Checkout) holdEarlyOrder(g *Group, order SellerOrder, now time.Time) (bool, error) {
+	if g.CreationDeadline.IsZero() || g.Status == GroupCreationExpired || g.Excluded() {
+		return false, ErrNotFound
+	}
+	early := order
+	early.Tracking = cloneTracking(order.Tracking)
+	held := slices.IndexFunc(g.EarlyOrders, func(o SellerOrder) bool { return o.OrderID == order.OrderID })
+	if held >= 0 && g.EarlyOrders[held].Revision >= order.Revision {
+		return false, nil
+	}
+	g.EarlyOrders = holdNewest(g.EarlyOrders, held, early)
+	return true, c.touch(now)
+}
+
+// holdNewest ставит состояние последним — свежим; при переполнении вытесняет самое давнее. Настоящий
+// заказ шлёт новые ревизии и остаётся свежим, а чужие номера без продолжения уходят первыми.
+func holdNewest(held []SellerOrder, index int, early SellerOrder) []SellerOrder {
+	if index >= 0 {
+		held = slices.Delete(slices.Clone(held), index, index+1)
+	}
+	if len(held) == maxEarlyOrders {
+		held = slices.Clone(held[1:])
+	}
+	return append(held, early)
+}
+
+// applyEarlyOrder применяет при привязке заказа раннее состояние его номера; состояния других
+// заказов снимаются. Противоречащее порядку исполнения состояние сценарий получает в
+// RejectedEarlyOrders — как отказ такого же события после привязки, а не молча.
+func (c *Checkout) applyEarlyOrder(g *Group, now time.Time) {
+	held := g.EarlyOrders
+	g.EarlyOrders = nil
+	for _, early := range held {
+		if early.OrderID != g.OrderID {
+			continue
+		}
+		if _, err := c.ApplyOrderState(g.TenantID, early, now); err != nil {
+			c.rejectedEarly = append(c.rejectedEarly, EarlyRejection{TenantID: g.TenantID, Order: early, Err: err})
+		}
+	}
 }
 
 // outranUnnumbered — статус группы получен без номера перехода (оплата площадкой, отказ отмены)

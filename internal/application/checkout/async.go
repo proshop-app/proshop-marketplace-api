@@ -43,22 +43,30 @@ func enqueueOrderTask(
 	group checkout.Group,
 	now time.Time,
 ) error {
-	payload, err := json.Marshal(orderTask{BuyerID: state.BuyerID, CheckoutID: state.ID})
+	task, err := newOrderTask(kind, state, group, now)
 	if err != nil {
 		return err
+	}
+	return tx.Outbox().Enqueue(ctx, task)
+}
+
+func newOrderTask(kind string, state checkout.State, group checkout.Group, now time.Time) (ports.NewTask, error) {
+	payload, err := json.Marshal(orderTask{BuyerID: state.BuyerID, CheckoutID: state.ID})
+	if err != nil {
+		return ports.NewTask{}, err
 	}
 	available := now
 	if kind == TaskExpireCreation {
 		available = group.CreationDeadline
 	}
-	return tx.Outbox().Enqueue(ctx, ports.NewTask{
+	return ports.NewTask{
 		Kind:        kind,
 		TenantID:    group.TenantID,
 		DedupKey:    kind + ":" + group.ExternalCheckoutID,
 		Payload:     payload,
 		At:          now,
 		AvailableAt: available,
-	})
+	}, nil
 }
 
 // HandleOrderTask — единственный путь создания; после дедлайна POST магазина запрещён.
@@ -99,30 +107,6 @@ func (s *Service) HandleOrderTask(ctx context.Context, task ports.Task) error {
 	default:
 		return errs.New(errs.Invalid, "checkout.invalid_task", "неизвестная задача заказа")
 	}
-}
-
-func (s *Service) resumePurchase(ctx context.Context, state checkout.State) error {
-	enqueue := func(
-		ctx context.Context,
-		tx ports.Tx,
-		c *checkout.Checkout,
-	) error {
-		for _, g := range c.Groups() {
-			if g.PollDue(s.clock.Now()) {
-				if err := enqueueOrderTask(ctx, tx, TaskPollOrder, c.State(), g, s.clock.Now()); err != nil {
-					return err
-				}
-			}
-		}
-		return s.enqueueCancellations(ctx, tx, c)
-	}
-	// Покупку выбрали по сроку работы в хранилище. Если созревшей работы у групп нет, срок устарел
-	// (его записала прежняя версия) — сохранение пересчитает его, иначе покупка выбиралась бы каждый круг.
-	settle := func(c *checkout.Checkout, now time.Time) error { return c.SettleWork(now) }
-	if _, err := s.updateSelection(ctx, state.BuyerID, state.ID, enqueue, settle); err != nil {
-		return err
-	}
-	return s.ReturnCancelled(ctx, state.BuyerID, state.ID)
 }
 
 // Cancel фиксирует отказ покупателя и команды магазинам в одной транзакции.

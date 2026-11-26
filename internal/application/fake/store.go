@@ -72,6 +72,7 @@ type data struct {
 	challenges           map[ids.UUID]buyer.ChallengeState
 	carts                map[ids.UUID]cart.State
 	checkouts            map[ids.UUID]checkout.State
+	deferredWork         map[ids.UUID]time.Time
 	leases               map[string]lease
 	reference            *referenceData
 	synonyms             *synonymData
@@ -117,6 +118,7 @@ func (d *data) clone() *data {
 		challenges:           maps.Clone(d.challenges),
 		carts:                maps.Clone(d.carts),
 		checkouts:            maps.Clone(d.checkouts),
+		deferredWork:         maps.Clone(d.deferredWork),
 		leases:               maps.Clone(d.leases),
 		reference:            d.reference.clone(),
 		synonyms:             d.synonyms.clone(),
@@ -144,6 +146,7 @@ func NewStore() *Store {
 		challenges:           map[ids.UUID]buyer.ChallengeState{},
 		carts:                map[ids.UUID]cart.State{},
 		checkouts:            map[ids.UUID]checkout.State{},
+		deferredWork:         map[ids.UUID]time.Time{},
 		leases:               map[string]lease{},
 		reference:            newReferenceData(),
 	}}

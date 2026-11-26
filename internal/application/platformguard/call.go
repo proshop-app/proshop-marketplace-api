@@ -67,7 +67,11 @@ func (c *Client) admit(
 	case waitCtx.Err() != nil:
 		return p, 0, reason, callError(waitCtx.Err())
 	case reason == "server_breaker" || reason == "tenant_breaker":
-		rejected := &ports.PlatformRejected{NotBefore: c.reopensAt(ctx, reason), Cause: ErrUnavailable}
+		rejected := &ports.PlatformRejected{
+			NotBefore: c.reopensAt(ctx, reason),
+			Cause:     ErrUnavailable,
+			Server:    reason == "server_breaker",
+		}
 		return p, 0, reason, rejected
 	default:
 		return p, 0, reason, ErrUnavailable

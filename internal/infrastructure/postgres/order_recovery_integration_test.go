@@ -147,15 +147,13 @@ func TestOrderRetryAndCartRemainderPersistAcrossRestart(t *testing.T) {
 			!reflect.DeepEqual(g.ReturnRemaining[0], line) {
 			return fmt.Errorf("остаток возврата потерян: %+v", g)
 		}
-		due := checkout.Filter{BuyerID: buyerA, OrdersOnly: true, Limit: 100, WorkDueAt: now}
-		waiting, err := tx.Checkouts().List(ctx, due)
-		if err != nil || len(waiting) != 0 {
-			return fmt.Errorf("рано повторять возврат: %d %w", len(waiting), err)
+		waiting, err := tx.Checkouts().LockWorkDue(ctx, now, checkout.WorkCursor{}, 100)
+		if err != nil || len(waiting.Due) != 0 {
+			return fmt.Errorf("рано повторять возврат: %d %w", len(waiting.Due), err)
 		}
-		due.WorkDueAt = now.Add(time.Minute)
-		ready, err := tx.Checkouts().List(ctx, due)
-		if err != nil || len(ready) != 1 {
-			return fmt.Errorf("пора вернуть остаток: %d %w", len(ready), err)
+		ready, err := tx.Checkouts().LockWorkDue(ctx, now.Add(time.Minute), checkout.WorkCursor{}, 100)
+		if err != nil || len(ready.Due) != 1 {
+			return fmt.Errorf("пора вернуть остаток: %d %w", len(ready.Due), err)
 		}
 		return nil
 	})
@@ -219,10 +217,11 @@ func TestExhaustedCreationReturnDueAfterRestart(t *testing.T) {
 	}
 	for _, returned := range []bool{false, true} {
 		if err := do(t, uow, func(ctx context.Context, tx ports.Tx) error {
-			due, err := tx.Checkouts().List(ctx, checkout.Filter{OrdersOnly: true, Limit: 100, WorkDueAt: at(0)})
+			page, err := tx.Checkouts().LockWorkDue(ctx, at(0), checkout.WorkCursor{}, 100)
 			if err != nil {
 				return err
 			}
+			due := page.Due
 			if returned {
 				if len(due) != 0 {
 					return fmt.Errorf("возвращённая группа снова выбрана")

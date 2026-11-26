@@ -519,7 +519,7 @@ func (s *server) jobs() []jobs.Loop {
 			s.metrics,
 		).Run},
 		{Name: "checkout-creation", Run: jobs.NewCreationRunner(s.app.creation, s.logger, outbox.RecordOutcome).Run},
-		{Name: "orders", Run: jobs.NewOrdersRunner(s.app.checkouts, cfg.Checkout.OrdersInterval, s.logger).Run},
+		{Name: "orders", Run: s.orderRecovery},
 		{Name: "order-reconcile", Run: s.orderReconciliation},
 		{Name: "outbox-retry-stats", Run: jobs.NewOutboxRetryStatsRunner(
 			s.app.dispatcher,
@@ -586,6 +586,14 @@ func (s *server) scheduledJobs() []jobs.Loop {
 // schedule — общий владелец интервала: работу выполняет одна реплика.
 func (s *server) schedule(name string, interval time.Duration) *postgres.ScheduledWork {
 	return postgres.NewScheduledWork(s.store.pool(ports.DatabaseBackground), s.store.sessions, name, interval)
+}
+
+// orderRecovery — восстановление покупок: проход за интервал делает одна реплика установки,
+// работа без класса идёт в фоновый пул.
+func (s *server) orderRecovery(ctx context.Context) error {
+	interval := s.cfg.Checkout.OrdersInterval
+	schedule := postgres.NewSharedInterval(s.store.pool(ports.DatabaseBackground), "orders-resume", interval)
+	return jobs.NewOrdersRunner(s.app.checkouts, interval, s.logger).WithSchedule(schedule).Run(ctx)
 }
 
 // orderReconciliation — суточная сверка статусов заказов; работа без класса идёт в фоновый пул.
