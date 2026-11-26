@@ -33,7 +33,7 @@ type env struct {
 	pickups  *appdelivery.Service
 	store    *fake.Store
 	platform *fake.Platform
-	clock    *fake.Clock
+	clock    *fake.Scheduler
 	verifier *fake.CartVerifier
 	carts    *appcart.Service
 	service  *appcheckout.Service
@@ -43,7 +43,7 @@ var w3ServiceDelivery = participant.DeliverySettings{Regions: []string{"RU-MOW"}
 
 func setup(t *testing.T) *env {
 	t.Helper()
-	e := &env{store: fake.NewStore(), platform: fake.NewPlatform(), clock: fake.NewClock(t0)}
+	e := &env{store: fake.NewStore(), platform: fake.NewPlatform(), clock: fake.NewClock(t0).Scheduler()}
 	identities := &fake.IDs{}
 	e.pickups = appdelivery.NewService(e.store, e.platform, fake.NewPickupCache(), appdelivery.Config{
 		Attempts:     3,

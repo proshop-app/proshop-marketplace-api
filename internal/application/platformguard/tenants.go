@@ -1,6 +1,7 @@
 package platformguard
 
 import (
+	"container/heap"
 	"container/list"
 	"time"
 
@@ -8,13 +9,16 @@ import (
 )
 
 type tenantState struct {
-	id       ids.TenantID
-	breaker  breaker
-	active   [classCount]int
-	queued   [classCount]list.List
-	ready    [classCount]*list.Element
-	idle     *list.Element
-	lastUsed time.Time
+	id          ids.TenantID
+	breaker     breaker
+	active      [classCount]int
+	queued      [classCount]list.List
+	ready       [classCount]*list.Element
+	idle        *list.Element
+	lastUsed    time.Time
+	silentUntil time.Time
+	// exclusionPosition — позиция в куче с единицы; ноль означает, что магазина в куче нет.
+	exclusionPosition int
 }
 
 // Состояния с текущими вызовами закреплены; неактивные вытесняются за O(1), без обхода магазинов.
@@ -46,6 +50,9 @@ func (c *Client) tenantState(id ids.TenantID, now time.Time) *tenantState {
 func (c *Client) removeTenant(state *tenantState) {
 	c.idle.Remove(state.idle)
 	delete(c.tenants, state.id)
+	if state.exclusionPosition != 0 {
+		heap.Remove(&c.excluded, state.exclusionPosition-1)
+	}
 }
 
 func (c *Client) pin(state *tenantState) {

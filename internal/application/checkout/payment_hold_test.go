@@ -160,12 +160,7 @@ func TestPaymentHoldPartialFailureAndParallelRetry(t *testing.T) {
 		result <- err
 	}()
 	for range 2 {
-		select {
-		case <-started:
-		case <-time.After(time.Second):
-			close(release)
-			t.Fatal("удержания должны вызываться параллельно")
-		}
+		<-started
 	}
 	close(release)
 	if err := <-result; !errors.Is(err, checkout.ErrPaymentUnavailable) {

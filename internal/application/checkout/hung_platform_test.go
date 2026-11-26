@@ -40,11 +40,13 @@ type leaseQueue struct {
 	mu      sync.Mutex
 	leases  []time.Duration
 	claimed int
+	kinds   []string
 }
 
 // deadlineUOW запоминает срок контекста каждой транзакции обработчика.
 type deadlineUOW struct {
 	ports.UnitOfWork
+	clock     ports.Clock
 	mu        sync.Mutex
 	remaining []time.Duration
 	bounded   []bool
@@ -86,22 +88,39 @@ func TestHungShopReleasesCreationSlotsAndOtherShopCreates(t *testing.T) {
 	if _, err := e.service.CreateOrders(ctx, buyerID, c.ID, orderContact); err != nil {
 		t.Fatal(err)
 	}
-	guard, _ := hungGuard(e)
-	hang(e)
+	guard, metrics := hungGuard(e)
+	started := make(chan struct{}, 1)
+	e.platform.CallHook = func(ctx context.Context, _ string) error {
+		hung, _ := ctx.Value(hangKey{}).(bool)
+		if hung {
+			started <- struct{}{}
+			<-ctx.Done()
+		}
+		return ctx.Err()
+	}
 	upstream := &hungShopOrders{PlatformAPI: guard, tenant: "t1"}
 	svc := appcheckout.NewService(e.store, upstream, e.pickups, e.verifier, &fake.IDs{}, e.clock, guardedConfig())
-	executor := appcheckout.NewExecutor(e.store, e.clock, svc, messaging.DefaultMaxAttempts)
-	first := dispatchCreation(ctx, t, executor, 2)
-	if first["t1"] < hungCallBudget {
-		t.Fatal("первый вызов зависшего магазина должен ждать срок ограждения", first)
+	executor := appcheckout.NewExecutor(e.store, e.clock, svc, guard, messaging.DefaultMaxAttempts)
+	if err := executor.Dispatch(ctx); err != nil {
+		t.Fatal(err)
 	}
-	if first["t2"] >= hungCallBudget {
-		t.Fatal("магазин без зависания ждал чужой срок", first)
+	<-started
+	if first := <-executor.Results(); first.Task.TenantID != "t2" || first.Err != nil {
+		t.Fatal("здоровый магазин должен создать заказ до завершения зависшего вызова", first)
+	}
+	e.clock.Advance(hungCallBudget)
+	if hung := <-executor.Results(); hung.Task.TenantID != "t1" || !appcheckout.CreationPending(hung.Err) {
+		t.Fatal("у зависшего магазина должен остаться повтор", hung)
 	}
 	e.clock.Advance(checkout.CreationRetryDelay)
-	second := dispatchCreation(ctx, t, executor, 1)
-	if second["t1"] >= hungCallBudget/2 {
-		t.Fatal("при открытом размыкателе место полосы занято на срок вызова", second)
+	if err := executor.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if second := <-executor.Results(); second.Task.TenantID != "t1" || !appcheckout.CreationPending(second.Err) {
+		t.Fatal("открытый размыкатель должен отложить повтор", second)
+	}
+	if metrics.Count("create_order", "timeout") != 1 || metrics.Count("create_order", "tenant_breaker") != 1 {
+		t.Fatal("повтор при открытом размыкателе дошёл до сервера")
 	}
 	state, err := e.service.Get(ctx, buyerID, c.ID)
 	if err != nil {
@@ -124,9 +143,9 @@ func TestExecutorLeaseCoversHandlerDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	queue := &leaseQueue{TaskQueue: e.store}
-	uow := &deadlineUOW{UnitOfWork: e.store}
+	uow := &deadlineUOW{UnitOfWork: e.store, clock: e.clock}
 	svc := appcheckout.NewService(uow, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
-	executor := appcheckout.NewExecutor(queue, e.clock, svc, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(queue, e.clock, svc, nil, messaging.DefaultMaxAttempts)
 	if err := executor.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -161,11 +180,13 @@ func TestOpenBreakerDefersCreationUntilReopen(t *testing.T) {
 				t.Fatal(err)
 			}
 			guard, _ := hungGuardOpen(e, open)
-			hang(e, "create_order")
+			for _, group := range c.Groups {
+				e.platform.FailCreate(group.TenantID, context.DeadlineExceeded)
+			}
 			queue := &leaseQueue{TaskQueue: e.store}
-			uow := &deadlineUOW{UnitOfWork: e.store}
+			uow := &deadlineUOW{UnitOfWork: e.store, clock: e.clock}
 			svc := appcheckout.NewService(uow, guard, e.pickups, e.verifier, &fake.IDs{}, e.clock, guardedConfig())
-			executor := appcheckout.NewExecutor(queue, e.clock, svc, messaging.DefaultMaxAttempts)
+			executor := appcheckout.NewExecutor(queue, e.clock, svc, guard, messaging.DefaultMaxAttempts)
 			if taken := dispatchDue(ctx, t, executor, queue); taken != len(c.Groups) {
 				t.Fatal("первый проход не взял задачи создания", taken)
 			}
@@ -203,10 +224,12 @@ func TestOpenBreakerDefersCancellationUntilReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	guard, _ := hungGuard(e)
-	hang(e, "cancel_order")
+	for _, group := range c.Groups {
+		e.platform.FailCancel(group.TenantID, context.DeadlineExceeded)
+	}
 	queue := &leaseQueue{TaskQueue: e.store}
 	svc := guardedService(e, guard)
-	executor := appcheckout.NewExecutor(queue, e.clock, svc, messaging.DefaultMaxAttempts)
+	executor := appcheckout.NewExecutor(queue, e.clock, svc, guard, messaging.DefaultMaxAttempts)
 	if taken := dispatchDue(ctx, t, executor, queue); taken != len(c.Groups) {
 		t.Fatal("первый проход не взял задачи отмены", taken)
 	}
@@ -269,16 +292,19 @@ func TestCreationAdmittedAtDeadlineSkipsServer(t *testing.T) {
 	upstream := &enteringOrders{PlatformAPI: guard, entered: make(chan struct{}, 1)}
 	svc := appcheckout.NewService(e.store, upstream, e.pickups, e.verifier, &fake.IDs{}, e.clock, guardedConfig())
 	checkoutCtx := ports.WithPlatformCallClass(ctx, ports.PlatformCheckout)
+	quoteCtx, cancelQuote := context.WithCancel(checkoutCtx)
+	defer cancelQuote()
 	created.Add(1)
 	go func() {
 		defer created.Done()
-		_, _ = guard.QuoteDelivery(checkoutCtx, "t9", ports.QuoteRequest{Carrier: "cdek", City: "Город"})
+		_, _ = guard.QuoteDelivery(quoteCtx, "t9", ports.QuoteRequest{Carrier: "cdek", City: "Город"})
 	}()
 	<-occupied
 	handled := make(chan error, 1)
 	go func() { handled <- svc.HandleOrderTask(ctx, task) }()
 	// Задача захватила группу и ждёт место; время доходит до срока создания, место освобождается.
 	<-upstream.entered
+	cancelQuote()
 	e.clock.Advance(appcheckout.CreationTimeout)
 	close(release)
 	err := <-handled
@@ -315,8 +341,21 @@ func (q *leaseQueue) Claim(ctx context.Context, request ports.ClaimRequest) (por
 	q.mu.Lock()
 	q.leases = append(q.leases, request.LeaseUntil.Sub(request.Now))
 	q.claimed += len(result.Tasks)
+	q.kinds = append(q.kinds, request.Kinds...)
 	q.mu.Unlock()
 	return result, err
+}
+
+func (q *leaseQueue) calls(kind string) int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	count := 0
+	for _, called := range q.kinds {
+		if kind == "" || called == kind {
+			count++
+		}
+	}
+	return count
 }
 
 func (q *leaseQueue) taken() int {
@@ -335,7 +374,7 @@ func (u *deadlineUOW) Do(ctx context.Context, fn func(context.Context, ports.Tx)
 	deadline, bounded := ctx.Deadline()
 	u.mu.Lock()
 	u.bounded = append(u.bounded, bounded)
-	u.remaining = append(u.remaining, time.Until(deadline))
+	u.remaining = append(u.remaining, deadline.Sub(u.clock.Now()))
 	u.mu.Unlock()
 	return u.UnitOfWork.Do(ctx, fn)
 }
@@ -374,14 +413,10 @@ func hungGuardOpen(e *env, open time.Duration) (*platformguard.Client, *fake.Pla
 }
 
 // hang включает зависание операций после того, как сценарий подготовлен обычным фейком.
-func hang(e *env, operations ...string) {
+func hang(e *env, target string) {
 	e.platform.CallHook = func(ctx context.Context, operation string) error {
-		hung, _ := ctx.Value(hangKey{}).(bool)
-		for _, candidate := range operations {
-			hung = hung || candidate == operation
-		}
-		if hung {
-			<-ctx.Done()
+		if operation == target {
+			return e.clock.Expire(ctx)
 		}
 		return ctx.Err()
 	}
@@ -403,10 +438,10 @@ func guardedService(e *env, guard *platformguard.Client) *appcheckout.Service {
 
 func requireRejectedAtOnce(t *testing.T, guard *platformguard.Client, tenant ids.TenantID) {
 	t.Helper()
-	started := time.Now()
 	_, err := guard.MarketplaceSettings(context.Background(), tenant)
-	if !errors.Is(err, platformguard.ErrUnavailable) || time.Since(started) >= hungCallBudget/2 {
-		t.Fatal("размыкатель магазина не открылся после зависания", tenant, err, time.Since(started))
+	var rejected *ports.PlatformRejected
+	if !errors.As(err, &rejected) || rejected.Server {
+		t.Fatal("размыкатель магазина не открылся после зависания", tenant, err)
 	}
 }
 
@@ -487,8 +522,24 @@ func hungQuote(t *testing.T, e *env, svc *appcheckout.Service) ids.TenantID {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hang(e, "quote")
-	if _, err := svc.Quote(ctx, buyerID, state.ID, "cdek", "MSK1", "Город"); err != nil {
+	started := make(chan struct{}, len(state.Groups))
+	e.platform.CallHook = func(ctx context.Context, operation string) error {
+		if operation == "quote" {
+			started <- struct{}{}
+			<-ctx.Done()
+		}
+		return ctx.Err()
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := svc.Quote(ctx, buyerID, state.ID, "cdek", "MSK1", "Город")
+		done <- err
+	}()
+	for range state.Groups {
+		<-started
+	}
+	e.clock.Advance(hungCallBudget)
+	if err := <-done; err != nil {
 		t.Log("расчёт при зависшем магазине:", err)
 	}
 	return state.Groups[0].TenantID
@@ -503,35 +554,7 @@ func dispatchDue(ctx context.Context, t *testing.T, executor *appcheckout.Execut
 	}
 	taken := queue.taken() - before
 	for range taken {
-		select {
-		case <-executor.Results():
-		case <-time.After(10 * hungCallBudget):
-			t.Fatal("задача не завершилась")
-		}
+		<-executor.Results()
 	}
 	return taken
-}
-
-// dispatchCreation запускает один проход полосы создания и возвращает время каждой задачи по магазинам.
-func dispatchCreation(
-	ctx context.Context,
-	t *testing.T,
-	executor *appcheckout.Executor,
-	tasks int,
-) map[ids.TenantID]time.Duration {
-	t.Helper()
-	started := time.Now()
-	if err := executor.Dispatch(ctx); err != nil {
-		t.Fatal(err)
-	}
-	took := make(map[ids.TenantID]time.Duration)
-	for range tasks {
-		select {
-		case result := <-executor.Results():
-			took[result.Task.TenantID] = time.Since(started)
-		case <-time.After(10 * hungCallBudget):
-			t.Fatal("задача создания не завершилась", took)
-		}
-	}
-	return took
 }

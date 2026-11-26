@@ -3,9 +3,9 @@ package checkout_test
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -25,48 +25,40 @@ func testMapLeavesPointReserve(t *testing.T, kind string) {
 	ctx := context.Background()
 	purchase := confirmedPurchase(t, e)
 	var calls atomic.Int32
+	const blocked = 4
+	started := make(chan struct{}, blocked)
 	release := make(chan struct{})
-	defer close(release)
-	e.platform.BeforePickup = func(ctx context.Context, _ ids.TenantID) error {
-		if calls.Add(1) > 4 {
-			return nil
+	var attacks sync.WaitGroup
+	defer func() {
+		close(release)
+		attacks.Wait()
+	}()
+	e.platform.BeforePickup = func(_ context.Context, _ ids.TenantID) error {
+		if calls.Add(1) <= blocked {
+			started <- struct{}{}
+			<-release
 		}
-		select {
-		case <-release:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		return nil
 	}
 	for i := range 40 {
-		attack, cancel := context.WithTimeout(ctx, 5*time.Millisecond)
-		if kind == "checkout" {
-			_, _ = e.pickups.CheckoutPoints(
-				attack,
-				buyerID,
-				purchase.ID,
-				appdelivery.PickupQuery{
+		attacks.Add(1)
+		go func() {
+			defer attacks.Done()
+			if kind == "checkout" {
+				_, _ = e.pickups.CheckoutPoints(ctx, buyerID, purchase.ID, appdelivery.PickupQuery{
 					Carrier: "cdek",
 					City:    fmt.Sprintf("Атака %d", i),
 					Limit:   100,
-				},
-			)
-		} else {
-			_, _ = e.pickups.ProfilePoint(attack, "cdek", "MSK1", fmt.Sprintf("Атака %d", i))
-		}
-		cancel()
+				})
+				return
+			}
+			_, _ = e.pickups.ProfilePoint(ctx, "cdek", "MSK1", fmt.Sprintf("Атака %d", i))
+		}()
 	}
-	victim, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	start := time.Now()
-	_, pointErr := e.pickups.Point(victim, "buyer-b", "cdek", "MSK1", "Холодный город покупателя Б")
-	t.Logf(
-		"после 40 запросов карты оформления одного покупателя: Point покупателя Б=%v за "+
-			"%s; вызовов магазинов=%d",
-		pointErr,
-		time.Since(start),
-		calls.Load(),
-	)
+	for range blocked {
+		<-started
+	}
+	_, pointErr := e.pickups.Point(ctx, "buyer-b", "cdek", "MSK1", "Холодный город покупателя Б")
 	if pointErr != nil {
 		t.Fatalf("карта оформления одного покупателя закрыла выбор ПВЗ другим покупателям процесса")
 	}

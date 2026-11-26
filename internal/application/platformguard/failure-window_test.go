@@ -16,7 +16,7 @@ func TestAlternatingFailuresOpenEachScopeIndependently(t *testing.T) {
 			cfg := testConfig()
 			cfg.FailureThreshold = 100
 			upstream := fake.NewPlatform()
-			c := New(upstream, cfg, fake.NewClock(time.Now()), nil, nil)
+			c := New(upstream, cfg, guardTestClock(), nil, nil)
 			for i := 0; i < cfg.FailureMinCalls; i++ {
 				var failure error
 				if i%2 == 0 {
@@ -43,7 +43,7 @@ func TestAlternatingFailuresOpenEachScopeIndependently(t *testing.T) {
 func TestRareFailuresAndSmallSampleDoNotOpenBreaker(t *testing.T) {
 	cfg := testConfig()
 	cfg.FailureThreshold = 100
-	now := time.Now()
+	now := time.Unix(1000, 0)
 	var rare, small breaker
 	for i := 0; i < 1000; i++ {
 		v := verdictSuccess
@@ -90,7 +90,7 @@ func TestWindowExpiresBucketsAndLongIdlePeriod(t *testing.T) {
 
 func TestNeutralResultsAndProbeDoNotPolluteWindow(t *testing.T) {
 	cfg := testConfig()
-	now := time.Now()
+	now := time.Unix(1000, 0)
 	var b breaker
 	for i := 0; i < 100; i++ {
 		b.finish(b.start(), verdictNeutral, cfg, now)
@@ -111,20 +111,22 @@ func TestCallerDeadlineIsNeutralForBothBreakers(t *testing.T) {
 	cfg.FailureThreshold = 1
 	cfg.FailureMinCalls = 1
 	upstream := fake.NewPlatform()
-	upstream.CallHook = func(ctx context.Context, _ string) error {
-		<-ctx.Done()
-		return ctx.Err()
-	}
-	c := New(upstream, cfg, fake.NewClock(time.Now()), nil, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	clock := guardTestClock()
+	c := New(upstream, cfg, clock, nil, nil)
+	// Срок истёк после допуска: именно тогда его можно ошибочно засчитать магазину.
+	p := admit(t, c, "t1", readClass)
+	p.strict = true
+	ctx, cancel := clock.WithTimeout(context.Background(), 0)
 	defer cancel()
-	if _, err := c.MarketplaceSettings(ctx, "t1"); !errors.Is(err, ErrTimeout) {
+	_, err := execute(ctx, ctx, c, p, func(ctx context.Context) (ports.ShopSettings, error) {
+		return upstream.MarketplaceSettings(ctx, "t1")
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(err)
 	}
 	if c.server.window.calls != 0 || c.tenants["t1"].breaker.window.calls != 0 {
 		t.Fatal("бюджет вызывающего кода начислен серверу или магазину")
 	}
-	upstream.CallHook = nil
 	if _, err := c.MarketplaceSettings(context.Background(), "t1"); err != nil {
 		t.Fatal("таймаут клиента открыл размыкатель", err)
 	}

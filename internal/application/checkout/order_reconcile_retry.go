@@ -49,6 +49,8 @@ type reconcileRun struct {
 	mu        sync.Mutex
 	result    ReconcileResult
 	postponed map[ids.TenantID]*pendingShop
+	// scheduled считает магазины первого круга в потоке, который их запускает.
+	scheduled int
 	// silent — истёкшие сроки чтения; answers — ответы магазинов за первый круг.
 	silent  int
 	answers int

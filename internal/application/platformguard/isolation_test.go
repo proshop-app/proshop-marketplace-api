@@ -13,7 +13,7 @@ import (
 
 func TestTenantFailuresDoNotCloseOtherShops(t *testing.T) {
 	upstream := fake.NewPlatform()
-	clock := fake.NewClock(time.Now())
+	clock := fake.NewClock(time.Unix(1000, 0))
 	cfg := testConfig()
 	c := New(upstream, cfg, clock, nil, nil)
 	upstream.Fail("t1", errors.New("сбой магазина"))
@@ -35,7 +35,7 @@ func TestTenantFailuresDoNotCloseOtherShops(t *testing.T) {
 
 func TestServerFailuresCloseAllShops(t *testing.T) {
 	upstream := fake.NewPlatform()
-	clock := fake.NewClock(time.Now())
+	clock := fake.NewClock(time.Unix(1000, 0))
 	cfg := testConfig()
 	c := New(upstream, cfg, clock, nil, nil)
 	upstream.CallHook = func(context.Context, string) error {
@@ -60,7 +60,7 @@ func TestServerFailuresCloseAllShops(t *testing.T) {
 func TestTenantStatesAreBoundedAndExpire(t *testing.T) {
 	cfg := testConfig()
 	cfg.TenantStateSize = 2
-	clock := fake.NewClock(time.Now())
+	clock := fake.NewClock(time.Unix(1000, 0))
 	c := New(fake.NewPlatform(), cfg, clock, nil, nil)
 	for _, tenant := range []ids.TenantID{"t1", "t2", "t3"} {
 		if _, err := c.MarketplaceSettings(context.Background(), tenant); err != nil {

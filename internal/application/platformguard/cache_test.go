@@ -15,7 +15,7 @@ import (
 
 func TestReviewCacheEvictsLeastRecentlyUsed(t *testing.T) {
 	upstream := fake.NewPlatform()
-	c := New(upstream, testConfig(), fake.NewClock(time.Now()), nil, nil)
+	c := New(upstream, testConfig(), guardTestClock(), nil, nil)
 	for _, product := range []ids.ProductID{"p1", "p2", "p3", "p1", "p4"} {
 		_, _ = c.ProductReviews(context.Background(), "t1", product, 20, 0)
 	}
@@ -32,23 +32,14 @@ func TestReviewCacheEvictsLeastRecentlyUsed(t *testing.T) {
 }
 
 func TestReviewCacheLockDoesNotBlockAdmission(t *testing.T) {
-	c := New(fake.NewPlatform(), testConfig(), fake.NewClock(time.Now()), nil, nil)
+	c := New(fake.NewPlatform(), testConfig(), guardTestClock(), nil, nil)
 	c.cacheMu.Lock()
 	defer c.cacheMu.Unlock()
-	done := make(chan admission, 1)
-	go func() {
-		result, _ := c.request(tenantContext("t1"), checkoutClass)
-		done <- result
-	}()
-	select {
-	case result := <-done:
-		if result.reason != "" {
-			t.Fatal(result.reason)
-		}
-		c.release(result.permit, nil)
-	case <-time.After(time.Second):
-		t.Fatal("замок кэша заблокировал оформление")
+	result, _ := c.request(tenantContext("t1"), checkoutClass)
+	if result.reason != "" {
+		t.Fatal(result.reason)
 	}
+	c.release(result.permit, nil)
 }
 
 func TestEvictedLoadDoesNotReplaceNewEntry(t *testing.T) {
@@ -56,7 +47,7 @@ func TestEvictedLoadDoesNotReplaceNewEntry(t *testing.T) {
 	cfg.CacheSize = 1
 	cfg.ReadTimeout = time.Second
 	cfg.TenantMaxConcurrent = 4
-	c := New(fake.NewPlatform(), cfg, fake.NewClock(time.Now()), nil, nil)
+	c := New(fake.NewPlatform(), cfg, guardTestClock(), nil, nil)
 	key := reviewKey([]any{"p1"})
 	started, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	go func() {
@@ -105,7 +96,7 @@ func BenchmarkReviewCacheFootprint(b *testing.B) {
 
 func measureReviewCache(b *testing.B, raw []byte) {
 	b.Helper()
-	c := New(fake.NewPlatform(), testConfig(), fake.NewClock(time.Now()), nil, nil)
+	c := New(fake.NewPlatform(), testConfig(), guardTestClock(), nil, nil)
 	var before, after runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&before)

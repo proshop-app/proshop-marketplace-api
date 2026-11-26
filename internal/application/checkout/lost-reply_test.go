@@ -17,7 +17,8 @@ import (
 
 type lostCreationReply struct {
 	ports.PlatformAPI
-	lost atomic.Bool
+	lost  atomic.Bool
+	clock *fake.Scheduler
 }
 
 func (p *lostCreationReply) CreateOrder(
@@ -27,14 +28,13 @@ func (p *lostCreationReply) CreateOrder(
 ) (checkout.SellerOrder, error) {
 	answer, err := p.PlatformAPI.CreateOrder(ctx, tenant, request)
 	if err == nil && p.lost.CompareAndSwap(false, true) {
-		<-ctx.Done()
-		return checkout.SellerOrder{}, ctx.Err()
+		return checkout.SellerOrder{}, p.clock.Expire(ctx)
 	}
 	return answer, err
 }
 
 func checkoutWithLostReply(e *env) *appcheckout.Service {
-	upstream := &lostCreationReply{PlatformAPI: e.platform}
+	upstream := &lostCreationReply{PlatformAPI: e.platform, clock: e.clock}
 	guard := platformguard.New(
 		upstream,
 		platformguard.Config{

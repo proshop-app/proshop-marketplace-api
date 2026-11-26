@@ -91,6 +91,7 @@ func (s *Service) reconcilePage(ctx context.Context, entries []checkout.Reconcil
 		if run.failed(shop.tenant) || run.joinPostponed(shop) {
 			continue
 		}
+		run.scheduled++
 		group.Go(safego.Guard("checkout.reconcile", func() error {
 			s.reconcileShop(ctx, shop, run)
 			return nil
@@ -106,7 +107,8 @@ func (s *Service) serverDown(group *errgroup.Group, run *reconcileRun) bool {
 	if run.stopped() != nil {
 		return true
 	}
-	if !run.serverSilent() {
+	// Быстрые отказы не должны уменьшать выборку, которую успеваем запустить.
+	if run.scheduled < reconcileSilentShops+reconcileWorkers || !run.serverSilent() {
 		return false
 	}
 	_ = group.Wait()

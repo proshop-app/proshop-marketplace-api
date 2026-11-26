@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -17,15 +16,7 @@ import (
 type hungTenant struct {
 	ports.PlatformAPI
 	tenant ids.TenantID
-}
-
-// slowShops отвечает каждому магазину через заданное время, если срок вызова позволяет.
-type slowShops struct {
-	ports.PlatformAPI
-	delays  map[ids.TenantID]time.Duration
-	entered chan ids.TenantID
-	mu      sync.Mutex
-	granted map[ids.TenantID][]time.Duration
+	clock  *fake.Scheduler
 }
 
 // Бюджет, переданный вызывающим данными, ограждение ставит само и засчитывает его истечение магазину.
@@ -33,13 +24,14 @@ func TestCallerBudgetAsDataCountsHangToTenant(t *testing.T) {
 	cfg := testConfig()
 	cfg.FailureThreshold = 1
 	metrics := &fake.PlatformMetrics{}
-	c := New(&hungTenant{PlatformAPI: fake.NewPlatform(), tenant: "t1"}, cfg, fake.NewClock(time.Now()), metrics, nil)
+	clock := guardTestClock()
+	c := New(&hungTenant{PlatformAPI: fake.NewPlatform(), tenant: "t1", clock: clock}, cfg, clock, metrics, nil)
 	ctx := ports.WithPlatformCallBudget(context.Background(), cfg.StrictTimeout/4)
-	started := time.Now()
+	started := clock.Now()
 	if _, err := c.MarketplaceSettings(ctx, "t1"); !errors.Is(err, ErrTimeout) {
 		t.Fatal(err)
 	}
-	if took := time.Since(started); took >= cfg.StrictTimeout {
+	if took := clock.Now().Sub(started); took != cfg.StrictTimeout/4 {
 		t.Fatal("бюджет вызывающего не сократил срок ограждения", took)
 	}
 	if metrics.Count("settings", "timeout") != 1 {
@@ -55,19 +47,18 @@ func TestCallerBudgetAsDataCountsHangToTenant(t *testing.T) {
 func TestWidespreadHangOpensServerBreaker(t *testing.T) {
 	cfg := testConfig()
 	upstream := fake.NewPlatform()
+	clock := guardTestClock()
 	upstream.CallHook = func(ctx context.Context, _ string) error {
-		<-ctx.Done()
-		return ctx.Err()
+		return clock.Expire(ctx)
 	}
 	metrics := &fake.PlatformMetrics{}
-	c := New(upstream, cfg, fake.NewClock(time.Now()), metrics, nil)
+	c := New(upstream, cfg, clock, metrics, nil)
 	for n := range cfg.FailureMinCalls {
 		_, _ = c.MarketplaceSettings(context.Background(), ids.TenantID(fmt.Sprintf("t%d", n)))
 	}
-	started := time.Now()
 	_, err := c.MarketplaceSettings(context.Background(), "fresh")
-	if !errors.Is(err, ErrUnavailable) || time.Since(started) >= cfg.StrictTimeout/2 {
-		t.Fatal("массовое зависание не открыло общий размыкатель", err, time.Since(started))
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatal("массовое зависание не открыло общий размыкатель", err)
 	}
 	if metrics.Count("settings", "server_breaker") != 1 {
 		t.Fatal("отказ дан не общим размыкателем")
@@ -82,8 +73,8 @@ func TestWidespreadHangOpensServerBreaker(t *testing.T) {
 // размыкателя идут в долю окна, а пробы открытого размыкателя — нет.
 func TestOneHungShopDoesNotOpenServerBreaker(t *testing.T) {
 	cfg := testConfig()
-	clock := fake.NewClock(time.Now())
-	c := New(&hungTenant{PlatformAPI: fake.NewPlatform(), tenant: "t1"}, cfg, clock, nil, nil)
+	clock := guardTestClock()
+	c := New(&hungTenant{PlatformAPI: fake.NewPlatform(), tenant: "t1", clock: clock}, cfg, clock, nil, nil)
 	for range cfg.FailureMinCalls + cfg.FailureThreshold {
 		_, _ = c.MarketplaceSettings(context.Background(), "t1")
 		clock.Advance(cfg.OpenInterval)
@@ -96,18 +87,60 @@ func TestOneHungShopDoesNotOpenServerBreaker(t *testing.T) {
 	}
 }
 
+func TestRepeatedStrictTimeoutsCountOnceBeforeShopBreakerOpens(t *testing.T) {
+	cfg := testConfig()
+	cfg.FailureThreshold = 10
+	upstream := fake.NewPlatform()
+	upstream.Fail("t1", context.DeadlineExceeded)
+	clock := guardTestClock()
+	c := New(upstream, cfg, clock, nil, nil)
+	for range 4 {
+		if _, err := c.MarketplaceSettings(context.Background(), "t1"); !errors.Is(err, ErrTimeout) {
+			t.Fatal(err)
+		}
+	}
+	if c.server.window.failures != 1 || !c.tenants["t1"].breaker.openUntil.IsZero() {
+		t.Fatal("повторные таймауты одного магазина попали в окно сервера", c.server.window.failures)
+	}
+	if _, excluded := c.CreationCandidates(true); len(excluded) != 1 || excluded[0] != "t1" {
+		t.Fatal("недавнее молчание должно исключить магазин из пробы", excluded)
+	}
+	clock.Advance(cfg.FailureWindow)
+	if _, excluded := c.CreationCandidates(true); len(excluded) != 0 {
+		t.Fatal("давний таймаут исключил магазин из пробы", excluded)
+	}
+}
+
+func TestResponseFromInFlightShopClosesServerBreaker(t *testing.T) {
+	cfg := testConfig()
+	cfg.FailureThreshold = 1
+	clock := guardTestClock()
+	c := New(fake.NewPlatform(), cfg, clock, nil, nil)
+	healthy := admit(t, c, "t1", checkoutClass)
+	failed := admit(t, c, "t2", checkoutClass)
+	c.release(failed, &ports.PlatformServerFailure{Cause: ErrUnavailable})
+	if c.ServerState() != ports.PlatformServerBlocked {
+		t.Fatal("общий отказ должен открыть размыкатель")
+	}
+	c.release(healthy, nil)
+	if c.ServerState() != ports.PlatformServerReady {
+		t.Fatal("ответ магазина не закрыл размыкатель сервера")
+	}
+}
+
 // Короткий бюджет чтения не доказывает зависание сервера: медленная сверка или отзывы многих
 // магазинов не закрывают оформление всем.
 func TestReadTimeoutsDoNotOpenServerBreaker(t *testing.T) {
 	cfg := testConfig()
 	upstream := fake.NewPlatform()
+	clock := guardTestClock()
 	upstream.CallHook = func(ctx context.Context, operation string) error {
 		if operation == "order_statuses" {
-			<-ctx.Done()
+			return clock.Expire(ctx)
 		}
 		return ctx.Err()
 	}
-	c := New(upstream, cfg, fake.NewClock(time.Now()), nil, nil)
+	c := New(upstream, cfg, clock, nil, nil)
 	for n := range cfg.FailureMinCalls {
 		_, _ = c.OrderStatuses(context.Background(), ids.TenantID(fmt.Sprintf("t%d", n)), []string{"o1"})
 	}
@@ -120,39 +153,33 @@ func TestReadTimeoutsDoNotOpenServerBreaker(t *testing.T) {
 // срок B отсчитывается от начала его вызова, и B успевает ответить в свой бюджет.
 func TestWaitingForSlotIsNotChargedToShop(t *testing.T) {
 	cfg := testConfig()
-	cfg.StrictTimeout = 200 * time.Millisecond
-	cfg.TenantMaxConcurrent = 4
-	upstream := &slowShops{
-		PlatformAPI: fake.NewPlatform(),
-		delays:      map[ids.TenantID]time.Duration{"A": 150 * time.Millisecond, "B": 150 * time.Millisecond},
-		entered:     make(chan ids.TenantID, 8),
-		granted:     map[ids.TenantID][]time.Duration{},
-	}
-	c := New(upstream, cfg, fake.NewClock(time.Now()), nil, nil)
-	for range cfg.FailureThreshold + 1 {
-		var wg sync.WaitGroup
-		for range cfg.ReadMaxConcurrent {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				_, _ = c.MarketplaceSettings(context.Background(), "A")
-			}()
-			<-upstream.entered
+	clock := guardTestClock()
+	upstream := fake.NewPlatform()
+	upstream.CallHook = func(ctx context.Context, _ string) error {
+		deadline, _ := ctx.Deadline()
+		if granted := deadline.Sub(clock.Now()); granted != cfg.StrictTimeout {
+			t.Error("срок магазина должен начинаться после получения места", granted)
 		}
-		time.Sleep(60 * time.Millisecond)
-		if _, err := c.MarketplaceSettings(context.Background(), "B"); err != nil {
-			t.Fatal("здоровый магазин не ответил в свой бюджет после ожидания места", err)
-		}
-		<-upstream.entered
-		wg.Wait()
+		clock.Advance(cfg.StrictTimeout - time.Millisecond)
+		return ctx.Err()
 	}
-	if c.tenants["B"].breaker.failures != 0 || c.server.window.failures != 0 {
+	c := New(upstream, cfg, clock, nil, nil)
+	first := admit(t, c, "t1", readClass)
+	second := admit(t, c, "t3", readClass)
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.MarketplaceSettings(context.Background(), "t2")
+		done <- err
+	}()
+	awaitQueued(c, readClass)
+	clock.Advance(cfg.StrictTimeout - time.Millisecond)
+	c.release(first, nil)
+	if err := <-done; err != nil {
+		t.Fatal("магазин должен получить полный срок после ожидания места", err)
+	}
+	c.release(second, nil)
+	if c.tenants["t2"].breaker.failures != 0 || c.server.window.failures != 0 {
 		t.Fatal("ожидание места засчитано магазину или серверу")
-	}
-	for _, granted := range upstream.granted["B"] {
-		if granted < cfg.StrictTimeout*9/10 {
-			t.Fatal("срок в заголовке не отражает бюджет от начала вызова", granted)
-		}
 	}
 }
 
@@ -161,8 +188,8 @@ func TestWaitingForSlotIsNotChargedToShop(t *testing.T) {
 func TestRejectionCarriesReopenTimeAndProbeIsSingle(t *testing.T) {
 	cfg := testConfig()
 	cfg.FailureThreshold = 1
-	clock := fake.NewClock(time.Now())
-	c := New(&hungTenant{PlatformAPI: fake.NewPlatform(), tenant: "t1"}, cfg, clock, nil, nil)
+	clock := guardTestClock()
+	c := New(&hungTenant{PlatformAPI: fake.NewPlatform(), tenant: "t1", clock: clock}, cfg, clock, nil, nil)
 	_, _ = c.MarketplaceSettings(context.Background(), "t1")
 	_, err := c.MarketplaceSettings(context.Background(), "t1")
 	var rejected *ports.PlatformRejected
@@ -171,18 +198,25 @@ func TestRejectionCarriesReopenTimeAndProbeIsSingle(t *testing.T) {
 		t.Fatal("отказ размыкателя без момента допуска", err)
 	}
 	clock.Advance(cfg.OpenInterval)
+	started := make(chan struct{})
+	upstream := fake.NewPlatform()
+	upstream.CallHook = func(ctx context.Context, _ string) error {
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	c.upstream = upstream
 	probe := make(chan error, 1)
 	go func() {
 		_, err := c.MarketplaceSettings(context.Background(), "t1")
 		probe <- err
 	}()
-	for !c.probing("t1") {
-		time.Sleep(time.Millisecond)
-	}
+	<-started
 	_, err = c.MarketplaceSettings(context.Background(), "t1")
 	if !errors.As(err, &rejected) || !rejected.NotBefore.After(clock.Now()) {
 		t.Fatal("во время пробы второй вызов не получил «не раньше»", err)
 	}
+	clock.Advance(cfg.StrictTimeout)
 	if err := <-probe; !errors.Is(err, ErrTimeout) {
 		t.Fatal("проба не дошла до магазина", err)
 	}
@@ -191,48 +225,26 @@ func TestRejectionCarriesReopenTimeAndProbeIsSingle(t *testing.T) {
 // Срок вызова, а с ним заголовок x-marketplace-deadline-ms, не дальше крайнего момента вызывающего.
 func TestCallDeadlineLimitsGrantedTime(t *testing.T) {
 	cfg := testConfig()
-	clock := fake.NewClock(time.Now())
-	upstream := &slowShops{
-		PlatformAPI: fake.NewPlatform(),
-		delays:      map[ids.TenantID]time.Duration{},
-		entered:     make(chan ids.TenantID, 1),
-		granted:     map[ids.TenantID][]time.Duration{},
+	clock := guardTestClock()
+	upstream := fake.NewPlatform()
+	want := clock.Now().Add(cfg.StrictTimeout / 4)
+	upstream.CallHook = func(ctx context.Context, _ string) error {
+		deadline, _ := ctx.Deadline()
+		if !deadline.Equal(want) {
+			t.Error("срок вызова отличается от крайнего момента вызывающего", deadline, want)
+		}
+		return nil
 	}
 	c := New(upstream, cfg, clock, nil, nil)
-	ctx := ports.WithPlatformCallDeadline(context.Background(), clock.Now().Add(cfg.StrictTimeout/4))
+	ctx := ports.WithPlatformCallDeadline(context.Background(), want)
 	if _, err := c.MarketplaceSettings(ctx, "t1"); err != nil {
 		t.Fatal(err)
-	}
-	if granted := upstream.granted["t1"][0]; granted > cfg.StrictTimeout/4 {
-		t.Fatal("срок вызова дальше крайнего момента вызывающего", granted)
-	}
-}
-
-func (c *Client) probing(tenant ids.TenantID) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	state := c.tenants[tenant]
-	return state != nil && state.breaker.probe
-}
-
-func (p *slowShops) MarketplaceSettings(ctx context.Context, tenant ids.TenantID) (ports.ShopSettings, error) {
-	deadline, _ := ctx.Deadline()
-	p.mu.Lock()
-	p.granted[tenant] = append(p.granted[tenant], time.Until(deadline))
-	p.mu.Unlock()
-	p.entered <- tenant
-	select {
-	case <-time.After(p.delays[tenant]):
-		return p.PlatformAPI.MarketplaceSettings(ctx, tenant)
-	case <-ctx.Done():
-		return ports.ShopSettings{}, ctx.Err()
 	}
 }
 
 func (p *hungTenant) MarketplaceSettings(ctx context.Context, tenant ids.TenantID) (ports.ShopSettings, error) {
 	if tenant == p.tenant {
-		<-ctx.Done()
-		return ports.ShopSettings{}, ctx.Err()
+		return ports.ShopSettings{}, p.clock.Expire(ctx)
 	}
 	return p.PlatformAPI.MarketplaceSettings(ctx, tenant)
 }

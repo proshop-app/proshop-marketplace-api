@@ -440,6 +440,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			postgres.NewTaskQueue(s.store.pool(ports.DatabaseOrders)),
 			now,
 			checkouts,
+			platform,
 			cfg.Outbox.MaxAttempts,
 		),
 		janitor:    janitor,

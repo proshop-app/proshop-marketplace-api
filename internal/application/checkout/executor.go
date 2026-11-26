@@ -26,6 +26,9 @@ const (
 	// taskStoreBudget — записи обработчика вне вызова магазина под его сроком: захват группы,
 	// итог, возврат в корзину, повторы конфликта версии.
 	taskStoreBudget = 5 * time.Second
+	// Аренда от начала взятия покрывает взятие, обработчик, сохранение ответа без отмены
+	// и отметку задачи (5 + 15 + 3 + 5 секунд в худшем случае).
+	taskLease       = 2 * (2*CreationCallTimeout + taskStoreBudget)
 	PollWorkers     = 4
 	PollPerTenant   = 1
 	CancelWorkers   = 4
@@ -43,6 +46,19 @@ type TaskResult struct {
 	Lag           time.Duration
 }
 
+type executorLane struct {
+	kind      string
+	workers   int
+	perTenant int
+}
+
+var executorLanes = [...]executorLane{
+	{TaskExpireCreation, DeadlineWorkers, DeadlineWorkers},
+	{TaskCancelOrder, CancelWorkers, CancelPerTenant},
+	{TaskPollOrder, PollWorkers, PollPerTenant},
+	{TaskCreateOrder, CreationWorkers, CreationPerTenant},
+}
+
 // Executor разделяет создание, закрытие срока, отмену и сверку на независимые полосы.
 // Dispatch вызывается одним циклом, результаты каждого вызова сохраняются независимо.
 type Executor struct {
@@ -50,6 +66,7 @@ type Executor struct {
 	queue       ports.TaskQueue
 	clock       ports.Clock
 	service     *Service
+	gate        ports.PlatformServerGate
 	mu          sync.Mutex
 	active      map[string]map[ids.TenantID]int
 	// after — курсор круга магазинов по виду: каждое взятие продолжает с прошлого.
@@ -59,12 +76,19 @@ type Executor struct {
 }
 
 // NewExecutor собирает отдельный пул поверх существующей очереди; maxAttempts — предел неизвестных сбоев.
-func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service, maxAttempts int) *Executor {
+func NewExecutor(
+	queue ports.TaskQueue,
+	clock ports.Clock,
+	service *Service,
+	gate ports.PlatformServerGate,
+	maxAttempts int,
+) *Executor {
 	return &Executor{
 		maxAttempts: maxAttempts,
 		queue:       queue,
 		clock:       clock,
 		service:     service,
+		gate:        gate,
 		active: map[string]map[ids.TenantID]int{
 			TaskCreateOrder:    {},
 			TaskExpireCreation: {},
@@ -72,7 +96,7 @@ func NewExecutor(queue ports.TaskQueue, clock ports.Clock, service *Service, max
 			TaskCancelOrder:    {},
 		},
 		after:   map[string]ports.ClaimCursor{},
-		results: make(chan TaskResult, CreationWorkers+DeadlineWorkers+PollWorkers+CancelWorkers),
+		results: make(chan TaskResult, ExecutorSlots),
 	}
 }
 
@@ -82,52 +106,99 @@ func (e *Executor) Results() <-chan TaskResult { return e.results }
 // Wait вызывается после остановки Dispatch и отмены контекста исполнения.
 func (e *Executor) Wait() { e.wg.Wait() }
 
-// Dispatch не ждёт HTTP: каждый освободившийся слот доступен следующему Claim.
+// Dispatch обнаруживает новую работу всех полос на очередном проходе.
 func (e *Executor) Dispatch(ctx context.Context) error {
+	var failed error
+	for _, lane := range executorLanes {
+		failed = errors.Join(failed, e.dispatchLane(ctx, lane))
+	}
+	return failed
+}
+
+// Refill проверяет только полосу освободившегося места.
+func (e *Executor) Refill(ctx context.Context, kind string) error {
+	for _, lane := range executorLanes {
+		if lane.kind == kind {
+			return e.dispatchLane(ctx, lane)
+		}
+	}
+	return nil
+}
+
+func (e *Executor) dispatchLane(ctx context.Context, lane executorLane) error {
 	// Создание заказа ждёт покупатель (CreationTimeout): полоса берёт соединения своего
 	// пула, их не займут индексация outbox и фоновые циклы.
 	ctx = ports.WithDatabaseClass(ctx, ports.DatabaseOrders)
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	for _, kind := range []string{TaskExpireCreation, TaskCreateOrder, TaskCancelOrder, TaskPollOrder} {
-		limit, perTenant := CreationWorkers, CreationPerTenant
-		switch kind {
-		case TaskExpireCreation:
-			limit, perTenant = DeadlineWorkers, DeadlineWorkers
-		case TaskCancelOrder:
-			limit, perTenant = CancelWorkers, CancelPerTenant
-		case TaskPollOrder:
-			limit, perTenant = PollWorkers, PollPerTenant
-		}
-		slots := make(map[ids.TenantID]int)
-		for tenant, count := range e.active[kind] {
-			limit -= count
-			slots[tenant] = perTenant - count
-		}
-		if limit == 0 {
-			continue
-		}
-		now := e.clock.Now()
-		claimed, err := e.queue.Claim(ctx, ports.ClaimRequest{
-			Now:         now,
-			Limit:       limit,
-			PerTenant:   perTenant,
-			Kinds:       []string{kind},
-			TenantSlots: slots,
-			After:       e.after[kind],
-			LeaseUntil:  now.Add(e.lease()),
-		})
-		if err != nil {
-			return err
-		}
-		e.after[kind] = claimed.Next
-		for _, task := range claimed.Tasks {
-			e.active[kind][task.TenantID]++
-			e.wg.Add(1)
-			safego.Go("checkout.executor", func() { e.execute(ctx, task) })
-		}
+	kind := lane.kind
+	limit := lane.workers
+	slots := make(map[ids.TenantID]int, len(e.active[kind]))
+	for tenant, count := range e.active[kind] {
+		limit -= count
+		slots[tenant] = lane.perTenant - count
+	}
+	if limit == 0 {
+		return nil
+	}
+	request := ports.ClaimRequest{
+		Limit:       limit,
+		PerTenant:   lane.perTenant,
+		Kinds:       []string{kind},
+		TenantSlots: slots,
+		After:       e.after[kind],
+	}
+	if kind == TaskCreateOrder && !e.allowCreation(&request) {
+		return nil
+	}
+	request.Now = e.clock.Now()
+	request.LeaseUntil = request.Now.Add(taskLease)
+	claimCtx, cancel := ports.WithTimeout(ctx, e.clock, taskStoreBudget)
+	defer cancel()
+	claimed, err := e.queue.Claim(claimCtx, request)
+	if err != nil {
+		return err
+	}
+	e.after[kind] = claimed.Next
+	for _, task := range claimed.Tasks {
+		e.active[kind][task.TenantID]++
+		e.wg.Add(1)
+		safego.Go("checkout.executor", func() { e.execute(ctx, task) })
 	}
 	return nil
+}
+
+func (e *Executor) allowCreation(request *ports.ClaimRequest) bool {
+	if e.gate == nil {
+		return true
+	}
+	state := e.gate.ServerState()
+	if state == ports.PlatformServerBlocked {
+		return false
+	}
+	probe := state == ports.PlatformServerProbe
+	if probe {
+		// Активная задача может ещё не дойти до HTTP и не занять пробу в ограждении.
+		if request.Limit < CreationWorkers {
+			return false
+		}
+		request.Limit = 1
+	}
+	preferRecent, excluded := e.gate.CreationCandidates(probe)
+	request.PreferRecent = preferRecent
+	if probe {
+		for _, tenant := range excluded {
+			request.TenantSlots[tenant] = 0
+		}
+	} else if preferRecent {
+		// Пока ищем отвечающие магазины, второе место уже занятого магазина
+		// используем только при отсутствии свежего кандидата.
+		request.DeprioritizedTenants = excluded
+		for tenant := range request.TenantSlots {
+			request.DeprioritizedTenants = append(request.DeprioritizedTenants, tenant)
+		}
+	}
+	return true
 }
 
 func (e *Executor) execute(ctx context.Context, task ports.Task) {
@@ -165,20 +236,9 @@ func (e *Executor) execute(ctx context.Context, task ports.Task) {
 // handle ограничивает обработчик сроком, из которого считается аренда: без срока записи итога
 // с повторами могли пережить аренду, и задачу взял бы второй исполнитель с повторным вызовом магазина.
 func (e *Executor) handle(ctx context.Context, task ports.Task) error {
-	handling, cancel := context.WithTimeout(ctx, e.handlerTimeout())
+	handling, cancel := ports.WithTimeout(ctx, e.clock, 2*e.service.orderCallBudget()+taskStoreBudget)
 	defer cancel()
 	return e.service.HandleOrderTask(handling, task)
-}
-
-// handlerTimeout — ожидание места в ограждении и вызов магазина (по бюджету каждое) плюс записи.
-func (e *Executor) handlerTimeout() time.Duration {
-	return 2*e.service.orderCallBudget() + taskStoreBudget
-}
-
-// lease — как у messaging.Dispatcher: обработчик укладывается в половину аренды, вторая половина
-// покрывает запись итога без отмены (completionTimeout) и отметку задачи.
-func (e *Executor) lease() time.Duration {
-	return 2 * e.handlerTimeout()
 }
 
 func (e *Executor) release(task ports.Task) {
@@ -215,5 +275,7 @@ func (e *Executor) save(ctx context.Context, resolution ports.TaskResolution) er
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return e.queue.Resolve(ctx, []ports.TaskResolution{resolution})
+	saving, cancel := ports.WithTimeout(ctx, e.clock, taskStoreBudget)
+	defer cancel()
+	return e.queue.Resolve(saving, []ports.TaskResolution{resolution})
 }

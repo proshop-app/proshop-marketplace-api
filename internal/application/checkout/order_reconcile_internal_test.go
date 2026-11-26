@@ -9,16 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-// pauseClock считает паузы сценария вместо настоящего ожидания.
-type pauseClock struct {
-	mu     sync.Mutex
-	paused time.Duration
-}
+var reconcileStart = time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)
 
 // shopCall — запрос сверки магазину: кому и сколько заказов.
 type shopCall struct {
@@ -31,14 +30,15 @@ type shopCall struct {
 type stubStatuses struct {
 	ports.PlatformAPI
 	mu        sync.Mutex
-	clock     *pauseClock
+	clock     *fake.Clock
 	hung      map[ids.TenantID]bool
 	limit     int
 	rejected  ids.TenantID
 	notBefore time.Time
-	// answerDelay — здоровый магазин отвечает не сразу: проверка сервера застаёт его в полёте.
-	answerDelay time.Duration
-	calls       []shopCall
+	// healthyStarted и answerGate удерживают волну здоровых магазинов в полёте.
+	healthyStarted chan struct{}
+	answerGate     <-chan struct{}
+	calls          []shopCall
 }
 
 func TestReconcileShopsKeepsShopTogether(t *testing.T) {
@@ -69,8 +69,8 @@ func TestReconcileShopShrinksBatchUntilShopAnswers(t *testing.T) {
 	if got := platform.sizes(); !slices.Equal(got, []int{200, 100, 50, 50, 50, 50}) {
 		t.Fatalf("размеры запросов: %v", got)
 	}
-	if platform.clock.paused != 0 {
-		t.Fatalf("проход не спит в строю: %s", platform.clock.paused)
+	if platform.paused() != 0 {
+		t.Fatalf("проход не спит в строю: %s", platform.paused())
 	}
 }
 
@@ -110,8 +110,8 @@ func TestReconcileHealthyShopsDoNotWaitForHungOnes(t *testing.T) {
 			t.Fatalf("магазину %s запросов %d, ожидалось %d", tenant, count, want)
 		}
 	}
-	if len(calls) != 400+len(hung)*ReconcileRetries || platform.clock.paused != 0 {
-		t.Fatalf("запросов %d, пауз %s", len(calls), platform.clock.paused)
+	if len(calls) != 400+len(hung)*ReconcileRetries || platform.paused() != 0 {
+		t.Fatalf("запросов %d, пауз %s", len(calls), platform.paused())
 	}
 }
 
@@ -128,8 +128,8 @@ func TestReconcileSilentServerStopsPass(t *testing.T) {
 		service.reconcilePage(context.Background(), reconcileEntries(shops, 1), run)
 		_, err := service.finishReconcile(context.Background(), run, platform.clock.Now())
 		calls := len(platform.log())
-		if !errors.Is(err, ErrReconcileServerDown) || calls > 4*reconcileWorkers || platform.clock.paused != 0 {
-			t.Fatalf("%d магазинов: %v, запросов %d, пауз %s", shops, err, calls, platform.clock.paused)
+		if !errors.Is(err, ErrReconcileServerDown) || calls > 4*reconcileWorkers || platform.paused() != 0 {
+			t.Fatalf("%d магазинов: %v, запросов %d, пауз %s", shops, err, calls, platform.paused())
 		}
 	}
 }
@@ -148,18 +148,54 @@ func TestReconcileRunOfHungShopsDoesNotStopPass(t *testing.T) {
 		for i := run.first; i < run.first+run.count; i++ {
 			hung[shopName(i)] = true
 		}
-		service, _ := reconcileService(&stubStatuses{hung: hung, answerDelay: 20 * time.Millisecond})
-		result := service.reconcileAll(t, reconcileEntries(400, 1))
+		started := make(chan struct{}, 400)
+		answer := make(chan struct{})
+		service, platform := reconcileService(&stubStatuses{hung: hung, healthyStarted: started, answerGate: answer})
+		ctx := context.Background()
+		result := newReconcileRun()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			service.reconcilePage(ctx, reconcileEntries(400, 1), result)
+		}()
+		for range reconcileWorkers {
+			<-started
+		}
+		// В начальной серии все таймауты уже учтены, а здоровые магазины ещё не ответили.
+		silentDuringWave := result.serverSilent()
+		close(answer)
+		<-done
+		if run.first == 0 && !silentDuringWave {
+			t.Fatal("ожидалась полная выборка таймаутов перед ответом здорового магазина")
+		}
+		if _, err := service.finishReconcile(ctx, result, platform.clock.Now()); err != nil {
+			t.Fatal(err)
+		}
 		if result.stopped() != nil || result.result.Checked != 400-run.count || len(result.result.Failed) != run.count {
 			t.Fatalf("%s: %+v %v", run.name, result.result, result.stopped())
 		}
 	}
 }
 
+func TestReconcileSamplesAnotherWaveAfterFastTimeouts(t *testing.T) {
+	service, _ := reconcileService(&stubStatuses{})
+	run := newReconcileRun()
+	run.scheduled = reconcileSilentShops
+	run.silent = reconcileSilentShops
+	var group errgroup.Group
+	if service.serverDown(&group, run) {
+		t.Fatal("быстрые отказы сократили выборку до следующей волны магазинов")
+	}
+	run.scheduled += reconcileWorkers
+	if !service.serverDown(&group, run) || !errors.Is(run.stopped(), ErrPlatformSilent) {
+		t.Fatal("после дополнительной волны без ответов проход должен остановиться")
+	}
+}
+
 // Размыкатель магазина отклоняет до своего срока: проход один раз ждёт его после остальных и
 // повторяет запрос; пауза — одна на проход, а не на магазин.
 func TestReconcileRetriesShopAfterItsBreaker(t *testing.T) {
-	clock := &pauseClock{}
+	clock := fake.NewClock(reconcileStart)
 	service, platform := reconcileService(&stubStatuses{
 		rejected:  shopName(3),
 		notBefore: clock.Now().Add(5 * time.Second),
@@ -169,22 +205,22 @@ func TestReconcileRetriesShopAfterItsBreaker(t *testing.T) {
 	if len(run.result.Failed) != 0 || run.result.Checked != 10 {
 		t.Fatalf("магазин сверен после своего размыкателя: %+v", run.result)
 	}
-	if platform.clock.paused != 5*time.Second || len(platform.log()) != 11 {
-		t.Fatalf("одна пауза до срока размыкателя: %s, запросов %d", platform.clock.paused, len(platform.log()))
+	if platform.paused() != 5*time.Second || len(platform.log()) != 11 {
+		t.Fatalf("одна пауза до срока размыкателя: %s, запросов %d", platform.paused(), len(platform.log()))
 	}
 }
 
 // Размыкатель магазина откроется позже бюджета повторов: проход его не ждёт, магазин пропускается.
 func TestReconcileDoesNotWaitBreakerBeyondBudget(t *testing.T) {
-	clock := &pauseClock{}
+	clock := fake.NewClock(reconcileStart)
 	service, platform := reconcileService(&stubStatuses{
 		rejected:  shopName(3),
 		notBefore: clock.Now().Add(reconcileRetryBudget + time.Minute),
 		clock:     clock,
 	})
 	run := service.reconcileAll(t, reconcileEntries(10, 1))
-	if len(run.result.Failed) != 1 || platform.clock.paused != 0 || len(platform.log()) != 10 {
-		t.Fatalf("ожидание за пределом бюджета: %+v, пауз %s", run.result, platform.clock.paused)
+	if len(run.result.Failed) != 1 || platform.paused() != 0 || len(platform.log()) != 10 {
+		t.Fatalf("ожидание за пределом бюджета: %+v, пауз %s", run.result, platform.paused())
 	}
 }
 
@@ -204,7 +240,7 @@ func TestReconcileRetryRoundsStopAtBudget(t *testing.T) {
 
 func reconcileService(platform *stubStatuses) (*Service, *stubStatuses) {
 	if platform.clock == nil {
-		platform.clock = &pauseClock{}
+		platform.clock = fake.NewClock(reconcileStart)
 	}
 	return NewService(nil, platform, nil, nil, nil, platform.clock, Config{}), platform
 }
@@ -237,19 +273,6 @@ func reconcileEntries(shops, orders int) []checkout.ReconcileEntry {
 
 func shopName(i int) ids.TenantID { return ids.TenantID(fmt.Sprintf("t%04d", i)) }
 
-func (c *pauseClock) Now() time.Time {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC).Add(c.paused)
-}
-
-func (c *pauseClock) Wait(_ context.Context, d time.Duration) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.paused += d
-	return true
-}
-
 func (p *stubStatuses) OrderStatuses(
 	_ context.Context,
 	tenant ids.TenantID,
@@ -264,12 +287,19 @@ func (p *stubStatuses) OrderStatuses(
 	case tenant == p.rejected && p.clock.Now().Before(p.notBefore):
 		return nil, &ports.PlatformRejected{NotBefore: p.notBefore, Cause: errors.New("размыкатель магазина")}
 	}
-	time.Sleep(p.answerDelay)
+	if p.answerGate != nil {
+		p.healthyStarted <- struct{}{}
+		<-p.answerGate
+	}
 	statuses := make([]checkout.OrderStatus, 0, len(orderIDs))
 	for _, id := range orderIDs {
 		statuses = append(statuses, checkout.OrderStatus{OrderID: id, Status: checkout.GroupPaid, Revision: 1})
 	}
 	return statuses, nil
+}
+
+func (p *stubStatuses) paused() time.Duration {
+	return p.clock.Now().Sub(reconcileStart)
 }
 
 func (p *stubStatuses) log() []shopCall {

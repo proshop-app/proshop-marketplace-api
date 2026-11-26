@@ -92,7 +92,7 @@ func (b *breaker) open(interval time.Duration, now time.Time) {
 // иначе один зависший магазин раз в интервал добавлял бы сбой в окно всех магазинов.
 // Короткий бюджет чтения (отзывы, сверка) тоже не доказывает: медленные отзывы под нагрузкой
 // не должны закрывать оформление всем магазинам.
-func serverVerdict(p permit, err error) verdict {
+func (c *Client) serverVerdict(p permit, err error, now time.Time) verdict {
 	var serverFailure *ports.PlatformServerFailure
 	var catalogFailure *ports.PickupCatalogFailure
 	switch {
@@ -101,12 +101,24 @@ func serverVerdict(p permit, err error) verdict {
 	case errors.As(err, &serverFailure):
 		return verdictFailure
 	case !errors.Is(err, context.DeadlineExceeded):
+		p.tenant.silentUntil = time.Time{}
 		return verdictSuccess
-	case errors.As(err, &catalogFailure) || p.shop.probe || !p.strict:
+	case !p.strict || errors.As(err, &catalogFailure):
 		return verdictNeutral
 	default:
-		return verdictSlow
+		return c.shopTimeout(p, now)
 	}
+}
+
+func (c *Client) shopTimeout(p permit, now time.Time) verdict {
+	c.lastShopTimeout = now
+	repeated := now.Before(p.tenant.silentUntil) || !p.tenant.breaker.openUntil.IsZero()
+	p.tenant.silentUntil = now.Add(c.cfg.FailureWindow)
+	// Пока этот вызов ждал, другой магазин ответил. Это молчание магазина.
+	if repeated || p.answers != c.answers {
+		return verdictNeutral
+	}
+	return verdictSlow
 }
 
 // tenantVerdict засчитывает магазину его отказы и зависание; общий сбой и справочник — нет.
