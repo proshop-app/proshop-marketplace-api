@@ -313,3 +313,28 @@ func TestLockWorkDueSkipsDrafts(t *testing.T) {
 		t.Fatalf("черновик взят страницей: %d %v", len(page.Due), err)
 	}
 }
+
+// Отложенная покупка, которую следующий проход разобрал без изменений, сохраняется и признак снимается.
+func TestResumeClearsDeferredWorkWithoutChange(t *testing.T) {
+	bench := newOrderEventBench(t)
+	ctx := context.Background()
+	c := bench.orderedPurchase(t, 980)
+	err := do(t, bench.uow, func(ctx context.Context, tx ports.Tx) error {
+		return tx.Checkouts().DeferWork(ctx, []ids.UUID{c.ID()}, bench.clock.Now().Add(time.Hour), bench.clock.Now())
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bench.clock.Advance(2 * time.Hour)
+	if err := bench.service.Resume(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var next *time.Time
+	var deferred bool
+	if err := bench.pool.QueryRow(ctx, selectDeferredWork, string(c.ID())).Scan(&next, &deferred); err != nil {
+		t.Fatal(err)
+	}
+	if deferred {
+		t.Fatal("разобранная покупка осталась отложенной")
+	}
+}

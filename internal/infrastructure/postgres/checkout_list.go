@@ -10,7 +10,7 @@ import (
 )
 
 const selectCheckoutListGroups = `
-	SELECT g.checkout_id, g.next_work_at, ` + groupColumns + `
+	SELECT g.checkout_id, g.next_work_at, g.work_deferred_at IS NOT NULL, ` + groupColumns + `
 	FROM unnest($1::uuid[], $2::bigint[]) AS selected (id, version)
 	JOIN checkouts c ON c.id = selected.id AND c.version = selected.version
 	JOIN checkout_groups g ON g.checkout_id = c.id
@@ -20,6 +20,8 @@ const selectCheckoutListGroups = `
 type loadedGroups struct {
 	failed   map[ids.UUID]error
 	nextWork map[ids.UUID]time.Time
+	// deferred — у покупки есть группа с отложенной работой: её снимет сохранение.
+	deferred map[ids.UUID]bool
 }
 
 func checkoutListSQL(filter checkout.Filter) string {
@@ -56,7 +58,11 @@ func (r *Checkouts) listGroups(ctx context.Context, states []checkout.State) err
 // разобрались или не нашлись в её версии, возвращается в failed с причиной; nextWork — ближайший
 // записанный срок работы её групп.
 func (r *Checkouts) loadGroups(ctx context.Context, states []checkout.State) (loadedGroups, error) {
-	loaded := loadedGroups{failed: map[ids.UUID]error{}, nextWork: map[ids.UUID]time.Time{}}
+	loaded := loadedGroups{
+		failed:   map[ids.UUID]error{},
+		nextWork: map[ids.UUID]time.Time{},
+		deferred: map[ids.UUID]bool{},
+	}
 	if len(states) == 0 {
 		return loaded, nil
 	}
@@ -77,11 +83,15 @@ func (r *Checkouts) loadGroups(ctx context.Context, states []checkout.State) (lo
 	for rows.Next() {
 		var checkoutID string
 		var nextWork *time.Time
+		var deferred bool
 		var row groupRow
-		if err := rows.Scan(append([]any{&checkoutID, &nextWork}, row.targets()...)...); err != nil {
+		if err := rows.Scan(append([]any{&checkoutID, &nextWork, &deferred}, row.targets()...)...); err != nil {
 			return loadedGroups{}, fmt.Errorf("группы списка покупок: %w", err)
 		}
 		loaded.noteWork(ids.UUID(checkoutID), nextWork)
+		if deferred {
+			loaded.deferred[ids.UUID(checkoutID)] = true
+		}
 		group, err := row.checkoutGroup()
 		if err != nil {
 			loaded.failed[ids.UUID(checkoutID)] = fmt.Errorf("позиции покупки %s: %w", checkoutID, err)

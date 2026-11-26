@@ -31,11 +31,16 @@ const (
 		ORDER BY id
 		FOR NO KEY UPDATE SKIP LOCKED`
 
+	// deferCheckoutWork сначала блокирует строки покупок по порядку ключа, как любая запись покупки:
+	// иначе запись групп пары покупок могла бы сцепиться с их сохранением.
 	deferCheckoutWork = `
+		WITH locked AS (
+			SELECT id FROM checkouts WHERE id = ANY($1::uuid[]) ORDER BY id FOR NO KEY UPDATE
+		)
 		UPDATE checkout_groups
 		SET next_work_at = $2,
 			work_deferred_at = $3
-		WHERE checkout_id = ANY($1::uuid[]) AND next_work_at < $2`
+		WHERE checkout_id IN (SELECT id FROM locked) AND next_work_at < $2`
 )
 
 // LockWorkDue — покупки страницы созревших групп после курсора, под блокировкой до конца транзакции.
@@ -66,6 +71,9 @@ func (r *Checkouts) LockWorkDue(
 		// Соседний проход сохранил покупку между выборкой кандидатов и блокировкой: работы нет.
 		if next, found := loaded.nextWork[state.ID]; found && !next.After(now) {
 			page.Due = append(page.Due, checkout.Restore(state))
+			if loaded.deferred[state.ID] {
+				page.Deferred = append(page.Deferred, state.ID)
+			}
 		}
 	}
 	return page, nil

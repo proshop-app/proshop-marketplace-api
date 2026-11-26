@@ -52,6 +52,9 @@ type BrokenCheckout struct {
 type WorkPage struct {
 	Due    []*Checkout
 	Broken []BrokenCheckout
+	// Deferred — взятые покупки с отложенной ранее работой: проход сохраняет их, даже если ничего
+	// не изменилось, чтобы снять признак.
+	Deferred []ids.UUID
 	// Next — курсор по последней просмотренной группе; More — страница групп была полной.
 	Next WorkCursor
 	More bool

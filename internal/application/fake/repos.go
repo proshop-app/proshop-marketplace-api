@@ -267,6 +267,9 @@ func (r checkouts) LockWorkDue(
 			(state.Status != checkout.StatusDraft && state.Status != checkout.StatusConfirmed)
 		if !seen[cursor.CheckoutID] && ordered {
 			page.Due = append(page.Due, checkout.Restore(copyCheckout(state)))
+			if _, deferred := r.d.deferredWork[cursor.CheckoutID]; deferred {
+				page.Deferred = append(page.Deferred, cursor.CheckoutID)
+			}
 		}
 		seen[cursor.CheckoutID] = true
 	}

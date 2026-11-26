@@ -112,6 +112,10 @@ func (s *Service) collectResume(
 	purchases *[]ports.NewTask,
 ) resumeBatch {
 	var batch resumeBatch
+	deferred := map[ids.UUID]bool{}
+	for _, id := range work.Deferred {
+		deferred[id] = true
+	}
 	for _, broken := range work.Broken {
 		batch.broken = append(batch.broken, rejectedPurchase{id: broken.ID, cause: broken.Err})
 	}
@@ -126,7 +130,7 @@ func (s *Service) collectResume(
 		page.taken = append(page.taken, c.ID())
 		state := c.State()
 		batch.tasks = append(batch.tasks, tasks...)
-		if state.Version != previous.Version {
+		if state.Version != previous.Version || deferred[c.ID()] {
 			batch.changed = append(batch.changed, c)
 		}
 		s.observeTransitions(tx, previous, state)
@@ -187,10 +191,8 @@ func (s *Service) resumeOne(ctx context.Context, id ids.UUID) (checkout.State, e
 			return err
 		}
 		state = c.State()
-		batch := resumeBatch{tasks: tasks}
-		if state.Version != previous.Version {
-			batch.changed = []*checkout.Checkout{c}
-		}
+		// Сохраняется и без изменений: покупка этого пути могла быть отложена, сохранение снимает признак.
+		batch := resumeBatch{tasks: tasks, changed: []*checkout.Checkout{c}}
 		return s.saveResume(ctx, tx, batch, now)
 	})
 	if err == nil || errors.Is(err, checkout.ErrNotFound) {
