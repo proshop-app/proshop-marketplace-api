@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -42,6 +43,7 @@ type OfferCard struct {
 
 // OfferList — страница выдачи и фасеты.
 type OfferList struct {
+	FacetCategoryID    string
 	AvailableFacetKeys []string
 	Correction         *ports.OfferCorrection
 	Receipt            string
@@ -109,14 +111,22 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 	if err != nil {
 		return OfferList{}, err
 	}
+	var facetCategoryID string
+	if normalized.FacetTaxonomyVersion > 0 {
+		if panel, ok := presentation.taxonomy.panels[page.FacetCategoryID]; ok && page.FacetCategoryID != "" {
+			facetCategoryID = page.FacetCategoryID
+			presentation = presentation.taxonomy.resultFacetDisplay(normalized, panel)
+		}
+	}
 	list := OfferList{
-		Correction:    page.Correction,
-		Facets:        displayFacets(page.Facets, normalized, presentation),
-		Total:         page.Total,
-		TotalRelation: page.TotalRelation,
-		Limit:         normalized.Limit,
-		Limited:       page.Limited,
-		Items:         make([]OfferCard, 0, len(page.Items)),
+		FacetCategoryID: facetCategoryID,
+		Correction:      page.Correction,
+		Facets:          displayFacets(page.Facets, normalized, presentation),
+		Total:           page.Total,
+		TotalRelation:   page.TotalRelation,
+		Limit:           normalized.Limit,
+		Limited:         page.Limited,
+		Items:           make([]OfferCard, 0, len(page.Items)),
 	}
 	if len(normalized.FacetKeys) == 0 {
 		for _, filter := range presentation.order {
@@ -124,7 +134,10 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 			if key == "" {
 				key = "attr." + filter.Code
 			}
-			list.AvailableFacetKeys = append(list.AvailableFacetKeys, key)
+			if normalized.FacetTaxonomyVersion == 0 || page.AvailableFacetKeys == nil ||
+				slices.Contains(page.AvailableFacetKeys, key) {
+				list.AvailableFacetKeys = append(list.AvailableFacetKeys, key)
+			}
 		}
 	}
 	if normalized.Observe && len(page.Items) != 0 {
@@ -268,29 +281,13 @@ func (q *Queries) prepareQuery(ctx context.Context, query ports.OfferQuery) (por
 		if !found {
 			return ErrInvalidQuery.WithMessage("неизвестная категория")
 		}
-		if len(normalized.Attributes) > 0 {
-			fields := make(map[string]taxonomy.Attribute, len(normalized.Attributes))
-			for _, filter := range panel.filters {
-				if _, selected := normalized.Attributes[filter.Code]; selected {
-					fields[filter.Code] = view.fields[filter.Code]
-				}
-			}
-			if err := validateAttributeFilters(normalized.Attributes, fields); err != nil {
-				return err
-			}
-			for code, filter := range normalized.Attributes {
-				filter.Type = fields[code].Type
-				normalized.Attributes[code] = filter
-			}
-		}
-		presentation = facetDisplay{
-			taxonomy: view,
-			sources:  panel.sources,
-			order:    panel.apply(&normalized, view.fields),
+		presentation, err = view.prepareFacetPanel(&normalized, panel)
+		if err != nil {
+			return err
 		}
 		return nil
 	}); err != nil {
 		return ports.OfferQuery{}, facetDisplay{}, err
 	}
-	return normalized, presentation, validateListingFacetFields(normalized)
+	return normalized, presentation, nil
 }

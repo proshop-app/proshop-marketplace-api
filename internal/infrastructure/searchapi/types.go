@@ -61,36 +61,40 @@ type attribute struct {
 }
 
 type offerQuery struct {
-	Exact          bool                             `json:"exact,omitempty"`
-	TrackQuery     bool                             `json:"trackQuery"`
-	Observe        bool                             `json:"observe,omitempty"`
-	BuyerKey       string                           `json:"buyerKey,omitempty"`
-	GroupID        string                           `json:"groupId,omitempty"`
-	Attributes     map[string]ports.AttributeFilter `json:"attributes"`
-	FacetFields    []facetField                     `json:"facetFields"`
-	FacetKeys      []string                         `json:"facetKeys,omitempty"`
-	PriceHistogram bool                             `json:"priceHistogram,omitempty"`
-	Facets         *[]ports.FacetCode               `json:"facets,omitempty"`
-	InStockSet     bool                             `json:"inStockSet"`
-	Text           string                           `json:"text"`
-	TenantIDs      []string                         `json:"tenantIds"`
-	CategoryID     string                           `json:"categoryId"`
-	PriceMin       *int64                           `json:"priceMin"`
-	PriceMax       *int64                           `json:"priceMax"`
-	InStock        bool                             `json:"inStock"`
-	Sort           string                           `json:"sort"`
-	Offset         int                              `json:"offset"`
-	Limit          int                              `json:"limit"`
+	FacetTaxonomyVersion int64                            `json:"facetTaxonomyVersion,omitempty"`
+	PanelAttributes      bool                             `json:"panelAttributes,omitempty"`
+	Exact                bool                             `json:"exact,omitempty"`
+	TrackQuery           bool                             `json:"trackQuery"`
+	Observe              bool                             `json:"observe,omitempty"`
+	BuyerKey             string                           `json:"buyerKey,omitempty"`
+	GroupID              string                           `json:"groupId,omitempty"`
+	Attributes           map[string]ports.AttributeFilter `json:"attributes"`
+	FacetFields          []facetField                     `json:"facetFields"`
+	FacetKeys            []string                         `json:"facetKeys,omitempty"`
+	PriceHistogram       bool                             `json:"priceHistogram,omitempty"`
+	Facets               *[]ports.FacetCode               `json:"facets,omitempty"`
+	InStockSet           bool                             `json:"inStockSet"`
+	Text                 string                           `json:"text"`
+	TenantIDs            []string                         `json:"tenantIds"`
+	CategoryID           string                           `json:"categoryId"`
+	PriceMin             *int64                           `json:"priceMin"`
+	PriceMax             *int64                           `json:"priceMax"`
+	InStock              bool                             `json:"inStock"`
+	Sort                 string                           `json:"sort"`
+	Offset               int                              `json:"offset"`
+	Limit                int                              `json:"limit"`
 }
 
 type offerPage struct {
-	Correction    *offerCorrection `json:"correction,omitempty"`
-	Receipt       string           `json:"receipt,omitempty"`
-	Facets        []ports.Facet    `json:"facets"`
-	Total         int              `json:"total"`
-	TotalRelation string           `json:"totalRelation"`
-	Limited       bool             `json:"limited"`
-	Items         []offerDocument  `json:"items"`
+	FacetCategoryID    string           `json:"facetCategoryId,omitempty"`
+	AvailableFacetKeys []string         `json:"availableFacetKeys,omitempty"`
+	Correction         *offerCorrection `json:"correction,omitempty"`
+	Receipt            string           `json:"receipt,omitempty"`
+	Facets             []ports.Facet    `json:"facets"`
+	Total              int              `json:"total"`
+	TotalRelation      string           `json:"totalRelation"`
+	Limited            bool             `json:"limited"`
+	Items              []offerDocument  `json:"items"`
 }
 
 type offerCorrection struct {

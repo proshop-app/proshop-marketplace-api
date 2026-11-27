@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	contractVersion         = 11
+	contractVersion         = 12
 	generationSchemaVersion = 11
 	apiPath                 = "/api/v1/internal/marketplace"
 	batchLimit              = 200
@@ -191,26 +191,28 @@ func (x *Index) Get(ctx context.Context, id string) (ports.OfferDocument, bool, 
 // Search передаёт текст, каноническую категорию и фильтры общему движку.
 func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.OfferPage, error) {
 	payload := offerQuery{
-		Exact:          query.Exact,
-		TrackQuery:     query.TrackQuery,
-		Observe:        query.Observe,
-		BuyerKey:       query.BuyerKey,
-		Attributes:     query.Attributes,
-		FacetFields:    wireFacetFields(query),
-		Facets:         wireFacetSelection(query.Facets),
-		FacetKeys:      query.FacetKeys,
-		PriceHistogram: query.PriceHistogram,
-		InStockSet:     query.InStockSet,
-		Text:           query.Text,
-		TenantIDs:      query.TenantIDs,
-		GroupID:        query.GroupID,
-		CategoryID:     query.CategoryID,
-		PriceMin:       query.PriceMin,
-		PriceMax:       query.PriceMax,
-		InStock:        query.InStock,
-		Sort:           string(query.Sort),
-		Offset:         query.Offset,
-		Limit:          query.Limit,
+		Exact:                query.Exact,
+		TrackQuery:           query.TrackQuery,
+		Observe:              query.Observe,
+		BuyerKey:             query.BuyerKey,
+		Attributes:           query.Attributes,
+		FacetFields:          wireFacetFields(query),
+		FacetTaxonomyVersion: query.FacetTaxonomyVersion,
+		PanelAttributes:      query.FacetTaxonomyVersion > 0 && query.WantsFacet(ports.FacetAttributes),
+		Facets:               wireFacetSelection(query.Facets),
+		FacetKeys:            query.FacetKeys,
+		PriceHistogram:       query.PriceHistogram,
+		InStockSet:           query.InStockSet,
+		Text:                 query.Text,
+		TenantIDs:            query.TenantIDs,
+		GroupID:              query.GroupID,
+		CategoryID:           query.CategoryID,
+		PriceMin:             query.PriceMin,
+		PriceMax:             query.PriceMax,
+		InStock:              query.InStock,
+		Sort:                 string(query.Sort),
+		Offset:               query.Offset,
+		Limit:                query.Limit,
 	}
 	var result offerPage
 	status, err := x.read(ctx, "/search", payload, &result)
@@ -232,13 +234,15 @@ func (x *Index) Search(ctx context.Context, query ports.OfferQuery) (ports.Offer
 		return ports.OfferPage{}, err
 	}
 	page := ports.OfferPage{
-		Correction:    correction,
-		Receipt:       result.Receipt,
-		Facets:        result.Facets,
-		TotalRelation: result.TotalRelation,
-		Limited:       result.Limited,
-		Total:         result.Total,
-		Items:         make([]ports.OfferDocument, 0, len(result.Items)),
+		Correction:         correction,
+		FacetCategoryID:    result.FacetCategoryID,
+		AvailableFacetKeys: result.AvailableFacetKeys,
+		Receipt:            result.Receipt,
+		Facets:             result.Facets,
+		TotalRelation:      result.TotalRelation,
+		Limited:            result.Limited,
+		Total:              result.Total,
+		Items:              make([]ports.OfferDocument, 0, len(result.Items)),
 	}
 
 	for _, doc := range result.Items {

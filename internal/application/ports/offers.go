@@ -122,6 +122,7 @@ const MaxSearchAttributes = 256
 
 // OfferQuery — поиск по выдаче каталога.
 type OfferQuery struct {
+	FacetTaxonomyVersion int64
 	// Exact запрещает исправления опечаток, раскладки и транслита, сохраняя остальные правила поиска.
 	Exact       bool
 	TrackQuery  bool
@@ -148,13 +149,15 @@ type OfferQuery struct {
 
 // OfferPage — страница выдачи.
 type OfferPage struct {
-	Correction    *OfferCorrection
-	Receipt       string
-	Facets        []Facet
-	Total         int
-	TotalRelation string
-	Limited       bool
-	Items         []OfferDocument
+	FacetCategoryID    string
+	AvailableFacetKeys []string
+	Correction         *OfferCorrection
+	Receipt            string
+	Facets             []Facet
+	Total              int
+	TotalRelation      string
+	Limited            bool
+	Items              []OfferDocument
 }
 
 // OfferCorrection объясняет, по какому запросу найдены предложения после исправления или расширения.

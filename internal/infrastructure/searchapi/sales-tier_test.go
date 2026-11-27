@@ -17,7 +17,7 @@ func TestOfferBatchCarriesTierAndContractVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw, err := json.Marshal(batch)
-	if err != nil || batch.ContractVersion != 11 ||
+	if err != nil || batch.ContractVersion != 12 ||
 		!bytes.Contains(raw, []byte(`"salesTier":0`)) || !bytes.Contains(raw, []byte(`"salesTier":3`)) ||
 		bytes.Contains(raw, []byte(`"salesCount"`)) {
 		t.Fatalf("неверный контракт ступеней продаж: %s, %v", raw, err)

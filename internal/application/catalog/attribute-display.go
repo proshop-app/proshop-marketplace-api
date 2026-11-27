@@ -20,10 +20,11 @@ type AttributeDisplay struct {
 }
 
 type taxonomyDisplay struct {
-	definition taxonomy.Definition
-	fields     map[string]taxonomy.Attribute
-	sources    map[string]map[string]string
-	panels     map[string]facetPanel
+	definition        taxonomy.Definition
+	fields            map[string]taxonomy.Attribute
+	sources           map[string]map[string]string
+	panels            map[string]facetPanel
+	searchFacetFields map[string]taxonomy.Attribute
 }
 
 type facetDisplay struct {
@@ -71,6 +72,7 @@ func (q *Queries) displayFor(definition taxonomy.Definition) *taxonomyDisplay {
 		sources:    definition.SelectionSources(),
 	}
 	view.panels = view.buildFacetPanels()
+	view.searchFacetFields = view.collectSearchFacetFields()
 	if current == nil || current.definition.Version < definition.Version {
 		q.display.Store(view)
 	}

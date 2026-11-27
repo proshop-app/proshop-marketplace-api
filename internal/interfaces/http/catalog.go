@@ -55,6 +55,7 @@ type offerJSON struct {
 }
 
 type offerPageJSON struct {
+	FacetCategoryID    string               `json:"facetCategoryId,omitempty"`
 	AvailableFacetKeys []string             `json:"availableFacetKeys,omitempty"`
 	Correction         *offerCorrectionJSON `json:"correction,omitempty"`
 	Receipt            string               `json:"receipt,omitempty"`
@@ -168,6 +169,7 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 	}
 	body := offerPageJSON{
 		AvailableFacetKeys: list.AvailableFacetKeys,
+		FacetCategoryID:    list.FacetCategoryID,
 		Receipt:            list.Receipt,
 		Facets:             facets,
 		Items:              make([]offerJSON, 0, len(list.Items)),
