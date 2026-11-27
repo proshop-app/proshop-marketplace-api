@@ -207,7 +207,7 @@ func testSilentCreationServer(
 
 func (load creationLoad) dispatch(ctx context.Context, t *testing.T) {
 	t.Helper()
-	if err := load.executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, load.executor); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -220,7 +220,7 @@ func (load creationLoad) finishHealthy(ctx context.Context, t *testing.T, expect
 			t.Fatal("ожидалось успешное создание", result)
 		}
 		before := load.queue.calls("")
-		if err := load.executor.Refill(ctx, result.Task.Kind); err != nil {
+		if _, _, err := load.executor.Refill(ctx, result.Task.Kind); err != nil {
 			t.Fatal(err)
 		}
 		if got := load.queue.calls("") - before; got > 1 {

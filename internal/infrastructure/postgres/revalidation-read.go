@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
@@ -49,7 +50,8 @@ const (
 
 // Revalidations использует только транзакцию страницы, не владеет кэшем или пулом.
 type Revalidations struct {
-	db *gorm.DB
+	db   *gorm.DB
+	wake func(string, time.Time)
 }
 
 type revalidationSignalTimes struct {

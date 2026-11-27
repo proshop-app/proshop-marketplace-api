@@ -380,7 +380,7 @@ func TestCheckouts(t *testing.T) {
 func TestLeases(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	leases := postgres.NewLeases(pool)
+	leases := postgres.NewLeases(postgres.Single(pool))
 	if ok, err := leases.Acquire(ctx, "job", "pod-1", time.Minute); err != nil || !ok {
 		t.Fatalf("свободная аренда: %v %v", ok, err)
 	}

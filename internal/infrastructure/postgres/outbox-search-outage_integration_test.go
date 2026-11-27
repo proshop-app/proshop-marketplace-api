@@ -226,14 +226,20 @@ func newSearchOutageReplica(
 
 func runSearchOutagePass(ctx context.Context, t *testing.T, lane *messaging.IndependentLane) []messaging.Outcome {
 	t.Helper()
-	outcomes, err := lane.RunOnce(ctx)
+	outcomes, err := runLaneForTest(ctx, lane)
 	if err != nil {
 		t.Fatal(err)
 	}
 	lane.Wait()
-	indexed, err := lane.RunOnce(ctx)
+	indexed, err := runLaneForTest(ctx, lane)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return append(outcomes, indexed...)
+}
+
+func runLaneForTest(ctx context.Context, lane *messaging.IndependentLane) ([]messaging.Outcome, error) {
+	previous, previousErr := lane.Finish()
+	outcomes, _, _, err := lane.RunWork(ctx, nil)
+	return append(previous, outcomes...), errors.Join(previousErr, err)
 }

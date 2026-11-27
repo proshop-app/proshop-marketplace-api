@@ -18,6 +18,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencedata"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
@@ -115,7 +116,9 @@ func runReferenceDelivery(ctx context.Context, cfg config.Config, args []string,
 	}
 	defer pool.Close()
 	// событие уходит через outbox: публикует его процесс serve
-	uow := postgres.NewUnitOfWork(pool)
+	wake, closeWake := redis.CommandWorkSignal(cfg.Redis.URL, slog.Default())
+	defer closeWake()
+	uow := postgres.NewUnitOfWork(pool).WithWorkSignal(wake)
 	service := appreference.NewService(uow, clock.System{}, random.IDs{}, nil, appreference.Config{})
 	operation := service.Apply
 	if args[0] == "rollback" {
@@ -151,8 +154,10 @@ func moderationReevaluate(ctx context.Context, cfg config.Config, _ *slog.Logger
 		return err
 	}
 	defer pool.Close()
+	wake, closeWake := redis.CommandWorkSignal(cfg.Redis.URL, slog.Default())
+	defer closeWake()
 	service := appmoderation.NewService(
-		postgres.NewUnitOfWork(pool),
+		postgres.NewUnitOfWork(pool).WithWorkSignal(wake),
 		clock.System{},
 		random.IDs{},
 		appmoderation.Config{
@@ -193,8 +198,10 @@ func runReferenceImport(ctx context.Context, cfg config.Config, args []string, o
 		return errors.New("не удалось подключиться к PostgreSQL")
 	}
 	defer pool.Close()
+	wake, closeWake := redis.CommandWorkSignal(cfg.Redis.URL, slog.Default())
+	defer closeWake()
 	service := appreference.NewService(
-		postgres.NewUnitOfWork(pool),
+		postgres.NewUnitOfWork(pool).WithWorkSignal(wake),
 		clock.System{},
 		random.IDs{},
 		nil,

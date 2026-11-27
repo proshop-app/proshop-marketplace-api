@@ -82,7 +82,7 @@ func TestStockSnapshotUpdatesIndexWithoutStoreSummaryTask(t *testing.T) {
 		refreshes := 0
 		for {
 			clock.Advance(time.Second)
-			outcomes, err := dispatcher.RunOnce(ctx)
+			outcomes, _, _, err := dispatcher.RunWork(ctx, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

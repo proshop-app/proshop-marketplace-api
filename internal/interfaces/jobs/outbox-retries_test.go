@@ -105,7 +105,7 @@ func TestRetrySnapshotDoesNotFollowQueueDrainRate(t *testing.T) {
 		map[string]messaging.Handler{"work": func(context.Context, ports.Task) error { return nil }},
 	)
 	for range 20 {
-		if _, err := dispatcher.RunOnce(ctx); err != nil {
+		if _, _, _, err := dispatcher.RunWork(ctx, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

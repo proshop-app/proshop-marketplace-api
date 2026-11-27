@@ -4,6 +4,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -15,45 +16,38 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
-// Dispatcher — разбор одной пачки outbox.
-type Dispatcher interface {
-	RunOnce(ctx context.Context) ([]messaging.Outcome, error)
-}
-
 // Purger — чистка по сроку.
 type Purger interface {
 	Purge(ctx context.Context) (ports.PurgeResult, error)
 }
 
-// OutboxRunner опустошает готовую очередь, затем ждёт следующего опроса.
+// OutboxRunner опустошает готовую очередь и засыпает до следующей работы.
 type OutboxRunner struct {
-	dispatcher Dispatcher
-	interval   time.Duration
-	logger     *slog.Logger
-	tasks      *prometheus.CounterVec
-	lag        *prometheus.HistogramVec
-	errors     prometheus.Counter
-	panics     *prometheus.CounterVec
+	logger *slog.Logger
+	clock  ports.Clock
+	tasks  *prometheus.CounterVec
+	lag    *prometheus.HistogramVec
+	errors prometheus.Counter
+	panics *prometheus.CounterVec
 }
 
 // RetentionRunner чистит служебные записи по расписанию.
 type RetentionRunner struct {
 	purger   Purger
+	schedule ports.IndexRebuildLock
 	interval time.Duration
 	logger   *slog.Logger
 }
 
 // NewOutboxRunner — цикл разбора outbox с метриками.
 func NewOutboxRunner(
-	dispatcher Dispatcher,
-	interval time.Duration,
 	logger *slog.Logger,
 	registerer prometheus.Registerer,
+	clock ports.Clock,
 ) *OutboxRunner {
 	r := &OutboxRunner{
-		dispatcher: dispatcher,
-		interval:   interval,
-		logger:     logger,
+		logger: logger,
+		clock:  clock,
 		tasks: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "marketplace_outbox_tasks_total",
@@ -84,54 +78,6 @@ func NewOutboxRunner(
 	registerer.MustRegister(r.tasks, r.lag, r.errors, r.panics)
 
 	return r
-}
-
-// Run крутит разбор до отмены контекста.
-func (r *OutboxRunner) Run(ctx context.Context) error {
-	return r.run(ctx, r.dispatcher, nil)
-}
-
-// RunLane разбирает свои виды задач независимо и пишет в общие метрики outbox.
-func (r *OutboxRunner) RunLane(ctx context.Context, dispatcher Dispatcher) error {
-	return r.run(ctx, dispatcher, nil)
-}
-
-// RunIndependent ведёт общий цикл и дожидается отдельной полосы при остановке.
-func (r *OutboxRunner) RunIndependent(ctx context.Context, lane *messaging.IndependentLane) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer func() {
-		cancel()
-		lane.Wait()
-	}()
-	return r.run(ctx, lane, lane.Done)
-}
-
-func (r *OutboxRunner) run(
-	ctx context.Context,
-	dispatcher Dispatcher,
-	wake func() <-chan struct{},
-) error {
-	for {
-		outcomes, err := dispatcher.RunOnce(ctx)
-		r.record(outcomes)
-
-		if err != nil && ctx.Err() == nil {
-			r.errors.Inc()
-			r.logger.Error("outbox: цикл разбора не удался", slog.Any("error", err))
-		}
-
-		if err == nil && len(outcomes) > 0 {
-			continue
-		}
-
-		var done <-chan struct{}
-		if err == nil && wake != nil {
-			done = wake()
-		}
-		if !waitForWork(ctx, r.interval, done) {
-			return nil
-		}
-	}
 }
 
 func (r *OutboxRunner) record(outcomes []messaging.Outcome) {
@@ -178,12 +124,19 @@ func NewRetentionRunner(purger Purger, interval time.Duration, logger *slog.Logg
 	return &RetentionRunner{purger: purger, interval: interval, logger: logger}
 }
 
+// WithSchedule назначает общего владельца уборки.
+func (r *RetentionRunner) WithSchedule(schedule ports.IndexRebuildLock) *RetentionRunner {
+	r.schedule = schedule
+	return r
+}
+
 // Run чистит сразу и далее раз в интервал до отмены контекста.
 func (r *RetentionRunner) Run(ctx context.Context) error {
 	for {
-		result, err := r.purger.Purge(ctx)
+		result, err := r.purge(ctx)
 
 		switch {
+		case errors.Is(err, ports.ErrRebuildBusy):
 		case err != nil && ctx.Err() == nil:
 			r.logger.Error("чистка: не удалась", slog.Any("error", err))
 		case err == nil:
@@ -203,11 +156,21 @@ func (r *RetentionRunner) Run(ctx context.Context) error {
 	}
 }
 
-func wait(ctx context.Context, d time.Duration) bool {
-	return waitForWork(ctx, d, nil)
+func (r *RetentionRunner) purge(ctx context.Context) (ports.PurgeResult, error) {
+	if r.schedule == nil {
+		return r.purger.Purge(ctx)
+	}
+	var result ports.PurgeResult
+	err := r.schedule.WithLock(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = r.purger.Purge(ctx)
+		return err
+	})
+	return result, err
 }
 
-func waitForWork(ctx context.Context, d time.Duration, wake <-chan struct{}) bool {
+func wait(ctx context.Context, d time.Duration) bool {
+
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 
@@ -215,8 +178,6 @@ func waitForWork(ctx context.Context, d time.Duration, wake <-chan struct{}) boo
 	case <-ctx.Done():
 		return false
 	case <-timer.C:
-		return true
-	case <-wake:
 		return true
 	}
 }

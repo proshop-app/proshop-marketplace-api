@@ -58,7 +58,7 @@ func seedOfferBatch(t *testing.T, size int) (*fake.Store, *fake.Index, *fake.Clo
 
 func TestOfferBatchUsesOneIndexCall(t *testing.T) {
 	store, index, clock := seedOfferBatch(t, 200)
-	outcomes, err := batchDispatcher(store, index, clock).RunOnce(context.Background())
+	outcomes, _, _, err := batchDispatcher(store, index, clock).RunWork(context.Background(), nil)
 	if err != nil || len(outcomes) != 200 || len(index.PutBatches) != 1 || len(index.PutBatches[0]) != 200 {
 		t.Fatalf("200 задач должны дать одну отправку: %d, %d, %v", len(outcomes), len(index.PutBatches), err)
 	}
@@ -80,7 +80,7 @@ func TestOfferBatchReadsLatestAndCoalescesTasks(t *testing.T) {
 	state.Revision++
 	state.Version++
 	store.SeedProduct(state)
-	outcomes, err := batchDispatcher(store, index, clock).RunOnce(context.Background())
+	outcomes, _, _, err := batchDispatcher(store, index, clock).RunWork(context.Background(), nil)
 	if err != nil || len(outcomes) != 2 || len(index.PutBatches) != 1 || len(index.PutBatches[0]) != 1 {
 		t.Fatalf("две задачи одного предложения склеиваются: %+v, %v", outcomes, err)
 	}
@@ -104,7 +104,7 @@ func TestOfferBatchRetriesWholeFailureWithBackoff(t *testing.T) {
 	store, index, clock := seedOfferBatch(t, 4)
 	index.FailPut = errors.New("поиск недоступен")
 	d := batchDispatcher(store, index, clock)
-	outcomes, err := d.RunOnce(context.Background())
+	outcomes, _, _, err := d.RunWork(context.Background(), nil)
 	if err != nil || len(outcomes) != 4 || len(index.PutBatches) != 1 {
 		t.Fatalf("временный сбой не дробит пачку: %+v, %v", outcomes, err)
 	}
@@ -115,12 +115,12 @@ func TestOfferBatchRetriesWholeFailureWithBackoff(t *testing.T) {
 			}
 		}
 	}
-	if outcomes, err := d.RunOnce(context.Background()); err != nil || len(outcomes) != 0 {
+	if outcomes, _, _, err := d.RunWork(context.Background(), nil); err != nil || len(outcomes) != 0 {
 		t.Fatalf("повтор до срока: %+v, %v", outcomes, err)
 	}
 	clock.Advance(time.Second)
 	index.FailPut = nil
-	if outcomes, err := d.RunOnce(context.Background()); err != nil || len(outcomes) != 4 {
+	if outcomes, _, _, err := d.RunWork(context.Background(), nil); err != nil || len(outcomes) != 4 {
 		t.Fatalf("повтор всей пачки: %+v, %v", outcomes, err)
 	}
 	if len(index.PutBatches) != 2 || len(index.PutBatches[1]) != 4 {
@@ -139,7 +139,7 @@ func TestOfferBatchDefersOnlyRejectedOffer(t *testing.T) {
 	}
 	d := batchDispatcher(store, index, clock)
 	ctx := context.Background()
-	outcomes, err := d.RunOnce(ctx)
+	outcomes, _, _, err := d.RunWork(ctx, nil)
 	if err != nil || len(outcomes) != 3 {
 		t.Fatalf("первый проход: %+v, %v", outcomes, err)
 	}
@@ -155,12 +155,12 @@ func TestOfferBatchDefersOnlyRejectedOffer(t *testing.T) {
 	seedProduct(store, "t2", "p0")
 	enqueueOffer(t, store, "t2", "p0")
 	index.RejectPut = nil
-	outcomes, err = d.RunOnce(ctx)
+	outcomes, _, _, err = d.RunWork(ctx, nil)
 	if err != nil || len(outcomes) != 1 || outcomes[0].Task.TenantID != "t2" || outcomes[0].Err != nil {
 		t.Fatalf("новое предложение другого продавца: %+v, %v", outcomes, err)
 	}
 	clock.Advance(time.Second)
-	outcomes, err = d.RunOnce(ctx)
+	outcomes, _, _, err = d.RunWork(ctx, nil)
 	if err != nil || len(outcomes) != 2 || len(index.PutBatches) != 3 {
 		t.Fatalf("повтор двух задач одного предложения: %+v, %v", outcomes, err)
 	}
@@ -179,7 +179,7 @@ func TestOfferBatchIsolatesPoison(t *testing.T) {
 		}
 		return nil
 	}
-	outcomes, err := batchDispatcher(store, index, clock).RunOnce(context.Background())
+	outcomes, _, _, err := batchDispatcher(store, index, clock).RunWork(context.Background(), nil)
 	if err != nil || len(outcomes) != 5 {
 		t.Fatal(outcomes, err)
 	}
@@ -220,7 +220,7 @@ func TestOfferBatchIncludesHiddenAndDeletedDocuments(t *testing.T) {
 		}
 		store.SeedProduct(state)
 	}
-	if _, err := batchDispatcher(store, index, clock).RunOnce(context.Background()); err != nil {
+	if _, _, _, err := batchDispatcher(store, index, clock).RunWork(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(index.PutBatches) != 1 || len(index.PutBatches[0]) != 3 {

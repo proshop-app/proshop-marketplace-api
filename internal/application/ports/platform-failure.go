@@ -42,6 +42,7 @@ const (
 // PlatformServerGate позволяет очереди не брать работу, которую ограждение заведомо отклонит.
 type PlatformServerGate interface {
 	ServerState() PlatformServerState
+	ServerWorkAt() time.Time
 	// CreationCandidates подсказывает, когда искать работу с другого конца очереди,
 	// и какие магазины пропустить при этом поиске или при пробе сервера.
 	CreationCandidates(probe bool) (preferRecent bool, excluded []ids.TenantID)

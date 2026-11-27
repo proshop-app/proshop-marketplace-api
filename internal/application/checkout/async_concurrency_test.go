@@ -123,7 +123,7 @@ func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 			},
 		},
 	)
-	go func() { _, err := dispatcher.RunOnce(ctx); otherDone <- err }()
+	go func() { _, _, _, err := dispatcher.RunWork(ctx, nil); otherDone <- err }()
 	<-otherStarted
 	defer func() {
 		close(release)
@@ -144,7 +144,7 @@ func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 	// Общий срок обработчика заканчивается позже срока, в который покупатель ждёт результат.
 	const beforeDispatch = time.Second
 	e.clock.Advance(beforeDispatch)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	<-started
@@ -172,7 +172,7 @@ func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 		cancelSecond()
 		second.Wait()
 	}()
-	if err := second.Dispatch(secondCtx); err != nil {
+	if err := dispatchForTest(secondCtx, second); err != nil {
 		t.Fatal(err)
 	}
 	if secondQueue.taken() != 0 {
@@ -180,7 +180,7 @@ func TestExecutorDoesNotWaitForSlowSellerOrOtherTask(t *testing.T) {
 	}
 	// Закрытие срока не занимает место HTTP и не ждёт заблокированный магазин.
 	e.clock.Advance(appcheckout.CreationTimeout - beforeDispatch - alreadyRunning)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	for closed := 0; closed < 2; {
@@ -237,7 +237,7 @@ func TestPollLaneDoesNotBlockCreationOrGeneralOutbox(t *testing.T) {
 	defer func() { close(release); executor.Wait() }()
 	const beforeDispatch = time.Second
 	e.clock.Advance(beforeDispatch)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	<-started
@@ -266,7 +266,7 @@ func TestPollLaneDoesNotBlockCreationOrGeneralOutbox(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	counts := e.store.ReadyTasks(e.clock.Now())
@@ -289,12 +289,12 @@ func TestPollLaneDoesNotBlockCreationOrGeneralOutbox(t *testing.T) {
 		},
 		map[string]messaging.Handler{"index": func(context.Context, ports.Task) error { return nil }},
 	)
-	outcomes, err := dispatcher.RunOnce(ctx)
+	outcomes, _, _, err := dispatcher.RunWork(ctx, nil)
 	if err != nil || len(outcomes) != 1 || outcomes[0].Err != nil || outcomes[0].Task.Kind != "index" {
 		t.Fatal("сверка задержала общий outbox", outcomes, err)
 	}
 	e.clock.Advance(appcheckout.CreationTimeout - beforeDispatch)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {

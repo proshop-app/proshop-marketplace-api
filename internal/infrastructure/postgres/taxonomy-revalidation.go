@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"time"
+
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
@@ -37,7 +40,10 @@ const (
 
 // QueueRevalidation не читает товары: одна запись пачки категорий в транзакции публикации.
 func (r *Taxonomy) QueueRevalidation(ctx context.Context, version int64, categories []string) error {
-	_, err := execSQL(ctx, r.db, queueRevalidation, version, categories)
+	affected, err := execSQL(ctx, r.db, queueRevalidation, version, categories)
+	if err == nil && affected > 0 && r.wake != nil {
+		r.wake(ports.TaxonomyWork, time.Time{})
+	}
 	return err
 }
 

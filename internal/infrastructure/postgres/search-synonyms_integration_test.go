@@ -186,7 +186,7 @@ func assertSynonymEvents(
 		map[string]messaging.Handler{app.TaskChanged: service.HandleTask},
 	)
 	for i := 0; i < 3; i++ {
-		if _, err := dispatcher.RunOnce(context.Background()); err != nil {
+		if _, _, _, err := dispatcher.RunWork(context.Background(), nil); err != nil {
 			t.Fatal(err)
 		}
 	}

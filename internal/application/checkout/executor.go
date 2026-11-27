@@ -60,7 +60,7 @@ var executorLanes = [...]executorLane{
 }
 
 // Executor разделяет создание, закрытие срока, отмену и сверку на независимые полосы.
-// Dispatch вызывается одним циклом, результаты каждого вызова сохраняются независимо.
+// Refill вызывается одним циклом, результаты каждого вызова сохраняются независимо.
 type Executor struct {
 	maxAttempts int
 	queue       ports.TaskQueue
@@ -103,53 +103,32 @@ func NewExecutor(
 // Results сообщает циклу о свободном месте после обработки задачи.
 func (e *Executor) Results() <-chan TaskResult { return e.results }
 
-// Wait вызывается после остановки Dispatch и отмены контекста исполнения.
+// Wait вызывается после остановки Refill и отмены контекста исполнения.
 func (e *Executor) Wait() { e.wg.Wait() }
 
-// Dispatch обнаруживает новую работу всех полос на очередном проходе.
-func (e *Executor) Dispatch(ctx context.Context) error {
-	var failed error
-	for _, lane := range executorLanes {
-		failed = errors.Join(failed, e.dispatchLane(ctx, lane))
-	}
-	return failed
-}
-
-// Refill проверяет только полосу освободившегося места.
-func (e *Executor) Refill(ctx context.Context, kind string) error {
+// Refill заполняет свободные места полосы и сообщает, исчерпано ли число мест.
+func (e *Executor) Refill(ctx context.Context, kind string) (claimed int, full bool, err error) {
 	for _, lane := range executorLanes {
 		if lane.kind == kind {
 			return e.dispatchLane(ctx, lane)
 		}
 	}
-	return nil
+	return 0, true, nil
 }
 
-func (e *Executor) dispatchLane(ctx context.Context, lane executorLane) error {
+func (e *Executor) dispatchLane(ctx context.Context, lane executorLane) (int, bool, error) {
 	// Создание заказа ждёт покупатель (CreationTimeout): полоса берёт соединения своего
 	// пула, их не займут индексация outbox и фоновые циклы.
 	ctx = ports.WithDatabaseClass(ctx, ports.DatabaseOrders)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	kind := lane.kind
-	limit := lane.workers
-	slots := make(map[ids.TenantID]int, len(e.active[kind]))
-	for tenant, count := range e.active[kind] {
-		limit -= count
-		slots[tenant] = lane.perTenant - count
-	}
-	if limit == 0 {
-		return nil
-	}
-	request := ports.ClaimRequest{
-		Limit:       limit,
-		PerTenant:   lane.perTenant,
-		Kinds:       []string{kind},
-		TenantSlots: slots,
-		After:       e.after[kind],
+	request := e.laneRequest(lane)
+	if request.Limit == 0 {
+		return 0, true, nil
 	}
 	if kind == TaskCreateOrder && !e.allowCreation(&request) {
-		return nil
+		return 0, true, nil
 	}
 	request.Now = e.clock.Now()
 	request.LeaseUntil = request.Now.Add(taskLease)
@@ -157,7 +136,7 @@ func (e *Executor) dispatchLane(ctx context.Context, lane executorLane) error {
 	defer cancel()
 	claimed, err := e.queue.Claim(claimCtx, request)
 	if err != nil {
-		return err
+		return 0, false, err
 	}
 	e.after[kind] = claimed.Next
 	for _, task := range claimed.Tasks {
@@ -165,7 +144,52 @@ func (e *Executor) dispatchLane(ctx context.Context, lane executorLane) error {
 		e.wg.Add(1)
 		safego.Go("checkout.executor", func() { e.execute(ctx, task) })
 	}
-	return nil
+	return len(claimed.Tasks), len(claimed.Tasks) == request.Limit, nil
+}
+
+// WorkKinds возвращает полосы в порядке обслуживания.
+func (e *Executor) WorkKinds() []string {
+	kinds := make([]string, 0, len(executorLanes))
+	for _, lane := range executorLanes {
+		kinds = append(kinds, lane.kind)
+	}
+	return kinds
+}
+
+// WorkRequest учитывает занятые места при поиске следующего срока полосы.
+func (e *Executor) WorkRequest(kind string) (ports.ClaimRequest, time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, lane := range executorLanes {
+		if lane.kind == kind {
+			request := e.laneRequest(lane)
+			if kind == TaskCreateOrder && e.gate != nil {
+				at := e.gate.ServerWorkAt()
+				if at.IsZero() && !e.allowCreation(&request) {
+					request.Limit = 0
+				}
+				return request, at
+			}
+			return request, time.Time{}
+		}
+	}
+	return ports.ClaimRequest{}, time.Time{}
+}
+
+func (e *Executor) laneRequest(lane executorLane) ports.ClaimRequest {
+	limit := lane.workers
+	slots := make(map[ids.TenantID]int, len(e.active[lane.kind]))
+	for tenant, count := range e.active[lane.kind] {
+		limit -= count
+		slots[tenant] = lane.perTenant - count
+	}
+	return ports.ClaimRequest{
+		Limit:       limit,
+		PerTenant:   lane.perTenant,
+		Kinds:       []string{lane.kind},
+		TenantSlots: slots,
+		After:       e.after[lane.kind],
+	}
 }
 
 func (e *Executor) allowCreation(request *ports.ClaimRequest) bool {

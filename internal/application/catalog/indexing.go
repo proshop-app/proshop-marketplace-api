@@ -18,15 +18,16 @@ const CatchUpMargin = 5 * time.Minute
 // Indexer переносит предложения из проекции в индекс. Источник истины —
 // проекция: индекс всегда можно собрать заново.
 type Indexer struct {
-	batchObserver ports.OfferBatchObserver
-	skipObserver  ports.OfferIndexSkipObserver
-	models        *ModelKeys
-	uow           ports.UnitOfWork
-	index         ports.OfferIndex
-	clock         ports.Clock
-	batch         int
-	refreshDelay  time.Duration
-	lock          ports.IndexRebuildLock
+	maintenanceSignal func()
+	batchObserver     ports.OfferBatchObserver
+	skipObserver      ports.OfferIndexSkipObserver
+	models            *ModelKeys
+	uow               ports.UnitOfWork
+	index             ports.OfferIndex
+	clock             ports.Clock
+	batch             int
+	refreshDelay      time.Duration
+	lock              ports.IndexRebuildLock
 }
 
 // NewIndexer — синхронизация индекса пачками по batch предложений.
@@ -106,7 +107,7 @@ func (i *Indexer) SyncOffer(ctx context.Context, tenantID ids.TenantID, productI
 		return nil
 	}
 
-	return i.index.Put(ctx, []ports.OfferDocument{doc})
+	return i.put(ctx, []ports.OfferDocument{doc})
 }
 
 func (i *Indexer) scheduleStoreSummaryChanges(ctx context.Context, tx ports.Tx, states []ports.OfferState) error {
@@ -128,7 +129,7 @@ func (i *Indexer) scheduleStoreSummaryChanges(ctx context.Context, tx ports.Tx, 
 func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 	var after ids.ProductID
 	put := func(docs []ports.OfferDocument) error {
-		return i.index.Put(ctx, docs)
+		return i.put(ctx, docs)
 	}
 
 	for {
@@ -270,6 +271,19 @@ func Document(state ports.OfferState) (ports.OfferDocument, bool) {
 	doc.CheckoutAvailable = offer.CheckoutAvailable
 
 	return doc, true
+}
+
+// SetMaintenanceSignal подключает запуск обслуживания после обращений по записи.
+func (i *Indexer) SetMaintenanceSignal(signal func()) {
+	i.maintenanceSignal = signal
+}
+
+func (i *Indexer) put(ctx context.Context, docs []ports.OfferDocument) error {
+	err := i.index.Put(ctx, docs)
+	if i.maintenanceSignal != nil && len(docs) > 0 {
+		i.maintenanceSignal()
+	}
+	return err
 }
 
 // Maintain собирает отсутствующий индекс (первый запуск или потеря кластера),

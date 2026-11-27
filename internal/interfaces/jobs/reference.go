@@ -21,7 +21,7 @@ type ReferenceStats interface {
 // записей и длину очереди кандидатов: по ним видно, что поставка прошла и
 // что очередь оператора растёт.
 type ReferenceStatsRunner struct {
-	schedule   ports.IndexRebuildLock
+	schedule   ports.IntervalWork
 	stats      ReferenceStats
 	interval   time.Duration
 	logger     *slog.Logger
@@ -98,7 +98,7 @@ func (r *ReferenceStatsRunner) Run(ctx context.Context) error {
 }
 
 // WithSchedule назначает общее расписание для реплик.
-func (r *ReferenceStatsRunner) WithSchedule(schedule ports.IndexRebuildLock) *ReferenceStatsRunner {
+func (r *ReferenceStatsRunner) WithSchedule(schedule ports.IntervalWork) *ReferenceStatsRunner {
 	r.schedule = schedule
 	return r
 }
@@ -109,11 +109,11 @@ func (r *ReferenceStatsRunner) RunOnce(ctx context.Context) {
 		r.runOnce(ctx)
 		return
 	}
-	err := r.schedule.WithLock(ctx, func(ctx context.Context) error {
+	err := r.schedule.Run(ctx, func(ctx context.Context) error {
 		r.runOnce(ctx)
 		return nil
 	})
-	if err != nil && !errors.Is(err, ports.ErrRebuildBusy) && ctx.Err() == nil {
+	if err != nil && !errors.Is(err, ports.ErrIntervalTaken) && ctx.Err() == nil {
 		r.logger.Warn("расписание фоновой сверки: сбой", slog.Any("error", err))
 	}
 }

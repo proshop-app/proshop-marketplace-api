@@ -174,7 +174,6 @@ type Kafka struct {
 type Outbox struct {
 	RetryMetricsInterval time.Duration
 	MaxAttempts          int
-	PollInterval         time.Duration
 	Batch                int
 	PerTenant            int
 	Lease                time.Duration
@@ -251,7 +250,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 		Outbox: Outbox{
 			RetryMetricsInterval: r.duration("OUTBOX_RETRY_METRICS_INTERVAL", time.Minute),
 			MaxAttempts:          r.positive("OUTBOX_MAX_ATTEMPTS", 10),
-			PollInterval:         r.duration("OUTBOX_POLL_INTERVAL", time.Second),
 			Batch:                r.positive("OUTBOX_BATCH", 200),
 			PerTenant:            r.positive("OUTBOX_PER_TENANT", 200),
 			Lease:                r.duration("OUTBOX_LEASE", 90*time.Second),
@@ -346,9 +344,6 @@ func Load(env func(string) (string, bool)) (Config, error) {
 	}
 	if cfg.Outbox.Batch > 200 {
 		r.fail("OUTBOX_BATCH", "не больше 200: предел служебного API поиска")
-	}
-	if cfg.Outbox.PollInterval > time.Minute {
-		r.fail("OUTBOX_POLL_INTERVAL", "не больше минуты")
 	}
 	if cfg.SmsRu.Mode == SmsRuLive && cfg.SmsRu.APIID == "" {
 		r.fail("SMSRU_API_ID", "обязательна при SMSRU_MODE=live")

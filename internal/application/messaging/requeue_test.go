@@ -48,7 +48,7 @@ func TestRequeuePreservesIntentAndFencesOldOwner(t *testing.T) {
 	}
 	d := messaging.NewDispatcher(store, clock, config(), nil)
 	for range 3 {
-		if _, err := d.RunOnce(context.Background()); err != nil {
+		if _, _, _, err := d.RunWork(context.Background(), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -79,7 +79,7 @@ func TestRequeuePreservesIntentAndFencesOldOwner(t *testing.T) {
 		"other": func(context.Context, ports.Task) error { return nil },
 	})
 	for range 3 {
-		if _, err := d.RunOnce(context.Background()); err != nil {
+		if _, _, _, err := d.RunWork(context.Background(), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -100,7 +100,7 @@ func TestShutdownLeavesClaimRecoverable(t *testing.T) {
 			return messaging.ErrInvalidTask
 		},
 	})
-	if _, err := d.RunOnce(ctx); !errors.Is(err, context.Canceled) {
+	if _, _, _, err := d.RunWork(ctx, nil); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	row := store.OutboxRows()[0]
@@ -111,7 +111,7 @@ func TestShutdownLeavesClaimRecoverable(t *testing.T) {
 	d = messaging.NewDispatcher(store, clock, config(), map[string]messaging.Handler{
 		"work": func(context.Context, ports.Task) error { return nil },
 	})
-	if _, err := d.RunOnce(context.Background()); err != nil || store.OutboxRows()[0].DoneAt == nil {
+	if _, _, _, err := d.RunWork(context.Background(), nil); err != nil || store.OutboxRows()[0].DoneAt == nil {
 		t.Fatal("новый процесс не восстановил аренду", err)
 	}
 }

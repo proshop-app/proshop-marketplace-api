@@ -109,7 +109,7 @@ func TestProjectionToIndex(t *testing.T) {
 		t.Helper()
 
 		for {
-			outcomes, err := dispatcher.RunOnce(ctx)
+			outcomes, _, _, err := dispatcher.RunWork(ctx, nil)
 
 			if err != nil {
 				t.Fatal(err)

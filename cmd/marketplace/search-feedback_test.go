@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
+	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/application/searchfeedback"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
@@ -20,9 +22,9 @@ func (f searchPurchaseSinkFunc) Purchase(ctx context.Context, purchase ports.Sea
 	return f(ctx, purchase)
 }
 
-func TestSearchPurchaseDispatcherRetriesWithSameEvent(t *testing.T) {
+func TestSearchPurchaseRetriesAndExpires(t *testing.T) {
 	ctx := context.Background()
-	clock := fake.NewClock(time.Now().UTC())
+	clock := fake.NewClock(time.Unix(1, 0))
 	store := fake.NewStore()
 	event := enqueuePurchaseTask(t, store, clock.Now(), "t1", "o1")
 	if err := store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
@@ -38,56 +40,37 @@ func TestSearchPurchaseDispatcherRetriesWithSameEvent(t *testing.T) {
 		}
 		return nil
 	})
-	dispatcher := searchPurchaseDispatcher(store, clock, sink)
-	first, err := dispatcher.RunOnce(ctx)
+	dispatcher := messaging.NewDispatcher(
+		store,
+		clock,
+		messaging.DispatcherConfig{Batch: 4, PerTenant: 1},
+		map[string]messaging.Handler{searchfeedback.TaskPurchase: searchfeedback.NewPurchases(sink, clock).Deliver},
+	)
+	kinds := []string{searchfeedback.TaskPurchase}
+	first, _, _, err := dispatcher.RunWork(ctx, kinds)
 	if err != nil || len(first) != 1 || errs.CodeOf(first[0].Err) != errs.Unavailable {
 		t.Fatal(first, err)
 	}
-	if outcomes, err := dispatcher.RunOnce(ctx); len(outcomes) != 0 || err != nil {
+	if outcomes, _, _, err := dispatcher.RunWork(ctx, kinds); len(outcomes) != 0 || err != nil {
 		t.Fatal("отложенный повтор либо чужая задача", outcomes, err)
 	}
 	clock.Advance(time.Second)
-	second, err := dispatcher.RunOnce(ctx)
+	second, _, _, err := dispatcher.RunWork(ctx, kinds)
 	if err != nil || len(second) != 1 || second[0].Err != nil || second[0].Task.Attempts != 2 {
 		t.Fatal(second, err)
 	}
 	if !reflect.DeepEqual(got, []ports.SearchPurchase{event, event}) {
 		t.Fatal("повтор изменил событие", got)
 	}
-	if outcomes, err := dispatcher.RunOnce(ctx); len(outcomes) != 0 || err != nil {
-		t.Fatal(outcomes, err)
-	}
-}
-
-func TestSearchPurchaseDispatcherBoundsLaneAndExpires(t *testing.T) {
-	ctx := context.Background()
-	clock := fake.NewClock(time.Now().UTC())
-	store := fake.NewStore()
-	for index, tenant := range []ids.TenantID{"t1", "t1", "t2", "t3", "t4", "t5"} {
-		enqueuePurchaseTask(t, store, clock.Now(), tenant, string(rune('a'+index)))
-	}
-	terminal := errs.New(errs.Invalid, "search.purchase_rejected", "поиск отклонил покупку")
-	sent := make(chan string, 6)
-	sink := searchPurchaseSinkFunc(func(_ context.Context, purchase ports.SearchPurchase) error {
-		sent <- purchase.OfferIDs[0]
-		return terminal
-	})
-	dispatcher := searchPurchaseDispatcher(store, clock, sink)
-	outcomes, err := dispatcher.RunOnce(ctx)
-	if err != nil || len(outcomes) != 4 {
-		t.Fatal(outcomes, err)
-	}
-	tenants := make(map[ids.TenantID]bool)
-	for _, outcome := range outcomes {
-		if tenants[outcome.Task.TenantID] || outcome.FailureReason != terminal.Key() {
-			t.Fatal("превышена квота магазина или терминальный отказ не сохранён", outcomes)
-		}
-		tenants[outcome.Task.TenantID] = true
-	}
+	enqueuePurchaseTask(t, store, clock.Now(), "t2", "o2")
 	clock.Advance(2 * time.Hour)
-	outcomes, err = dispatcher.RunOnce(ctx)
-	if err != nil || len(outcomes) != 2 || len(sent) != 4 {
-		t.Fatal("просроченные и терминальные события не отправляются", outcomes, err, len(sent))
+	outcomes, _, _, err := dispatcher.RunWork(ctx, kinds)
+	if len(outcomes) != 1 || outcomes[0].Err != nil || err != nil || len(got) != 2 {
+		t.Fatal("просроченная покупка должна завершиться без вызова поиска", outcomes, err, got)
+	}
+	if !slices.Contains(searchLaneKinds, searchfeedback.TaskPurchase) ||
+		!slices.Contains(searchLaneKinds, ports.TaskPurgeTenant) {
+		t.Fatal("покупка и очистка магазина обращаются к поиску", searchLaneKinds)
 	}
 }
 

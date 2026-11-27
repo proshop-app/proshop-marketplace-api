@@ -24,7 +24,7 @@ type ReadyLanes interface {
 // устаревшие.
 type OutboxReadyRunner struct {
 	source   ReadyLanes
-	schedule ports.IndexRebuildLock
+	schedule ports.IntervalWork
 	logger   *slog.Logger
 	tenants  *prometheus.GaugeVec
 	age      *prometheus.GaugeVec
@@ -34,7 +34,7 @@ type OutboxReadyRunner struct {
 // NewOutboxReadyRunner — метрики готовой работы outbox под общим расписанием реплик.
 func NewOutboxReadyRunner(
 	source ReadyLanes,
-	schedule ports.IndexRebuildLock,
+	schedule ports.IntervalWork,
 	logger *slog.Logger,
 	registerer prometheus.Registerer,
 ) *OutboxReadyRunner {
@@ -77,9 +77,9 @@ func (r *OutboxReadyRunner) Run(ctx context.Context) error {
 
 // RunOnce обновляет метрики у владельца интервала и сбрасывает их у остальных реплик.
 func (r *OutboxReadyRunner) RunOnce(ctx context.Context) {
-	err := r.schedule.WithLock(ctx, r.record)
+	err := r.schedule.Run(ctx, r.record)
 	switch {
-	case errors.Is(err, ports.ErrRebuildBusy):
+	case errors.Is(err, ports.ErrIntervalTaken):
 		r.tenants.Reset()
 		r.age.Reset()
 	case err != nil && ctx.Err() == nil:

@@ -44,17 +44,17 @@ func TestIndependentLaneCompletesOtherWorkWhileSearchWaits(t *testing.T) {
 		cancel()
 		lane.Wait()
 	}()
-	if outcomes, err := lane.RunOnce(ctx); err != nil || len(outcomes) != 0 || queue.calls != 2 {
+	if outcomes, err := runLaneForTest(ctx, lane); err != nil || len(outcomes) != 0 || queue.calls != 2 {
 		t.Fatalf("пустой проход: %v, %v, взятий %d", outcomes, err, queue.calls)
 	}
 	enqueue(t, queue.Store, "index", "t1", "index", t0)
-	if outcomes, err := lane.RunOnce(ctx); err != nil || len(outcomes) != 0 {
+	if outcomes, err := runLaneForTest(ctx, lane); err != nil || len(outcomes) != 0 {
 		t.Fatal(outcomes, err)
 	}
 	<-started
 	enqueue(t, queue.Store, "settings", "t2", "settings", t0)
 	enqueue(t, queue.Store, "status", "t3", "status", t0)
-	outcomes, err := lane.RunOnce(ctx)
+	outcomes, err := runLaneForTest(ctx, lane)
 	if err != nil || len(outcomes) != 2 || queue.calls != 6 {
 		t.Fatalf("проход при занятом поиске: %v, %v, взятий %d", outcomes, err, queue.calls)
 	}
@@ -80,7 +80,7 @@ func TestIndependentLanePausesSearchOnOtherReplicaUntilClockReachesResume(t *tes
 		func(err error) bool { return errors.Is(err, failure) },
 		func(context.Context) bool { return true },
 	)
-	if _, err := lane.RunOnce(ctx); err != nil {
+	if _, err := runLaneForTest(ctx, lane); err != nil {
 		t.Fatal(err)
 	}
 	lane.Wait()
@@ -94,7 +94,7 @@ func TestIndependentLanePausesSearchOnOtherReplicaUntilClockReachesResume(t *tes
 	enqueue(t, store, "index", "t2", "index2", t0)
 	enqueue(t, store, "other", "t3", "other", t0)
 	clock.Advance(59 * time.Second)
-	outcomes, err := replica.RunOnce(ctx)
+	outcomes, err := runLaneForTest(ctx, replica)
 	if err != nil || len(outcomes) != 1 || outcomes[0].Task.Kind != "other" {
 		t.Fatal(outcomes, err)
 	}
@@ -103,7 +103,7 @@ func TestIndependentLanePausesSearchOnOtherReplicaUntilClockReachesResume(t *tes
 		t.Fatalf("поиск вызван на второй реплике во время паузы: %d", secondCalls.Load())
 	}
 	clock.Advance(time.Second)
-	if _, err := replica.RunOnce(ctx); err != nil {
+	if _, err := runLaneForTest(ctx, replica); err != nil {
 		t.Fatal(err)
 	}
 	replica.Wait()
@@ -115,4 +115,10 @@ func TestIndependentLanePausesSearchOnOtherReplicaUntilClockReachesResume(t *tes
 func (q *countedClaims) Claim(ctx context.Context, req ports.ClaimRequest) (ports.ClaimResult, error) {
 	q.calls++
 	return q.Store.Claim(ctx, req)
+}
+
+func runLaneForTest(ctx context.Context, lane *messaging.IndependentLane) ([]messaging.Outcome, error) {
+	previous, previousErr := lane.Finish()
+	outcomes, _, _, err := lane.RunWork(ctx, nil)
+	return append(previous, outcomes...), errors.Join(previousErr, err)
 }

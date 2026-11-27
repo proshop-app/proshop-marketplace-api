@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 )
 
@@ -15,24 +16,49 @@ type TaxonomyRevalidator interface {
 	RevalidateNext(context.Context) (*taxonomy.Revalidation, error)
 }
 
-// RunTaxonomyRevalidation не использует очередь событий: одна страница и пауза уступают базу приёму.
-func RunTaxonomyRevalidation(ctx context.Context, service TaxonomyRevalidator, logger *slog.Logger) error {
+// RunTaxonomyWork ждёт ближайшую страницу или подсказку о публикации.
+func RunTaxonomyWork(
+	ctx context.Context,
+	service TaxonomyRevalidator,
+	deadline workDeadline,
+	watch ports.WorkWatch,
+	logger *slog.Logger,
+	clock ports.Clock,
+) error {
+	recovery := time.NewTicker(WorkRecovery)
+	defer recovery.Stop()
 	var pages int64
-	for {
-		job, err := service.RevalidateNext(ctx)
-		delay := time.Second
-		if err != nil && ctx.Err() == nil {
+	var retry workRetry
+	for ctx.Err() == nil {
+		next, err := deadline(ctx)
+		now := clock.Now()
+		if err == nil && !next.IsZero() {
+			next = laterTime(next, retry.until)
+			if isDue(next, now) {
+				job, pageErr := service.RevalidateNext(ctx)
+				err = pageErr
+				retry.afterAttempt(clock.Now(), job != nil, err)
+				next = retry.until
+				if job != nil {
+					pages++
+					logTaxonomyProgress(ctx, logger, *job, pages)
+					next = clock.Now().Add(100 * time.Millisecond)
+					retry.until = next
+				}
+			}
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				break
+			}
 			logger.Error("перепроверка таксономии отложена", slog.Any("error", err))
+			next = clock.Now().Add(time.Second)
 		}
-		if err == nil && job != nil {
-			delay = 100 * time.Millisecond
-			pages++
-			logTaxonomyProgress(ctx, logger, *job, pages)
-		}
-		if !wait(ctx, delay) {
-			return nil
+		if !waitWork(ctx, clock, next, watch, recovery.C) {
+			break
 		}
 	}
+	return nil
 }
 
 func logTaxonomyProgress(ctx context.Context, logger *slog.Logger, job taxonomy.Revalidation, pages int64) {

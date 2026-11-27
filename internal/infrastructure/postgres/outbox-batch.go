@@ -30,7 +30,7 @@ const (
 			USING results r
 			WHERE o.id = r.id AND o.attempts = r.attempts AND o.attempts > 0 AND o.failed_at IS NULL
 				AND r.next_at IS NULL AND r.failure_reason = ''
-			RETURNING o.id
+			RETURNING o.id, o.kind
 		), kept AS (
 			UPDATE outbox o
 			SET unknown_failures = NULLIF(r.unknown_failures, 0),
@@ -41,7 +41,7 @@ const (
 			FROM results r
 			WHERE o.id = r.id AND o.attempts = r.attempts AND o.attempts > 0 AND o.failed_at IS NULL
 				AND (r.next_at IS NOT NULL OR r.failure_reason <> '')
-			RETURNING o.id
+			RETURNING o.id, o.kind, o.failed_at, o.next_at
 		), paused AS (
 			INSERT INTO outbox_lane_pauses(lane, resume_at)
 			SELECT r.pause_key, max(r.pause_until)
@@ -53,7 +53,15 @@ const (
 			SET resume_at = EXCLUDED.resume_at
 			WHERE outbox_lane_pauses.resume_at < EXCLUDED.resume_at
 		)
-		SELECT (SELECT count(*) FROM done) + (SELECT count(*) FROM kept)`
+		SELECT (SELECT count(*) FROM done) + (SELECT count(*) FROM kept),
+			(SELECT json_object_agg(kind, next_at) FROM (
+				SELECT kind, CASE WHEN bool_or(next_at IS NULL) THEN NULL ELSE min(next_at) END AS next_at
+				FROM (
+					SELECT kind, CASE WHEN failed_at IS NULL THEN next_at END AS next_at FROM kept
+					WHERE failed_at IS NULL OR kind IN ` + orderedLaneKinds + `
+					UNION ALL SELECT kind, NULL FROM done WHERE kind IN ` + orderedLaneKinds + `
+				) signals GROUP BY kind
+			) grouped)`
 
 	// selectReadyLanes обходит полосы «вид × магазин» прыжками по outbox_lane_due_idx: число спусков
 	// по индексу равно числу полос, а не задач. Первая запись полосы — её ближайший срок.
@@ -128,8 +136,14 @@ func (o *Outbox) EnqueueBatch(ctx context.Context, tasks []ports.NewTask) error 
 	if err != nil {
 		return fmt.Errorf("пачка задач: %w", err)
 	}
-	if _, err := execSQL(ctx, o.db, insertTasks, string(encoded)); err != nil {
+	affected, err := execSQL(ctx, o.db, insertTasks, string(encoded))
+	if err != nil {
 		return fmt.Errorf("постановка пачки задач: %w", err)
+	}
+	if affected > 0 && o.wake != nil {
+		for _, row := range rows {
+			o.wake(row.Kind, row.NextAt)
+		}
 	}
 	return nil
 }
@@ -147,10 +161,11 @@ func (q *TaskQueue) Resolve(ctx context.Context, results []ports.TaskResolution)
 	if err != nil {
 		return fmt.Errorf("результаты задач: %w", err)
 	}
-	return q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
+	var kinds []byte
+	err = q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		apply := func(tx *gorm.DB) error {
 			var count int64
-			if err := rawSQL(ctx, tx, resolveTasks, string(body)).Row().Scan(&count); err != nil {
+			if err := rawSQL(ctx, tx, resolveTasks, string(body)).Row().Scan(&count, &kinds); err != nil {
 				return fmt.Errorf("отметка задач: %w", err)
 			}
 			if count != int64(len(results)) {
@@ -163,6 +178,13 @@ func (q *TaskQueue) Resolve(ctx context.Context, results []ports.TaskResolution)
 		}
 		return db.Transaction(apply)
 	})
+	if err == nil && q.wake != nil {
+		var changed ports.WorkHints
+		if json.Unmarshal(kinds, &changed) == nil {
+			q.wake.Notify(changed)
+		}
+	}
+	return err
 }
 
 // ReadyLanes считает по видам магазины с созревшей задачей и срок старейшей из них; аренды

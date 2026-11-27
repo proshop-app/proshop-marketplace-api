@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"gorm.io/gorm"
@@ -22,23 +23,25 @@ const (
 	// completeTask удаляет выполненную задачу: завершённые не копятся и не ждут чистки обходом.
 	completeTask = `
 		DELETE FROM outbox
-		WHERE id = $1 AND attempts = $2 AND attempts > 0 AND failed_at IS NULL`
+		WHERE id = $1 AND attempts = $2 AND attempts > 0 AND failed_at IS NULL RETURNING kind`
 
 	retryTask = `
 		UPDATE outbox
 		SET next_at = $3,
 			last_error = $4
-		WHERE id = $1 AND attempts = $2 AND attempts > 0 AND failed_at IS NULL`
+		WHERE id = $1 AND attempts = $2 AND attempts > 0 AND failed_at IS NULL RETURNING kind`
 )
 
 // Outbox — запись задач в транзакции изменения.
 type Outbox struct {
-	db *gorm.DB
+	db   *gorm.DB
+	wake func(string, time.Time)
 }
 
 // TaskQueue — разбор outbox вне транзакций изменения.
 type TaskQueue struct {
 	source *connectionSource
+	wake   ports.WorkSignal
 }
 
 // Enqueue ставит задачу; невзятая задача с тем же ключом склеивает повтор.
@@ -52,7 +55,7 @@ func (o *Outbox) Enqueue(ctx context.Context, task ports.NewTask) error {
 		dedup = task.DedupKey
 	}
 
-	_, err := execSQL(
+	affected, err := execSQL(
 		ctx,
 		o.db,
 		insertTask,
@@ -67,6 +70,9 @@ func (o *Outbox) Enqueue(ctx context.Context, task ports.NewTask) error {
 		return fmt.Errorf("задача %s: %w", task.Kind, err)
 	}
 
+	if affected > 0 && o.wake != nil {
+		o.wake(task.Kind, next)
+	}
 	return nil
 }
 
@@ -75,32 +81,41 @@ func NewTaskQueue(pool *ClassPool) *TaskQueue {
 	return &TaskQueue{source: newConnectionSource(pool)}
 }
 
+// WithWorkSignal сообщает об изменении сроков после отметки результата.
+func (q *TaskQueue) WithWorkSignal(wake ports.WorkSignal) *TaskQueue {
+	q.wake = wake
+	return q
+}
+
 // Complete удаляет выполненную задачу; время итога очереди не нужно — его пишут метрики.
 func (q *TaskQueue) Complete(ctx context.Context, id int64, attempts int, _ time.Time) error {
-	return q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
-		affected, err := execSQL(ctx, db, completeTask, id, attempts)
-		if err != nil {
-			return fmt.Errorf("задача %d: %w", id, err)
-		}
-		if affected == 0 {
-			return ports.ErrTaskClaimConflict
-		}
-
-		return nil
-	})
+	kind, err := q.markTask(ctx, completeTask, id, attempts)
+	if err == nil && q.wake != nil && slices.Contains(OrderedTaskKinds, kind) {
+		q.wake.Notify(ports.WorkHints{kind: {}})
+	}
+	return err
 }
 
 // Retry откладывает задачу с причиной.
 func (q *TaskQueue) Retry(ctx context.Context, id int64, attempts int, nextAt time.Time, reason string) error {
-	return q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
-		affected, err := execSQL(ctx, db, retryTask, id, attempts, nextAt, reason)
+	kind, err := q.markTask(ctx, retryTask, id, attempts, nextAt, reason)
+	if err == nil && q.wake != nil {
+		q.wake.Notify(ports.WorkHints{kind: nextAt})
+	}
+	return err
+}
+
+func (q *TaskQueue) markTask(ctx context.Context, query string, id int64, args ...any) (string, error) {
+	var kind string
+	err := q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
+		err := rawSQL(ctx, db, query, append([]any{id}, args...)...).Row().Scan(&kind)
+		if notFound(err) {
+			return ports.ErrTaskClaimConflict
+		}
 		if err != nil {
 			return fmt.Errorf("задача %d: %w", id, err)
 		}
-		if affected == 0 {
-			return ports.ErrTaskClaimConflict
-		}
-
 		return nil
 	})
+	return kind, err
 }

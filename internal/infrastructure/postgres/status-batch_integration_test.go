@@ -132,7 +132,7 @@ func TestOfferStatusBatchSQLAndPartialDelivery(t *testing.T) {
 			if _, err := pool.Exec(ctx, "DELETE FROM outbox WHERE kind <> $1", moderationstatus.TaskOffer); err != nil {
 				t.Fatal(err)
 			}
-			outcomes, err := dispatcher.RunOnce(ctx)
+			outcomes, _, _, err := dispatcher.RunWork(ctx, nil)
 			if err != nil || len(outcomes) != 200 {
 				t.Fatal(len(outcomes), err)
 			}

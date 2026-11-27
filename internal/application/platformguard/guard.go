@@ -54,6 +54,7 @@ type Client struct {
 	batch           *tenantState
 	mu              sync.Mutex
 	server          breaker
+	serverChanged   func()
 	answers         uint64
 	lastShopTimeout time.Time
 	tenants         map[ids.TenantID]*tenantState
@@ -76,6 +77,13 @@ type permit struct {
 	// strict — вызов шёл со строгим бюджетом или бюджетом вызывающего, а не коротким бюджетом чтения:
 	// только такое истечение срока доказывает зависание общему серверу.
 	strict bool
+}
+
+// SetServerChanged подключает неблокирующий локальный сигнал об изменении размыкателя.
+func (c *Client) SetServerChanged(notify func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.serverChanged = notify
 }
 
 // New создаёт защиту процесса с изоляцией магазинов и классов операций.

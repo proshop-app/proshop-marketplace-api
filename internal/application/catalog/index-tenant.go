@@ -35,7 +35,7 @@ func (i *Indexer) syncTenantTaskPage(ctx context.Context, tenant ids.TenantID) e
 	}
 
 	_, skipped, err := i.writeIndexPage(ctx, states, func(docs []ports.OfferDocument) error {
-		return i.index.Put(ctx, docs)
+		return i.put(ctx, docs)
 	})
 	if err != nil {
 		return err

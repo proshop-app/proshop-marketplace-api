@@ -62,11 +62,11 @@ func TestBulkBacklogDoesNotOccupyDispatcherPass(t *testing.T) {
 		},
 	)
 	started := time.Now()
-	if _, err := d.RunOnce(ctx); err != nil {
+	if _, _, _, err := d.RunWork(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
 	firstCalls, pass := calls.Load(), time.Since(started)
-	if _, err := d.RunOnce(ctx); err != nil {
+	if _, _, _, err := d.RunWork(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("A backlog=50000, first pass A=%d, pass=%s, B wait=%s", firstCalls, pass, quietDelay)
