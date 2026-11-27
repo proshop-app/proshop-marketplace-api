@@ -85,17 +85,22 @@ func TestOfferBatchReadsLatestAndCoalescesTasks(t *testing.T) {
 		t.Fatalf("две задачи одного предложения склеиваются: %+v, %v", outcomes, err)
 	}
 	doc := index.PutBatches[0][0]
-	if doc.Name != state.Card.Name || doc.Version != 5 {
+	tile := doc.Tile
+	if tile == nil || len(tile.Members) != 1 || tile.Members[0].Name != state.Card.Name {
+		t.Fatalf("нужен актуальный снимок плитки: %+v", tile)
+	}
+	if tile.Members[0].Version != 5 {
 		t.Fatalf("нужен актуальный документ: %+v", doc)
 	}
 	// Запоздалое подтверждение или повтор старой версии не возвращает старую карточку.
 	stale := doc
 	stale.Version--
-	stale.Name = "Старое название"
+	stale.Tile = &ports.TileDocument{Key: tile.Key}
 	if err := index.Put(context.Background(), []ports.OfferDocument{stale}); err != nil {
 		t.Fatal(err)
 	}
-	if saved, _ := index.Doc(doc.ID); saved.Name != doc.Name {
+	saved, _ := index.Doc(doc.ID)
+	if saved.Tile == nil || len(saved.Tile.Members) != 1 || saved.Tile.Members[0].Name != state.Card.Name {
 		t.Fatal("старая версия затёрла новую")
 	}
 }
@@ -133,7 +138,7 @@ func TestOfferBatchDefersOnlyRejectedOffer(t *testing.T) {
 	enqueueOffer(t, store, "t1", "p0")
 	index.RejectPut = func(docs []ports.OfferDocument) error {
 		return &ports.OfferCapacityError{
-			Deferred:        []ids.OfferID{{Tenant: "t1", Product: "p0"}},
+			Deferred:        []ids.OfferID{{Tenant: "t1", Product: ports.TileDocumentPrefix + "p0"}},
 			UnconfirmedFrom: len(docs),
 		}
 	}
@@ -164,7 +169,7 @@ func TestOfferBatchDefersOnlyRejectedOffer(t *testing.T) {
 	if err != nil || len(outcomes) != 2 || len(index.PutBatches) != 3 {
 		t.Fatalf("повтор двух задач одного предложения: %+v, %v", outcomes, err)
 	}
-	if retry := index.PutBatches[2]; len(retry) != 1 || retry[0].ID != "t1~p0" {
+	if retry := index.PutBatches[2]; len(retry) != 1 || retry[0].ID != "t1~~tile~p0" || retry[0].Tile == nil {
 		t.Fatalf("повтор отправил лишние документы: %v", retry)
 	}
 }
@@ -173,7 +178,7 @@ func TestOfferBatchIsolatesPoison(t *testing.T) {
 	store, index, clock := seedOfferBatch(t, 5)
 	index.RejectPut = func(docs []ports.OfferDocument) error {
 		for _, doc := range docs {
-			if doc.ProductID == "p2" {
+			if doc.ProductID == ports.TileDocumentPrefix+"p2" {
 				return errs.New(errs.Invalid, "search.invalid_request", "поиск отверг документ")
 			}
 		}
@@ -227,9 +232,28 @@ func TestOfferBatchIncludesHiddenAndDeletedDocuments(t *testing.T) {
 		t.Fatal("скрытие должно доставляться общей пачкой")
 	}
 	for _, product := range []string{"p0", "p1"} {
-		doc, found := index.Doc("t1~" + product)
+		doc, found := index.Doc("t1~" + ports.TileDocumentPrefix + product)
 		if !found || doc.Visible || doc.Name != "" {
 			t.Fatalf("нужен tombstone: %+v", doc)
 		}
+	}
+}
+
+func TestOfferBatchWritesOneTileForChangedGroup(t *testing.T) {
+	const size = 15
+	store, index, clock := seedOfferBatch(t, size)
+	for i := range size {
+		product := ids.ProductID(fmt.Sprintf("p%d", i))
+		state, _ := store.Product("t1", product)
+		state.Card.TileKey = "tile"
+		store.SeedProduct(state)
+	}
+	outcomes, _, _, err := batchDispatcher(store, index, clock).RunWork(context.Background(), nil)
+	if err != nil || len(outcomes) != size || len(index.PutBatches) != 1 || len(index.PutBatches[0]) != 1 {
+		t.Fatalf("пачка группы: %+v, %v", outcomes, err)
+	}
+	tile := index.PutBatches[0][0].Tile
+	if tile == nil || tile.Key != "tile" || len(tile.Members) != size {
+		t.Fatalf("одна полная плитка на весь пакет: %+v", tile)
 	}
 }

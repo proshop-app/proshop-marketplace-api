@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // RebuildResult — итог перестроения.
@@ -67,10 +68,10 @@ func (i *Indexer) rebuildPage(
 	progress ports.IndexRebuildProgress,
 	put func([]ports.OfferDocument) error,
 ) (ports.IndexRebuildProgress, error) {
-	var states []ports.OfferState
+	var states []ports.TileState
 	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
-		states, err = tx.Offers().ParticipantOffers(ctx, progress.After, i.batch)
+		states, err = tx.Offers().TilePage(ctx, ports.TilePage{After: tileCursor(progress.After), Limit: i.batch})
 		return err
 	})
 	if err != nil {
@@ -106,10 +107,14 @@ func (i *Indexer) catchUp(
 	since := progress.Started.Add(-CatchUpMargin)
 	var after ports.OfferKey
 	for {
-		var states []ports.OfferState
+		var states []ports.TileState
 		err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var err error
-			states, err = tx.Offers().ChangedSince(ctx, since, after, i.batch)
+			states, err = tx.Offers().TilePage(ctx, ports.TilePage{
+				After: tileCursor(after),
+				Since: since,
+				Limit: i.batch,
+			})
 			return err
 		})
 		if err != nil || len(states) == 0 {
@@ -131,10 +136,14 @@ func (i *Indexer) catchUp(
 	}
 }
 
-func lastOfferKey(states []ports.OfferState, fallback ports.OfferKey) ports.OfferKey {
+func lastOfferKey(states []ports.TileState, fallback ports.OfferKey) ports.OfferKey {
 	if len(states) == 0 {
 		return fallback
 	}
-	last := states[len(states)-1].Product.State()
-	return ports.OfferKey{TenantID: last.TenantID, ProductID: last.ProductID}
+	last := states[len(states)-1].Key
+	return ports.OfferKey{TenantID: last.TenantID, ProductID: ids.ProductID(last.Key)}
+}
+
+func tileCursor(key ports.OfferKey) ports.TileKey {
+	return ports.TileKey{TenantID: key.TenantID, Key: string(key.ProductID)}
 }

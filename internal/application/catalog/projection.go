@@ -99,6 +99,9 @@ func (p *Projector) applyProduct(ctx context.Context, tx ports.Tx, snapshot cata
 		tasks = append(tasks, moderationstatus.OfferTask(state.TenantID, state.ProductID, now))
 	}
 	tasks = append(tasks, SyncOfferTask(state.TenantID, state.ProductID, now))
+	if previous != nil && productTileKey(*previous) != productTileKey(state) {
+		tasks = append(tasks, syncFormerTileTask(state.TenantID, productTileKey(*previous), now))
+	}
 	return tx.Outbox().EnqueueBatch(ctx, tasks)
 }
 

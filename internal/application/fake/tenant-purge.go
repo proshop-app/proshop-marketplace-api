@@ -43,9 +43,22 @@ func (p tenantPurge) IndexPage(
 		return nil, false, nil
 	}
 	var products []ids.ProductID
-	for key := range p.data.products {
-		if key.tenant == tenant && key.product > cursor.Product {
-			products = append(products, key.product)
+	after, _ := strings.CutPrefix(string(cursor.Product), ports.TileDocumentPrefix)
+	seen := make(map[string]bool)
+	if !strings.HasPrefix(string(cursor.Product), ports.TileDocumentPrefix) {
+		after = ""
+	}
+	for key, product := range p.data.products {
+		if key.tenant != tenant {
+			continue
+		}
+		tile := product.Card.TileKey
+		if tile == "" {
+			tile = string(key.product)
+		}
+		if tile > after && !seen[tile] {
+			seen[tile] = true
+			products = append(products, ids.ProductID(ports.TileDocumentPrefix+tile))
 		}
 	}
 	slices.Sort(products)

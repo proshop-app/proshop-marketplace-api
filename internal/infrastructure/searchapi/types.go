@@ -1,6 +1,7 @@
 package searchapi
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -16,7 +17,14 @@ type category struct {
 	URL  string `json:"url"`
 }
 
+type tileDocument struct {
+	Key     string                       `json:"key"`
+	Base    map[string]json.RawMessage   `json:"base,omitempty"`
+	Members []map[string]json.RawMessage `json:"members"`
+}
+
 type offerDocument struct {
+	Tile              *tileDocument                `json:"tile,omitempty"`
 	SalesTier         uint8                        `json:"salesTier"`
 	TileKey           string                       `json:"tileKey,omitempty"`
 	Rating            *catalog.Rating              `json:"rating"`

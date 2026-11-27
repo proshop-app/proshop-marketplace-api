@@ -28,7 +28,8 @@ const (
 		 AND s.product_id = p.product_id AND s.batch_no IS NOT NULL AND NOT s.scheduled
 	)` + offerJoins
 	offerColumns = `
-		SELECT ` + productColumns + `, ` + signalsColumns + `,
+		SELECT ` + productColumns + offerDetailsColumns
+	offerDetailsColumns = `, ` + signalsColumns + `,
 			pa.tenant_id, pa.slug, pa.name, pa.stage, pa.enabled,
 			pa.awaiting_review, pa.settings_synced_at, pa.version, pa.created_at, pa.updated_at,
 			pa.delivery_settings, pa.trust, pa.approved_offers,

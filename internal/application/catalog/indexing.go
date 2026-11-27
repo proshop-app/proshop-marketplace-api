@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -75,39 +74,15 @@ func (i *Indexer) HandleTask(ctx context.Context, task ports.Task) error {
 // SyncOffer переписывает одно предложение. Товар магазина, который не
 // участвует в маркетплейсе, в индекс не попадает.
 func (i *Indexer) SyncOffer(ctx context.Context, tenantID ids.TenantID, productID ids.ProductID) error {
-	var state ports.OfferState
-
-	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		var err error
-
-		state, err = tx.Offers().Offer(ctx, tenantID, productID)
-		if err != nil || state.Participant == nil {
-			return err
-		}
-		return i.scheduleStoreSummaryChanges(ctx, tx, []ports.OfferState{state})
-	})
-
-	if errors.Is(err, catalog.ErrProductNotFound) {
-		return nil
+	task := SyncOfferTask(tenantID, productID, i.clock.Now())
+	if key, former := formerTileKey(productID); former {
+		task = syncFormerTileTask(tenantID, key, i.clock.Now())
 	}
-
-	if err != nil {
-		return err
-	}
-
-	ready, err := i.refreshModelKeys(ctx, []ports.OfferState{state})
-
-	if err != nil || len(ready) == 0 {
-		return err
-	}
-
-	doc, ok := Document(state)
-
-	if !ok {
-		return nil
-	}
-
-	return i.put(ctx, []ports.OfferDocument{doc})
+	return i.HandleOfferBatch(ctx, []ports.Task{{
+		Kind:     task.Kind,
+		TenantID: task.TenantID,
+		Payload:  task.Payload,
+	}})[0]
 }
 
 func (i *Indexer) scheduleStoreSummaryChanges(ctx context.Context, tx ports.Tx, states []ports.OfferState) error {
@@ -133,11 +108,15 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 	}
 
 	for {
-		var states []ports.OfferState
+		var states []ports.TileState
 
 		err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var err error
-			states, err = tx.Offers().TenantOffers(ctx, tenantID, after, i.batch)
+			states, err = tx.Offers().TilePage(ctx, ports.TilePage{
+				TenantID: tenantID,
+				After:    ports.TileKey{Key: string(after)},
+				Limit:    i.batch,
+			})
 			if err != nil || after != "" {
 				return err
 			}
@@ -158,7 +137,7 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 		}
 		i.observeIndexSkips(ctx, "tenant", "", skipped)
 
-		after = states[len(states)-1].Product.State().ProductID
+		after = ids.ProductID(states[len(states)-1].Key.Key)
 
 		if len(states) < i.batch {
 			return nil
@@ -181,17 +160,6 @@ func BuyerOffer(state ports.OfferState) (catalog.Offer, bool) {
 		CheckoutAvailable: visibility.CheckoutAvailable,
 	}
 	return catalog.ComposeOffer(state.Product, state.Signals, seller, state.Verdict), true
-}
-
-func documents(states []ports.OfferState) []ports.OfferDocument {
-	docs := make([]ports.OfferDocument, 0, len(states))
-	for _, state := range states {
-		if doc, ok := Document(state); ok {
-			docs = append(docs, doc)
-		}
-	}
-
-	return docs
 }
 
 // Document — документ индекса для предложения участника; ok=false — магазин

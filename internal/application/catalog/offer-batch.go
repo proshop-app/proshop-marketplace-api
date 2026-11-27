@@ -1,8 +1,10 @@
 package catalog
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -39,9 +41,10 @@ func (i *Indexer) HandleOfferBatch(ctx context.Context, tasks []ports.Task) []er
 	if len(keys) == 0 {
 		return failures
 	}
-	states, err := i.readOfferBatch(ctx, keys)
+	tiles, err := i.readOfferBatch(ctx, keys)
+	var docs []ports.OfferDocument
 	if err == nil {
-		states, err = i.refreshModelKeys(ctx, states)
+		docs, err = i.indexDocuments(ctx, tiles)
 	}
 	if err != nil {
 		for _, indexes := range positions {
@@ -52,22 +55,23 @@ func (i *Indexer) HandleOfferBatch(ctx context.Context, tasks []ports.Task) []er
 		return failures
 	}
 
-	// Порядок SQL не определён; восстанавливаем справедливый порядок взятых задач.
-	byKey := map[ids.OfferID]ports.OfferDocument{}
-	for _, state := range states {
-		if doc, ok := Document(state); ok {
-			key := ids.OfferID{Tenant: ids.TenantID(doc.TenantID), Product: ids.ProductID(doc.ProductID)}
-			if previous, exists := byKey[key]; !exists || doc.Version >= previous.Version {
-				byKey[key] = doc
+	// Ошибка записи плитки возвращается и задачам изменённых SKU этой плитки.
+	for _, tile := range tiles {
+		key := tileOfferID(tile.Key)
+		for _, member := range tile.Members {
+			if member.Changed {
+				p := member.State.Product.State()
+				sku := ids.OfferID{Tenant: p.TenantID, Product: p.ProductID}
+				positions[key] = append(positions[key], positions[sku]...)
 			}
 		}
 	}
-	docs := make([]ports.OfferDocument, 0, len(byKey))
-	for _, key := range keys {
-		if doc, ok := byKey[key]; ok {
-			docs = append(docs, doc)
-		}
-	}
+	// Плитка следует за последней задачей об изменении её состава.
+	slices.SortStableFunc(docs, func(left, right ports.OfferDocument) int {
+		leftPosition := slices.Max(positions[indexDocumentKey(left)])
+		rightPosition := slices.Max(positions[indexDocumentKey(right)])
+		return cmp.Compare(leftPosition, rightPosition)
+	})
 	i.sendOfferBatch(ctx, docs, positions, failures)
 	return failures
 }
@@ -75,17 +79,26 @@ func (i *Indexer) HandleOfferBatch(ctx context.Context, tasks []ports.Task) []er
 func (i *Indexer) readOfferBatch(
 	ctx context.Context,
 	keys []ids.OfferID,
-) ([]ports.OfferState, error) {
-	var states []ports.OfferState
+) ([]ports.TileState, error) {
+	var offers []ids.OfferID
+	var former []ports.TileKey
+	for _, key := range keys {
+		if tile, ok := formerTileKey(key.Product); ok {
+			former = append(former, ports.TileKey{TenantID: key.Tenant, Key: tile})
+		} else {
+			offers = append(offers, key)
+		}
+	}
+	var tiles []ports.TileState
 	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
-		states, err = tx.Offers().Batch(ctx, keys)
+		tiles, err = tx.Offers().Tiles(ctx, offers, former)
 		if err != nil {
 			return err
 		}
-		return i.scheduleStoreSummaryChanges(ctx, tx, states)
+		return i.scheduleStoreSummaryChanges(ctx, tx, changedTileMembers(tiles))
 	})
-	return states, err
+	return tiles, err
 }
 
 func (i *Indexer) sendOfferBatch(
@@ -123,10 +136,16 @@ func (i *Indexer) sendOfferBatch(
 		i.sendOfferBatch(ctx, docs[middle:], positions, failures)
 		return
 	}
+	if err == nil {
+		return
+	}
 	for _, doc := range docs {
-		key := ids.OfferID{Tenant: ids.TenantID(doc.TenantID), Product: ids.ProductID(doc.ProductID)}
-		for _, n := range positions[key] {
+		for _, n := range positions[indexDocumentKey(doc)] {
 			failures[n] = err
 		}
 	}
+}
+
+func indexDocumentKey(doc ports.OfferDocument) ids.OfferID {
+	return ids.OfferID{Tenant: ids.TenantID(doc.TenantID), Product: ids.ProductID(doc.ProductID)}
 }

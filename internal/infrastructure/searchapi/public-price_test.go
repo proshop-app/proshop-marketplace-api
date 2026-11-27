@@ -36,7 +36,7 @@ func TestPublicPriceDocumentWire(t *testing.T) {
 			t.Fatal(actual, err)
 		}
 	}
-	if contractVersion != 12 {
+	if contractVersion != 13 {
 		t.Fatal(contractVersion)
 	}
 }

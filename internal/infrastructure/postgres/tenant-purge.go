@@ -24,9 +24,20 @@ const (
 	lockPurgeCursor = `SELECT step, product_id, index_done, complete
 		FROM marketplace_tenant_deletions WHERE tenant_id = $1 FOR UPDATE`
 	purgeIndexProducts = `SELECT to_jsonb(ARRAY(
-		SELECT p.product_id FROM catalog_products p
-		WHERE p.tenant_id = d.tenant_id AND p.product_id > d.product_id ORDER BY p.product_id LIMIT $3
-	)) FROM marketplace_tenant_deletions d WHERE d.tenant_id = $1 AND d.step = $2 AND NOT d.index_done`
+    SELECT '~tile~' || key FROM (
+      (SELECT p.tile_key AS key FROM catalog_products p
+       WHERE p.tenant_id = d.tenant_id AND p.tile_key > cursor.key
+       GROUP BY p.tile_key ORDER BY p.tile_key LIMIT $3)
+      UNION
+      (SELECT x.tile_key FROM catalog_tile_departures x
+       WHERE x.tenant_id = d.tenant_id AND x.tile_key > cursor.key
+       ORDER BY x.tile_key LIMIT $3)
+    ) tiles ORDER BY key LIMIT $3
+  ))
+ FROM marketplace_tenant_deletions d
+ CROSS JOIN LATERAL (SELECT CASE WHEN left(d.product_id, 6) = '~tile~'
+   THEN substr(d.product_id, 7) ELSE '' END AS key) cursor
+ WHERE d.tenant_id = $1 AND d.step = $2 AND NOT d.index_done`
 	setPurgeTenant     = `SELECT set_config('marketplace.purge_tenant', $1, true)`
 	advancePurgeCursor = `UPDATE marketplace_tenant_deletions
 		SET step = $2,
@@ -180,6 +191,7 @@ func tenantDeleteQuery() string {
 
 		{name: "taxonomy_revalidation_failures", order: "product_id"},
 		{name: "offer_index_tenant", order: "tenant_id"},
+		{name: "catalog_tile_departures", order: "tile_key"},
 		{name: "outbox", order: "next_at, id", where: purgeReadyTask},
 		{name: "buyer_shop_subscriptions", order: "tenant_id"},
 	}

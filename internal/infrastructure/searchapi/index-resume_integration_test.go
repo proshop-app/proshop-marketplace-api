@@ -67,9 +67,12 @@ func (x indexRecoveryProbe) Put(ctx context.Context, docs []ports.OfferDocument)
 // Замена на границе адаптера проверяет реальный HTTP-отказ валидации поиска.
 func rejectOneDocument(docs []ports.OfferDocument) []ports.OfferDocument {
 	for n, doc := range docs {
-		if doc.ProductID == "p02" && doc.Visible {
+		if doc.ProductID == ports.TileDocumentPrefix+"p02" && doc.Visible && len(doc.Tile.Members) == 1 {
 			changed := slices.Clone(docs)
-			changed[n].Name = ""
+			tile := *doc.Tile
+			tile.Members = slices.Clone(tile.Members)
+			tile.Members[0].Name = ""
+			changed[n].Tile = &tile
 			return changed
 		}
 	}
@@ -156,7 +159,7 @@ func TestIndexRecoveryWithSearch(t *testing.T) {
 		OfferIndex: index,
 		before: func(docs []ports.OfferDocument) error {
 			attempts = append(attempts, docs[0].ProductID)
-			if docs[0].ProductID == "p11" && !failed {
+			if docs[0].ProductID == ports.TileDocumentPrefix+"p11" && !failed {
 				failed = true
 				return unavailable
 			}
@@ -176,7 +179,7 @@ func TestIndexRecoveryWithSearch(t *testing.T) {
 	replica := makeIndexer()
 	result, err := replica.Rebuild(ctx)
 	if err != nil || result.Generation != first.Generation || result.Indexed != 19 || result.Skipped != 1 ||
-		skips["rebuild"] != 1 || !slices.Equal(attempts, []string{"p11"}) {
+		skips["rebuild"] != 1 || !slices.Equal(attempts, []string{"~tile~p11"}) {
 		t.Fatalf("повтор пересборки: %+v, вызовы %v, метрика %v, ошибка %v", result, attempts, skips, err)
 	}
 	page, err := index.Search(ctx, ports.OfferQuery{Limit: 20})
@@ -233,7 +236,7 @@ func TestIndexRecoveryWithSearch(t *testing.T) {
 	for range 5 {
 		runTenantIndexPage(t, dispatcher, clock)
 	}
-	if want := []string{"p11", "p01", "p11"}; !slices.Equal(attempts, want) {
+	if want := []string{"~tile~p11", "~tile~p01", "~tile~p11"}; !slices.Equal(attempts, want) {
 		t.Fatalf("индексация магазина: вызовы %v, ожидалось %v", attempts, want)
 	}
 	outcomes, _, _, err := dispatcher.RunWork(ctx, nil)
