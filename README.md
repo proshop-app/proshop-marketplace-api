@@ -67,8 +67,8 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 |---|---|---|---|
 | `DATABASE_URL` | да | — | адрес пулов процесса `postgres://…`: база напрямую или пулер в режиме транзакций |
 | `DATABASE_DIRECT_URL` | | — | прямой адрес базы для сеансовых блокировок, миграций и служебных команд. Задан — значит `DATABASE_URL` ведёт к пулеру без учётных данных; пусто — всё напрямую по `DATABASE_URL`. [Соединения с PostgreSQL](docs/postgres-connections.md) |
-| `DATABASE_<КЛАСС>_USER`, `DATABASE_<КЛАСС>_PASSWORD` | при `DATABASE_DIRECT_URL` | — | роль класса за пулером (`READ`, `CHECKOUT`, `INGESTION`, `BACKGROUND`, `ORDERS`), у каждого класса своя; сроки задаёт роль, старт сверяет их со сроками класса. Без пулера не задаются |
-| `DATABASE_READ_MAX_CONNS`, `DATABASE_CHECKOUT_MAX_CONNS`, `DATABASE_BACKGROUND_MAX_CONNS` | | `8`, `6`, `10` | пулы чтения покупателя, HTTP-записи (корзина, оформление, вход, избранное, API сервера) и фона (outbox, циклы, оператор), 1–1000; сумма всех пулов не больше 1000 |
+| `DATABASE_<КЛАСС>_USER`, `DATABASE_<КЛАСС>_PASSWORD` | при `DATABASE_DIRECT_URL` | — | роль класса за пулером (`READ`, `CHECKOUT`, `WRITE`, `INGESTION`, `BACKGROUND`, `ORDERS`), у каждого класса своя; сроки задаёт роль, старт сверяет их со сроками класса. Без пулера не задаются |
+| `DATABASE_READ_MAX_CONNS`, `DATABASE_CHECKOUT_MAX_CONNS`, `DATABASE_WRITE_MAX_CONNS`, `DATABASE_BACKGROUND_MAX_CONNS` | | `8`, `6`, `6`, `10` | пулы чтения, корзины и оформления, прочих HTTP-записей и фоновых операций, 1–1000; сумма всех пулов не больше 1000 |
 | `DATABASE_INGESTION_MAX_CONNS` | | `KAFKA_WORKERS` + 4 | пул приёма Kafka; меньше воркеров обеих групп и полосы статусов заказов — отказ старта |
 | `DATABASE_ORDERS_MAX_CONNS` | | `29` | пул исполнителя оформления: 28 мест полос и взятие задач; меньше — отказ старта. Индексация и циклы его не занимают |
 | `SEARCH_URL` | да | — | адрес общего `proshop-search` без `/api` |
@@ -392,10 +392,11 @@ PostgreSQL, миграции goose в `internal/infrastructure/postgres/migratio
 
 ### Ёмкость соединений PostgreSQL
 
-Реплика держит пул на класс нагрузки: чтение (`DATABASE_READ_MAX_CONNS`, 8), HTTP-запись
-(`DATABASE_CHECKOUT_MAX_CONNS`, 6), приём Kafka (`DATABASE_INGESTION_MAX_CONNS`,
+Реплика держит пул на класс нагрузки: чтение (`DATABASE_READ_MAX_CONNS`, 8),
+корзина и оформление (`DATABASE_CHECKOUT_MAX_CONNS`, 6), прочие HTTP-записи
+(`DATABASE_WRITE_MAX_CONNS`, 6), приём Kafka (`DATABASE_INGESTION_MAX_CONNS`,
 `KAFKA_WORKERS` + 4 = 12), фон (`DATABASE_BACKGROUND_MAX_CONNS`, 10) и исполнитель оформления
-(`DATABASE_ORDERS_MAX_CONNS`, 28 мест + 1 = 29) — по умолчанию 65. Пулы открывают
+(`DATABASE_ORDERS_MAX_CONNS`, 28 мест + 1 = 29) — по умолчанию 71. Пулы открывают
 соединения по требованию: это потолок, а не постоянный расход.
 
 Вне пулов — прямые сеансы под advisory lock, каждый только на время прохода: пересборка
@@ -405,12 +406,12 @@ PostgreSQL, миграции goose в `internal/infrastructure/postgres/migratio
 которой он достался. Служебная команда — 2 соединения и одно под блокировку.
 
 Напрямую (без `DATABASE_DIRECT_URL`) соединения растут с репликами:
-`R × 65 + 8 + 3 × служебных команд` — 76 для одной реплики, 206 для трёх (больше
-`max_connections` = 100), 661 для десяти. Первый выпуск идёт с тремя репликами — только
+`R × 71 + 8 + 3 × служебных команд` — 82 для одной реплики, 224 для трёх (больше
+`max_connections` = 100), 721 для десяти. Первый выпуск идёт с тремя репликами — только
 через пулер.
 Через пулер в режиме транзакций `DATABASE_<КЛАСС>_MAX_CONNS` — клиентские соединения к
-пулеру, а базу ограничивает пулер: `I × (5 × P + 1) + 8 + 3 × команд`, где I — реплик пулера,
-P — `default_pool_size`; при I = 2, P = 6 — 73 соединения при любом числе реплик API.
+пулеру, а базу ограничивает пулер: `I × (6 × P + 1) + 8 + 3 × команд`, где I — реплик пулера,
+P — `default_pool_size`; при I = 2, P = 6 — 85 соединений при любом числе реплик API.
 Схема, манифест `Pooler`, роли, выкат и откат — [Соединения с PostgreSQL](docs/postgres-connections.md).
 
 ### Переход на один ПВЗ (18.11.2026, круг 15)

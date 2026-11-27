@@ -43,6 +43,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/storecache"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/synonymmodel"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
@@ -494,6 +495,16 @@ func (s *server) run(ctx context.Context) error {
 func (s *server) jobs() []jobs.Loop {
 	cfg := s.cfg
 	outbox := jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics)
+	indexLane := messaging.NewIndependentLane(
+		s.app.dispatcher,
+		ports.TaskLaneGate{
+			Key:   "offer-index",
+			Kinds: []string{appcatalog.TaskSyncOffer, appcatalog.TaskSyncTenant},
+		},
+		30*time.Second,
+		func(err error) bool { return errors.Is(err, searchapi.ErrUnavailable) },
+		s.store.index.ConfirmOutage,
+	)
 	loops := []jobs.Loop{
 		{Name: "city-detector", Run: s.cityDetector.Run},
 		{Name: "taxonomy-display", Run: s.refreshTaxonomyDisplay},
@@ -506,8 +517,6 @@ func (s *server) jobs() []jobs.Loop {
 		}},
 		{Name: "promotion", Run: jobs.NewPromotionRunner(
 			s.app.promotion,
-			// Одно имя с прежней блокировкой продвижения: при выкате старые и новые реплики
-			// не пройдут тик одновременно.
 			s.schedule("uno:marketplace:promotion", cfg.Promotion.TickInterval),
 			s.logger,
 			cfg.Promotion.TickInterval,
@@ -528,7 +537,9 @@ func (s *server) jobs() []jobs.Loop {
 			s.logger,
 			s.metrics,
 		).Run},
-		{Name: "outbox", Run: outbox.Run},
+		{Name: "outbox", Run: func(ctx context.Context) error {
+			return outbox.RunIndependent(ctx, indexLane)
+		}},
 		{Name: "outbox-ready", Run: jobs.NewOutboxReadyRunner(
 			s.app.dispatcher,
 			s.schedule("outbox-ready", jobs.OutboxReadyInterval),

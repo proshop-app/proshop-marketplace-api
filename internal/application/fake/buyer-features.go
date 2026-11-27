@@ -69,8 +69,11 @@ func (t *tx) BuyerFeatures() ports.BuyerFeatures {
 	return buyerFeatures{d: t.data.features, store: t.data}
 }
 
-// Lock — сериализует изменения списков одного покупателя.
-func (r buyerFeatures) Lock(_ context.Context, _ ids.UUID) error { return nil }
+// Lock сериализует сохранение ПВЗ в профиле при оформлении заказа.
+func (r buyerFeatures) Lock(_ context.Context, _ ids.UUID) error           { return nil }
+func (r buyerFeatures) TryLockProfile(_ context.Context, _ ids.UUID) error { return nil }
+
+func (r buyerFeatures) TryLockLists(_ context.Context, _ ids.UUID) error { return nil }
 
 // Profile возвращает пустой профиль до первого сохранения.
 func (r buyerFeatures) Profile(_ context.Context, id ids.UUID) (*buyer.Profile, error) {

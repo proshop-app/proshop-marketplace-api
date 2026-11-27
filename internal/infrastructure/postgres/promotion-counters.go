@@ -13,6 +13,7 @@ const (
 	promotionDecisionAdd = `INSERT INTO promotion_decisions(campaign_id,at,actor,action,note) VALUES($1,$2,$3,$4,$5)`
 	promotionDecisions   = `SELECT at,actor,action,note FROM promotion_decisions WHERE campaign_id=$1 ORDER BY id`
 	// Сначала дедуп, затем счётчики. В каждой фазе блокировки идут в порядке ключей.
+	// Один шард на пачку по первому eventId: одна запись счётчика на кампанию и день.
 	promotionCount = `
 		WITH accepted AS (
 			INSERT INTO promotion_views (campaign_id, day, event_id, kind)
@@ -24,25 +25,25 @@ const (
 			ON CONFLICT DO NOTHING
 			RETURNING campaign_id, day, kind
 		), counted AS (
-			INSERT INTO promotion_counters (campaign_id, day, position, impressions, clicks)
-			SELECT a.campaign_id, a.day, c.position, count(*) FILTER (WHERE a.kind = 'view'),
+			INSERT INTO promotion_counters (campaign_id, day, position, shard, impressions, clicks)
+			SELECT a.campaign_id, a.day, c.position,
+				(hashtextextended($2::jsonb -> 0 ->> 'eventId', 0) & 63)::smallint,
+				count(*) FILTER (WHERE a.kind = 'view'),
 				count(*) FILTER (WHERE a.kind = 'click')
 			FROM accepted a
 			JOIN promotion_campaigns c ON c.id = a.campaign_id
 			GROUP BY a.campaign_id, a.day, c.position
 			ORDER BY a.campaign_id, a.day, c.position
-			ON CONFLICT (campaign_id, day, position) DO UPDATE
+			ON CONFLICT (campaign_id, day, position, shard) DO UPDATE
 			SET impressions = promotion_counters.impressions + EXCLUDED.impressions,
 				clicks = promotion_counters.clicks + EXCLUDED.clicks
-			RETURNING campaign_id, day
 		)
 		SELECT c.tenant_id, c.placement_code, a.kind
 		FROM accepted a
-		JOIN counted n USING (campaign_id, day)
 		JOIN promotion_campaigns c ON c.id = a.campaign_id`
-	promotionStats = `SELECT to_char(day,'YYYY-MM-DD'),position,impressions,clicks FROM promotion_counters
+	promotionStats = `SELECT to_char(day,'YYYY-MM-DD'),position,sum(impressions),sum(clicks) FROM promotion_counters
  WHERE campaign_id=$1 AND ($2='' OR day>=NULLIF($2,'')::date) AND ($3='' OR day<=NULLIF($3,'')::date)
- ORDER BY day,position`
+ GROUP BY day,position ORDER BY day,position`
 )
 
 // AddDecision добавляет запись аудита в транзакции перехода.

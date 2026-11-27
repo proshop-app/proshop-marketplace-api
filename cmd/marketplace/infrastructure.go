@@ -110,6 +110,7 @@ func databasePools(cfg config.Config) (map[ports.DatabaseClass]postgres.PoolConf
 	classes := map[ports.DatabaseClass]config.DatabasePool{
 		ports.DatabaseRead:       db.Read,
 		ports.DatabaseCheckout:   db.Checkout,
+		ports.DatabaseWrite:      db.Write,
 		ports.DatabaseIngestion:  db.Ingestion,
 		ports.DatabaseBackground: db.Background,
 		ports.DatabaseOrders:     db.Orders,

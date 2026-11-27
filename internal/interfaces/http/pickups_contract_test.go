@@ -118,8 +118,8 @@ func TestProfilePickupContract(t *testing.T) {
 	}{
 		{`{"pickupPoint":{"provider":"cdek","code":"p1"}}`, 400, "delivery.invalid_city"},
 		{`{"pickupPoint":{"provider":"cdek","code":"p1","city":"Город"}}`, 200, "Адрес"},
-		{`{"pickupPoint":{"provider":"cdek","code":"p1"}}`, 200, "Адрес"},
-		{`{"pickupPoint":{"provider":"cdek","code":"p1","city":""}}`, 200, "Адрес"},
+		{`{"pickupPoint":{"provider":"cdek","code":"p1"}}`, 400, "delivery.invalid_city"},
+		{`{"pickupPoint":{"provider":"cdek","code":"p1","city":""}}`, 400, "delivery.invalid_city"},
 		{`{"pickupPoint":{"provider":"cdek","code":"changed"}}`, 400, "delivery.invalid_city"},
 		{`{"pickupPoint":{"provider":"yandex","code":"p1"}}`, 400, "delivery.invalid_city"},
 		{`{"pickupPoint":{"provider":"cdek","code":"unknown","city":"Город"}}`, 404, "delivery.pickup_point_not_found"},

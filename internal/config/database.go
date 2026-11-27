@@ -26,6 +26,7 @@ type Database struct {
 	Maintenance DatabaseBudget
 	Read        DatabasePool
 	Checkout    DatabasePool
+	Write       DatabasePool
 	// Ingestion.MaxConns и Orders.MaxConns ноль — по числу воркеров приёма и мест
 	// исполнителя оформления; их и сумму пулов проверяет сборка процесса: она знает
 	// размеры полос.
@@ -64,6 +65,7 @@ func (r *reader) database() Database {
 		DirectURL:   r.postgresURL("DATABASE_DIRECT_URL", r.str("DATABASE_DIRECT_URL", "")),
 		Read:        r.databasePool("READ", 8, 750*time.Millisecond, 2*time.Second),
 		Checkout:    r.databasePool("CHECKOUT", 6, 2*time.Second, 5*time.Second),
+		Write:       r.databasePool("WRITE", 6, 2*time.Second, 5*time.Second),
 		Ingestion:   r.databasePool("INGESTION", 0, 2*time.Second, 5*time.Second),
 		Background:  r.databasePool("BACKGROUND", 10, 10*time.Second, 30*time.Second),
 		Orders:      r.databasePool("ORDERS", 0, 2*time.Second, 5*time.Second),
@@ -91,6 +93,7 @@ func (r *reader) validateRouting(db Database) {
 	classes := []databaseClass{
 		{"READ", db.Read},
 		{"CHECKOUT", db.Checkout},
+		{"WRITE", db.Write},
 		{"INGESTION", db.Ingestion},
 		{"BACKGROUND", db.Background},
 		{"ORDERS", db.Orders},

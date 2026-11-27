@@ -12,6 +12,8 @@ var (
 	ErrInvalidProfile = errs.New(errs.Invalid, "buyer.invalid_profile", "некорректный профиль")
 	// ErrProfileConflict — профиль изменился после чтения.
 	ErrProfileConflict = errs.New(errs.Conflict, "buyer.profile_conflict", "профиль изменён параллельно")
+	// ErrFeaturesBusy — уже изменяется профиль или список этого покупателя.
+	ErrFeaturesBusy = errs.New(errs.Conflict, "buyer.features_busy", "данные покупателя уже изменяются")
 	// ErrCollectionLimit — достигнут лимит покупательского списка.
 	ErrCollectionLimit = errs.New(errs.Conflict, "buyer.collection_limit", "достигнут лимит списка")
 	// ErrInvalidTarget — целевая цена не может быть отрицательной.

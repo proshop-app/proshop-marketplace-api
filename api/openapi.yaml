@@ -5781,17 +5781,15 @@ components:
         name: { type: string, description: Игнорируется; берётся из справочника }
     BuyerPickupChoice:
       type: [object, "null"]
-      required: [provider, code]
+      required: [provider, code, city]
       description: |
-        При первом выборе или смене provider/code city обязателен.
-        Если provider/code совпадают с сохранённым пунктом, а city пуст или совпадает,
-        сохраняются прежние город, адрес и регион без обращения к магазину.
-        Другой непустой city требует проверки по списку магазина.
+        Если provider, code и city совпадают с сохранённым пунктом, его адрес и регион
+        сохраняются. При смене любого из этих полей пункт проверяется по списку магазина.
       additionalProperties: false
       properties:
         provider: { type: string }
         code: { type: string }
-        city: { type: string, maxLength: 120 }
+        city: { type: string, minLength: 1, maxLength: 120 }
         address: { type: string, description: Игнорируется; берётся из списка магазина }
         regionCode: { type: string, description: Игнорируется; берётся из списка магазина }
     BuyerRegion:

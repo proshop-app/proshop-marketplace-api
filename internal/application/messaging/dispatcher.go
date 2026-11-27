@@ -133,29 +133,36 @@ func (d *Dispatcher) ReadyLanes(ctx context.Context) ([]ports.ReadyLane, error) 
 
 // RunOnce разбирает одну справедливо выбранную пачку.
 func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
-	tasks, err := d.claimPass(ctx)
+	tasks, err := d.claimPass(ctx, ports.TaskLaneGate{}, nil)
 	if err != nil {
 		return nil, err
 	}
-	return d.executePass(ctx, tasks)
+	return d.executePass(ctx, tasks, nil)
 }
 
 // Пакетный обработчик получает одну порцию, а не N последовательных вызовов.
 // Точечный выбор сначала даёт слот каждому магазину, затем заполняет свободные слоты.
-func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
+func (d *Dispatcher) claimPass(
+	ctx context.Context,
+	gate ports.TaskLaneGate,
+	exclude []string,
+) ([]ports.Task, error) {
 	d.claimMu.Lock()
 	defer d.claimMu.Unlock()
 	now := d.clock.Now()
 	request := ports.ClaimRequest{
+		Gate:         gate,
 		Now:          now,
-		ExcludeKinds: slices.Clone(d.config.ExcludeKinds),
+		ExcludeKinds: slices.Concat(d.config.ExcludeKinds, exclude),
 		Limit:        d.config.Batch,
 		PerTenant:    d.config.PerTenant,
 		LeaseUntil:   now.Add(d.config.Lease),
 	}
 	kinds := []string{}
 	for kind := range d.batches {
-		kinds = append(kinds, kind)
+		if !slices.Contains(request.ExcludeKinds, kind) {
+			kinds = append(kinds, kind)
+		}
 	}
 	slices.Sort(kinds)
 	allBatchKinds := slices.Clone(kinds)
@@ -199,7 +206,11 @@ func (d *Dispatcher) claimPass(ctx context.Context) ([]ports.Task, error) {
 
 // executePass не держит локальный хвост одного магазина. Все взятые порции
 // сразу получают слот; новая задача другого магазина попадёт в следующий проход.
-func (d *Dispatcher) executePass(ctx context.Context, tasks []ports.Task) ([]Outcome, error) {
+func (d *Dispatcher) executePass(
+	ctx context.Context,
+	tasks []ports.Task,
+	lane *IndependentLane,
+) ([]Outcome, error) {
 	groups := [][]ports.Task{}
 	for len(tasks) > 0 {
 		group := tasks[:1]
@@ -239,6 +250,9 @@ func (d *Dispatcher) executePass(ctx context.Context, tasks []ports.Task) ([]Out
 		}
 		outcomes = append(outcomes, result...)
 		allResolutions = append(allResolutions, resolutions[n]...)
+	}
+	if lane != nil {
+		lane.pauseOnFailure(ctx, outcomes, allResolutions)
 	}
 	// Ограниченный проход подтверждается одним запросом, без N отдельных COMMIT.
 	if err := d.resolve(ctx, allResolutions); err != nil {
@@ -283,11 +297,14 @@ func (d *Dispatcher) resolve(ctx context.Context, results []ports.TaskResolution
 	if len(results) == 0 {
 		return nil
 	}
-	if len(results) != 1 || results[0].FailureReason != "" || results[0].UnknownFailures > 0 {
+	if len(results) != 1 {
+		return d.queue.Resolve(ctx, results)
+	}
+	result := results[0]
+	if result.FailureReason != "" || result.UnknownFailures > 0 || result.PauseKey != "" {
 		return d.queue.Resolve(ctx, results)
 	}
 	// Одиночным обработчикам не нужны сериализация пачки и дополнительная транзакция.
-	result := results[0]
 	if result.NextAt != nil {
 		return d.queue.Retry(ctx, result.ID, result.Attempts, *result.NextAt, result.Error)
 	}

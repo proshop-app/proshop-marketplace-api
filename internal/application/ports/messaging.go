@@ -58,8 +58,15 @@ type ClaimCursor struct {
 	Started bool
 }
 
+// TaskLaneGate — виды outbox с общим для реплик сроком возобновления.
+type TaskLaneGate struct {
+	Key   string
+	Kinds []string
+}
+
 // ClaimRequest — сколько задач взять и до какого времени их держать.
 type ClaimRequest struct {
+	Gate TaskLaneGate
 	// After — курсор круга магазинов из ClaimResult.Next прошлого взятия.
 	After        ClaimCursor
 	Kinds        []string
@@ -91,6 +98,8 @@ type ClaimResult struct {
 
 // TaskResolution — результат с токеном аренды; NextAt задан только при повторе.
 type TaskResolution struct {
+	PauseKey        string
+	PauseUntil      *time.Time
 	UnknownFailures int
 	FailureReason   string
 	ID              int64

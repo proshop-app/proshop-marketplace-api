@@ -41,6 +41,13 @@ func (s *Store) Resolve(_ context.Context, results []ports.TaskResolution) error
 			row.DoneAt = &result.At
 		default:
 			row.NextAt = *result.NextAt
+			if result.PauseKey != "" && result.PauseUntil != nil &&
+				result.PauseUntil.After(s.lanePauses[result.PauseKey]) {
+				if s.lanePauses == nil {
+					s.lanePauses = make(map[string]time.Time)
+				}
+				s.lanePauses[result.PauseKey] = *result.PauseUntil
+			}
 		}
 	}
 	return nil

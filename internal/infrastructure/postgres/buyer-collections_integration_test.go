@@ -23,9 +23,6 @@ import (
 )
 
 const (
-	waitingBuyerLocks = `SELECT count(*) FROM pg_locks
- WHERE locktype = 'advisory' AND NOT granted
- AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`
 	lowerWatchPrices = `UPDATE catalog_products SET price = $1 WHERE tenant_id = 't1' AND product_id = 'p1'`
 	hideWatchSeller  = `UPDATE participants
  SET enabled = false,
@@ -46,10 +43,20 @@ const (
  WHERE tenant_id = 't1' AND product_id = 'p1'`
 )
 
-func seedBuyerFeatureOffers(t *testing.T, uow *postgres.UnitOfWork) {
+type buyerListLockProbe struct {
+	ports.UnitOfWork
+	released chan<- struct{}
+	retry    <-chan struct{}
+	signaled bool
+}
+
+func seedBuyerFeatureOffers(t *testing.T, uow *postgres.UnitOfWork, products ...ids.ProductID) {
 	t.Helper()
 	seedBuyer(t, uow, buyerA, "79990000001")
 	seedStoredCard(t, uow)
+	if len(products) == 0 {
+		products = []ids.ProductID{"p1", "p2"}
+	}
 	err := uow.Do(context.Background(), func(ctx context.Context, tx ports.Tx) error {
 		shop, err := tx.Participants().Get(ctx, "t1")
 		if err != nil {
@@ -67,7 +74,7 @@ func seedBuyerFeatureOffers(t *testing.T, uow *postgres.UnitOfWork) {
 		if err := tx.Participants().Update(ctx, shop); err != nil {
 			return err
 		}
-		for _, id := range []ids.ProductID{"p1", "p2"} {
+		for _, id := range products {
 			snap := snapshot("t1", id, 1, 0)
 			snap.Card.Publication = taxonomy.Publication{Published: true}
 			product, err := catalog.NewProduct(snap, at(0))
@@ -113,11 +120,11 @@ func TestBuyerCollectionConcurrentLimit(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			// Удерживаем блокировку, чтобы обе транзакции начали добавление до освобождения места проверки.
+			// Две реплики должны вернуть соединения, пока блокировка списка ещё занята.
 			locked, release, holding := make(chan struct{}), make(chan struct{}), make(chan error, 1)
 			go func() {
 				holding <- uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-					if err := tx.BuyerFeatures().Lock(ctx, buyerA); err != nil {
+					if err := tx.BuyerFeatures().TryLockLists(ctx, buyerA); err != nil {
 						return err
 					}
 					close(locked)
@@ -134,35 +141,36 @@ func TestBuyerCollectionConcurrentLimit(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal(ctx.Err())
 			}
-			service := appbuyer.NewFeatures(uow, nil, &fake.PickupLookup{})
-			results, started := make(chan error, 2), make(chan struct{}, 2)
+			results, released := make(chan error, 2), make(chan struct{}, 2)
+			retry := make(chan struct{})
 			for _, id := range []ids.ProductID{"p1", "p2"} {
+				probe := &buyerListLockProbe{
+					UnitOfWork: postgres.NewUnitOfWork(pool),
+					released:   released,
+					retry:      retry,
+				}
+				service := appbuyer.NewFeatures(probe, nil, nil)
 				go func() {
-					started <- struct{}{}
 					results <- service.PutSaved(ctx, buyerA, kind, ids.OfferID{Tenant: "t1", Product: id}, nil)
 				}()
 			}
-			<-started
-			<-started
-			for {
-				var waiting int
-				err := pool.QueryRow(ctx, waitingBuyerLocks).Scan(&waiting)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if waiting == 2 {
-					break
-				}
+			for range 2 {
 				select {
+				case <-released:
+				case err := <-results:
+					t.Fatalf("добавление завершилось до освобождения списка: %v", err)
 				case <-ctx.Done():
 					t.Fatal(ctx.Err())
-				case <-time.After(10 * time.Millisecond):
 				}
+			}
+			if got := pool.Stat().AcquiredConns(); got != 1 {
+				t.Fatalf("занято %d соединений, ожидается только владелец блокировки", got)
 			}
 			close(release)
 			if err := <-holding; err != nil {
 				t.Fatal(err)
 			}
+			close(retry)
 			successes, limited := 0, 0
 			for i := 0; i < 2; i++ {
 				err := <-results
@@ -179,21 +187,93 @@ func TestBuyerCollectionConcurrentLimit(t *testing.T) {
 				t.Fatal(successes, limited)
 			}
 			if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-				var saved []ports.SavedOffer
-				var err error
-				if kind == ports.Favorites {
-					saved, _, err = tx.BuyerFeatures().FavoritesPage(ctx, buyerA, buyer.FavoritesLimit, 0)
-				} else {
-					saved, err = tx.BuyerFeatures().Saved(ctx, buyerA)
+				inserted := 0
+				for _, id := range []ids.ProductID{"p1", "p2"} {
+					offer := ids.OfferID{Tenant: "t1", Product: id}
+					count, exists, err := tx.BuyerFeatures().SavedStats(ctx, buyerA, kind, offer)
+					if err != nil {
+						return err
+					}
+					if count != limit {
+						return fmt.Errorf("число записей: %d вместо %d", count, limit)
+					}
+					if exists {
+						inserted++
+					}
 				}
-				if err == nil && len(saved) != limit {
-					return fmt.Errorf("число записей: %d", len(saved))
+				if inserted != 1 {
+					return fmt.Errorf("добавлено %d из двух новых предложений", inserted)
 				}
-				return err
+				return nil
 			}); err != nil {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestBuyerCollectionConcurrentWrites(t *testing.T) {
+	for _, kind := range []ports.SavedKind{ports.Favorites, ports.PriceWatches} {
+		t.Run(string(kind), func(t *testing.T) {
+			const count = 96
+			pool := pgtest.Pool(t)
+			products := make([]ids.ProductID, count)
+			for i := range products {
+				products[i] = ids.ProductID(fmt.Sprintf("p%d", i+1))
+			}
+			seedBuyerFeatureOffers(t, postgres.NewUnitOfWork(pool), products...)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			replicas := make([]*appbuyer.Features, 3)
+			for i := range replicas {
+				replicas[i] = appbuyer.NewFeatures(postgres.NewUnitOfWork(pool), nil, nil)
+			}
+			start, results := make(chan struct{}), make(chan error, count)
+			for i, product := range products {
+				go func() {
+					<-start
+					offer := ids.OfferID{Tenant: "t1", Product: product}
+					results <- replicas[i%len(replicas)].PutSaved(ctx, buyerA, kind, offer, nil)
+				}()
+			}
+			close(start)
+			for range products {
+				if err := <-results; err != nil {
+					t.Error(err)
+				}
+			}
+			err := postgres.NewUnitOfWork(pool).Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+				offer := ids.OfferID{Tenant: "t1", Product: products[0]}
+				got, exists, err := tx.BuyerFeatures().SavedStats(ctx, buyerA, kind, offer)
+				if err == nil && (got != count || !exists) {
+					return fmt.Errorf("число записей: %d, первая запись найдена: %t", got, exists)
+				}
+				return err
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func (p *buyerListLockProbe) Do(ctx context.Context, run func(context.Context, ports.Tx) error) error {
+	err := p.UnitOfWork.Do(ctx, run)
+	if p.signaled || !errors.Is(err, buyer.ErrFeaturesBusy) {
+		return err
+	}
+	p.signaled = true
+	select {
+	case p.released <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case <-p.retry:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

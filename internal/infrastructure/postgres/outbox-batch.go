@@ -26,7 +26,7 @@ const (
 		WITH results AS (
 			SELECT * FROM jsonb_to_recordset($1::jsonb)
 			AS r(id bigint, attempts integer, at timestamptz, next_at timestamptz, error text, failure_reason text,
-				unknown_failures integer)
+				unknown_failures integer, pause_key text, pause_until timestamptz)
 		), done AS (
 			DELETE FROM outbox o
 			USING results r
@@ -44,6 +44,16 @@ const (
 			WHERE o.id = r.id AND o.attempts = r.attempts AND o.attempts > 0 AND o.failed_at IS NULL
 				AND (r.next_at IS NOT NULL OR r.failure_reason <> '')
 			RETURNING o.id
+		), paused AS (
+			INSERT INTO outbox_lane_pauses(lane, resume_at)
+			SELECT r.pause_key, max(r.pause_until)
+			FROM kept k JOIN results r ON r.id = k.id
+			WHERE r.pause_key <> '' AND r.pause_until IS NOT NULL
+			GROUP BY r.pause_key
+			ORDER BY r.pause_key
+			ON CONFLICT (lane) DO UPDATE
+			SET resume_at = EXCLUDED.resume_at
+			WHERE outbox_lane_pauses.resume_at < EXCLUDED.resume_at
 		)
 		SELECT (SELECT count(*) FROM done) + (SELECT count(*) FROM kept)`
 
@@ -82,6 +92,8 @@ type newTaskRow struct {
 }
 
 type taskResolution struct {
+	PauseKey        string     `json:"pause_key,omitempty"`
+	PauseUntil      *time.Time `json:"pause_until,omitempty"`
 	UnknownFailures int        `json:"unknown_failures"`
 	FailureReason   string     `json:"failure_reason"`
 	ID              int64      `json:"id"`

@@ -293,3 +293,32 @@ func TestSubscriptionsIncludePublicPageWithoutReadyCard(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestBuyerListsNeverWaitForBusyBuyerOrCheckoutLock(t *testing.T) {
+	ctx := context.Background()
+	uow := postgres.NewUnitOfWork(testPool(t))
+	first := ids.UUID("00000000-0000-0000-0000-000000000001")
+	second := ids.UUID("00000000-0000-0000-0000-000000000002")
+	err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		if err := tx.BuyerFeatures().Lock(ctx, first); err != nil {
+			return err
+		}
+		return uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+			if err := tx.BuyerFeatures().TryLockProfile(ctx, first); !errors.Is(err, buyer.ErrFeaturesBusy) {
+				t.Fatalf("запись профиля во время сохранения ПВЗ: %v", err)
+			}
+			if err := tx.BuyerFeatures().TryLockLists(ctx, first); err != nil {
+				return err
+			}
+			return uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+				if err := tx.BuyerFeatures().TryLockLists(ctx, first); !errors.Is(err, buyer.ErrFeaturesBusy) {
+					t.Fatalf("конкурирующая запись списка: %v", err)
+				}
+				return tx.BuyerFeatures().TryLockLists(ctx, second)
+			})
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

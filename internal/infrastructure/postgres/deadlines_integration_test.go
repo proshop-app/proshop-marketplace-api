@@ -43,6 +43,7 @@ func TestPoolsApplyClassBudgetsAndQuotas(t *testing.T) {
 	pools, err := postgres.OpenPools(ctx, target, map[ports.DatabaseClass]postgres.PoolConfig{
 		ports.DatabaseRead:       {MaxConns: 1, Budget: fast},
 		ports.DatabaseCheckout:   {MaxConns: 1, Budget: slow},
+		ports.DatabaseWrite:      {MaxConns: 1, Budget: slow},
 		ports.DatabaseIngestion:  {MaxConns: 1, Budget: slow},
 		ports.DatabaseBackground: {MaxConns: 1, Budget: slow},
 		ports.DatabaseOrders:     {MaxConns: 1, Budget: slow},
@@ -72,6 +73,15 @@ func TestPoolsApplyClassBudgetsAndQuotas(t *testing.T) {
 	defer ingestion.Release()
 	if err := uow.Do(read, func(context.Context, ports.Tx) error { return nil }); err != nil {
 		t.Fatal("приём не занимает соединения покупателей", err)
+	}
+	auxiliary, err := pools.Pool(ports.DatabaseWrite).Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer auxiliary.Release()
+	checkout := ports.WithDatabaseClass(ctx, ports.DatabaseCheckout)
+	if err := uow.Do(checkout, func(context.Context, ports.Tx) error { return nil }); err != nil {
+		t.Fatal("прочие HTTP-записи не занимают пул оформления", err)
 	}
 	// Фон (outbox индексации, циклы) занят целиком — исполнитель оформления не ждёт.
 	background, err := pools.Pool(ports.DatabaseBackground).Acquire(ctx)

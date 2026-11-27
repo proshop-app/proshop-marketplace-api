@@ -19,6 +19,7 @@ func poolConfig(ingestion int32) config.Config {
 		Database: config.Database{
 			Read:       config.DatabasePool{MaxConns: 8, Budget: budget},
 			Checkout:   config.DatabasePool{MaxConns: 6, Budget: budget},
+			Write:      config.DatabasePool{MaxConns: 6, Budget: budget},
 			Ingestion:  config.DatabasePool{MaxConns: ingestion, Budget: budget},
 			Background: config.DatabasePool{MaxConns: 10, Budget: budget},
 			Orders:     config.DatabasePool{Budget: budget},
@@ -37,7 +38,8 @@ func TestIngestionPoolFitsAllKafkaWorkers(t *testing.T) {
 	if got := pools[ports.DatabaseOrders].MaxConns; got != int32(appcheckout.ExecutorSlots+1) {
 		t.Fatalf("пул оформления вмещает все места исполнителя и взятие задач: %d", got)
 	}
-	if pools[ports.DatabaseRead].MaxConns != 8 || pools[ports.DatabaseBackground].Budget.Transaction != 2*time.Second {
+	if pools[ports.DatabaseRead].MaxConns != 8 || pools[ports.DatabaseWrite].MaxConns != 6 ||
+		pools[ports.DatabaseBackground].Budget.Transaction != 2*time.Second {
 		t.Fatalf("пулы классов переносят размер и сроки: %+v", pools)
 	}
 

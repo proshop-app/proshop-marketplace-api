@@ -87,8 +87,9 @@ type lease struct {
 
 // Store — хранилище в памяти: UnitOfWork, очередь задач и чистка по сроку.
 type Store struct {
-	mu   sync.Mutex
-	data *data
+	lanePauses map[string]time.Time
+	mu         sync.Mutex
+	data       *data
 	// FailCommit, если задан, возвращается вместо фиксации транзакции.
 	FailCommit error
 }
@@ -296,6 +297,9 @@ func (s *Store) Claim(_ context.Context, request ports.ClaimRequest) (ports.Clai
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.lanePauses[request.Gate.Key].After(request.Now) {
+		request.ExcludeKinds = slices.Concat(request.ExcludeKinds, request.Gate.Kinds)
+	}
 	walk := claimWalk{request: request, rows: s.data.outbox}
 	kinds := walk.kinds()
 	if len(kinds) == 0 {

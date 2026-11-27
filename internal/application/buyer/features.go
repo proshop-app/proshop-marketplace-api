@@ -2,7 +2,10 @@ package buyer
 
 import (
 	"context"
+	"errors"
 	"slices"
+	"sync"
+	"time"
 
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -28,9 +31,11 @@ const (
 
 // Features — покупательские сценарии в одной транзакции на изменение.
 type Features struct {
-	points   ports.ProfilePickupLookup
-	uow      ports.UnitOfWork
-	detector ports.CityDetector
+	profileWrites sync.Map
+	listWrites    sync.Map
+	points        ports.ProfilePickupLookup
+	uow           ports.UnitOfWork
+	detector      ports.CityDetector
 }
 
 // Alerts — счётчик достигнутых ценовых условий.
@@ -87,8 +92,13 @@ func (s *Features) Patch(
 	id ids.UUID,
 	change func(buyer.ProfileState) (buyer.ProfileState, error),
 ) (ProfileView, error) {
+	release, err := s.beginProfileWrite(id)
+	if err != nil {
+		return ProfileView{}, err
+	}
+	defer release()
 	var original *buyer.Profile
-	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		profile, err := tx.BuyerFeatures().Profile(ctx, id)
 		if err != nil {
 			return err
@@ -105,9 +115,7 @@ func (s *Features) Patch(
 		return ProfileView{}, err
 	}
 	if selected, saved := state.PickupPoint, previous.PickupPoint; selected != nil && saved != nil &&
-		selected.Provider == saved.Provider && selected.Code == saved.Code &&
-		(selected.City == "" || selected.City == saved.City) {
-		// Старые клиенты знают только код: адрес, регион и город берём из сохранённого выбора.
+		selected.Provider == saved.Provider && selected.Code == saved.Code && selected.City == saved.City {
 		state.PickupPoint = saved
 	}
 	if state.PickupPoint != nil &&
@@ -130,9 +138,6 @@ func (s *Features) Patch(
 	}
 	var result ProfileView
 	err = s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		if err := tx.BuyerFeatures().Lock(ctx, id); err != nil {
-			return err
-		}
 		p, err := tx.BuyerFeatures().Profile(ctx, id)
 		if err != nil {
 			return err
@@ -144,14 +149,22 @@ func (s *Features) Patch(
 		if err != nil {
 			return err
 		}
+		drops, err := tx.BuyerFeatures().PriceDrops(ctx, id)
+		if err != nil {
+			return err
+		}
 		if changed {
+			// Короткая блокировка включает только запись по версии и фиксацию.
+			if err := tx.BuyerFeatures().TryLockProfile(ctx, id); err != nil {
+				return err
+			}
 			if err := tx.BuyerFeatures().SaveProfile(ctx, id, p); err != nil {
 				return err
 			}
 		}
 		result.ProfileState = p.State()
-		result.Alerts.PriceDrops, err = tx.BuyerFeatures().PriceDrops(ctx, id)
-		return err
+		result.Alerts.PriceDrops = drops
+		return nil
 	})
 	return result, err
 }
@@ -278,11 +291,8 @@ func (s *Features) PutSaved(
 	if target != nil && target.Kopecks() < 0 {
 		return buyer.ErrInvalidTarget
 	}
-	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	return s.writeLists(ctx, id, func(ctx context.Context, tx ports.Tx) error {
 		repo := tx.BuyerFeatures()
-		if err := repo.Lock(ctx, id); err != nil {
-			return err
-		}
 		count, exists, err := repo.SavedStats(ctx, id, kind, offer)
 		if err != nil {
 			return err
@@ -315,10 +325,7 @@ func (s *Features) PutSaved(
 
 // DeleteSaved — идемпотентно удаляет предложение из списка.
 func (s *Features) DeleteSaved(ctx context.Context, id ids.UUID, kind ports.SavedKind, offer string) error {
-	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		if err := tx.BuyerFeatures().Lock(ctx, id); err != nil {
-			return err
-		}
+	return s.writeLists(ctx, id, func(ctx context.Context, tx ports.Tx) error {
 		return tx.BuyerFeatures().DeleteSaved(ctx, id, kind, offer)
 	})
 }
@@ -330,11 +337,8 @@ func (s *Features) Subscribe(
 	tenant ids.TenantID,
 	enabled ports.SubscriptionState,
 ) error {
-	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+	return s.writeLists(ctx, id, func(ctx context.Context, tx ports.Tx) error {
 		repo := tx.BuyerFeatures()
-		if err := repo.Lock(ctx, id); err != nil {
-			return err
-		}
 		if enabled {
 			saved, err := repo.Subscriptions(ctx, id)
 			if err != nil {
@@ -409,4 +413,59 @@ func pricedDocument(state ports.OfferState) (ports.OfferDocument, bool) {
 		return doc, false
 	}
 	return doc, true
+}
+
+// beginProfileWrite отсекает параллельное изменение профиля в этой реплике до первого чтения.
+func (s *Features) beginProfileWrite(id ids.UUID) (func(), error) {
+	if _, busy := s.profileWrites.LoadOrStore(id, struct{}{}); busy {
+		return nil, buyer.ErrFeaturesBusy
+	}
+	return func() { s.profileWrites.Delete(id) }, nil
+}
+
+// writeLists сериализует запросы покупателя в процессе, а между репликами
+// повторяет попытку только после возврата соединения в пул.
+func (s *Features) writeLists(
+	ctx context.Context,
+	id ids.UUID,
+	change func(context.Context, ports.Tx) error,
+) error {
+	done := make(chan struct{})
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		previous, busy := s.listWrites.LoadOrStore(id, done)
+		if !busy {
+			break
+		}
+		select {
+		case <-previous.(chan struct{}):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	defer func() {
+		s.listWrites.Delete(id)
+		close(done)
+	}()
+
+	for delay := 5 * time.Millisecond; ; delay = min(2*delay, 40*time.Millisecond) {
+		err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+			if err := tx.BuyerFeatures().TryLockLists(ctx, id); err != nil {
+				return err
+			}
+			return change(ctx, tx)
+		})
+		if !errors.Is(err, buyer.ErrFeaturesBusy) {
+			return err
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		}
+	}
 }

@@ -41,6 +41,7 @@ var classRoleList = []string{
 	"marketplace_app",
 	"marketplace_read",
 	"marketplace_checkout",
+	"marketplace_write",
 	"marketplace_ingestion",
 	"marketplace_background",
 	"marketplace_orders",

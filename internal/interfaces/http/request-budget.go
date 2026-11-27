@@ -10,9 +10,7 @@ import (
 
 type requestClass int
 
-// Классы маршрутов. Запись покупателя и служебного API сервера (вход, избранное,
-// профиль, обратная связь, заявки магазина) работает в пуле оформления, а не в пуле
-// приёма Kafka: волна событий не задерживает ответ человеку.
+// Классы маршрутов. Корзина и оформление имеют собственный пул для запросов HTTP.
 const (
 	readRequest requestClass = iota + 1
 	checkoutRequest
@@ -39,8 +37,10 @@ func requestBudget(class requestClass, deps Deps, next http.HandlerFunc) http.Ha
 		database := ports.DatabaseRead
 		switch class {
 		case readRequest:
-		case checkoutRequest, writeRequest:
+		case checkoutRequest:
 			database = ports.DatabaseCheckout
+		case writeRequest:
+			database = ports.DatabaseWrite
 		case backgroundRequest:
 			database = ports.DatabaseBackground
 		case importRequest:
