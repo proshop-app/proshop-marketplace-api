@@ -189,6 +189,7 @@ func routes(deps Deps) []route {
 		{readRequest, http.MethodGet, "/api/v1/region", publicBuyer(deps.Auth, features.region)},
 
 		{readRequest, http.MethodGet, "/api/v1/shops", participants.shops},
+		{readRequest, http.MethodGet, shopDirectoryPath, participants.shopDirectory},
 		{readRequest, http.MethodGet, "/api/v1/shops/{slug}", publicBuyer(deps.Auth, participants.shop)},
 		{
 			readRequest,

@@ -209,6 +209,17 @@ func (s *Service) Shops(ctx context.Context, category string, limit, offset int)
 	return result, err
 }
 
+// ShopDirectory читает изменения публичного справочника после курсора.
+func (s *Service) ShopDirectory(ctx context.Context, previous int64) (ports.ShopDirectory, error) {
+	var result ports.ShopDirectory
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		var err error
+		result, err = tx.StoreCards().Directory(ctx, previous)
+		return err
+	})
+	return result, err
+}
+
 func categoryPaths(nodes []taxonomy.Category) map[string][]StoreCategory {
 	result := map[string][]StoreCategory{}
 	var visit func(taxonomy.Category, []StoreCategory)

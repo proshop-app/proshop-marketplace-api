@@ -355,6 +355,48 @@ paths:
           headers:
             ETag: { schema: { type: string } }
         "400": { $ref: "#/components/responses/Error" }
+  /api/v1/shops/directory/snapshot:
+    get:
+      tags: [catalog]
+      operationId: shopDirectorySnapshot
+      summary: Изменения публичного справочника магазинов
+      security: []
+      parameters:
+        - name: since
+          in: query
+          description: Ревизия локальной копии. Без курсора передаётся полный справочник.
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        "400": { $ref: "#/components/responses/Error" }
+        "304":
+          description: С момента указанной ревизии справочник не менялся
+          headers:
+            ETag: { schema: { type: string } }
+        "200":
+          description: Текущее состояние магазинов, изменившихся после курсора
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision, items, removed]
+                properties:
+                  revision: { type: integer, format: int64 }
+                  removed: { type: array, items: { type: string } }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [tenantId, slug, name, sizeTier]
+                      properties:
+                        tenantId: { type: string }
+                        slug: { type: string }
+                        name: { type: string }
+                        sizeTier:
+                          type: integer
+                          enum: [0, 1, 2, 3]
+                          description: Число предложений по ступеням 0, 1–9, 10–99, от 100.
   /api/v1/shops/{slug}:
     get:
       tags: [catalog]

@@ -20,45 +20,41 @@ const (
 		ORDER BY array_position($1::text[], tenant_id)`
 	lockStoreSummary = `SELECT pg_advisory_xact_lock(hashtextextended($1, 38))`
 	saveStoreSummary = `
-		INSERT INTO store_cards (
-		 tenant_id, slug, name, offers, from_price, public, summary, header, card, profile_version, page_public,
-         cache_signature
-		)
-		VALUES (
-		$1,
-		$2,
-		$3,
-		$4,
-		$5,
-		$6,
-		$7,
-		$8,
-		$9,
-		$10,
-		$11,
-		$12
-		)
-		ON CONFLICT (tenant_id) DO UPDATE
-		SET
-		slug = EXCLUDED.slug,
-		name = EXCLUDED.name,
-		offers = EXCLUDED.offers,
-		from_price = EXCLUDED.from_price,
-		public = EXCLUDED.public,
-		cache_signature = EXCLUDED.cache_signature,
-		page_public = EXCLUDED.page_public,
-		summary = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
-		THEN jsonb_set(EXCLUDED.summary, '{hidden}', store_cards.summary->'hidden') ELSE EXCLUDED.summary END,
-		header = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
-		THEN EXCLUDED.header || jsonb_build_object(
-		 'logo', store_cards.header->'logo')
-		ELSE EXCLUDED.header END,
-		card = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
-		THEN EXCLUDED.card || jsonb_build_object(
-		 'logo', store_cards.card->'logo',
-		 'mark', store_cards.card->'mark')
-		ELSE EXCLUDED.card END,
-		profile_version = GREATEST(store_cards.profile_version, EXCLUDED.profile_version)`
+        WITH saved AS (
+            INSERT INTO store_cards (
+                tenant_id, slug, name, offers, from_price, public, summary, header, card, profile_version,
+                page_public, cache_signature
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            ON CONFLICT (tenant_id) DO UPDATE SET
+                slug = EXCLUDED.slug,
+                name = EXCLUDED.name,
+                offers = EXCLUDED.offers,
+                from_price = EXCLUDED.from_price,
+                public = EXCLUDED.public,
+                cache_signature = EXCLUDED.cache_signature,
+                page_public = EXCLUDED.page_public,
+                summary = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
+                    THEN jsonb_set(EXCLUDED.summary, '{hidden}', store_cards.summary->'hidden')
+                    ELSE EXCLUDED.summary
+                END,
+                header = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
+                    THEN EXCLUDED.header || jsonb_build_object('logo', store_cards.header->'logo')
+                    ELSE EXCLUDED.header
+                END,
+                card = CASE WHEN store_cards.profile_version > EXCLUDED.profile_version
+                    THEN EXCLUDED.card || jsonb_build_object(
+                        'logo', store_cards.card->'logo',
+                        'mark', store_cards.card->'mark'
+                    )
+                    ELSE EXCLUDED.card
+                END,
+                profile_version = GREATEST(store_cards.profile_version, EXCLUDED.profile_version)
+            RETURNING tenant_id, slug, name, offers, public
+        )
+        SELECT record_shop_directory_change(tenant_id,
+            CASE WHEN public THEN shop_directory_card(tenant_id, slug, name, offers) END)
+        FROM saved`
 	deleteStoreCategories = `DELETE FROM store_card_categories WHERE tenant_id = $1`
 	insertStoreCategories = `INSERT INTO store_card_categories (category_id, tenant_id, name, count)
         SELECT id, $1, name, count FROM jsonb_to_recordset($2::jsonb) AS c(id text, name text, count integer)`
@@ -75,6 +71,15 @@ const (
 		)
 		SELECT COALESCE((SELECT jsonb_agg(card ORDER BY offers DESC, name, tenant_id) FROM page), '[]'::jsonb),
 		COALESCE((SELECT total FROM filtered LIMIT 1), 0)`
+	// Курсор и изменения читаются в одном снимке SQL. Ветка 304 не
+	// обращается к записям и не сериализует тело.
+	shopDirectory = `
+		SELECT revision, CASE WHEN revision <> $1 THEN (
+			SELECT jsonb_build_object(
+				'items', COALESCE(jsonb_agg(card) FILTER (WHERE card IS NOT NULL), '[]'::jsonb),
+				'removed', COALESCE(jsonb_agg(tenant_id) FILTER (WHERE card IS NULL AND $1 > 0), '[]'::jsonb))
+			FROM shop_directory_changes WHERE revision > $1)
+		END FROM shop_directory_revision`
 	listCategoryShopCards = `
 		WITH filtered AS (
 		SELECT s.card || jsonb_build_object(
@@ -232,6 +237,20 @@ func (r *StoreCards) List(ctx context.Context, category string, limit, offset in
 		return result, err
 	}
 	err := json.Unmarshal(raw, &result.Items)
+	return result, err
+}
+
+// Directory читает ревизию и при изменении карточки одним запросом.
+func (r *StoreCards) Directory(ctx context.Context, previous int64) (ports.ShopDirectory, error) {
+	var result ports.ShopDirectory
+	var raw []byte
+	if err := rawSQL(ctx, r.db, shopDirectory, previous).Row().Scan(&result.Revision, &raw); err != nil {
+		return result, err
+	}
+	if raw == nil {
+		return result, nil
+	}
+	err := json.Unmarshal(raw, &result)
 	return result, err
 }
 

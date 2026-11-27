@@ -11,6 +11,16 @@ import (
 
 type storeCards struct{ d *data }
 
+type storeDirectory struct {
+	revision int64
+	changes  map[ids.TenantID]directoryChange
+}
+
+type directoryChange struct {
+	revision int64
+	card     ports.ShopDirectoryCard
+}
+
 func (r storeCards) CacheVersion(context.Context, ...ids.TenantID) (int64, error) { return 0, nil }
 
 func (r storeCards) Lock(_ context.Context, _ ids.TenantID) error {
@@ -24,6 +34,14 @@ func (r storeCards) Save(_ context.Context, record ports.StoreRecord) error {
 		record.Card.Mark = previous.Card.Mark
 		record.Summary.Hidden = previous.Summary.Hidden
 		record.ProfileVersion = previous.ProfileVersion
+	}
+	before, after := directoryCard(previous), directoryCard(record)
+	if before != after {
+		r.d.directory.revision++
+		r.d.directory.changes[record.Header.TenantID] = directoryChange{
+			revision: r.d.directory.revision,
+			card:     after,
+		}
 	}
 	r.d.storeCards[record.Header.TenantID] = record
 	return nil
@@ -77,6 +95,51 @@ func (r storeCards) List(_ context.Context, category string, limit, offset int) 
 	result.Total = len(result.Items)
 	start := min(offset, result.Total)
 	result.Items = result.Items[start:min(start+limit, result.Total)]
+	return result, nil
+}
+
+func directoryCard(record ports.StoreRecord) ports.ShopDirectoryCard {
+	if !record.Public {
+		return ports.ShopDirectoryCard{}
+	}
+	return ports.ShopDirectoryCard{
+		TenantID: record.Header.TenantID,
+		Slug:     record.Header.Slug,
+		Name:     record.Header.Name,
+		SizeTier: shopSizeTier(record.Header.Offers),
+	}
+}
+
+func shopSizeTier(offers int) int {
+	switch {
+	case offers >= 100:
+		return 3
+	case offers >= 10:
+		return 2
+	case offers >= 1:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func (r storeCards) Directory(_ context.Context, previous int64) (ports.ShopDirectory, error) {
+	result := ports.ShopDirectory{Revision: r.d.directory.revision}
+	if result.Revision == previous {
+		return result, nil
+	}
+	result.Items = []ports.ShopDirectoryCard{}
+	result.Removed = []ids.TenantID{}
+	for tenant, change := range r.d.directory.changes {
+		if change.revision <= previous {
+			continue
+		}
+		if change.card.TenantID != "" {
+			result.Items = append(result.Items, change.card)
+		} else if previous != 0 {
+			result.Removed = append(result.Removed, tenant)
+		}
+	}
 	return result, nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -95,6 +96,21 @@ func TestStoreCardHTTP(t *testing.T) {
 		}
 		return response
 	}
+	const directory = "/api/v1/shops/directory/snapshot"
+	first := call(http.MethodGet, directory, "", "", http.StatusOK)
+	var snapshot ports.ShopDirectory
+	if err := json.Unmarshal(first.Body.Bytes(), &snapshot); err != nil ||
+		len(snapshot.Items) != 1 || snapshot.Items[0].Slug != "shop" || snapshot.Items[0].SizeTier != 1 ||
+		!strings.Contains(first.Body.String(), `"sizeTier":1`) ||
+		strings.Contains(first.Body.String(), `"offers"`) || strings.Contains(first.Body.String(), `"fromPrice"`) {
+		t.Fatal(first.Header(), first.Body.String(), err)
+	}
+	since := directory + "?since=" + strconv.FormatInt(snapshot.Revision, 10)
+	unchanged := call(http.MethodGet, since, "", "", http.StatusNotModified)
+	if unchanged.Body.Len() != 0 || unchanged.Header().Get("ETag") != first.Header().Get("ETag") {
+		t.Fatal(unchanged.Code, unchanged.Header(), unchanged.Body.String())
+	}
+	call(http.MethodGet, directory+"?since=-1", "", "", http.StatusBadRequest)
 	sync := "/api/v1/internal/tenants/t1/settings/sync"
 	summary := "/api/v1/internal/tenants/t1/store-card"
 	for _, bearer := range []string{"", token, "wrong"} {
