@@ -166,9 +166,8 @@ func openCommandPool(ctx context.Context, database config.Database) (*pgxpool.Po
 
 func openSearch(cfg config.Config) (*searchapi.Index, error) {
 	return searchapi.New(searchapi.Config{
-		URL:           cfg.Search.URL,
-		Token:         cfg.Search.Token,
-		PurchaseToken: cfg.Search.PurchaseToken,
+		URL:   cfg.Search.URL,
+		Token: cfg.Search.Token,
 	})
 }
 

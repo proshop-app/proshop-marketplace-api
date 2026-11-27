@@ -274,18 +274,9 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 	)
 	carts := appcart.NewService(uow, resyncing, identities, now, cfg.Cart.TTL, cfg.Identity.EncryptionKey)
-	var searchBuyerKeys *searchfeedback.BuyerKeys
-	var feedback *searchfeedback.Feedback
-	var purchases *messaging.Dispatcher
-	if cfg.Search.FeedbackEnabled() {
-		searchBuyerKeys = searchfeedback.NewBuyerKeys(cfg.Search.AnalyticsKey)
-		feedback = searchfeedback.NewFeedback(s.store.index, redis.NewLimiter(s.cache, keyPrefix), searchBuyerKeys)
-		purchases = searchPurchaseDispatcher(postgres.NewTaskQueue(background), now, s.store.index)
-	} else {
-		s.logger.Warn(
-			"обратная связь поиска выключена: нужны SEARCH_ANALYTICS_KEY и SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN",
-		)
-	}
+	searchBuyerKeys := searchfeedback.NewBuyerKeys(cfg.Identity.EncryptionKey)
+	feedback := searchfeedback.NewFeedback(s.store.index, redis.NewLimiter(s.cache, keyPrefix), searchBuyerKeys)
+	purchases := searchPurchaseDispatcher(postgres.NewTaskQueue(background), now, s.store.index)
 	checkouts := appcheckout.NewService(
 		uow,
 		resyncing,
@@ -554,11 +545,9 @@ func (s *server) jobs() []jobs.Loop {
 		).Run},
 		{Name: "retention", Run: jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run},
 	}
-	if s.app.searchPurchases != nil {
-		loops = append(loops, jobs.Loop{Name: "search-purchases", Run: func(ctx context.Context) error {
-			return outbox.RunLane(ctx, s.app.searchPurchases)
-		}})
-	}
+	loops = append(loops, jobs.Loop{Name: "search-purchases", Run: func(ctx context.Context) error {
+		return outbox.RunLane(ctx, s.app.searchPurchases)
+	}})
 	return append(loops, s.scheduledJobs()...)
 }
 

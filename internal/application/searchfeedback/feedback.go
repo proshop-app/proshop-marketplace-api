@@ -27,6 +27,9 @@ const (
 	ratePerMinute    = 120
 	limitTimeout     = 25 * time.Millisecond
 	feedbackTimeout  = 500 * time.Millisecond
+	// buyerKeysPurpose отделяет ключ псевдонимов от секрета, из которого он выведен:
+	// сам секрет шифрует refresh и в псевдонимы не попадает.
+	buyerKeysPurpose = "proshop-marketplace/search-buyer-keys/v1"
 )
 
 // ErrInvalid означает нарушение формы события до вызова поиска.
@@ -44,9 +47,13 @@ type Feedback struct {
 	keys    *BuyerKeys
 }
 
-// NewBuyerKeys закрепляет общий ключ аналитики процесса.
-func NewBuyerKeys(key string) *BuyerKeys {
-	return &BuyerKeys{key: []byte(key)}
+// NewBuyerKeys выводит ключ псевдонимов из постоянного секрета площадки. Отдельной
+// переменной окружения нет: у всех реплик один секрет — значит, один псевдоним
+// покупателя для выдачи, клика и оплаты; смена секрета лишь начинает окно спроса заново.
+func NewBuyerKeys(secret string) *BuyerKeys {
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(buyerKeysPurpose))
+	return &BuyerKeys{key: mac.Sum(nil)}
 }
 
 // Key вычисляет псевдоним в области площадки. Гость остаётся без псевдонима.

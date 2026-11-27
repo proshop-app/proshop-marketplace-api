@@ -47,16 +47,14 @@ var (
 
 // Config — адрес и отдельный служебный токен поискового API.
 type Config struct {
-	URL           string
-	Token         string
-	PurchaseToken string
+	URL   string
+	Token string
 }
 
 // Index реализует порт индекса предложений через proshop-search.
 type Index struct {
 	base            string
 	token           string
-	purchaseToken   string
 	client          *http.Client
 	referenceBearer string
 }
@@ -70,15 +68,11 @@ func New(cfg Config) (*Index, error) {
 		(parsed.Path != "" && parsed.Path != "/") || len(cfg.Token) < minTokenLength {
 		return nil, fmt.Errorf("некорректные настройки поискового сервиса")
 	}
-	if cfg.PurchaseToken != "" && (len(cfg.PurchaseToken) < minTokenLength || cfg.PurchaseToken == cfg.Token) {
-		return nil, fmt.Errorf("нужен отдельный токен подтверждения покупок")
-	}
 
 	return &Index{
-		base:          strings.TrimRight(cfg.URL, "/") + apiPath,
-		token:         cfg.Token,
-		purchaseToken: cfg.PurchaseToken,
-		client:        httpclient.Internal(httpclient.Config{Conns: searchConns, Timeout: ServiceTimeout}),
+		base:   strings.TrimRight(cfg.URL, "/") + apiPath,
+		token:  cfg.Token,
+		client: httpclient.Internal(httpclient.Config{Conns: searchConns, Timeout: ServiceTimeout}),
 	}, nil
 }
 
