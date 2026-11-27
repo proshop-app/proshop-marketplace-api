@@ -13,6 +13,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 )
 
 const projectionRecoveryCommand = "recover-projection-review"
@@ -74,8 +75,9 @@ func openProjectionRecovery(
 	if err != nil {
 		return nil, nil, err
 	}
+	wake, closeWake := redis.CommandWorkSignal(cfg.Redis.URL, slog.Default())
 	service := appmoderation.NewService(
-		postgres.NewUnitOfWork(pool),
+		postgres.NewUnitOfWork(pool).WithWorkSignal(wake),
 		clock.System{},
 		random.IDs{},
 		appmoderation.Config{
@@ -84,5 +86,8 @@ func openProjectionRecovery(
 		},
 	)
 
-	return service, pool.Close, nil
+	return service, func() {
+		closeWake()
+		pool.Close()
+	}, nil
 }

@@ -235,7 +235,7 @@ func runPurgeOutbox(
 		map[string]messaging.Handler{ports.TaskPurgeTenant: purger.HandleTask},
 	)
 	for i := 0; i < 20; i++ {
-		outcomes, err := dispatcher.RunOnce(ctx)
+		outcomes, _, _, err := dispatcher.RunWork(ctx, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

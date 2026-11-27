@@ -171,7 +171,7 @@ func (load creationLoad) measure(
 	defer ticker.Stop()
 	stop := time.NewTimer(time.Until(load.deadline.Add(500 * time.Millisecond)))
 	defer stop.Stop()
-	if err := load.executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, load.executor); err != nil {
 		t.Fatal(err)
 	}
 	finished := 0
@@ -179,13 +179,13 @@ measure:
 	for {
 		select {
 		case <-ticker.C:
-			if err := load.executor.Dispatch(ctx); err != nil {
+			if err := dispatchForTest(ctx, load.executor); err != nil {
 				t.Fatal(err)
 			}
 		case result := <-load.executor.Results():
 			stats.results++
 			before := load.queue.calls("")
-			if err := load.executor.Refill(ctx, result.Task.Kind); err != nil {
+			if _, _, err := load.executor.Refill(ctx, result.Task.Kind); err != nil {
 				t.Fatal(err)
 			}
 			refills := load.queue.calls("") - before

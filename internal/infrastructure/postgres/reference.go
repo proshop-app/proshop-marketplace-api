@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/reference"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
@@ -189,7 +191,8 @@ const (
 
 // References — реестр справочных сущностей в схеме reference.
 type References struct {
-	db *gorm.DB
+	db   *gorm.DB
+	wake func(string, time.Time)
 }
 
 // saveCheck — чего ждать от оператора пачки сохранения.
@@ -283,6 +286,9 @@ func (r *References) SaveDictionary(ctx context.Context, dict *reference.Diction
 	state := dict.State()
 	if _, err := execSQL(ctx, r.db, updateDictionary, state.Code, state.Revision, state.Entries); err != nil {
 		return fmt.Errorf("словарь %s: %w", state.Code, err)
+	}
+	if r.wake != nil {
+		r.wake(ports.TaxonomySelectionWork, time.Time{})
 	}
 	return nil
 }

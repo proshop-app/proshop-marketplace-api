@@ -40,24 +40,30 @@ func NewIndependentLane(
 	}
 }
 
-// RunOnce вызывается последовательно одним циклом. Пока отдельная полоса занята,
-// общая продолжает брать и подтверждать свои задачи.
-func (l *IndependentLane) RunOnce(ctx context.Context) ([]Outcome, error) {
-	var previous []Outcome
-	var previousErr error
+// Finish собирает результат готовой отдельной пачки без нового взятия.
+func (l *IndependentLane) Finish() ([]Outcome, error) {
 	select {
 	case <-l.done:
-		previous, previousErr = l.outcomes, l.err
+		outcomes, err := l.outcomes, l.err
 		l.done, l.outcomes, l.err = nil, nil, nil
+		return outcomes, err
 	default:
+		return nil, nil
 	}
+}
+
+// DetachedKinds — виды, срок которых нужно перечитать после завершения отдельной пачки.
+func (l *IndependentLane) DetachedKinds() []string { return l.gate.Kinds }
+
+// RunWork берёт указанные виды, пока общая полоса и независимая пачка работают независимо.
+func (l *IndependentLane) RunWork(ctx context.Context, kinds []string) ([]Outcome, []string, bool, error) {
 	gate := l.gate
 	var exclude []string
 	if l.done != nil {
 		exclude = gate.Kinds
 		gate = ports.TaskLaneGate{}
 	}
-	tasks, claimErr := l.dispatcher.claimPass(ctx, gate, exclude)
+	tasks, full, claimErr := l.dispatcher.claimPass(ctx, gate, exclude, kinds)
 	var detached, shared []ports.Task
 	for _, task := range tasks {
 		if slices.Contains(l.gate.Kinds, task.Kind) {
@@ -70,7 +76,17 @@ func (l *IndependentLane) RunOnce(ctx context.Context) ([]Outcome, error) {
 		l.start(ctx, detached)
 	}
 	outcomes, err := l.dispatcher.executePass(ctx, shared, nil)
-	return append(previous, outcomes...), errors.Join(previousErr, claimErr, err)
+	return outcomes, taskKinds(tasks), full, errors.Join(claimErr, err)
+}
+
+// WorkRequest даёт сроки той же работы, которую сейчас может взять цикл.
+func (l *IndependentLane) WorkRequest() ports.ClaimRequest {
+	request := l.dispatcher.WorkRequest()
+	request.Gate = l.gate
+	if l.done != nil {
+		request.ExcludeKinds = slices.Concat(request.ExcludeKinds, l.gate.Kinds)
+	}
+	return request
 }
 
 // Done закрывается после подтверждения текущей пачки, даже если обработка завершилась ошибкой.

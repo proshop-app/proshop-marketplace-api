@@ -4,6 +4,7 @@ package messaging
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sync"
 	"time"
@@ -131,13 +132,35 @@ func (d *Dispatcher) ReadyLanes(ctx context.Context) ([]ports.ReadyLane, error) 
 	return lanes, nil
 }
 
-// RunOnce разбирает одну справедливо выбранную пачку.
-func (d *Dispatcher) RunOnce(ctx context.Context) ([]Outcome, error) {
-	tasks, err := d.claimPass(ctx, ports.TaskLaneGate{}, nil)
-	if err != nil {
-		return nil, err
+// RunWork берёт и исполняет одну пачку указанных видов.
+func (d *Dispatcher) RunWork(ctx context.Context, kinds []string) ([]Outcome, []string, bool, error) {
+	tasks, full, claimErr := d.claimPass(ctx, ports.TaskLaneGate{}, nil, kinds)
+	outcomes, err := d.executePass(ctx, tasks, nil)
+	return outcomes, taskKinds(tasks), full, errors.Join(claimErr, err)
+}
+
+// WorkRequest сохраняет фильтры и курсор точечных задач для чтения срока.
+func (d *Dispatcher) WorkRequest() ports.ClaimRequest {
+	d.claimMu.Lock()
+	defer d.claimMu.Unlock()
+
+	return ports.ClaimRequest{
+		Kinds:        d.config.Kinds,
+		ExcludeKinds: d.config.ExcludeKinds,
+		OrderedKinds: d.config.OrderedKinds,
+		After:        d.singleAfter,
+		PerTenant:    d.config.PerTenant,
 	}
-	return d.executePass(ctx, tasks, nil)
+}
+
+func taskKinds(tasks []ports.Task) []string {
+	var kinds []string
+	for _, task := range tasks {
+		if !slices.Contains(kinds, task.Kind) {
+			kinds = append(kinds, task.Kind)
+		}
+	}
+	return kinds
 }
 
 // Пакетный обработчик получает одну порцию, а не N последовательных вызовов.
@@ -146,7 +169,8 @@ func (d *Dispatcher) claimPass(
 	ctx context.Context,
 	gate ports.TaskLaneGate,
 	exclude []string,
-) ([]ports.Task, error) {
+	only []string,
+) ([]ports.Task, bool, error) {
 	d.claimMu.Lock()
 	defer d.claimMu.Unlock()
 	now := d.clock.Now()
@@ -158,28 +182,34 @@ func (d *Dispatcher) claimPass(
 		PerTenant:    d.config.PerTenant,
 		LeaseUntil:   now.Add(d.config.Lease),
 	}
-	kinds := []string{}
+	allBatchKinds := []string{}
 	for kind := range d.batches {
 		if !slices.Contains(request.ExcludeKinds, kind) {
-			kinds = append(kinds, kind)
+			allBatchKinds = append(allBatchKinds, kind)
 		}
 	}
+	kinds := slices.Clone(allBatchKinds)
+	if len(only) > 0 {
+		kinds = slices.DeleteFunc(kinds, func(kind string) bool { return !slices.Contains(only, kind) })
+	}
 	slices.Sort(kinds)
-	allBatchKinds := slices.Clone(kinds)
+	batchKindCount := len(kinds)
 	if len(kinds) > 0 {
 		start := d.batchKindAfter % len(kinds)
 		kinds = append(slices.Clone(kinds[start:]), kinds[:start]...)
 		kinds = kinds[:min(len(kinds), d.config.Concurrency-1)]
-		d.batchKindAfter = (start + len(kinds)) % len(allBatchKinds)
+		d.batchKindAfter = (start + len(kinds)) % batchKindCount
 	}
 	tasks := []ports.Task{}
+	var full bool
 	if len(kinds) > 0 {
 		request.Kinds = kinds
 		request.After = d.batchAfter
 		claimed, err := d.queue.Claim(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
+		full = len(claimed.Tasks) == request.Limit || (len(claimed.Tasks) > 0 && len(kinds) < batchKindCount)
 		// Курсор двигается и после пустого взятия: обход полос ограничен, следующий продолжит дальше.
 		tasks, d.batchAfter = claimed.Tasks, claimed.Next
 	}
@@ -190,18 +220,27 @@ func (d *Dispatcher) claimPass(
 	request.Kinds = d.config.Kinds
 	request.After = d.singleAfter
 	request.ExcludeKinds = append(request.ExcludeKinds, allBatchKinds...)
+	if len(only) > 0 {
+		request.Kinds = slices.DeleteFunc(slices.Clone(only), func(kind string) bool {
+			return slices.Contains(request.ExcludeKinds, kind) ||
+				(len(d.config.Kinds) > 0 && !slices.Contains(d.config.Kinds, kind))
+		})
+		if len(request.Kinds) == 0 {
+			return tasks, full, nil
+		}
+	}
 	request.OrderedKinds = d.config.OrderedKinds
 	request.PerTenant = min(d.config.PerTenant, d.config.Concurrency)
 	request.Limit = min(d.config.Batch, d.config.Concurrency-len(batchKinds))
 	if request.Limit == 0 {
-		return tasks, nil
+		return tasks, full, nil
 	}
 	singles, err := d.queue.Claim(ctx, request)
 	if err != nil {
-		return tasks, err
+		return tasks, full, err
 	}
 	d.singleAfter = singles.Next
-	return append(tasks, singles.Tasks...), nil
+	return append(tasks, singles.Tasks...), full || len(singles.Tasks) == request.Limit, nil
 }
 
 // executePass не держит локальный хвост одного магазина. Все взятые порции

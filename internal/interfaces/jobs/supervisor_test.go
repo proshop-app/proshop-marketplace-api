@@ -7,9 +7,11 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
@@ -54,7 +56,7 @@ func TestSupervisorStopsDuringPauseOnCancel(t *testing.T) {
 
 func TestOutboxOutcomeCountsPanic(t *testing.T) {
 	registry := prometheus.NewRegistry()
-	runner := jobs.NewOutboxRunner(&dispatcher{}, 0, quiet, registry)
+	runner := jobs.NewOutboxRunner(quiet, registry, fake.NewClock(time.Unix(0, 0)))
 	panicked := errs.Guard(func() error { panic("сбой обработчика") })
 	runner.RecordOutcome(messaging.Outcome{Err: panicked, FailureReason: "attempts_exhausted"})
 	runner.RecordOutcome(messaging.Outcome{Err: errors.New("сеть")})

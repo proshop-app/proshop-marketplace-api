@@ -236,7 +236,7 @@ func TestIndexRecoveryWithSearch(t *testing.T) {
 	if want := []string{"p11", "p01", "p11"}; !slices.Equal(attempts, want) {
 		t.Fatalf("индексация магазина: вызовы %v, ожидалось %v", attempts, want)
 	}
-	outcomes, err := dispatcher.RunOnce(ctx)
+	outcomes, _, _, err := dispatcher.RunWork(ctx, nil)
 	if err != nil || len(outcomes) != 0 {
 		t.Fatalf("лишние продолжения: %v, %v", outcomes, err)
 	}
@@ -249,7 +249,7 @@ func TestIndexRecoveryWithSearch(t *testing.T) {
 func runTenantIndexPage(t *testing.T, dispatcher *messaging.Dispatcher, clock *fake.Clock) {
 	t.Helper()
 	for range 10 {
-		outcomes, err := dispatcher.RunOnce(context.Background())
+		outcomes, _, _, err := dispatcher.RunWork(context.Background(), nil)
 		if err != nil || len(outcomes) != 1 {
 			t.Fatalf("страница магазина: %+v, %v", outcomes, err)
 		}

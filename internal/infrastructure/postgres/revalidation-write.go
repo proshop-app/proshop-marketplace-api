@@ -211,6 +211,15 @@ func (r *Revalidations) releaseRevalidation(ctx context.Context, items []prepare
 		return err
 	}
 	for _, item := range items {
+		if r.wake != nil {
+			for _, task := range item.change.Tasks {
+				next := task.AvailableAt
+				if next.IsZero() {
+					next = task.At
+				}
+				r.wake(task.Kind, next)
+			}
+		}
 		item.change.Product.MarkSaved()
 		if item.change.Verdict != nil {
 			item.change.Verdict.MarkSaved()

@@ -73,7 +73,7 @@ func TestBatchResolutionRollsBackOnStaleOwner(t *testing.T) {
 		}
 		return nil
 	})
-	outcomes, err := d.RunOnce(context.Background())
+	outcomes, _, _, err := d.RunWork(context.Background(), nil)
 	if !errors.Is(err, ports.ErrTaskClaimConflict) || len(outcomes) != 0 {
 		t.Fatalf("устаревшая пачка не должна подтверждаться: %+v, %v", outcomes, err)
 	}
@@ -161,7 +161,7 @@ func TestDispatcherIsolatesSlowTenantAndBoundsHandlerDuration(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := d.RunOnce(context.Background())
+		_, _, _, err := d.RunWork(context.Background(), nil)
 		done <- err
 	}()
 	select {
@@ -210,7 +210,7 @@ func TestDispatcherRotatesTenantsWhenReadyStoresExceedSlots(t *testing.T) {
 		},
 	)
 	for range 2 {
-		if _, err := d.RunOnce(context.Background()); err != nil {
+		if _, _, _, err := d.RunWork(context.Background(), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -241,7 +241,7 @@ func TestDispatcherFillsFreeSlotsFromOneTenant(t *testing.T) {
 		},
 	)
 	d.RegisterBatch("unused", func(context.Context, []ports.Task) []error { return nil })
-	outcomes, err := d.RunOnce(context.Background())
+	outcomes, _, _, err := d.RunWork(context.Background(), nil)
 	if err != nil || len(outcomes) != 8 || peak.Load() != 8 {
 		t.Fatalf("свободные слоты простаивают: tasks=%d peak=%d err=%v", len(outcomes), peak.Load(), err)
 	}
@@ -262,7 +262,7 @@ func TestDispatcherFillsSlotsBesideBatchOfSameTenant(t *testing.T) {
 		},
 	)
 	d.RegisterBatch("batch", func(context.Context, []ports.Task) []error { return nil })
-	outcomes, err := d.RunOnce(context.Background())
+	outcomes, _, _, err := d.RunWork(context.Background(), nil)
 	if err != nil || len(outcomes) != 8 {
 		t.Fatal("пакет магазина не должен оставлять его точечные слоты пустыми", len(outcomes), err)
 	}
@@ -277,7 +277,7 @@ func TestDispatcherResolvesPointPassInOneBatch(t *testing.T) {
 	d := messaging.NewDispatcher(queue, fake.NewClock(t0), config(), map[string]messaging.Handler{
 		"work": func(context.Context, ports.Task) error { return nil },
 	})
-	outcomes, err := d.RunOnce(context.Background())
+	outcomes, _, _, err := d.RunWork(context.Background(), nil)
 	if err != nil || len(outcomes) != 8 || queue.batches.Load() != 1 || queue.singles.Load() != 0 {
 		t.Fatalf("tasks=%d batch=%d single=%d err=%v", len(outcomes), queue.batches.Load(), queue.singles.Load(), err)
 	}

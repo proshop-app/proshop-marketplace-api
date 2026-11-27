@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -19,6 +20,7 @@ type OutboxRetryStats interface {
 type OutboxRetryStatsRunner struct {
 	kinds    map[string]bool
 	source   OutboxRetryStats
+	schedule ports.IntervalWork
 	clock    ports.Clock
 	interval time.Duration
 	logger   *slog.Logger
@@ -64,10 +66,30 @@ func NewOutboxRetryStatsRunner(
 	return r
 }
 
+// WithSchedule назначает общего владельца сбора метрик.
+func (r *OutboxRetryStatsRunner) WithSchedule(schedule ports.IntervalWork) *OutboxRetryStatsRunner {
+	r.schedule = schedule
+	return r
+}
+
 // Run читает срез сразу и раз в интервал: быстрый разбор очереди не учащает запрос.
 func (r *OutboxRetryStatsRunner) Run(ctx context.Context) error {
 	for {
-		r.RunOnce(ctx)
+		if r.schedule == nil {
+			r.RunOnce(ctx)
+		} else {
+			err := r.schedule.Run(ctx, func(ctx context.Context) error {
+				r.RunOnce(ctx)
+				return nil
+			})
+			if errors.Is(err, ports.ErrIntervalTaken) {
+				r.count.Reset()
+				r.age.Reset()
+			} else if err != nil && ctx.Err() == nil {
+				r.failures.Inc()
+				r.logger.Warn("outbox: расписание метрик повторов недоступно", slog.Any("error", err))
+			}
+		}
 		if !wait(ctx, r.interval) {
 			return nil
 		}

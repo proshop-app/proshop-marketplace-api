@@ -43,5 +43,7 @@ func (p *Purchases) Deliver(ctx context.Context, task ports.Task) error {
 	if !p.clock.Now().Before(purchase.PaidObservedAt.Add(purchaseLifetime)) {
 		return nil
 	}
+	ctx, cancel := ports.WithTimeout(ctx, p.clock, PurchaseCallTimeout)
+	defer cancel()
 	return p.sink.Purchase(ctx, purchase)
 }

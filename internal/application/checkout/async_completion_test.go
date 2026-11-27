@@ -205,7 +205,7 @@ func TestDeadlineTaskWaitsForAttemptLease(t *testing.T) {
 	}
 	e.clock.Advance(time.Second)
 	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	for range 3 {
@@ -229,7 +229,7 @@ func TestDeadlineTaskWaitsForAttemptLease(t *testing.T) {
 		}
 	}
 	e.clock.Advance(100 * time.Millisecond)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	result := <-executor.Results()
@@ -325,7 +325,7 @@ func TestExecutorBacksOffNonPendingFailures(t *testing.T) {
 	executor := appcheckout.NewExecutor(e.store, e.clock, service, nil, messaging.DefaultMaxAttempts)
 	for _, delay := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second} {
 		now := e.clock.Now()
-		if err := executor.Dispatch(ctx); err != nil {
+		if err := dispatchForTest(ctx, executor); err != nil {
 			t.Fatal(err)
 		}
 		result := <-executor.Results()

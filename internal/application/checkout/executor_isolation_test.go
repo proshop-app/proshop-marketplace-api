@@ -106,7 +106,7 @@ func TestExecutorSkipsCreationWhileServerIsOpen(t *testing.T) {
 	})
 	// Срок обработчика начнётся позже срока покупки.
 	e.clock.Advance(time.Second)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	for range c.Groups {
@@ -115,7 +115,7 @@ func TestExecutorSkipsCreationWhileServerIsOpen(t *testing.T) {
 
 	// Оба HTTP ещё висят, а срок покупки обрабатывается своей полосой.
 	e.clock.Advance(appcheckout.CreationTimeout - time.Second)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	for closed := 0; closed < len(c.Groups); {
@@ -150,7 +150,7 @@ func TestExecutorSkipsCreationWhileServerIsOpen(t *testing.T) {
 	before := queue.calls(appcheckout.TaskCreateOrder)
 	for range 4 {
 		e.clock.Advance(time.Second)
-		if err := executor.Dispatch(ctx); err != nil {
+		if err := dispatchForTest(ctx, executor); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -186,7 +186,7 @@ func TestExecutorRefillsOnlyResultLaneAfterNewArrival(t *testing.T) {
 	queue := &leaseQueue{TaskQueue: e.store}
 	executor := appcheckout.NewExecutor(queue, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
 	t.Cleanup(executor.Wait)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	if queue.calls("") != 4 {
@@ -201,7 +201,7 @@ func TestExecutorRefillsOnlyResultLaneAfterNewArrival(t *testing.T) {
 			t.Fatal("ожидался результат создания для магазина", tenant, result)
 		}
 		before := queue.calls("")
-		if err := executor.Refill(ctx, result.Task.Kind); err != nil {
+		if _, _, err := executor.Refill(ctx, result.Task.Kind); err != nil {
 			t.Fatal(err)
 		}
 		if got := queue.calls("") - before; got != 1 {
@@ -212,7 +212,7 @@ func TestExecutorRefillsOnlyResultLaneAfterNewArrival(t *testing.T) {
 		t.Fatal("результат создания вызвал взятие отложенной задачи срока")
 	}
 	e.clock.Advance(time.Second)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	if result := <-executor.Results(); result.Task.Kind != appcheckout.TaskExpireCreation {
@@ -235,11 +235,11 @@ func TestExecutorRefillsAfterFullLaneMissesNewWork(t *testing.T) {
 		tasks = append(tasks, invalidCreation(e.clock.Now(), ids.TenantID(fmt.Sprintf("t%02d", n))))
 	}
 	enqueueExecutorTasks(t, e, tasks[:appcheckout.CreationWorkers])
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	enqueueExecutorTasks(t, e, tasks[appcheckout.CreationWorkers:])
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	if got := queue.calls(appcheckout.TaskCreateOrder); got != 1 {
@@ -247,7 +247,7 @@ func TestExecutorRefillsAfterFullLaneMissesNewWork(t *testing.T) {
 	}
 	close(release)
 	result := <-executor.Results()
-	if err := executor.Refill(ctx, result.Task.Kind); err != nil {
+	if _, _, err := executor.Refill(ctx, result.Task.Kind); err != nil {
 		t.Fatal(err)
 	}
 	if got := queue.calls(appcheckout.TaskCreateOrder); got != 2 || queue.taken() != len(tasks) {
@@ -275,7 +275,7 @@ func TestExecutorProbeWaitsForActiveCreationAndTakesOneCandidate(t *testing.T) {
 	}()
 	now := e.clock.Now()
 	enqueueExecutorTasks(t, e, []ports.NewTask{invalidCreation(now, "t1")})
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	<-queue.resolutions
@@ -292,7 +292,7 @@ func TestExecutorProbeWaitsForActiveCreationAndTakesOneCandidate(t *testing.T) {
 	if got := guard.ServerState(); got != ports.PlatformServerProbe {
 		t.Fatal("после паузы нужна проба", got)
 	}
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	if got := queue.calls(appcheckout.TaskCreateOrder); got != 1 {
@@ -300,7 +300,7 @@ func TestExecutorProbeWaitsForActiveCreationAndTakesOneCandidate(t *testing.T) {
 	}
 	close(release)
 	result := <-executor.Results()
-	if err := executor.Refill(ctx, result.Task.Kind); err != nil {
+	if _, _, err := executor.Refill(ctx, result.Task.Kind); err != nil {
 		t.Fatal(err)
 	}
 	if got := queue.taken(); got != 2 {
@@ -322,7 +322,7 @@ func TestExecutorBoundsClaimAndResolve(t *testing.T) {
 	executor := appcheckout.NewExecutor(queue, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
 	enqueueExecutorTasks(t, e, []ports.NewTask{invalidCreation(e.clock.Now(), "t1")})
 	want := e.clock.Now().Add(5 * time.Second)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	<-executor.Results()

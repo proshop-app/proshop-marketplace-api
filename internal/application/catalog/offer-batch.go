@@ -100,7 +100,7 @@ func (i *Indexer) sendOfferBatch(
 	started := time.Now()
 	err := ctx.Err()
 	if err == nil {
-		err = i.index.Put(ctx, docs)
+		err = i.put(ctx, docs)
 		if i.batchObserver != nil {
 			i.batchObserver.ObserveBatch(len(docs), time.Since(started), err)
 		}

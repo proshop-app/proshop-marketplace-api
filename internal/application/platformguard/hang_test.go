@@ -248,3 +248,34 @@ func (p *hungTenant) MarketplaceSettings(ctx context.Context, tenant ids.TenantI
 	}
 	return p.PlatformAPI.MarketplaceSettings(ctx, tenant)
 }
+
+func TestCreationWakesWhenServerProbeFinishes(t *testing.T) {
+	cfg := testConfig()
+	cfg.FailureThreshold = 1
+	cfg.StrictTimeout = 5 * time.Second
+	clock := guardTestClock()
+	guard := New(fake.NewPlatform(), cfg, clock, nil, nil)
+	notifications := 0
+	guard.SetServerChanged(func() { notifications++ })
+
+	failed := admit(t, guard, "t1", checkoutClass)
+	guard.release(failed, &ports.PlatformServerFailure{Cause: ErrUnavailable})
+	if got := guard.ServerWorkAt(); !got.Equal(clock.Now().Add(cfg.OpenInterval)) || notifications != 1 {
+		t.Fatalf("открытие размыкателя: срок %v, сигналов %d", got, notifications)
+	}
+
+	clock.Advance(cfg.OpenInterval)
+	probe := admit(t, guard, "t2", readClass)
+	if !probe.server.probe {
+		t.Fatal("ожидалась проба сервера")
+	}
+	want := clock.Now().Add(200 * time.Millisecond)
+	if got := guard.ServerWorkAt(); !got.Equal(want) {
+		t.Fatalf("срок проверки пробы %v, нужен %v", got, want)
+	}
+	clock.Advance(10 * time.Millisecond)
+	guard.release(probe, nil)
+	if got := guard.ServerWorkAt(); !got.IsZero() || notifications != 2 {
+		t.Fatalf("завершение пробы: срок %v, сигналов %d", got, notifications)
+	}
+}

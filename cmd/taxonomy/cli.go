@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,6 +21,7 @@ import (
 	domaintaxonomy "github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/clock"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
+	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/taxonomydata"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
@@ -133,7 +135,9 @@ func run(args []string, output, diagnostics io.Writer) int {
 	if err != nil {
 		return failure(diagnostics, err.Error(), 2)
 	}
-	uow := postgres.NewUnitOfWork(pool)
+	wake, closeWake := redis.CommandWorkSignal(os.Getenv("REDIS_URL"), slog.Default())
+	defer closeWake()
+	uow := postgres.NewUnitOfWork(pool).WithWorkSignal(wake)
 	evaluator := appmoderation.NewService(uow, clock.System{}, random.IDs{}, appmoderation.Config{
 		ProbationOffers: moderationConfig.ProbationOffers,
 		RequireImage:    moderationConfig.RequireImage,

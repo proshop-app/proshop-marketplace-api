@@ -22,13 +22,14 @@ const requeueFailedTasks = `WITH selected AS (
         last_error = NULL,
         next_at = $5
     FROM selected s WHERE o.id = s.id
-    RETURNING o.id
+    RETURNING o.id, o.kind
 )
-SELECT id FROM updated ORDER BY id`
+SELECT id, kind FROM updated ORDER BY id`
 
 // Requeue увеличивает attempts: старый обработчик не получит право на ожившую задачу.
 func (q *TaskQueue) Requeue(ctx context.Context, request ports.TaskRequeue) ([]int64, error) {
 	items := []int64{}
+	hints := make(ports.WorkHints)
 	err := q.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
 		rows, err := rawSQL(
 			ctx,
@@ -46,12 +47,19 @@ func (q *TaskQueue) Requeue(ctx context.Context, request ports.TaskRequeue) ([]i
 		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			var id int64
-			if err := rows.Scan(&id); err != nil {
+			var kind string
+			if err := rows.Scan(&id, &kind); err != nil {
 				return err
 			}
 			items = append(items, id)
+			if q.wake != nil {
+				hints[kind] = request.At
+			}
 		}
 		return rows.Err()
 	})
+	if err == nil && len(hints) > 0 {
+		q.wake.Notify(hints)
+	}
 	return items, err
 }
