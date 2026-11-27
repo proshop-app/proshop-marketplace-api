@@ -33,6 +33,12 @@ func (e *env) session(t *testing.T, method, path, body, cookie string, headers .
 		request.AddCookie(&http.Cookie{Name: transport.SessionCookie, Value: cookie})
 	}
 	request.Header.Set("X-Marketplace-Money-Unit", "RUB")
+	if method == http.MethodPost && path == "/api/v1/cart/lines" {
+		key := e.session(t, http.MethodGet, "/api/v1/cart/add-key", "", cookie)
+		if key.status == http.StatusOK {
+			request.Header.Set("Idempotency-Key", key.body["key"].(string))
+		}
+	}
 	for i := 0; i+1 < len(headers); i += 2 {
 		if headers[i+1] == "" {
 			request.Header.Del(headers[i])

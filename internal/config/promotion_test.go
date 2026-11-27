@@ -12,7 +12,6 @@ func TestPromotionConfiguration(t *testing.T) {
 		{"PROMOTION_TIMEZONE", ""},
 		{"PROMOTION_TIMEZONE", "Local"},
 		{"PROMOTION_TIMEZONE", "invalid/zone"},
-		{"PROMOTION_VISITOR_SALT", "short"},
 		{"PROMOTION_SEARCH_RELEVANCE_DEPTH", "9"},
 		{"PROMOTION_EVENTS_PER_MINUTE", "0"},
 		{"PROMOTION_TICK_INTERVAL", "0s"},

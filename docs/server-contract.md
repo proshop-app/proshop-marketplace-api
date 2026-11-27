@@ -915,7 +915,7 @@ Discovery: `GET /api/v1/internal/reference`; снимок:
 `GET /api/v1/internal/reference/{code}/snapshot?since=`; запись:
 `GET /api/v1/internal/reference/{code}/entries/{id}` (200/404).
 Все три маршрута принимают `Authorization: Bearer <REFERENCE_READ_TOKEN>`.
-Поля и семантика дельт описаны в [reference.md](reference.md).
+Снимок возвращается страницами одной ревизии. Поля и протокол страниц описаны в [reference.md](reference.md).
 
 ### Имя кандидата из реестра магазинов
 

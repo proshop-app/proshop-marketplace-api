@@ -169,3 +169,27 @@ func TestGroupsTotalExpiry(t *testing.T) {
 		t.Fatal("просроченная корзина очищается")
 	}
 }
+
+func TestLineChangesDoNotRenumberSurvivors(t *testing.T) {
+	c := newCart()
+	first, second, third := offer("t1", "p1", 100, 4), offer("t1", "p2", 200, 4), offer("t2", "p1", 300, 4)
+	for _, item := range []cart.Offer{first, second, third} {
+		if err := c.Add(item, 1, t0, ttl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.MarkSaved()
+	c.Remove(first.ID, t0, ttl)
+	if err := c.SetQuantity(second, 2, t0, ttl); err != nil {
+		t.Fatal(err)
+	}
+	saved, removed := c.LineChanges()
+	if len(saved) != 1 || saved[0].Offer != second.ID || saved[0].Position != 1 ||
+		len(removed) != 1 || removed[0] != first.ID {
+		t.Fatal(saved, removed)
+	}
+	c.MarkSaved()
+	if saved, removed := c.LineChanges(); len(saved) != 0 || len(removed) != 0 {
+		t.Fatal(saved, removed)
+	}
+}

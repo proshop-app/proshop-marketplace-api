@@ -661,24 +661,17 @@ func (h *promotionHandlers) sponsored(w http.ResponseWriter, r *http.Request) {
 
 func (h *promotionHandlers) events(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		VisitorID string               `json:"visitorId"`
-		Events    []apppromotion.Event `json:"events"`
+		Events []apppromotion.Event `json:"events"`
 	}
 	if err := readJSON(w, r, &body); err != nil {
 		writeError(w, r, err)
 		return
 	}
-	if body.VisitorID != "" {
-		body.VisitorID = "visitor:" + body.VisitorID
-	}
-	if buyer := BuyerID(r.Context()); buyer != "" {
-		body.VisitorID = "buyer:" + string(buyer)
-	}
 	if err := h.service.AllowEvents(r.Context(), clientIP(r, h.trustedProxies), len(body.Events)); err != nil {
 		writeError(w, r, err)
 		return
 	}
-	if err := h.service.Events(r.Context(), body.VisitorID, body.Events); err != nil {
+	if err := h.service.Events(r.Context(), body.Events); err != nil {
 		writeError(w, r, err)
 		return
 	}

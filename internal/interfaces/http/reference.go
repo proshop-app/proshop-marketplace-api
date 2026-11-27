@@ -107,6 +107,7 @@ type discoveryJSON struct {
 }
 
 type snapshotJSON struct {
+	NextCursor    string              `json:"nextCursor,omitempty"`
 	Kind          reference.Kind      `json:"kind"`
 	SchemaVersion int                 `json:"schemaVersion"`
 	Dictionary    string              `json:"dictionary"`
@@ -243,14 +244,15 @@ func (h *referenceHandlers) snapshot(w http.ResponseWriter, r *http.Request) {
 		}
 		since = &value
 	}
-	snapshot, err := h.service.Snapshot(r.Context(), r.PathValue("dict"), since)
+	snapshot, err := h.service.Snapshot(r.Context(), r.PathValue("dict"), since, query.Get("cursor"))
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	body := snapshotJSON{
 		Kind:          snapshot.Kind,
-		SchemaVersion: appreference.SchemaVersion,
+		SchemaVersion: appreference.SnapshotSchemaVersion,
+		NextCursor:    snapshot.NextCursor,
 		Dictionary:    snapshot.Dictionary,
 		Revision:      snapshot.Revision,
 		Normalizer:    snapshot.Normalizer,

@@ -11,6 +11,7 @@ import (
 	appdelivery "github.com/proshop-app/proshop-marketplace/internal/application/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/cart"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/checkout"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/delivery"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -51,7 +52,7 @@ func setup(t *testing.T) *env {
 		QuoteTimeout: time.Second,
 	})
 
-	e.carts = appcart.NewService(e.store, e.platform, identities, e.clock, 30*24*time.Hour)
+	e.carts = appcart.NewService(e.store, e.platform, identities, e.clock, 30*24*time.Hour, "test-cart-key")
 	e.verifier = &fake.CartVerifier{CartVerifier: e.carts}
 	e.service = appcheckout.NewService(
 		e.store,
@@ -139,10 +140,10 @@ func setup(t *testing.T) *env {
 		},
 	)
 
-	if _, err := e.carts.Add(ctx, buyerID, p1, 2); err != nil {
+	if _, err := e.seedCartLine(ctx, p1, 2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.carts.Add(ctx, buyerID, p2, 1); err != nil {
+	if _, err := e.seedCartLine(ctx, p2, 1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -336,4 +337,8 @@ func TestConfirmRefusesMissingStock(t *testing.T) {
 	if _, err := e.service.Confirm(ctx, buyerID, created.ID); !errors.Is(err, appcart.ErrSellerUnreachable) {
 		t.Fatalf("магазин не ответил на перепроверку: %v", err)
 	}
+}
+
+func (e *env) seedCartLine(ctx context.Context, offer ids.OfferID, quantity int) (cart.State, error) {
+	return e.carts.AddOnce(ctx, buyerID, offer, quantity, e.carts.NewAddKey(buyerID))
 }

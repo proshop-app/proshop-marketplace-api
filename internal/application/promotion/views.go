@@ -51,27 +51,26 @@ func (s *Service) NextMonday() string {
 	return day.Format(time.DateOnly)
 }
 
-// AllowEvents использует общий порт оконного лимитера по адресу клиента.
+// AllowEvents расходует лимит по размеру пачки одним запросом к Redis.
 func (s *Service) AllowEvents(ctx context.Context, address string, count int) error {
-	if count < 0 || count > 50 {
+	if count < 1 || count > 50 {
 		return promotion.ErrInvalid
 	}
 	if s.config.Limiter == nil {
 		return nil
 	}
-	for range count {
-		allowed, _, err := s.config.Limiter.Allow(
-			ctx,
-			"promotion:events:"+address,
-			s.config.EventsPerMinute,
-			time.Minute,
-		)
-		if err != nil {
-			return err
-		}
-		if !allowed {
-			return promotion.ErrRateLimited
-		}
+	allowed, _, err := s.config.Limiter.AllowN(
+		ctx,
+		"promotion:events:"+address,
+		s.config.EventsPerMinute,
+		time.Minute,
+		count,
+	)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return promotion.ErrRateLimited
 	}
 	return nil
 }

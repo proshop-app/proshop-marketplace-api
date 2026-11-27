@@ -19,10 +19,9 @@ type Config struct {
 	Catalog         *appcatalog.Queries
 	Location        *time.Location
 	SearchDepth     int
-	VisitorSalt     string
 	Random          promotion.Random
 	Metrics         ports.PromotionMetrics
-	Limiter         ports.RateLimiter
+	Limiter         ports.BatchRateLimiter
 	EventsPerMinute int
 }
 

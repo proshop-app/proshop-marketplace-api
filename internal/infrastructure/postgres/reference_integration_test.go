@@ -67,7 +67,7 @@ func referenceService(t *testing.T) (*appreference.Service, *pgxpool.Pool, *refe
 	if _, err := pool.Exec(context.Background(), insertTestDictionary); err != nil {
 		t.Fatal(err)
 	}
-	clock := &referenceClock{now: time.Now().UTC()}
+	clock := &referenceClock{now: time.Date(2026, 11, 26, 9, 0, 0, 0, time.UTC)}
 	service := appreference.NewService(postgres.NewUnitOfWork(pool), clock, random.IDs{}, nil, appreference.Config{})
 	return service, pool, clock
 }
@@ -180,12 +180,12 @@ func TestReferenceScenariosOnPostgres(t *testing.T) {
 		t.Fatalf("устаревший If-Match: %v", err)
 	}
 
-	full, err := service.Snapshot(ctx, referenceDict, nil)
+	full, err := service.Snapshot(ctx, referenceDict, nil, "")
 	if err != nil || !full.Full || len(full.Entries) != 3 || full.Revision != merged.Revision {
 		t.Fatalf("полный снимок: %+v %v", full, err)
 	}
 	since := second.Revision
-	delta, err := service.Snapshot(ctx, referenceDict, &since)
+	delta, err := service.Snapshot(ctx, referenceDict, &since, "")
 	if err != nil || delta.Full || len(delta.Entries) != 2 {
 		t.Fatalf("дельта после объединения: %+v %v", delta, err)
 	}
@@ -208,12 +208,12 @@ func TestReferenceSnapshotHorizon(t *testing.T) {
 	clock.advance(31 * 24 * time.Hour)
 	second := createReference(t, service, "Бренд Два", reference.StatusConfirmed)
 	old := int64(0)
-	aged, err := service.Snapshot(ctx, referenceDict, &old)
+	aged, err := service.Snapshot(ctx, referenceDict, &old, "")
 	if err != nil || !aged.Full {
 		t.Fatalf("since за горизонтом: %+v %v", aged, err)
 	}
 	inside := second.Revision - 1
-	delta, err := service.Snapshot(ctx, referenceDict, &inside)
+	delta, err := service.Snapshot(ctx, referenceDict, &inside, "")
 	if err != nil || delta.Full || len(delta.Entries) != 1 {
 		t.Fatalf("since на горизонте: %+v %v", delta, err)
 	}
@@ -245,7 +245,7 @@ func TestReferenceDeliveryOnPostgres(t *testing.T) {
 	if err != nil || !rolled.Changed {
 		t.Fatalf("откат: %+v %v", rolled, err)
 	}
-	snapshot, err := service.Snapshot(ctx, referenceDict, nil)
+	snapshot, err := service.Snapshot(ctx, referenceDict, nil, "")
 	if err != nil || len(snapshot.Entries) != 1 || snapshot.Entries[0].ID != existing.Entry.ID ||
 		snapshot.Entries[0].Status != reference.StatusCandidate || len(snapshot.Entries[0].Aliases) != 1 {
 		t.Fatalf("после отката: %+v %v", snapshot, err)
@@ -338,7 +338,7 @@ func TestReferenceConditionalSaveAndPresence(t *testing.T) {
 }
 
 func TestReferenceLargeDeliveryWritesRevisionPerBatch(t *testing.T) {
-	service, pool, _ := referenceService(t)
+	service, pool, clock := referenceService(t)
 	ctx := context.Background()
 	entries := make([]reference.DeliveryEntry, 0, largeDelivery)
 	for i := 0; i < largeDelivery; i++ {
@@ -355,24 +355,56 @@ func TestReferenceLargeDeliveryWritesRevisionPerBatch(t *testing.T) {
 		Checksum:   strings.Repeat("c", 64),
 		Entries:    entries,
 	}
-	started := time.Now()
 	applied, err := service.Apply(ctx, delivery)
 	if err != nil || applied.Created != largeDelivery {
 		t.Fatalf("поставка: %+v %v", applied, err)
 	}
-	t.Logf("поставка %d записей: %s", largeDelivery, time.Since(started))
 	var changes int
 	if err := pool.QueryRow(ctx, countReferenceChanges).Scan(&changes); err != nil || changes != largeDelivery/500 {
 		t.Fatalf("ревизий журнала: %d %v", changes, err)
 	}
-	started = time.Now()
+	first, err := service.Snapshot(ctx, referenceDict, nil, "")
+	if err != nil || len(first.Entries) != 128 || first.NextCursor == "" {
+		t.Fatal(len(first.Entries), first.NextCursor, err)
+	}
 	rolled, err := service.Rollback(ctx, delivery)
 	if err != nil || rolled.Updated != largeDelivery {
 		t.Fatalf("откат: %+v %v", rolled, err)
 	}
-	t.Logf("откат %d записей: %s", largeDelivery, time.Since(started))
-	snapshot, err := service.Snapshot(ctx, referenceDict, nil)
-	if err != nil || len(snapshot.Entries) != 0 {
-		t.Fatalf("после отката: %d записей %v", len(snapshot.Entries), err)
+	assertEmptySnapshotAfterRollback(t, pool, clock, rolled.Revision)
+	next, err := service.Snapshot(ctx, referenceDict, nil, first.NextCursor)
+	if err != nil || next.Revision != first.Revision || len(next.Entries) != 128 || next.NextCursor == "" {
+		t.Fatal(next.Revision, len(next.Entries), next.NextCursor, err)
+	}
+	checkDeliverySnapshotPlans(t, pool, first.Revision)
+}
+
+func TestReferenceSnapshotKeepsRevisionAfterWrite(t *testing.T) {
+	ctx := context.Background()
+	service, _, _ := referenceService(t)
+	delivery := reference.Delivery{
+		Dictionary: referenceDict,
+		Version:    1,
+		Checksum:   strings.Repeat("b", 64),
+	}
+	for i := range 129 {
+		delivery.Entries = append(delivery.Entries, reference.DeliveryEntry{
+			Canonical: "Запись " + strconv.Itoa(i),
+			Status:    reference.StatusConfirmed,
+		})
+	}
+	if _, err := service.Apply(ctx, delivery); err != nil {
+		t.Fatal(err)
+	}
+	since := int64(0)
+	first, err := service.Snapshot(ctx, referenceDict, &since, "")
+	if err != nil || first.Full || len(first.Entries) != 128 || first.NextCursor == "" {
+		t.Fatal(len(first.Entries), first.NextCursor, err)
+	}
+	current := createReference(t, service, "Новая запись", reference.StatusConfirmed)
+	second, err := service.Snapshot(ctx, referenceDict, nil, first.NextCursor)
+	if err != nil || second.Revision != first.Revision || len(second.Entries) != 1 ||
+		second.Entries[0].ID == current.Entry.ID || second.NextCursor != "" {
+		t.Fatal(second, err)
 	}
 }

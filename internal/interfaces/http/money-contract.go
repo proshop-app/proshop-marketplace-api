@@ -36,6 +36,9 @@ func moneyContract(path string, next http.HandlerFunc) http.HandlerFunc {
 
 // Возвраты из платёжной формы и прочие неденежные маршруты работают без нового заголовка.
 func publicMoneyRoute(method, path string) bool {
+	if path == "/api/v1/cart/add-key" {
+		return false
+	}
 	if strings.HasPrefix(path, "/api/v1/checkout/") &&
 		(strings.HasSuffix(path, "/return") || strings.HasSuffix(path, "/pay")) {
 		return false

@@ -2,6 +2,7 @@
 package cart
 
 import (
+	"slices"
 	"sort"
 	"time"
 
@@ -43,6 +44,7 @@ type Offer struct {
 // Line — строка корзины: предложение со снимком цены на момент добавления
 // или последней перепроверки.
 type Line struct {
+	Position  int64 `json:"-"`
 	Discounts []Discount
 	Offer     ids.OfferID
 	Name      string
@@ -82,6 +84,7 @@ type State struct {
 
 // Cart — корзина покупателя: одна на покупателя, живёт ttl с последнего изменения.
 type Cart struct {
+	originLines   []Line
 	state         State
 	originVersion int64
 }
@@ -97,6 +100,7 @@ func New(id, buyerID ids.UUID, now time.Time, ttl time.Duration) *Cart {
 func Restore(state State) *Cart {
 	c := &Cart{state: state, originVersion: state.Version}
 	c.state = c.State()
+	c.originLines = cloneLines(c.state.Lines)
 	return c
 }
 
@@ -104,19 +108,53 @@ func Restore(state State) *Cart {
 func (c *Cart) State() State {
 	state := c.state
 	state.Promos = ClonePromos(c.state.Promos)
-	state.Lines = append([]Line(nil), c.state.Lines...)
-	for i := range state.Lines {
-		state.Lines[i].Discounts = append([]Discount(nil), state.Lines[i].Discounts...)
-	}
-
+	state.Lines = cloneLines(c.state.Lines)
 	return state
+}
+
+func cloneLines(lines []Line) []Line {
+	copyOfLines := slices.Clone(lines)
+	for i := range copyOfLines {
+		copyOfLines[i].Discounts = slices.Clone(lines[i].Discounts)
+	}
+	return copyOfLines
 }
 
 // OriginVersion — версия на момент чтения; у новой корзины — ноль.
 func (c *Cart) OriginVersion() int64 { return c.originVersion }
 
 // MarkSaved фиксирует сохранённую версию.
-func (c *Cart) MarkSaved() { c.originVersion = c.state.Version }
+func (c *Cart) MarkSaved() {
+	c.originVersion = c.state.Version
+	c.originLines = cloneLines(c.state.Lines)
+}
+
+// LineChanges возвращает только строки, изменившиеся со времени загрузки или сохранения.
+func (c *Cart) LineChanges() (saved []Line, removed []ids.OfferID) {
+	origin := make(map[ids.OfferID]Line, len(c.originLines))
+	for _, line := range c.originLines {
+		origin[line.Offer] = line
+	}
+	for _, line := range c.state.Lines {
+		previous, found := origin[line.Offer]
+		if !found || !sameLine(previous, line) {
+			saved = append(saved, line)
+		}
+		delete(origin, line.Offer)
+	}
+	for id := range origin {
+		removed = append(removed, id)
+	}
+	return saved, removed
+}
+
+func sameLine(previous, current Line) bool {
+	return previous.Position == current.Position &&
+		previous.Name == current.Name && previous.Quantity == current.Quantity &&
+		previous.Price == current.Price && previous.Issue == current.Issue &&
+		previous.AddedAt.Equal(current.AddedAt) && previous.CheckedAt.Equal(current.CheckedAt) &&
+		slices.Equal(previous.Discounts, current.Discounts)
+}
 
 // ID — корзина.
 func (c *Cart) ID() ids.UUID { return c.state.ID }
@@ -162,7 +200,7 @@ func (c *Cart) Add(offer Offer, quantity int, now time.Time, ttl time.Duration) 
 			return ErrTooManyLines
 		}
 
-		c.state.Lines = append(c.state.Lines, Line{Offer: offer.ID, AddedAt: now})
+		c.appendLine(offer.ID, now)
 		index = len(c.state.Lines) - 1
 	}
 
@@ -327,6 +365,15 @@ func fits(offer Offer, quantity int) error {
 	}
 
 	return nil
+}
+
+// Позиции переживают удаление соседних строк, поэтому оно не требует их записи.
+func (c *Cart) appendLine(offerID ids.OfferID, now time.Time) {
+	var position int64
+	if n := len(c.state.Lines); n != 0 {
+		position = c.state.Lines[n-1].Position + 1
+	}
+	c.state.Lines = append(c.state.Lines, Line{Offer: offerID, AddedAt: now, Position: position})
 }
 
 func (c *Cart) find(offerID ids.OfferID) int {

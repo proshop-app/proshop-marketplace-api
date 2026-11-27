@@ -21,6 +21,12 @@ var (
 	ErrNotEnoughStock = errs.New(errs.Conflict, "cart.not_enough_stock", "в наличии меньше, чем в корзине")
 	// ErrConflict — корзину изменили параллельно.
 	ErrConflict = errs.New(errs.Conflict, "cart.version_conflict", "корзина изменена параллельно, повторите")
+	// ErrAddKey — ключ добавления отсутствует, неверен или просрочен.
+	ErrAddKey = errs.New(errs.Invalid, "cart.add_key_invalid", "нужен действующий Idempotency-Key")
+	// ErrAddKeyReused — ключ уже привязан к другому телу.
+	ErrAddKeyReused = errs.New(errs.Conflict, "cart.add_key_reused", "ключ уже связан с другим добавлением")
+	// ErrAddInProgress — добавление уже выполняется на этой или другой реплике.
+	ErrAddInProgress = errs.New(errs.Conflict, "cart.add_in_progress", "добавление уже выполняется")
 	// ErrPromoInvalid — код пуст или длиннее MaxPromoLength.
 	ErrPromoInvalid = errs.New(
 		errs.Invalid,

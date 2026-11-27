@@ -379,7 +379,7 @@ func TestReturnedGroupKeepsNewCartPromo(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{PromoCode: &cart.PromoCode{Code: "NEW", Valid: true}})
-	if _, err := e.carts.Add(ctx, buyerID, p1, 1); err != nil {
+	if _, err := e.seedCartLine(ctx, p1, 1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.carts.SetPromo(ctx, buyerID, "t1", "NEW"); err != nil {
@@ -422,7 +422,7 @@ func TestReturnedGroupMarksSameCartPromoRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{PromoCode: &cart.PromoCode{Code: "OLD", Valid: true}})
-	if _, err := e.carts.Add(ctx, buyerID, p1, 1); err != nil {
+	if _, err := e.seedCartLine(ctx, p1, 1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.carts.SetPromo(ctx, buyerID, "t1", "OLD"); err != nil {

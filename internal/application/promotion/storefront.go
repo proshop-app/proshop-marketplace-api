@@ -2,8 +2,6 @@ package promotion
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"time"
 
@@ -26,10 +24,7 @@ type Sponsored struct {
 }
 
 // Event передаёт показ или клик без влияния на органическое ранжирование.
-type Event struct {
-	PromotionID ids.UUID `json:"promotionId"`
-	Kind        string   `json:"kind"`
-}
+type Event = promotion.Beacon
 
 // Sponsored содержит выбранную карточку и обязательную маркировку.
 func (s *Service) Sponsored(ctx context.Context, query ports.OfferQuery) ([]Sponsored, error) {
@@ -148,41 +143,37 @@ func campaignOffer(state ports.OfferState, c promotion.CampaignState) (ports.Off
 	return doc, ok && doc.Listed && doc.CategoryID == c.Target.CategoryID
 }
 
-// Events обезличивает посетителя и атомарно учитывает пачку маячков.
-func (s *Service) Events(ctx context.Context, visitor string, events []Event) error {
-	if visitor == "" || len(visitor) > 1024 || len(events) > 50 {
+// Events учитывает один маячок один раз независимо от входа и дня доставки.
+func (s *Service) Events(ctx context.Context, events []Event) error {
+	if len(events) == 0 || len(events) > 50 {
 		return promotion.ErrInvalid
 	}
+	unique := make(map[Event]bool, len(events))
+	batch := make([]Event, 0, len(events))
 	for _, event := range events {
+		if _, err := ids.ParseUUID(string(event.EventID)); err != nil {
+			return promotion.ErrInvalid
+		}
 		if event.Kind != "view" && event.Kind != "click" {
 			return promotion.ErrInvalid
 		}
+		if _, err := ids.ParseUUID(string(event.PromotionID)); err == nil && !unique[event] {
+			unique[event] = true
+			batch = append(batch, event)
+		}
 	}
-	hash := sha256.Sum256([]byte(s.config.VisitorSalt + "\x00" + visitor))
-	visitorHash := hex.EncodeToString(hash[:])
+	if len(batch) == 0 {
+		return nil
+	}
 	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		day := s.clock.Now().In(s.config.Location).Format(time.DateOnly)
-		for _, event := range events {
-			if _, err := ids.ParseUUID(string(event.PromotionID)); err != nil {
-				continue
-			}
-			c, err := tx.Promotion().Get(ctx, event.PromotionID)
-			if errors.Is(err, promotion.ErrNotFound) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			state := c.State()
-			if state.Status != promotion.Active || day < state.Period.From || day > state.Period.To {
-				continue
-			}
-			changed, err := tx.Promotion().Count(ctx, state, day, visitorHash, event.Kind)
-			if err != nil {
-				return err
-			}
-			if changed && s.config.Metrics != nil {
-				tx.AfterCommit(func() { s.config.Metrics.PromotionEvent(state, event.Kind) })
+		counted, err := tx.Promotion().CountEvents(ctx, day, batch)
+		if err != nil {
+			return err
+		}
+		if s.config.Metrics != nil {
+			for _, event := range counted {
+				tx.AfterCommit(func() { s.config.Metrics.PromotionEvent(event) })
 			}
 		}
 		return nil

@@ -149,33 +149,19 @@ func (r references) Changes(_ context.Context, dictionary string, from, to int64
 	return out, nil
 }
 
-func (r references) ChangedEntries(
-	ctx context.Context,
+func (r references) SnapshotSinceExpired(
+	_ context.Context,
 	dictionary string,
-	since, until int64,
-) ([]ids.UUID, error) {
-	changes, _ := r.Changes(ctx, dictionary, since, until)
-	seen := map[ids.UUID]bool{}
-	var out []ids.UUID
-	for _, change := range changes {
-		for _, id := range change.EntryIDs {
-			if !seen[id] {
-				seen[id] = true
-				out = append(out, id)
-			}
-		}
-	}
-	return out, nil
-}
-
-func (r references) Horizon(_ context.Context, dictionary string, before time.Time) (int64, error) {
-	var horizon int64
+	since, revision int64,
+	before time.Time,
+) (bool, error) {
 	for _, change := range r.d.reference.changes {
-		if change.Dictionary == dictionary && change.At.Before(before) {
-			horizon = max(horizon, change.Revision)
+		if change.Dictionary == dictionary && change.Revision > since && change.Revision <= revision &&
+			change.At.Before(before) {
+			return true, nil
 		}
 	}
-	return horizon, nil
+	return false, nil
 }
 
 func (r references) Entry(_ context.Context, dictionary string, id ids.UUID) (*reference.Entry, error) {

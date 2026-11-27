@@ -52,6 +52,20 @@ type ReportGroup struct {
 	Count int
 }
 
+// Beacon — одно доставленное событие продвижения.
+type Beacon struct {
+	EventID     ids.UUID `json:"eventId"`
+	PromotionID ids.UUID `json:"promotionId"`
+	Kind        string   `json:"kind"`
+}
+
+// CountedBeacon содержит метки для события, впервые принятого счётчиком.
+type CountedBeacon struct {
+	TenantID      ids.TenantID
+	PlacementCode string
+	Kind          string
+}
+
 // Repository привязан к транзакции; LockPlacement сериализует резервирование слотов.
 type Repository interface {
 	LockPlacement(context.Context, string) error
@@ -70,6 +84,6 @@ type Repository interface {
 	Occupancy(context.Context, CampaignState, Scope, []string, ids.UUID) ([]Week, error)
 	AddDecision(context.Context, ids.UUID, Decision) error
 	Decisions(context.Context, ids.UUID) ([]Decision, error)
-	Count(context.Context, CampaignState, string, string, string) (bool, error)
+	CountEvents(ctx context.Context, day string, events []Beacon) ([]CountedBeacon, error)
 	Stats(context.Context, ids.UUID, string, string) ([]Counter, error)
 }

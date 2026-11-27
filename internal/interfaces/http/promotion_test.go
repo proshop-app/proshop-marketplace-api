@@ -63,7 +63,7 @@ func TestPromotionPauseAndBatch(t *testing.T) {
 	})
 	service := app.NewService(
 		store,
-		fake.NewClock(time.Now()),
+		fake.NewClock(time.Date(2026, 11, 26, 9, 0, 0, 0, time.UTC)),
 		&fake.IDs{},
 		fake.NewIndex(),
 		app.Config{Location: time.UTC, Random: fake.Random{}},
@@ -77,7 +77,8 @@ func TestPromotionPauseAndBatch(t *testing.T) {
 	if recorder.Code != 400 || !strings.Contains(recorder.Body.String(), "promotion.action_unsupported") {
 		t.Fatal(recorder.Code, recorder.Body.String())
 	}
-	req = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"visitorId":"","events":[]}`))
+	payload := `{"events":[{"kind":"view","promotionId":"00000000-0000-0000-0000-000000000001"}]}`
+	req = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(payload))
 	recorder = httptest.NewRecorder()
 	h.events(recorder, req)
 	if recorder.Code != 400 {

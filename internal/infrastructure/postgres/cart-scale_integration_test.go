@@ -56,7 +56,7 @@ func TestCartAddAtScale(t *testing.T) {
 	projector := seedProjectionIntake(ctx, t, uow, pool, catalogSize)
 	platform := seedCartScaleOffers(ctx, t, pool, projector)
 	seedBuyer(t, uow, buyerA, "79990000002")
-	service := appcart.NewService(uow, platform, random.IDs{}, fake.NewClock(time.Now()), time.Hour)
+	service := appcart.NewService(uow, platform, random.IDs{}, fake.NewClock(at(0)), time.Hour, "test-cart-key")
 	durations := make([]time.Duration, 0, cartScaleOffers)
 	counter.statements.Store(0)
 	for n := range cartScaleOffers {
@@ -65,7 +65,7 @@ func TestCartAddAtScale(t *testing.T) {
 			counter.print.Store(200)
 		}
 		started := time.Now()
-		if _, err := service.Add(ctx, buyerA, offer, 1); err != nil {
+		if _, err := service.AddOnce(ctx, buyerA, offer, 1, service.NewAddKey(buyerA)); err != nil {
 			t.Fatal(err)
 		}
 		durations = append(durations, time.Since(started))

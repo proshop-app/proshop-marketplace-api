@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -11,14 +12,34 @@ import (
 const (
 	promotionDecisionAdd = `INSERT INTO promotion_decisions(campaign_id,at,actor,action,note) VALUES($1,$2,$3,$4,$5)`
 	promotionDecisions   = `SELECT at,actor,action,note FROM promotion_decisions WHERE campaign_id=$1 ORDER BY id`
-	promotionView        = `INSERT INTO promotion_views(campaign_id,day,visitor_hash,kind)
- VALUES($1,$2::text::date,$3,$4)
- ON CONFLICT DO NOTHING`
-	promotionCount = `INSERT INTO promotion_counters(campaign_id,day,position,impressions,clicks)
- VALUES($1,$2::text::date,$3,$4,$5)
- ON CONFLICT(campaign_id,day,position) DO UPDATE SET
- impressions=promotion_counters.impressions+EXCLUDED.impressions,
- clicks=promotion_counters.clicks+EXCLUDED.clicks`
+	// Сначала дедуп, затем счётчики. В каждой фазе блокировки идут в порядке ключей.
+	promotionCount = `
+		WITH accepted AS (
+			INSERT INTO promotion_views (campaign_id, day, event_id, kind)
+			SELECT c.id, $1::text::date, e."eventId", e.kind
+			FROM jsonb_to_recordset($2::jsonb) AS e("promotionId" uuid, "eventId" uuid, kind text)
+			JOIN promotion_campaigns c ON c.id = e."promotionId"
+			WHERE c.status = 'active' AND $1::text::date BETWEEN c.date_from AND c.date_to
+			ORDER BY c.id, e."eventId", e.kind
+			ON CONFLICT DO NOTHING
+			RETURNING campaign_id, day, kind
+		), counted AS (
+			INSERT INTO promotion_counters (campaign_id, day, position, impressions, clicks)
+			SELECT a.campaign_id, a.day, c.position, count(*) FILTER (WHERE a.kind = 'view'),
+				count(*) FILTER (WHERE a.kind = 'click')
+			FROM accepted a
+			JOIN promotion_campaigns c ON c.id = a.campaign_id
+			GROUP BY a.campaign_id, a.day, c.position
+			ORDER BY a.campaign_id, a.day, c.position
+			ON CONFLICT (campaign_id, day, position) DO UPDATE
+			SET impressions = promotion_counters.impressions + EXCLUDED.impressions,
+				clicks = promotion_counters.clicks + EXCLUDED.clicks
+			RETURNING campaign_id, day
+		)
+		SELECT c.tenant_id, c.placement_code, a.kind
+		FROM accepted a
+		JOIN counted n USING (campaign_id, day)
+		JOIN promotion_campaigns c ON c.id = a.campaign_id`
 	promotionStats = `SELECT to_char(day,'YYYY-MM-DD'),position,impressions,clicks FROM promotion_counters
  WHERE campaign_id=$1 AND ($2='' OR day>=NULLIF($2,'')::date) AND ($3='' OR day<=NULLIF($3,'')::date)
  ORDER BY day,position`
@@ -50,32 +71,30 @@ func (r *Promotions) Decisions(ctx context.Context, id ids.UUID) ([]promotion.De
 	return result, rows.Err()
 }
 
-// Count дедуплицирует показ и увеличивает счётчик в одной транзакции.
-func (r *Promotions) Count(
+// CountEvents считает активные кампании и записывает всю пачку одним SQL.
+func (r *Promotions) CountEvents(
 	ctx context.Context,
-	s promotion.CampaignState,
-	day, visitor, kind string,
-) (bool, error) {
-	views, clicks := 0, 0
-	switch kind {
-	case "view":
-		views = 1
-	case "click":
-		clicks = 1
-	default:
-		return false, promotion.ErrInvalid
-	}
-	tag, err := execSQL(ctx, r.db, promotionView, s.ID, day, visitor, kind)
+	day string,
+	events []promotion.Beacon,
+) ([]promotion.CountedBeacon, error) {
+	payload, err := json.Marshal(events)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	if tag == 0 {
-		return false, nil
+	rows, err := rawSQL(ctx, r.db, promotionCount, day, payload).Rows()
+	if err != nil {
+		return nil, err
 	}
-	if _, err := execSQL(ctx, r.db, promotionCount, s.ID, day, s.Position, views, clicks); err != nil {
-		return false, err
+	defer func() { _ = rows.Close() }()
+	var counted []promotion.CountedBeacon
+	for rows.Next() {
+		var event promotion.CountedBeacon
+		if err := rows.Scan(&event.TenantID, &event.PlacementCode, &event.Kind); err != nil {
+			return nil, err
+		}
+		counted = append(counted, event)
 	}
-	return true, nil
+	return counted, rows.Err()
 }
 
 // Stats читает суточные счётчики за указанный период.

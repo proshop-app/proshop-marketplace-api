@@ -25,7 +25,7 @@ func TestEmptyOpenImportPublicationLearningSnapshotAndQueue(t *testing.T) {
 	if len(h.events(t)) != 0 || len(h.store.ReferenceChanges()) != 0 {
 		t.Fatal("пустой импорт не изменяет записи")
 	}
-	full, err := h.service.Snapshot(ctx, "a1", nil)
+	full, err := h.service.Snapshot(ctx, "a1", nil, "")
 	if err != nil || !full.Full || full.Revision != 0 || full.Kind != reference.KindOpen ||
 		full.Entries == nil || len(full.Entries) != 0 || full.Removed == nil {
 		t.Fatal(full, err)
@@ -94,7 +94,7 @@ func TestEmptyOpenImportPublicationLearningSnapshotAndQueue(t *testing.T) {
 		t.Fatal("потеряна публикация события словаря", messages)
 	}
 	since := int64(0)
-	delta, err := h.service.Snapshot(ctx, "a1", &since)
+	delta, err := h.service.Snapshot(ctx, "a1", &since, "")
 	if err != nil || delta.Full || delta.Revision != 1 || len(delta.Entries) != 1 ||
 		delta.Entries[0].Status != reference.StatusCandidate {
 		t.Fatal(delta, err)

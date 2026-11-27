@@ -35,8 +35,8 @@ func NewPromotion(registerer prometheus.Registerer) *Promotion {
 }
 
 // PromotionEvent увеличивает метрику только после фиксации маячка.
-func (p *Promotion) PromotionEvent(s promotion.CampaignState, kind string) {
-	p.events.WithLabelValues(s.PlacementCode, string(s.TenantID), kind).Inc()
+func (p *Promotion) PromotionEvent(event promotion.CountedBeacon) {
+	p.events.WithLabelValues(event.PlacementCode, string(event.TenantID), event.Kind).Inc()
 }
 
 // PromotionTransition учитывает изменение статуса после фиксации транзакции.

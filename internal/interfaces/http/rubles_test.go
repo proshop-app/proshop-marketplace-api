@@ -272,7 +272,7 @@ func TestMoneyEncodingFailureNeverSendsPartialSuccess(t *testing.T) {
 
 func TestCartMutationsUseServerPriceAndKeepStoredKopecks(t *testing.T) {
 	store, platform := fake.NewStore(), fake.NewPlatform()
-	now := time.Now()
+	now := time.Date(2026, 11, 26, 9, 0, 0, 0, time.UTC)
 	store.SeedBuyerOffer(ids.OfferID{Tenant: "t1", Product: "p1"}, "Товар", money.FromKopecks(90000))
 	platform.SetItem("t1", ports.ItemCheck{
 		ProductID: "p1",
@@ -286,6 +286,7 @@ func TestCartMutationsUseServerPriceAndKeepStoredKopecks(t *testing.T) {
 		&fake.IDs{},
 		fake.NewClock(now),
 		time.Hour,
+		"test-cart-key",
 	)}
 	for _, tc := range []struct {
 		body   string
@@ -297,6 +298,7 @@ func TestCartMutationsUseServerPriceAndKeepStoredKopecks(t *testing.T) {
 	} {
 		request := httptest.NewRequest(http.MethodPost, "/api/v1/cart/lines", strings.NewReader(tc.body))
 		request = request.WithContext(context.WithValue(request.Context(), keyBuyer, ids.UUID("buyer")))
+		request.Header.Set("Idempotency-Key", handler.carts.NewAddKey("buyer"))
 		response := httptest.NewRecorder()
 		handler.add(response, request)
 		if response.Code != tc.status {

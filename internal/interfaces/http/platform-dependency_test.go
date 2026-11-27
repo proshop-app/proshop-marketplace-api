@@ -173,8 +173,15 @@ func newDependencyFixture(t *testing.T) *dependencyFixture {
 		clock:     clock,
 		catalog:   &catalogHandlers{queries: queries},
 		promotion: &promotionHandlers{service: promotions},
-		cart:      &cartHandlers{carts: appcart.NewService(store, guarded, &fake.IDs{}, clock, time.Hour)},
-		buyer:     &buyerFeatureHandlers{service: buyers},
+		cart: &cartHandlers{carts: appcart.NewService(
+			store,
+			guarded,
+			&fake.IDs{},
+			clock,
+			time.Hour,
+			"test-cart-key",
+		)},
+		buyer: &buyerFeatureHandlers{service: buyers},
 		shops: &participantHandlers{
 			service:       appparticipant.NewService(store, clock, &fake.IDs{}),
 			buyerFeatures: buyers,

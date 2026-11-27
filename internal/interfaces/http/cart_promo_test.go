@@ -40,6 +40,7 @@ func TestCartPromoHTTP(t *testing.T) {
 		&fake.IDs{},
 		fake.NewClock(now),
 		time.Hour,
+		"test-cart-key",
 	)}
 	for _, method := range []string{http.MethodPut, http.MethodDelete} {
 		req := httptest.NewRequest(method, "/api/v1/cart/groups/t1/promo-code", strings.NewReader(`{"code":"BAD"}`))
@@ -112,6 +113,7 @@ func TestPromoValidationHTTP(t *testing.T) {
 		&fake.IDs{},
 		fake.NewClock(time.Now()),
 		time.Hour,
+		"test-cart-key",
 	)}
 	for _, code := range []string{"", "   ", strings.Repeat("я", cart.MaxPromoLength+1)} {
 		body, err := json.Marshal(promoCodeJSON{Code: code})
@@ -163,6 +165,7 @@ func TestGetCartSnapshotAndExplicitVerification(t *testing.T) {
 		&fake.IDs{},
 		fake.NewClock(now),
 		time.Hour,
+		"test-cart-key",
 	)}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/cart", nil)
 	req.Header.Set("X-Marketplace-Money-Unit", "RUB")

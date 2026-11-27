@@ -18,10 +18,9 @@ type promotionCounterKey struct {
 }
 
 type promotionViewKey struct {
-	id      ids.UUID
-	day     string
-	visitor string
-	kind    string
+	id    ids.UUID
+	event ids.UUID
+	kind  string
 }
 
 type promotionData struct {
@@ -192,29 +191,41 @@ func (r promotionRepo) Decisions(_ context.Context, id ids.UUID) ([]promotion.De
 }
 
 // Count дедуплицирует показ и увеличивает счётчик в одной транзакции.
-func (r promotionRepo) Count(
+func (r promotionRepo) CountEvents(
 	_ context.Context,
-	s promotion.CampaignState,
-	day, visitor, kind string,
-) (bool, error) {
-	key := promotionCounterKey{s.ID, day, s.Position}
-	count := r.d.counters[key]
-	count.Day, count.Position = day, s.Position
-	view := promotionViewKey{s.ID, day, visitor, kind}
-	if r.d.views[view] {
-		return false, nil
+	day string,
+	events []promotion.Beacon,
+) ([]promotion.CountedBeacon, error) {
+	var counted []promotion.CountedBeacon
+	for _, event := range events {
+		campaign := r.d.campaigns[event.PromotionID]
+		if campaign.Status != promotion.Active || day < campaign.Period.From || day > campaign.Period.To {
+			continue
+		}
+		view := promotionViewKey{campaign.ID, event.EventID, event.Kind}
+		if r.d.views[view] {
+			continue
+		}
+		key := promotionCounterKey{campaign.ID, day, campaign.Position}
+		count := r.d.counters[key]
+		count.Day, count.Position = day, campaign.Position
+		switch event.Kind {
+		case "view":
+			count.Impressions++
+		case "click":
+			count.Clicks++
+		default:
+			return nil, promotion.ErrInvalid
+		}
+		r.d.views[view] = true
+		r.d.counters[key] = count
+		counted = append(counted, promotion.CountedBeacon{
+			TenantID:      campaign.TenantID,
+			PlacementCode: campaign.PlacementCode,
+			Kind:          event.Kind,
+		})
 	}
-	switch kind {
-	case "view":
-		count.Impressions++
-	case "click":
-		count.Clicks++
-	default:
-		return false, promotion.ErrInvalid
-	}
-	r.d.views[view] = true
-	r.d.counters[key] = count
-	return true, nil
+	return counted, nil
 }
 
 // Stats читает суточные счётчики за указанный период.

@@ -35,7 +35,7 @@ type env struct {
 func setup(t *testing.T) *env {
 	t.Helper()
 	e := &env{store: fake.NewStore(), platform: fake.NewPlatform(), clock: fake.NewClock(t0)}
-	e.service = appcart.NewService(e.store, e.platform, &fake.IDs{}, e.clock, 30*24*time.Hour)
+	e.service = appcart.NewService(e.store, e.platform, &fake.IDs{}, e.clock, 30*24*time.Hour, "test-cart-key")
 	// Корзина читает предложение из проекции каталога; поиск ей не нужен.
 	e.store.SeedBuyerOffer(p1, "Чайник", money.FromKopecks(199000))
 	e.store.SeedBuyerOffer(p2, "Кружка", money.FromKopecks(35000))
@@ -67,22 +67,22 @@ func TestAddChangeRemove(t *testing.T) {
 		t.Fatal("чтение пустой корзины её не заводит")
 	}
 
-	state, err := e.service.Add(ctx, buyerID, p1, 2)
+	state, err := e.seedCartLine(ctx, p1, 2)
 	if err != nil || len(state.Lines) != 1 || state.Lines[0].Price.Kopecks() != 199000 ||
 		state.Lines[0].Name != "Чайник" {
 		t.Fatalf("добавление со снимком цены индекса: %+v %v", state, err)
 	}
 
-	if _, err := e.service.Add(ctx, buyerID, p1, 2); !errors.Is(err, cart.ErrNotEnoughStock) {
+	if _, err := e.seedCartLine(ctx, p1, 2); !errors.Is(err, cart.ErrNotEnoughStock) {
 		t.Fatalf("сверх остатка проекции: %v", err)
 	}
 
-	_, err = e.service.Add(ctx, buyerID, ids.OfferID{Tenant: "t3", Product: "p1"}, 1)
+	_, err = e.seedCartLine(ctx, ids.OfferID{Tenant: "t3", Product: "p1"}, 1)
 	if !errors.Is(err, cart.ErrOfferUnavailable) {
 		t.Fatalf("скрытое предложение: %v", err)
 	}
 
-	_, err = e.service.Add(ctx, buyerID, ids.OfferID{Tenant: "t9", Product: "p9"}, 1)
+	_, err = e.seedCartLine(ctx, ids.OfferID{Tenant: "t9", Product: "p9"}, 1)
 	if !errors.Is(err, cart.ErrOfferUnavailable) {
 		t.Fatalf("нет предложения: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestAddChangeRemove(t *testing.T) {
 	if state, err = e.service.SetQuantity(ctx, buyerID, p1, 3); err != nil || state.Lines[0].Quantity != 3 {
 		t.Fatalf("количество: %+v %v", state, err)
 	}
-	if state, err = e.service.Add(ctx, buyerID, p2, 1); err != nil || len(state.Lines) != 2 {
+	if state, err = e.seedCartLine(ctx, p2, 1); err != nil || len(state.Lines) != 2 {
 		t.Fatalf("второй магазин: %+v %v", state, err)
 	}
 	if state, err = e.service.SetQuantity(ctx, buyerID, p2, 0); err != nil || len(state.Lines) != 1 {
@@ -105,7 +105,7 @@ func TestExpiredCartResets(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 
-	if _, err := e.service.Add(ctx, buyerID, p1, 1); err != nil {
+	if _, err := e.seedCartLine(ctx, p1, 1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -124,8 +124,8 @@ func TestVerify(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 
-	_, _ = e.service.Add(ctx, buyerID, p1, 2)
-	_, _ = e.service.Add(ctx, buyerID, p2, 1)
+	_, _ = e.seedCartLine(ctx, p1, 2)
+	_, _ = e.seedCartLine(ctx, p2, 1)
 
 	e.platform.SetItem(
 		"t1",
@@ -154,4 +154,8 @@ func TestVerify(t *testing.T) {
 		errs.CodeOf(err) != errs.Unavailable {
 		t.Fatalf("магазин не ответил: %v", err)
 	}
+}
+
+func (e *env) seedCartLine(ctx context.Context, offer ids.OfferID, quantity int) (cart.State, error) {
+	return e.service.AddOnce(ctx, buyerID, offer, quantity, e.service.NewAddKey(buyerID))
 }

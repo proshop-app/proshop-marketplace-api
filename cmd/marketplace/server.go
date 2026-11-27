@@ -270,7 +270,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			IPLimit:       appbuyer.Limit(cfg.Login.IPLimit),
 		},
 	)
-	carts := appcart.NewService(uow, resyncing, identities, now, cfg.Cart.TTL)
+	carts := appcart.NewService(uow, resyncing, identities, now, cfg.Cart.TTL, cfg.Identity.EncryptionKey)
 	var searchBuyerKeys *searchfeedback.BuyerKeys
 	var feedback *searchfeedback.Feedback
 	var purchases *messaging.Dispatcher
@@ -399,7 +399,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 		EventsPerMinute: cfg.Promotion.EventsPerMinute,
 		Location:        location,
 		SearchDepth:     cfg.Promotion.SearchRelevanceDepth,
-		VisitorSalt:     cfg.Promotion.VisitorSalt,
 		Random:          promotionRandom{},
 		Metrics:         telemetry.NewPromotion(s.metrics),
 	})

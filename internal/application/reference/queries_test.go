@@ -54,33 +54,33 @@ func TestSnapshotFullAndDelta(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
 	h.create(t, "Бренд", reference.StatusConfirmed)
-	full, err := h.service.Snapshot(ctx, testDict, nil)
+	full, err := h.service.Snapshot(ctx, testDict, nil, "")
 	if err != nil || !full.Full || full.Revision != 1 || len(full.Entries) != 1 {
 		t.Fatalf("полный снимок: %+v %v", full, err)
 	}
 	second := h.create(t, "Бренд Два", reference.StatusConfirmed)
 	since := full.Revision
-	delta, err := h.service.Snapshot(ctx, testDict, &since)
+	delta, err := h.service.Snapshot(ctx, testDict, &since, "")
 	if err != nil || delta.Full || delta.Revision != 2 || len(delta.Entries) != 1 ||
 		delta.Entries[0].ID != second.Entry.ID {
 		t.Fatalf("дельта: %+v %v", delta, err)
 	}
 	head := delta.Revision
-	empty, err := h.service.Snapshot(ctx, testDict, &head)
+	empty, err := h.service.Snapshot(ctx, testDict, &head, "")
 	if err != nil || empty.Full || len(empty.Entries) != 0 {
 		t.Fatalf("пустая дельта: %+v %v", empty, err)
 	}
 	ahead := head + 10
-	if reset, _ := h.service.Snapshot(ctx, testDict, &ahead); !reset.Full {
+	if reset, _ := h.service.Snapshot(ctx, testDict, &ahead, ""); !reset.Full {
 		t.Fatal("since впереди головы дал дельту")
 	}
 	h.store.AgeReferenceChanges(1, 31*24*time.Hour)
 	old := int64(0)
-	if aged, _ := h.service.Snapshot(ctx, testDict, &old); !aged.Full || len(aged.Entries) != 2 {
+	if aged, _ := h.service.Snapshot(ctx, testDict, &old, ""); !aged.Full || len(aged.Entries) != 2 {
 		t.Fatalf("since за горизонтом дал дельту: %+v", aged)
 	}
 	fresh := int64(1)
-	if inside, _ := h.service.Snapshot(ctx, testDict, &fresh); inside.Full {
+	if inside, _ := h.service.Snapshot(ctx, testDict, &fresh, ""); inside.Full {
 		t.Fatal("since на горизонте дал полный снимок")
 	}
 }
