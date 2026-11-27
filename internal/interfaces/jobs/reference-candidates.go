@@ -65,11 +65,18 @@ func (r *ReferenceCandidatesRunner) runOnce(ctx context.Context) {
 		r.failed("", err)
 		return
 	}
+	// Таксономия и области читаются один раз на проход: на каждый словарь это был бы
+	// разбор всего снимка и обход всего дерева по всем атрибутам.
+	pass, err := r.service.CandidatePass(ctx)
+	if err != nil {
+		r.failed("", err)
+		return
+	}
 	for _, dict := range dictionaries {
 		if dict.Kind != reference.KindOpen {
 			continue
 		}
-		result, err := r.service.CollectCandidates(ctx, dict.Code, r.search)
+		result, err := r.service.CollectPassCandidates(ctx, pass, dict.Code, r.search)
 		r.created.WithLabelValues(dict.Code).Add(float64(result.Created))
 		for _, scope := range result.Skipped {
 			r.skipped.Inc()

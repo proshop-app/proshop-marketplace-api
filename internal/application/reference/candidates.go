@@ -51,14 +51,34 @@ func (s *Service) Dictionaries(ctx context.Context) ([]DictionaryView, error) {
 	return out, err
 }
 
-// CollectCandidates продолжает остальные области после сбоя и возвращает общий итог.
+// CandidatePass — снимок одного прохода сбора: таксономия и области читаются один раз
+// на все словари, а не заново на каждый.
+type CandidatePass struct {
+	definition taxonomy.Definition
+	scopes     map[string][]taxonomy.CandidateScope
+}
+
+// CandidatePass читает действующую таксономию и раскладывает области по словарям.
+func (s *Service) CandidatePass(ctx context.Context) (CandidatePass, error) {
+	var pass CandidatePass
+	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		definition, err := tx.Taxonomy().Current(ctx)
+		pass.definition = definition
+		return err
+	})
+	if err != nil {
+		return CandidatePass{}, err
+	}
+	pass.scopes = pass.definition.CandidateScopesByReceiver()
+	return pass, nil
+}
+
+// CollectCandidates собирает кандидатов одного открытого словаря отдельным проходом.
 func (s *Service) CollectCandidates(
 	ctx context.Context,
 	code string,
 	search ports.ReferenceCandidates,
 ) (CandidateCollection, error) {
-	var result CandidateCollection
-	var definition taxonomy.Definition
 	var kind reference.Kind
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		dict, err := tx.Reference().Dictionary(ctx, code)
@@ -66,18 +86,29 @@ func (s *Service) CollectCandidates(
 			return err
 		}
 		kind = dict.State().Kind
-		definition, err = tx.Taxonomy().Current(ctx)
-		return err
+		return nil
 	})
-	if err != nil {
-		return result, err
+	if err != nil || kind != reference.KindOpen {
+		return CandidateCollection{}, err
 	}
+	pass, err := s.CandidatePass(ctx)
+	if err != nil {
+		return CandidateCollection{}, err
+	}
+	return s.CollectPassCandidates(ctx, pass, code, search)
+}
+
+// CollectPassCandidates продолжает остальные области после сбоя и возвращает общий итог.
+func (s *Service) CollectPassCandidates(
+	ctx context.Context,
+	pass CandidatePass,
+	code string,
+	search ports.ReferenceCandidates,
+) (CandidateCollection, error) {
+	var result CandidateCollection
 	failures := []error{}
-	for _, scope := range definition.CandidateScopes(code, kind) {
-		if scope.Dictionaries[len(scope.Dictionaries)-1] != code {
-			continue
-		}
-		queries, skipped := candidateQueries(definition, scope)
+	for _, scope := range pass.scopes[code] {
+		queries, skipped := candidateQueries(pass.definition, scope)
 		result.Skipped = append(result.Skipped, skipped...)
 		for _, query := range queries {
 			count, err := s.collectCandidateScope(ctx, code, query, search)
