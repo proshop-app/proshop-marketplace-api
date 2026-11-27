@@ -109,17 +109,6 @@ func (o *batchOffers) StatusBatch(ctx context.Context, keys []ids.OfferID) ([]po
 }
 
 // Обход магазина или всех участников может задеть любой ключ пачки: очередь дописывается целиком.
-func (o *batchOffers) WalkStoreSummaryOffers(
-	ctx context.Context,
-	tenant ids.TenantID,
-	walk func([]ports.OfferState) error,
-) error {
-	if err := o.writes.flush(ctx); err != nil {
-		return err
-	}
-	return o.OfferStates.WalkStoreSummaryOffers(ctx, tenant, walk)
-}
-
 func (o *batchOffers) TenantOffers(
 	ctx context.Context,
 	tenant ids.TenantID,

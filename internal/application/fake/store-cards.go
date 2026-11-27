@@ -3,6 +3,7 @@ package fake
 import (
 	"context"
 	"sort"
+	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
@@ -21,10 +22,52 @@ type directoryChange struct {
 	card     ports.ShopDirectoryCard
 }
 
+func (r storeCards) ScheduleChanges(ctx context.Context, keys []ids.OfferID, at time.Time) error {
+	tenants := map[ids.TenantID]bool{}
+	for _, offer := range keys {
+		key := productKey{offer.Tenant, offer.Product}
+		if r.d.storeSummaryPending[key] {
+			delete(r.d.storeSummaryPending, key)
+			tenants[offer.Tenant] = true
+		}
+	}
+	for tenant := range tenants {
+		if err := outbox(r).Enqueue(ctx, ports.StoreCardTask(tenant, at)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r storeCards) CacheVersion(context.Context, ...ids.TenantID) (int64, error) { return 0, nil }
 
 func (r storeCards) Lock(_ context.Context, _ ids.TenantID) error {
 	return nil
+}
+
+func (r storeCards) Hide(_ context.Context, tenant ids.TenantID) error {
+	record, ok := r.d.storeCards[tenant]
+	if !ok {
+		return nil
+	}
+	previous := record
+	record.Public = false
+	record.PagePublic = false
+	r.publishDirectory(previous, record)
+	r.d.storeCards[tenant] = record
+	return nil
+}
+
+func (r storeCards) publishDirectory(previous, record ports.StoreRecord) {
+	before, after := directoryCard(previous), directoryCard(record)
+	if before == after {
+		return
+	}
+	r.d.directory.revision++
+	r.d.directory.changes[record.Header.TenantID] = directoryChange{
+		revision: r.d.directory.revision,
+		card:     after,
+	}
 }
 
 func (r storeCards) Save(_ context.Context, record ports.StoreRecord) error {
@@ -35,14 +78,7 @@ func (r storeCards) Save(_ context.Context, record ports.StoreRecord) error {
 		record.Summary.Hidden = previous.Summary.Hidden
 		record.ProfileVersion = previous.ProfileVersion
 	}
-	before, after := directoryCard(previous), directoryCard(record)
-	if before != after {
-		r.d.directory.revision++
-		r.d.directory.changes[record.Header.TenantID] = directoryChange{
-			revision: r.d.directory.revision,
-			card:     after,
-		}
-	}
+	r.publishDirectory(previous, record)
 	r.d.storeCards[record.Header.TenantID] = record
 	return nil
 }

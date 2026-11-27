@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
-	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // RebuildResult — итог перестроения.
@@ -89,10 +88,7 @@ func (i *Indexer) rebuildPage(
 	next.Complete = len(states) < i.batch
 	next.After = lastOfferKey(states, progress.After)
 	err = i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		if err := tx.OfferIndexWork().SaveRebuild(ctx, progress, next); err != nil {
-			return err
-		}
-		return i.enqueuePageStoreCards(ctx, tx, states)
+		return tx.OfferIndexWork().SaveRebuild(ctx, progress, next)
 	})
 	if err != nil {
 		return progress, err
@@ -114,10 +110,7 @@ func (i *Indexer) catchUp(
 		err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var err error
 			states, err = tx.Offers().ChangedSince(ctx, since, after, i.batch)
-			if err != nil {
-				return err
-			}
-			return i.enqueuePageStoreCards(ctx, tx, states)
+			return err
 		})
 		if err != nil || len(states) == 0 {
 			return err
@@ -144,20 +137,4 @@ func lastOfferKey(states []ports.OfferState, fallback ports.OfferKey) ports.Offe
 	}
 	last := states[len(states)-1].Product.State()
 	return ports.OfferKey{TenantID: last.TenantID, ProductID: last.ProductID}
-}
-
-func (i *Indexer) enqueuePageStoreCards(ctx context.Context, tx ports.Tx, states []ports.OfferState) error {
-	tenants := map[ids.TenantID]bool{}
-	for _, state := range states {
-		tenant := state.Product.State().TenantID
-		if tenants[tenant] {
-			continue
-		}
-		tenants[tenant] = true
-		task := ports.StoreCardTask(tenant, i.clock.Now().Add(i.refreshDelay))
-		if err := tx.Outbox().Enqueue(ctx, task); err != nil {
-			return err
-		}
-	}
-	return nil
 }

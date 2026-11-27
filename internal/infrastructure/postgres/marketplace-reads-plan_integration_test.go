@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -26,7 +27,8 @@ const (
  jsonb_build_object('name', 'Товар', 'visible', true, 'assets', '[]'::jsonb,
  'variantsId', 'g' || (n / 3)::text, 'publication', jsonb_build_object('published', true)),
  100, 100, 1, $1, 1, $1 FROM tenants
- CROSS JOIN LATERAL generate_series(1, CASE WHEN tenant_id = 't001000' THEN 2100 ELSE 100 END) n`
+ CROSS JOIN LATERAL generate_series(1, CASE WHEN tenant_id = 't001000' THEN 2100 ELSE 100 END) n
+ WHERE tenant_id BETWEEN $2 AND $3`
 	readPlanSeedCases = `INSERT INTO moderation_cases
  (id, tenant_id, product_id, revision, source, status, reasons, note, opened_at, version)
  SELECT md5(n::text)::uuid, 't' || lpad(((n - 1) / 100 + 1)::text, 6, '0'),
@@ -207,17 +209,6 @@ func TestMarketplaceReadIndexPlans(t *testing.T) {
 				return err
 			},
 		},
-		{
-			name:    "store_summary",
-			match:   "DECLARE store_summary",
-			indexes: []string{"catalog_products_store_summary"},
-			rows:    2100,
-			run: func(ctx context.Context, tx ports.Tx) error {
-				return tx.Offers().WalkStoreSummaryOffers(ctx, "t001000", func([]ports.OfferState) error {
-					return nil
-				})
-			},
-		},
 	} {
 		t.Run(probe.name, func(t *testing.T) {
 			trace.match, trace.sql, trace.args = probe.match, "", nil
@@ -227,8 +218,7 @@ func TestMarketplaceReadIndexPlans(t *testing.T) {
 			if trace.sql == "" {
 				t.Fatal("не перехвачен запрос репозитория")
 			}
-			sql := strings.TrimPrefix(trace.sql, "DECLARE store_summary NO SCROLL CURSOR FOR ")
-			checkMarketplaceReadPlan(t, pool, sql, trace.args, probe.indexes, probe.rows)
+			checkMarketplaceReadPlan(t, pool, trace.sql, trace.args, probe.indexes, probe.rows)
 		})
 	}
 }
@@ -241,16 +231,23 @@ func seedMarketplaceReadPlans(t *testing.T, pool *pgxpool.Pool) {
 	}{
 		{sql: offerPlanSeedTenants, args: []any{1000, at(0)}},
 		{sql: offerPlanSeedParticipants, args: []any{at(0)}},
-		{sql: readPlanSeedProducts, args: []any{at(0)}},
 		{sql: readPlanSeedCases, args: []any{at(0)}},
 		{sql: readPlanSeedModerationDecisions, args: []any{at(0)}},
 		{sql: readPlanSeedCampaigns, args: []any{at(0)}},
 		{sql: readPlanSeedPromotionDecisions, args: []any{at(0)}},
-		{sql: readPlanAnalyze},
 	} {
 		if _, err := pool.Exec(context.Background(), seed.sql, seed.args...); err != nil {
 			t.Fatal(err)
 		}
+	}
+	for first := 1; first <= 1000; first += 100 {
+		low, high := fmt.Sprintf("t%06d", first), fmt.Sprintf("t%06d", first+99)
+		if _, err := pool.Exec(context.Background(), readPlanSeedProducts, at(0), low, high); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Exec(context.Background(), readPlanAnalyze); err != nil {
+		t.Fatal(err)
 	}
 	t.Log("1000 магазинов; 102000 товаров (2100 у целевого), по 100000 дел и кампаний, по 200000 решений")
 }

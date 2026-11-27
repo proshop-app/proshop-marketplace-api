@@ -70,7 +70,7 @@ func (r revalidations) Save(
 			return nil, err
 		}
 		if change.Verdict != nil {
-			if err := (moderationVerdicts{r.d.moderation}).Save(ctx, change.Verdict); err != nil {
+			if err := (moderationVerdicts{d: r.d.moderation, store: r.d}).Save(ctx, change.Verdict); err != nil {
 				return nil, err
 			}
 		}

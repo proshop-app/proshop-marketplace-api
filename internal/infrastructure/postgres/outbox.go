@@ -11,12 +11,13 @@ import (
 )
 
 const (
+	mergePendingTasks = `ON CONFLICT (dedup_key) WHERE attempts = 0 DO UPDATE
+		SET next_at = EXCLUDED.next_at WHERE EXCLUDED.next_at < outbox.next_at`
+
 	insertTask = `
 		INSERT INTO outbox (kind, tenant_id, dedup_key, payload, next_at, created_at)
 		VALUES ($1, $2, $3, $4, $6, $5)
-		ON CONFLICT (dedup_key) WHERE attempts = 0 DO UPDATE
-		SET next_at = EXCLUDED.next_at
-		WHERE EXCLUDED.next_at < outbox.next_at`
+		` + mergePendingTasks
 
 	// completeTask удаляет выполненную задачу: завершённые не копятся и не ждут чистки обходом.
 	completeTask = `

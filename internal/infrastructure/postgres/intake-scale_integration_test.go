@@ -176,9 +176,12 @@ func seedProjectionIntake(
 		t.Fatal(err)
 	}
 	if catalogSize > 0 {
-		// Пачками: тестовый пул держит срок оператора 10 с.
-		for first := 1; first <= catalogSize; first += 50000 {
-			if _, err := pool.Exec(ctx, cloneIntakeCatalog, first, min(catalogSize, first+49999)); err != nil {
+		// Загрузка каталога записывает и дельты сводок. Порции оставляют
+		// той же нагрузочной проверке обычный срок SQL тестового пула.
+		const seedBatch = 5000
+		for first := 1; first <= catalogSize; first += seedBatch {
+			last := min(catalogSize, first+seedBatch-1)
+			if _, err := pool.Exec(ctx, cloneIntakeCatalog, first, last); err != nil {
 				t.Fatal(err)
 			}
 		}

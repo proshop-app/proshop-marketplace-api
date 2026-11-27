@@ -35,6 +35,7 @@ type delivery struct {
 	message kafkago.Message
 	key     orderingKey
 	offset  *offsetSlot
+	retry   deliveryRetry
 	// alone — повтор после отката пачки: разбирается отдельным заданием.
 	alone bool
 }

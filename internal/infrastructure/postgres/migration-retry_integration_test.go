@@ -177,6 +177,9 @@ func testInterruptedIndexRecovery(t *testing.T, test interruptedIndexCase) {
 	}
 	index := test.name
 	switch test.version {
+	case 54:
+		// Миграция 00080 заменяет индекс обхода каталога индексом готовой витрины.
+		index = "store_summary_showcase"
 	case 59:
 		// Единый перечень служб заменяет оба прежних индекса одним индексом видимости.
 		index = "participants_pickup_visible"

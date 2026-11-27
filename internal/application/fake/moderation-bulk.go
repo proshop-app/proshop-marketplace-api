@@ -106,7 +106,7 @@ func (r bulkModeration) Save(
 	tasks []ports.NewTask,
 ) error {
 	for _, change := range changes {
-		if err := (moderationVerdicts{d: r.d.moderation}).Save(ctx, change.Verdict); err != nil {
+		if err := (moderationVerdicts{d: r.d.moderation, store: r.d}).Save(ctx, change.Verdict); err != nil {
 			return err
 		}
 		if err := (moderationCases{d: r.d.moderation}).Save(ctx, change.Case); err != nil {

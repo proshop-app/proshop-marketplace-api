@@ -62,17 +62,13 @@ func TestOfferBatchUsesOneIndexCall(t *testing.T) {
 	if err != nil || len(outcomes) != 200 || len(index.PutBatches) != 1 || len(index.PutBatches[0]) != 200 {
 		t.Fatalf("200 задач должны дать одну отправку: %d, %d, %v", len(outcomes), len(index.PutBatches), err)
 	}
-	storeCards := 0
 	for _, row := range store.OutboxRows() {
 		if row.Kind == appcatalog.TaskSyncOffer && row.DoneAt == nil {
 			t.Fatal("успешная задача не завершена")
 		}
 		if row.Kind == ports.TaskStoreCard {
-			storeCards++
+			t.Fatal("синхронизация индекса поставила задачу сводки")
 		}
-	}
-	if storeCards != 1 {
-		t.Fatalf("сводка магазина должна пересчитываться один раз: %d", storeCards)
 	}
 }
 

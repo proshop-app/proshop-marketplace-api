@@ -205,7 +205,7 @@ func (s *Service) CreateStopPhrase(
 		if err := tx.ModerationRules().AddPhrase(ctx, phrase); err != nil {
 			return err
 		}
-		return EnqueueAll(ctx, tx, s.clock.Now())
+		return tx.Outbox().Enqueue(ctx, reevaluateAllTask(reevaluateAllPayload{}, s.clock.Now()))
 	})
 	return phrase, err
 }
@@ -220,7 +220,7 @@ func (s *Service) RemoveStopPhrase(ctx context.Context, text string) error {
 		if !changed {
 			return moderation.ErrNotFound
 		}
-		return EnqueueAll(ctx, tx, s.clock.Now())
+		return tx.Outbox().Enqueue(ctx, reevaluateAllTask(reevaluateAllPayload{}, s.clock.Now()))
 	})
 }
 

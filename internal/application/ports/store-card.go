@@ -109,8 +109,25 @@ type StoreRecord struct {
 	PagePublic     bool
 }
 
+// StoreSummaryFacts — итог применения дельт и локальных чтений индексов.
+type StoreSummaryFacts struct {
+	Offers         int
+	VisibleOffers  int
+	FromPrice      *int64
+	Categories     map[string]int
+	Uncategorized  int
+	Products       []ShopCardProduct
+	Rating         *catalog.Rating
+	CacheSignature string
+	More           bool
+}
+
 // StoreCards — хранение производной карточки без чтения каталога на запросе.
 type StoreCards interface {
+	// ScheduleChanges склеивает ещё не запланированные дельты в задачи по магазинам.
+	ScheduleChanges(context.Context, []ids.OfferID, time.Time) error
+	// Rollup применяет порцию изменений под замком магазина. До последней порции возвращает только More.
+	Rollup(context.Context, ids.TenantID, bool, []string) (StoreSummaryFacts, error)
 	// CacheVersion меняется вместе с публичной видимостью и оформлением, но не продажами.
 	CacheVersion(context.Context, ...ids.TenantID) (int64, error)
 	// BatchPublic возвращает только публичные карточки выбранных магазинов.
@@ -119,6 +136,8 @@ type StoreCards interface {
 	UpdateProfile(context.Context, *participant.Participant) error
 	// Lock сериализует только пересчёты, не блокируя строку участника.
 	Lock(context.Context, ids.TenantID) error
+	// Hide закрывает страницу и исключает магазин из списков до окончания пересчёта.
+	Hide(context.Context, ids.TenantID) error
 	// Save атомарно заменяет сводку и счётчики категорий.
 	Save(context.Context, StoreRecord) error
 	// Get читает сводку; до первого пересчёта возвращает participant.ErrNotFound.
@@ -136,8 +155,12 @@ type StoreCardCache interface {
 	Set(context.Context, string, []byte, time.Duration) error
 }
 
-// TaskStoreCard — пересчёт готовой сводки, склеенный по магазину.
-const TaskStoreCard = "participant.store-card.refresh"
+const (
+	// TaskSyncOffer — актуализация одного предложения в индексе.
+	TaskSyncOffer = "catalog.offer.sync"
+	// TaskStoreCard — пересчёт готовой сводки, склеенный по магазину.
+	TaskStoreCard = "participant.store-card.refresh"
+)
 
 // StoreCardTask ставится вместе с изменением источника сводки.
 func StoreCardTask(tenant ids.TenantID, at time.Time) NewTask {

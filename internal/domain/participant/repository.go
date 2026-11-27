@@ -43,6 +43,8 @@ type Repository interface {
 	Get(ctx context.Context, tenantID ids.TenantID) (*Participant, error)
 	// List — участники по времени создания и общее число.
 	List(ctx context.Context, page Page) ([]*Participant, int, error)
+	// TenantIDsAfter возвращает ключи участников по возрастанию, строго после курсора.
+	TenantIDsAfter(context.Context, ids.TenantID, int) ([]ids.TenantID, error)
 	// Add сохраняет нового участника; занят магазин — ErrAlreadyExists, слаг — ErrSlugTaken.
 	Add(ctx context.Context, p *Participant) error
 	// Update сохраняет изменения условно по исходным статусу и версии; не совпали — ErrConflict.

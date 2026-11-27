@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/errs"
 )
 
@@ -35,6 +37,16 @@ type Source interface {
 // Parker откладывает сообщение в отравленные.
 type Parker interface {
 	Park(ctx context.Context, event ports.ParkedEvent) error
+}
+
+// deliveryRetry хранит счётчики между выдачами воркеру. После решения о парковке
+// при сбое записи повторяется только парковка.
+type deliveryRetry struct {
+	attempts        int
+	unknownFailures int
+	reason          string
+	cause           error
+	delay           time.Duration
 }
 
 // ConsumerConfig — политика повторов.
@@ -116,38 +128,67 @@ func (c *Consumer) envelope(message kafkago.Message) Envelope {
 // Process доводит одно сообщение до записанного итога. Позиции фиксирует Run пачкой.
 // Возвращает ошибку только при отмене контекста.
 func (c *Consumer) Process(ctx context.Context, message kafkago.Message) error {
-	envelope := c.envelope(message)
-	var log *slog.Logger
-	var tenantID string
-	unknownFailures := 0
-	for attempt := 1; ; attempt++ {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		err := c.handle(ctx, envelope)
-		if err == nil {
-			c.metrics.messages.WithLabelValues(envelope.Topic, "processed").Inc()
-
-			return ctx.Err()
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if log == nil {
-			tenantID = TenantHint(message)
-			log = c.messageLogger(envelope, tenantID)
-		}
-		c.notePanic(log, envelope.Topic, err)
-		if errs.RetryKindOf(err) == errs.RetryUnknown {
-			unknownFailures++
-		}
-		if c.settle(ctx, log, envelope, tenantID, err, attempt, unknownFailures) {
-			return ctx.Err()
-		}
-		if !sleep(ctx, c.config.Backoff(attempt)) {
-			return ctx.Err()
+	item := delivery{message: message}
+	for ctx.Err() == nil {
+		if c.attempt(ctx, &item) || !sleep(ctx, item.retry.delay) {
+			break
 		}
 	}
+	return ctx.Err()
+}
+
+// attempt выполняет одну попытку. Ожидание следующей выдачи принадлежит раздатчику.
+func (c *Consumer) attempt(ctx context.Context, item *delivery) bool {
+	envelope := c.envelope(item.message)
+	retry := &item.retry
+	retry.attempts++
+	apply := retry.reason == ""
+	if apply {
+		err := c.handle(ctx, envelope)
+		if ctx.Err() != nil {
+			return false
+		}
+		if err == nil {
+			c.metrics.messages.WithLabelValues(envelope.Topic, "processed").Inc()
+			return true
+		}
+		retry.cause = err
+		retry.reason = c.parkReason(ctx, retry, err)
+	}
+
+	tenant := TenantHint(item.message)
+	log := c.messageLogger(envelope, tenant)
+	if apply {
+		c.notePanic(log, envelope.Topic, retry.cause)
+	}
+	if retry.reason == "" {
+		c.metrics.failures.WithLabelValues(envelope.Topic).Inc()
+		log.Warn(
+			"kafka: обработка не удалась, повтор",
+			slog.Int("attempt", retry.attempts),
+			slog.Any("error", retry.cause),
+		)
+		retry.cause = nil
+	} else if c.park(ctx, log, envelope, tenant, retry.reason, retry.cause, retry.attempts) {
+		return true
+	}
+	retry.delay = c.config.Backoff(retry.attempts)
+	return false
+}
+
+// parkReason отделяет устойчивый конфликт слага от гонок версий, которые требуют перечитать запись.
+func (c *Consumer) parkReason(ctx context.Context, retry *deliveryRetry, err error) string {
+	kind := errs.RetryKindOf(err)
+	switch {
+	case errors.Is(err, participant.ErrSlugTaken), kind == errs.RetryPermanent:
+		return reasonOf(err)
+	case kind == errs.RetryUnknown:
+		retry.unknownFailures++
+		if retry.unknownFailures >= c.config.MaxAttempts && c.config.Ready(ctx) == nil {
+			return ReasonExhausted
+		}
+	}
+	return ""
 }
 
 // handle — единственное место перехвата паники приёма: паника на одном кривом
@@ -174,29 +215,6 @@ func (c *Consumer) notePanic(log *slog.Logger, topic string, err error) {
 	}
 	c.metrics.panics.WithLabelValues(topic).Inc()
 	log.Error("kafka: паника обработчика", slog.Any("error", err), slog.String("stack", string(stack)))
-}
-
-// settle откладывает сообщение в отравленные, если повтор не поможет; true — итог записан.
-func (c *Consumer) settle(
-	ctx context.Context,
-	log *slog.Logger,
-	envelope Envelope,
-	tenantID string,
-	err error,
-	attempt, unknownFailures int,
-) bool {
-	retry := errs.RetryKindOf(err)
-	switch {
-	case retry == errs.RetryPermanent:
-		return c.park(ctx, log, envelope, tenantID, reasonOf(err), err, attempt)
-	case retry == errs.RetryUnknown && unknownFailures >= c.config.MaxAttempts && c.config.Ready(ctx) == nil:
-		return c.park(ctx, log, envelope, tenantID, ReasonExhausted, err, attempt)
-	default:
-		c.metrics.failures.WithLabelValues(envelope.Topic).Inc()
-		log.Warn("kafka: обработка не удалась, повтор", slog.Int("attempt", attempt), slog.Any("error", err))
-
-		return false
-	}
 }
 
 func (c *Consumer) park(
@@ -259,6 +277,9 @@ func prefixOf(prefix string) string {
 }
 
 func sleep(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 

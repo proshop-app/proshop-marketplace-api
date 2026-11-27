@@ -72,7 +72,10 @@ func (i *Indexer) HandleOfferBatch(ctx context.Context, tasks []ports.Task) []er
 	return failures
 }
 
-func (i *Indexer) readOfferBatch(ctx context.Context, keys []ids.OfferID) ([]ports.OfferState, error) {
+func (i *Indexer) readOfferBatch(
+	ctx context.Context,
+	keys []ids.OfferID,
+) ([]ports.OfferState, error) {
 	var states []ports.OfferState
 	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
@@ -80,19 +83,7 @@ func (i *Indexer) readOfferBatch(ctx context.Context, keys []ids.OfferID) ([]por
 		if err != nil {
 			return err
 		}
-		tenants := map[ids.TenantID]bool{}
-		for _, state := range states {
-			tenant := state.Product.State().TenantID
-			if tenants[tenant] {
-				continue
-			}
-			tenants[tenant] = true
-			task := ports.StoreCardTask(tenant, i.clock.Now().Add(i.refreshDelay))
-			if err := tx.Outbox().Enqueue(ctx, task); err != nil {
-				return err
-			}
-		}
-		return nil
+		return i.scheduleStoreSummaryChanges(ctx, tx, states)
 	})
 	return states, err
 }

@@ -13,7 +13,7 @@ import (
 
 const (
 	// TaskSyncOffer — переписать в индексе одно предложение.
-	TaskSyncOffer = "catalog.offer.sync"
+	TaskSyncOffer = ports.TaskSyncOffer
 	// TaskSyncTenant — переписать в индексе все предложения магазина.
 	TaskSyncTenant = "catalog.tenant.sync"
 )

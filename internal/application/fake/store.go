@@ -54,6 +54,8 @@ type data struct {
 	features             *buyerFeaturesData
 	storeCards           map[ids.TenantID]ports.StoreRecord
 	directory            storeDirectory
+	storeSummaryPending  map[productKey]bool
+	storeRanked          map[productKey]summaryRank
 	promotion            *promotionData
 	moderation           *moderationData
 	decisions            map[string]ports.EventDecision
@@ -108,6 +110,8 @@ func (d *data) clone() *data {
 			revision: d.directory.revision,
 			changes:  maps.Clone(d.directory.changes),
 		},
+		storeSummaryPending:  maps.Clone(d.storeSummaryPending),
+		storeRanked:          maps.Clone(d.storeRanked),
 		promotion:            d.promotion.clone(),
 		moderation:           d.moderation.clone(),
 		taxonomy:             d.taxonomy,
@@ -152,6 +156,8 @@ func NewStore() *Store {
 			revision: 1,
 			changes:  make(map[ids.TenantID]directoryChange),
 		},
+		storeSummaryPending:  map[productKey]bool{},
+		storeRanked:          map[productKey]summaryRank{},
 		promotion:            newPromotionData(),
 		moderation:           newModerationData(),
 		decisions:            map[string]ports.EventDecision{},
@@ -221,7 +227,11 @@ func (s *Store) SeedParticipant(state participant.State) {
 
 // SeedProduct кладёт товар проекции.
 func (s *Store) SeedProduct(state catalog.ProductState) {
-	s.read(func(d *data) { d.products[productKey{state.TenantID, state.ProductID}] = state })
+	s.read(func(d *data) {
+		key := productKey{state.TenantID, state.ProductID}
+		d.products[key] = state
+		d.storeRanked[key] = summaryRank{at: state.ProjectedAt, revision: state.Revision}
+	})
 }
 
 // Participant возвращает сохранённого участника.

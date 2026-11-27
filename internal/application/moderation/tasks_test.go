@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
+	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	appmoderation "github.com/proshop-app/proshop-marketplace/internal/application/moderation"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
+	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
@@ -47,5 +51,65 @@ func TestReevaluationTaskYieldsAndContinuesOnePage(t *testing.T) {
 	}
 	if len(e.view(t, "p204").Verdict.Reasons) != 2 {
 		t.Fatal("продолжение пропустило хвост магазина")
+	}
+}
+
+func TestReevaluationQueuesStoreCardOnlyWhenVisibilityChanges(t *testing.T) {
+	ctx := context.Background()
+	e := setup()
+	member, _ := e.store.Participant("t1")
+	member.Trust = participant.Trusted
+	e.store.SeedParticipant(member)
+	e.project(t, "p1", 1)
+	e.project(t, "p2", 1)
+	index := appcatalog.NewIndexer(e.store, fake.NewIndex(), e.clock, 50, nil, nil, 0)
+	request := ports.ClaimRequest{
+		Now:        e.clock.Now(),
+		Limit:      10,
+		PerTenant:  10,
+		LeaseUntil: e.clock.Now().Add(time.Minute),
+	}
+	claim := func(kind string) []ports.Task {
+		t.Helper()
+		request.Kinds = []string{kind}
+		tasks, err := e.store.Claim(ctx, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tasks.Tasks
+	}
+	complete := func(tasks []ports.Task) {
+		t.Helper()
+		for _, task := range tasks {
+			if err := e.store.Complete(ctx, task.ID, task.Attempts, e.clock.Now()); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	initial := claim(appcatalog.TaskSyncOffer)
+	for _, err := range index.HandleOfferBatch(ctx, initial) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	complete(initial)
+	complete(claim(ports.TaskStoreCard))
+	for i, phrase := range []string{"Иное", "Товар"} {
+		if err := e.service.AddStopPhrase(ctx, phrase, moderation.Actor{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.service.Reevaluate(ctx, "t1"); err != nil {
+			t.Fatal(err)
+		}
+		offers := claim(appcatalog.TaskSyncOffer)
+		for _, err := range index.HandleOfferBatch(ctx, offers) {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		complete(offers)
+		if tasks := claim(ports.TaskStoreCard); len(tasks) != i {
+			t.Fatalf("сводка после фразы %q: %d задач", phrase, len(tasks))
+		}
 	}
 }

@@ -401,7 +401,7 @@ func TestStoreCardRefreshCoalescing(t *testing.T) {
 	ctx := context.Background()
 	refreshAt := clock.Now().Add(30 * time.Second)
 	service := indexer(store, index, clock)
-	if err := service.SyncOffer(ctx, "t1", "p1"); err != nil {
+	if err := service.SyncTenant(ctx, "t1"); err != nil {
 		t.Fatal(err)
 	}
 	clock.Advance(time.Second)
