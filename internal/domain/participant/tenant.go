@@ -106,6 +106,20 @@ func (t *Tenant) Apply(event RegistryEvent, now time.Time) (bool, error) {
 	return true, nil
 }
 
+// Delete завершает жизненный цикл магазина, сохраняя последнее состояние до очистки.
+func (t *Tenant) Delete(at, now time.Time) bool {
+	if t.state.Status == TenantDeleted {
+		return false
+	}
+	t.state.Status = TenantDeleted
+	if at.After(t.state.EventAt) {
+		t.state.EventAt = at
+	}
+	t.state.Version = t.originVersion + 1
+	t.state.UpdatedAt = now
+	return true
+}
+
 func (t *Tenant) assign(event RegistryEvent, now time.Time) {
 	t.state.TenantID = event.TenantID
 	t.state.Name = strings.TrimSpace(event.Name)

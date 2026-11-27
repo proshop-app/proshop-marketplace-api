@@ -321,6 +321,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 	projector := appcatalog.NewProjector(uow, now, moderation)
 	registry := appparticipant.NewRegistry(uow, now, identities)
+	purger := appparticipant.NewTenantPurger(uow, s.store.index, now)
 	replay := kafka.NewReplay(kafka.NewRouter(projector, registry).WithOrders(checkouts), cfg.Kafka.TopicPrefix)
 	events := messaging.NewEvents(uow, now, replay)
 	var operatorTokens ports.IdentityTokens
@@ -377,6 +378,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			appcatalog.TaskSyncOffer:         indexer.HandleTask,
 			appcatalog.TaskSyncTenant:        indexer.HandleTask,
 			searchfeedback.TaskPurchase:      searchfeedback.NewPurchases(s.store.index, now).Deliver,
+			ports.TaskPurgeTenant:            purger.HandleTask,
 			appparticipant.TaskSyncSettings:  settings.HandleTask,
 			ports.TaskStoreCard:              participants.RefreshStoreCard,
 			appreference.TaskChanged:         references.HandleTask,

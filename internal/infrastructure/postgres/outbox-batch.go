@@ -13,10 +13,17 @@ import (
 
 const (
 	insertTasks = `
+		WITH tasks AS MATERIALIZED (
+			SELECT * FROM jsonb_to_recordset($1::jsonb)
+			AS t(kind text, tenant_id text, dedup_key text, payload jsonb, next_at timestamptz, created_at timestamptz)
+		), available AS MATERIALIZED (
+			SELECT tenant FROM marketplace_open_tenants(
+				ARRAY(SELECT tenant_id FROM tasks WHERE marketplace_store_task(kind)), false) tenant
+		)
 		INSERT INTO outbox (kind, tenant_id, dedup_key, payload, next_at, created_at)
-		SELECT kind, tenant_id, NULLIF(dedup_key, ''), payload, next_at, created_at
-		FROM jsonb_to_recordset($1::jsonb)
-		AS t(kind text, tenant_id text, dedup_key text, payload jsonb, next_at timestamptz, created_at timestamptz)
+		SELECT t.kind, t.tenant_id, NULLIF(t.dedup_key, ''), t.payload, t.next_at, t.created_at
+		FROM tasks t LEFT JOIN available a ON a.tenant = t.tenant_id
+		WHERE a.tenant IS NOT NULL OR NOT marketplace_store_task(t.kind)
 		` + mergePendingTasks
 
 	// resolveTasks удаляет выполненные задачи и сохраняет повторы и карантин одним оператором.

@@ -68,7 +68,14 @@ func (p *Projector) ApplyProducts(ctx context.Context, events []ProductEvent) er
 	now := p.clock.Now()
 	return p.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		batch := newProjectionBatch(tx, events)
+		available, err := tx.TenantPurge().Available(ctx, batch.tenants)
+		if err != nil {
+			return err
+		}
 		for _, event := range events {
+			if !available[event.Snapshot.TenantID] {
+				continue
+			}
 			if err := p.applyProduct(ctx, batch, event.Snapshot, now); err != nil {
 				return err
 			}
@@ -123,6 +130,11 @@ func (p *Projector) applySignals(
 	now := p.clock.Now()
 
 	return p.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		available, err := tx.TenantPurge().Available(ctx, []ids.TenantID{tenantID})
+		if err != nil || !available[tenantID] {
+			return err
+		}
+
 		signals, err := tx.Signals().Get(ctx, tenantID, productID)
 		if errors.Is(err, catalog.ErrSignalsNotFound) {
 			signals, err = catalog.NewSignals(tenantID, productID), nil

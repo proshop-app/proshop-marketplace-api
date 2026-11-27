@@ -47,6 +47,10 @@ func (i *Indexer) syncTenantTaskPage(ctx context.Context, tenant ids.TenantID) e
 		progress.After = states[len(states)-1].Product.State().ProductID
 	}
 	err = i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		available, err := tx.TenantPurge().Available(ctx, []ids.TenantID{tenant})
+		if err != nil || !available[tenant] {
+			return err
+		}
 		if err := tx.OfferIndexWork().SaveTenant(ctx, tenant, progress); err != nil {
 			return err
 		}
