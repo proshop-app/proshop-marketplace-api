@@ -60,9 +60,10 @@ const (
 	taxonomySelectionInterval = 15 * time.Second
 )
 
-// orderedTaskKinds — виды outbox, которые публикуют или применяют снимок без внешней версии: магазин
-// получает их строго по одному. Совпадает с postgres.OrderedTaskKinds (индекс головы полосы).
+// orderedTaskKinds — виды outbox, которые магазин получает строго по одному.
+// Совпадает с postgres.OrderedTaskKinds (индекс головы полосы).
 var orderedTaskKinds = []string{
+	appcatalog.TaskSyncTenant,
 	appparticipant.TaskSyncSettings,
 	moderationstatus.TaskParticipant,
 	appreference.TaskChanged,
@@ -349,7 +350,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		now,
 		messaging.DispatcherConfig{
 			MaxAttempts: cfg.Outbox.MaxAttempts,
-			// Эти обработчики публикуют или применяют снимок без внешней версии.
+			// Эти обработчики продвигают одну позицию магазина или публикуют снимок без внешней версии.
 			OrderedKinds: orderedTaskKinds,
 			ExcludeKinds: []string{
 				appcheckout.TaskCreateOrder,
@@ -378,6 +379,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 	)
 	indexer.SetBatchObserver(telemetry.NewOfferBatches(s.metrics))
+	indexer.SetSkipObserver(telemetry.NewOfferIndexSkips(s.metrics))
 	dispatcher.RegisterBatch(appcatalog.TaskSyncOffer, indexer.HandleOfferBatch)
 	dispatcher.RegisterBatch(moderationstatus.TaskOffer, statuses.HandleOfferBatch)
 	janitor := messaging.NewJanitor(postgres.NewRetention(background), now, messaging.RetentionPolicy{

@@ -47,6 +47,8 @@ type OutboxRow struct {
 }
 
 type data struct {
+	indexRebuild         ports.IndexRebuildProgress
+	indexTenants         map[ids.TenantID]ports.TenantIndexProgress
 	databaseNow          func() time.Time
 	revalidationFailures map[productKey]ports.RevalidationFailure
 	features             *buyerFeaturesData
@@ -96,6 +98,8 @@ type Store struct {
 
 func (d *data) clone() *data {
 	return &data{
+		indexRebuild:         d.indexRebuild,
+		indexTenants:         maps.Clone(d.indexTenants),
 		databaseNow:          d.databaseNow,
 		features:             d.features.clone(),
 		storeCards:           maps.Clone(d.storeCards),
@@ -133,6 +137,7 @@ func (d *data) clone() *data {
 // NewStore — пустое хранилище.
 func NewStore() *Store {
 	return &Store{data: &data{
+		indexTenants:         map[ids.TenantID]ports.TenantIndexProgress{},
 		databaseNow:          time.Now,
 		features:             newBuyerFeaturesData(),
 		taxonomyVersions:     map[int64]taxonomy.Definition{},

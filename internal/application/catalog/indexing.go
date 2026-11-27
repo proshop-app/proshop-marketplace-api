@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -20,6 +19,7 @@ const CatchUpMargin = 5 * time.Minute
 // проекция: индекс всегда можно собрать заново.
 type Indexer struct {
 	batchObserver ports.OfferBatchObserver
+	skipObserver  ports.OfferIndexSkipObserver
 	models        *ModelKeys
 	uow           ports.UnitOfWork
 	index         ports.OfferIndex
@@ -27,13 +27,6 @@ type Indexer struct {
 	batch         int
 	refreshDelay  time.Duration
 	lock          ports.IndexRebuildLock
-}
-
-// RebuildResult — итог перестроения.
-type RebuildResult struct {
-	Generation string
-	Indexed    int
-	CaughtUp   int
 }
 
 // NewIndexer — синхронизация индекса пачками по batch предложений.
@@ -71,68 +64,11 @@ func (i *Indexer) HandleTask(ctx context.Context, task ports.Task) error {
 
 	case TaskSyncTenant:
 
-		return i.syncTenantTaskPage(ctx, task, tenantID)
+		return i.syncTenantTaskPage(ctx, tenantID)
 	default:
 
 		return ErrInvalidTask.WithMessage("неизвестная задача: " + task.Kind)
 	}
-}
-
-// Фоновая синхронизация отдаёт слот после страницы, сохраняя продолжение
-// только после успешной записи индекса. Повтор страницы идемпотентен по версии.
-func (i *Indexer) syncTenantTaskPage(ctx context.Context, task ports.Task, tenant ids.TenantID) error {
-	var payload taskPayload
-	if err := json.Unmarshal(task.Payload, &payload); err != nil {
-		return ErrInvalidTask.Wrap(err)
-	}
-	after := ids.ProductID(payload.After)
-	if payload.After != "" {
-		if _, err := ids.ParseProductID(payload.After); err != nil {
-			return ErrInvalidTask.Wrap(err)
-		}
-	}
-	var states []ports.OfferState
-	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		var err error
-		states, err = tx.Offers().TenantOffers(ctx, tenant, after, i.batch)
-		return err
-	})
-	if err != nil || len(states) == 0 {
-		return err
-	}
-	ready, err := i.refreshModelKeys(ctx, states)
-	if err != nil {
-		return err
-	}
-	if docs := documents(ready); len(docs) > 0 {
-		if err := i.index.Put(ctx, docs); err != nil {
-			return err
-		}
-	}
-	return i.enqueueTenantPage(ctx, task, payload, states)
-}
-
-func (i *Indexer) enqueueTenantPage(
-	ctx context.Context,
-	task ports.Task,
-	payload taskPayload,
-	states []ports.OfferState,
-) error {
-	return i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		now := i.clock.Now()
-		if err := tx.Outbox().Enqueue(ctx, ports.StoreCardTask(task.TenantID, now.Add(i.refreshDelay))); err != nil {
-			return err
-		}
-		if len(states) < i.batch {
-			return nil
-		}
-		traversal := payload.Traversal
-		if traversal == 0 {
-			traversal = task.ID
-		}
-		after := states[len(states)-1].Product.State().ProductID
-		return tx.Outbox().Enqueue(ctx, syncTenantPageTask(task.TenantID, after, traversal, now))
-	})
 }
 
 // SyncOffer переписывает одно предложение. Товар магазина, который не
@@ -179,6 +115,9 @@ func (i *Indexer) SyncOffer(ctx context.Context, tenantID ids.TenantID, productI
 // или записи реестра меняется видимость всех его товаров.
 func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 	var after ids.ProductID
+	put := func(docs []ports.OfferDocument) error {
+		return i.index.Put(ctx, docs)
+	}
 
 	for {
 		var states []ports.OfferState
@@ -200,128 +139,13 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 			return nil
 		}
 
-		ready, err := i.refreshModelKeys(ctx, states)
-
+		_, skipped, err := i.writeIndexPage(ctx, states, put)
 		if err != nil {
 			return err
 		}
-
-		if docs := documents(ready); len(docs) > 0 {
-			if err := i.index.Put(ctx, docs); err != nil {
-				return err
-			}
-		}
+		i.observeIndexSkips(ctx, "tenant", "", skipped)
 
 		after = states[len(states)-1].Product.State().ProductID
-
-		if len(states) < i.batch {
-			return nil
-		}
-	}
-}
-
-// Rebuild собирает индекс заново из проекции: новое поколение, наполнение,
-// догоняющий проход и переключение. Поисковый сервис сохраняет Building до
-// начала сканирования и направляет новые события в оба поколения.
-func (i *Indexer) Rebuild(ctx context.Context) (RebuildResult, error) {
-	var result RebuildResult
-	err := i.lock.WithLock(ctx, func(ctx context.Context) error {
-		var err error
-		result, err = i.rebuild(ctx)
-		return err
-	})
-	return result, err
-}
-
-func (i *Indexer) rebuild(ctx context.Context) (RebuildResult, error) {
-	started := i.clock.Now()
-
-	generation, err := i.index.NewGeneration(ctx)
-	if err != nil {
-		return RebuildResult{}, err
-	}
-
-	result := RebuildResult{Generation: generation}
-
-	participantOffers := func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error) {
-		return tx.Offers().ParticipantOffers(ctx, after, i.batch)
-	}
-	putGeneration := func(docs []ports.OfferDocument) error {
-		result.Indexed += len(docs)
-
-		return i.index.PutGeneration(ctx, generation, docs)
-	}
-
-	if err := i.pages(ctx, participantOffers, putGeneration); err != nil {
-		return result, err
-	}
-
-	since := started.Add(-CatchUpMargin)
-	changedOffers := func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error) {
-		return tx.Offers().ChangedSince(ctx, since, after, i.batch)
-	}
-	put := func(docs []ports.OfferDocument) error {
-		result.CaughtUp += len(docs)
-
-		return i.index.PutGeneration(ctx, generation, docs)
-	}
-
-	if err := i.pages(ctx, changedOffers, put); err != nil {
-		return result, err
-	}
-
-	return result, i.index.Activate(ctx, generation)
-}
-
-func (i *Indexer) pages(
-	ctx context.Context,
-	read func(tx ports.Tx, after ports.OfferKey) ([]ports.OfferState, error),
-	write func([]ports.OfferDocument) error,
-) error {
-	var after ports.OfferKey
-
-	for {
-		var states []ports.OfferState
-
-		err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-			var err error
-			states, err = read(tx, after)
-			if err != nil {
-				return err
-			}
-			tenants := map[ids.TenantID]bool{}
-			for _, state := range states {
-				tenant := state.Product.State().TenantID
-				if tenants[tenant] {
-					continue
-				}
-				tenants[tenant] = true
-				task := ports.StoreCardTask(tenant, i.clock.Now().Add(i.refreshDelay))
-				if err := tx.Outbox().Enqueue(ctx, task); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-		if len(states) == 0 {
-			return nil
-		}
-
-		ready, err := i.refreshModelKeys(ctx, states)
-		if err != nil {
-			return err
-		}
-		if docs := documents(ready); len(docs) > 0 {
-			if err := write(docs); err != nil {
-				return err
-			}
-		}
-
-		last := states[len(states)-1].Product.State()
-		after = ports.OfferKey{TenantID: last.TenantID, ProductID: last.ProductID}
 
 		if len(states) < i.batch {
 			return nil
