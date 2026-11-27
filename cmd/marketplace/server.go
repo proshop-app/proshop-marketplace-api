@@ -57,7 +57,8 @@ const (
 	referenceStatsInterval = time.Minute
 )
 
-// searchLaneKinds исполняются в независимой полосе общего цикла.
+// searchLaneKinds — виды, которые зовут proshop-search. Их выполняет отдельная полоса общего
+// цикла outbox: своего опроса очереди у неё нет, а подтверждённый отказ поиска ставит паузу всем.
 var searchLaneKinds = []string{
 	appcatalog.TaskSyncOffer,
 	appcatalog.TaskSyncTenant,
@@ -279,22 +280,13 @@ func (s *server) services(ctx context.Context) (services, error) {
 		},
 	)
 	carts := appcart.NewService(uow, resyncing, identities, now, cfg.Cart.TTL, cfg.Identity.EncryptionKey)
-	var searchBuyerKeys *searchfeedback.BuyerKeys
-	var feedback *searchfeedback.Feedback
+	searchBuyerKeys := searchfeedback.NewBuyerKeys(cfg.Identity.EncryptionKey)
+	feedback := searchfeedback.NewFeedback(s.store.index, redis.NewLimiter(s.cache, keyPrefix), searchBuyerKeys)
 	exclude := []string{
 		appcheckout.TaskCreateOrder,
 		appcheckout.TaskExpireCreation,
 		appcheckout.TaskPollOrder,
 		appcheckout.TaskCancelOrder,
-	}
-	if cfg.Search.FeedbackEnabled() {
-		searchBuyerKeys = searchfeedback.NewBuyerKeys(cfg.Search.AnalyticsKey)
-		feedback = searchfeedback.NewFeedback(s.store.index, redis.NewLimiter(s.cache, keyPrefix), searchBuyerKeys)
-	} else {
-		exclude = append(exclude, searchfeedback.TaskPurchase)
-		s.logger.Warn(
-			"обратная связь поиска выключена: нужны SEARCH_ANALYTICS_KEY и SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN",
-		)
 	}
 	checkouts := appcheckout.NewService(
 		uow,

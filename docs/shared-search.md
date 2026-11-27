@@ -74,9 +74,9 @@ keyword-ранжирование, фасеты и
 `search.purchase` в карантин. Старая версия API не собирает наблюдения,
 поэтому ранний выкат витрины оставляет действия без сигнала спроса.
 
-Без `SEARCH_ANALYTICS_KEY` или `SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN` API
-стартует с одним предупреждением. Наблюдение выдачи, пересылка feedback
-и постановка или доставка событий покупок выключены.
+Обратная связь включена всегда и отдельных переменных не требует. Ключ псевдонимов
+выводится из обязательного `IDENTITY_REFRESH_KEY` (HMAC с меткой назначения
+`proshop-marketplace/search-buyer-keys/v1`), покупки уходят по `SEARCH_MARKETPLACE_TOKEN`.
 
 `GET /api/v1/catalog/offers?q=товар&observe=1` включает наблюдение порции.
 API передаёт `observe: true` в существующем `POST /api/v1/internal/marketplace/search`.
@@ -90,12 +90,14 @@ API передаёт `observe: true` в существующем `POST /api/v1/i
 При сбое лимитера или поиска API возвращает `200 {"data":false}`.
 
 Для V1 `buyerKey` — 64 строчных hex-символа HMAC-SHA256 от `marketplace`, нулевого
-байта и локального `buyerId`. Все реплики API используют общий `SEARCH_ANALYTICS_KEY`.
+байта и локального `buyerId` на ключе, выведенном из `IDENTITY_REFRESH_KEY`; он общий у всех реплик.
+Смена `IDENTITY_REFRESH_KEY` меняет псевдонимы: окно спроса (7 дней) начинается заново.
 После фиксации оплаты отдельная транзакция ставит `search.purchase` в PostgreSQL
 outbox. Сбой записи оставляет оплату зафиксированной и даёт предупреждение.
-Независимая полоса общего outbox посылает её в `POST /api/v1/internal/marketplace/search-purchases`
-с отдельным `SEARCH_MARKETPLACE_SEARCH_PURCHASE_TOKEN` в `X-Admin-Id`. При `503` и потере
-ответа он отправляет то же событие с тем же `eventId`, максимум до двух часов от
+Её выполняет независимая полоса вызовов поиска общего outbox (вместе с индексацией; опроса
+очереди нет) и посылает в `POST /api/v1/internal/marketplace/search-purchases`
+с `SEARCH_MARKETPLACE_TOKEN` в `X-Admin-Id`; попытка ограничена одной секундой. При `503` и потере
+ответа полоса отправляет то же событие с тем же `eventId`, максимум до двух часов от
 `paidObservedAt`. `200 {"data":{"attributed":0}}` завершает доставку.
 Доставленное событие удаляется из outbox при завершении; помещённое в карантин очищается по
 `RETENTION_SEARCH_PURCHASE_QUARANTINE` (72 часа по умолчанию с карантина).

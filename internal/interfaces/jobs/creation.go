@@ -10,6 +10,11 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 )
 
+// creationRecovery — страховочная сверка оформления. Короче срока подтверждения покупки
+// (appcheckout.CreationTimeout, 15 с): покупка, чей сигнал потерян вместе с упавшей репликой,
+// успевает уйти в магазин с соседней, а не истекает в ожидании общей сверки в 30 с.
+const creationRecovery = 5 * time.Second
+
 // CreationRunner пополняет пул после каждого результата, независимо от других задач outbox.
 type CreationRunner struct {
 	executor *appcheckout.Executor
@@ -137,7 +142,7 @@ func (c *creationCycle) onDue(ctx context.Context) {
 }
 
 func (c *creationCycle) recoverAll(ctx context.Context) {
-	c.recoverAt = c.runner.clock.Now().Add(WorkRecovery)
+	c.recoverAt = c.runner.clock.Now().Add(creationRecovery)
 	c.refresh(ctx, ports.ClaimRequest{Kinds: c.kinds})
 }
 

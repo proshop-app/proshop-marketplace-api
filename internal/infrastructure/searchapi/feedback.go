@@ -53,15 +53,12 @@ func (x *Index) Feedback(ctx context.Context, event ports.SearchFeedback) (bool,
 
 // Purchase повторяется при HTTP 503 и при потере сетевого ответа, сохраняя eventId.
 func (x *Index) Purchase(ctx context.Context, event ports.SearchPurchase) error {
-	if x.purchaseToken == "" {
-		return errPurchaseRejected.WithMessage("нет допуска на запись покупок поиска")
-	}
 	var result purchaseResult
 	status, err := x.requestWith(
 		ctx,
 		http.MethodPost,
 		"/search-purchases",
-		x.purchaseToken,
+		x.token,
 		event,
 		&result,
 		bodyLimits{send: purchaseLimit, receive: behaviorResponseLimit},

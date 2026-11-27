@@ -153,7 +153,7 @@ func TestSearchPurchaseWire(t *testing.T) {
 	}
 	var calls atomic.Int32
 	client := feedbackSearchClient(t, func(w http.ResponseWriter, r *http.Request) {
-		assertFeedbackRequest(t, r, "/search-purchases", strings.Repeat("p", 32))
+		assertFeedbackRequest(t, r, "/search-purchases", strings.Repeat("s", 32))
 		assertFeedbackBody(t, r, expected)
 		switch calls.Add(1) {
 		case 1:
@@ -192,9 +192,8 @@ func feedbackSearchClient(t *testing.T, handler http.HandlerFunc) *Index {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	client, err := New(Config{
-		URL:           server.URL,
-		Token:         strings.Repeat("s", 32),
-		PurchaseToken: strings.Repeat("p", 32),
+		URL:   server.URL,
+		Token: strings.Repeat("s", 32),
 	})
 	if err != nil {
 		t.Fatal(err)
