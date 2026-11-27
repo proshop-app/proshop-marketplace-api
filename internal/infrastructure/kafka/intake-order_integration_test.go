@@ -48,7 +48,7 @@ func TestIntakeSQLCounts(t *testing.T) {
 		}
 		t.Logf("SQL %s: %d (+ BEGIN/COMMIT)", name, want)
 	}
-	check("product", 9, func() error {
+	check("product", 10, func() error {
 		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{Snapshot: snapshot})
 	})
 	snapshot.Revision++
@@ -56,14 +56,14 @@ func TestIntakeSQLCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	check("product/price-only", 5, func() error {
+	check("product/price-only", 6, func() error {
 		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{Snapshot: snapshot})
 	})
 	snapshot.Revision--
-	check("product/stale", 1, func() error {
+	check("product/stale", 2, func() error {
 		return projector.ApplyProduct(ctx, appcatalog.ProductEvent{Snapshot: snapshot})
 	})
-	check("stock", 3, func() error {
+	check("stock", 4, func() error {
 		return projector.ApplyStock(ctx, appcatalog.StockEvent{
 			TenantID:  snapshot.TenantID,
 			ProductID: snapshot.ProductID,
@@ -118,7 +118,6 @@ func TestIntakeBeforeRegistryPreservesDataAndReevaluates(t *testing.T) {
 	for i, status := range []participant.TenantStatus{
 		participant.TenantActive,
 		participant.TenantSuspended,
-		participant.TenantDeleted,
 	} {
 		err := registry.Apply(ctx, appparticipant.RegistryEvent{
 			EventID: fmt.Sprint("registry", i),
@@ -168,7 +167,7 @@ func checkIntakeRegistry(t *testing.T, uow ports.UnitOfWork, status participant.
 		}
 		if status != participant.TenantActive {
 			if participant.VisibilityOf(state.Participant, state.Tenant).Visible {
-				t.Fatal("приостановленный или удалённый магазин виден после нового товара")
+				t.Fatal("приостановленный магазин виден после нового товара")
 			}
 		}
 		return nil

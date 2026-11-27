@@ -16,7 +16,9 @@ const (
 
 	insertTask = `
 		INSERT INTO outbox (kind, tenant_id, dedup_key, payload, next_at, created_at)
-		VALUES ($1, $2, $3, $4, $6, $5)
+		SELECT $1, $2, $3, $4, $6, $5
+		WHERE NOT marketplace_store_task($1) OR EXISTS (
+			SELECT 1 FROM marketplace_open_tenants(ARRAY[$2::text], false))
 		` + mergePendingTasks
 
 	// completeTask удаляет выполненную задачу: завершённые не копятся и не ждут чистки обходом.

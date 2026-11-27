@@ -75,6 +75,10 @@ func (s *Service) RefreshStoreCard(ctx context.Context, task ports.Task) error {
 		return ErrInvalidTask
 	}
 	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		available, err := tx.TenantPurge().Available(ctx, []ids.TenantID{task.TenantID})
+		if err != nil || !available[task.TenantID] {
+			return err
+		}
 		if err := tx.StoreCards().Lock(ctx, task.TenantID); err != nil {
 			return err
 		}

@@ -64,6 +64,7 @@ const (
 // Совпадает с postgres.OrderedTaskKinds (индекс головы полосы).
 var orderedTaskKinds = []string{
 	appcatalog.TaskSyncTenant,
+	ports.TaskPurgeTenant,
 	appparticipant.TaskSyncSettings,
 	moderationstatus.TaskParticipant,
 	appreference.TaskChanged,
@@ -310,6 +311,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	})
 	projector := appcatalog.NewProjector(uow, now, moderation)
 	registry := appparticipant.NewRegistry(uow, now, identities)
+	purger := appparticipant.NewTenantPurger(uow, s.store.index, now)
 	replay := kafka.NewReplay(kafka.NewRouter(projector, registry).WithOrders(checkouts), cfg.Kafka.TopicPrefix)
 	events := messaging.NewEvents(uow, now, replay)
 	var operatorTokens ports.IdentityTokens
@@ -371,6 +373,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			messaging.TaskReplay:             events.HandleTask,
 			appcatalog.TaskSyncOffer:         indexer.HandleTask,
 			appcatalog.TaskSyncTenant:        indexer.HandleTask,
+			ports.TaskPurgeTenant:            purger.HandleTask,
 			appparticipant.TaskSyncSettings:  settings.HandleTask,
 			ports.TaskStoreCard:              participants.RefreshStoreCard,
 			appreference.TaskChanged:         references.HandleTask,
@@ -502,7 +505,7 @@ func (s *server) jobs() []jobs.Loop {
 		s.app.dispatcher,
 		ports.TaskLaneGate{
 			Key:   "offer-index",
-			Kinds: []string{appcatalog.TaskSyncOffer, appcatalog.TaskSyncTenant},
+			Kinds: []string{appcatalog.TaskSyncOffer, appcatalog.TaskSyncTenant, ports.TaskPurgeTenant},
 		},
 		30*time.Second,
 		func(err error) bool { return errors.Is(err, searchapi.ErrUnavailable) },

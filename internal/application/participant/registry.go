@@ -7,6 +7,7 @@ import (
 	appcatalog "github.com/proshop-app/proshop-marketplace/internal/application/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/participant"
+	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 // RegistryEvent — событие platform.tenant.* с идентификатором для дедупа.
@@ -35,7 +36,20 @@ func (r *Registry) Apply(ctx context.Context, event RegistryEvent) error {
 
 	return r.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		fresh, err := tx.Inbox().MarkProcessed(ctx, event.EventID, now)
-		if err != nil || !fresh {
+		if err != nil {
+			return err
+		}
+
+		// Старая версия отмечала это событие, сохраняя проекции. Очистку дедуплицирует её собственный курсор.
+		if event.Event.Status == participant.TenantDeleted {
+			return startTenantPurge(ctx, tx, event.Event, now)
+		}
+		if !fresh {
+			return nil
+		}
+
+		available, err := tx.TenantPurge().Available(ctx, []ids.TenantID{event.Event.TenantID})
+		if err != nil || !available[event.Event.TenantID] {
 			return err
 		}
 

@@ -117,6 +117,8 @@ func (s *scope) AfterCommit(fn func()) { s.afterCommit = append(s.afterCommit, f
 
 func (s *scope) Participants() participant.Repository { return &Participants{db: s.db} }
 
+func (s *scope) TenantPurge() ports.TenantPurge { return tenantPurge{db: s.db} }
+
 func (s *scope) Registry() participant.Registry { return &Registry{db: s.db} }
 
 func (s *scope) Products() catalog.ProductRepository { return &Products{db: s.db} }

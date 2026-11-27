@@ -47,6 +47,7 @@ type OutboxRow struct {
 }
 
 type data struct {
+	tenantPurges         map[ids.TenantID]ports.TenantPurgeCursor
 	indexRebuild         ports.IndexRebuildProgress
 	indexTenants         map[ids.TenantID]ports.TenantIndexProgress
 	databaseNow          func() time.Time
@@ -101,6 +102,7 @@ type Store struct {
 
 func (d *data) clone() *data {
 	return &data{
+		tenantPurges: maps.Clone(d.tenantPurges),
 		indexRebuild: d.indexRebuild,
 		indexTenants: maps.Clone(d.indexTenants),
 		databaseNow:  d.databaseNow,
@@ -146,6 +148,7 @@ func (d *data) clone() *data {
 // NewStore — пустое хранилище.
 func NewStore() *Store {
 	return &Store{data: &data{
+		tenantPurges:         map[ids.TenantID]ports.TenantPurgeCursor{},
 		indexTenants:         map[ids.TenantID]ports.TenantIndexProgress{},
 		databaseNow:          time.Now,
 		features:             newBuyerFeaturesData(),
