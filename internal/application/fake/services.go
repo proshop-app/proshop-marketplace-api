@@ -219,7 +219,18 @@ func NewLimiter() *Limiter {
 }
 
 // Allow засчитывает попытку.
-func (l *Limiter) Allow(_ context.Context, key string, limit int, window time.Duration) (bool, time.Duration, error) {
+func (l *Limiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, time.Duration, error) {
+	return l.AllowN(ctx, key, limit, window, 1)
+}
+
+// AllowN засчитывает пачку попыток.
+func (l *Limiter) AllowN(
+	_ context.Context,
+	key string,
+	limit int,
+	window time.Duration,
+	n int,
+) (bool, time.Duration, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -227,7 +238,7 @@ func (l *Limiter) Allow(_ context.Context, key string, limit int, window time.Du
 	if l.Err != nil {
 		return false, 0, l.Err
 	}
-	l.counts[key]++
+	l.counts[key] += n
 
 	if l.counts[key] > limit {
 		if l.RetryAfter > 0 {

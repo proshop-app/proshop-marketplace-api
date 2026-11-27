@@ -39,7 +39,7 @@ func (c *Cart) Return(
 		return ErrInvalidQuantity
 	}
 	if index < 0 {
-		c.state.Lines = append(c.state.Lines, Line{Offer: id, AddedAt: now})
+		c.appendLine(id, now)
 		index = len(c.state.Lines) - 1
 	}
 	line := &c.state.Lines[index]

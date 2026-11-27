@@ -23,22 +23,24 @@ var ErrSellerUnreachable = errs.New(errs.Unavailable, "cart.seller_unreachable",
 // cartChange — одно изменение корзины: чья, какой магазин перепроверить, какое предложение принято,
 // удаление ли это, что прочитать в транзакции корзины и как изменить агрегат.
 type cartChange struct {
-	buyer    ids.UUID
-	tenant   ids.TenantID
-	accepted ids.OfferID
-	removing bool
-	read     func(context.Context, ports.Tx) error
-	mutate   func(*cart.Cart, time.Time) (bool, error)
+	operation *cart.AddOperation
+	buyer     ids.UUID
+	tenant    ids.TenantID
+	accepted  ids.OfferID
+	removing  bool
+	read      func(context.Context, ports.Tx) error
+	mutate    func(*cart.Cart, time.Time) (bool, error)
 }
 
 // Service — корзина: изменения сверяются с проекцией каталога в PostgreSQL, перед
 // оформлением цены и наличие перепроверяются у магазинов. Поиск корзине не нужен.
 type Service struct {
-	uow      ports.UnitOfWork
-	platform ports.PlatformAPI
-	ids      ports.IDs
-	clock    ports.Clock
-	ttl      time.Duration
+	uow          ports.UnitOfWork
+	platform     ports.PlatformAPI
+	ids          ports.IDs
+	clock        ports.Clock
+	ttl          time.Duration
+	addKeySecret []byte
 }
 
 // NewService — сценарии корзины; ttl — срок жизни с последнего изменения.
@@ -48,8 +50,16 @@ func NewService(
 	identities ports.IDs,
 	clock ports.Clock,
 	ttl time.Duration,
+	addKeySecret string,
 ) *Service {
-	return &Service{uow: uow, platform: platform, ids: identities, clock: clock, ttl: ttl}
+	return &Service{
+		uow:          uow,
+		platform:     platform,
+		ids:          identities,
+		clock:        clock,
+		ttl:          ttl,
+		addKeySecret: []byte(addKeySecret),
+	}
 }
 
 // Get — корзина покупателя; нет или просрочена — пустая.
@@ -80,12 +90,13 @@ func (s *Service) Get(ctx context.Context, buyerID ids.UUID) (cart.State, error)
 	return state, err
 }
 
-// Add кладёт предложение в корзину.
-func (s *Service) Add(ctx context.Context, buyerID ids.UUID, offerID ids.OfferID, quantity int) (cart.State, error) {
-	if quantity == 0 {
-		return s.Remove(ctx, buyerID, offerID)
-	}
-
+func (s *Service) add(
+	ctx context.Context,
+	buyerID ids.UUID,
+	offerID ids.OfferID,
+	quantity int,
+	operation cart.AddOperation,
+) (cart.State, error) {
 	var offer cart.Offer
 	read := func(ctx context.Context, tx ports.Tx) error {
 		var err error
@@ -97,7 +108,14 @@ func (s *Service) Add(ctx context.Context, buyerID ids.UUID, offerID ids.OfferID
 		return true, c.Add(offer, quantity, now, s.ttl)
 	}
 
-	return s.change(ctx, cartChange{buyer: buyerID, tenant: offerID.Tenant, accepted: offerID, read: read, mutate: add})
+	return s.change(ctx, cartChange{
+		buyer:     buyerID,
+		tenant:    offerID.Tenant,
+		accepted:  offerID,
+		read:      read,
+		mutate:    add,
+		operation: &operation,
+	})
 }
 
 // SetQuantity задаёт количество; ноль убирает строку.
@@ -148,10 +166,29 @@ func (s *Service) Verify(ctx context.Context, buyerID ids.UUID) (cart.State, err
 // магазинов, сверка принятого предложения и сохранение.
 func (s *Service) change(ctx context.Context, request cartChange) (cart.State, error) {
 	now := s.clock.Now()
-	c, err := s.load(ctx, request, now)
+	c, replayed, err := s.load(ctx, request, now)
 	if err != nil {
 		return cart.State{}, err
 	}
+	if replayed {
+		if c.Expired(now) {
+			c = cart.New(s.ids.NewUUID(), request.buyer, now, s.ttl)
+		}
+		return c.State(), nil
+	}
+	state, err := s.applyChange(ctx, c, request, now)
+	if err != nil && request.operation != nil {
+		s.releaseAdd(ctx, *request.operation)
+	}
+	return state, err
+}
+
+func (s *Service) applyChange(
+	ctx context.Context,
+	c *cart.Cart,
+	request cartChange,
+	now time.Time,
+) (cart.State, error) {
 	reset := c.ResetIfExpired(now, s.ttl)
 	changed, err := request.mutate(c, now)
 	if err != nil {
@@ -170,15 +207,23 @@ func (s *Service) change(ctx context.Context, request cartChange) (cart.State, e
 		return cart.State{}, err
 	}
 	// Цены и скидки магазинов меняют агрегат при сохранении: состояние читается после него.
-	err = s.save(ctx, c, results, changed, reset, now)
+	err = s.save(ctx, c, results, changed, reset, now, request.operation)
 	return c.State(), err
 }
 
 // load читает корзину покупателя и, если нужно, предложение — в одной транзакции.
-func (s *Service) load(ctx context.Context, request cartChange, now time.Time) (*cart.Cart, error) {
+func (s *Service) load(ctx context.Context, request cartChange, now time.Time) (*cart.Cart, bool, error) {
 	var c *cart.Cart
+	var replayed bool
 	err := s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		if request.read != nil {
+		if request.operation != nil {
+			var err error
+			replayed, err = tx.Carts().ClaimAdd(ctx, *request.operation)
+			if err != nil {
+				return err
+			}
+		}
+		if request.read != nil && !replayed {
 			if err := request.read(ctx, tx); err != nil {
 				return err
 			}
@@ -190,7 +235,7 @@ func (s *Service) load(ctx context.Context, request cartChange, now time.Time) (
 		}
 		return err
 	})
-	return c, err
+	return c, replayed, err
 }
 
 // acceptOffer сверяет только что принятое предложение с ответом магазина: цена и остаток — его.
@@ -223,8 +268,14 @@ func (s *Service) save(
 	results map[ids.TenantID]ports.GroupPricing,
 	changed, reset bool,
 	now time.Time,
+	operation *cart.AddOperation,
 ) error {
 	return s.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		if operation != nil {
+			if err := tx.Carts().CompleteAdd(ctx, *operation); err != nil {
+				return err
+			}
+		}
 		for tenant, result := range results {
 			pricesChanged := c.Apply(pricingChecks(tenant, result), now, s.ttl)
 			promo := cart.PromoCode{}

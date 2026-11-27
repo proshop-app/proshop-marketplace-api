@@ -32,7 +32,6 @@ func setup() environment {
 	service := app.NewService(store, clock, &fake.IDs{}, index, app.Config{
 		Location:    time.UTC,
 		SearchDepth: 100,
-		VisitorSalt: "test-visitor-salt-012345",
 		Random:      fake.Random{},
 	})
 	store.SeedParticipant(participant.State{
@@ -173,12 +172,12 @@ func TestActivationCountersAndSystemStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := []app.Event{
-		{PromotionID: c.ID, Kind: "view"},
-		{PromotionID: c.ID, Kind: "view"},
-		{PromotionID: c.ID, Kind: "click"},
+		{EventID: "10000000-0000-4000-8000-000000000001", PromotionID: c.ID, Kind: "view"},
+		{EventID: "10000000-0000-4000-8000-000000000001", PromotionID: c.ID, Kind: "view"},
+		{EventID: "10000000-0000-4000-8000-000000000002", PromotionID: c.ID, Kind: "click"},
 	}
 	for range 2 {
-		if err := e.service.Events(ctx, "visitor", events); err != nil {
+		if err := e.service.Events(ctx, events); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -187,11 +186,16 @@ func TestActivationCountersAndSystemStop(t *testing.T) {
 		t.Fatal(rows, err)
 	}
 	e.clock.Advance(24 * time.Hour)
-	if err := e.service.Events(ctx, "visitor", events); err != nil {
+	events = append(events, app.Event{
+		EventID:     "10000000-0000-4000-8000-000000000003",
+		PromotionID: c.ID,
+		Kind:        "view",
+	})
+	if err := e.service.Events(ctx, events); err != nil {
 		t.Fatal(err)
 	}
 	rows, err = e.service.Stats(ctx, app.Access{}, c.ID, "2026-11-09", "2026-11-15")
-	if err != nil || len(rows) != 2 {
+	if err != nil || len(rows) != 2 || rows[1].Impressions != 1 || rows[1].Clicks != 0 {
 		t.Fatal(rows, err)
 	}
 	e.store.SeedVerdict(moderation.VerdictState{
@@ -529,10 +533,14 @@ func TestM12EventsLimitUnknownAndCategory(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := []app.Event{
-		{PromotionID: "not-uuid", Kind: "click"},
-		{PromotionID: "ffffffff-ffff-ffff-ffff-ffffffffffff", Kind: "view"},
+		{EventID: "10000000-0000-4000-8000-000000000001", PromotionID: "not-uuid", Kind: "click"},
+		{
+			EventID:     "10000000-0000-4000-8000-000000000002",
+			PromotionID: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+			Kind:        "view",
+		},
 	}
-	if err := e.service.Events(ctx, "visitor", events); err != nil {
+	if err := e.service.Events(ctx, events); err != nil {
 		t.Fatal(err)
 	}
 	c := e.create(t, "category_slot")
@@ -577,5 +585,26 @@ func TestSubmitRequiresReadyStoreCard(t *testing.T) {
 	})
 	if !errors.Is(err, promotion.ErrCardNotReady) {
 		t.Fatal(err)
+	}
+}
+
+func TestPromotionBatchConsumesWeightWithOneCall(t *testing.T) {
+	e := setup()
+	ctx := context.Background()
+	limiter := fake.NewLimiter()
+	service := app.NewService(e.store, e.clock, &fake.IDs{}, e.index, app.Config{
+		Location:        time.UTC,
+		Random:          fake.Random{},
+		Limiter:         limiter,
+		EventsPerMinute: 3,
+	})
+	if err := service.AllowEvents(ctx, "адрес", 3); err != nil || limiter.Calls() != 1 {
+		t.Fatal(limiter.Calls(), err)
+	}
+	if err := service.AllowEvents(ctx, "адрес", 1); !errors.Is(err, promotion.ErrRateLimited) {
+		t.Fatal(err)
+	}
+	if err := service.AllowEvents(ctx, "адрес", 0); !errors.Is(err, promotion.ErrInvalid) || limiter.Calls() != 2 {
+		t.Fatal(limiter.Calls(), err)
 	}
 }

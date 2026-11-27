@@ -164,11 +164,13 @@ func TestPromotionM12SessionEventsAndSponsored(t *testing.T) {
 		Marking:       promotion.Marking{ERID: "erid"},
 	})
 	clock.Advance(72 * time.Hour)
-	for i, visitor := range []string{"first", "second", "third"} {
-		raw := `{"visitorId":"` + visitor + `","events":[{"promotionId":"` + string(id) + `","kind":"click"}]}`
+	for i := range 3 {
+		beacon := `{"promotionId":"` + string(id) + `","eventId":"10000000-0000-4000-8000-000000000001","kind":"click"}`
+		raw := `{"events":[` + beacon + `]}`
 		req := httptest.NewRequest("POST", "/", strings.NewReader(raw))
-		req.Header.Set("X-Marketplace-Money-Unit", "RUB")
-		req = req.WithContext(context.WithValue(req.Context(), keyBuyer, ids.UUID("buyer")))
+		if i != 0 {
+			req = req.WithContext(context.WithValue(req.Context(), keyBuyer, ids.UUID("buyer")))
+		}
 		result := httptest.NewRecorder()
 		h.events(result, req)
 		want := 204

@@ -15,10 +15,10 @@ import (
 func TestPromoRevalidationAndRemoval(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
-	if _, err := e.service.Add(ctx, buyerID, p1, 2); err != nil {
+	if _, err := e.seedCartLine(ctx, p1, 2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.Add(ctx, buyerID, p2, 1); err != nil {
+	if _, err := e.seedCartLine(ctx, p2, 1); err != nil {
 		t.Fatal(err)
 	}
 	e.platform.SetPromoPricing("t1", ports.GroupPricing{
@@ -54,7 +54,7 @@ func TestPromoRevalidationAndRemoval(t *testing.T) {
 func TestPromoLastLineAndExpiry(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
-	_, _ = e.service.Add(ctx, buyerID, p1, 1)
+	_, _ = e.seedCartLine(ctx, p1, 1)
 	_, _ = e.service.SetPromo(ctx, buyerID, "t1", "BAD")
 	state, err := e.service.Remove(ctx, buyerID, p1)
 	if err != nil || len(state.Promos) != 0 {
@@ -65,7 +65,7 @@ func TestPromoLastLineAndExpiry(t *testing.T) {
 func TestPromoVerificationFailureKeepsSnapshot(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
-	_, _ = e.service.Add(ctx, buyerID, p1, 1)
+	_, _ = e.seedCartLine(ctx, p1, 1)
 	original, err := e.service.SetPromo(ctx, buyerID, "t1", "BAD")
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestPricingOnlyAffectedTenantAndVerifyOnce(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	for _, offer := range []ids.OfferID{p1, p2} {
-		if _, err := e.service.Add(ctx, buyerID, offer, 1); err != nil {
+		if _, err := e.seedCartLine(ctx, offer, 1); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -111,7 +111,7 @@ func TestPricingOnlyAffectedTenantAndVerifyOnce(t *testing.T) {
 	if _, err := e.service.SetPromo(ctx, buyerID, "t2", "BAD"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.Add(ctx, buyerID, p2, 1); err != nil {
+	if _, err := e.seedCartLine(ctx, p2, 1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.service.Remove(ctx, buyerID, p2); err != nil {
@@ -126,7 +126,7 @@ func TestMutationAcceptsServerPriceAndStock(t *testing.T) {
 				e := setup(t)
 				ctx := context.Background()
 				if set {
-					if _, err := e.service.Add(ctx, buyerID, p1, 1); err != nil {
+					if _, err := e.seedCartLine(ctx, p1, 1); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -141,7 +141,7 @@ func TestMutationAcceptsServerPriceAndStock(t *testing.T) {
 				if set {
 					state, err = e.service.SetQuantity(ctx, buyerID, p1, 2)
 				} else {
-					state, err = e.service.Add(ctx, buyerID, p1, 2)
+					state, err = e.seedCartLine(ctx, p1, 2)
 				}
 				switch scenario {
 				case "missing":
@@ -227,7 +227,7 @@ func TestUnavailableSellerAllowsRemoval(t *testing.T) {
 func TestUnavailableSellerAllowsPromoRemoval(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
-	if _, err := e.service.Add(ctx, buyerID, p1, 1); err != nil {
+	if _, err := e.seedCartLine(ctx, p1, 1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.service.SetPromo(ctx, buyerID, "t1", "SAVE"); err != nil {

@@ -33,8 +33,9 @@ type sessionJSON struct {
 
 // fixedWindow — счётчик окна: первая попытка заводит ключ со сроком окна.
 var fixedWindow = goredis.NewScript(`
-local count = redis.call('INCR', KEYS[1])
-if count == 1 then
+local n = tonumber(ARGV[2])
+local count = redis.call('INCRBY', KEYS[1], n)
+if count == n then
   redis.call('PEXPIRE', KEYS[1], ARGV[1])
 end
 return {count, redis.call('PTTL', KEYS[1])}
@@ -142,7 +143,18 @@ func NewLimiter(client *goredis.Client, prefix string) *Limiter {
 
 // Allow засчитывает попытку атомарно.
 func (l *Limiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, time.Duration, error) {
-	result, err := fixedWindow.Run(ctx, l.client, []string{l.prefix + key}, window.Milliseconds()).Int64Slice()
+	return l.AllowN(ctx, key, limit, window, 1)
+}
+
+// AllowN расходует несколько попыток за одно обращение к Redis.
+func (l *Limiter) AllowN(
+	ctx context.Context,
+	key string,
+	limit int,
+	window time.Duration,
+	n int,
+) (bool, time.Duration, error) {
+	result, err := fixedWindow.Run(ctx, l.client, []string{l.prefix + key}, window.Milliseconds(), n).Int64Slice()
 	if err != nil {
 		return false, 0, ErrUnavailable.Wrap(err)
 	}

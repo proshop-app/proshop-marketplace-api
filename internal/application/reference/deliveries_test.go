@@ -53,7 +53,7 @@ func TestApplyIsIdempotentAndExtends(t *testing.T) {
 	if err != nil || result.Created != 0 || result.Updated != 2 {
 		t.Fatalf("поставка 2: %+v %v", result, err)
 	}
-	snapshot, _ := h.service.Snapshot(ctx, testDict, nil)
+	snapshot, _ := h.service.Snapshot(ctx, testDict, nil, "")
 	if len(snapshot.Entries) != 2 {
 		t.Fatalf("дубли после поставки: %+v", snapshot.Entries)
 	}
@@ -96,14 +96,14 @@ func TestRollbackRestoresAndRefusesAfterEdits(t *testing.T) {
 	if err != nil || !rolled.Changed || rolled.Updated != 2 {
 		t.Fatalf("откат: %+v %v", rolled, err)
 	}
-	snapshot, _ := h.service.Snapshot(ctx, testDict, nil)
+	snapshot, _ := h.service.Snapshot(ctx, testDict, nil, "")
 	if len(snapshot.Entries) != 1 || snapshot.Entries[0].Status != reference.StatusCandidate ||
 		len(snapshot.Entries[0].Aliases) != 1 {
 		t.Fatalf("после отката: %+v", snapshot.Entries)
 	}
 	// ревизии: 1 — запись оператора, 2 — пачка поставки, 3 — её откат
 	since := int64(2)
-	delta, _ := h.service.Snapshot(ctx, testDict, &since)
+	delta, _ := h.service.Snapshot(ctx, testDict, &since, "")
 	if len(delta.Removed) != 1 || len(delta.Entries) != 1 || delta.Entries[0].ID != existing.Entry.ID {
 		t.Fatalf("дельта отката: %+v", delta)
 	}
@@ -130,7 +130,7 @@ func TestRevertMergeByInverse(t *testing.T) {
 	ctx := context.Background()
 	a := h.create(t, "Бренд", reference.StatusConfirmed, "Brend")
 	b := h.create(t, "Бренд Два", reference.StatusConfirmed)
-	before, _ := h.service.Snapshot(ctx, testDict, nil)
+	before, _ := h.service.Snapshot(ctx, testDict, nil, "")
 	if _, err := h.service.Merge(ctx, MergeCommand{
 		Dictionary: testDict,
 		ID:         a.Entry.ID,
@@ -147,7 +147,7 @@ func TestRevertMergeByInverse(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := h.service.Snapshot(ctx, testDict, nil)
+	after, _ := h.service.Snapshot(ctx, testDict, nil, "")
 	for i := range before.Entries {
 		if !reference.SameContent(&before.Entries[i], &after.Entries[i]) {
 			t.Fatalf("откат объединения: %+v → %+v", before.Entries[i], after.Entries[i])

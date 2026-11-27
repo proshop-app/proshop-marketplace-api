@@ -381,7 +381,7 @@ func routes(deps Deps) []route {
 			writeRequest,
 			http.MethodPost,
 			"/api/v1/promotion/events",
-			publicBuyer(deps.Auth, promotion.events),
+			promotion.events,
 		},
 		{
 			backgroundRequest,
@@ -608,6 +608,7 @@ func routes(deps Deps) []route {
 		{readRequest, http.MethodGet, "/api/v1/me", auth.me},
 
 		{checkoutRequest, http.MethodGet, "/api/v1/cart", signedIn(carts.get)},
+		{checkoutRequest, http.MethodGet, "/api/v1/cart/add-key", signedIn(carts.newAddKey)},
 		{checkoutRequest, http.MethodPost, "/api/v1/cart/lines", signedIn(carts.add)},
 		{checkoutRequest, http.MethodPut, "/api/v1/cart/lines/{offerId}", signedIn(carts.setQuantity)},
 		{checkoutRequest, http.MethodDelete, "/api/v1/cart/lines/{offerId}", signedIn(carts.remove)},

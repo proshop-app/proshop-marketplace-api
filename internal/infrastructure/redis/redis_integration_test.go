@@ -102,3 +102,18 @@ func TestLimiter(t *testing.T) {
 		t.Fatal("после окна счётчик начинается заново")
 	}
 }
+
+func TestLimiterChargesWholeBatchInOneWindow(t *testing.T) {
+	_, limiter, _ := connect(t)
+	ctx := context.Background()
+	key := "promotion:events:address"
+	if allowed, _, err := limiter.AllowN(ctx, key, 5, time.Minute, 3); err != nil || !allowed {
+		t.Fatal(allowed, err)
+	}
+	if allowed, _, err := limiter.AllowN(ctx, key, 5, time.Minute, 2); err != nil || !allowed {
+		t.Fatal(allowed, err)
+	}
+	if allowed, _, err := limiter.Allow(ctx, key, 5, time.Minute); err != nil || allowed {
+		t.Fatal(allowed, err)
+	}
+}

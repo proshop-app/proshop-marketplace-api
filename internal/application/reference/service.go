@@ -149,6 +149,7 @@ type Resolution struct {
 
 // Snapshot — словарь для потребителя: полный или дельта после since.
 type Snapshot struct {
+	NextCursor string
 	Kind       reference.Kind
 	Dictionary string
 	Revision   int64

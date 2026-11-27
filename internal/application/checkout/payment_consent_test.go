@@ -67,7 +67,7 @@ func addConsentThirdShop(t *testing.T, e *env) {
 		},
 	)
 	e.platform.SetQuote("t3", delivery.Offered{Available: true, Cost: money.FromKopecks(20000), MinDays: 2, MaxDays: 3})
-	if _, err := e.carts.Add(ctx, buyerID, consentThirdOffer, 1); err != nil {
+	if _, err := e.seedCartLine(ctx, consentThirdOffer, 1); err != nil {
 		t.Fatal(err)
 	}
 }

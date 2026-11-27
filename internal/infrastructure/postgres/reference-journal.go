@@ -14,13 +14,28 @@ import (
 
 const (
 	// insertChange — запись журнала первой в изменении: её ревизия становится
-	// ревизией затронутых записей и головой словаря.
+	// ревизией затронутых записей и головой словаря. Подсчёт closed
+	// закрывает прежние версии до вставки в частичный уникальный индекс.
 	insertChange = `
-		INSERT INTO reference.changes (
-			dictionary_code, entry_id, entry_ids, kind, actor, source, reason, reverts, forward, inverse, at
+		WITH change AS (
+			INSERT INTO reference.changes (
+				dictionary_code, entry_id, entry_ids, kind, actor, source, reason, reverts, forward, inverse, at
+			)
+			VALUES ($1, $2, $3::uuid[], $4, $5, $6, $7, $8, $9, $10, $11)
+			RETURNING revision, dictionary_code, entry_ids, forward
+		), closed AS (
+			UPDATE reference.snapshot_versions v
+			SET replaced_at = c.revision
+			FROM change c
+			WHERE v.dictionary_code = c.dictionary_code AND v.entry_id = ANY(c.entry_ids) AND v.replaced_at IS NULL
+			RETURNING v.position
+		), images AS (
+			INSERT INTO reference.snapshot_versions (dictionary_code, entry_id, revision, state)
+			SELECT dictionary_code, (image->>'id')::uuid, revision, NULLIF(image->'state', 'null'::jsonb)
+			FROM change CROSS JOIN LATERAL jsonb_array_elements(forward) AS images(image)
+			WHERE (SELECT count(*) FROM closed) >= 0
 		)
-		VALUES ($1, $2, $3::uuid[], $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING revision`
+		SELECT revision FROM change`
 
 	selectChanges = `
 		SELECT revision, dictionary_code, entry_id, entry_ids, kind, actor, source, reason,
@@ -29,21 +44,11 @@ const (
 		WHERE dictionary_code = $1 AND revision > $2 AND revision <= $3
 		ORDER BY revision`
 
-	// selectChangedEntries — затронутые записи в порядке первого касания.
-	selectChangedEntries = `
-		SELECT id
-		FROM (
-			SELECT unnest(entry_ids) AS id, revision
-			FROM reference.changes
-			WHERE dictionary_code = $1 AND revision > $2 AND revision <= $3
-		) touched
-		GROUP BY id
-		ORDER BY min(revision), id`
-
-	selectHorizon = `
-		SELECT COALESCE(max(revision), 0)
-		FROM reference.changes
-		WHERE dictionary_code = $1 AND at < $2`
+	selectSnapshotSinceExpired = `
+		SELECT EXISTS (
+			SELECT 1 FROM reference.changes
+			WHERE dictionary_code = $1 AND revision > $2 AND revision <= $3 AND at < $4
+		)`
 )
 
 // Append пишет запись журнала и возвращает её ревизию.
@@ -134,31 +139,14 @@ func (r *References) Changes(ctx context.Context, dictionary string, from, to in
 	return out, rows.Err()
 }
 
-// ChangedEntries — записи, затронутые ревизиями (since, until].
-func (r *References) ChangedEntries(ctx context.Context, dictionary string, since, until int64) ([]ids.UUID, error) {
-	rows, err := rawSQL(ctx, r.db, selectChangedEntries, dictionary, since, until).Rows()
-	if err != nil {
-		return nil, fmt.Errorf("дельта %s: %w", dictionary, err)
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	var out []ids.UUID
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out = append(out, ids.UUID(id))
-	}
-	return out, rows.Err()
-}
-
-// Horizon — последняя ревизия словаря старше before.
-func (r *References) Horizon(ctx context.Context, dictionary string, before time.Time) (int64, error) {
-	var revision int64
-	if err := rawSQL(ctx, r.db, selectHorizon, dictionary, before).Row().Scan(&revision); err != nil {
-		return 0, fmt.Errorf("горизонт журнала %s: %w", dictionary, err)
-	}
-	return revision, nil
+// SnapshotSinceExpired проверяет, пропустил ли потребитель изменения старше горизонта.
+func (r *References) SnapshotSinceExpired(
+	ctx context.Context,
+	dictionary string,
+	since, revision int64,
+	before time.Time,
+) (bool, error) {
+	var expired bool
+	err := rawSQL(ctx, r.db, selectSnapshotSinceExpired, dictionary, since, revision, before).Row().Scan(&expired)
+	return expired, err
 }

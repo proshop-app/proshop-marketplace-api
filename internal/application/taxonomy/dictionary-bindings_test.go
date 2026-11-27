@@ -99,7 +99,7 @@ func TestHintImportBindingReviewAndRollbackPreserveFreeStrings(t *testing.T) {
 		!product.Card.Publication.Published || string(product.Card.Publication.Attributes["a1"]) != string(raw) {
 		t.Fatal("подсказки ограничили или переписали старую строку", current, product.Card.Publication)
 	}
-	snapshot, err := registry.Snapshot(ctx, "a1", nil)
+	snapshot, err := registry.Snapshot(ctx, "a1", nil, "")
 	if err != nil || len(snapshot.Entries) != 1 || snapshot.Entries[0].Status != reference.StatusCandidate {
 		t.Fatal("импорт автоматически подтвердил кандидата", snapshot, err)
 	}
@@ -114,7 +114,7 @@ func TestHintImportBindingReviewAndRollbackPreserveFreeStrings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	delta, err := registry.Snapshot(ctx, "a1", &snapshot.Revision)
+	delta, err := registry.Snapshot(ctx, "a1", &snapshot.Revision, "")
 	if err != nil || delta.Full || len(delta.Entries) != 1 || delta.Entries[0].Status != confirmed {
 		t.Fatal("потребитель не получит подтверждение через дельту", delta, err)
 	}

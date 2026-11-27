@@ -33,6 +33,13 @@ type Presence struct {
 	Sellers    int
 }
 
+// SnapshotRow хранит образ записи на ревизии; пустой State отмечает удаление.
+type SnapshotRow struct {
+	ID       ids.UUID
+	Position int64
+	State    *EntryState
+}
+
 // Repository — реестр в одной транзакции. Мутация словаря начинается с
 // LockDictionary: изменения одного словаря идут по одной, поэтому его
 // ревизии видны потребителю в порядке фиксации и дельта since ничего не теряет.
@@ -50,10 +57,23 @@ type Repository interface {
 	Append(ctx context.Context, change Change) (int64, error)
 	// Changes — записи журнала словаря в (from, to] по возрастанию ревизии.
 	Changes(ctx context.Context, dictionary string, from, to int64) ([]Change, error)
-	// ChangedEntries — записи, затронутые ревизиями (since, until].
-	ChangedEntries(ctx context.Context, dictionary string, since, until int64) ([]ids.UUID, error)
-	// Horizon — последняя ревизия словаря старше before; ноль — таких нет.
-	Horizon(ctx context.Context, dictionary string, before time.Time) (int64, error)
+	// SnapshotChanges читает страницу последних касаний, включая удалённые записи.
+	SnapshotChanges(
+		ctx context.Context,
+		dictionary string,
+		since int64,
+		revision int64,
+		after int64,
+		limit int,
+	) ([]SnapshotRow, error)
+	SnapshotSinceExpired(ctx context.Context, dictionary string, since, revision int64, before time.Time) (bool, error)
+	SnapshotEntries(
+		ctx context.Context,
+		dictionary string,
+		revision int64,
+		after int64,
+		limit int,
+	) ([]SnapshotRow, error)
 
 	Entry(ctx context.Context, dictionary string, id ids.UUID) (*Entry, error)
 	Entries(ctx context.Context, dictionary string, entries []ids.UUID) ([]*Entry, error)

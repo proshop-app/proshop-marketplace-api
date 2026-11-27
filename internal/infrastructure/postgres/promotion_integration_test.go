@@ -22,7 +22,8 @@ const (
 	promotionLegacyInsert = `INSERT INTO promotion_campaigns
  (id,tenant_id,kind,placement_code,position,category_id,date_from,date_to,price,payment_amount,status,version,state)
  VALUES($1,'t1','sponsored_slot','category_slot',1,'c1','2026-11-09','2026-11-15',700,0,'draft',1,$2)`
-	promotionColumnsCheck = `SELECT created_at,updated_at,product_id FROM promotion_campaigns WHERE id=$1`
+	activatePromotionForCounters = `UPDATE promotion_campaigns SET status = 'active' WHERE id = $1`
+	promotionColumnsCheck        = `SELECT created_at,updated_at,product_id FROM promotion_campaigns WHERE id=$1`
 )
 
 func TestPromotionRepositories(t *testing.T) {
@@ -109,6 +110,9 @@ func TestPromotionRepositories(t *testing.T) {
 	if !errors.Is(err, promotion.ErrConflict) {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, activatePromotionForCounters, c.State().ID); err != nil {
+		t.Fatal(err)
+	}
 	err = uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		request := c.State()
 		request.ID = "00000000-0000-0000-0000-000000000002"
@@ -119,16 +123,27 @@ func TestPromotionRepositories(t *testing.T) {
 		if len(weeks) != 1 || weeks[0].Sold != 1 {
 			return fmt.Errorf("%+v", weeks)
 		}
-		for i := range 2 {
-			for _, kind := range []string{"view", "click"} {
-				fresh, err := tx.Promotion().Count(ctx, c.State(), "2026-11-09", "hash", kind)
-				if err != nil {
-					return err
-				}
-				if fresh != (i == 0) {
-					return fmt.Errorf("%+v", fresh)
-				}
-			}
+		events := []promotion.Beacon{
+			{
+				EventID:     "10000000-0000-4000-8000-000000000001",
+				PromotionID: c.State().ID,
+				Kind:        "view",
+			},
+			{
+				EventID:     "10000000-0000-4000-8000-000000000002",
+				PromotionID: c.State().ID,
+				Kind:        "click",
+			},
+		}
+		events = append(events, events[0])
+		day := "2026-11-09"
+		fresh, err := tx.Promotion().CountEvents(ctx, day, events)
+		if err != nil || len(fresh) != 2 {
+			return fmt.Errorf("первая пачка: %+v %w", fresh, err)
+		}
+		fresh, err = tx.Promotion().CountEvents(ctx, "2026-11-10", events)
+		if err != nil || len(fresh) != 0 {
+			return fmt.Errorf("повтор пачки: %+v %w", fresh, err)
 		}
 		rows, err := tx.Promotion().Stats(ctx, c.State().ID, "", "")
 		if err != nil {
@@ -336,10 +351,24 @@ func TestPromotionMigrationAndQueries(t *testing.T) {
 		if len(history) != 0 {
 			return fmt.Errorf("%+v", history)
 		}
-		_, err = tx.Promotion().Count(ctx, newer, "2026-11-09", "visitor", "view")
-		return err
+		return nil
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	newID := ids.UUID("00000000-0000-0000-0000-000000000002")
+	if _, err := pool.Exec(ctx, activatePromotionForCounters, newID); err != nil {
+		t.Fatal(err)
+	}
+	if err := uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		events := []promotion.Beacon{{
+			EventID:     "10000000-0000-4000-8000-000000000001",
+			PromotionID: newID,
+			Kind:        "view",
+		}}
+		_, err := tx.Promotion().CountEvents(ctx, "2026-11-09", events)
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	retention := postgres.NewRetention(postgres.Single(pool))

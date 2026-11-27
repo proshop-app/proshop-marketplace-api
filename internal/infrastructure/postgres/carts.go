@@ -15,15 +15,13 @@ import (
 
 const (
 	selectCart = `
-		SELECT id, buyer_id, version, created_at, updated_at, expires_at, promos
-		FROM carts
-		WHERE buyer_id = $1`
-
-	selectCartLines = `
-		SELECT tenant_id, product_id, name, quantity, price, issue, added_at, checked_at, discounts
-		FROM cart_lines
-		WHERE cart_id = $1
-		ORDER BY position`
+		SELECT c.id, c.buyer_id, c.version, c.created_at, c.updated_at, c.expires_at, c.promos,
+			COALESCE((
+				SELECT jsonb_agg(to_jsonb(l) - 'cart_id' ORDER BY l.position)
+				FROM cart_lines l WHERE l.cart_id = c.id
+			), '[]'::jsonb)
+		FROM carts c
+		WHERE c.buyer_id = $1`
 
 	insertCart = `
 		INSERT INTO carts (id, buyer_id, version, created_at, updated_at, expires_at, promos)
@@ -37,13 +35,31 @@ const (
 			promos = $6
 		WHERE id = $1 AND version = $2`
 
-	deleteCartLines = `DELETE FROM cart_lines WHERE cart_id = $1`
-
-	insertCartLine = `
+	saveCartLineChanges = `
+		WITH changes AS (
+			SELECT * FROM jsonb_to_recordset($2::jsonb) AS x(
+				tenant_id text, product_id text, position bigint, name text, quantity int,
+				price bigint, issue text, added_at timestamptz, checked_at timestamptz, discounts jsonb, removed bool
+			)
+		), deleted AS (
+			DELETE FROM cart_lines l USING changes c
+			WHERE l.cart_id = $1 AND l.tenant_id = c.tenant_id AND l.product_id = c.product_id AND c.removed
+		)
 		INSERT INTO cart_lines (
 			cart_id, tenant_id, product_id, position, name, quantity, price, issue, added_at, checked_at, discounts
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+		SELECT $1, tenant_id, product_id, position, name, quantity, price, issue, added_at, checked_at,
+			COALESCE(NULLIF(discounts, 'null'::jsonb), '[]'::jsonb)
+		FROM changes WHERE NOT removed
+		ON CONFLICT (cart_id, tenant_id, product_id) DO UPDATE
+		SET position = EXCLUDED.position,
+			name = EXCLUDED.name,
+			quantity = EXCLUDED.quantity,
+			price = EXCLUDED.price,
+			issue = EXCLUDED.issue,
+			added_at = EXCLUDED.added_at,
+			checked_at = EXCLUDED.checked_at,
+			discounts = EXCLUDED.discounts`
 
 	deleteExpiredCarts = `
 		DELETE FROM carts
@@ -55,16 +71,39 @@ type Carts struct {
 	db *gorm.DB
 }
 
+type cartLineChange struct {
+	Tenant    ids.TenantID    `json:"tenant_id"`
+	Product   ids.ProductID   `json:"product_id"`
+	Position  int64           `json:"position"`
+	Name      string          `json:"name"`
+	Quantity  int             `json:"quantity"`
+	Price     int64           `json:"price"`
+	Issue     cart.Issue      `json:"issue"`
+	AddedAt   time.Time       `json:"added_at"`
+	CheckedAt time.Time       `json:"checked_at"`
+	Discounts []cart.Discount `json:"discounts"`
+	Removed   bool            `json:"removed"`
+}
+
 // ByBuyer — корзина покупателя со строками по порядку добавления.
 func (r *Carts) ByBuyer(ctx context.Context, buyerID ids.UUID) (*cart.Cart, error) {
 	var (
-		state       cart.State
-		id, buyerFK string
-		promos      []byte
+		state         cart.State
+		id, buyerFK   string
+		promos, lines []byte
 	)
 
-	err := rawSQL(ctx, r.db, selectCart, string(buyerID)).Row().
-		Scan(&id, &buyerFK, &state.Version, &state.CreatedAt, &state.UpdatedAt, &state.ExpiresAt, &promos)
+	// Версия и строки из одного снимка PostgreSQL, в том числе при повторе добавления.
+	err := rawSQL(ctx, r.db, selectCart, string(buyerID)).Row().Scan(
+		&id,
+		&buyerFK,
+		&state.Version,
+		&state.CreatedAt,
+		&state.UpdatedAt,
+		&state.ExpiresAt,
+		&promos,
+		&lines,
+	)
 	if notFound(err) {
 		return nil, cart.ErrNotFound
 	}
@@ -78,15 +117,28 @@ func (r *Carts) ByBuyer(ctx context.Context, buyerID ids.UUID) (*cart.Cart, erro
 	state.ID = ids.UUID(id)
 	state.BuyerID = ids.UUID(buyerFK)
 
-	if state.Lines, err = r.lines(ctx, id); err != nil {
-		return nil, err
+	var stored []cartLineChange
+	if err := json.Unmarshal(lines, &stored); err != nil {
+		return nil, fmt.Errorf("строки корзины: %w", err)
+	}
+	for _, line := range stored {
+		state.Lines = append(state.Lines, cart.Line{
+			Offer:     ids.OfferID{Tenant: line.Tenant, Product: line.Product},
+			Position:  line.Position,
+			Name:      line.Name,
+			Quantity:  line.Quantity,
+			Price:     money.FromKopecks(line.Price),
+			Issue:     line.Issue,
+			AddedAt:   line.AddedAt,
+			CheckedAt: line.CheckedAt,
+			Discounts: line.Discounts,
+		})
 	}
 
 	return cart.Restore(state), nil
 }
 
-// Save заводит корзину или обновляет её условно по версии; строки
-// переписываются целиком — их не больше сотни.
+// Save обновляет корзину условно по версии и записывает только дельту строк.
 func (r *Carts) Save(ctx context.Context, c *cart.Cart) error {
 	s := c.State()
 
@@ -98,34 +150,44 @@ func (r *Carts) Save(ctx context.Context, c *cart.Cart) error {
 		return err
 	}
 
-	for position, line := range s.Lines {
-		discounts, err := jsonValue(line.Discounts, "[]")
-		if err != nil {
-			return err
-		}
-		_, err = execSQL(
-			ctx,
-			r.db,
-			insertCartLine,
-			string(s.ID),
-			string(line.Offer.Tenant),
-			string(line.Offer.Product),
-			position,
-			line.Name,
-			line.Quantity,
-			line.Price.Kopecks(),
-			string(line.Issue),
-			line.AddedAt,
-			line.CheckedAt,
-			discounts,
-		)
-		if err != nil {
-			return fmt.Errorf("строка корзины %s: %w", s.ID, err)
-		}
+	if err := r.saveLines(ctx, c); err != nil {
+		return err
 	}
-
 	c.MarkSaved()
 
+	return nil
+}
+
+func (r *Carts) saveLines(ctx context.Context, c *cart.Cart) error {
+	saved, removed := c.LineChanges()
+	if len(saved)+len(removed) == 0 {
+		return nil
+	}
+	changes := make([]cartLineChange, 0, len(saved)+len(removed))
+	for _, line := range saved {
+		changes = append(changes, cartLineChange{
+			Tenant:    line.Offer.Tenant,
+			Product:   line.Offer.Product,
+			Position:  line.Position,
+			Name:      line.Name,
+			Quantity:  line.Quantity,
+			Price:     line.Price.Kopecks(),
+			Issue:     line.Issue,
+			AddedAt:   line.AddedAt,
+			CheckedAt: line.CheckedAt,
+			Discounts: line.Discounts,
+		})
+	}
+	for _, offer := range removed {
+		changes = append(changes, cartLineChange{Tenant: offer.Tenant, Product: offer.Product, Removed: true})
+	}
+	payload, err := json.Marshal(changes)
+	if err != nil {
+		return err
+	}
+	if _, err := execSQL(ctx, r.db, saveCartLineChanges, c.ID(), payload); err != nil {
+		return fmt.Errorf("строки корзины %s: %w", c.ID(), err)
+	}
 	return nil
 }
 
@@ -167,7 +229,7 @@ func (r *Carts) insert(ctx context.Context, s cart.State) error {
 	}
 }
 
-// update обновляет корзину условно по версии и стирает прежние строки.
+// update обновляет корзину условно по версии.
 func (r *Carts) update(ctx context.Context, s cart.State, origin int64) error {
 	promos, err := jsonValue(s.Promos, "{}")
 	if err != nil {
@@ -191,60 +253,5 @@ func (r *Carts) update(ctx context.Context, s cart.State, origin int64) error {
 		return cart.ErrConflict
 	}
 
-	if _, err := execSQL(ctx, r.db, deleteCartLines, string(s.ID)); err != nil {
-		return fmt.Errorf("строки корзины %s: %w", s.ID, err)
-	}
-
 	return nil
-}
-
-func (r *Carts) lines(ctx context.Context, cartID string) ([]cart.Line, error) {
-	rows, err := rawSQL(ctx, r.db, selectCartLines, cartID).Rows()
-	if err != nil {
-		return nil, fmt.Errorf("строки корзины: %w", err)
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	var lines []cart.Line
-
-	for rows.Next() {
-		var (
-			line            cart.Line
-			tenant, product string
-			price           int64
-			issue           string
-			discounts       []byte
-		)
-
-		err := rows.Scan(
-			&tenant,
-			&product,
-			&line.Name,
-			&line.Quantity,
-			&price,
-			&issue,
-			&line.AddedAt,
-			&line.CheckedAt,
-			&discounts,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("строки корзины: %w", err)
-		}
-
-		if err := json.Unmarshal(discounts, &line.Discounts); err != nil {
-			return nil, err
-		}
-		line.Offer = ids.OfferID{Tenant: ids.TenantID(tenant), Product: ids.ProductID(product)}
-		line.Price = money.FromKopecks(price)
-		line.Issue = cart.Issue(issue)
-		lines = append(lines, line)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("строки корзины: %w", err)
-	}
-
-	return lines, nil
 }

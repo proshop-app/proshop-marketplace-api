@@ -40,6 +40,7 @@ const token = "operator-token-for-tests-0123456789"
 var t0 = time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
 
 type env struct {
+	ids        *fake.IDs
 	checkouts  *appcheckout.Service
 	limiter    *fake.Limiter
 	citySource *fake.Cities
@@ -82,6 +83,7 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 	})
 	registry := prometheus.NewRegistry()
 	identities := &fake.IDs{}
+	e.ids = &fake.IDs{}
 	directory := appdelivery.NewService(e.store, e.platform, fake.NewPickupCache(), appdelivery.Config{
 		Attempts:     3,
 		TTL:          time.Hour,
@@ -120,13 +122,13 @@ func newEnv(t *testing.T, options ...func(*transport.Deps)) *env {
 				IPLimit: appbuyer.Limit{Count: 10, Window: time.Minute},
 			},
 		),
-		Carts:     appcart.NewService(e.store, e.platform, identities, e.clock, time.Hour),
+		Carts:     appcart.NewService(e.store, e.platform, identities, e.clock, time.Hour, "test-cart-key"),
 		Directory: directory,
 		Checkouts: appcheckout.NewService(
 			e.store,
 			e.platform,
 			e.pickups,
-			appcart.NewService(e.store, e.platform, identities, e.clock, time.Hour),
+			appcart.NewService(e.store, e.platform, identities, e.clock, time.Hour, "test-cart-key"),
 			identities,
 			e.clock,
 			appcheckout.Config{

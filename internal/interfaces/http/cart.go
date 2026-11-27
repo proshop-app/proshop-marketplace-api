@@ -44,6 +44,10 @@ type cartHandlers struct {
 	carts *appcart.Service
 }
 
+type addKeyJSON struct {
+	Key string `json:"key"`
+}
+
 type addLineJSON struct {
 	OfferID  string `json:"offerId"`
 	Quantity int    `json:"quantity"`
@@ -183,6 +187,11 @@ func (h *cartHandlers) get(w http.ResponseWriter, r *http.Request) {
 	h.respond(w, r, state, err)
 }
 
+func (h *cartHandlers) newAddKey(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, addKeyJSON{Key: h.carts.NewAddKey(BuyerID(r.Context()))})
+}
+
 func (h *cartHandlers) add(w http.ResponseWriter, r *http.Request) {
 	var body addLineJSON
 	if err := readJSON(w, r, &body); err != nil {
@@ -198,7 +207,8 @@ func (h *cartHandlers) add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.carts.Add(r.Context(), BuyerID(r.Context()), offerID, body.Quantity)
+	key := r.Header.Get("Idempotency-Key")
+	state, err := h.carts.AddOnce(r.Context(), BuyerID(r.Context()), offerID, body.Quantity, key)
 	h.respond(w, r, state, err)
 }
 

@@ -2739,13 +2739,40 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
+  /api/v1/cart/add-key:
+    get:
+      tags: [cart]
+      summary: Получить ключ для одного добавления
+      operationId: newCartAddKey
+      security: [{ sessionCookie: [] }, { sessionBearer: [] }]
+      responses:
+        "200":
+          description: Ключ покупателя, действует 24 часа с момента выдачи.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key]
+                properties:
+                  key: { type: string }
+        "401": { $ref: "#/components/responses/Error" }
   /api/v1/cart/lines:
     post:
       parameters:
         - { $ref: "#/components/parameters/MoneyUnit" }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string }
+          description: Ключ, полученный от GET /api/v1/cart/add-key. Для повтора используются исходные ключ и тело.
       tags: [cart]
       summary: Положить предложение
-      description: То же предложение складывает количества; остаток сверяется с каталогом.
+      description: |
+        Разные ключи складывают количества. Повтор с тем же ключом и телом возвращает текущую
+        корзину. Другое тело или ещё выполняющееся добавление даёт 409.
       operationId: addCartLine
       security: [{ sessionCookie: [] }, { sessionBearer: [] }]
       requestBody:
@@ -3889,31 +3916,38 @@ paths:
   /api/v1/internal/reference/{dict}/snapshot:
     get:
       tags: [reference]
-      summary: Снимок словаря — полный или дельта после since
+      summary: Страница полного снимка или дельты словаря
       operationId: referenceSnapshotV1
       security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
       description: |
         Без since, со since старше горизонта журнала (30 дней) или впереди головы — полный
         снимок (full: true). Иначе дельта: текущие записи, затронутые после since, и
-        удалённые id. Потребитель сверяет normalizer со своей копией правила ключа.
+        удалённые id. Страница содержит до 128 записей и удалений суммарно. Продолжение
+        запрашивается по nextCursor без since и сохраняет ревизию первой страницы.
+        Потребитель сверяет normalizer и применяет результат после последней страницы.
       parameters:
         - { $ref: "#/components/parameters/ReferenceDictionary" }
         - name: since
           in: query
           schema: { type: integer, format: int64, minimum: 0 }
+        - name: cursor
+          in: query
+          description: Значение nextCursor из предыдущей страницы.
+          schema: { type: string, maxLength: 512 }
         - name: scope
           in: query
           description: Только global; частный слой магазина — следующий этап
           schema: { type: string, enum: [global] }
       responses:
         "200":
-          description: Снимок
+          description: Страница снимка
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReferenceSnapshot" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/internal/reference/{dict}/entries/{id}:
     get:
       tags: [reference]
@@ -3930,31 +3964,38 @@ paths:
   /internal/reference/{dict}/snapshot:
     get:
       tags: [reference]
-      summary: Снимок словаря — полный или дельта после since
+      summary: Страница полного снимка или дельты словаря
       operationId: referenceSnapshot
       security: [{ referenceReadToken: [] }, { operatorToken: [] }, { operatorSession: [] }]
       description: |
         Без since, со since старше горизонта журнала (30 дней) или впереди головы — полный
         снимок (full: true). Иначе дельта: текущие записи, затронутые после since, и
-        удалённые id. Потребитель сверяет normalizer со своей копией правила ключа.
+        удалённые id. Страница содержит до 128 записей и удалений суммарно. Продолжение
+        запрашивается по nextCursor без since и сохраняет ревизию первой страницы.
+        Потребитель сверяет normalizer и применяет результат после последней страницы.
       parameters:
         - { $ref: "#/components/parameters/ReferenceDictionary" }
         - name: since
           in: query
           schema: { type: integer, format: int64, minimum: 0 }
+        - name: cursor
+          in: query
+          description: Значение nextCursor из предыдущей страницы.
+          schema: { type: string, maxLength: 512 }
         - name: scope
           in: query
           description: Только global; частный слой магазина — следующий этап
           schema: { type: string, enum: [global] }
       responses:
         "200":
-          description: Снимок
+          description: Страница снимка
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReferenceSnapshot" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /internal/reference/{dict}/resolve:
     post:
       tags: [reference]
@@ -6544,23 +6585,20 @@ components:
             $ref: "#/components/schemas/PromotionAvailabilityWeek"
     PromotionEvents:
       type: object
-      required:
-      - visitorId
-      - events
+      required: [events]
       properties:
-        visitorId:
-          type: string
-          minLength: 1
-          maxLength: 1024
         events:
           type: array
+          minItems: 1
           maxItems: 50
           items:
             type: object
-            required:
-            - promotionId
-            - kind
+            required: [eventId, promotionId, kind]
             properties:
+              eventId:
+                type: string
+                format: uuid
+                description: UUID события, сохраняется при повторе и входе покупателя.
               promotionId:
                 type: string
                 format: uuid
@@ -9327,7 +9365,8 @@ components:
       type: object
       required: [schemaVersion, dictionary, kind, revision, normalizer, full, entries, removed]
       properties:
-        schemaVersion: { type: integer, const: 1 }
+        schemaVersion: { type: integer, const: 2 }
+        nextCursor: { type: string, description: Отсутствует на последней странице. }
         dictionary: { type: string }
         kind: { type: string, enum: [open, closed] }
         revision: { type: integer, format: int64 }

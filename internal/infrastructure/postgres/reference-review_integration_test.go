@@ -89,7 +89,7 @@ func seedReviewDatabase(t *testing.T, service *appreference.Service, count, alia
 	}); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := service.Snapshot(context.Background(), referenceDict, nil)
+	snapshot, err := databaseSnapshot(service, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestReferenceReviewAllCandidatesRealDatabaseAndCompleteDelta(t *testing.T) 
 		t.Fatal(result, err)
 	}
 	t.Logf("2204 кандидата обработаны за %s", time.Since(started))
-	delta, err := service.Snapshot(context.Background(), referenceDict, &baseline.Revision)
+	delta, err := databaseSnapshot(service, &baseline.Revision)
 	if err != nil || delta.Full || len(delta.Entries) != 2204 {
 		t.Fatal(len(delta.Entries), delta.Full, err)
 	}
@@ -176,7 +176,7 @@ func TestReferenceReviewRealRollbackAfterSavedChunksAndCancellation(t *testing.T
 			if err == nil || result.Changed != 0 || fault.calls < 1 {
 				t.Fatal(result, fault.calls, err)
 			}
-			after, err := service.Snapshot(context.Background(), referenceDict, nil)
+			after, err := databaseSnapshot(service, nil)
 			if err != nil || !reflect.DeepEqual(after, baseline) {
 				t.Fatal("часть решения зафиксирована", err)
 			}
@@ -237,7 +237,7 @@ func TestReferenceReviewDeadlineCancelsWaitingDictionaryLock(t *testing.T) {
 		t.Fatal(result, err, ctx.Err())
 	}
 	_ = lock.Rollback(context.Background())
-	after, err := service.Snapshot(context.Background(), referenceDict, nil)
+	after, err := databaseSnapshot(service, nil)
 	if err != nil || !reflect.DeepEqual(after, baseline) {
 		t.Fatal(after, err)
 	}
@@ -274,4 +274,17 @@ func TestReferenceReviewRichCandidatesKeepsAllAliasesAndMetadata(t *testing.T) {
 		t.Fatal("rich запись повреждена", page, err)
 	}
 	t.Logf("1001 кандидат с 50 вариантами и 4 КиБ metadata: %s", time.Since(started))
+}
+
+func databaseSnapshot(service *appreference.Service, since *int64) (appreference.Snapshot, error) {
+	ctx := context.Background()
+	result, err := service.Snapshot(ctx, referenceDict, since, "")
+	for err == nil && result.NextCursor != "" {
+		var page appreference.Snapshot
+		page, err = service.Snapshot(ctx, referenceDict, nil, result.NextCursor)
+		result.Entries = append(result.Entries, page.Entries...)
+		result.Removed = append(result.Removed, page.Removed...)
+		result.NextCursor = page.NextCursor
+	}
+	return result, err
 }

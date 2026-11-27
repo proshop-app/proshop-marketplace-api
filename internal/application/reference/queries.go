@@ -116,54 +116,6 @@ func (s *Service) Resolve(ctx context.Context, code, text string) (Resolution, e
 	return result, err
 }
 
-// Snapshot — полный снимок без since, со since за горизонтом журнала или
-// впереди головы; иначе дельта: текущие записи, затронутые после since, и
-// удалённые id. Голова читается первой: запись новее головы безопасна, потому
-// что следующая дельта отдаст её ещё раз.
-func (s *Service) Snapshot(ctx context.Context, code string, since *int64) (Snapshot, error) {
-	var snapshot Snapshot
-	err := s.read(ctx, code, func(ctx context.Context, repo reference.Repository, dict *reference.Dictionary) error {
-		snapshot = Snapshot{
-			Kind:       dict.State().Kind,
-			Dictionary: code,
-			Revision:   dict.Revision(),
-			Normalizer: dict.Normalizer(),
-			Entries:    []reference.EntryState{},
-			Removed:    []ids.UUID{},
-		}
-		horizon, err := repo.Horizon(ctx, code, s.clock.Now().Add(-s.config.Horizon))
-		if err != nil {
-			return err
-		}
-		if since == nil || *since < horizon || *since > dict.Revision() {
-			snapshot.Full = true
-			entries, err := repo.AllEntries(ctx, code)
-			snapshot.Entries = states(entries)
-			return err
-		}
-		changed, err := repo.ChangedEntries(ctx, code, *since, dict.Revision())
-		if err != nil {
-			return err
-		}
-		entries, err := repo.Entries(ctx, code, changed)
-		if err != nil {
-			return err
-		}
-		present := map[ids.UUID]bool{}
-		for _, entry := range entries {
-			present[entry.ID()] = true
-		}
-		for _, id := range changed {
-			if !present[id] {
-				snapshot.Removed = append(snapshot.Removed, id)
-			}
-		}
-		snapshot.Entries = states(entries)
-		return nil
-	})
-	return snapshot, err
-}
-
 // Stats — ревизия и длина очереди кандидатов каждого словаря.
 func (s *Service) Stats(ctx context.Context) ([]Stats, error) {
 	s.statsMu.Lock()

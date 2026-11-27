@@ -157,7 +157,8 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `POST /api/v1/auth/logout` | покупатель | выход |
 | `GET /api/v1/me` | покупатель | текущий покупатель |
 | `GET /api/v1/cart` | покупатель | корзина по продавцам |
-| `POST /api/v1/cart/lines` | покупатель | добавить `{"offerId","quantity"}` |
+| `GET /api/v1/cart/add-key` | покупатель | ключ одного добавления на 24 часа |
+| `POST /api/v1/cart/lines` | покупатель | добавить `{"offerId","quantity"}` с `Idempotency-Key` |
 | `PUT /api/v1/cart/lines/{offerId}` | покупатель | количество `{"quantity"}` |
 | `DELETE /api/v1/cart/lines/{offerId}` | покупатель | убрать позицию |
 | `POST /api/v1/cart/verify` | покупатель | перепроверить цены и наличие у магазинов |
@@ -687,8 +688,7 @@ uno-reference-data. Пакет содержит данные репозитор�
 На стенде оператор отдельно импортирует реальные значения из uno-reference-data;
 при конфликте вида или истории поставок нужна сверка, а не смена номера вслепую.
 
-Продвижение использует обязательные `PROMOTION_TIMEZONE` (IANA, без умолчания) и
-`PROMOTION_VISITOR_SALT` (от 16 символов). `PROMOTION_SEARCH_RELEVANCE_DEPTH` — 10–500,
+Продвижение использует обязательную настройку `PROMOTION_TIMEZONE` (IANA, без умолчания). `PROMOTION_SEARCH_RELEVANCE_DEPTH` — 10–500,
 по умолчанию 100. `SERVER_API_TOKEN` включает машинный API продвижения; пустое значение
 оставляет его выключенным (404). Токен должен отличаться от других служебных токенов
 и быть не короче `OPERATOR_TOKEN` (минимум 32 символа).

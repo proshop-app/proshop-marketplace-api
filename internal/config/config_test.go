@@ -33,7 +33,6 @@ func validEnv() map[string]string {
 		"KAFKA_BROKERS":                            "localhost:9092, localhost:9093",
 		"OPERATOR_TOKEN":                           strings.Repeat("x", 32),
 		"PROMOTION_TIMEZONE":                       "Etc/UTC",
-		"PROMOTION_VISITOR_SALT":                   "test-visitor-salt-012345",
 		"REDIS_URL":                                "redis://localhost:6379/0",
 		"MARKETPLACE_PUBLIC_URL":                   "https://market.example",
 		"PLATFORM_API_URL":                         "http://server:3000",

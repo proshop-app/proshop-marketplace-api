@@ -27,6 +27,11 @@ type RateLimiter interface {
 	) (allowed bool, retryAfter time.Duration, err error)
 }
 
+// BatchRateLimiter засчитывает попытки одной пачки атомарно.
+type BatchRateLimiter interface {
+	AllowN(ctx context.Context, key string, limit int, window time.Duration, count int) (bool, time.Duration, error)
+}
+
 // Leases — аренда фоновых задач между процессами: одну работу делает один процесс.
 type Leases interface {
 	// Acquire берёт аренду name на ttl для holder; занята другим — false.

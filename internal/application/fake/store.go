@@ -71,6 +71,7 @@ type data struct {
 	buyers               map[ids.UUID]buyer.Buyer
 	challenges           map[ids.UUID]buyer.ChallengeState
 	carts                map[ids.UUID]cart.State
+	cartAdds             map[cartAddKey]cartAddRecord
 	checkouts            map[ids.UUID]checkout.State
 	checkoutReadFailures map[ids.UUID]checkout.ReadFailure
 	deferredWork         map[ids.UUID]time.Time
@@ -118,6 +119,7 @@ func (d *data) clone() *data {
 		buyers:               maps.Clone(d.buyers),
 		challenges:           maps.Clone(d.challenges),
 		carts:                maps.Clone(d.carts),
+		cartAdds:             maps.Clone(d.cartAdds),
 		checkouts:            maps.Clone(d.checkouts),
 		checkoutReadFailures: maps.Clone(d.checkoutReadFailures),
 		deferredWork:         maps.Clone(d.deferredWork),
@@ -147,6 +149,7 @@ func NewStore() *Store {
 		buyers:               map[ids.UUID]buyer.Buyer{},
 		challenges:           map[ids.UUID]buyer.ChallengeState{},
 		carts:                map[ids.UUID]cart.State{},
+		cartAdds:             map[cartAddKey]cartAddRecord{},
 		checkouts:            map[ids.UUID]checkout.State{},
 		checkoutReadFailures: map[ids.UUID]checkout.ReadFailure{},
 		deferredWork:         map[ids.UUID]time.Time{},
