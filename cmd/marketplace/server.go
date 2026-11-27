@@ -71,6 +71,15 @@ var orderedTaskKinds = []string{
 	appsynonyms.TaskChanged,
 }
 
+// searchLaneKinds — виды, которые зовут proshop-search. Их выполняет отдельная полоса общего
+// цикла outbox: своего опроса очереди у неё нет, а подтверждённый отказ поиска ставит паузу всем.
+var searchLaneKinds = []string{
+	appcatalog.TaskSyncOffer,
+	appcatalog.TaskSyncTenant,
+	ports.TaskPurgeTenant,
+	searchfeedback.TaskPurchase,
+}
+
 // services — сценарии приложения процесса.
 type services struct {
 	cities        *appbuyer.Cities
@@ -95,7 +104,6 @@ type services struct {
 	checkouts         *appcheckout.Service
 	searchFeedback    *searchfeedback.Feedback
 	searchBuyerKeys   *searchfeedback.BuyerKeys
-	searchPurchases   *messaging.Dispatcher
 	dispatcher        *messaging.Dispatcher
 	creation          *appcheckout.Executor
 	janitor           *messaging.Janitor
@@ -276,7 +284,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 	carts := appcart.NewService(uow, resyncing, identities, now, cfg.Cart.TTL, cfg.Identity.EncryptionKey)
 	searchBuyerKeys := searchfeedback.NewBuyerKeys(cfg.Identity.EncryptionKey)
 	feedback := searchfeedback.NewFeedback(s.store.index, redis.NewLimiter(s.cache, keyPrefix), searchBuyerKeys)
-	purchases := searchPurchaseDispatcher(postgres.NewTaskQueue(background), now, s.store.index)
+	purchases := searchfeedback.NewPurchases(s.store.index, now)
 	checkouts := appcheckout.NewService(
 		uow,
 		resyncing,
@@ -350,7 +358,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 				appcheckout.TaskExpireCreation,
 				appcheckout.TaskPollOrder,
 				appcheckout.TaskCancelOrder,
-				searchfeedback.TaskPurchase,
 			},
 			Batch:          cfg.Outbox.Batch,
 			PerTenant:      cfg.Outbox.PerTenant,
@@ -371,6 +378,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			appsynonyms.TaskChanged:          synonyms.HandleTask,
 			moderationstatus.TaskOffer:       statuses.HandleTask,
 			moderationstatus.TaskParticipant: statuses.HandleTask,
+			searchfeedback.TaskPurchase:      purchases.Deliver,
 		},
 	)
 	indexer.SetBatchObserver(telemetry.NewOfferBatches(s.metrics))
@@ -431,7 +439,6 @@ func (s *server) services(ctx context.Context) (services, error) {
 		checkouts:         checkouts,
 		searchFeedback:    feedback,
 		searchBuyerKeys:   searchBuyerKeys,
-		searchPurchases:   purchases,
 		dispatcher:        dispatcher,
 		creation: appcheckout.NewExecutor(
 			postgres.NewTaskQueue(s.store.pool(ports.DatabaseOrders)),
@@ -494,10 +501,7 @@ func (s *server) jobs() []jobs.Loop {
 	outbox := jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics)
 	indexLane := messaging.NewIndependentLane(
 		s.app.dispatcher,
-		ports.TaskLaneGate{
-			Key:   "offer-index",
-			Kinds: []string{appcatalog.TaskSyncOffer, appcatalog.TaskSyncTenant, ports.TaskPurgeTenant},
-		},
+		ports.TaskLaneGate{Key: "offer-index", Kinds: searchLaneKinds},
 		30*time.Second,
 		func(err error) bool { return errors.Is(err, searchapi.ErrUnavailable) },
 		s.store.index.ConfirmOutage,
@@ -545,9 +549,6 @@ func (s *server) jobs() []jobs.Loop {
 		).Run},
 		{Name: "retention", Run: jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run},
 	}
-	loops = append(loops, jobs.Loop{Name: "search-purchases", Run: func(ctx context.Context) error {
-		return outbox.RunLane(ctx, s.app.searchPurchases)
-	}})
 	return append(loops, s.scheduledJobs()...)
 }
 
