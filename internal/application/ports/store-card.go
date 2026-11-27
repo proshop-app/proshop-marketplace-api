@@ -82,6 +82,21 @@ type ShopPage struct {
 	Offset int        `json:"offset"`
 }
 
+// ShopDirectoryCard содержит поля для поиска по имени, сортировки и маршрута.
+type ShopDirectoryCard struct {
+	TenantID ids.TenantID `json:"tenantId"`
+	Slug     string       `json:"slug"`
+	Name     string       `json:"name"`
+	SizeTier int          `json:"sizeTier"`
+}
+
+// ShopDirectory возвращает актуальные записи и удалённые магазины после курсора.
+type ShopDirectory struct {
+	Revision int64               `json:"revision"`
+	Items    []ShopDirectoryCard `json:"items"`
+	Removed  []ids.TenantID      `json:"removed"`
+}
+
 // StoreRecord — готовая сводка и публичный снимок одной ревизии пересчёта.
 type StoreRecord struct {
 	CacheSignature string
@@ -112,6 +127,7 @@ type StoreCards interface {
 	Shop(context.Context, string) (ShopHeader, error)
 	// List отбирает публичные магазины с общим числом до пагинации.
 	List(context.Context, string, int, int) (ShopPage, error)
+	Directory(context.Context, int64) (ShopDirectory, error)
 }
 
 // StoreCardCache хранит только сериализованные неперсональные карточки и списки магазинов.

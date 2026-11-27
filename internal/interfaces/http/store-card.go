@@ -12,7 +12,11 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-const shopDefaultLimit = 20
+const (
+	shopDefaultLimit  = 20
+	shopDirectoryTag  = "shops-directory-"
+	shopDirectoryPath = "/api/v1/shops/directory/snapshot"
+)
 
 type shopHeaderJSON struct {
 	ports.ShopHeader
@@ -132,6 +136,35 @@ func (h *participantHandlers) shops(w http.ResponseWriter, r *http.Request) {
 		Offset: result.Offset,
 	}
 	writeShopJSON(w, r, body)
+}
+
+func (h *participantHandlers) shopDirectory(w http.ResponseWriter, r *http.Request) {
+	var previous int64
+	if raw := r.URL.Query().Get("since"); raw != "" {
+		var err error
+		previous, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || previous <= 0 {
+			writeError(w, r, ErrInvalidQuery)
+			return
+		}
+	}
+	result, err := h.service.ShopDirectory(r.Context(), previous)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if previous > result.Revision {
+		writeError(w, r, ErrInvalidQuery)
+		return
+	}
+	etag := `"` + shopDirectoryTag + strconv.FormatInt(result.Revision, 10) + `"`
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-store")
+	if previous == result.Revision {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func shopCardResponses(cards []ports.ShopCard) []shopCardJSON {

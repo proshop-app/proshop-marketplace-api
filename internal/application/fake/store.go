@@ -53,6 +53,7 @@ type data struct {
 	revalidationFailures map[productKey]ports.RevalidationFailure
 	features             *buyerFeaturesData
 	storeCards           map[ids.TenantID]ports.StoreRecord
+	directory            storeDirectory
 	promotion            *promotionData
 	moderation           *moderationData
 	decisions            map[string]ports.EventDecision
@@ -98,11 +99,15 @@ type Store struct {
 
 func (d *data) clone() *data {
 	return &data{
-		indexRebuild:         d.indexRebuild,
-		indexTenants:         maps.Clone(d.indexTenants),
-		databaseNow:          d.databaseNow,
-		features:             d.features.clone(),
-		storeCards:           maps.Clone(d.storeCards),
+		indexRebuild: d.indexRebuild,
+		indexTenants: maps.Clone(d.indexTenants),
+		databaseNow:  d.databaseNow,
+		features:     d.features.clone(),
+		storeCards:   maps.Clone(d.storeCards),
+		directory: storeDirectory{
+			revision: d.directory.revision,
+			changes:  maps.Clone(d.directory.changes),
+		},
 		promotion:            d.promotion.clone(),
 		moderation:           d.moderation.clone(),
 		taxonomy:             d.taxonomy,
@@ -143,6 +148,10 @@ func NewStore() *Store {
 		taxonomyVersions:     map[int64]taxonomy.Definition{},
 		revalidationFailures: map[productKey]ports.RevalidationFailure{},
 		storeCards:           map[ids.TenantID]ports.StoreRecord{},
+		directory: storeDirectory{
+			revision: 1,
+			changes:  make(map[ids.TenantID]directoryChange),
+		},
 		promotion:            newPromotionData(),
 		moderation:           newModerationData(),
 		decisions:            map[string]ports.EventDecision{},

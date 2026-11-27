@@ -8,6 +8,7 @@ name: proshop-marketplace
 services:
   postgres:
     image: ${DEV_REGISTRY:-docker.io}/library/postgres:16-alpine
+    command: ["postgres", "-c", "max_connections=120"]
     environment:
       POSTGRES_USER: marketplace
       POSTGRES_PASSWORD: marketplace
