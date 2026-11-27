@@ -20,7 +20,7 @@ func wireFacetSelection(facets *[]ports.FacetCode) *[]ports.FacetCode {
 
 func wireFacetFields(query ports.OfferQuery) []facetField {
 	out := make([]facetField, 0, len(query.FacetFields))
-	if !query.WantsFacet(ports.FacetAttributes) {
+	if !query.WantsFacet(ports.FacetAttributes) && len(query.FacetKeys) == 0 {
 		return out
 	}
 

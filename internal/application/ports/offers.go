@@ -133,25 +133,29 @@ type OfferQuery struct {
 	Attributes  map[string]AttributeFilter
 	FacetFields []taxonomy.Attribute
 	// nil сохраняет все фасеты; пустой список отключает их, attributes включает поля таксономии.
-	Facets     *[]FacetCode
-	Text       string
-	TenantIDs  []string
-	CategoryID string
-	PriceMin   *int64
-	PriceMax   *int64
-	InStock    bool
-	Sort       OfferSort
-	Offset     int
-	Limit      int
+	FacetKeys      []string
+	PriceHistogram bool
+	Facets         *[]FacetCode
+	Text           string
+	TenantIDs      []string
+	CategoryID     string
+	PriceMin       *int64
+	PriceMax       *int64
+	InStock        bool
+	Sort           OfferSort
+	Offset         int
+	Limit          int
 }
 
 // OfferPage — страница выдачи.
 type OfferPage struct {
-	Correction *OfferCorrection
-	Receipt    string
-	Facets     []Facet
-	Total      int
-	Items      []OfferDocument
+	Correction    *OfferCorrection
+	Receipt       string
+	Facets        []Facet
+	Total         int
+	TotalRelation string
+	Limited       bool
+	Items         []OfferDocument
 }
 
 // OfferCorrection объясняет, по какому запросу найдены предложения после исправления или расширения.

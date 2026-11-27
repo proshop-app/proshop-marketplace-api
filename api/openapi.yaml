@@ -2387,8 +2387,8 @@ paths:
         Максимум 32 характеристики в панели, плюс до четырёх встроенных фасетов по контексту.
         facets=none отключает все фасеты. Список выбирает перечисленные доступные встроенные,
         attributes добавляет характеристики выбранной панели.
-        API обновляется раньше витрины: предыдущая версия отклоняет новые none/attributes/повторы.
-        Размер страницы не определяет выбор фасетов. Фильтры и total от селекторов не меняются.
+        На первом экране возвращаются до восьми фасетов и активные фильтры.
+        При limited клиент останавливает листание на 2400 и предлагает уточнить фильтры.
         Числа: min/max; остальные: до 256 наиболее частых значений с count.
         При пустой выдаче фасеты могут содержать варианты после снятия собственного фильтра.
       operationId: listOffers
@@ -2403,7 +2403,7 @@ paths:
             offerId вида tenantId~productId, от 1 до 20 значений до схлопывания повторов.
             Первое вхождение задаёт порядок. Пустой или невалидный id — 400 catalog.invalid_query.
             Не сочетается с q, tenant, groupId, category, priceMin, priceMax, inStock,
-            attr.*, sort, limit, offset, track (даже пустыми) — 400 catalog.invalid_query.
+            attr.*, sort, limit, offset, track, facetKeys, priceHistogram (даже пустыми) — 400 catalog.invalid_query.
             deliveryRegion и deliveryCarrier допустимы. Цены учитывают необязательного покупателя.
             Отсутствующие, скрытые, снятые с публикации предложения и предложения без цены пропускаются.
             items идут в порядке ids, без description, assets и variants, с контекстом доставки.
@@ -2476,7 +2476,7 @@ paths:
                   type: string
                   enum: [category, tenant, inStock, price, attributes]
           description: >-
-            Список через запятую и/или повтором параметра, без пробелов. Без селекторов возвращается панель области.
+            Список через запятую и/или повтором параметра, без пробелов. Без селекторов возвращаются базовые и выбранные фасеты области.
             none даёт пустой массив. Список выбирает указанные доступные встроенные фасеты.
             Код attributes включает характеристики панели.
             Неизвестный код, повтор кода, none с другим значением — 400.
@@ -2495,7 +2495,22 @@ paths:
           in: query
           schema: { type: string, enum: [relevance, price_asc, price_desc, newest, rating], default: relevance }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
-        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 }, description: "offset + limit ≤ 10000" }
+        - name: facetKeys
+          in: query
+          style: form
+          explode: true
+          schema: { type: array, maxItems: 50, uniqueItems: true, items: { type: string } }
+          description: >-
+            Повторяемый ключ фасета (например, price или attr.color). Возвращаются
+            запрошенные и активные фасеты, items пуст.
+        - name: priceHistogram
+          in: query
+          schema: { type: boolean, default: false }
+          description: Добавить корзины к границам цены.
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 2399, default: 0 }
+          description: Смещение в плитках. Последняя порция обрезается на 2400.
       responses:
         "409": { $ref: "#/components/responses/Error" }
         "200":
@@ -8206,7 +8221,7 @@ components:
                 type: string
     OfferPage:
       type: object
-      required: [items, total, limit, offset, facets]
+      required: [items, total, totalRelation, limited, limit, offset, facets]
       properties:
         correction:
           $ref: "#/components/schemas/OfferCorrection"
@@ -8217,7 +8232,7 @@ components:
           items: { $ref: "#/components/schemas/Offer" }
         facets:
           description: >-
-            Выбранная панель в порядке показа. Параметр facets сужает состав, none даёт [].
+            Базовые и выбранные фасеты в порядке показа. Параметры facets и facetKeys выбирают состав.
             Счётчики и min/max учитывают все фильтры, кроме собственного фильтра фасета.
             category учитывает все фильтры. Значения внутри фасета объединяются через ИЛИ,
             разные фасеты — через И. total и items учитывают все фильтры.
@@ -8225,6 +8240,17 @@ components:
           maxItems: 36
           items: { $ref: "#/components/schemas/Facet" }
         total: { type: integer }
+        availableFacetKeys:
+          type: array
+          items: { type: string }
+          description: Ключи настроенной панели в её порядке. Ключ без фасета в ответе можно запросить через facetKeys.
+        totalRelation:
+          type: string
+          enum: [eq, gte]
+          description: При gte total является нижней границей.
+        limited:
+          type: boolean
+          description: В выдаче есть плитки за пределами окна 2400.
         limit: { type: integer }
         offset: { type: integer }
     SearchReceipt:

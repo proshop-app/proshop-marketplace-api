@@ -68,23 +68,24 @@ func (p facetPanel) apply(query *ports.OfferQuery, fields map[string]taxonomy.At
 	order := make([]taxonomy.Filter, 0, min(len(p.filters), MaxAttributeFacets)+len(builtinFacetOrder))
 	query.FacetFields = []taxonomy.Attribute{}
 	includeAttributes := query.WantsFacet(ports.FacetAttributes)
+	requested := listingFacetKeys(query)
 	var selection []ports.FacetCode
 	if !p.priorities {
 		for _, code := range builtinFacetOrder {
-			if query.WantsFacet(wireBuiltin(code)) {
+			if wire := wireBuiltin(code); query.WantsFacet(wire) || requested[string(wire)] {
 				order = append(order, taxonomy.Filter{Code: code, Primary: true})
 			}
 		}
 	}
 	for _, filter := range p.filters {
 		if code := wireBuiltin(filter.Code); code != "" {
-			if query.WantsFacet(code) {
+			if query.WantsFacet(code) || requested[string(code)] {
 				selection = append(selection, code)
 				order = append(order, filter)
 			}
 			continue
 		}
-		if includeAttributes && len(query.FacetFields) < MaxAttributeFacets {
+		if (includeAttributes || requested["attr."+filter.Code]) && len(query.FacetFields) < MaxAttributeFacets {
 			query.FacetFields = append(query.FacetFields, fields[filter.Code])
 			order = append(order, filter)
 		}

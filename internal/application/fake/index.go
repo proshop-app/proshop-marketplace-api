@@ -143,7 +143,7 @@ func (x *Index) Search(_ context.Context, query ports.OfferQuery) (ports.OfferPa
 
 		return hits[i].ID < hits[j].ID
 	})
-	page := ports.OfferPage{Facets: fakeFacets(candidates, query), Total: len(hits)}
+	page := ports.OfferPage{Facets: fakeFacets(candidates, query), Total: len(hits), TotalRelation: "eq"}
 	if x.Facets != nil {
 		page.Facets = x.Facets
 	}
