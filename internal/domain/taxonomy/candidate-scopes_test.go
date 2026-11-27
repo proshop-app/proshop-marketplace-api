@@ -103,3 +103,31 @@ func candidateScopeContains(d taxonomy.Definition, scope taxonomy.CandidateScope
 	}
 	return false
 }
+
+// Раскладка за один обход даёт каждому словарю те же области, что отдельный расчёт,
+// в котором он получатель кандидатов.
+func TestCandidateScopesByReceiverMatchesPerDictionary(t *testing.T) {
+	fixture := bindingFixture(t)
+	byReceiver := fixture.Definition.CandidateScopesByReceiver()
+	total := 0
+	for i := 0; i <= 5; i++ {
+		code := fmt.Sprintf("d%d", i)
+		expected := []taxonomy.CandidateScope{}
+		for _, scope := range fixture.Definition.CandidateScopes(code, reference.KindOpen) {
+			if scope.Dictionaries[len(scope.Dictionaries)-1] == code {
+				expected = append(expected, scope)
+			}
+		}
+		got := byReceiver[code]
+		if len(got) != len(expected) || (len(got) > 0 && !reflect.DeepEqual(got, expected)) {
+			t.Fatalf("словарь %s: области за один обход расходятся: %d против %d", code, len(got), len(expected))
+		}
+		total += len(got)
+	}
+	if total == 0 {
+		t.Fatal("в образце нет ни одной области с получателем")
+	}
+	if len((taxonomy.Definition{}).CandidateScopesByReceiver()) != 0 {
+		t.Fatal("без версии таксономии областей нет")
+	}
+}
