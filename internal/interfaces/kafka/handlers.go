@@ -245,7 +245,7 @@ func stockItemUpdated(ctx context.Context, projections Projections, envelope Env
 }
 
 // tenantEvent — событие реестра: магазин в теле, заголовок — если есть.
-// Событие удаления переводит запись в конечный статус независимо от тела.
+// Топик удаления задаёт конечный статус независимо от поля status.
 func tenantEvent(ctx context.Context, registry Registry, envelope Envelope) error {
 	var record tenantRecord
 	if err := decode(envelope.Message, &record); err != nil {

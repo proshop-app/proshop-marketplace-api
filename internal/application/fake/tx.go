@@ -41,6 +41,8 @@ type offers struct{ d *data }
 
 func (t *tx) Participants() participant.Repository { return participants{t.data} }
 
+func (t *tx) TenantPurge() ports.TenantPurge { return tenantPurge{t.data} }
+
 func (t *tx) Registry() participant.Registry { return registry{t.data} }
 
 func (t *tx) Products() catalog.ProductRepository { return products{t.data} }

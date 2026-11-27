@@ -39,8 +39,9 @@ import (
 const (
 	// orderedLaneKinds — упорядоченные виды буквально: так планировщик выбирает частичный индекс
 	// outbox_ordered_head_idx для старейшей задачи полосы. Список совпадает с OrderedTaskKinds
-	// и предикатом индекса в миграции 00080.
-	orderedLaneKinds = `('catalog.tenant.sync', 'participant.settings.sync', 'moderation.participant.status', ` +
+	// и предикатом индекса в миграции 00083.
+	orderedLaneKinds = `('catalog.tenant.sync', 'participant.tenant.purge', 'participant.settings.sync', ` +
+		`'moderation.participant.status', ` +
 		`'reference.changed', 'search-synonyms.changed')`
 
 	// claimQueuedKinds — виды, у которых есть незавершённые задачи: один спуск на вид.
@@ -315,10 +316,11 @@ var ErrUnorderedLane = errs.New(
 	"упорядоченный вид outbox не входит в индекс головы полосы",
 )
 
-// OrderedTaskKinds — виды, для которых индекс головы полосы построен (миграция 00080). Новый
+// OrderedTaskKinds — виды, для которых индекс головы полосы построен. Новый
 // упорядоченный вид добавляется сюда, в orderedLaneKinds и в индекс отдельной миграцией.
 var OrderedTaskKinds = []string{
 	"catalog.tenant.sync",
+	ports.TaskPurgeTenant,
 	"participant.settings.sync",
 	"moderation.participant.status",
 	"reference.changed",

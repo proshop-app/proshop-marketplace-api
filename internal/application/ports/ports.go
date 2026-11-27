@@ -33,6 +33,7 @@ type UnitOfWork interface {
 
 // Tx — хранилища, привязанные к одной транзакции.
 type Tx interface {
+	TenantPurge() TenantPurge
 	OfferIndexWork() OfferIndexWork
 	BulkModeration() BulkModeration
 	Revalidation() RevalidationStore
