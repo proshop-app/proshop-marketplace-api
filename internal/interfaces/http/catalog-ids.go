@@ -27,10 +27,11 @@ func (h *catalogHandlers) listIDs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := offerPageJSON{
-		Facets: []facetJSON{},
-		Items:  make([]offerJSON, 0, len(cards)),
-		Total:  len(cards),
-		Limit:  len(offerIDs),
+		Facets:        []facetJSON{},
+		Items:         make([]offerJSON, 0, len(cards)),
+		Total:         len(cards),
+		TotalRelation: "eq",
+		Limit:         len(offerIDs),
 	}
 	if !h.populateSellers(r, cards) {
 		return
@@ -48,7 +49,7 @@ func parseOfferIDs(values url.Values) ([]ids.OfferID, error) {
 		switch key {
 		case "q", "tenant", "groupId", "category", "priceMin", "priceMax", "inStock":
 			return nil, appcatalog.ErrInvalidQuery
-		case "sort", "limit", "offset", "track":
+		case "sort", "limit", "offset", "track", "facetKeys", "priceHistogram":
 			return nil, appcatalog.ErrInvalidQuery
 		}
 		if strings.HasPrefix(key, "attr.") {

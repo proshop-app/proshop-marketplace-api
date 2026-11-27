@@ -21,7 +21,7 @@ const (
 	// MaxLimit — наибольший размер страницы.
 	MaxLimit = 100
 	// MaxWindow — глубже этой позиции выдача не листается.
-	MaxWindow = 10000
+	MaxWindow = 2400
 	// MaxQueryLength — длина строки поиска в символах.
 	MaxQueryLength = 200
 	// MaxQueryWords — число слов в строке поиска.
@@ -42,11 +42,15 @@ type OfferCard struct {
 
 // OfferList — страница выдачи и фасеты.
 type OfferList struct {
-	Correction *ports.OfferCorrection
-	Receipt    string
-	Facets     []ports.Facet
-	Total      int
-	Items      []OfferCard
+	AvailableFacetKeys []string
+	Correction         *ports.OfferCorrection
+	Receipt            string
+	Facets             []ports.Facet
+	Total              int
+	TotalRelation      string
+	Limit              int
+	Limited            bool
+	Items              []OfferCard
 }
 
 // Queries — чтение выдачи и карточек.
@@ -106,10 +110,22 @@ func (q *Queries) Search(ctx context.Context, query ports.OfferQuery) (OfferList
 		return OfferList{}, err
 	}
 	list := OfferList{
-		Correction: page.Correction,
-		Facets:     displayFacets(page.Facets, normalized, presentation),
-		Total:      page.Total,
-		Items:      make([]OfferCard, 0, len(page.Items)),
+		Correction:    page.Correction,
+		Facets:        displayFacets(page.Facets, normalized, presentation),
+		Total:         page.Total,
+		TotalRelation: page.TotalRelation,
+		Limit:         normalized.Limit,
+		Limited:       page.Limited,
+		Items:         make([]OfferCard, 0, len(page.Items)),
+	}
+	if len(normalized.FacetKeys) == 0 {
+		for _, filter := range presentation.order {
+			key := string(wireBuiltin(filter.Code))
+			if key == "" {
+				key = "attr." + filter.Code
+			}
+			list.AvailableFacetKeys = append(list.AvailableFacetKeys, key)
+		}
 	}
 	if normalized.Observe && len(page.Items) != 0 {
 		list.Receipt = page.Receipt
@@ -146,13 +162,16 @@ func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 	if err := validateFacetSelection(query.Facets); err != nil {
 		return query, err
 	}
+	if err := validateListingFacetKeys(query.FacetKeys); err != nil {
+		return query, err
+	}
 	text, err := NormalizeQueryText(query.Text)
 	if err != nil {
 		return query, err
 	}
 	query.Text = text
-	query.TrackQuery = query.TrackQuery && query.Text != "" && query.Offset == 0
-	query.Observe = query.Observe && query.Text != ""
+	query.TrackQuery = query.TrackQuery && query.Text != "" && query.Offset == 0 && len(query.FacetKeys) == 0
+	query.Observe = query.Observe && query.Text != "" && len(query.FacetKeys) == 0
 	if !query.Observe {
 		query.BuyerKey = ""
 	}
@@ -181,9 +200,10 @@ func normalize(query ports.OfferQuery) (ports.OfferQuery, error) {
 	if query.Limit < 0 || query.Limit > MaxLimit {
 		return query, ErrInvalidQuery.WithMessage("размер страницы — от 1 до 100")
 	}
-	if query.Offset < 0 || query.Offset > MaxWindow-query.Limit {
-		return query, ErrInvalidQuery.WithMessage("выдача листается не глубже 10000 предложений")
+	if query.Offset < 0 || query.Offset >= MaxWindow {
+		return query, ErrInvalidQuery.WithMessage("доступны первые 2400 позиций выдачи, уточните фильтры")
 	}
+	query.Limit = min(query.Limit, MaxWindow-query.Offset)
 	if (query.PriceMin != nil && *query.PriceMin < 0) || (query.PriceMax != nil && *query.PriceMax < 0) {
 		return query, ErrInvalidQuery.WithMessage("цена не может быть отрицательной")
 	}
@@ -272,5 +292,5 @@ func (q *Queries) prepareQuery(ctx context.Context, query ports.OfferQuery) (por
 	}); err != nil {
 		return ports.OfferQuery{}, facetDisplay{}, err
 	}
-	return normalized, presentation, nil
+	return normalized, presentation, validateListingFacetFields(normalized)
 }

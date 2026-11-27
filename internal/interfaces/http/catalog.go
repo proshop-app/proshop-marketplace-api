@@ -55,13 +55,16 @@ type offerJSON struct {
 }
 
 type offerPageJSON struct {
-	Correction *offerCorrectionJSON `json:"correction,omitempty"`
-	Receipt    string               `json:"receipt,omitempty"`
-	Facets     []facetJSON          `json:"facets"`
-	Items      []offerJSON          `json:"items"`
-	Total      int                  `json:"total"`
-	Limit      int                  `json:"limit"`
-	Offset     int                  `json:"offset"`
+	AvailableFacetKeys []string             `json:"availableFacetKeys,omitempty"`
+	Correction         *offerCorrectionJSON `json:"correction,omitempty"`
+	Receipt            string               `json:"receipt,omitempty"`
+	Facets             []facetJSON          `json:"facets"`
+	Items              []offerJSON          `json:"items"`
+	Total              int                  `json:"total"`
+	TotalRelation      string               `json:"totalRelation"`
+	Limited            bool                 `json:"limited"`
+	Limit              int                  `json:"limit"`
+	Offset             int                  `json:"offset"`
 }
 
 type offerCorrectionJSON struct {
@@ -158,22 +161,21 @@ func (h *catalogHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rememberCatalogFacets(r.Context(), query, list.Facets)
-	limit := query.Limit
-	if limit == 0 {
-		limit = appcatalog.DefaultLimit
-	}
 	facets, err := facetResponses(list.Facets)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	body := offerPageJSON{
-		Receipt: list.Receipt,
-		Facets:  facets,
-		Items:   make([]offerJSON, 0, len(list.Items)),
-		Total:   list.Total,
-		Limit:   limit,
-		Offset:  query.Offset,
+		AvailableFacetKeys: list.AvailableFacetKeys,
+		Receipt:            list.Receipt,
+		Facets:             facets,
+		Items:              make([]offerJSON, 0, len(list.Items)),
+		Total:              list.Total,
+		TotalRelation:      list.TotalRelation,
+		Limited:            list.Limited,
+		Limit:              list.Limit,
+		Offset:             query.Offset,
 	}
 	if list.Correction != nil {
 		body.Correction = &offerCorrectionJSON{
@@ -238,6 +240,14 @@ func parseCatalogOfferQuery(r *http.Request) (ports.OfferQuery, error) {
 			return query, appcatalog.ErrInvalidQuery.WithMessage("exact — true или false")
 		}
 		query.Exact = exact[0] == "true"
+	}
+
+	query.FacetKeys = r.URL.Query()["facetKeys"]
+	if histogram, present := r.URL.Query()["priceHistogram"]; present {
+		if len(histogram) != 1 || (histogram[0] != "true" && histogram[0] != "false") {
+			return query, appcatalog.ErrInvalidQuery.WithMessage("priceHistogram — true или false")
+		}
+		query.PriceHistogram = histogram[0] == "true"
 	}
 
 	return query, nil
