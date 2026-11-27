@@ -16,11 +16,12 @@ import (
 // OfferState — согласованный снимок всего, из чего собирается предложение:
 // товар, сигналы, участник и запись реестра. Читается одним запросом.
 type OfferState struct {
-	Verdict     *moderation.Verdict
-	Product     *catalog.Product
-	Signals     *catalog.Signals
-	Participant *participant.Participant
-	Tenant      *participant.Tenant
+	StoreSummaryPending bool
+	Verdict             *moderation.Verdict
+	Product             *catalog.Product
+	Signals             *catalog.Signals
+	Participant         *participant.Participant
+	Tenant              *participant.Tenant
 }
 
 // OfferStatus содержит только данные обратной связи; Err относится к одному повреждённому товару.
@@ -43,8 +44,6 @@ type OfferKey struct {
 
 // OfferStates — чтение проекции для индекса.
 type OfferStates interface {
-	// WalkStoreSummaryOffers читает единый снимок пачками, с соседними вариантами для подсчёта рейтинга.
-	WalkStoreSummaryOffers(context.Context, ids.TenantID, func([]OfferState) error) error
 	// StatusBatch читает статусы, последние решения и причины дел одним снимком.
 	StatusBatch(context.Context, []ids.OfferID) ([]OfferStatus, error)
 	// Batch читает проекции выбранных предложений одной пачкой.

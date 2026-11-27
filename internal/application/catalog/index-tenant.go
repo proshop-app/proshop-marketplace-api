@@ -41,6 +41,7 @@ func (i *Indexer) syncTenantTaskPage(ctx context.Context, tenant ids.TenantID) e
 		return err
 	}
 
+	first := progress.After == ""
 	progress.Complete = len(states) < i.batch
 	if len(states) > 0 {
 		progress.After = states[len(states)-1].Product.State().ProductID
@@ -49,8 +50,11 @@ func (i *Indexer) syncTenantTaskPage(ctx context.Context, tenant ids.TenantID) e
 		if err := tx.OfferIndexWork().SaveTenant(ctx, tenant, progress); err != nil {
 			return err
 		}
-		if err := i.enqueuePageStoreCards(ctx, tx, states); err != nil {
-			return err
+		if first {
+			card := ports.StoreCardTask(tenant, i.clock.Now().Add(i.refreshDelay))
+			if err := tx.Outbox().Enqueue(ctx, card); err != nil {
+				return err
+			}
 		}
 		if !progress.Complete || version > progress.Target {
 			return tx.Outbox().Enqueue(ctx, SyncTenantTask(tenant, i.clock.Now()))

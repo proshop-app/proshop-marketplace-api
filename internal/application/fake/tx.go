@@ -102,6 +102,17 @@ func (r participants) List(_ context.Context, page participant.Page) ([]*partici
 	return items, total, nil
 }
 
+func (r participants) TenantIDsAfter(_ context.Context, after ids.TenantID, limit int) ([]ids.TenantID, error) {
+	keys := make([]ids.TenantID, 0, len(r.d.participants))
+	for key := range r.d.participants {
+		if key > after {
+			keys = append(keys, key)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	return keys[:min(len(keys), limit)], nil
+}
+
 func (r participants) Add(_ context.Context, p *participant.Participant) error {
 	state := p.State()
 	if _, ok := r.d.participants[state.TenantID]; ok {
@@ -218,6 +229,14 @@ func (r products) Save(_ context.Context, product *catalog.Product) error {
 		return catalog.ErrConflict
 	}
 
+	old := r.d.products[key]
+	changed := summaryInput(old) != summaryInput(state)
+	if changed {
+		r.d.storeSummaryPending[key] = true
+	}
+	if changed || old.Version == 0 {
+		r.d.storeRanked[key] = summaryRank{at: state.ProjectedAt, revision: state.Revision}
+	}
 	r.d.products[key] = state
 	product.MarkSaved()
 
@@ -320,7 +339,10 @@ func (p parked) Park(_ context.Context, event ports.ParkedEvent) error {
 }
 
 func (o offers) state(key productKey) ports.OfferState {
-	state := ports.OfferState{Product: catalog.RestoreProduct(o.d.products[key])}
+	state := ports.OfferState{
+		Product:             catalog.RestoreProduct(o.d.products[key]),
+		StoreSummaryPending: o.d.storeSummaryPending[key],
+	}
 	if v, ok := o.d.moderation.verdicts[key]; ok {
 		state.Verdict = moderation.RestoreVerdict(v)
 	}

@@ -21,6 +21,8 @@ import (
 
 const (
 	offerPlanProductsPerTenant = 1000
+	offerPlanSeedTimeout       = `SET statement_timeout = '5min'`
+	offerPlanResetTimeout      = `RESET statement_timeout`
 	offerPlanSeedTenants       = `
 		INSERT INTO tenants (tenant_id, slug, status, event_at, version, updated_at)
 		SELECT 't' || lpad(n::text, 6, '0'), 't' || lpad(n::text, 6, '0'), 'active', $2, 1, $2
@@ -235,6 +237,21 @@ func seedOfferPlan(t *testing.T, pool *pgxpool.Pool, tenants int, at time.Time) 
 	t.Helper()
 
 	ctx := context.Background()
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Release()
+	// Лимит выдачи сохраняется. Запас нужен только для загрузки фикстуры и её дельт.
+	if _, err := conn.Exec(ctx, offerPlanSeedTimeout); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := conn.Exec(ctx, offerPlanResetTimeout); err != nil {
+			t.Error(err)
+		}
+	}()
+
 	for _, seed := range []struct {
 		sql  string
 		args []any
@@ -263,7 +280,7 @@ func seedOfferPlan(t *testing.T, pool *pgxpool.Pool, tenants int, at time.Time) 
 			sql: offerPlanAnalyze,
 		},
 	} {
-		if _, err := pool.Exec(ctx, seed.sql, seed.args...); err != nil {
+		if _, err := conn.Exec(ctx, seed.sql, seed.args...); err != nil {
 			t.Fatal(err)
 		}
 	}

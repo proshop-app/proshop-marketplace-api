@@ -91,6 +91,7 @@ func TestProjectionToIndex(t *testing.T) {
 		},
 		map[string]messaging.Handler{
 			appmoderation.TaskReevaluate:     moderationService.HandleTask,
+			appmoderation.TaskReevaluateAll:  moderationService.HandleReevaluateAll,
 			appmoderation.TaskAllowTrusted:   moderationService.HandleTask,
 			appcatalog.TaskSyncOffer:         indexer.HandleTask,
 			appcatalog.TaskSyncTenant:        indexer.HandleTask,

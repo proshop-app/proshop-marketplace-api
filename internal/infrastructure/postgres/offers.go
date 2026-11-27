@@ -17,12 +17,17 @@ import (
 )
 
 const (
-	selectOfferBatch = offerSelect + `
+	selectOfferBatch = offerSelectWithSummary + `
 		WHERE (p.tenant_id, p.product_id) IN (SELECT * FROM unnest($1::text[], $2::text[]))`
 
 	// offerSelect — всё, из чего собирается предложение, одним запросом: снимок
 	// согласован, поэтому версия документа индекса монотонна.
-	offerSelect = `
+	offerSelect            = offerColumns + `, false` + offerJoins
+	offerSelectWithSummary = offerColumns + `, EXISTS (
+		SELECT 1 FROM store_summary_changes s WHERE s.tenant_id = p.tenant_id
+		 AND s.product_id = p.product_id AND s.batch_no IS NOT NULL AND NOT s.scheduled
+	)` + offerJoins
+	offerColumns = `
 		SELECT ` + productColumns + `, ` + signalsColumns + `,
 			pa.tenant_id, pa.slug, pa.name, pa.stage, pa.enabled,
 			pa.awaiting_review, pa.settings_synced_at, pa.version, pa.created_at, pa.updated_at,
@@ -31,14 +36,15 @@ const (
 			CASE WHEN mv.tenant_id IS NULL THEN NULL ELSE
 				to_jsonb(mv) || jsonb_build_object('operator', jsonb_build_object(
 					'id', mv.operator_id, 'name', mv.operator_name))
-			END
+			END`
+	offerJoins = `
 		FROM catalog_products p
 		LEFT JOIN offers o ON o.tenant_id = p.tenant_id AND o.product_id = p.product_id
 		LEFT JOIN participants pa ON pa.tenant_id = p.tenant_id
 		LEFT JOIN tenants t ON t.tenant_id = p.tenant_id
 		LEFT JOIN moderation_verdicts mv ON mv.tenant_id = p.tenant_id AND mv.product_id = p.product_id`
 
-	selectOffer = offerSelect + `
+	selectOffer = offerSelectWithSummary + `
 		WHERE p.tenant_id = $1 AND p.product_id = $2`
 
 	selectTenantOffers = offerSelect + `
@@ -67,11 +73,12 @@ type Offers struct {
 
 // offerRow — строка предложения: товар и всё, что к нему присоединено.
 type offerRow struct {
-	verdict     []byte
-	product     productRow
-	signals     signalsRow
-	participant participantRow
-	tenant      tenantRow
+	storeSummaryPending bool
+	verdict             []byte
+	product             productRow
+	signals             signalsRow
+	participant         participantRow
+	tenant              tenantRow
 }
 
 // participantRow — участник из LEFT JOIN: у товара без участника все поля пусты.
@@ -178,7 +185,7 @@ func (r *offerRow) targets() []any {
 	targets = append(targets, r.participant.targets()...)
 
 	targets = append(targets, r.tenant.targets()...)
-	return append(targets, &r.verdict)
+	return append(targets, &r.verdict, &r.storeSummaryPending)
 }
 
 func (r *offerRow) state() (ports.OfferState, error) {
@@ -193,10 +200,11 @@ func (r *offerRow) state() (ports.OfferState, error) {
 	}
 
 	state := ports.OfferState{
-		Product:     product,
-		Signals:     r.signals.signals(),
-		Participant: member,
-		Tenant:      r.tenant.tenant(),
+		StoreSummaryPending: r.storeSummaryPending,
+		Product:             product,
+		Signals:             r.signals.signals(),
+		Participant:         member,
+		Tenant:              r.tenant.tenant(),
 	}
 
 	if len(r.verdict) > 0 {

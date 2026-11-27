@@ -33,7 +33,7 @@ func NewService(uow ports.UnitOfWork, clock ports.Clock, identities ports.IDs, c
 	return &Service{uow: uow, clock: clock, ids: identities, config: config}
 }
 
-// Evaluate сохраняет порядок правил и защищает решение оператора текущей ревизии.
+// Evaluate сохраняет вердикт и задачи после отдельного пересмотра предложения.
 func (s *Service) Evaluate(
 	ctx context.Context,
 	tx ports.Tx,
@@ -42,11 +42,12 @@ func (s *Service) Evaluate(
 	previous *catalog.ProductState,
 	now time.Time,
 ) error {
-	changed, err := s.evaluate(ctx, tx, product, member, previous, now)
-	if err != nil || !changed {
+	decision, err := s.evaluate(ctx, tx, product, member, previous, now)
+	if err != nil || !decision.Changed {
 		return err
 	}
-	return s.enqueueEvaluation(ctx, tx, product.State(), now)
+	state := product.State()
+	return tx.Outbox().EnqueueBatch(ctx, evaluationTasks(state, now))
 }
 
 // EvaluateProjection оставляет постановку задач вызывающему проектору.
@@ -68,30 +69,24 @@ func (s *Service) evaluate(
 	member *participant.Participant,
 	previous *catalog.ProductState,
 	now time.Time,
-) (bool, error) {
+) (evaluationDecision, error) {
 	input, err := s.readEvaluation(ctx, tx, product, member, previous, now)
 	if err != nil {
-		return false, err
+		return evaluationDecision{}, err
 	}
 	decision := decideVerdict(input)
 	if err := readEvaluationCase(ctx, tx, &input, decision); err != nil {
-		return false, err
+		return evaluationDecision{}, err
 	}
 	decision = s.completeEvaluation(input, decision)
-	return decision.Changed, saveDecision(ctx, tx, decision)
+	return decision, saveDecision(ctx, tx, decision)
 }
 
-func (s *Service) enqueueEvaluation(
-	ctx context.Context,
-	tx ports.Tx,
-	p catalog.ProductState,
-	now time.Time,
-) error {
-	if err := tx.Outbox().Enqueue(ctx, moderationstatus.OfferTask(p.TenantID, p.ProductID, now)); err != nil {
-		return err
+func evaluationTasks(p catalog.ProductState, now time.Time) []ports.NewTask {
+	return []ports.NewTask{
+		moderationstatus.OfferTask(p.TenantID, p.ProductID, now),
+		appcatalog.SyncOfferTask(p.TenantID, p.ProductID, now),
 	}
-	// Пересчёт сводки магазина ставит синхронизация предложения — с окном склейки.
-	return tx.Outbox().Enqueue(ctx, appcatalog.SyncOfferTask(p.TenantID, p.ProductID, now))
 }
 
 func (s *Service) recordVerdict(tx ports.Tx, state moderation.VerdictState) {

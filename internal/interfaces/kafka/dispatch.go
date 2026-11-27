@@ -59,6 +59,8 @@ func (c *Consumer) runGeneration(parent context.Context) error {
 
 func (c *Consumer) dispatch(ctx context.Context, incoming <-chan kafkago.Message, work lane, commits *offsetCommitter) {
 	queue := newKeyQueue()
+	var retries retrySchedule
+	defer retries.stop()
 	ticker := time.NewTicker(commitInterval)
 	defer ticker.Stop()
 	// idle — воркеры, ждущие задание; busy — выданные задания. Ожидающие делятся на все незанятые
@@ -92,11 +94,13 @@ func (c *Consumer) dispatch(ctx context.Context, incoming <-chan kafkago.Message
 				item.offset.complete()
 				c.source.Release(ctx, item.message)
 			}
-			// Неуспешное после отката — отдельным заданием, ключ остаётся за ним.
+			// Пока повтор ждёт срока, ключ остаётся занят, а воркер принимает другие сообщения.
 			for _, item := range result.retry {
-				queue.retry(item)
+				retries.deferRetry(queue, item, time.Now())
 			}
 			commits.flush(ctx, false)
+		case <-retries.wakeup():
+			retries.release(queue, time.Now())
 		case <-ticker.C:
 			commits.flush(ctx, true)
 		}

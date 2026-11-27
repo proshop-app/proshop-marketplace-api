@@ -324,6 +324,28 @@ func TestShopDirectoryConcurrentChanges(t *testing.T) {
 	}
 }
 
+// Скрытая карточка уходит из справочника поиска той же транзакцией; повтор ревизию не двигает.
+func TestShopDirectoryHiddenStoreIsRemoved(t *testing.T) {
+	ctx := context.Background()
+	pool := pgtest.Pool(t)
+	uow := postgres.NewUnitOfWork(pool)
+	seedDirectoryStores(t, pool, 2, 9)
+	previous := readDirectory(t, uow, 0).Revision
+	hide := func(ctx context.Context, tx ports.Tx) error {
+		return tx.StoreCards().Hide(ctx, "shop-1")
+	}
+	for range 2 {
+		if err := uow.Do(ctx, hide); err != nil {
+			t.Fatal(err)
+		}
+	}
+	current := readDirectory(t, uow, previous)
+	removed := len(current.Removed) == 1 && current.Removed[0] == "shop-1"
+	if current.Revision != previous+1 || !removed || len(current.Items) != 0 {
+		t.Fatalf("скрытый магазин остался в справочнике: %d → %+v", previous, current)
+	}
+}
+
 func TestShopDirectoryOfferCountsDoNotSerializeStores(t *testing.T) {
 	ctx := context.Background()
 	pool := pgtest.Pool(t)

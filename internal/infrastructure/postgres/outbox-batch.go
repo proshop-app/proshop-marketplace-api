@@ -17,9 +17,7 @@ const (
 		SELECT kind, tenant_id, NULLIF(dedup_key, ''), payload, next_at, created_at
 		FROM jsonb_to_recordset($1::jsonb)
 		AS t(kind text, tenant_id text, dedup_key text, payload jsonb, next_at timestamptz, created_at timestamptz)
-		ON CONFLICT (dedup_key) WHERE attempts = 0 DO UPDATE
-		SET next_at = EXCLUDED.next_at
-		WHERE EXCLUDED.next_at < outbox.next_at`
+		` + mergePendingTasks
 
 	// resolveTasks удаляет выполненные задачи и сохраняет повторы и карантин одним оператором.
 	resolveTasks = `

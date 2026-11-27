@@ -80,12 +80,10 @@ func (i *Indexer) SyncOffer(ctx context.Context, tenantID ids.TenantID, productI
 		var err error
 
 		state, err = tx.Offers().Offer(ctx, tenantID, productID)
-
-		if err != nil {
+		if err != nil || state.Participant == nil {
 			return err
 		}
-
-		return tx.Outbox().Enqueue(ctx, ports.StoreCardTask(tenantID, i.clock.Now().Add(i.refreshDelay)))
+		return i.scheduleStoreSummaryChanges(ctx, tx, []ports.OfferState{state})
 	})
 
 	if errors.Is(err, catalog.ErrProductNotFound) {
@@ -111,6 +109,20 @@ func (i *Indexer) SyncOffer(ctx context.Context, tenantID ids.TenantID, productI
 	return i.index.Put(ctx, []ports.OfferDocument{doc})
 }
 
+func (i *Indexer) scheduleStoreSummaryChanges(ctx context.Context, tx ports.Tx, states []ports.OfferState) error {
+	var keys []ids.OfferID
+	for _, state := range states {
+		if state.Participant != nil && state.StoreSummaryPending {
+			p := state.Product.State()
+			keys = append(keys, ids.OfferID{Tenant: p.TenantID, Product: p.ProductID})
+		}
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	return tx.StoreCards().ScheduleChanges(ctx, keys, i.clock.Now().Add(i.refreshDelay))
+}
+
 // SyncTenant переписывает все предложения магазина: после смены участника
 // или записи реестра меняется видимость всех его товаров.
 func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
@@ -125,7 +137,7 @@ func (i *Indexer) SyncTenant(ctx context.Context, tenantID ids.TenantID) error {
 		err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 			var err error
 			states, err = tx.Offers().TenantOffers(ctx, tenantID, after, i.batch)
-			if err != nil {
+			if err != nil || after != "" {
 				return err
 			}
 			return tx.Outbox().Enqueue(ctx, ports.StoreCardTask(tenantID, i.clock.Now().Add(i.refreshDelay)))

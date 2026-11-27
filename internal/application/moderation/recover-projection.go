@@ -148,7 +148,8 @@ func (s *Service) RecoverProjection(
 		if err != nil || !saved {
 			return err
 		}
-		return s.enqueueEvaluation(ctx, tx, p, s.clock.Now())
+		tasks := evaluationTasks(p, s.clock.Now())
+		return tx.Outbox().EnqueueBatch(ctx, tasks)
 	})
 	return result, err
 }

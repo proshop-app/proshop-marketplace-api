@@ -26,7 +26,10 @@ type moderationData struct {
 	revision             int64
 }
 
-type moderationVerdicts struct{ d *moderationData }
+type moderationVerdicts struct {
+	d     *moderationData
+	store *data
+}
 type moderationCases struct{ d *moderationData }
 type moderationDecisions struct{ d *moderationData }
 type moderationRules struct{ d *moderationData }
@@ -60,7 +63,7 @@ func (d *moderationData) clone() *moderationData {
 }
 
 func (t *tx) ModerationVerdicts() moderation.VerdictRepository {
-	return moderationVerdicts{t.data.moderation}
+	return moderationVerdicts{d: t.data.moderation, store: t.data}
 }
 func (t *tx) ModerationCases() moderation.CaseRepository { return moderationCases{t.data.moderation} }
 func (t *tx) ModerationDecisions() moderation.DecisionRepository {
@@ -107,6 +110,9 @@ func (r moderationVerdicts) Save(_ context.Context, v *moderation.Verdict) error
 	old := r.d.verdicts[key]
 	if old.Version != v.Origin().Version || old.Status != v.Origin().Status {
 		return moderation.ErrConflict
+	}
+	if (old.Status == moderation.Allowed) != (state.Status == moderation.Allowed) {
+		r.store.storeSummaryPending[key] = true
 	}
 	r.d.verdicts[key] = state
 	if state.Version != old.Version {

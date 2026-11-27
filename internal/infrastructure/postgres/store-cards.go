@@ -19,6 +19,13 @@ const (
 	batchPublicCards = `SELECT card FROM store_cards WHERE tenant_id = ANY($1) AND page_public
 		ORDER BY array_position($1::text[], tenant_id)`
 	lockStoreSummary = `SELECT pg_advisory_xact_lock(hashtextextended($1, 38))`
+	hideStoreCard    = `
+		WITH hidden AS (
+			UPDATE store_cards SET public = false, page_public = false
+			WHERE tenant_id = $1 AND (public OR page_public)
+			RETURNING tenant_id
+		)
+		SELECT record_shop_directory_change(tenant_id, NULL) FROM hidden`
 	saveStoreSummary = `
         WITH saved AS (
             INSERT INTO store_cards (
@@ -126,6 +133,13 @@ func (r *StoreCards) CacheVersion(ctx context.Context, tenants ...ids.TenantID) 
 // Lock сериализует пересчёты магазина до чтения источников в READ COMMITTED.
 func (r *StoreCards) Lock(ctx context.Context, tenant ids.TenantID) error {
 	_, err := execSQL(ctx, r.db, lockStoreSummary, string(tenant))
+	return err
+}
+
+// Hide закрывает публичные чтения, меняет поколение кэша через триггер store_cards
+// и убирает магазин из справочника поиска.
+func (r *StoreCards) Hide(ctx context.Context, tenant ids.TenantID) error {
+	_, err := execSQL(ctx, r.db, hideStoreCard, string(tenant))
 	return err
 }
 

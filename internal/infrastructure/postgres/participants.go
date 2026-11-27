@@ -35,6 +35,8 @@ const (
 		ORDER BY created_at, tenant_id
 		LIMIT $1 OFFSET $2`
 
+	listParticipantTenantIDs = `SELECT tenant_id FROM participants WHERE tenant_id > $1 ORDER BY tenant_id LIMIT $2`
+
 	insertParticipant = `
 		INSERT INTO participants (
 			tenant_id, slug, name, stage, enabled, awaiting_review,
@@ -94,6 +96,26 @@ func (r *Participants) Get(ctx context.Context, tenantID ids.TenantID) (*partici
 	}
 
 	return p, nil
+}
+
+// TenantIDsAfter читает только ключи следующей страницы через первичный индекс.
+func (r *Participants) TenantIDsAfter(ctx context.Context, after ids.TenantID, limit int) ([]ids.TenantID, error) {
+	rows, err := rawSQL(ctx, r.db, listParticipantTenantIDs, string(after), limit).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	keys := make([]ids.TenantID, 0, limit)
+	for rows.Next() {
+		var key ids.TenantID
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
 }
 
 // List — участники по времени создания.
