@@ -20,6 +20,23 @@ import (
 
 const featureBuyer ids.UUID = "7a1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b"
 
+type featureTransactions struct {
+	*fake.Store
+	calls        int
+	profileLocks int
+	busyProfile  bool
+}
+
+type featureTx struct {
+	ports.Tx
+	store *featureTransactions
+}
+
+type featureRepo struct {
+	ports.BuyerFeatures
+	store *featureTransactions
+}
+
 func seedFeatureOffer(store *fake.Store, price int64, visible bool) {
 	store.SeedTenant(participant.TenantState{TenantID: "t1", Status: participant.TenantActive})
 	store.SeedParticipant(participant.State{
@@ -326,4 +343,69 @@ func TestRegionWithoutLocalHint(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConcurrentProfileWriteStopsBeforeTransaction(t *testing.T) {
+	ctx := context.Background()
+	store := &featureTransactions{Store: fake.NewStore()}
+	service := app.NewFeatures(store, nil, nil)
+	same := func(state buyer.ProfileState) (buyer.ProfileState, error) { return state, nil }
+	change := func(state buyer.ProfileState) (buyer.ProfileState, error) {
+		_, err := service.Patch(ctx, featureBuyer, same)
+		if !errors.Is(err, buyer.ErrFeaturesBusy) || store.calls != 1 {
+			t.Fatalf("конкурирующая запись: %v, транзакций %d", err, store.calls)
+		}
+		return state, nil
+	}
+	if _, err := service.Patch(ctx, featureBuyer, change); err != nil || store.calls != 2 {
+		t.Fatalf("первая запись: %v, транзакций %d", err, store.calls)
+	}
+	if _, err := service.Patch(ctx, featureBuyer, same); err != nil || store.calls != 4 {
+		t.Fatalf("запись после освобождения: %v, транзакций %d", err, store.calls)
+	}
+}
+
+func TestProfilePatchDoesNotWaitForCheckoutPickupWrite(t *testing.T) {
+	ctx := context.Background()
+	store := &featureTransactions{Store: fake.NewStore(), busyProfile: true}
+	service := app.NewFeatures(store, nil, nil)
+	same := func(state buyer.ProfileState) (buyer.ProfileState, error) { return state, nil }
+	if _, err := service.Patch(ctx, featureBuyer, same); err != nil || store.profileLocks != 0 {
+		t.Fatalf("пустая правка: %v, блокировок %d", err, store.profileLocks)
+	}
+	change := func(state buyer.ProfileState) (buyer.ProfileState, error) {
+		state.Name = "Покупатель"
+		return state, nil
+	}
+	if _, err := service.Patch(ctx, featureBuyer, change); !errors.Is(err, buyer.ErrFeaturesBusy) {
+		t.Fatal(err)
+	}
+	profile, err := service.Profile(ctx, featureBuyer)
+	if err != nil || profile.Version != 0 || store.profileLocks != 1 {
+		t.Fatal(profile, err, store.profileLocks)
+	}
+	store.busyProfile = false
+	profile, err = service.Patch(ctx, featureBuyer, change)
+	if err != nil || profile.Name != "Покупатель" || profile.Version != 1 {
+		t.Fatal(profile, err)
+	}
+}
+
+func (s *featureTransactions) Do(ctx context.Context, run func(context.Context, ports.Tx) error) error {
+	s.calls++
+	return s.Store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		return run(ctx, featureTx{Tx: tx, store: s})
+	})
+}
+
+func (tx featureTx) BuyerFeatures() ports.BuyerFeatures {
+	return featureRepo{BuyerFeatures: tx.Tx.BuyerFeatures(), store: tx.store}
+}
+
+func (r featureRepo) TryLockProfile(ctx context.Context, buyerID ids.UUID) error {
+	r.store.profileLocks++
+	if r.store.busyProfile {
+		return buyer.ErrFeaturesBusy
+	}
+	return r.BuyerFeatures.TryLockProfile(ctx, buyerID)
 }

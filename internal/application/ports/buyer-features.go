@@ -58,9 +58,11 @@ type SavedOffer struct {
 	TargetPrice  *money.Money
 }
 
-// BuyerFeatures привязан к транзакции; Lock сериализует изменения списков и проверку лимитов.
+// BuyerFeatures привязан к транзакции; Lock защищает запись ПВЗ при оформлении, TryLockLists — лимиты списков.
 type BuyerFeatures interface {
 	Lock(context.Context, ids.UUID) error
+	TryLockProfile(context.Context, ids.UUID) error
+	TryLockLists(context.Context, ids.UUID) error
 	Profile(context.Context, ids.UUID) (*buyer.Profile, error)
 	SaveProfile(context.Context, ids.UUID, *buyer.Profile) error
 	FavoritesPage(context.Context, ids.UUID, int, int) ([]SavedOffer, int, error)

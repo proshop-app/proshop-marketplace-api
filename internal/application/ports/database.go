@@ -13,12 +13,14 @@ const (
 	DatabaseBackground DatabaseClass = iota + 1
 	// DatabaseRead — чтение покупателя по HTTP.
 	DatabaseRead
-	// DatabaseCheckout — запись по HTTP: корзина, оформление, вход, избранное, API сервера.
+	// DatabaseCheckout — корзина и оформление по HTTP.
 	DatabaseCheckout
 	// DatabaseIngestion — приём событий Kafka.
 	DatabaseIngestion
 	// DatabaseOrders — исполнитель оформления: создание, срок, сверка и отмена заказов магазинов.
 	DatabaseOrders
+	// DatabaseWrite — вход, покупательские списки, маячки и прочие HTTP-записи.
+	DatabaseWrite
 )
 
 type databaseClassKey struct{}
@@ -31,7 +33,7 @@ func WithDatabaseClass(ctx context.Context, class DatabaseClass) context.Context
 // DatabaseClassFrom возвращает явно выбранный класс либо фон.
 func DatabaseClassFrom(ctx context.Context) DatabaseClass {
 	class, ok := ctx.Value(databaseClassKey{}).(DatabaseClass)
-	if ok && class >= DatabaseBackground && class <= DatabaseOrders {
+	if ok && class >= DatabaseBackground && class <= DatabaseWrite {
 		return class
 	}
 	return DatabaseBackground

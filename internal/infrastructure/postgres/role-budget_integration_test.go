@@ -77,6 +77,7 @@ func TestPooledClassesTakeBudgetFromRole(t *testing.T) {
 	configs := classRoles(t, database, map[ports.DatabaseClass]postgres.Budget{
 		ports.DatabaseRead:       fast,
 		ports.DatabaseCheckout:   slow,
+		ports.DatabaseWrite:      slow,
 		ports.DatabaseIngestion:  slow,
 		ports.DatabaseBackground: slow,
 		ports.DatabaseOrders:     slow,
@@ -116,6 +117,7 @@ func TestPooledClassWithForeignRoleBudgetDoesNotStart(t *testing.T) {
 	configs := classRoles(t, database, map[ports.DatabaseClass]postgres.Budget{
 		ports.DatabaseRead:       budget,
 		ports.DatabaseCheckout:   budget,
+		ports.DatabaseWrite:      budget,
 		ports.DatabaseIngestion:  budget,
 		ports.DatabaseBackground: budget,
 		ports.DatabaseOrders:     budget,

@@ -12,13 +12,13 @@ import (
 
 func TestEveryRouteHasExplicitBudgetAndUniformTimeoutStatus(t *testing.T) {
 	deps := Deps{
-		RequestTimeout:         time.Millisecond,
-		ReferenceImportTimeout: 2 * time.Millisecond,
+		RequestTimeout:         -time.Second,
+		ReferenceImportTimeout: -time.Second,
 	}
 	classes := map[requestClass]ports.DatabaseClass{
 		readRequest:       ports.DatabaseRead,
 		checkoutRequest:   ports.DatabaseCheckout,
-		writeRequest:      ports.DatabaseCheckout,
+		writeRequest:      ports.DatabaseWrite,
 		backgroundRequest: ports.DatabaseBackground,
 		importRequest:     ports.DatabaseBackground,
 	}
@@ -52,12 +52,34 @@ func TestEveryRouteHasExplicitBudgetAndUniformTimeoutStatus(t *testing.T) {
 }
 
 func TestDeadlineErrorUses503BeforeWritingHeaders(t *testing.T) {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Time{})
 	defer cancel()
 	request := httptest.NewRequest(http.MethodGet, "/any", nil).WithContext(ctx)
 	recorder := httptest.NewRecorder()
 	writeError(recorder, request, context.DeadlineExceeded)
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatal("истечение срока стало внутренней ошибкой", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestAuxiliaryWritesUseTheirOwnDatabaseClass(t *testing.T) {
+	want := map[string]requestClass{
+		"POST /api/v1/checkout":         checkoutRequest,
+		"POST /api/v1/cart/lines":       checkoutRequest,
+		"POST /api/v1/promotion/events": writeRequest,
+		"PATCH /api/v1/buyer/profile":   writeRequest,
+		"POST /api/v1/auth/call":        writeRequest,
+	}
+	for _, route := range routes(Deps{}) {
+		key := route.method + " " + route.path
+		if class, ok := want[key]; ok {
+			if route.class != class {
+				t.Errorf("%s: класс %d, ожидается %d", key, route.class, class)
+			}
+			delete(want, key)
+		}
+	}
+	if len(want) != 0 {
+		t.Fatal("не найдены маршруты", want)
 	}
 }

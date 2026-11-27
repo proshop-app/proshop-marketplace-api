@@ -31,7 +31,7 @@ func TestDatabasePoolsPerLoadClass(t *testing.T) {
 	}
 	pools := cfg.Database
 	if pools.Read.MaxConns != 8 || pools.Checkout.MaxConns != 6 || pools.Background.MaxConns != 10 ||
-		pools.Ingestion.MaxConns != 0 {
+		pools.Write.MaxConns != 6 || pools.Ingestion.MaxConns != 0 {
 		t.Fatalf("умолчания пулов; приём без переменной считается по воркерам: %+v", pools)
 	}
 	env := validEnv()
@@ -58,7 +58,7 @@ func pooledEnv() map[string]string {
 	env := validEnv()
 	env["DATABASE_URL"] = "postgres://pooler:5432/marketplace"
 	env["DATABASE_DIRECT_URL"] = "postgres://marketplace:secret@db:5432/marketplace"
-	for _, class := range []string{"READ", "CHECKOUT", "INGESTION", "BACKGROUND", "ORDERS"} {
+	for _, class := range []string{"READ", "CHECKOUT", "WRITE", "INGESTION", "BACKGROUND", "ORDERS"} {
 		env["DATABASE_"+class+"_USER"] = "marketplace_" + strings.ToLower(class)
 		env["DATABASE_"+class+"_PASSWORD"] = "secret-" + class
 	}

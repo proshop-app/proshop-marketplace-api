@@ -29,9 +29,11 @@ const (
 	putBuyerFavorite = `INSERT INTO buyer_favorites(buyer_id, tenant_id, product_id, snapshot)
   VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`
 
-	lockBuyerFeatures  = `SELECT pg_advisory_xact_lock(hashtextextended($1, 39))`
-	getBuyerProfile    = `SELECT body, version FROM buyer_profiles WHERE buyer_id = $1`
-	insertBuyerProfile = `INSERT INTO buyer_profiles(buyer_id, body, version) VALUES ($1, $2, $3)
+	lockBuyerProfile    = `SELECT pg_advisory_xact_lock(hashtextextended($1, 39))`
+	tryLockBuyerProfile = `SELECT pg_try_advisory_xact_lock(hashtextextended($1, 39))`
+	tryLockBuyerLists   = `SELECT pg_try_advisory_xact_lock(hashtextextended($1, 40))`
+	getBuyerProfile     = `SELECT body, version FROM buyer_profiles WHERE buyer_id = $1`
+	insertBuyerProfile  = `INSERT INTO buyer_profiles(buyer_id, body, version) VALUES ($1, $2, $3)
   ON CONFLICT DO NOTHING`
 	updateBuyerProfile = `UPDATE buyer_profiles
   SET body = $2,
@@ -69,10 +71,31 @@ type BuyerFeatures struct {
 // BuyerFeatures возвращает репозиторий текущей транзакции.
 func (s *scope) BuyerFeatures() ports.BuyerFeatures { return &BuyerFeatures{db: s.db} }
 
-// Lock — сериализует изменения списков одного покупателя.
+// Lock сериализует сохранение ПВЗ в профиле при оформлении заказа.
 func (r *BuyerFeatures) Lock(ctx context.Context, id ids.UUID) error {
-	_, err := execSQL(ctx, r.db, lockBuyerFeatures, string(id))
+	_, err := execSQL(ctx, r.db, lockBuyerProfile, string(id))
 	return err
+}
+
+// TryLockProfile согласует запись профиля с сохранением ПВЗ при оформлении.
+func (r *BuyerFeatures) TryLockProfile(ctx context.Context, id ids.UUID) error {
+	return r.tryLock(ctx, id, tryLockBuyerProfile)
+}
+
+// TryLockLists сохраняет лимиты списков при параллельной записи с разных реплик.
+func (r *BuyerFeatures) TryLockLists(ctx context.Context, id ids.UUID) error {
+	return r.tryLock(ctx, id, tryLockBuyerLists)
+}
+
+func (r *BuyerFeatures) tryLock(ctx context.Context, id ids.UUID, query string) error {
+	var acquired bool
+	if err := rawSQL(ctx, r.db, query, string(id)).Row().Scan(&acquired); err != nil {
+		return err
+	}
+	if !acquired {
+		return buyer.ErrFeaturesBusy
+	}
+	return nil
 }
 
 // Profile возвращает пустой профиль до первого сохранения.

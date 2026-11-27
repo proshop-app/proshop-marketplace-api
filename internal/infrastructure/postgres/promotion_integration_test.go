@@ -10,12 +10,15 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/promotion"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres/pgtest"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 	"github.com/proshop-app/proshop-marketplace/pkg/money"
+	"github.com/proshop-app/proshop-marketplace/pkg/safego"
 )
 
 const (
@@ -24,6 +27,7 @@ const (
  VALUES($1,'t1','sponsored_slot','category_slot',1,'c1','2026-11-09','2026-11-15',700,0,'draft',1,$2)`
 	activatePromotionForCounters = `UPDATE promotion_campaigns SET status = 'active' WHERE id = $1`
 	promotionColumnsCheck        = `SELECT created_at,updated_at,product_id FROM promotion_campaigns WHERE id=$1`
+	promotionCountShards         = `SELECT count(*) FROM promotion_counters WHERE campaign_id=$1 AND day=$2::text::date`
 )
 
 func TestPromotionRepositories(t *testing.T) {
@@ -191,7 +195,68 @@ func TestPromotionRepositories(t *testing.T) {
 	if err != nil || !created.Equal(now) || !updated.Equal(now.Add(time.Hour)) || product != "p1" {
 		t.Fatal(created, updated, product, err)
 	}
+	var shards int
+	if err := pool.QueryRow(ctx, promotionCountShards, c.State().ID, "2026-11-09").Scan(&shards); err != nil {
+		t.Fatal(err)
+	}
+	if shards != 1 {
+		t.Fatalf("одна пачка должна использовать один шард, использовано %d", shards)
+	}
+	if err := countConcurrentPromotionBatches(ctx, uow, c.State().ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, promotionCountShards, c.State().ID, "2026-11-09").Scan(&shards); err != nil {
+		t.Fatal(err)
+	}
+	if shards < 32 {
+		t.Fatalf("5000 маячков использовали %d из 64 шардов", shards)
+	}
+}
 
+func countConcurrentPromotionBatches(ctx context.Context, uow ports.UnitOfWork, campaign ids.UUID) error {
+	const (
+		batches   = 100
+		batchSize = 50
+		day       = "2026-11-09"
+	)
+	group, batchCtx := errgroup.WithContext(ctx)
+	group.SetLimit(12)
+	for i := range batches {
+		group.Go(safego.Guard("test.promotion.beacons", func() error {
+			events := make([]promotion.Beacon, batchSize)
+			for j := range events {
+				events[j] = promotion.Beacon{
+					EventID:     ids.UUID(fmt.Sprintf("20000000-0000-4000-8000-%012d", i*batchSize+j)),
+					PromotionID: campaign,
+					Kind:        "view",
+				}
+			}
+			return uow.Do(batchCtx, func(ctx context.Context, tx ports.Tx) error {
+				fresh, err := tx.Promotion().CountEvents(ctx, day, events)
+				if err != nil || len(fresh) != batchSize {
+					return fmt.Errorf("новые маячки пачки %d: %d, %w", i, len(fresh), err)
+				}
+				repeated, err := tx.Promotion().CountEvents(ctx, "2026-11-10", events)
+				if err != nil || len(repeated) != 0 {
+					return fmt.Errorf("повторы пачки %d: %d, %w", i, len(repeated), err)
+				}
+				return nil
+			})
+		}))
+	}
+	if err := group.Wait(); err != nil {
+		return err
+	}
+	return uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
+		rows, err := tx.Promotion().Stats(ctx, campaign, "", "")
+		if err != nil {
+			return err
+		}
+		if len(rows) != 1 || rows[0].Impressions != batches*batchSize+1 || rows[0].Clicks != 1 {
+			return fmt.Errorf("итоги кампании после параллельных пачек: %+v", rows)
+		}
+		return nil
+	})
 }
 
 func TestPromotionConcurrentCapacity(t *testing.T) {

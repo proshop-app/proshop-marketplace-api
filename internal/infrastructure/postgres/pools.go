@@ -17,6 +17,7 @@ const commandConnections = 2
 var databaseClasses = []ports.DatabaseClass{
 	ports.DatabaseRead,
 	ports.DatabaseCheckout,
+	ports.DatabaseWrite,
 	ports.DatabaseIngestion,
 	ports.DatabaseBackground,
 	ports.DatabaseOrders,

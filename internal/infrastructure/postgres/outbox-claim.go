@@ -33,7 +33,9 @@ import (
 //	$9  ordered    — упорядоченные виды запроса (подмножество OrderedTaskKinds);
 //	$10 visits     — потолок посещённых полос одного вида;
 //	$11 recent     — сначала пробовать магазин из конца очереди;
-//	$12 deprioritized — магазины, которые пропускают, если найден свежий кандидат.
+//	$12 deprioritized — магазины, которые пропускают, если найден свежий кандидат;
+//	$13 gate_key    — ключ общей отсрочки;
+//	$14 gate_kinds  — виды, на которые действует отсрочка.
 const (
 	// orderedLaneKinds — упорядоченные виды буквально: так планировщик выбирает частичный индекс
 	// outbox_ordered_head_idx для старейшей задачи полосы. Список совпадает с OrderedTaskKinds
@@ -56,7 +58,7 @@ const (
 	// claimKinds — виды взятия: из запроса или все виды очереди, без исключённых.
 	// Для одного явно запрошенного вида сразу проверяем по индексу, есть ли созревшие задачи.
 	claimKinds = `
-		claim_kinds AS (
+		claim_requested_kinds AS (
 			SELECT kind FROM unnest($5::text[]) AS kind
 			WHERE cardinality($5::text[]) > 1 OR EXISTS (
 				SELECT 1 FROM outbox
@@ -65,6 +67,11 @@ const (
 			)
 			UNION
 			SELECT kind FROM claim_queued_kinds WHERE cardinality($5::text[]) = 0
+		), claim_kinds AS (
+			SELECT kind FROM claim_requested_kinds
+			WHERE NOT (kind = ANY($14::text[])) OR NOT EXISTS (
+				SELECT FROM outbox_lane_pauses WHERE lane = $13 AND resume_at > $1
+			)
 		)`
 
 	// claimNextLane — следующая полоса вида после l.position; в конце вида — переход к началу
@@ -366,6 +373,8 @@ func claimOutboxTasks(ctx context.Context, db *gorm.DB, request ports.ClaimReque
 		ports.ClaimLaneVisits,
 		request.PreferRecent,
 		append([]ids.TenantID{}, request.DeprioritizedTenants...),
+		request.Gate.Key,
+		append([]string{}, request.Gate.Kinds...),
 	).Rows()
 	if err != nil {
 		return ports.ClaimResult{}, fmt.Errorf("взятие задач: %w", err)

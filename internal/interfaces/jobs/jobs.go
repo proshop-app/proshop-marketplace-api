@@ -88,15 +88,29 @@ func NewOutboxRunner(
 
 // Run крутит разбор до отмены контекста.
 func (r *OutboxRunner) Run(ctx context.Context) error {
-	return r.run(ctx, r.dispatcher)
+	return r.run(ctx, r.dispatcher, nil)
 }
 
 // RunLane разбирает свои виды задач независимо и пишет в общие метрики outbox.
 func (r *OutboxRunner) RunLane(ctx context.Context, dispatcher Dispatcher) error {
-	return r.run(ctx, dispatcher)
+	return r.run(ctx, dispatcher, nil)
 }
 
-func (r *OutboxRunner) run(ctx context.Context, dispatcher Dispatcher) error {
+// RunIndependent ведёт общий цикл и дожидается отдельной полосы при остановке.
+func (r *OutboxRunner) RunIndependent(ctx context.Context, lane *messaging.IndependentLane) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer func() {
+		cancel()
+		lane.Wait()
+	}()
+	return r.run(ctx, lane, lane.Done)
+}
+
+func (r *OutboxRunner) run(
+	ctx context.Context,
+	dispatcher Dispatcher,
+	wake func() <-chan struct{},
+) error {
 	for {
 		outcomes, err := dispatcher.RunOnce(ctx)
 		r.record(outcomes)
@@ -110,7 +124,11 @@ func (r *OutboxRunner) run(ctx context.Context, dispatcher Dispatcher) error {
 			continue
 		}
 
-		if !wait(ctx, r.interval) {
+		var done <-chan struct{}
+		if err == nil && wake != nil {
+			done = wake()
+		}
+		if !waitForWork(ctx, r.interval, done) {
 			return nil
 		}
 	}
@@ -186,6 +204,10 @@ func (r *RetentionRunner) Run(ctx context.Context) error {
 }
 
 func wait(ctx context.Context, d time.Duration) bool {
+	return waitForWork(ctx, d, nil)
+}
+
+func waitForWork(ctx context.Context, d time.Duration, wake <-chan struct{}) bool {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 
@@ -193,6 +215,8 @@ func wait(ctx context.Context, d time.Duration) bool {
 	case <-ctx.Done():
 		return false
 	case <-timer.C:
+		return true
+	case <-wake:
 		return true
 	}
 }

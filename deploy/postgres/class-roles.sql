@@ -19,7 +19,7 @@ DO $$
 DECLARE
     class text;
 BEGIN
-    FOREACH class IN ARRAY ARRAY['read', 'checkout', 'ingestion', 'background', 'orders'] LOOP
+    FOREACH class IN ARRAY ARRAY['read', 'checkout', 'write', 'ingestion', 'background', 'orders'] LOOP
         IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'marketplace_' || class) THEN
             EXECUTE format('CREATE ROLE %I LOGIN', 'marketplace_' || class);
         END IF;
@@ -32,6 +32,8 @@ ALTER ROLE marketplace_read SET statement_timeout = '750ms';
 ALTER ROLE marketplace_read SET idle_in_transaction_session_timeout = '2s';
 ALTER ROLE marketplace_checkout SET statement_timeout = '2s';
 ALTER ROLE marketplace_checkout SET idle_in_transaction_session_timeout = '5s';
+ALTER ROLE marketplace_write SET statement_timeout = '2s';
+ALTER ROLE marketplace_write SET idle_in_transaction_session_timeout = '5s';
 ALTER ROLE marketplace_ingestion SET statement_timeout = '2s';
 ALTER ROLE marketplace_ingestion SET idle_in_transaction_session_timeout = '5s';
 ALTER ROLE marketplace_background SET statement_timeout = '10s';
