@@ -29,12 +29,12 @@ func TestDispatcherStopsPoisonTaskAndReleasesTenant(t *testing.T) {
 				return []error{errs.New(errs.Invalid, "test.invalid", "некорректная задача")}
 			})
 		}
-		if _, err := d.RunOnce(context.Background()); err != nil {
+		if _, _, _, err := d.RunWork(context.Background(), nil); err != nil {
 			t.Fatal(err)
 		}
 		clock.Advance(24 * time.Hour)
 		enqueue(t, store, "ok", "t1", "good", clock.Now())
-		outcomes, err := d.RunOnce(context.Background())
+		outcomes, _, _, err := d.RunWork(context.Background(), nil)
 		if err != nil || len(outcomes) != 1 || outcomes[0].Task.Kind != "ok" || outcomes[0].Err != nil {
 			t.Fatalf("ядовитые задачи больше не занимают квоту: %+v, %v", outcomes, err)
 		}
@@ -51,13 +51,13 @@ func TestDispatcherExhaustsUnclassifiedFailures(t *testing.T) {
 		"fail": func(context.Context, ports.Task) error { return errors.New("сеть недоступна") },
 	})
 	for range 10 {
-		outcomes, err := d.RunOnce(context.Background())
+		outcomes, _, _, err := d.RunWork(context.Background(), nil)
 		if err != nil || len(outcomes) != 1 {
 			t.Fatal(outcomes, err)
 		}
 		clock.Advance(24 * time.Hour)
 	}
-	outcomes, err := d.RunOnce(context.Background())
+	outcomes, _, _, err := d.RunWork(context.Background(), nil)
 	if err != nil || len(outcomes) != 0 {
 		t.Fatalf("исчерпавшая попытки задача ждёт оператора: %+v, %v", outcomes, err)
 	}
@@ -96,7 +96,7 @@ func TestDependencyOutageRecoversAllTasksAfterThirtyMinutes(t *testing.T) {
 				enqueue(t, store, "independent", "t1", "same-store", clock.Now())
 				enqueue(t, store, "independent", "t3", "other-store", clock.Now())
 			}
-			if _, err := d.RunOnce(context.Background()); err != nil {
+			if _, _, _, err := d.RunWork(context.Background(), nil); err != nil {
 				t.Fatal(err)
 			}
 			clock.Advance(time.Second)
@@ -107,7 +107,7 @@ func TestDependencyOutageRecoversAllTasksAfterThirtyMinutes(t *testing.T) {
 		}
 		outage = false
 		for range 601 {
-			if _, err := d.RunOnce(context.Background()); err != nil {
+			if _, _, _, err := d.RunWork(context.Background(), nil); err != nil {
 				t.Fatal(err)
 			}
 			clock.Advance(time.Second)
@@ -147,7 +147,7 @@ func TestDispatcherQuarantinesPanickingTaskAndKeepsNeighbours(t *testing.T) {
 		if batch {
 			d.RegisterBatch("panic", func(context.Context, []ports.Task) []error { panic("сбой пачки") })
 		}
-		outcomes, err := d.RunOnce(context.Background())
+		outcomes, _, _, err := d.RunWork(context.Background(), nil)
 		if err != nil || len(outcomes) != 2 {
 			t.Fatalf("паника не прерывает проход: %+v, %v", outcomes, err)
 		}

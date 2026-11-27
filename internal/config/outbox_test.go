@@ -10,9 +10,8 @@ import (
 
 func TestOutboxBatchBounds(t *testing.T) {
 	for key, value := range map[string]string{
-		"OUTBOX_BATCH":         "201",
-		"OUTBOX_PER_TENANT":    "201",
-		"OUTBOX_POLL_INTERVAL": "61s",
+		"OUTBOX_BATCH":      "201",
+		"OUTBOX_PER_TENANT": "201",
 	} {
 		t.Run(key, func(t *testing.T) {
 			env := validEnv()
@@ -23,7 +22,7 @@ func TestOutboxBatchBounds(t *testing.T) {
 		})
 	}
 	cfg, err := config.Load(envOf(validEnv()))
-	if err != nil || cfg.Outbox.Batch != 200 || cfg.Outbox.PerTenant != 200 || cfg.Outbox.PollInterval != time.Second {
+	if err != nil || cfg.Outbox.Batch != 200 || cfg.Outbox.PerTenant != 200 {
 		t.Fatal(cfg.Outbox, err)
 	}
 }

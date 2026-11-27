@@ -43,7 +43,7 @@ func TestExecutorQuarantinesMalformedTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	<-executor.Results()
@@ -72,7 +72,7 @@ func TestExecutorShutdownLeavesInFlightTaskForNextProcess(t *testing.T) {
 	platform := delayedOrderPlatform{PlatformAPI: e.platform, release: make(chan struct{}), started: started}
 	service := appcheckout.NewService(e.store, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
 	executor := appcheckout.NewExecutor(e.store, e.clock, service, nil, 1)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	<-started
@@ -92,7 +92,7 @@ func TestExecutorShutdownLeavesInFlightTaskForNextProcess(t *testing.T) {
 	}
 	e.clock.Advance(time.Minute)
 	resumed := appcheckout.NewExecutor(e.store, e.clock, e.service, nil, 1)
-	if err := resumed.Dispatch(context.Background()); err != nil {
+	if err := dispatchForTest(context.Background(), resumed); err != nil {
 		t.Fatal(err)
 	}
 	resumed.Wait()
@@ -144,7 +144,7 @@ func TestExecutorQuarantinesPanickingTask(t *testing.T) {
 		appcheckout.Config{},
 	)
 	executor := appcheckout.NewExecutor(e.store, e.clock, service, nil, 1)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	result := <-executor.Results()
@@ -168,7 +168,7 @@ func TestExecutorUsesOrdersDatabaseClass(t *testing.T) {
 	}
 	queue := &classQueue{TaskQueue: e.store}
 	executor := appcheckout.NewExecutor(queue, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	<-executor.Results()

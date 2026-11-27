@@ -28,7 +28,7 @@ type drainQueue struct {
 
 func TestOutboxIndependentLaneDrainsIndexBacklogWithoutPoll(t *testing.T) {
 	pool := testPool(t)
-	clock := fake.NewClock(at(0))
+	clock := fake.NewClock(at(0)).Scheduler()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -72,8 +72,10 @@ func TestOutboxIndependentLaneDrainsIndexBacklogWithoutPoll(t *testing.T) {
 	lane := messaging.NewIndependentLane(dispatch, gate, time.Second, func(error) bool { return false }, nil)
 	registry := prometheus.NewRegistry()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	runner := jobs.NewOutboxRunner(dispatch, time.Hour, logger, registry)
-	if err := runner.RunIndependent(ctx, lane); err != nil {
+	runner := jobs.NewOutboxRunner(logger, registry, clock)
+	deadlines := postgres.NewTaskQueue(postgres.Single(pool))
+
+	if err := runner.RunIndependent(ctx, lane, deadlines, nil); err != nil {
 		t.Fatal(err)
 	}
 	if queue.confirmed != len(tasks) || batches < 3 {

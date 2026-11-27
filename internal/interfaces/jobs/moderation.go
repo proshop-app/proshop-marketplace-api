@@ -2,11 +2,13 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/moderation"
 )
 
@@ -88,9 +90,16 @@ func (m *ModerationMetrics) Run(
 	service ModerationStats,
 	interval time.Duration,
 	logger *slog.Logger,
+	schedule ports.IntervalWork,
 ) error {
 	for {
-		if err := m.Refresh(ctx, service, time.Now()); err != nil && ctx.Err() == nil {
+		err := schedule.Run(ctx, func(ctx context.Context) error {
+			return m.Refresh(ctx, service, time.Now())
+		})
+		if errors.Is(err, ports.ErrIntervalTaken) {
+			m.open.Reset()
+			m.oldest.Set(0)
+		} else if err != nil && ctx.Err() == nil {
 			logger.Error("модерация: не удалось обновить метрики", slog.Any("error", err))
 		}
 		if !wait(ctx, interval) {

@@ -5,13 +5,14 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
+	"github.com/proshop-app/proshop-marketplace/internal/interfaces/jobs"
 )
 
 func TestScheduledWorkSkipsOtherReplicaForWholeInterval(t *testing.T) {
@@ -51,8 +52,12 @@ func TestScheduledWorkDoesNotOverlapLongRunAfterInterval(t *testing.T) {
 	}()
 	<-started
 	// Интервал истёк, прежний проход ещё идёт: вторая реплика берёт интервал, но не работу.
-	time.Sleep(1100 * time.Millisecond)
-	err := second.WithLock(ctx, func(context.Context) error {
+	_, err := pool.Exec(ctx, "UPDATE job_leases SET until = '2000-01-01' WHERE name = 'long-test'")
+	if err != nil {
+		close(release)
+		t.Fatal(err)
+	}
+	err = second.WithLock(ctx, func(context.Context) error {
 		t.Error("второй проход поверх незавершённого")
 		return nil
 	})
@@ -62,54 +67,6 @@ func TestScheduledWorkDoesNotOverlapLongRunAfterInterval(t *testing.T) {
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestSharedIntervalRunsOnceAcrossReplicasWithoutDirectSession(t *testing.T) {
-	pool := testPool(t)
-	ctx := context.Background()
-	first := postgres.NewSharedInterval(postgres.Single(pool), "shared-test", time.Hour)
-	second := postgres.NewSharedInterval(postgres.Single(pool), "shared-test", time.Hour)
-	calls := 0
-	run := func(context.Context) error {
-		calls++
-		return nil
-	}
-	if err := first.Run(ctx, run); err != nil {
-		t.Fatal(err)
-	}
-	if err := second.Run(ctx, run); !errors.Is(err, ports.ErrIntervalTaken) || calls != 1 {
-		t.Fatalf("второй реплике интервал не достаётся: calls=%d err=%v", calls, err)
-	}
-	if err := first.Run(ctx, run); !errors.Is(err, ports.ErrIntervalTaken) || calls != 1 {
-		t.Fatalf("до истечения интервала прохода нет и у первой: calls=%d err=%v", calls, err)
-	}
-}
-
-// Холостая попытка реплики, интервал которой уже взят, — только чтение, без пишущей команды.
-func TestSharedIntervalIdleAttemptOnlyReads(t *testing.T) {
-	pool := testPool(t)
-	ctx := context.Background()
-	counter := &checkoutQueryCounter{}
-	counter.reset()
-	config := pool.Config()
-	config.ConnConfig.Tracer = counter
-	traced, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(traced.Close)
-	first := postgres.NewSharedInterval(postgres.Single(traced), "idle-test", time.Hour)
-	second := postgres.NewSharedInterval(postgres.Single(traced), "idle-test", time.Hour)
-	if err := first.Run(ctx, func(context.Context) error { return nil }); err != nil {
-		t.Fatal(err)
-	}
-	counter.reset()
-	if err := second.Run(ctx, func(context.Context) error { return nil }); !errors.Is(err, ports.ErrIntervalTaken) {
-		t.Fatal(err)
-	}
-	if counter.total() != 1 || counter.counts["SELECT"] != 1 {
-		t.Fatalf("холостая попытка: %v", counter.counts)
 	}
 }
 
@@ -133,5 +90,43 @@ func TestScheduledWorkReleaseLetsNextAttemptRun(t *testing.T) {
 	}
 	if err := second.WithLock(ctx, run); err != nil || calls != 2 {
 		t.Fatalf("возвращённый интервал взят следующей попыткой: calls=%d err=%v", calls, err)
+	}
+}
+
+func TestShortSchedulesShareOneLease(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	clock := fake.NewClock(at(0))
+	leases := postgres.NewLeases(postgres.Single(pool))
+	first := jobs.NewShortSchedules(leases, "first", clock, slog.Default())
+	second := jobs.NewShortSchedules(leases, "second", clock, slog.Default())
+	first.Refresh(ctx)
+	second.Refresh(ctx)
+
+	calls := 0
+	pass := func(context.Context) error {
+		calls++
+		return nil
+	}
+	if err := first.Run(ctx, pass); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Run(ctx, pass); err != nil || calls != 2 {
+		t.Fatalf("владелец выполняет разные расписания: %d, %v", calls, err)
+	}
+	if err := second.Run(ctx, pass); !errors.Is(err, ports.ErrIntervalTaken) {
+		t.Fatal(err)
+	}
+
+	clock.Advance(time.Minute)
+	if _, err := pool.Exec(ctx, "UPDATE job_leases SET until = '2000-01-01'"); err != nil {
+		t.Fatal(err)
+	}
+	second.Refresh(ctx)
+	if err := first.Run(ctx, pass); !errors.Is(err, ports.ErrIntervalTaken) {
+		t.Fatal(err)
+	}
+	if err := second.Run(ctx, pass); err != nil || calls != 3 {
+		t.Fatalf("следующий владелец: %d, %v", calls, err)
 	}
 }

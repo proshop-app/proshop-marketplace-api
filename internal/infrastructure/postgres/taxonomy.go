@@ -3,15 +3,18 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"gorm.io/gorm"
 
+	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
 const (
+	readTaxonomyDisplay   = `SELECT CASE WHEN version <> $1 THEN definition END FROM taxonomy_head WHERE singleton`
 	selectTaxonomy        = `SELECT definition FROM taxonomy_head WHERE singleton FOR SHARE`
 	readTaxonomyVersion   = `SELECT version FROM taxonomy_head WHERE singleton FOR SHARE`
 	selectTaxonomyVersion = `SELECT definition FROM taxonomy_versions WHERE version = $1`
@@ -28,6 +31,7 @@ const (
 // Taxonomy — версии схем в PostgreSQL, блокировка головы согласует приём и загрузку.
 type Taxonomy struct {
 	db       *gorm.DB
+	wake     func(string, time.Time)
 	snapshot snapshotReader[taxonomy.Definition]
 }
 
@@ -43,6 +47,22 @@ func newTaxonomy(
 			afterCommit: afterCommit,
 		},
 	}
+}
+
+// TaxonomyDisplay читает зафиксированную голову одним оператором без блокировки.
+func (u *UnitOfWork) TaxonomyDisplay(ctx context.Context, known int64) (taxonomy.Definition, error) {
+	var raw []byte
+	err := u.source.withConnection(ctx, func(ctx context.Context, db *gorm.DB) error {
+		return rawSQL(ctx, db, readTaxonomyDisplay, known).Row().Scan(&raw)
+	})
+	if err != nil || len(raw) == 0 {
+		return taxonomy.Definition{}, err
+	}
+	definition, err := decodeTaxonomySnapshot(raw)
+	if err == nil {
+		u.snapshots.taxonomy.put(definition.Version, definition)
+	}
+	return definition, err
 }
 
 // Current читает голову с разделяемой блокировкой до фиксации транзакции.
@@ -127,6 +147,9 @@ func (r *Taxonomy) Save(ctx context.Context, d taxonomy.Definition, expected int
 		return taxonomy.ErrConflict
 	}
 	_, err = execSQL(ctx, r.db, insertTaxonomy, d.Version, string(raw))
+	if err == nil && r.wake != nil {
+		r.wake(ports.TaxonomyDisplayWork, time.Time{})
+	}
 	return err
 }
 

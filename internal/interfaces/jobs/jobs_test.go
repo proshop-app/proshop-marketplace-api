@@ -26,9 +26,14 @@ import (
 var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 type dispatcher struct {
-	mu     sync.Mutex
 	rounds [][]messaging.Outcome
 	calls  int
+	stop   context.CancelFunc
+	clock  ports.Clock
+}
+
+type readyInterval struct {
+	taken bool
 }
 
 type purger struct {
@@ -41,23 +46,35 @@ type syncer struct {
 	calls int
 }
 
-func (d *dispatcher) RunOnce(context.Context) ([]messaging.Outcome, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
+func (d *dispatcher) RunWork(context.Context, []string) ([]messaging.Outcome, []string, bool, error) {
 	d.calls++
 	if len(d.rounds) == 0 {
-		return nil, errors.New("база недоступна")
+		return nil, nil, false, errors.New("база недоступна")
 	}
-
 	round := d.rounds[0]
 	d.rounds = d.rounds[1:]
+	return round, []string{"a"}, len(d.rounds) > 0, nil
+}
 
-	return round, nil
+func (d *dispatcher) WorkRequest() ports.ClaimRequest { return ports.ClaimRequest{} }
+
+func (d *dispatcher) NextWorkByKind(context.Context, ports.ClaimRequest) (map[string]time.Time, error) {
+	if len(d.rounds) == 0 {
+		d.stop()
+		return nil, nil
+	}
+	return map[string]time.Time{"a": d.clock.Now()}, nil
 }
 
 func (d *dispatcher) ReadyLanes(context.Context) ([]ports.ReadyLane, error) {
-	return []ports.ReadyLane{{Kind: "a", Tenants: 3, Oldest: time.Now().Add(-time.Minute)}}, nil
+	return []ports.ReadyLane{{Kind: "a", Tenants: 3, Oldest: time.Unix(0, 0)}}, nil
+}
+
+func (s *readyInterval) Run(ctx context.Context, pass func(context.Context) error) error {
+	if s.taken {
+		return ports.ErrIntervalTaken
+	}
+	return pass(ctx)
 }
 
 func outcome(kind string, err error) messaging.Outcome {
@@ -65,44 +82,24 @@ func outcome(kind string, err error) messaging.Outcome {
 }
 
 func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
-	d := &dispatcher{rounds: [][]messaging.Outcome{
-		{outcome("a", nil), outcome("a", errors.New("сбой"))},
-		{outcome("a", nil)},
-		{},
-	}}
-	registry := prometheus.NewRegistry()
-	runner := jobs.NewOutboxRunner(d, time.Hour, quiet, registry)
-
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-
-	go func() { done <- runner.Run(ctx) }()
-
-	deadline := time.Now().Add(time.Second)
-	for {
-		d.mu.Lock()
-		calls := d.calls
-		d.mu.Unlock()
-
-		if calls >= 3 || time.Now().After(deadline) {
-			break
-		}
-
-		time.Sleep(time.Millisecond)
+	defer cancel()
+	clock := fake.NewClock(time.Unix(0, 0)).Scheduler()
+	d := &dispatcher{
+		rounds: [][]messaging.Outcome{
+			{outcome("a", nil), outcome("a", errors.New("сбой"))},
+			{outcome("a", nil)},
+		},
+		clock: clock,
+		stop:  cancel,
 	}
-
-	cancel()
-
-	if err := <-done; err != nil {
+	registry := prometheus.NewRegistry()
+	runner := jobs.NewOutboxRunner(quiet, registry, clock)
+	if err := runner.Run(ctx, d, d, nil); err != nil {
 		t.Fatal(err)
 	}
-
-	d.mu.Lock()
-	calls := d.calls
-	d.mu.Unlock()
-
-	if calls != 3 {
-		t.Fatalf("следующая пачка сразу, пустая очередь — пауза: %d вызовов", calls)
+	if d.calls != 2 {
+		t.Fatalf("следующая пачка сразу, пустая очередь засыпает: %d вызовов", d.calls)
 	}
 
 	totals := map[string]float64{}
@@ -126,15 +123,15 @@ func TestOutboxRunnerDrainsFullBatchesAndRecords(t *testing.T) {
 }
 
 func TestOutboxRunnerEmptyQueueWaits(t *testing.T) {
-	d := &dispatcher{rounds: [][]messaging.Outcome{{}}}
-	runner := jobs.NewOutboxRunner(d, time.Hour, quiet, prometheus.NewRegistry())
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := runner.Run(ctx); err != nil {
+	d := &dispatcher{stop: cancel}
+	runner := jobs.NewOutboxRunner(quiet, prometheus.NewRegistry(), fake.NewClock(time.Unix(0, 0)))
+	if err := runner.Run(ctx, d, d, nil); err != nil {
 		t.Fatal(err)
 	}
-	if d.calls != 1 {
-		t.Fatalf("пустая очередь должна ждать опроса, вызовов: %d", d.calls)
+	if d.calls != 0 {
+		t.Fatalf("пустая очередь не должна вызывать взятие, вызовов: %d", d.calls)
 	}
 }
 
@@ -214,7 +211,7 @@ func TestCheckoutOutboxMetricsAndRoutineWaiting(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	var journal strings.Builder
 	logger := slog.New(slog.NewTextHandler(&journal, nil))
-	runner := jobs.NewOutboxRunner(&dispatcher{}, time.Second, logger, registry)
+	runner := jobs.NewOutboxRunner(logger, registry, fake.NewClock(time.Unix(0, 0)))
 	for _, kind := range []string{
 		appcheckout.TaskCreateOrder,
 		appcheckout.TaskExpireCreation,
@@ -261,7 +258,7 @@ func TestCheckoutOutboxMetricsAndRoutineWaiting(t *testing.T) {
 // Готовую работу снимает только владелец интервала; реплика без владения сбрасывает свои значения.
 func TestOutboxReadyRunnerOnlyOwnerReports(t *testing.T) {
 	registry := prometheus.NewRegistry()
-	schedule := &fake.IndexRebuildLock{}
+	schedule := &readyInterval{}
 	runner := jobs.NewOutboxReadyRunner(&dispatcher{}, schedule, quiet, registry)
 	runner.RunOnce(context.Background())
 	if got := readyGauges(t, registry); got["marketplace_outbox_ready_tenants"] != 3 ||
@@ -269,13 +266,8 @@ func TestOutboxReadyRunnerOnlyOwnerReports(t *testing.T) {
 		t.Fatalf("владелец: %+v", got)
 	}
 	// Интервал занят другой репликой: свои значения не отдаём.
-	err := schedule.WithLock(context.Background(), func(ctx context.Context) error {
-		runner.RunOnce(ctx)
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	schedule.taken = true
+	runner.RunOnce(context.Background())
 	if got := readyGauges(t, registry); len(got) != 0 {
 		t.Fatalf("не владелец держит значения: %+v", got)
 	}

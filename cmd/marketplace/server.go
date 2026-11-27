@@ -43,7 +43,6 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/random"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/redis"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/referencecatalog"
-	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/storecache"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/synonymmodel"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/telemetry"
@@ -55,21 +54,8 @@ import (
 
 // referenceStatsInterval — как часто обновлять метрики ревизии и очереди кандидатов реестра.
 const (
-	referenceStatsInterval    = time.Minute
-	taxonomyDisplayInterval   = 5 * time.Second
-	taxonomySelectionInterval = 15 * time.Second
+	referenceStatsInterval = time.Minute
 )
-
-// orderedTaskKinds — виды outbox, которые магазин получает строго по одному.
-// Совпадает с postgres.OrderedTaskKinds (индекс головы полосы).
-var orderedTaskKinds = []string{
-	appcatalog.TaskSyncTenant,
-	ports.TaskPurgeTenant,
-	appparticipant.TaskSyncSettings,
-	moderationstatus.TaskParticipant,
-	appreference.TaskChanged,
-	appsynonyms.TaskChanged,
-}
 
 // searchLaneKinds — виды, которые зовут proshop-search. Их выполняет отдельная полоса общего
 // цикла outbox: своего опроса очереди у неё нет, а подтверждённый отказ поиска ставит паузу всем.
@@ -117,13 +103,16 @@ type services struct {
 
 // server — процесс маркетплейса: хранилища, сценарии и метрики.
 type server struct {
-	cityDetector *localgeoip.Detector
-	cfg          config.Config
-	logger       *slog.Logger
-	store        *storage
-	cache        *goredis.Client
-	metrics      *prometheus.Registry
-	app          services
+	cityDetector   *localgeoip.Detector
+	cfg            config.Config
+	logger         *slog.Logger
+	store          *storage
+	cache          *goredis.Client
+	metrics        *prometheus.Registry
+	wake           *redis.WorkSignals
+	shortSchedules *jobs.ShortSchedules
+	uow            *postgres.UnitOfWork
+	app            services
 }
 
 // promotionRandom использует math/rand/v2: ротации не нужна криптографическая случайность.
@@ -153,6 +142,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	defer func() { _ = cache.Close() }()
 	s := &server{cfg: cfg, logger: logger, store: store, cache: cache, metrics: telemetry.NewRegistry()}
+	s.wake = redis.NewWorkSignals(cache, logger)
+	s.shortSchedules = jobs.NewShortSchedules(
+		postgres.NewLeases(s.store.pool(ports.DatabaseBackground)),
+		string(random.IDs{}.NewUUID()),
+		clock.System{},
+		s.logger,
+	)
 	safego.SetReporter(telemetry.NewGoroutinePanics(s.metrics, logger))
 	s.cityDetector, err = localgeoip.New(cfg.City.Path, cfg.City.DevClientIP, logger, s.metrics)
 	if err != nil {
@@ -165,7 +161,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	defer func() { _ = s.app.writer.Close() }()
 
-	if err := s.app.queries.RefreshTaxonomyDisplay(ctx); err != nil {
+	if err := s.app.queries.RefreshTaxonomyDisplay(ctx, s.uow.TaxonomyDisplay); err != nil {
 		return fmt.Errorf("снимок отображения таксономии: %w", err)
 	}
 	return s.run(ctx)
@@ -187,8 +183,9 @@ func (s *server) services(ctx context.Context) (services, error) {
 	}
 	identities := random.IDs{}
 	background := s.store.pool(ports.DatabaseBackground)
+	s.uow = postgres.NewUnitOfWorkByClass(s.store.pools).WithWorkSignal(s.wake)
 	uow := storecache.NewUnitOfWork(
-		postgres.NewUnitOfWorkByClass(s.store.pools),
+		s.uow,
 		redis.NewStoreCardCache(s.cache, keyPrefix),
 	)
 	upstream := platformapi.New(platformapi.Config{
@@ -224,6 +221,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		telemetry.NewPlatform(s.metrics),
 		s.logger,
 	)
+	platform.SetServerChanged(func() { s.wake.NotifyLocal(ports.WorkHints{appcheckout.TaskCreateOrder: {}}) })
 	// корзина и покупка узнают об отказе участия первыми — по нему сверка настроек внеочередная
 	resyncing := appparticipant.NewResyncingPlatform(platform, uow, now)
 	settings := appparticipant.NewSettings(uow, platform, now, identities)
@@ -284,7 +282,12 @@ func (s *server) services(ctx context.Context) (services, error) {
 	carts := appcart.NewService(uow, resyncing, identities, now, cfg.Cart.TTL, cfg.Identity.EncryptionKey)
 	searchBuyerKeys := searchfeedback.NewBuyerKeys(cfg.Identity.EncryptionKey)
 	feedback := searchfeedback.NewFeedback(s.store.index, redis.NewLimiter(s.cache, keyPrefix), searchBuyerKeys)
-	purchases := searchfeedback.NewPurchases(s.store.index, now)
+	exclude := []string{
+		appcheckout.TaskCreateOrder,
+		appcheckout.TaskExpireCreation,
+		appcheckout.TaskPollOrder,
+		appcheckout.TaskCancelOrder,
+	}
 	checkouts := appcheckout.NewService(
 		uow,
 		resyncing,
@@ -347,18 +350,13 @@ func (s *server) services(ctx context.Context) (services, error) {
 	checkouts.SetActionLimiter(redis.NewLimiter(s.cache, keyPrefix))
 	checkouts.SetObserver(jobs.NewCheckoutMetrics(s.logger, s.metrics))
 	dispatcher := messaging.NewDispatcher(
-		postgres.NewTaskQueue(background),
+		postgres.NewTaskQueue(background).WithWorkSignal(s.wake),
 		now,
 		messaging.DispatcherConfig{
 			MaxAttempts: cfg.Outbox.MaxAttempts,
 			// Эти обработчики продвигают одну позицию магазина или публикуют снимок без внешней версии.
-			OrderedKinds: orderedTaskKinds,
-			ExcludeKinds: []string{
-				appcheckout.TaskCreateOrder,
-				appcheckout.TaskExpireCreation,
-				appcheckout.TaskPollOrder,
-				appcheckout.TaskCancelOrder,
-			},
+			OrderedKinds:   postgres.OrderedTaskKinds,
+			ExcludeKinds:   exclude,
 			Batch:          cfg.Outbox.Batch,
 			PerTenant:      cfg.Outbox.PerTenant,
 			Lease:          cfg.Outbox.Lease,
@@ -371,6 +369,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 			messaging.TaskReplay:             events.HandleTask,
 			appcatalog.TaskSyncOffer:         indexer.HandleTask,
 			appcatalog.TaskSyncTenant:        indexer.HandleTask,
+			searchfeedback.TaskPurchase:      searchfeedback.NewPurchases(s.store.index, now).Deliver,
 			ports.TaskPurgeTenant:            purger.HandleTask,
 			appparticipant.TaskSyncSettings:  settings.HandleTask,
 			ports.TaskStoreCard:              participants.RefreshStoreCard,
@@ -378,9 +377,11 @@ func (s *server) services(ctx context.Context) (services, error) {
 			appsynonyms.TaskChanged:          synonyms.HandleTask,
 			moderationstatus.TaskOffer:       statuses.HandleTask,
 			moderationstatus.TaskParticipant: statuses.HandleTask,
-			searchfeedback.TaskPurchase:      purchases.Deliver,
 		},
 	)
+	indexer.SetMaintenanceSignal(func() {
+		s.wake.Notify(ports.WorkHints{ports.IndexMaintenanceWork: {}})
+	})
 	indexer.SetBatchObserver(telemetry.NewOfferBatches(s.metrics))
 	indexer.SetSkipObserver(telemetry.NewOfferIndexSkips(s.metrics))
 	dispatcher.RegisterBatch(appcatalog.TaskSyncOffer, indexer.HandleOfferBatch)
@@ -441,7 +442,7 @@ func (s *server) services(ctx context.Context) (services, error) {
 		searchBuyerKeys:   searchBuyerKeys,
 		dispatcher:        dispatcher,
 		creation: appcheckout.NewExecutor(
-			postgres.NewTaskQueue(s.store.pool(ports.DatabaseOrders)),
+			postgres.NewTaskQueue(s.store.pool(ports.DatabaseOrders)).WithWorkSignal(s.wake),
 			now,
 			checkouts,
 			platform,
@@ -458,6 +459,28 @@ func (s *server) services(ctx context.Context) (services, error) {
 
 // run запускает HTTP, консьюмеры и фоновые циклы; первый сбой останавливает остальных.
 func (s *server) run(ctx context.Context) error {
+	group, groupCtx := errgroup.WithContext(ctx)
+	s.shortSchedules.Refresh(groupCtx)
+	loops := s.jobs()
+	signalsCtx, stopSignals := context.WithCancel(context.WithoutCancel(groupCtx))
+	defer stopSignals()
+	supervisor := jobs.NewSupervisor(s.logger, s.metrics)
+	group.Go(safego.Guard("work-signals", func() error {
+		return supervisor.Run(signalsCtx, jobs.Loop{Name: "work-signals", Run: s.wake.Run})
+	}))
+	group.Go(safego.Guard("signal-producers", func() error {
+		defer stopSignals()
+		return s.runSignalProducers(groupCtx)
+	}))
+	for _, loop := range loops {
+		group.Go(safego.Guard("job."+loop.Name, func() error { return supervisor.Run(groupCtx, loop) }))
+	}
+	s.logger.Info("маркетплейс запущен")
+	return group.Wait()
+}
+
+// runSignalProducers дожидается фиксаций HTTP и Kafka перед остановкой доставки подсказок.
+func (s *server) runSignalProducers(ctx context.Context) error {
 	cfg := s.cfg
 	httpServer := s.httpServer()
 	group, groupCtx := errgroup.WithContext(ctx)
@@ -485,36 +508,19 @@ func (s *server) run(ctx context.Context) error {
 	}))
 	s.runConsumers(groupCtx, group)
 
-	supervisor := jobs.NewSupervisor(s.logger, s.metrics)
-	for _, loop := range s.jobs() {
-		group.Go(safego.Guard("job."+loop.Name, func() error { return supervisor.Run(groupCtx, loop) }))
-	}
-
-	s.logger.Info("маркетплейс запущен")
-
 	return group.Wait()
 }
 
 // jobs — фоновые циклы процесса; каждый работает под присмотром jobs.Supervisor.
 func (s *server) jobs() []jobs.Loop {
 	cfg := s.cfg
-	outbox := jobs.NewOutboxRunner(s.app.dispatcher, cfg.Outbox.PollInterval, s.logger, s.metrics)
-	indexLane := messaging.NewIndependentLane(
-		s.app.dispatcher,
-		ports.TaskLaneGate{Key: "offer-index", Kinds: searchLaneKinds},
-		30*time.Second,
-		func(err error) bool { return errors.Is(err, searchapi.ErrUnavailable) },
-		s.store.index.ConfirmOutage,
-	)
 	loops := []jobs.Loop{
 		{Name: "city-detector", Run: s.cityDetector.Run},
-		{Name: "taxonomy-display", Run: s.refreshTaxonomyDisplay},
-		{Name: "taxonomy-selection", Run: s.refreshTaxonomySelection},
+		{Name: "short-schedules", Run: s.shortSchedules.Renew},
 		{Name: "moderation-metrics", Run: func(ctx context.Context) error {
-			return s.app.moderationMetrics.Run(ctx, s.app.moderation, cfg.Moderation.MetricsInterval, s.logger)
-		}},
-		{Name: "taxonomy-revalidation", Run: func(ctx context.Context) error {
-			return jobs.RunTaxonomyRevalidation(ctx, s.app.taxonomy, s.logger)
+			interval := cfg.Moderation.MetricsInterval
+			schedule := s.shortSchedules
+			return s.app.moderationMetrics.Run(ctx, s.app.moderation, interval, s.logger, schedule)
 		}},
 		{Name: "promotion", Run: jobs.NewPromotionRunner(
 			s.app.promotion,
@@ -522,13 +528,6 @@ func (s *server) jobs() []jobs.Loop {
 			s.logger,
 			cfg.Promotion.TickInterval,
 		).Run},
-		{Name: "index-maintenance", Run: jobs.NewIndexMaintenanceRunner(
-			s.app.indexer,
-			cfg.Search.MaintenanceInterval,
-			s.logger,
-			s.metrics,
-		).Run},
-		{Name: "checkout-creation", Run: jobs.NewCreationRunner(s.app.creation, s.logger, outbox.RecordOutcome).Run},
 		{Name: "orders", Run: s.orderRecovery},
 		{Name: "order-reconcile", Run: s.orderReconciliation},
 		{Name: "outbox-retry-stats", Run: jobs.NewOutboxRetryStatsRunner(
@@ -537,18 +536,17 @@ func (s *server) jobs() []jobs.Loop {
 			cfg.Outbox.RetryMetricsInterval,
 			s.logger,
 			s.metrics,
-		).Run},
-		{Name: "outbox", Run: func(ctx context.Context) error {
-			return outbox.RunIndependent(ctx, indexLane)
-		}},
+		).WithSchedule(s.shortSchedules).Run},
 		{Name: "outbox-ready", Run: jobs.NewOutboxReadyRunner(
 			s.app.dispatcher,
-			s.schedule("outbox-ready", jobs.OutboxReadyInterval),
+			s.shortSchedules,
 			s.logger,
 			s.metrics,
 		).Run},
-		{Name: "retention", Run: jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).Run},
+		{Name: "retention", Run: jobs.NewRetentionRunner(s.app.janitor, cfg.Retention.Interval, s.logger).
+			WithSchedule(s.schedule("retention", cfg.Retention.Interval)).Run},
 	}
+	loops = append(loops, s.workJobs()...)
 	return append(loops, s.scheduledJobs()...)
 }
 
@@ -567,12 +565,12 @@ func (s *server) scheduledJobs() []jobs.Loop {
 			referenceStatsInterval,
 			s.logger,
 			s.metrics,
-		).WithSchedule(s.schedule("reference-stats", referenceStatsInterval)).Run},
+		).WithSchedule(s.shortSchedules).Run},
 		{Name: "model-key-stats", Run: jobs.NewModelKeyStatsRunner(
 			postgres.NewModelKeyStats(s.store.pool(ports.DatabaseBackground)),
 			s.logger,
 			s.metrics,
-		).WithSchedule(s.schedule("model-key-stats", jobs.ModelKeyStatsInterval)).Run},
+		).WithSchedule(s.shortSchedules).Run},
 	}
 	if s.app.candidates != nil {
 		interval := cfg.Reference.CandidatesInterval
@@ -599,7 +597,7 @@ func (s *server) schedule(name string, interval time.Duration) *postgres.Schedul
 // работа без класса идёт в фоновый пул.
 func (s *server) orderRecovery(ctx context.Context) error {
 	interval := s.cfg.Checkout.OrdersInterval
-	schedule := postgres.NewSharedInterval(s.store.pool(ports.DatabaseBackground), "orders-resume", interval)
+	schedule := s.shortSchedules
 	return jobs.NewOrdersRunner(s.app.checkouts, interval, s.logger).WithSchedule(schedule).Run(ctx)
 }
 

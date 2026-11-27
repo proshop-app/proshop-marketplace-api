@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -26,10 +27,13 @@ import (
 type UnitOfWork struct {
 	source    *connectionSource
 	snapshots snapshots
+	wake      ports.WorkSignal
 }
 
 type scope struct {
 	afterCommit []func()
+	work        ports.WorkHints
+	wake        bool
 	db          *gorm.DB
 	snapshots   *snapshots
 	taxonomy    *Taxonomy
@@ -46,6 +50,12 @@ func NewUnitOfWork(pool *pgxpool.Pool) *UnitOfWork {
 // пула класса нагрузки из контекста.
 func NewUnitOfWorkByClass(pools *Pools) *UnitOfWork {
 	return &UnitOfWork{source: &connectionSource{pools: pools}}
+}
+
+// WithWorkSignal подключает подсказки очередям процесса после фиксации.
+func (u *UnitOfWork) WithWorkSignal(wake ports.WorkSignal) *UnitOfWork {
+	u.wake = wake
+	return u
 }
 
 func newScope(db *gorm.DB, snapshots *snapshots) *scope {
@@ -82,6 +92,7 @@ func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx por
 	}()
 
 	scope := newScope(shared.orm, &u.snapshots)
+	scope.wake = u.wake != nil
 	if err = fn(ctx, scope); err != nil {
 		return shared.failure(err)
 	}
@@ -107,10 +118,23 @@ func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx por
 	// Наблюдатели могут открыть следующую транзакцию даже при пуле из одного соединения.
 	shared.close()
 
+	if u.wake != nil && len(scope.work) > 0 {
+		u.wake.Notify(scope.work)
+	}
 	for _, observe := range scope.afterCommit {
 		observe()
 	}
 	return nil
+}
+
+func (s *scope) markWork(kind string, next time.Time) {
+	if !s.wake {
+		return
+	}
+	if s.work == nil {
+		s.work = ports.WorkHints{}
+	}
+	s.work.Add(kind, next)
 }
 
 func (s *scope) AfterCommit(fn func()) { s.afterCommit = append(s.afterCommit, fn) }
@@ -125,11 +149,11 @@ func (s *scope) Products() catalog.ProductRepository { return &Products{db: s.db
 
 func (s *scope) Signals() catalog.SignalsRepository { return &Signals{db: s.db} }
 
-func (s *scope) StoreCards() ports.StoreCards { return &StoreCards{db: s.db} }
+func (s *scope) StoreCards() ports.StoreCards { return &StoreCards{db: s.db, wake: s.markWork} }
 
 func (s *scope) Offers() ports.OfferStates { return &Offers{db: s.db} }
 
-func (s *scope) Outbox() ports.Outbox { return &Outbox{db: s.db} }
+func (s *scope) Outbox() ports.Outbox { return &Outbox{db: s.db, wake: s.markWork} }
 
 func (s *scope) Inbox() ports.Inbox { return &Inbox{db: s.db} }
 
@@ -146,11 +170,12 @@ func (s *scope) Checkouts() checkout.Repository { return &Checkouts{db: s.db} }
 func (s *scope) Taxonomy() taxonomy.Repository {
 	if s.taxonomy == nil {
 		s.taxonomy = newTaxonomy(s.db, &s.snapshots.taxonomy, s.AfterCommit)
+		s.taxonomy.wake = s.markWork
 	}
 	return s.taxonomy
 }
 
-func (s *scope) Reference() reference.Repository { return &References{db: s.db} }
+func (s *scope) Reference() reference.Repository { return &References{db: s.db, wake: s.markWork} }
 
 func (s *scope) ModerationVerdicts() moderation.VerdictRepository {
 	return &ModerationVerdicts{db: s.db}
@@ -179,4 +204,6 @@ func (s *scope) ParticipantDecisions() participant.DecisionRepository {
 
 func (s *scope) Promotion() promotion.Repository { return &Promotions{db: s.db} }
 
-func (s *scope) Revalidation() ports.RevalidationStore { return &Revalidations{db: s.db} }
+func (s *scope) Revalidation() ports.RevalidationStore {
+	return &Revalidations{db: s.db, wake: s.markWork}
+}

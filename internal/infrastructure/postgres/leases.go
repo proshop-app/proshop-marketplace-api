@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
 
@@ -29,8 +28,8 @@ type Leases struct {
 }
 
 // NewLeases — аренда поверх пула.
-func NewLeases(pool *pgxpool.Pool) *Leases {
-	return &Leases{source: newConnectionSource(Single(pool))}
+func NewLeases(pool *ClassPool) *Leases {
+	return &Leases{source: newConnectionSource(pool)}
 }
 
 // Acquire берёт свободную, истёкшую или свою аренду.

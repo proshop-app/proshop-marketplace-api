@@ -68,7 +68,10 @@ const (
 // ScheduleChanges отмечает обработанные при индексации дельты и будит сводку.
 func (r *StoreCards) ScheduleChanges(ctx context.Context, keys []ids.OfferID, at time.Time) error {
 	tenants, products := offerKeyColumns(keys)
-	_, err := execSQL(ctx, r.db, scheduleStoreSummaryChanges, tenants, products, ports.TaskStoreCard, at)
+	affected, err := execSQL(ctx, r.db, scheduleStoreSummaryChanges, tenants, products, ports.TaskStoreCard, at)
+	if err == nil && affected > 0 && r.wake != nil {
+		r.wake(ports.TaskStoreCard, at)
+	}
 	return err
 }
 

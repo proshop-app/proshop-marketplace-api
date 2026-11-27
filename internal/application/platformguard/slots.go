@@ -8,6 +8,8 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
+const serverProbeRetry = 200 * time.Millisecond
+
 // ServerState читает размыкатель без занятия места или запуска пробы.
 func (c *Client) ServerState() ports.PlatformServerState {
 	c.mu.Lock()
@@ -19,6 +21,21 @@ func (c *Client) ServerState() ports.PlatformServerState {
 		return ports.PlatformServerProbe
 	}
 	return ports.PlatformServerReady
+}
+
+// ServerWorkAt возвращает срок открытия пробы либо короткую паузу до проверки её итога.
+// Проба может идти в другом HTTP-сценарии, у которого нет результата полосы оформления.
+func (c *Client) ServerWorkAt() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := c.clock.Now()
+	if c.server.available(now) {
+		return time.Time{}
+	}
+	if c.server.openUntil.After(now) {
+		return c.server.openUntil
+	}
+	return now.Add(serverProbeRetry)
 }
 
 // CreationCandidates ищет ответивший магазин с другого конца очереди, когда её голова молчит.
@@ -90,9 +107,20 @@ func (c *Client) start(state *tenantState, class operationClass) permit {
 
 func (c *Client) release(p permit, err error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	var notify func()
+	defer func() {
+		c.mu.Unlock()
+		if notify != nil {
+			notify()
+		}
+	}()
 
+	before := c.server.openUntil
+	probing := c.server.probe
 	c.finishBreakers(p, err)
+	if before != c.server.openUntil || probing != c.server.probe {
+		notify = c.serverChanged
+	}
 	p.tenant.active[p.class]--
 	c.pools[p.class].active--
 	c.running--
@@ -135,8 +163,8 @@ func (c *Client) breakerReason(state *tenantState) string {
 	return ""
 }
 
-// reopensAt — когда размыкатель, давший отказ, снова допустит вызов. Пока идёт единственная проба,
-// её итог известен не позже строгого срока: до него повтор получит тот же отказ.
+// reopensAt задаёт срок повтора. Пока идёт общая проба, оформление проверяет её итог
+// короткими шагами. У магазина отдельно ограничиваем частоту повторных обращений.
 func (c *Client) reopensAt(ctx context.Context, reason string) time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -151,6 +179,9 @@ func (c *Client) reopensAt(ctx context.Context, reason string) time.Time {
 	}
 	if b.openUntil.After(now) {
 		return b.openUntil
+	}
+	if reason == "server_breaker" {
+		return now.Add(serverProbeRetry)
 	}
 	return now.Add(c.cfg.StrictTimeout)
 }

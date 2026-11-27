@@ -101,7 +101,7 @@ func TestHungShopReleasesCreationSlotsAndOtherShopCreates(t *testing.T) {
 	upstream := &hungShopOrders{PlatformAPI: guard, tenant: "t1"}
 	svc := appcheckout.NewService(e.store, upstream, e.pickups, e.verifier, &fake.IDs{}, e.clock, guardedConfig())
 	executor := appcheckout.NewExecutor(e.store, e.clock, svc, guard, messaging.DefaultMaxAttempts)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	<-started
@@ -113,7 +113,7 @@ func TestHungShopReleasesCreationSlotsAndOtherShopCreates(t *testing.T) {
 		t.Fatal("у зависшего магазина должен остаться повтор", hung)
 	}
 	e.clock.Advance(checkout.CreationRetryDelay)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	if second := <-executor.Results(); second.Task.TenantID != "t1" || !appcheckout.CreationPending(second.Err) {
@@ -146,7 +146,7 @@ func TestExecutorLeaseCoversHandlerDeadline(t *testing.T) {
 	uow := &deadlineUOW{UnitOfWork: e.store, clock: e.clock}
 	svc := appcheckout.NewService(uow, e.platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
 	executor := appcheckout.NewExecutor(queue, e.clock, svc, nil, messaging.DefaultMaxAttempts)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	executor.Wait()
@@ -549,7 +549,7 @@ func hungQuote(t *testing.T, e *env, svc *appcheckout.Service) ids.TenantID {
 func dispatchDue(ctx context.Context, t *testing.T, executor *appcheckout.Executor, queue *leaseQueue) int {
 	t.Helper()
 	before := queue.taken()
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	taken := queue.taken() - before

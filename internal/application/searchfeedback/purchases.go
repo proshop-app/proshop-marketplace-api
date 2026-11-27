@@ -43,9 +43,7 @@ func (p *Purchases) Deliver(ctx context.Context, task ports.Task) error {
 	if !p.clock.Now().Before(purchase.PaidObservedAt.Add(purchaseLifetime)) {
 		return nil
 	}
-	// Покупку ведёт общая полоса вызовов поиска со сроком обработчика индексации:
-	// своя попытка короче, чтобы медленный поиск не держал полосу.
-	ctx, cancel := context.WithTimeout(ctx, PurchaseCallTimeout)
+	ctx, cancel := ports.WithTimeout(ctx, p.clock, PurchaseCallTimeout)
 	defer cancel()
 	return p.sink.Purchase(ctx, purchase)
 }

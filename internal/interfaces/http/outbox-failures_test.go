@@ -59,7 +59,7 @@ func TestOperatorCanReturnQuarantineByKindAndID(t *testing.T) {
 		}
 	}
 	for range 3 {
-		if _, err := dispatcher.RunOnce(context.Background()); err != nil {
+		if _, _, _, err := dispatcher.RunWork(context.Background(), nil); err != nil {
 			t.Fatal(err)
 		}
 	}

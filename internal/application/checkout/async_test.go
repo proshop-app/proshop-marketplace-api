@@ -422,14 +422,14 @@ func TestExecutorRetriesRespectDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
 		<-executor.Results()
 	}
 	executor.Wait()
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	executor.Wait()
@@ -437,7 +437,7 @@ func TestExecutorRetriesRespectDeadline(t *testing.T) {
 		t.Fatal("повтор без паузы")
 	}
 	e.clock.Advance(time.Second)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	result := <-executor.Results()
@@ -446,7 +446,7 @@ func TestExecutorRetriesRespectDeadline(t *testing.T) {
 	}
 	executor.Wait()
 	e.clock.Advance(14 * time.Second)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	for range 3 {
@@ -535,4 +535,13 @@ func TestCreationLeaseRespectsShorterTransportTimeout(t *testing.T) {
 	if err := executeTasks(ctx, e); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func dispatchForTest(ctx context.Context, executor *appcheckout.Executor) error {
+	for _, kind := range executor.WorkKinds() {
+		if _, _, err := executor.Refill(ctx, kind); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -19,7 +19,7 @@ const (
 
 // ModelKeyStatsRunner периодически обновляет метрики покрытия ключами.
 type ModelKeyStatsRunner struct {
-	schedule   ports.IndexRebuildLock
+	schedule   ports.IntervalWork
 	stats      ports.ModelKeyStats
 	logger     *slog.Logger
 	offers     *prometheus.GaugeVec
@@ -122,7 +122,7 @@ func (r *ModelKeyStatsRunner) Run(ctx context.Context) error {
 }
 
 // WithSchedule назначает общее расписание для реплик.
-func (r *ModelKeyStatsRunner) WithSchedule(schedule ports.IndexRebuildLock) *ModelKeyStatsRunner {
+func (r *ModelKeyStatsRunner) WithSchedule(schedule ports.IntervalWork) *ModelKeyStatsRunner {
 	r.schedule = schedule
 	return r
 }
@@ -133,11 +133,11 @@ func (r *ModelKeyStatsRunner) RunOnce(ctx context.Context) {
 		r.runOnce(ctx)
 		return
 	}
-	err := r.schedule.WithLock(ctx, func(ctx context.Context) error {
+	err := r.schedule.Run(ctx, func(ctx context.Context) error {
 		r.runOnce(ctx)
 		return nil
 	})
-	if err != nil && !errors.Is(err, ports.ErrRebuildBusy) && ctx.Err() == nil {
+	if err != nil && !errors.Is(err, ports.ErrIntervalTaken) && ctx.Err() == nil {
 		r.logger.Warn("расписание фоновой сверки: сбой", slog.Any("error", err))
 	}
 }

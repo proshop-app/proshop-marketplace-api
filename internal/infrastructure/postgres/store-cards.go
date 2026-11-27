@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -112,7 +113,8 @@ const (
 
 // StoreCards хранит сводку и категории атомарно в транзакции пересчёта.
 type StoreCards struct {
-	db *gorm.DB
+	db   *gorm.DB
+	wake func(string, time.Time)
 }
 
 // CacheVersion читается из той же базы, что и проекция: отказ Redis не скрывает обновления.

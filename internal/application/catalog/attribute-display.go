@@ -40,14 +40,15 @@ type valueOrder struct {
 }
 
 // RefreshTaxonomyDisplay прогревает снимок для карточек и вариантов вне HTTP-запросов.
-func (q *Queries) RefreshTaxonomyDisplay(ctx context.Context) error {
-	var definition taxonomy.Definition
-	err := q.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		var err error
-		definition, err = tx.Taxonomy().Current(ctx)
-		return err
-	})
-	if err == nil {
+func (q *Queries) RefreshTaxonomyDisplay(
+	ctx context.Context, load func(context.Context, int64) (taxonomy.Definition, error),
+) error {
+	known := int64(-1)
+	if current := q.display.Load(); current != nil {
+		known = current.definition.Version
+	}
+	definition, err := load(ctx, known)
+	if err == nil && definition.Version > known {
 		q.displayFor(definition)
 	}
 	return err

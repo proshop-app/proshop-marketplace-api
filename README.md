@@ -89,7 +89,7 @@ goose встроен в `cmd/migrate` и закреплён в `go.mod`. `GOTOOL
 | `HTTP_ADDR` | | `:8080` | адрес HTTP |
 | `SHUTDOWN_TIMEOUT` | | `20s` | ожидание запросов при остановке |
 | `LOG_LEVEL` | | `info` | `debug`, `info`, `warn`, `error` |
-| `OUTBOX_POLL_INTERVAL`, `OUTBOX_BATCH`, `OUTBOX_PER_TENANT`, `OUTBOX_LEASE` | | `1s`, `200`, `200`, `90s` | [очередь outbox](docs/outbox.md), [пакетная доставка](docs/shared-search.md#пакетная-доставка-из-outbox) |
+| `OUTBOX_BATCH`, `OUTBOX_PER_TENANT`, `OUTBOX_LEASE` | | `200`, `200`, `90s` | [очередь outbox](docs/outbox.md), [пакетная доставка](docs/shared-search.md#пакетная-доставка-из-outbox) |
 | `RETENTION_PROCESSED_EVENTS`, `RETENTION_SEARCH_PURCHASE_QUARANTINE`, `RETENTION_PARKED_EVENTS`, `RETENTION_INTERVAL` | | `336h`, `72h`, `720h`, `1h` | чистка служебных записей; выполненные задачи outbox удаляются при завершении, по сроку уходит только карантин покупок поиска |
 | `RETENTION_CHALLENGES` | | `24h` | чистка истёкших проверок входа |
 | `REDIS_URL` | да | — | Redis `redis://…`: сессии и лимиты входа |

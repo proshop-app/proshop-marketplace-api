@@ -279,7 +279,7 @@ func TestCancellationRetriesAndDoesNotBlockHealthySeller(t *testing.T) {
 	platform := delayedCancellation{PlatformAPI: e.platform, started: started, release: release}
 	service := appcheckout.NewService(e.store, platform, nil, nil, &fake.IDs{}, e.clock, appcheckout.Config{})
 	executor := appcheckout.NewExecutor(e.store, e.clock, service, nil, messaging.DefaultMaxAttempts)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	<-started
@@ -303,7 +303,7 @@ func TestCancellationRetriesAndDoesNotBlockHealthySeller(t *testing.T) {
 	}
 	e.platform.FailCancel("t1", nil)
 	e.clock.Advance(time.Second)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	result = <-executor.Results()
@@ -358,7 +358,7 @@ func TestCancellationNetworkFailureRetries(t *testing.T) {
 	}
 	e.platform.FailCancel("t1", context.DeadlineExceeded)
 	executor := appcheckout.NewExecutor(e.store, e.clock, e.service, nil, messaging.DefaultMaxAttempts)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
@@ -379,7 +379,7 @@ func TestCancellationNetworkFailureRetries(t *testing.T) {
 	}
 	e.platform.FailCancel("t1", nil)
 	e.clock.Advance(time.Second)
-	if err := executor.Dispatch(ctx); err != nil {
+	if err := dispatchForTest(ctx, executor); err != nil {
 		t.Fatal(err)
 	}
 	result := <-executor.Results()

@@ -46,7 +46,7 @@ func TestDispatcherCompletesAndRetries(t *testing.T) {
 
 	clock.Advance(3 * time.Second)
 
-	outcomes, err := dispatcher.RunOnce(context.Background())
+	outcomes, _, _, err := dispatcher.RunWork(context.Background(), nil)
 	if err != nil || len(outcomes) != 3 || calls != 1 {
 		t.Fatalf("итоги: %+v, %v, вызовов %d", outcomes, err, calls)
 	}
@@ -66,7 +66,7 @@ func TestDispatcherCompletesAndRetries(t *testing.T) {
 		t.Fatalf("первый повтор через секунду: %s, ожидалось %s", rows[1].NextAt, want)
 	}
 
-	outcomes, err = dispatcher.RunOnce(context.Background())
+	outcomes, _, _, err = dispatcher.RunWork(context.Background(), nil)
 	if err != nil || len(outcomes) != 0 {
 		t.Fatalf("отложенные задачи ещё не созрели: %+v, %v", outcomes, err)
 	}
@@ -91,7 +91,7 @@ func TestDispatcherLimitsPerTenant(t *testing.T) {
 		},
 	})
 
-	if _, err := dispatcher.RunOnce(context.Background()); err != nil {
+	if _, _, _, err := dispatcher.RunWork(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
 	if seen["noisy"] != 4 || seen["quiet"] != 1 {
@@ -130,7 +130,7 @@ func TestDispatcherRejectsStaleClaim(t *testing.T) {
 				},
 			})
 
-			outcomes, err := dispatcher.RunOnce(ctx)
+			outcomes, _, _, err := dispatcher.RunWork(ctx, nil)
 			if !errors.Is(err, ports.ErrTaskClaimConflict) || errs.CodeOf(err) != errs.Conflict || len(outcomes) != 0 {
 				t.Fatalf("устаревший результат должен вернуть конфликт: %+v, %v", outcomes, err)
 			}
@@ -200,7 +200,7 @@ func TestJanitorPurgesByPolicy(t *testing.T) {
 			"search.purchase": func(context.Context, ports.Task) error { return messaging.ErrInvalidTask },
 		},
 	)
-	if _, err := dispatcher.RunOnce(ctx); err != nil {
+	if _, _, _, err := dispatcher.RunWork(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
 

@@ -59,7 +59,7 @@ func TestDispatcherPostgresThroughput(t *testing.T) {
 	d.RegisterBatch("unused", func(context.Context, []ports.Task) []error { return nil })
 	started := time.Now()
 	for handled.Load() < 10000 {
-		outcomes, err := d.RunOnce(ctx)
+		outcomes, _, _, err := d.RunWork(ctx, nil)
 		if err != nil || len(outcomes) == 0 {
 			t.Fatal(len(outcomes), err)
 		}
@@ -125,11 +125,11 @@ func TestDispatcherPostgresFairness(t *testing.T) {
 	)
 	d.RegisterBatch("unused", func(context.Context, []ports.Task) []error { return nil })
 	started := time.Now()
-	if _, err := d.RunOnce(ctx); err != nil {
+	if _, _, _, err := d.RunWork(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
 	firstCalls, pass := calls.Load(), time.Since(started)
-	if _, err := d.RunOnce(ctx); err != nil {
+	if _, _, _, err := d.RunWork(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("backlog=50000 first-pass-A=%d pass=%s B-wait=%s", firstCalls, pass, quietDelay)
