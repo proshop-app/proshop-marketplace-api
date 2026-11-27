@@ -63,6 +63,7 @@ func reindex(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 		slog.String("generation", result.Generation),
 		slog.Int("indexed", result.Indexed),
 		slog.Int("caughtUp", result.CaughtUp),
+		slog.Int("skipped", result.Skipped),
 	)
 
 	return nil

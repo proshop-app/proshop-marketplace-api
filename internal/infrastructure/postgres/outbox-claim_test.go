@@ -18,7 +18,7 @@ func TestOrderedLaneKindsMatchIndex(t *testing.T) {
 	if strings.Join(strings.Fields(orderedLaneKinds), " ") != "("+want+")" {
 		t.Fatalf("виды запроса %s, ожидались (%s)", orderedLaneKinds, want)
 	}
-	migration, err := os.ReadFile("migrations/00070_outbox_lanes.sql")
+	migration, err := os.ReadFile("migrations/00080_offer_index_work.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

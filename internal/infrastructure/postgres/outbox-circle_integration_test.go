@@ -162,7 +162,7 @@ func TestClaimCirclePassesSharedTaskWithEmptyTenant(t *testing.T) {
 	}
 }
 
-// Частичный индекс головы полосы (миграция 00070) построен ровно по упорядоченным видам: вид вне
+// Частичный индекс головы полосы (миграция 00080) построен ровно по упорядоченным видам: вид вне
 // предиката читал бы полосу без индекса, лишний вид в предикате — мёртвый вес индекса.
 func TestOrderedHeadIndexCoversOrderedKinds(t *testing.T) {
 	pool := testPool(t)

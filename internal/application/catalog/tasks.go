@@ -4,7 +4,6 @@ package catalog
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -25,8 +24,6 @@ var ErrInvalidTask = errs.New(errs.Invalid, "catalog.invalid_task", "некор�
 type taskPayload struct {
 	TenantID  string `json:"tenantId"`
 	ProductID string `json:"productId,omitempty"`
-	After     string `json:"after,omitempty"`
-	Traversal int64  `json:"traversal,omitempty"`
 }
 
 // SyncOfferTask — задача синхронизации одного предложения.
@@ -50,17 +47,6 @@ func SyncTenantTask(tenantID ids.TenantID, at time.Time) ports.NewTask {
 		Kind:     TaskSyncTenant,
 		TenantID: tenantID,
 		DedupKey: TaskSyncTenant + ":" + string(tenantID),
-		Payload:  payload,
-		At:       at,
-	}
-}
-
-func syncTenantPageTask(tenant ids.TenantID, after ids.ProductID, traversal int64, at time.Time) ports.NewTask {
-	payload, _ := json.Marshal(taskPayload{TenantID: string(tenant), After: string(after), Traversal: traversal})
-	return ports.NewTask{
-		Kind:     TaskSyncTenant,
-		TenantID: tenant,
-		DedupKey: fmt.Sprintf("%s:%s:%d:%s", TaskSyncTenant, tenant, traversal, after),
 		Payload:  payload,
 		At:       at,
 	}
