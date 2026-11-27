@@ -62,11 +62,11 @@ func TestRebuildResumesAfterAnIsolatedRejectionAndTemporaryFailure(t *testing.T)
 		put: func(docs []ports.OfferDocument) error {
 			attempts = append(attempts, docs[0].ID)
 			for _, doc := range docs {
-				if doc.ID == "t1~p2" {
+				if doc.ID == "t1~~tile~p2" {
 					return poison
 				}
 			}
-			if docs[0].ID == "t1~p3" && !failed {
+			if docs[0].ID == "t1~~tile~p3" && !failed {
 				failed = true
 				return unavailable
 			}
@@ -87,13 +87,14 @@ func TestRebuildResumesAfterAnIsolatedRejectionAndTemporaryFailure(t *testing.T)
 	if err != nil || resumed.Generation != first.Generation || resumed.Indexed != 3 || resumed.Skipped != 1 {
 		t.Fatalf("повтор поколения: %+v, %v", resumed, err)
 	}
-	if want := []string{"t1~p1", "t1~p1", "t1~p2", "t1~p3", "t1~p3"}; !reflect.DeepEqual(attempts, want) {
+	want := []string{"t1~~tile~p1", "t1~~tile~p1", "t1~~tile~p2", "t1~~tile~p3", "t1~~tile~p3"}
+	if !reflect.DeepEqual(attempts, want) {
 		t.Fatalf("попытки записи: %v, ожидалось %v", attempts, want)
 	}
 	if _, ok := index.Doc("t2~p1"); !ok {
 		t.Fatal("последняя карточка не попала в новое поколение")
 	}
-	if _, ok := index.Doc("t1~p2"); ok || skips["rebuild"] != 1 {
+	if _, ok := index.Doc("t1~~tile~p2"); ok || skips["rebuild"] != 1 {
 		t.Fatalf("результат отклонённой карточки или счётчик: %v, %v", ok, skips)
 	}
 }
@@ -108,7 +109,7 @@ func TestTenantIndexContinuesPastRejectionAndCoalescesNewTarget(t *testing.T) {
 	poison := errs.New(errs.Invalid, "test.rejected", "поиск отклонил документ")
 	index.RejectPut = func(docs []ports.OfferDocument) error {
 		for _, doc := range docs {
-			if doc.ID == "t1~p1" && doc.Visible {
+			if doc.ID == "t1~~tile~p1" && doc.Visible {
 				return poison
 			}
 		}
@@ -131,7 +132,7 @@ func TestTenantIndexContinuesPastRejectionAndCoalescesNewTarget(t *testing.T) {
 	if err := service.HandleTask(ctx, task); err != nil {
 		t.Fatal(err)
 	}
-	if doc, ok := index.Doc("t1~p3"); !ok || doc.Visible {
+	if doc, ok := index.Doc("t1~~tile~p3"); !ok || doc.Visible {
 		t.Fatal("сигнал о новой версии должен сначала дать закончить предыдущий обход")
 	}
 
@@ -144,11 +145,11 @@ func TestTenantIndexContinuesPastRejectionAndCoalescesNewTarget(t *testing.T) {
 	for _, docs := range index.PutBatches {
 		attempts = append(attempts, docs[0].ID)
 	}
-	want := []string{"t1~p1", "t1~p1", "t1~p2", "t1~p3", "t1~p1", "t1~p3"}
+	want := []string{"t1~~tile~p1", "t1~~tile~p1", "t1~~tile~p2", "t1~~tile~p3", "t1~~tile~p1", "t1~~tile~p3"}
 	if !reflect.DeepEqual(attempts, want) || skips["tenant"] != 1 {
 		t.Fatalf("попытки записи: %v, ожидалось %v, счётчик: %v", attempts, want, skips)
 	}
-	if doc, ok := index.Doc("t1~p2"); !ok || doc.Visible {
+	if doc, ok := index.Doc("t1~~tile~p2"); !ok || doc.Visible {
 		t.Fatal("первая страница должна отразить последнюю версию магазина")
 	}
 }
@@ -163,7 +164,7 @@ func TestTenantIndexKeepsCursorOnTemporaryFailure(t *testing.T) {
 
 	unavailable := errors.New("потерян ответ поиска")
 	index.RejectPut = func(docs []ports.OfferDocument) error {
-		if docs[0].ID == "t1~p3" {
+		if docs[0].ID == "t1~~tile~p3" {
 			return unavailable
 		}
 		return nil
@@ -180,7 +181,7 @@ func TestTenantIndexKeepsCursorOnTemporaryFailure(t *testing.T) {
 	if err := service.HandleTask(ctx, task); err != nil {
 		t.Fatal(err)
 	}
-	if len(index.PutBatches) != 3 || index.PutBatches[2][0].ID != "t1~p3" {
+	if len(index.PutBatches) != 3 || index.PutBatches[2][0].ID != "t1~~tile~p3" {
 		t.Fatalf("запись должна продолжиться со второй страницы: %v", index.PutBatches)
 	}
 }

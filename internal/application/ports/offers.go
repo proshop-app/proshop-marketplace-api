@@ -44,6 +44,8 @@ type OfferKey struct {
 
 // OfferStates — чтение проекции для индекса.
 type OfferStates interface {
+	Tiles(context.Context, []ids.OfferID, []TileKey) ([]TileState, error)
+	TilePage(context.Context, TilePage) ([]TileState, error)
 	// StatusBatch читает статусы, последние решения и причины дел одним снимком.
 	StatusBatch(context.Context, []ids.OfferID) ([]OfferStatus, error)
 	// Batch читает проекции выбранных предложений одной пачкой.
@@ -61,6 +63,7 @@ type OfferStates interface {
 
 // OfferDocument — предложение в индексе поиска. Суммы — в копейках.
 type OfferDocument struct {
+	Tile                 *TileDocument
 	SalesTier            uint8
 	TileKey              string
 	AttributeFacetValues map[string][]string

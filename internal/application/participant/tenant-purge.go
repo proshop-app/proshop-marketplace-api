@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -93,7 +94,8 @@ func (p *TenantPurger) HandleTask(ctx context.Context, task ports.Task) error {
 		return err
 	}
 
-	last := len(products) <= tenantPurgeBatch
+	last := len(products) <= tenantPurgeBatch &&
+		(len(products) == 0 || products[len(products)-1] != ids.ProductID(ports.TileDocumentPrefix))
 	products = products[:min(tenantPurgeBatch, len(products))]
 	if err := p.withdrawOffers(ctx, tenant, products); err != nil {
 		return err
@@ -109,14 +111,25 @@ func (p *TenantPurger) withdrawOffers(ctx context.Context, tenant ids.TenantID, 
 	now := p.clock.Now()
 	for _, product := range products {
 		id := ids.OfferID{Tenant: tenant, Product: product}
+		tileKey, isTile := strings.CutPrefix(string(product), ports.TileDocumentPrefix)
+		if isTile && tileKey == "" {
+			continue
+		}
 		// Снимок, прочитанный до удаления, не сможет вернуть карточку ни в одно поколение.
-		docs = append(docs, ports.OfferDocument{
+		doc := ports.OfferDocument{
 			ID:        id.String(),
 			TenantID:  string(tenant),
 			ProductID: string(product),
 			Version:   math.MaxInt64,
 			UpdatedAt: now,
-		})
+		}
+		if isTile {
+			doc.Tile = &ports.TileDocument{Key: tileKey}
+		}
+		docs = append(docs, doc)
+	}
+	if len(docs) == 0 {
+		return nil
 	}
 	return p.index.Put(ctx, docs)
 }

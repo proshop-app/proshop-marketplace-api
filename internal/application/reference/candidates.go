@@ -35,6 +35,13 @@ type candidateMetadata struct {
 	Catalog catalogObservation `json:"catalog"`
 }
 
+// CandidatePass — снимок одного прохода сбора: таксономия и области читаются один раз
+// на все словари, а не заново на каждый.
+type CandidatePass struct {
+	definition taxonomy.Definition
+	scopes     map[string][]taxonomy.CandidateScope
+}
+
 // Dictionaries читает только заголовки словарей, без подсчёта записей.
 func (s *Service) Dictionaries(ctx context.Context) ([]DictionaryView, error) {
 	out := []DictionaryView{}
@@ -49,13 +56,6 @@ func (s *Service) Dictionaries(ctx context.Context) ([]DictionaryView, error) {
 		return nil
 	})
 	return out, err
-}
-
-// CandidatePass — снимок одного прохода сбора: таксономия и области читаются один раз
-// на все словари, а не заново на каждый.
-type CandidatePass struct {
-	definition taxonomy.Definition
-	scopes     map[string][]taxonomy.CandidateScope
 }
 
 // CandidatePass читает действующую таксономию и раскладывает области по словарям.

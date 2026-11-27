@@ -12,7 +12,7 @@ import (
 func (i *Indexer) syncTenantTaskPage(ctx context.Context, tenant ids.TenantID) error {
 	var progress ports.TenantIndexProgress
 	var version int64
-	var states []ports.OfferState
+	var states []ports.TileState
 	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		var err error
 		progress, version, err = tx.OfferIndexWork().TenantProgress(ctx, tenant)
@@ -27,7 +27,11 @@ func (i *Indexer) syncTenantTaskPage(ctx context.Context, tenant ids.TenantID) e
 			progress.After = ""
 			progress.Complete = false
 		}
-		states, err = tx.Offers().TenantOffers(ctx, tenant, progress.After, i.batch)
+		states, err = tx.Offers().TilePage(ctx, ports.TilePage{
+			TenantID: tenant,
+			After:    ports.TileKey{Key: string(progress.After)},
+			Limit:    i.batch,
+		})
 		return err
 	})
 	if err != nil || progress.Complete {
@@ -44,7 +48,7 @@ func (i *Indexer) syncTenantTaskPage(ctx context.Context, tenant ids.TenantID) e
 	first := progress.After == ""
 	progress.Complete = len(states) < i.batch
 	if len(states) > 0 {
-		progress.After = states[len(states)-1].Product.State().ProductID
+		progress.After = ids.ProductID(states[len(states)-1].Key.Key)
 	}
 	err = i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		available, err := tx.TenantPurge().Available(ctx, []ids.TenantID{tenant})

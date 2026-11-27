@@ -24,6 +24,7 @@ var ErrInvalidTask = errs.New(errs.Invalid, "catalog.invalid_task", "некор�
 type taskPayload struct {
 	TenantID  string `json:"tenantId"`
 	ProductID string `json:"productId,omitempty"`
+	TileKey   string `json:"tileKey,omitempty"`
 }
 
 // SyncOfferTask — задача синхронизации одного предложения.
@@ -66,6 +67,9 @@ func decodeTask(task ports.Task) (ids.TenantID, ids.ProductID, error) {
 		return tenantID, "", nil
 	}
 
+	if payload.TileKey != "" && payload.ProductID == "" {
+		return tenantID, ids.ProductID(ports.TileDocumentPrefix + payload.TileKey), nil
+	}
 	productID, err := ids.ParseProductID(payload.ProductID)
 	if err != nil {
 		return "", "", ErrInvalidTask.Wrap(err)

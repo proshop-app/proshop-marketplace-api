@@ -96,8 +96,20 @@ func (x *Index) Get(ctx context.Context, id string) (ports.OfferDocument, bool, 
 	defer x.mu.Unlock()
 
 	doc, ok := x.generations[x.active][id]
-
-	return doc, ok, nil
+	if ok {
+		return doc, true, nil
+	}
+	for _, tile := range x.generations[x.active] {
+		if tile.Tile == nil {
+			continue
+		}
+		for _, member := range tile.Tile.Members {
+			if member.ID == id {
+				return member, true, nil
+			}
+		}
+	}
+	return ports.OfferDocument{}, false, nil
 }
 
 // Search — выдача рабочего поколения: только предложения в выдаче.
@@ -108,9 +120,25 @@ func (x *Index) Search(_ context.Context, query ports.OfferQuery) (ports.OfferPa
 	var hits, candidates []ports.OfferDocument
 
 	for _, doc := range x.generations[x.active] {
-		candidates = append(candidates, doc)
-		if matches(doc, query, "") {
-			hits = append(hits, doc)
+		members := []ports.OfferDocument{doc}
+		if doc.Tile != nil {
+			members = doc.Tile.Members
+		}
+		var matched []ports.OfferDocument
+		for _, member := range members {
+			if member.TileKey != "" {
+				member.Listed = true
+			}
+			if matches(member, query, "") {
+				matched = append(matched, member)
+			}
+		}
+		if len(members) > 0 {
+			candidates = append(candidates, members[0])
+		}
+		if len(matched) > 0 {
+			sort.SliceStable(matched, func(i, j int) bool { return matched[i].Price < matched[j].Price })
+			hits = append(hits, matched[0])
 		}
 	}
 

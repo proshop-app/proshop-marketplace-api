@@ -63,10 +63,15 @@ func (i *Indexer) saveModelKeys(ctx context.Context, products []*catalog.Product
 	}
 	err := i.uow.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
 		keys, err := tx.Products().SaveIdentities(ctx, products)
+		if err != nil {
+			return err
+		}
+		tasks := make([]ports.NewTask, 0, len(keys))
 		for _, key := range keys {
 			saved[key] = true
+			tasks = append(tasks, SyncOfferTask(key.Tenant, key.Product, i.clock.Now()))
 		}
-		return err
+		return tx.Outbox().EnqueueBatch(ctx, tasks)
 	})
 	return saved, err
 }

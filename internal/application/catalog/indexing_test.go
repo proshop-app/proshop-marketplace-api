@@ -83,7 +83,7 @@ func TestSyncOfferHiddenSellerLeavesTombstone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	doc, ok := index.Doc("t1~p1")
+	doc, ok := index.Doc("t1~~tile~p1")
 	if !ok || doc.Visible || doc.Listed || doc.Name != "" || doc.Price != 0 || len(doc.Assets) != 0 {
 		t.Fatalf("скрытое предложение — документ без карточки: %+v", doc)
 	}
@@ -112,13 +112,13 @@ func TestStaleDocumentDoesNotOverwrite(t *testing.T) {
 	seedProduct(store, "t1", "p1")
 	ctx := context.Background()
 
-	var stale ports.OfferState
-	_ = store.Do(ctx, func(ctx context.Context, tx ports.Tx) error {
-		var err error
-		stale, err = tx.Offers().Offer(ctx, "t1", "p1")
-
-		return err
-	})
+	if err := indexer(store, index, clock).SyncOffer(ctx, "t1", "p1"); err != nil {
+		t.Fatal(err)
+	}
+	stale, ok := index.Doc("t1~~tile~p1")
+	if !ok {
+		t.Fatal("ожидалась плитка")
+	}
 
 	p, _ := store.Participant("t1")
 	p.Enabled = false
@@ -130,12 +130,11 @@ func TestStaleDocumentDoesNotOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	staleDoc, _ := appcatalog.Document(stale)
-	if err := index.Put(ctx, []ports.OfferDocument{staleDoc}); err != nil {
+	if err := index.Put(ctx, []ports.OfferDocument{stale}); err != nil {
 		t.Fatal(err)
 	}
 
-	if doc, _ := index.Doc("t1~p1"); doc.Visible {
+	if doc, ok := index.Doc("t1~~tile~p1"); !ok || doc.Visible {
 		t.Fatal("документ, прочитанный до выключения участника, не перезаписывает свежий")
 	}
 }

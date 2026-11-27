@@ -1,6 +1,9 @@
 package searchapi
 
 import (
+	"bytes"
+	"encoding/json"
+
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/catalog"
 	"github.com/proshop-app/proshop-marketplace/internal/domain/taxonomy"
@@ -8,6 +11,20 @@ import (
 )
 
 func toDocument(doc ports.OfferDocument) (offerDocument, error) {
+	if doc.Tile != nil {
+		tile, err := encodeTile(doc.Tile)
+		if err != nil {
+			return offerDocument{}, err
+		}
+		return offerDocument{
+			TenantID:  doc.TenantID,
+			ProductID: doc.ProductID,
+			Version:   doc.Version,
+			Visible:   len(tile.Members) > 0,
+			UpdatedAt: doc.UpdatedAt.UTC(),
+			Tile:      tile,
+		}, nil
+	}
 	attributes, err := encodeAttributes(doc.Attributes)
 
 	if err != nil {
@@ -138,4 +155,40 @@ func fromDocument(doc offerDocument) (ports.OfferDocument, error) {
 	}
 
 	return out, nil
+}
+
+func encodeTile(doc *ports.TileDocument) (*tileDocument, error) {
+	tile := &tileDocument{
+		Key:     doc.Key,
+		Members: make([]map[string]json.RawMessage, 0, len(doc.Members)),
+	}
+	for _, member := range doc.Members {
+		wire, err := toDocument(member)
+		if err != nil {
+			return nil, err
+		}
+		data, err := json.Marshal(wire)
+		if err != nil {
+			return nil, ErrInvalid.Wrap(err)
+		}
+		var values map[string]json.RawMessage
+		if err := json.Unmarshal(data, &values); err != nil {
+			return nil, ErrInvalid.Wrap(err)
+		}
+		if tile.Base == nil {
+			tile.Base = values
+			tile.Members = append(tile.Members, map[string]json.RawMessage{})
+			continue
+		}
+		for field, base := range tile.Base {
+			value, ok := values[field]
+			if !ok {
+				values[field] = json.RawMessage("null")
+			} else if bytes.Equal(value, base) {
+				delete(values, field)
+			}
+		}
+		tile.Members = append(tile.Members, values)
+	}
+	return tile, nil
 }

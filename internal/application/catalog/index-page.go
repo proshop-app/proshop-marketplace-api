@@ -20,17 +20,17 @@ func (i *Indexer) SetSkipObserver(observer ports.OfferIndexSkipObserver) {
 
 func (i *Indexer) writeIndexPage(
 	ctx context.Context,
-	states []ports.OfferState,
+	states []ports.TileState,
 	put func([]ports.OfferDocument) error,
 ) (int, []skippedOffer, error) {
 	if len(states) == 0 {
 		return 0, nil, nil
 	}
-	ready, err := i.refreshModelKeys(ctx, states)
+	docs, err := i.indexDocuments(ctx, states)
 	if err != nil {
 		return 0, nil, err
 	}
-	return writeIndexBatch(ctx, documents(ready), put)
+	return writeIndexBatch(ctx, docs, put)
 }
 
 func writeIndexBatch(
