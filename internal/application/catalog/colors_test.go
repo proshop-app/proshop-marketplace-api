@@ -202,7 +202,7 @@ func TestColorRegistryPublicationDocumentAndSearch(t *testing.T) {
 		t.Fatalf("непривязанный оттенок попал в отбор: %+v %v", page, err)
 	}
 	beforeTasks := len(store.OutboxRows())
-	_, err = registry.Update(ctx, appreference.UpdateCommand{
+	updated, err := registry.Update(ctx, appreference.UpdateCommand{
 		Dictionary: "color",
 		ID:         legacy.Entry.ID,
 		IfMatch:    legacy.Entry.Revision,
@@ -212,8 +212,13 @@ func TestColorRegistryPublicationDocumentAndSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	frozen, _ := service.Current(ctx)
-	if !reflect.DeepEqual(published, frozen) || len(store.OutboxRows()) != beforeTasks {
-		t.Fatal("правка метаданных изменила снимок или поставила задачу")
+	tasks := store.OutboxRows()
+	var event appreference.Event
+	if !reflect.DeepEqual(published, frozen) || len(tasks) != beforeTasks+1 ||
+		tasks[beforeTasks].Kind != appreference.TaskChanged ||
+		json.Unmarshal(tasks[beforeTasks].Payload, &event) != nil || event.RevisionTo != updated.Revision ||
+		event.RevisionFrom != legacy.Entry.Revision || len(event.Kinds) != 0 {
+		t.Fatal("правка метаданных должна объявить новую ревизию без перепубликации таксономии")
 	}
 	if _, err := service.LoadPart(ctx, "schemas", definition, frozen.Version); err != nil {
 		t.Fatal(err)
