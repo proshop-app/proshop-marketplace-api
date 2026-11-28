@@ -23,18 +23,18 @@ func TestBundledCatalogFacetLayout(t *testing.T) {
 	queries := appcatalog.NewQueries(store, fake.NewIndex(), nil, nil, nil, fake.NewClock(time.Time{}))
 	for id, want := range map[string][]string{
 		"":            {"brand"},
-		"electronics": {"brand"},
-		"clothing":    {"brand", "color"},
+		"electronics": {"brand", "color"},
+		"clothing":    {"brand", "color", "size_clothing_label"},
 		"electronics.smartphones": {
 			"storage_capacity",
 			"ram",
 			"brand",
+			"color",
 			"screen_diagonal",
 			"processor",
 			"battery_capacity",
 			"esim_support",
 			"wireless_charge_support",
-			"color",
 			"nfc",
 			"refresh_rate",
 			"screen_matrix",
@@ -68,6 +68,7 @@ func TestBundledCatalogFacetLayout(t *testing.T) {
 	priorities := []taxonomy.Filter{
 		{Code: taxonomy.FilterPrice, Primary: true},
 		{Code: "brand", Primary: true},
+		{Code: "color", Primary: true},
 		{Code: taxonomy.FilterInStock, Primary: true},
 		{Code: taxonomy.FilterSeller, Primary: true},
 		{Code: taxonomy.FilterCategory, Primary: true},

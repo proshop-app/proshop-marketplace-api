@@ -89,6 +89,7 @@ func TestArtifactRejectsWrongPin(t *testing.T) {
 }
 
 func TestArtifactRejectsInvalidJSON(t *testing.T) {
+	release := testArtifact(t).Manifest.Release
 	for name, test := range map[string]struct {
 		body []byte
 		want string
@@ -137,7 +138,7 @@ func TestArtifactRejectsInvalidJSON(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			lock := releaseLock{Release: 17, SHA256: fmt.Sprintf("%x", sha256.Sum256(test.body))}
+			lock := releaseLock{Release: release, SHA256: fmt.Sprintf("%x", sha256.Sum256(test.body))}
 			if _, _, err := loadArtifact(test.body, lock); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatal(err)
 			}
@@ -255,15 +256,15 @@ func TestIdentityWarningsSourceRoundTrip(t *testing.T) {
 	}
 }
 
-func TestRelease17RequiresBrandWithoutReplacingTree(t *testing.T) {
+func TestRelease19RequiresBrandWithoutReplacingTree(t *testing.T) {
 	bundle := testArtifact(t)
 	release, coverage, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if release.Version != 17 || bundle.CategoryMigration != nil || bundle.MigrationSource != nil ||
+	if release.Version != 19 || bundle.CategoryMigration != nil || bundle.MigrationSource != nil ||
 		release.ReplaceCategories || coverage.Categories != 3974 || coverage.Leaves != 3555 {
-		t.Fatalf("параметры поставки 17: %+v", coverage)
+		t.Fatalf("параметры поставки 19: %+v", coverage)
 	}
 	var walk func([]taxonomy.Category)
 	walk = func(nodes []taxonomy.Category) {

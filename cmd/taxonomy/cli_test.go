@@ -26,8 +26,8 @@ func TestCheckDoesNotNeedDatabase(t *testing.T) {
 	}
 }
 
-func TestArtifactRelease17Export(t *testing.T) {
-	const want = "60d4ed6a535837e56041b41bbaa337346c0ab70a57100a3d084963925d1aa594"
+func TestArtifactRelease19Export(t *testing.T) {
+	const want = "2187837de77ace4de715b756163c6b85dbba1df819fb42be53e663e9e33ddf61"
 	var output, diagnostics bytes.Buffer
 	if code := run([]string{"check", "--export"}, &output, &diagnostics); code != 0 {
 		t.Fatalf("code=%d: %s", code, diagnostics.String())
