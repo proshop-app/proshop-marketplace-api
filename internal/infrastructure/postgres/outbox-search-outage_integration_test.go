@@ -18,6 +18,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/internal/application/fake"
 	"github.com/proshop-app/proshop-marketplace/internal/application/messaging"
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
+	"github.com/proshop-app/proshop-marketplace/internal/application/searchfeedback"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/postgres"
 	"github.com/proshop-app/proshop-marketplace/internal/infrastructure/searchapi"
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
@@ -207,16 +208,23 @@ func newSearchOutageReplica(
 		clock,
 		messaging.DispatcherConfig{Batch: 4, PerTenant: 4},
 		map[string]messaging.Handler{
-			appcatalog.TaskSyncTenant: indexer.HandleTask,
-			"settings":                func(context.Context, ports.Task) error { return nil },
+			appcatalog.TaskSyncTenant:   indexer.HandleTask,
+			searchfeedback.TaskPurchase: func(context.Context, ports.Task) error { return nil },
+			ports.TaskPurgeTenant:       func(context.Context, ports.Task) error { return nil },
+			"settings":                  func(context.Context, ports.Task) error { return nil },
 		},
 	)
 	dispatcher.RegisterBatch(appcatalog.TaskSyncOffer, indexer.HandleOfferBatch)
 	return messaging.NewIndependentLane(
 		dispatcher,
 		ports.TaskLaneGate{
-			Key:   "offer-index",
-			Kinds: []string{appcatalog.TaskSyncOffer, appcatalog.TaskSyncTenant},
+			Key: "offer-index",
+			Kinds: []string{
+				appcatalog.TaskSyncOffer,
+				appcatalog.TaskSyncTenant,
+				ports.TaskPurgeTenant,
+				searchfeedback.TaskPurchase,
+			},
 		},
 		searchOutagePause,
 		func(err error) bool { return errors.Is(err, searchapi.ErrUnavailable) },
