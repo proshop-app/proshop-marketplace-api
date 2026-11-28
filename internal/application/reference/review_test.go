@@ -31,7 +31,8 @@ func seedReviewCandidates(t *testing.T, h *harness, count int) Snapshot {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := readTestSnapshot(h.service, nil)
+	initial := int64(0)
+	snapshot, err := readTestSnapshot(h.service, &initial)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,6 +154,7 @@ func TestReviewOnlyCandidatesAndAllNonCandidatesRemainExact(t *testing.T) {
 }
 
 func TestReviewLaterChunkConflictAndCommitFailureRollbackEverything(t *testing.T) {
+	initial := int64(0)
 	for _, commitFailure := range []bool{false, true} {
 		h := newHarness(t)
 		baseline := seedReviewCandidates(t, h, 501)
@@ -165,7 +167,7 @@ func TestReviewLaterChunkConflictAndCommitFailureRollbackEverything(t *testing.T
 		} else {
 			final := h.create(t, "Уже подтверждённый", reference.StatusConfirmed)
 			selected = append(selected, final.Entry.ID)
-			baseline, _ = readTestSnapshot(h.service, nil)
+			baseline, _ = readTestSnapshot(h.service, &initial)
 		}
 		beforeChanges, beforeEvents := len(h.store.ReferenceChanges()), len(h.events(t))
 		result, err := h.service.Review(context.Background(), ReviewCommand{
@@ -179,7 +181,7 @@ func TestReviewLaterChunkConflictAndCommitFailureRollbackEverything(t *testing.T
 		if err == nil || result.Changed != 0 || result.Revision != 0 {
 			t.Fatal("частичный успех", result, err)
 		}
-		after, _ := readTestSnapshot(h.service, nil)
+		after, _ := readTestSnapshot(h.service, &initial)
 		if !reflect.DeepEqual(after, baseline) || len(h.store.ReferenceChanges()) != beforeChanges ||
 			len(h.events(t)) != beforeEvents {
 			t.Fatal("часть решения пережила rollback", commitFailure)
@@ -297,7 +299,8 @@ func TestReviewCapsActualTargetsAndAllowsExplicitSubset(t *testing.T) {
 	if err != nil || result.Changed != 1 {
 		t.Fatal(result, err)
 	}
-	after, _ := readTestSnapshot(h.service, nil)
+	initial := int64(0)
+	after, _ := readTestSnapshot(h.service, &initial)
 	candidates := 0
 	for _, entry := range after.Entries {
 		if entry.Status == reference.StatusCandidate {

@@ -68,20 +68,18 @@ func TestPlanDelivery(t *testing.T) {
 
 func TestPlanDeliveryRollback(t *testing.T) {
 	d := Delivery{Version: 1, Checksum: testChecksum}
-	dict := RestoreDictionary(DictionaryState{Code: "b1", Revision: 5})
 	latest := &DeliveryRecord{Version: 1, Checksum: testChecksum, RevisionFrom: 2, RevisionTo: 5}
-	if apply, err := PlanDeliveryRollback(latest, dict, d); !apply || err != nil {
+	if apply, err := PlanDeliveryRollback(latest, d, false); !apply || err != nil {
 		t.Fatalf("откат: %v %v", apply, err)
 	}
-	edited := RestoreDictionary(DictionaryState{Code: "b1", Revision: 6})
-	if _, err := PlanDeliveryRollback(latest, edited, d); !errors.Is(err, ErrDeliveryConflict) {
+	if _, err := PlanDeliveryRollback(latest, d, true); !errors.Is(err, ErrDeliveryConflict) {
 		t.Fatal("откат после правок прошёл")
 	}
 	latest.RolledBack = true
-	if apply, err := PlanDeliveryRollback(latest, edited, d); apply || err != nil {
+	if apply, err := PlanDeliveryRollback(latest, d, false); apply || err != nil {
 		t.Fatal("повтор отката не пустой")
 	}
-	if _, err := PlanDeliveryRollback(nil, dict, d); !errors.Is(err, ErrDeliveryConflict) {
+	if _, err := PlanDeliveryRollback(nil, d, false); !errors.Is(err, ErrDeliveryConflict) {
 		t.Fatal("откат без поставки прошёл")
 	}
 }

@@ -156,15 +156,17 @@ func PlanDelivery(latest *DeliveryRecord, d Delivery) (bool, error) {
 }
 
 // PlanDeliveryRollback откатывает только последнюю поставку и только пока
-// после неё в словаре не было правок: иначе откат затёр бы оператора.
-func PlanDeliveryRollback(latest *DeliveryRecord, dict *Dictionary, d Delivery) (bool, error) {
+// после неё в реестре не было правок: иначе откат затёр бы оператора.
+// Восстановление снимка двигает голову без правки реестра, поэтому правки
+// определяет вызывающий по журналу, а не по ревизии головы.
+func PlanDeliveryRollback(latest *DeliveryRecord, d Delivery, editedAfter bool) (bool, error) {
 	if latest == nil || latest.Version != d.Version || latest.Checksum != d.Checksum {
 		return false, ErrDeliveryConflict
 	}
 	if latest.RolledBack {
 		return false, nil
 	}
-	if dict.Revision() != latest.RevisionTo {
+	if editedAfter {
 		return false, ErrDeliveryConflict.WithMessage("после поставки в словаре были правки")
 	}
 	return true, nil

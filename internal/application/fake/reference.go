@@ -139,6 +139,16 @@ func (r references) Append(_ context.Context, change reference.Change) (int64, e
 	return change.Revision, nil
 }
 
+func (r references) RegistryChangedSince(_ context.Context, dictionary string, since int64) (bool, error) {
+	for _, change := range r.d.reference.changes {
+		if change.Dictionary == dictionary && change.Revision > since &&
+			change.Kind != reference.ChangeSnapshotBackfilled {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r references) Changes(_ context.Context, dictionary string, from, to int64) ([]reference.Change, error) {
 	var out []reference.Change
 	for _, change := range r.d.reference.changes {

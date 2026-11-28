@@ -97,14 +97,14 @@ func TestRollbackRestoresAndRefusesAfterEdits(t *testing.T) {
 		t.Fatalf("откат: %+v %v", rolled, err)
 	}
 	snapshot, _ := h.service.Snapshot(ctx, testDict, nil, "")
-	if len(snapshot.Entries) != 1 || snapshot.Entries[0].Status != reference.StatusCandidate ||
-		len(snapshot.Entries[0].Aliases) != 1 {
+	if len(snapshot.Entries) != 0 {
 		t.Fatalf("после отката: %+v", snapshot.Entries)
 	}
 	// ревизии: 1 — запись оператора, 2 — пачка поставки, 3 — её откат
 	since := int64(2)
 	delta, _ := h.service.Snapshot(ctx, testDict, &since, "")
-	if len(delta.Removed) != 1 || len(delta.Entries) != 1 || delta.Entries[0].ID != existing.Entry.ID {
+	if len(delta.Removed) != 1 || len(delta.Entries) != 1 || delta.Entries[0].ID != existing.Entry.ID ||
+		delta.Entries[0].Status != reference.StatusCandidate || len(delta.Entries[0].Aliases) != 1 {
 		t.Fatalf("дельта отката: %+v", delta)
 	}
 	if repeat, err := h.service.Rollback(ctx, delivery); err != nil || repeat.Changed {

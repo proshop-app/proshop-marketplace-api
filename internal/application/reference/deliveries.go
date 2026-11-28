@@ -76,7 +76,11 @@ func (s *Service) Rollback(ctx context.Context, d reference.Delivery) (reference
 		if err != nil {
 			return err
 		}
-		apply, err := reference.PlanDeliveryRollback(latest, m.dict, d)
+		edited, err := registryEditedAfter(ctx, m, d.Dictionary, latest)
+		if err != nil {
+			return err
+		}
+		apply, err := reference.PlanDeliveryRollback(latest, d, edited)
 		if err != nil || !apply {
 			return err
 		}
@@ -95,6 +99,20 @@ func (s *Service) Rollback(ctx context.Context, d reference.Delivery) (reference
 	})
 	result.Revision = revision
 	return result, err
+}
+
+// registryEditedAfter читает журнал, только когда голова ушла дальше поставки:
+// восстановление снимка двигает голову без правки реестра.
+func registryEditedAfter(
+	ctx context.Context,
+	m *session,
+	dictionary string,
+	latest *reference.DeliveryRecord,
+) (bool, error) {
+	if latest == nil || m.dict.Revision() == latest.RevisionTo {
+		return false, nil
+	}
+	return m.repo.RegistryChangedSince(ctx, dictionary, latest.RevisionTo)
 }
 
 // deliver применяет пачку поставки одной ревизией журнала.

@@ -99,7 +99,8 @@ func TestHintImportBindingReviewAndRollbackPreserveFreeStrings(t *testing.T) {
 		!product.Card.Publication.Published || string(product.Card.Publication.Attributes["a1"]) != string(raw) {
 		t.Fatal("подсказки ограничили или переписали старую строку", current, product.Card.Publication)
 	}
-	snapshot, err := registry.Snapshot(ctx, "a1", nil, "")
+	initial := int64(0)
+	snapshot, err := registry.Snapshot(ctx, "a1", &initial, "")
 	if err != nil || len(snapshot.Entries) != 1 || snapshot.Entries[0].Status != reference.StatusCandidate {
 		t.Fatal("импорт автоматически подтвердил кандидата", snapshot, err)
 	}

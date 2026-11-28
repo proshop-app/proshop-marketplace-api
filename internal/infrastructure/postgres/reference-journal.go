@@ -49,6 +49,12 @@ const (
 			SELECT 1 FROM reference.changes
 			WHERE dictionary_code = $1 AND revision > $2 AND revision <= $3 AND at < $4
 		)`
+
+	selectRegistryChangedSince = `
+		SELECT EXISTS (
+			SELECT 1 FROM reference.changes
+			WHERE dictionary_code = $1 AND revision > $2 AND kind <> $3
+		)`
 )
 
 // Append пишет запись журнала и возвращает её ревизию.
@@ -86,6 +92,20 @@ func (r *References) Append(ctx context.Context, change reference.Change) (int64
 		return 0, fmt.Errorf("журнал %s: %w", change.Dictionary, err)
 	}
 	return revision, nil
+}
+
+// RegistryChangedSince отличает правки реестра от восстановления образов.
+func (r *References) RegistryChangedSince(ctx context.Context, dictionary string, since int64) (bool, error) {
+	var changed bool
+	err := rawSQL(
+		ctx,
+		r.db,
+		selectRegistryChangedSince,
+		dictionary,
+		since,
+		string(reference.ChangeSnapshotBackfilled),
+	).Row().Scan(&changed)
+	return changed, err
 }
 
 // Changes — записи журнала словаря в (from, to].
