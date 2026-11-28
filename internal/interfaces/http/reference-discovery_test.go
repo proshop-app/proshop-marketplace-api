@@ -1,16 +1,20 @@
 package http_test
 
 import (
+	"encoding/json"
 	"net/http"
+	"os"
+	"reflect"
 	"testing"
 )
 
 func TestReferenceConsumerContract(t *testing.T) {
 	e := newReferenceEnv(t)
 	created := e.do(t, referenceCall{
-		method:     http.MethodPost,
-		path:       "/internal/reference/b1/entries",
-		body:       `{"canonical":"Первое","metadata":{"directions":["d1"],"order":7,"label":"Название"}}`,
+		method: http.MethodPost,
+		path:   "/internal/reference/b1/entries",
+		body: `{"canonical":"Первое","status":"confirmed",` +
+			`"metadata":{"directions":["d1"],"order":7,"label":"Название"}}`,
 		authorized: true,
 	})
 	id := created.entry(t)["id"].(string)
@@ -31,15 +35,23 @@ func TestReferenceConsumerContract(t *testing.T) {
 	}
 	snapshot := e.do(t, referenceCall{
 		method: http.MethodGet,
-		path:   "/api/v1/internal/reference/b1/snapshot?since=0",
+		path:   "/api/v1/internal/reference/b1/snapshot",
 		bearer: readToken,
 	})
-	if snapshot.status != http.StatusOK || snapshot.body["kind"] != "open" {
+	if snapshot.status != http.StatusOK {
 		t.Fatalf("снимок: %+v", snapshot)
 	}
-	entry := snapshot.body["entries"].([]any)[0].(map[string]any)
-	if entry["order"] != float64(7) || entry["label"] != "Название" || entry["directions"].([]any)[0] != "d1" {
-		t.Fatalf("поля снимка: %v", entry)
+	raw, err := os.ReadFile("testdata/reference-snapshot-v2.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var golden map[string]any
+	if err := json.Unmarshal(raw, &golden); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(snapshot.body, golden) {
+		actual, _ := json.Marshal(snapshot.body)
+		t.Fatalf("снимок отличается от эталона: %s", actual)
 	}
 	for _, test := range []struct {
 		id     string

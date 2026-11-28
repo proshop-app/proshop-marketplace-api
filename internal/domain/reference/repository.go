@@ -57,6 +57,8 @@ type Repository interface {
 	Append(ctx context.Context, change Change) (int64, error)
 	// Changes — записи журнала словаря в (from, to] по возрастанию ревизии.
 	Changes(ctx context.Context, dictionary string, from, to int64) ([]Change, error)
+	// RegistryChangedSince проверяет правки реестра, пропуская восстановление снимка.
+	RegistryChangedSince(ctx context.Context, dictionary string, since int64) (bool, error)
 	// SnapshotChanges читает страницу последних касаний, включая удалённые записи.
 	SnapshotChanges(
 		ctx context.Context,
@@ -67,6 +69,7 @@ type Repository interface {
 		limit int,
 	) ([]SnapshotRow, error)
 	SnapshotSinceExpired(ctx context.Context, dictionary string, since, revision int64, before time.Time) (bool, error)
+	// SnapshotEntries — подтверждённые записи словаря на заданной ревизии (полный снимок).
 	SnapshotEntries(
 		ctx context.Context,
 		dictionary string,

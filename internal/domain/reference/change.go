@@ -29,6 +29,8 @@ const (
 	ChangeReverted ChangeKind = "change.reverted"
 	// ChangeDelivered — пачка записей поставки одной ревизией: журнал не растёт на каждую запись.
 	ChangeDelivered ChangeKind = "delivery.applied"
+	// ChangeSnapshotBackfilled — восстановлены образы снимка без правки реестра.
+	ChangeSnapshotBackfilled ChangeKind = "snapshot.backfilled"
 )
 
 // Виды событий из контракта catalog.reference.changed.

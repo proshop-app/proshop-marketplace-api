@@ -1,0 +1,23 @@
+{
+    "schemaVersion": 2,
+    "dictionary": "b1",
+    "kind": "open",
+    "revision": 1,
+    "normalizer": "v1",
+    "full": true,
+    "entries": [
+        {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "canonical": "Первое",
+            "key": "первое",
+            "status": "confirmed",
+            "aliases": [
+                {"text": "Первое", "key": "первое", "kind": "spelling"}
+            ],
+            "directions": ["d1"],
+            "order": 7,
+            "label": "Название"
+        }
+    ],
+    "removed": []
+}

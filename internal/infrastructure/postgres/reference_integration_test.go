@@ -181,7 +181,8 @@ func TestReferenceScenariosOnPostgres(t *testing.T) {
 	}
 
 	full, err := service.Snapshot(ctx, referenceDict, nil, "")
-	if err != nil || !full.Full || len(full.Entries) != 3 || full.Revision != merged.Revision {
+	if err != nil || !full.Full || len(full.Entries) != 1 || full.Entries[0].ID != second.Entry.ID ||
+		full.Revision != merged.Revision {
 		t.Fatalf("полный снимок: %+v %v", full, err)
 	}
 	since := second.Revision
@@ -245,8 +246,9 @@ func TestReferenceDeliveryOnPostgres(t *testing.T) {
 	if err != nil || !rolled.Changed {
 		t.Fatalf("откат: %+v %v", rolled, err)
 	}
-	snapshot, err := service.Snapshot(ctx, referenceDict, nil, "")
-	if err != nil || len(snapshot.Entries) != 1 || snapshot.Entries[0].ID != existing.Entry.ID ||
+	snapshot, err := service.Snapshot(ctx, referenceDict, &applied.Revision, "")
+	if err != nil || snapshot.Full || len(snapshot.Removed) != 1 ||
+		len(snapshot.Entries) != 1 || snapshot.Entries[0].ID != existing.Entry.ID ||
 		snapshot.Entries[0].Status != reference.StatusCandidate || len(snapshot.Entries[0].Aliases) != 1 {
 		t.Fatalf("после отката: %+v %v", snapshot, err)
 	}

@@ -13,7 +13,8 @@ const (
 	selectSnapshotEntries = `
 		SELECT entry_id, position, revision, state
 		FROM reference.snapshot_versions
-		WHERE dictionary_code = $1 AND validity @> $2::bigint AND position > $3 AND state IS NOT NULL
+		WHERE dictionary_code = $1 AND validity @> $2::bigint AND position > $3
+			AND state IS NOT NULL AND state->>'status' = 'confirmed'
 		ORDER BY position <-> $3
 		LIMIT $4`
 
@@ -25,7 +26,7 @@ const (
 		LIMIT $5`
 )
 
-// SnapshotEntries читает полную страницу на заданной ревизии, без удалённых к этому моменту записей.
+// SnapshotEntries читает подтверждённые записи на заданной ревизии.
 func (r *References) SnapshotEntries(
 	ctx context.Context,
 	dictionary string,

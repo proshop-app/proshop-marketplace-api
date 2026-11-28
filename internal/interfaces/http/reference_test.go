@@ -279,7 +279,7 @@ func TestReferenceSnapshotAndResolve(t *testing.T) {
 	snapshot := e.do(t, full)
 	entries := snapshot.body["entries"].([]any)
 	if snapshot.status != http.StatusOK || snapshot.body["full"] != true || snapshot.body["normalizer"] != "v1" ||
-		len(entries) != 2 || entries[0].(map[string]any)["metadata"] != nil {
+		len(entries) != 1 || entries[0].(map[string]any)["metadata"] != nil {
 		t.Fatalf("снимок: %d %v", snapshot.status, snapshot.body)
 	}
 	since := referenceCall{method: http.MethodGet, path: "/internal/reference/b1/snapshot?since=1", authorized: true}

@@ -32,7 +32,7 @@ func (r references) SnapshotEntries(
 	limit int,
 ) ([]reference.SnapshotRow, error) {
 	return r.snapshotPage(dictionary, revision, after, limit, func(version snapshotVersion) bool {
-		return version.row.State != nil
+		return version.row.State != nil && version.row.State.Status == reference.StatusConfirmed
 	}), nil
 }
 

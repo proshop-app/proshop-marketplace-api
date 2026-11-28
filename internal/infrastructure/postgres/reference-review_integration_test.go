@@ -89,7 +89,8 @@ func seedReviewDatabase(t *testing.T, service *appreference.Service, count, alia
 	}); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := databaseSnapshot(service, nil)
+	initial := int64(0)
+	snapshot, err := databaseSnapshot(service, &initial)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +177,8 @@ func TestReferenceReviewRealRollbackAfterSavedChunksAndCancellation(t *testing.T
 			if err == nil || result.Changed != 0 || fault.calls < 1 {
 				t.Fatal(result, fault.calls, err)
 			}
-			after, err := databaseSnapshot(service, nil)
+			initial := int64(0)
+			after, err := databaseSnapshot(service, &initial)
 			if err != nil || !reflect.DeepEqual(after, baseline) {
 				t.Fatal("часть решения зафиксирована", err)
 			}
@@ -237,7 +239,8 @@ func TestReferenceReviewDeadlineCancelsWaitingDictionaryLock(t *testing.T) {
 		t.Fatal(result, err, ctx.Err())
 	}
 	_ = lock.Rollback(context.Background())
-	after, err := databaseSnapshot(service, nil)
+	initial := int64(0)
+	after, err := databaseSnapshot(service, &initial)
 	if err != nil || !reflect.DeepEqual(after, baseline) {
 		t.Fatal(after, err)
 	}
