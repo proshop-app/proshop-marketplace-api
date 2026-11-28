@@ -43,7 +43,7 @@ type releaseRepository struct {
 	store *releaseStore
 }
 
-func TestArtifactRelease17PublishedContract(t *testing.T) {
+func TestArtifactRelease19PublishedContract(t *testing.T) {
 	release, _, err := taxonomydata.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -68,6 +68,10 @@ func TestArtifactRelease17PublishedContract(t *testing.T) {
 	}
 	assertArtifactFacets(t, published["attributes"].body, release.Definition())
 	assertArtifactCategorySchema(t, service)
+	volume := taxonomy.Definition{Attributes: attributes.Attributes}.Fields()["volume"]
+	if !volume.Variant || !volume.Facet || volume.Multiple || volume.Type != "number" || volume.Unit != "мл" {
+		t.Fatalf("неверное определение оси объёма: %+v", volume)
+	}
 	var tree struct {
 		Categories []taxonomy.Category
 	}
@@ -126,14 +130,19 @@ func assertArtifactCategorySchema(t *testing.T, service *apptaxonomy.Service) {
 	var leaf taxonomyCategorySchema
 	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &leaf) != nil ||
 		len(leaf.Filters) != 18 || leaf.Filters[0] != (taxonomy.Filter{Code: "storage_capacity", Primary: true}) ||
-		leaf.Filters[6] != (taxonomy.Filter{Code: "esim_support"}) {
+		leaf.Filters[2] != (taxonomy.Filter{Code: "brand", Primary: true}) ||
+		leaf.Filters[3] != (taxonomy.Filter{Code: "color", Primary: true}) ||
+		leaf.Filters[7] != (taxonomy.Filter{Code: "esim_support"}) {
 		t.Fatalf("неверная панель листа: %v", leaf.Filters)
 	}
 	fields := map[string]bool{}
 	for _, field := range leaf.Attributes {
 		fields[field.Code] = field.Facet
+		if field.Code == "color" && !field.Required {
+			t.Fatal("цвет необязателен для смартфонов")
+		}
 	}
-	if !fields["esim_support"] || fields["country"] || fields["model"] {
+	if !fields["color"] || !fields["esim_support"] || fields["country"] || fields["model"] {
 		t.Fatalf("неверный признак фильтруемости листа: %v", fields)
 	}
 }
