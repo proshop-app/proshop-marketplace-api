@@ -149,6 +149,9 @@ func assertBackfilledDictionaries(
 			(!repaired && dictionary.Revision != old.Revision) {
 			t.Fatalf("неверная голова: %+v → %+v", old, dictionary)
 		}
+		if repaired {
+			assertReferenceTask(t, pool, dictionary.Code, 0, dictionary.Revision, true)
+		}
 		assertBackfilledDictionary(t, reader, pool, dictionary, counter)
 	}
 }

@@ -186,20 +186,16 @@ func (m *session) checkKeys(ctx context.Context, draft *reference.Draft) error {
 	return nil
 }
 
-// enqueue ставит событие в outbox той же транзакцией. Изменение без следствий
-// для ссылок (только свободные поля) события не порождает: снимок его отдаст.
+// enqueue сообщает и о ревизиях, которые не меняют разрешение ключей.
 func (m *session) enqueue(ctx context.Context) error {
-	if len(m.effects.Kinds) == 0 {
-		return nil
-	}
 	event := Event{
 		SchemaVersion: SchemaVersion,
 		Dictionary:    m.dict.Code(),
 		RevisionFrom:  m.from,
 		RevisionTo:    m.dict.Revision(),
-		EntryIDs:      m.effects.Entries,
-		Kinds:         m.effects.Kinds,
-		AffectedKeys:  m.effects.Keys,
+		EntryIDs:      append([]ids.UUID{}, m.effects.Entries...),
+		Kinds:         append([]reference.EventKind{}, m.effects.Kinds...),
+		AffectedKeys:  append([]string{}, m.effects.Keys...),
 		Truncated:     m.truncated,
 	}
 	if len(event.EntryIDs) > maxEventList {

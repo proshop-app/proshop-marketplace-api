@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/proshop-app/proshop-marketplace/internal/application/ports"
@@ -30,6 +32,7 @@ const (
 		WHERE code = 'brand'`
 	countReferenceTasks   = `SELECT count(*) FROM outbox WHERE kind = 'reference.changed'`
 	countReferenceChanges = `SELECT count(*) FROM reference.changes WHERE dictionary_code = 'b1'`
+	selectReferenceTask   = `SELECT payload FROM outbox WHERE kind = 'reference.changed' AND dedup_key = $1`
 	// largeDelivery — записей в поставке теста пачек: десять пачек по 500
 	largeDelivery = 5000
 )
@@ -116,6 +119,7 @@ func TestReferenceScenariosOnPostgres(t *testing.T) {
 	service, pool, _ := referenceService(t)
 	ctx := context.Background()
 	first := createReference(t, service, "Бренд", reference.StatusConfirmed, "Brend")
+	assertReferenceTask(t, pool, referenceDict, 0, first.Revision, false)
 	if first.Revision != first.Entry.Revision || len(first.Entry.Aliases) != 2 {
 		t.Fatalf("создание: %+v", first)
 	}
@@ -129,6 +133,7 @@ func TestReferenceScenariosOnPostgres(t *testing.T) {
 		t.Fatalf("занятый ключ: %v", err)
 	}
 	candidate := createReference(t, service, "Брендовый", reference.StatusCandidate)
+	assertReferenceTask(t, pool, referenceDict, first.Revision, candidate.Revision, false)
 	again := createReference(t, service, "БРЕНДОВЫЙ", reference.StatusCandidate)
 	view, err := service.Get(ctx, referenceDict, candidate.Entry.ID)
 	if err != nil || again.Created || view.Entry.Occurrences != 2 {
@@ -150,6 +155,7 @@ func TestReferenceScenariosOnPostgres(t *testing.T) {
 	}
 
 	second := createReference(t, service, "Бренд Два", reference.StatusConfirmed)
+	assertReferenceTask(t, pool, referenceDict, candidate.Revision, second.Revision, false)
 	merged, err := service.Merge(ctx, appreference.MergeCommand{
 		Dictionary: referenceDict,
 		ID:         first.Entry.ID,
@@ -160,6 +166,7 @@ func TestReferenceScenariosOnPostgres(t *testing.T) {
 	if err != nil || len(merged.Entry.Aliases) != 3 {
 		t.Fatalf("объединение: %+v %v", merged, err)
 	}
+	assertReferenceTask(t, pool, referenceDict, second.Revision, merged.Revision, false)
 	resolved, err := service.Resolve(ctx, referenceDict, "brend")
 	if err != nil || resolved.Match == nil || resolved.Match.EntryID != second.Entry.ID {
 		t.Fatalf("вариант после объединения: %+v %v", resolved, err)
@@ -191,7 +198,7 @@ func TestReferenceScenariosOnPostgres(t *testing.T) {
 		t.Fatalf("дельта после объединения: %+v %v", delta, err)
 	}
 	var tasks int
-	if err := pool.QueryRow(ctx, countReferenceTasks).Scan(&tasks); err != nil || tasks != 4 {
+	if err := pool.QueryRow(ctx, countReferenceTasks).Scan(&tasks); err != nil || tasks != 5 {
 		t.Fatalf("событий в outbox: %d %v", tasks, err)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE reference.changes SET reason = 'x'"); err == nil {
@@ -221,7 +228,7 @@ func TestReferenceSnapshotHorizon(t *testing.T) {
 }
 
 func TestReferenceDeliveryOnPostgres(t *testing.T) {
-	service, _, _ := referenceService(t)
+	service, pool, _ := referenceService(t)
 	ctx := context.Background()
 	existing := createReference(t, service, "Бренд", reference.StatusCandidate)
 	aliases := []reference.DeliveryAlias{{Text: "Brend", Kind: reference.AliasTranslit}}
@@ -238,6 +245,7 @@ func TestReferenceDeliveryOnPostgres(t *testing.T) {
 	if err != nil || applied.Created != 1 || applied.Updated != 1 {
 		t.Fatalf("поставка: %+v %v", applied, err)
 	}
+	assertReferenceTask(t, pool, referenceDict, existing.Revision, applied.Revision, false)
 	repeat, err := service.Apply(ctx, delivery)
 	if err != nil || repeat.Changed || repeat.Revision != applied.Revision {
 		t.Fatalf("повтор поставки: %+v %v", repeat, err)
@@ -246,6 +254,7 @@ func TestReferenceDeliveryOnPostgres(t *testing.T) {
 	if err != nil || !rolled.Changed {
 		t.Fatalf("откат: %+v %v", rolled, err)
 	}
+	assertReferenceTask(t, pool, referenceDict, applied.Revision, rolled.Revision, false)
 	snapshot, err := service.Snapshot(ctx, referenceDict, &applied.Revision, "")
 	if err != nil || snapshot.Full || len(snapshot.Removed) != 1 ||
 		len(snapshot.Entries) != 1 || snapshot.Entries[0].ID != existing.Entry.ID ||
@@ -257,6 +266,88 @@ func TestReferenceDeliveryOnPostgres(t *testing.T) {
 	}
 	if _, err := service.Apply(ctx, delivery); !errors.Is(err, reference.ErrDeliveryConflict) {
 		t.Fatalf("повтор откаченной поставки: %v", err)
+	}
+}
+
+func TestReferenceRevisionOutboxIsTransactional(t *testing.T) {
+	service, pool, _ := referenceService(t)
+	ctx := context.Background()
+	assertReferenceTask(t, pool, referenceDict, 0, 0, true)
+	entry := createReference(t, service, "Бренд", reference.StatusConfirmed)
+	updated, err := service.Update(ctx, appreference.UpdateCommand{
+		Dictionary: referenceDict,
+		ID:         entry.Entry.ID,
+		IfMatch:    entry.Revision,
+		Metadata:   json.RawMessage(`{"directions":["d1"]}`),
+		Meta:       referenceMeta,
+	})
+	if err != nil || !updated.Changed {
+		t.Fatal(updated, err)
+	}
+	assertReferenceTask(t, pool, referenceDict, entry.Revision, updated.Revision, false)
+
+	const advance = `UPDATE reference.dictionaries SET revision = revision + 1 WHERE code = $1`
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, advance, referenceDict); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "SET CONSTRAINTS ALL IMMEDIATE"); err != nil {
+		t.Fatal(err)
+	}
+	next := updated.Revision + 1
+	var payload []byte
+	key := appreference.TaskChanged + ":" + referenceDict + ":" + strconv.FormatInt(next, 10)
+	if err := tx.QueryRow(ctx, selectReferenceTask, key).Scan(&payload); err != nil {
+		t.Fatal("SQL-ревизия без задачи в транзакции", err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, selectReferenceTask, key).Scan(&payload); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatal("задача пережила откат", err)
+	}
+	if _, err := pool.Exec(ctx, advance, referenceDict); err != nil {
+		t.Fatal(err)
+	}
+	assertReferenceTask(t, pool, referenceDict, updated.Revision, next, true)
+
+	const rejectTasks = `ALTER TABLE outbox ADD CONSTRAINT reject_reference_tasks
+		CHECK (kind <> 'reference.changed') NOT VALID`
+	if _, err := pool.Exec(ctx, rejectTasks); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, advance, referenceDict); err == nil {
+		t.Fatal("ревизия зафиксирована при отказе outbox")
+	}
+	const selectRevision = `SELECT revision FROM reference.dictionaries WHERE code = $1`
+	var head int64
+	if err := pool.QueryRow(ctx, selectRevision, referenceDict).Scan(&head); err != nil || head != next {
+		t.Fatalf("отказ outbox сохранил новую голову: %d, %v", head, err)
+	}
+}
+
+func assertReferenceTask(
+	t *testing.T,
+	pool *pgxpool.Pool,
+	code string,
+	from, to int64,
+	truncated bool,
+) {
+	t.Helper()
+	var payload []byte
+	key := appreference.TaskChanged + ":" + code + ":" + strconv.FormatInt(to, 10)
+	if err := pool.QueryRow(context.Background(), selectReferenceTask, key).Scan(&payload); err != nil {
+		t.Fatalf("нет задачи %s: %v", key, err)
+	}
+	var event appreference.Event
+	if err := json.Unmarshal(payload, &event); err != nil || event.Dictionary != code ||
+		event.RevisionFrom != from || event.RevisionTo != to ||
+		event.SchemaVersion != 1 || event.Truncated != truncated {
+		t.Fatalf("неверная задача %s: %s: %v", key, payload, err)
 	}
 }
 
