@@ -11,7 +11,7 @@ import (
 	"github.com/proshop-app/proshop-marketplace/pkg/ids"
 )
 
-const capacityResponseLimit = 384 << 10
+const offerWriteResponseLimit = 384 << 10
 
 type deferredOffer struct {
 	TenantID  string `json:"tenantId"`
@@ -20,7 +20,7 @@ type deferredOffer struct {
 	Reason    string `json:"reason"`
 }
 
-type capacityResponse struct {
+type offerWriteResponse struct {
 	Code           string          `json:"code"`
 	DeferredOffers json.RawMessage `json:"deferredOffers"`
 }
@@ -51,28 +51,28 @@ func (x *Index) put(ctx context.Context, path string, docs []ports.OfferDocument
 }
 
 func (x *Index) putOfferBatch(ctx context.Context, path string, batch offerBatch) ([]ids.OfferID, error) {
-	var capacity *capacityResponse
-	if path == "/offers" {
-		capacity = new(capacityResponse)
+	var response offerWriteResponse
+	status, err := x.requestWithOfferResponse(ctx, http.MethodPost, path, batch, nil, &response)
+	if status == http.StatusConflict && response.Code == "CONTRACT_VERSION_MISMATCH" {
+		return nil, ports.ErrOfferContractMismatch
 	}
-	status, err := x.requestWithCapacity(ctx, http.MethodPost, path, batch, nil, capacity)
 	if status == http.StatusBadRequest || status == http.StatusRequestEntityTooLarge {
 		return nil, ErrInvalid.WithMessage(fmt.Sprintf("поиск отверг предложения: HTTP %d", status))
 	}
-	if capacity != nil && capacity.Code == "GENERATION_CAPACITY" {
-		return batchDeferredOffers(batch.Offers, capacity.DeferredOffers), nil
+	if path == "/offers" && status == http.StatusServiceUnavailable && response.Code == "GENERATION_CAPACITY" {
+		return batchDeferredOffers(batch.Offers, response.DeferredOffers), nil
 	}
 	return nil, err
 }
 
-func readCapacityResponse(body io.Reader) capacityResponse {
-	encoded, err := io.ReadAll(io.LimitReader(body, capacityResponseLimit+1))
-	if err != nil || len(encoded) > capacityResponseLimit {
-		return capacityResponse{}
+func readOfferWriteResponse(body io.Reader) offerWriteResponse {
+	encoded, err := io.ReadAll(io.LimitReader(body, offerWriteResponseLimit+1))
+	if err != nil || len(encoded) > offerWriteResponseLimit {
+		return offerWriteResponse{}
 	}
-	var result capacityResponse
+	var result offerWriteResponse
 	if json.Unmarshal(encoded, &result) != nil {
-		return capacityResponse{}
+		return offerWriteResponse{}
 	}
 	return result
 }

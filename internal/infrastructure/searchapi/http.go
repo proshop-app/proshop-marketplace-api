@@ -17,7 +17,7 @@ type bodyLimits struct {
 // request не повторяет мутации транспортом: ответ может потеряться уже после
 // записи. Outbox повторит версионированную пачку, а rebuild сверит поколение.
 func (x *Index) request(ctx context.Context, method, path string, payload, out any) (int, error) {
-	return x.requestWithCapacity(ctx, method, path, payload, out, nil)
+	return x.requestWithOfferResponse(ctx, method, path, payload, out, nil)
 }
 
 // read — запрос покупателя: свой короткий срок вместо служебного потолка ServiceTimeout.
@@ -28,15 +28,15 @@ func (x *Index) read(ctx context.Context, path string, payload, out any) (int, e
 	return x.request(ctx, http.MethodPost, path, payload, out)
 }
 
-func (x *Index) requestWithCapacity(
+func (x *Index) requestWithOfferResponse(
 	ctx context.Context,
 	method string,
 	path string,
 	payload any,
 	out any,
-	capacity *capacityResponse,
+	offerResponse *offerWriteResponse,
 ) (int, error) {
-	return x.requestWith(ctx, method, path, x.token, payload, out, bodyLimits{receive: responseLimit}, capacity)
+	return x.requestWith(ctx, method, path, x.token, payload, out, bodyLimits{receive: responseLimit}, offerResponse)
 }
 
 func (x *Index) requestWith(
@@ -44,7 +44,7 @@ func (x *Index) requestWith(
 	method, path, token string,
 	payload, out any,
 	limits bodyLimits,
-	capacity *capacityResponse,
+	offerResponse *offerWriteResponse,
 ) (int, error) {
 	var body io.Reader
 
@@ -81,8 +81,11 @@ func (x *Index) requestWith(
 	}()
 
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		if capacity != nil && response.StatusCode == http.StatusServiceUnavailable {
-			*capacity = readCapacityResponse(response.Body)
+		if offerResponse != nil {
+			switch response.StatusCode {
+			case http.StatusConflict, http.StatusServiceUnavailable:
+				*offerResponse = readOfferWriteResponse(response.Body)
+			}
 		}
 		// Не прокидываем тело чужой ошибки и служебные заголовки в публичный API.
 		message := fmt.Sprintf("поиск ответил HTTP %d", response.StatusCode)
